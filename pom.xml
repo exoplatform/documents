@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>addons-parent-pom</artifactId>
+    <groupId>org.exoplatform.addons</groupId>
+    <version>15-M02</version>
+  </parent>
+  <groupId>org.exoplatform.documents</groupId>
+  <artifactId>documents-parent</artifactId>
+  <version>1.0.x-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>eXo Documents - Parent POM</name>
+  <modules>
+    <module>documents-api</module>
+    <module>documents-storage-jcr</module>
+    <module>documents-services</module>
+    <module>documents-webapp</module>
+    <module>documents-packaging</module>
+  </modules>
+  <scm>
+    <connection>scm:git:git://github.com/exoplatform/documents.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/exoplatform/documents.git</developerConnection>
+    <url>https://github.com/exoplatform/documents</url>
+    <tag>HEAD</tag>
+  </scm>
+  <properties>
+    <!-- 3rd party libraries versions -->
+    <org.exoplatform.social.version>6.3.x-SNAPSHOT</org.exoplatform.social.version>
+    <org.exoplatform.platform-ui.version>6.3.x-SNAPSHOT</org.exoplatform.platform-ui.version>
+    <addon.exo.jcr.version>6.3.x-SNAPSHOT</addon.exo.jcr.version>
+  </properties>
+  <dependencyManagement>
+    <dependencies>
+      <!-- Import versions from platform project -->
+      <dependency>
+        <groupId>org.exoplatform.social</groupId>
+        <artifactId>social</artifactId>
+        <version>${org.exoplatform.social.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!-- Import versions from jcr project -->
+      <dependency>
+        <groupId>org.exoplatform.jcr</groupId>
+        <artifactId>jcr-parent</artifactId>
+        <version>${addon.exo.jcr.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!-- Import versions from platform-ui project -->
+      <dependency>
+        <groupId>org.exoplatform.platform-ui</groupId>
+        <artifactId>platform-ui</artifactId>
+        <version>${org.exoplatform.platform-ui.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Current project artifacts -->
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>documents-api</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>documents-storage-jcr</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>documents-services</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>documents-webapp</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+        <type>war</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>documents-packaging</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+        <type>war</type>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>
