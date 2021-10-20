@@ -1,7 +1,35 @@
 import Documents from './components/Documents.vue';
+import DocumentsHeader from './components/header/DocumentsHeader.vue';
+import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
+import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
+import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
+import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
+import DocumentsBody from './components/body/DocumentsBody.vue';
+import DocumentsTimelineView from './components/body/views/DocumentsTimelineView.vue';
+import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
+import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
+import DocumentsFileSizeCell from './components/body/table/cells/DocumentsFileSizeCell.vue';
+import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
+import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
+import DocumentsActionCell from './components/body/table/cells/DocumentsActionCell.vue';
+import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 
 const components = {
   'documents': Documents,
+  'documents-header': DocumentsHeader,
+  'documents-header-left': DocumentsHeaderLeft,
+  'documents-header-right': DocumentsHeaderRight,
+  'documents-add-new-file': DocumentsAddNewFile,
+  'documents-filter-input': DocumentsFilterInput,
+  'documents-body': DocumentsBody,
+  'documents-timeline-view': DocumentsTimelineView,
+  'documents-table-cell': DocumentsTableCell,
+  'documents-last-updated-cell': DocumentsLastUpdatedCell,
+  'documents-file-size-cell': DocumentsFileSizeCell,
+  'documents-last-activity-cell': DocumentsLastActivityCell,
+  'documents-favorite-cell': DocumentsFavoriteCell,
+  'documents-action-cell': DocumentsActionCell,
+  'documents-file-name-cell': DocumentsFileNameCell,
 };
 
 for (const key in components) {
