@@ -16,41 +16,23 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.model;
+package org.exoplatform.documents.rest.model;
+
+import java.util.List;
 
 import lombok.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DocumentFile {
+public class NodeAuditTrailsEntity {
 
-  private String     id;
+  private List<NodeAuditTrailItemEntity> trails;
 
-  private String     name;
+  private long                           size;
 
-  private String     description;
+  private long                           offset;
 
-  private String     datasource;
-
-  private String     driveId;
-
-  private String     folderId;
-
-  private String     parentFileId;
-
-  private long       ownerId;
-
-  private long       creatorId;
-
-  private long       createdDate;
-
-  private long       modifiedDate;
-
-  private long       size;
-
-  private String     mimeType;
-
-  private Permission acl;
+  private long                           limit;
 
 }

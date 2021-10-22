@@ -2,6 +2,13 @@
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd"
   xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
 
-  <import>war:/conf/documents/documents-service-configuration.xml</import>
+  <component>
+    <key>org.exoplatform.documents.service.DocumentFileService</key>
+    <type>org.exoplatform.documents.service.DocumentFileServiceImpl</type>
+  </component>
+
+  <component>
+    <type>org.exoplatform.documents.rest.DocumentFileRest</type>
+  </component>
 
 </configuration>

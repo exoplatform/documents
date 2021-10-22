@@ -16,21 +16,32 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.model;
+package org.exoplatform.documents.constant;
 
-import lombok.*;
+import org.apache.commons.lang3.StringUtils;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class Permission {
+public enum DocumentSortField {
+  NAME,
+  MODIFIED_DATE,
+  CREATED_DATE;
 
-  private boolean canAccess;
-
-  private boolean canEdit;
-
-  private boolean canDelete;
-
-  private boolean canShare;
-
+  public static DocumentSortField getFromAlias(String alias) {
+    if (StringUtils.isBlank(alias)) {
+      return null;
+    }
+    switch (alias) {
+      case "name":
+      case "title":
+        return NAME;
+      case "modified":
+      case "modifiedDate":
+      case "lastUpdated":
+        return MODIFIED_DATE;
+      case "created":
+      case "createdDate":
+        return CREATED_DATE;
+      default:
+        return null;
+    }
+  }
 }

@@ -16,23 +16,19 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.rest.model;
-
-import java.util.Map;
+package org.exoplatform.documents.model;
 
 import lombok.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FileVersionEntity {
+public class NodePermission {
 
-  private Map<Long, FileEntity> versions;
+  private boolean canAccess;
 
-  private long                  size;
+  private boolean canEdit;
 
-  private long                  offset;
-
-  private long                  limit;
+  private boolean canDelete;
 
 }

@@ -1,6 +1,13 @@
 import './initComponents.js';
 import './extensions.js';
 
+import * as documentFileService from './js/DocumentFileService.js';
+if (!Vue.prototype.$documentFileService) {
+  window.Object.defineProperty(Vue.prototype, '$documentFileService', {
+    value: documentFileService,
+  });
+}
+
 // get overrided components if exists
 if (extensionRegistry) {
   const components = extensionRegistry.loadComponents('Documents');
@@ -26,7 +33,7 @@ export function init() {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale ressources are ready
     Vue.createApp({
-      template: `<documents id="${appId}" />`,
+      template: `<documents-main id="${appId}" />`,
       vuetify,
       i18n
     }, `#${appId}`, 'Documents');

@@ -16,23 +16,20 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.rest.model;
-
-import java.util.List;
+package org.exoplatform.documents.model;
 
 import lombok.*;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class FileAuditTrailEntity {
+@EqualsAndHashCode(callSuper = true)
+public class FileNode extends AbstractNode {
 
-  private List<FileAuditTrailItemEntity> trails;
+  private String versionnedFileId;
 
-  private long                           size;
+  private String linkedFileId;
 
-  private long                           offset;
+  private long   size;
 
-  private long                           limit;
+  private String mimeType;
 
 }

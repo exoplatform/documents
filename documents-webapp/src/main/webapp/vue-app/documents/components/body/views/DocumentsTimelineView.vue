@@ -7,8 +7,8 @@
     :loading="loading"
     :options.sync="options"
     :locale="lang"
-    :single-select="false"
-    show-select
+    :group-by="groupBy"
+    :group-desc="groupDesc"
     hide-default-footer
     disable-pagination
     disable-filtering
@@ -21,13 +21,23 @@
         :extension="header.cellExtension"
         :file="item" />
     </template>
+    <template
+      v-if="grouping"
+      v-slot:group.header="{group, items, isOpen, toggle}">
+      <documents-timeline-group-header
+        :group="group"
+        :headers="headers"
+        :files="items"
+        :open="isOpen"
+        :toggle-function="toggle" />
+    </template>
     <template v-if="hasMore" slot="footer">
       <v-flex class="d-flex py-2 border-box-sizing">
         <v-btn
           :loading="loading"
           :disabled="loading"
           class="btn mx-auto"
-          @click="limit += pageSize">
+          @click="$root.$emit('document-load-more')">
           {{ $t('documents.loadMore') }}
         </v-btn>
       </v-flex>
@@ -38,99 +48,92 @@
 <script>
 export default {
   props: {
-    limit: {
-      type: Number,
-      default: 20
+    files: {
+      type: Array,
+      default: null,
     },
     pageSize: {
       type: Number,
       default: 20
     },
-    files: {
-      type: Array,
-      default: () => [
-        {
-          id: '11122',
-          name: 'Reporting  Projet - Test - Test - 22/09/2021.xlsx',
-          description: 'Reporting  Projet - Test - Test - 22/09/2021',
-          datasource: 'jcr',
-          driveId: 'driveId',
-          forlderId: 'forlderId',
-          parentFileId: 'parentFileId',
-          ownerIdentity: Vue.prototype.$currentUserIdentity,
-          creatorIdentity: Vue.prototype.$currentUserIdentity,
-          acl: {
-            canEdit: true,
-            canAccess: true,
-            canShare: true,
-            canDelete: true,
-          },
-          createdDate: Date.now(),
-          modifiedDate: Date.now(),
-          size: 1024 * 1024 + 512,
-          mimeType: 'image/png',
-          versions: {
-            number: 0,
-            versions: [],
-          },
-          auditTrails: {
-            offset: 0,
-            limit: 1,
-            size: 0,
-            trails: [
-              {
-                id: 112,
-                actionType: 'shared',
-                userIdentity: Vue.prototype.$currentUserIdentity,
-                targetIdentity: Vue.prototype.$currentUserIdentity,
-                date: Date.now(),
-                properties: {
-                  
-                }
-              },
-            ],
-          },
-          metadatas: {
-            favorites: [
-              {
-                'name': '1',
-                'properties': null,
-                'id': 140,
-                'objectType': 'file',
-                'audienceId': 1,
-                'creatorId': 1,
-                'parentObjectId': '',
-                'objectId': '11122'
-              }
-            ]
-          },
-        }
-      ],
+    offset: {
+      type: Number,
+      default: 20
+    },
+    limit: {
+      type: Number,
+      default: 20
+    },
+    sortField: {
+      type: String,
+      default: null
+    },
+    loading: {
+      type: Number,
+      default: 20
+    },
+    hasMore: {
+      type: Boolean,
+      default: false,
+    },
+    ascending: {
+      type: Boolean,
+      default: false,
     },
   },
   data: () => ({
     lang: eXo.env.portal.language,
     options: {},
-    loading: false,
-    sortBy: 0,
-    sortDirection: 'desc',
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
+    weekFirstDay: 0,
+    monthFirstDay: 0,
+    yearFirstDay: 0,
   }),
   computed: {
     extendedCells() {
-      return this.headers && this.headers.filter(header => header.cellExtension.componentOptions);
+      return this.headers && this.headers.filter(header => header.cellExtension && header.cellExtension.componentOptions);
+    },
+    grouping() {
+      return !this.sortField || this.sortField === 'lastUpdated';
+    },
+    groupBy() {
+      return this.grouping && 'groupValue' || [];
+    },
+    groupDesc() {
+      return this.ascending;
     },
     items() {
-      return this.files && this.files.slice() || [];
-    },
-    hasMore() {
-      return (this.loading && this.limit > this.pageSize) || this.limit === this.items.length;
+      if (this.grouping) {
+        return this.files && this.files.slice().map(file => {
+          const fileGrouping = JSON.parse(JSON.stringify(file));
+          if (this.weekFirstDay <= fileGrouping.modifiedDate) {
+            fileGrouping.groupValue = '1:thisWeek';
+          } else if (this.monthFirstDay <= fileGrouping.modifiedDate) {
+            fileGrouping.groupValue = '2:thisMonth';
+          } else if (this.yearFirstDay <= fileGrouping.modifiedDate) {
+            fileGrouping.groupValue = '3:thisYear';
+          } else {
+            fileGrouping.groupValue = '4:beforeThisYear';
+          }
+          return fileGrouping;
+        }) || [];
+      } else {
+        return this.files && this.files.slice() || [];
+      }
     },
     headers() {
       const sortedHeaderExtensions = Object.values(this.headerExtensions).sort((ext1, ext2) => ext1.rank - ext2.rank);
       const headers = [];
+      if (this.grouping) {
+        headers.push({
+          text: '',
+          sortable: false,
+          value: 'empty',
+          width: '32px',
+        });
+      }
       sortedHeaderExtensions.forEach(headerExtension => {
         headers.push({
           text: headerExtension.labelKey && this.$t(headerExtension.labelKey) || '',
@@ -146,17 +149,30 @@ export default {
     },
   },
   watch: {
-    limit() {
-      this.refresh();
+    options() {
+      const sortField = this.options.sortBy.length && this.options.sortBy[0] || this.sortField;
+      const ascending = this.options.sortDesc.length ? !this.options.sortDesc[0] : true;
+      if (!this.options.sortBy.length) {
+        this.setSortOptions(sortField, ascending);
+      }
+      if (sortField !== this.sortField || this.ascending !== ascending) {
+        this.$root.$emit('documents-sort', sortField, ascending);
+      }
     },
   },
   created() {
+    this.weekFirstDay = this.getWeekStart();
+    this.monthFirstDay = this.getMonthStart();
+    this.yearFirstDay = this.getYearStart();
+
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
+    this.setSortOptions(this.sortField, this.ascending);
   },
   methods: {
-    refresh() {
-      // TODO
+    setSortOptions(sortField, ascending) {
+      this.options.sortBy = [sortField];
+      this.options.sortDesc = [!ascending];
     },
     refreshHeaderExtensions() {
       const extensions = extensionRegistry.loadExtensions(this.headerExtensionApp, this.headerExtensionType);
@@ -171,6 +187,21 @@ export default {
       if (changed) {
         this.headerExtensions = Object.assign({}, this.headerExtensions);
       }
+    },
+    getWeekStart() { // Return Monday
+      const now = new Date();
+      const day = now.getDay();
+      const startOfWeekDate = now.getDate() - day + (day && 1 || -6);
+      const date = new Date(1900 + now.getYear(), now.getMonth(), startOfWeekDate);
+      return date.getTime();
+    },
+    getMonthStart() {
+      const now = new Date();
+      return new Date(1900 + now.getYear(), now.getMonth(), 1).getTime();
+    },
+    getYearStart() {
+      const now = new Date();
+      return new Date(1900 + now.getYear(), 0, 1).getTime();
     },
   },
 };

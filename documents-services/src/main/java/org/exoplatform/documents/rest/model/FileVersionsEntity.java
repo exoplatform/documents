@@ -18,50 +18,21 @@
  */
 package org.exoplatform.documents.rest.model;
 
-import java.util.List;
 import java.util.Map;
-
-import org.exoplatform.documents.model.Permission;
 
 import lombok.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FileEntity {
+public class FileVersionsEntity {
 
-  private String                    id;
+  private Map<Long, FileNodeEntity> versions;
 
-  private String                    name;
+  private long                  size;
 
-  private String                    description;
+  private long                  offset;
 
-  private String                    datasource;
-
-  private String                    driveId;
-
-  private String                    folderId;
-
-  private String                    parentFileId;
-
-  private IdentityEntity            ownerIdentity;
-
-  private IdentityEntity            creatorIdentity;
-
-  private Permission                acl;
-
-  private long                      createdDate;
-
-  private long                      modifiedDate;
-
-  private long                      size;
-
-  private String                    mimeType;
-
-  private FileVersionEntity         versions;
-
-  private FileAuditTrailEntity      auditTrails;
-
-  private Map<String, List<Object>> metadatas;
+  private long                  limit;
 
 }

@@ -16,9 +16,26 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.model;
+package org.exoplatform.documents.rest.model;
 
-public enum FileListingType {
-  TIMELINE,
-  FOLDER;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class FileNodeEntity extends AbstractNodeEntity {
+
+  private String             versionnedFileId;
+
+  private String             linkedFileId;
+
+  private long               size;
+
+  private String             mimeType;
+
+  private FileVersionsEntity versions;
+
+  public FileNodeEntity() {
+    super(false);
+  }
 }
