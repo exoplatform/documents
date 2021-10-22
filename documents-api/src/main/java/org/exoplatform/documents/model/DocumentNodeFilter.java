@@ -16,27 +16,21 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.rest.model;
+package org.exoplatform.documents.model;
 
-import java.util.Map;
+import org.exoplatform.documents.constant.DocumentSortField;
 
 import lombok.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FileAuditTrailItemEntity {
+public abstract class DocumentNodeFilter {
 
-  private long                id;
+  private String            query;
 
-  private String              actionType;
+  private DocumentSortField sortField;
 
-  private IdentityEntity      userIdentity;
-
-  private IdentityEntity      targetIdentity;
-
-  private long                date;
-
-  private Map<String, String> properties;
+  private boolean           ascending;
 
 }

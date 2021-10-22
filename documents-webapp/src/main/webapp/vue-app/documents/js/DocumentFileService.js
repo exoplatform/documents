@@ -1,16 +1,12 @@
-export function getFiles(ownerId, parentFolderId, listingType, query, expand, offset, limit) {
+export function getDocumentItems(itemsFilter, offset, limit, expand) {
   const formData = new FormData();
-  if (ownerId) {
-    formData.append('ownerId', ownerId);
-  }
-  if (parentFolderId) {
-    formData.append('parentFolderId', parentFolderId);
-  }
-  if (listingType) {
-    formData.append('listingType', listingType);
-  }
-  if (query) {
-    formData.append('query', query);
+  if (itemsFilter) {
+    Object.keys(itemsFilter).forEach(key => {
+      const value = itemsFilter[key];
+      if (value) {
+        formData.append(key, value);
+      }
+    });
   }
   if (expand) {
     formData.append('expand', expand);

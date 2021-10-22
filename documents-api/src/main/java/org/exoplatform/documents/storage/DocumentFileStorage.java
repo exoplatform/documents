@@ -16,38 +16,15 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.service;
+package org.exoplatform.documents.storage;
 
 import java.util.List;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
-import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.services.security.Identity;
 
-public interface DocumentFileService {
-
-  /**
-   * Retrieves a list of accessible folders and/or files, for a selected user,
-   * by applying the designated filter.
-   * 
-   * @param listingType {@link FileListingType}
-   * @param filter {@link DocumentNodeFilter} that contains filtering criteria
-   * @param offset Offset of the result list
-   * @param limit Limit of the result list
-   * @param userIdentityId {@link Identity} technical identifier of the user
-   *          acessing files
-   * @return {@link List} of {@link AbstractNode}
-   * @throws IllegalAccessException when the user isn't allowed to access
-   *           documents of the designated parentFolderId or ownerId
-   * @throws ObjectNotFoundException when parentFolderId or ownerId doesn't
-   *           exisits
-   */
-  List<AbstractNode> getDocumentItems(FileListingType listingType,
-                                      DocumentNodeFilter filter,
-                                      int offset,
-                                      int limit,
-                                      long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+public interface DocumentFileStorage {
 
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the
@@ -59,17 +36,14 @@ public interface DocumentFileService {
    *          criteria
    * @param offset Offset of the result list
    * @param limit Limit of the result list
-   * @param userIdentityId {@link Identity} technical identifier of the user
-   *          acessing files
+   * @param aclIdentity {@link Identity} of the user acessing files
    * @return {@link List} of {@link AbstractNode}
-   * @throws IllegalAccessException when the user isn't allowed to access
-   *           documents of the designated ownerId
-   * @throws ObjectNotFoundException when ownerId doesn't exisits
+   * @throws ObjectNotFoundException when parentFolderId doesn't exisits
    */
   List<FileNode> getFilesTimeline(DocumentTimelineFilter filter,
+                                  Identity aclIdentity,
                                   int offset,
-                                  int limit,
-                                  long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+                                  int limit) throws ObjectNotFoundException;
 
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the
@@ -79,16 +53,15 @@ public interface DocumentFileService {
    * @param filter {@link DocumentFolderFilter} that contains filtering criteria
    * @param offset Offset of the result list
    * @param limit Limit of the result list
-   * @param userIdentityId {@link Identity} technical identifier of the user
-   *          acessing files
+   * @param aclIdentity {@link Identity} of the user acessing files
    * @return {@link List} of {@link AbstractNode}
    * @throws IllegalAccessException when the user isn't allowed to access
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when parentFolderId doesn't exisits
    */
   List<AbstractNode> getFolderChildNodes(DocumentFolderFilter filter,
+                                         Identity aclIdentity,
                                          int offset,
-                                         int limit,
-                                         long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+                                         int limit) throws IllegalAccessException, ObjectNotFoundException;
 
 }

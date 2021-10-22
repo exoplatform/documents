@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd"
+  xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
+
+  <component>
+    <key>org.exoplatform.documents.storage.DocumentFileStorage</key>
+    <type>org.exoplatform.documents.storage.jcr.JCRDocumentFileStorage</type>
+  </component>
+
+  <component>
+    <key>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</key>
+    <type>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</type>
+    <init-params>
+      <properties-param>
+        <name>constructor.params</name>
+        <property name="searchType" value="file"/>
+        <property name="displayName" value="Files"/>
+        <property name="index" value="file_alias"/>
+        <property name="type" value="file"/>
+        <property name="enable" value="${exo.unified-search.connector.file.enable:true}"/>
+        <property name="titleField" value="title"/>
+        <property name="searchFields" value="title"/>
+      </properties-param>
+    </init-params>
+  </component>
+
+</configuration>

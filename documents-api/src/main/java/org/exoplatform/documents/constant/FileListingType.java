@@ -16,25 +16,9 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.exoplatform.documents.model;
+package org.exoplatform.documents.constant;
 
-import lombok.*;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class DocumentFileFilter {
-
-  private Long   ownerId;
-
-  private String parentFolderId;
-
-  private String query;
-
-  private String expand;
-
-  private long   offset;
-
-  private long   limit;
-
+public enum FileListingType {
+  TIMELINE,
+  FOLDER;
 }
