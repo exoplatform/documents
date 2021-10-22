@@ -63,7 +63,7 @@ public class JCRDocumentsUtil {
     SORT_FIELDS_JCR_CORRESPONDING.put(DocumentSortField.MODIFIED_DATE, NodeTypeConstants.EXO_DATE_MODIFIED);
 
     SORT_FIELDS_ES_CORRESPONDING.put(DocumentSortField.NAME, "title");
-    SORT_FIELDS_ES_CORRESPONDING.put(DocumentSortField.CREATED_DATE, "lastUpdatedDate");
+    SORT_FIELDS_ES_CORRESPONDING.put(DocumentSortField.CREATED_DATE, "createdDate");
     SORT_FIELDS_ES_CORRESPONDING.put(DocumentSortField.MODIFIED_DATE, "lastUpdatedDate");
   }
 
