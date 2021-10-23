@@ -6,7 +6,7 @@
       v-if="loading"
       indeterminate
       size="16" />
-    <i v-else :class="fileTypeClass"></i>
+    <v-icon v-else :color="icon.color">{{ icon.class }}</v-icon>
     <span
       :title="file.name"
       v-sanitized-html="file.name"
@@ -30,12 +30,43 @@ export default {
     loading: false,
   }),
   computed: {
-    fileTypeClass() {
-      if (this.file.mimeType) {
-        const fileMimeTypeClass = this.file.mimeType.replace(/\./g, '').replace('/', '').replace('\\', '');
-        return `uiIconFileType${fileMimeTypeClass} uiIconFileTypeDefault my-auto`;
+    icon() {
+      const type = this.file && this.file.mimeType || '';
+      if (type.includes('pdf')) {
+        return {
+          class: 'mdi-file-pdf',
+          color: '#d07b7b',
+        };
+      } else if (type.includes('presentation') || type.includes('powerpoint')) {
+        return {
+          class: 'mdi-file-powerpoint',
+          color: '#e45030',
+        };
+      } else if (type.includes('sheet') || type.includes('excel')) {
+        return {
+          class: 'mdi-file-excel',
+          color: '#1a744b',
+        };
+      } else if (type.includes('word') || type.includes('opendocument') || type.includes('rtf') ) {
+        return {
+          class: 'mdi-file-word',
+          color: '#094d7f',
+        };
+      } else if (type.includes('plain')) {
+        return {
+          class: 'mdi-clipboard-text',
+          color: '#1c9bd7',
+        };
+      } else if (type.includes('image')) {
+        return {
+          class: 'mdi-image',
+          color: '#eab320',
+        };
       } else {
-        return 'uiIconFileTypeDefault my-auto';
+        return {
+          class: 'mdi-file',
+          color: '#cdcccc',
+        };
       }
     },
   },
