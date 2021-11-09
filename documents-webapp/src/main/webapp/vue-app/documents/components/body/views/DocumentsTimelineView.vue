@@ -87,6 +87,7 @@ export default {
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
+    dayFirstDay: 0,
     weekFirstDay: 0,
     monthFirstDay: 0,
     yearFirstDay: 0,
@@ -108,7 +109,10 @@ export default {
       if (this.grouping) {
         return this.files && this.files.slice().map(file => {
           const fileGrouping = JSON.parse(JSON.stringify(file));
-          if (this.weekFirstDay <= fileGrouping.modifiedDate) {
+          if (this.isToday(fileGrouping.modifiedDate)) {
+            fileGrouping.groupValue = '1:thisDay';
+          }
+          else if (this.weekFirstDay <= fileGrouping.modifiedDate) {
             fileGrouping.groupValue = '1:thisWeek';
           } else if (this.monthFirstDay <= fileGrouping.modifiedDate) {
             fileGrouping.groupValue = '2:thisMonth';
@@ -161,6 +165,7 @@ export default {
     },
   },
   created() {
+    this.dayFirstDay = this.getDayStart();
     this.weekFirstDay = this.getWeekStart();
     this.monthFirstDay = this.getMonthStart();
     this.yearFirstDay = this.getYearStart();
@@ -187,6 +192,17 @@ export default {
       if (changed) {
         this.headerExtensions = Object.assign({}, this.headerExtensions);
       }
+    },
+    isToday (someDate){
+      const today = new Date();
+      const day = new Date(someDate);
+      return day.getDate() === today.getDate() &&
+          day.getMonth() === today.getMonth() &&
+          day.getFullYear() === today.getFullYear();
+    },
+    getDayStart() {
+      const now = new Date();
+      return now.getTime();
     },
     getWeekStart() { // Return Monday
       const now = new Date();
