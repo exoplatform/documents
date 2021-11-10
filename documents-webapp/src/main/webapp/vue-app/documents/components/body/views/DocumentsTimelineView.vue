@@ -113,13 +113,13 @@ export default {
             fileGrouping.groupValue = '1:thisDay';
           }
           else if (this.weekFirstDay <= fileGrouping.modifiedDate) {
-            fileGrouping.groupValue = '1:thisWeek';
+            fileGrouping.groupValue = '2:thisWeek';
           } else if (this.monthFirstDay <= fileGrouping.modifiedDate) {
-            fileGrouping.groupValue = '2:thisMonth';
+            fileGrouping.groupValue = '3:thisMonth';
           } else if (this.yearFirstDay <= fileGrouping.modifiedDate) {
-            fileGrouping.groupValue = '3:thisYear';
+            fileGrouping.groupValue = '4:thisYear';
           } else {
-            fileGrouping.groupValue = '4:beforeThisYear';
+            fileGrouping.groupValue = '5:beforeThisYear';
           }
           return fileGrouping;
         }) || [];
