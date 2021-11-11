@@ -10,7 +10,7 @@
     <span
       :title="file.name"
       v-sanitized-html="file.name"
-      class="text-truncate ms-2">
+      class="text-truncate hover-underline ms-2">
     </span>
   </a>
 </template>
