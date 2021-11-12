@@ -39,7 +39,7 @@ import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -143,14 +143,29 @@ public class DocumentFileRestTest {
     List<AbstractNode> files_ = new ArrayList<>();
     files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,filter,    0,    0,  Long.valueOf(currentIdentity.getId()));
 
+    FileNodeEntity nodeEntity = new FileNodeEntity();
+    nodeEntity.setLinkedFileId("1");
+    nodeEntity.setVersionnedFileId("1");
+    nodeEntity.setMimeType(":file");
+    nodeEntity.setSize(50);
+
     assertEquals(files_.size(),4);
     Response response4 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"",null,false,0,0);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
+    List<FileNodeEntity> filesNodeEntity = new ArrayList<>();
+    filesNodeEntity = (List<FileNodeEntity>) response4.getEntity();
+    assertNotNull(filesNodeEntity);
+    assertNotNull(filesNodeEntity.get(0).hashCode());
+    assertNotNull(filesNodeEntity.get(0).toString());
+    assertEquals(filesNodeEntity.get(0).getMimeType(),":file");
+    assertEquals(filesNodeEntity.get(0).getVersionnedFileId(),"1");
+    assertEquals(filesNodeEntity.get(0).getSize(),50);
+    assertTrue(nodeEntity.equals(filesNodeEntity.get(0)));
 
   }
   @Test
   public void testGetDocumentFolder() throws Exception {
-    String username = "testuser";
+    String username = "usera";
     org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
     ConversationState.setCurrent(new ConversationState(root));
     long currentOwnerId = 2;
@@ -176,15 +191,12 @@ public class DocumentFileRestTest {
     filter.setSortField(DocumentSortField.NAME);
 
     IdentityEntity identity1 = new IdentityEntity();
-    IdentityEntity identity2 = new IdentityEntity();
-    identity1.setId("1");
+    IdentityEntity identity2 = new IdentityEntity("3","userb",null,"organization","spacetest");
+    identity1.setId("2");
     identity1.setName("usera");
     identity1.setAvatar(null);
-    identity1.setRemoteId("2");
-    identity2.setId("3");
-    identity2.setName("userb");
-    identity2.setAvatar(null);
-    identity2.setRemoteId("4");
+    identity1.setProviderId("organization");
+    identity1.setRemoteId("spacetest");
 
     NodeAuditTrailItemEntity nodeAuditTrailItemEntity = new NodeAuditTrailItemEntity();
     nodeAuditTrailItemEntity.setId(11);
@@ -192,6 +204,7 @@ public class DocumentFileRestTest {
     nodeAuditTrailItemEntity.setUserIdentity(identity1);
     nodeAuditTrailItemEntity.setTargetIdentity(identity2);
     nodeAuditTrailItemEntity.setDate(1111);
+    nodeAuditTrailItemEntity.hashCode();
     List<NodeAuditTrailItemEntity> trails = new ArrayList<>();
     trails.add(nodeAuditTrailItemEntity);
 
@@ -201,6 +214,7 @@ public class DocumentFileRestTest {
     nodeAuditTrailsEntity.setOffset(0);
     nodeAuditTrailsEntity.setSize(50);
     nodeAuditTrailsEntity.setTrails(trails);
+    nodeAuditTrailsEntity.hashCode();
     AbstractNodeEntity documentEntities = new AbstractNodeEntity(true);
     documentEntities.setId("2");
     documentEntities.setName("document");
@@ -233,6 +247,15 @@ public class DocumentFileRestTest {
     folder.add(folder1);
     folder.add(folder2);
 
+    FolderNodeEntity  folderEntity= new FolderNodeEntity();
+    folderEntity.setId("2");
+    folderEntity.setName("folder1");
+    folderEntity.setCreatorIdentity(identity1);
+    folderEntity.setDatasource("datasource");
+    folderEntity.setDescription("description");
+    folderEntity.setCreatedDate(11111);
+    folderEntity.setParentFolderId("1");
+
     String expand = "creator";
 
     when(documentFileStorage.getFolderChildNodes(filter, spaceID,    0, 0)).thenReturn(folder);
@@ -245,6 +268,19 @@ public class DocumentFileRestTest {
 
     Response response3 = documentFileRest.getDocumentItems(null,    "2",    FileListingType.FOLDER,  null, expand,null,false,0,0);
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
+
+    List<FolderNodeEntity> foldersNodeEntity = new ArrayList<>();
+    foldersNodeEntity = (List<FolderNodeEntity>) response3.getEntity();
+    assertNotNull(foldersNodeEntity);
+    assertNotNull(foldersNodeEntity.get(0).hashCode());
+    assertNotNull(foldersNodeEntity.get(0).toString());
+    assertEquals(foldersNodeEntity.get(0).getName(),"folder1");
+    assertEquals(foldersNodeEntity.get(0).getCreatorIdentity(),identity1);
+    assertEquals(foldersNodeEntity.get(0).getDatasource(),"datasource");
+    assertEquals(foldersNodeEntity.get(0).getDescription(),"description");
+    assertEquals(foldersNodeEntity.get(0).getCreatedDate(),11111);
+    assertEquals(foldersNodeEntity.get(0).getParentFolderId(),"1");
+    assertTrue(folderEntity.equals(foldersNodeEntity.get(0)));
   }
 
 
