@@ -20,6 +20,7 @@
   }
   %>
   <% if(isNewDocumentsEnabledForUser) { %>
+   <link rel="stylesheet" href="/documents-portlet/skin/css/documents.css"/>
   <div id="DocumentsApplication">
   </div>
   <% } else { %>
