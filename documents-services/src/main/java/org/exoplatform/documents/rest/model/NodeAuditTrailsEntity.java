@@ -20,8 +20,9 @@ import java.util.List;
 
 import lombok.*;
 
-@Setter
+@Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class NodeAuditTrailsEntity {
 
   private List<NodeAuditTrailItemEntity> trails;
