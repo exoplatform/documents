@@ -20,8 +20,9 @@ import java.util.Map;
 
 import lombok.*;
 
-@Setter
+@Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class NodeAuditTrailItemEntity {
 
   private long                id;
