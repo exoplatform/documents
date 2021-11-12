@@ -20,7 +20,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Setter;
 
-@Setter
+@Data
 @EqualsAndHashCode(callSuper = true)
 public class FolderNodeEntity extends AbstractNodeEntity {
 
