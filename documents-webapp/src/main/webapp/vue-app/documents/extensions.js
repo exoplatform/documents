@@ -88,14 +88,4 @@ if (eXo.env.portal.activityFavoritesEnabled) {
   });
 }
 
-extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'actions',
-  align: 'center',
-  sortable: false,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '60px',
-  rank: 70,
-  componentOptions: {
-    vueComponent: Vue.options.components['documents-action-cell'],
-  },
-});
+
