@@ -20,9 +20,8 @@ import java.util.Map;
 
 import lombok.*;
 
-@Data
+@Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class FileVersionsEntity {
 
   private Map<Long, FileNodeEntity> versions;

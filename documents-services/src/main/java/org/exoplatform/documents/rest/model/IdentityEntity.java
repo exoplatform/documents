@@ -18,9 +18,8 @@ package org.exoplatform.documents.rest.model;
 
 import lombok.*;
 
-@Data
+@Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class IdentityEntity {
 
   private String id;
