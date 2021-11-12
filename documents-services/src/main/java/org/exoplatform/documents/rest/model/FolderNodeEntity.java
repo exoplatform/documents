@@ -18,8 +18,9 @@ package org.exoplatform.documents.rest.model;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Setter;
 
-@Data
+@Setter
 @EqualsAndHashCode(callSuper = true)
 public class FolderNodeEntity extends AbstractNodeEntity {
 
