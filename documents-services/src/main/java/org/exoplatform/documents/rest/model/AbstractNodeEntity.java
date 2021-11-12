@@ -23,8 +23,7 @@ import lombok.Setter;
 import org.exoplatform.documents.model.NodePermission;
 
 import lombok.Data;
-
-@Setter
+@Data
 public class AbstractNodeEntity {
 
   public AbstractNodeEntity(boolean isFolder) {
