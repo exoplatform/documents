@@ -1,8 +1,11 @@
 <%
+  import org.exoplatform.portal.resource.SkinService ;
+  import org.exoplatform.container.ExoContainerContext;
   def rcontext = _ctx.getRequestContext() ;
   def userAgent = uicomponent.getUserAgent();
   def jsManager = rcontext.getJavascriptManager();
-  
+
+  def skinService = ExoContainerContext.getService(SkinService.class) ;
   boolean isNewDocumentsEnabledForUser = uicomponent.isDisplayNewDocumentsForUser();
   if (isNewDocumentsEnabledForUser) {
     jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("app.init();");
@@ -19,7 +22,10 @@
     _ctx.include("app:/groovy/webui/component/explorer/UIDocumentsFeatureSwitch.gtmpl");
   }
   %>
-  <% if(isNewDocumentsEnabledForUser) { %>
+  <% if(isNewDocumentsEnabledForUser) {
+    String skinUrl = skinService.getSkin("documents-portlet/Documents", "Enterprise").createURL(_ctx.getRequestContext().getParentAppRequestContext().controllerContext);
+    %>
+   <link rel="stylesheet" href="$skinUrl"/>
   <div id="DocumentsApplication">
   </div>
   <% } else { %>

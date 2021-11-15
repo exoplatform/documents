@@ -1,1 +1,19 @@
 @import "./variables.less";
+
+.VuetifyApp {
+  .documents-application {
+    .documents-body {
+      .documents-table {
+        .attachment {
+          span {
+            &:hover {
+              text-decoration-color: @greyColorLighten1!important;
+              text-decoration-thickness: 2px!important;
+              text-underline-offset: 2px!important;
+            }
+          }
+        }
+      }
+    }
+  }
+}
