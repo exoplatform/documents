@@ -29,11 +29,11 @@ export default {
     },
     limit: {
       type: Number,
-      default: () => 10,
+      default: () => 50,
     },
     pageSize: {
       type: Number,
-      default: () => 10,
+      default: () => 50,
     },
     hasMore: {
       type: Boolean,
