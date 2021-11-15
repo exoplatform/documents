@@ -12,7 +12,6 @@ import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLas
 import DocumentsFileSizeCell from './components/body/table/cells/DocumentsFileSizeCell.vue';
 import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
 import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
-import DocumentsActionCell from './components/body/table/cells/DocumentsActionCell.vue';
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 
 const components = {
@@ -30,7 +29,6 @@ const components = {
   'documents-file-size-cell': DocumentsFileSizeCell,
   'documents-last-activity-cell': DocumentsLastActivityCell,
   'documents-favorite-cell': DocumentsFavoriteCell,
-  'documents-action-cell': DocumentsActionCell,
   'documents-file-name-cell': DocumentsFileNameCell,
 };
 
