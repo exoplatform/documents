@@ -4,12 +4,17 @@
   .documents-application {
     .documents-body {
       .documents-table {
-        .attachment {
-          span {
-            &:hover {
-              text-decoration-color: @greyColorLighten1!important;
-              text-decoration-thickness: 2px!important;
-              text-underline-offset: 2px!important;
+        tbody {
+          td {
+            border-bottom: none!important;
+            .attachment {
+              span {
+                &:hover {
+                  text-decoration-color: @greyColorLighten1!important;
+                  text-decoration-thickness: 2px!important;
+                  text-underline-offset: 2px!important;
+                }
+              }
             }
           }
         }
