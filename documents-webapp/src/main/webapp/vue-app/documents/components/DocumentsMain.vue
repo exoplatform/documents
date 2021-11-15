@@ -28,7 +28,7 @@ export default {
     sortField: 'lastUpdated',
     ascending: false,
     parentFolderId: null,
-    pageSize: 10,
+    pageSize: 50,
     files: [],
     offset: 0,
     limit: 0,
