@@ -1,6 +1,6 @@
 <template>
-  <v-btn class="btn btn-primary px-6" @click="openDrawer">
-    <v-icon class="me-2">mdi-text-box-plus</v-icon>
+  <v-btn class="btn btn-primary" @click="openDrawer">
+    <v-icon class="me-2">mdi-plus</v-icon>
     {{ $t('documents.button.addNewFile') }}
   </v-btn>
 </template>
