@@ -1,6 +1,6 @@
 <template>
   <v-app
-    class="documents-application border-box-sizing"
+    class="documents-application singlePageApplication border-box-sizing"
     role="main"
     flat>
     <div class="pa-3 white">
