@@ -36,7 +36,7 @@
         <v-btn
           :loading="loading"
           :disabled="loading"
-          class="btn mx-auto"
+          class="btn mx-auto loadMore"
           @click="$root.$emit('document-load-more')">
           {{ $t('documents.loadMore') }}
         </v-btn>
