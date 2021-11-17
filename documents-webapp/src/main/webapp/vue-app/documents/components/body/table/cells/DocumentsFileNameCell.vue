@@ -6,7 +6,10 @@
       v-if="loading"
       indeterminate
       size="16" />
-    <v-icon v-else size="22" :color="icon.color">{{ icon.class }}</v-icon>
+    <v-icon
+      v-else
+      size="22"
+      :color="icon.color">{{ icon.class }}</v-icon>
     <span
       :title="file.name"
       v-sanitized-html="file.name"
@@ -42,7 +45,7 @@ export default {
           class: 'fas fa-file-powerpoint',
           color: '#CB4B32',
         };
-      } else if (type.includes('sheet') || type.includes('excel')) {
+      } else if (type.includes('sheet') || type.includes('excel') || type.includes('csv')) {
         return {
           class: 'fas fa-file-excel',
           color: '#217345',
@@ -62,12 +65,12 @@ export default {
           class: 'fas fa-file-image',
           color: '#999999',
         };
-      } else if (type.includes('video')) {
+      } else if (type.includes('video') || type.includes('octet-stream') || type.includes('ogg')) {
         return {
           class: 'fas fa-file-video',
           color: '#79577A',
         };
-      } else if (type.includes('zip') || type.includes('war')) {
+      } else if (type.includes('zip') || type.includes('war') || type.includes('rar')) {
         return {
           class: 'fas fa-file-archive',
           color: '#717272',
