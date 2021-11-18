@@ -80,6 +80,11 @@ export default {
           class: 'fas fa-file-contract',
           color: '#E79E24',
         };
+      } else if (type.includes('html') || type.includes('xml') || type.includes('css')) {
+        return {
+          class: 'fas fa-file-code',
+          color: '#d404b1',
+        };
       } else {
         return {
           class: 'fas fa-file',
