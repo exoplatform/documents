@@ -60,19 +60,6 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   },
 });
 
-extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'size',
-  labelKey: 'documents.label.fileSize',
-  align: 'center',
-  sortable: false,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '120px',
-  rank: 50,
-  componentOptions: {
-    vueComponent: Vue.options.components['documents-file-size-cell'],
-  },
-});
-
 if (eXo.env.portal.activityFavoritesEnabled) {
   extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
     id: 'favorite',
