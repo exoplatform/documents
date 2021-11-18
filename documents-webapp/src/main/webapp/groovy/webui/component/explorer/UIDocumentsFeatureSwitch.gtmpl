@@ -1,6 +1,8 @@
 <%
     boolean isActive = uicomponent.isDisplayNewDocumentsForUser();
     String buttonLabel = isActive ? _ctx.appRes("documents.switchToOldDocuments") : _ctx.appRes("documents.switchToNewDocuments");
+    String buttonTitle = isActive ? _ctx.appRes("documents.switchToOldDocuments.title") : _ctx.appRes("documents.switchToNewDocuments.title");
+    String buttonClass = isActive ?  "mdi-backburger" : "mdi-star-four-points";
     String buttonId = isActive ? "switchToOldDocuments" : "switchToNewDocuments";
 %>
 <div class="VuetifyApp">
@@ -11,10 +13,10 @@
           class="primary--text font-weight-bold text-capitalize v-btn v-btn--flat v-btn--text theme--light v-size--default"
           id="$buttonId"
           onclick="<%=uicomponent.event("SwitchDocuments")%>">
-          <span class="v-btn__content">
+          <span class="v-btn__content" title="$buttonTitle">
             <i aria-hidden="true"
-              class="v-icon notranslate me-3 far fa-window-restore theme--light"
-              style="font-size: 16px;"></i>
+              class="v-icon notranslate theme--light me-3 mdi $buttonClass"
+              style="font-size: 20px;"></i>
             $buttonLabel
           </span>
         </button>
