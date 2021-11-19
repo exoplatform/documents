@@ -35,19 +35,6 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
 });
 
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'lastActivity',
-  labelKey: 'documents.label.lastActivity',
-  align: 'center',
-  sortable: false,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '120px',
-  rank: 30,
-  componentOptions: {
-    vueComponent: Vue.options.components['documents-last-activity-cell'],
-  },
-});
-
-extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   id: 'lastUpdated',
   labelKey: 'documents.label.lastUpdated',
   align: 'center',
