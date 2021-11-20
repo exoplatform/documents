@@ -47,6 +47,32 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   },
 });
 
+/*extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
+  id: 'size',
+  labelKey: 'documents.label.fileSize',
+  align: 'center',
+  sortable: false,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '120px',
+  rank: 50,
+  componentOptions: {
+    vueComponent: Vue.options.components['documents-file-size-cell'],
+  },
+});
+
+extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
+  id: 'lastActivity',
+  labelKey: 'documents.label.lastActivity',
+  align: 'center',
+  sortable: false,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '120px',
+  rank: 30,
+  componentOptions: {
+    vueComponent: Vue.options.components['documents-last-activity-cell'],
+  },
+});*/
+
 if (eXo.env.portal.activityFavoritesEnabled) {
   extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
     id: 'favorite',
