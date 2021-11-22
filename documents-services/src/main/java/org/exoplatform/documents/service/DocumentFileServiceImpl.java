@@ -125,6 +125,33 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public DocumentGroupsSize getGroupDocumentsCount(DocumentTimelineFilter filter,
+                                         long userIdentityId) throws IllegalAccessException, ObjectNotFoundException {
+    org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
+    String username = aclIdentity.getUserId();
+    Long ownerId = filter.getOwnerId();
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    if (ownerIdentity == null) {
+      throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+    }
+    if (ownerIdentity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      if (!spaceService.hasAccessPermission(space, username)) {
+        throw new IllegalAccessException("User " + username
+            + " attempts to access documents of space " + space.getDisplayName()
+            + "while it's not a member");
+      }
+    } else if (ownerIdentity.isUser() && !StringUtils.equals(ownerIdentity.getRemoteId(), username)) {
+      throw new IllegalAccessException("User " + username
+          + " attempts to access private documents of user " + ownerIdentity.getRemoteId());
+    }
+    if (filter.getSortField() == null) {
+      filter.setSortField(DocumentSortField.MODIFIED_DATE);
+    }
+    return documentFileStorage.getGroupDocumentsCount(filter, aclIdentity);
+  }
+
+  @Override
   public List<AbstractNode> getFolderChildNodes(DocumentFolderFilter filter,
                                                 int offset,
                                                 int limit,

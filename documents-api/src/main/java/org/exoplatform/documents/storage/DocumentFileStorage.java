@@ -43,6 +43,20 @@ public interface DocumentFileStorage {
                                   int offset,
                                   int limit) throws ObjectNotFoundException;
 
+
+  /**
+   * Retrieves the number of existing files by group.
+   *
+   * @param filter {@link DocumentFolderFilter} that contains filtering criteria
+   * @param aclIdentity {@link Identity} of the user acessing files
+   * @return {@link DocumentGroupsSize}
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when parentFolderId doesn't exisits
+   */
+
+  DocumentGroupsSize getGroupDocumentsCount(DocumentTimelineFilter filter, Identity aclIdentity) throws ObjectNotFoundException;
+
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the
    * designated filter. The parentForlderId of filter object will be used to
