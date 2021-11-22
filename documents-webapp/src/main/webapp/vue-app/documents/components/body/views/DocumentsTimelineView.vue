@@ -52,6 +52,10 @@ export default {
       type: Array,
       default: null,
     },
+    groupsSizes: {
+      type: Object,
+      default: null,
+    },
     pageSize: {
       type: Number,
       default: 20
@@ -110,16 +114,16 @@ export default {
         return this.files && this.files.slice().map(file => {
           const fileGrouping = JSON.parse(JSON.stringify(file));
           if (this.isToday(fileGrouping.modifiedDate)) {
-            fileGrouping.groupValue = '1:thisDay';
+            fileGrouping.groupValue = `1:thisDay:${this.groupsSizes.thisDay}`;
           }
           else if (this.weekFirstDay <= fileGrouping.modifiedDate) {
-            fileGrouping.groupValue = '2:thisWeek';
+            fileGrouping.groupValue = `2:thisWeek:${this.groupsSizes.thisWeek}`;
           } else if (this.monthFirstDay <= fileGrouping.modifiedDate) {
-            fileGrouping.groupValue = '3:thisMonth';
+            fileGrouping.groupValue = `3:thisMonth:${this.groupsSizes.thisMonth}`;
           } else if (this.yearFirstDay <= fileGrouping.modifiedDate) {
-            fileGrouping.groupValue = '4:thisYear';
+            fileGrouping.groupValue = `4:thisYear:${this.groupsSizes.thisYear}`;
           } else {
-            fileGrouping.groupValue = '5:beforeThisYear';
+            fileGrouping.groupValue = `5:beforeThisYear:${this.groupsSizes.beforeThisYear}`;
           }
           return fileGrouping;
         }) || [];

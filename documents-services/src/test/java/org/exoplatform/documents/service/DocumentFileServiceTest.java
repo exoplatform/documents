@@ -27,10 +27,7 @@ import java.util.List;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
-import org.exoplatform.documents.model.AbstractNode;
-import org.exoplatform.documents.model.DocumentFolderFilter;
-import org.exoplatform.documents.model.DocumentTimelineFilter;
-import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -199,6 +196,51 @@ public class DocumentFileServiceTest {
     List<FileNode> files_ = new ArrayList<>();
     files_ = documentFileService.getFilesTimeline(filter,    0,    0,  Long.valueOf(currentIdentity.getId()));
     assertEquals(files_.size(),4);
+  }
+
+  @Test
+  public void testGetGroupDocumentsCount() throws Exception { // NOSONAR
+
+    String username = "testuser";
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    DocumentTimelineFilter filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
+            eq(username))).thenReturn(currentIdentity);
+
+
+    DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L);
+    DocumentTimelineFilter finalFilter1 = filter_;
+    Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
+      documentFileService.getFilesTimeline(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
+    });
+    assertEquals(exception.getMessage(),"Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
+
+    String spacePrettyName = "spacetest";
+    currentIdentity.setRemoteId(spacePrettyName);
+    Space space = new Space();
+    org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
+    when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
+    when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
+    when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
+
+
+    DocumentGroupsSize documentGroupsSize = new DocumentGroupsSize();
+    documentGroupsSize.setThisDay(4);
+
+    when(documentFileStorage.getGroupDocumentsCount(filter, spaceID)).thenReturn(documentGroupsSize);
+    DocumentGroupsSize documentGroupsSize_ = new DocumentGroupsSize();
+    documentGroupsSize_ = documentFileService.getGroupDocumentsCount(filter,  Long.valueOf(currentIdentity.getId()));
+    assertEquals(documentGroupsSize_.getThisDay(),4);
   }
 
   @Test

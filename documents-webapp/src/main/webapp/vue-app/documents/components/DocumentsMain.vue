@@ -9,6 +9,7 @@
       <documents-body
         :view-extension="selectedViewExtension"
         :files="files"
+        :groupsSizes="groupsSizes"
         :page-size="pageSize"
         :offset="offset"
         :limit="limit"
@@ -35,6 +36,13 @@ export default {
     loading: false,
     hasMore: false,
     viewExtensions: {},
+    groupsSizes: {
+      'thisDay': 0,
+      'thisWeek': 0,
+      'thisMonth': 0,
+      'thisYear': 0,
+      'beforeThisYear': 0,
+    },
     selectedView: null,
   }),
   computed: {
@@ -52,7 +60,8 @@ export default {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
     this.refreshViewExtensions();
 
-    this.$root.$on('documents-refresh-files', this.refreshFiles);
+    this.$root.$on('documents-refresh-files', this.refreshFilesEvent);
+    this.getDocumentGroupSizes();
     this.refreshFiles().finally(() => this.$root.$applicationLoaded());
 
     this.$root.$on('document-load-more', this.loadMore);
@@ -77,6 +86,10 @@ export default {
     loadMore() {
       this.limit += this.pageSize;
 
+      this.refreshFiles();
+    },
+    refreshFilesEvent() {
+      this.getDocumentGroupSizes();
       this.refreshFiles();
     },
     refreshFiles() {
@@ -107,6 +120,24 @@ export default {
         .then(files => {
           this.files = files && files.slice(this.offset, this.limit) || [];
           this.hasMore = files && files.length > this.limit;
+        })
+        .finally(() => this.loading = false);
+    },
+    getDocumentGroupSizes() {
+      if (!this.selectedViewExtension) {
+        return Promise.resolve(null);
+      }
+      const filter = {
+        ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+      };
+
+      if (this.query) {
+        filter.query = this.query;
+      }
+      return this.$documentFileService
+        .getDocumentGroupSizes(filter)
+        .then(sizes => {
+          this.groupsSizes =  sizes || {};
         })
         .finally(() => this.loading = false);
     },

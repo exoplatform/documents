@@ -164,6 +164,58 @@ public class DocumentFileRestTest {
 
   }
   @Test
+  public void testGETDocumentGroupsCount() throws Exception {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    DocumentTimelineFilter filter = null;
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
+            eq(username))).thenReturn(currentIdentity);
+
+    String spacePrettyName = "spacetest";
+    currentIdentity.setRemoteId(spacePrettyName);
+    Space space = new Space();
+    org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
+    when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
+    when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
+    when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
+
+
+    DocumentGroupsSize documentGroupsSize = new DocumentGroupsSize();
+    documentGroupsSize.setThisDay(4);
+
+    when(documentFileService.getGroupDocumentsCount(filter, currentOwnerId)).thenReturn(documentGroupsSize);
+
+    Response response1 = documentFileRest.getDocumentGroupsCount(null,"",null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
+
+    Response response2 = documentFileRest.getDocumentGroupsCount(currentOwnerId,"",null);
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response2.getStatus());
+
+
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+
+    Response response4 = documentFileRest.getDocumentGroupsCount(currentOwnerId,    "",null);
+    assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
+
+    assertEquals(((DocumentGroupsSize) response4.getEntity()).getThisDay(),4);
+
+  }
+
+  @Test
   public void testGetDocumentFolder() throws Exception {
     String username = "usera";
     org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
