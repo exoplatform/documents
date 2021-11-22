@@ -9,7 +9,7 @@
       <documents-body
         :view-extension="selectedViewExtension"
         :files="files"
-        :groupsSizes="groupsSizes"
+        :groups-sizes="groupsSizes"
         :page-size="pageSize"
         :offset="offset"
         :limit="limit"
@@ -71,8 +71,8 @@ export default {
     this.$root.$on('document-search', this.search);
     this.$root.$on('documents-sort', this.sort);
     
-    const currentUrlPath = window.location.search;
-    const queryParams = new URLSearchParams(currentUrlPath);
+    const currentUrlSearchParams = window.location.search;
+    const queryParams = new URLSearchParams(currentUrlSearchParams);
     if (queryParams.has('documentPreviewId')) {
       this.loading = true;
       this.previewMode = true;
