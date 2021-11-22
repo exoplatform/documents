@@ -19,6 +19,10 @@ export default {
       type: Array,
       default: null,
     },
+    groupsSizes: {
+      type: Object,
+      default: null,
+    },
     loading: {
       type: Boolean,
       default: false,
@@ -52,6 +56,7 @@ export default {
     params() {
       return {
         files: this.files,
+        groupsSizes: this.groupsSizes,
         hasMore: this.hasMore,
         ascending: this.ascending,
         pageSize: this.pageSize,
