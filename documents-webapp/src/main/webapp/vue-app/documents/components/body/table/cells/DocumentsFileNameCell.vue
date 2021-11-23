@@ -1,6 +1,6 @@
 <template>
   <a
-    class="attachment d-flex flex-nowrap text-color"
+    class="attachment d-flex flex-nowrap text-color openPreviewDoc"
     @click="openPreview">
     <v-progress-circular
       v-if="loading"
