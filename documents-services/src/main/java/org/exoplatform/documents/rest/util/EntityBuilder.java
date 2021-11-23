@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.rest.util;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -96,7 +98,7 @@ public class EntityBuilder {
                              AbstractNodeEntity nodeEntity,
                              List<String> expandProperties) {
     nodeEntity.setId(node.getId());
-    nodeEntity.setName(node.getName());
+    nodeEntity.setName(URLDecoder.decode(node.getName(), StandardCharsets.UTF_8));
     nodeEntity.setDatasource(node.getDatasource());
     nodeEntity.setDescription(node.getDescription());
     nodeEntity.setAcl(node.getAcl());
