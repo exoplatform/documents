@@ -8,7 +8,7 @@
   <artifactId>documents-services</artifactId>
   <name>eXo Documents - Services</name>
   <properties>
-    <exo.test.coverage.ratio>0.72</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.71</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>
