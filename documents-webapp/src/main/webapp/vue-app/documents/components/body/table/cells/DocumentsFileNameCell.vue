@@ -92,7 +92,10 @@ export default {
           });
         })
         .catch(e => console.error(e))
-        .finally(() => this.loading = false);
+        .finally(() => {
+          window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.id}`);
+          this.loading = false;
+        });
     },
   },
 };
