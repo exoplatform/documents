@@ -98,7 +98,7 @@ public class EntityBuilder {
                              AbstractNodeEntity nodeEntity,
                              List<String> expandProperties) {
     nodeEntity.setId(node.getId());
-    nodeEntity.setName(URLDecoder.decode(node.getName(), StandardCharsets.UTF_8));
+    nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
     nodeEntity.setDatasource(node.getDatasource());
     nodeEntity.setDescription(node.getDescription());
     nodeEntity.setAcl(node.getAcl());
