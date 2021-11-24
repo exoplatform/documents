@@ -1,11 +1,16 @@
 <template>
   <v-btn class="btn btn-primary" @click="openDrawer">
-    <v-icon class="me-2">mdi-plus</v-icon>
-    {{ $t('documents.button.addNewFile') }}
+    <v-icon :class="!isMobile ? 'me-2' : ''">mdi-plus</v-icon>
+    {{ !isMobile ? $t('documents.button.addNewFile') : '' }}
   </v-btn>
 </template>
 <script>
 export default {
+  computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs';
+    },
+  },
   created() {
     document.addEventListener('entity-attachments-updated', this.refreshFilesList);
   },
