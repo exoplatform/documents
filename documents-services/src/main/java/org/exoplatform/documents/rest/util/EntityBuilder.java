@@ -26,13 +26,16 @@ import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
 public class EntityBuilder {
-
+  private static final Log LOG                             =
+          ExoLogger.getExoLogger(EntityBuilder.class);
   private EntityBuilder() {
   }
 
@@ -97,32 +100,36 @@ public class EntityBuilder {
                              AbstractNode node,
                              AbstractNodeEntity nodeEntity,
                              List<String> expandProperties) {
-    nodeEntity.setId(node.getId());
-    nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
-    nodeEntity.setDatasource(node.getDatasource());
-    nodeEntity.setDescription(node.getDescription());
-    nodeEntity.setAcl(node.getAcl());
-    nodeEntity.setCreatedDate(node.getCreatedDate());
-    nodeEntity.setModifiedDate(node.getModifiedDate());
-    nodeEntity.setParentFolderId(node.getParentFolderId());
-    if (expandProperties.contains("creator")) {
-      nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
-    }
-    if (expandProperties.contains("modifier")) {
-      nodeEntity.setModifierIdentity(toIdentityEntity(identityManager, spaceService, node.getModifierId()));
-    }
-    if (expandProperties.contains("owner")) {
-      nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
-    }
-    if (expandProperties.contains("auditTrails")) {
-      // TODO (documentFileService.getNodeAuditTrails) think of using limit of
-      // file auditTrails to retrieve. In listing, we need only latest activity,
-      // so limit = 1
-    }
-    if (expandProperties.contains("metadatas")) {
-      // TODO (documentFileService.getNodeMetadatas) retrieving all Metadata of
-      // a file, visible for current user only. The current user, by example
-      // must not see the metadata of other users, such as favorites metadata
+    try {
+      nodeEntity.setId(node.getId());
+      nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
+      nodeEntity.setDatasource(node.getDatasource());
+      nodeEntity.setDescription(node.getDescription());
+      nodeEntity.setAcl(node.getAcl());
+      nodeEntity.setCreatedDate(node.getCreatedDate());
+      nodeEntity.setModifiedDate(node.getModifiedDate());
+      nodeEntity.setParentFolderId(node.getParentFolderId());
+      if (expandProperties.contains("creator")) {
+        nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
+      }
+      if (expandProperties.contains("modifier")) {
+        nodeEntity.setModifierIdentity(toIdentityEntity(identityManager, spaceService, node.getModifierId()));
+      }
+      if (expandProperties.contains("owner")) {
+        nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
+      }
+      if (expandProperties.contains("auditTrails")) {
+        // TODO (documentFileService.getNodeAuditTrails) think of using limit of
+        // file auditTrails to retrieve. In listing, we need only latest activity,
+        // so limit = 1
+      }
+      if (expandProperties.contains("metadatas")) {
+        // TODO (documentFileService.getNodeMetadatas) retrieving all Metadata of
+        // a file, visible for current user only. The current user, by example
+        // must not see the metadata of other users, such as favorites metadata
+      }
+    } catch (Exception e) {
+      LOG.error("==== exception occured when converting node with ID = {} and name = {}",node.getId(),node.getName(),e );
     }
   }
 
