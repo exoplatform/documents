@@ -1,8 +1,8 @@
 <template>
   <div class="d-flex flex-row">
     <documents-header-left />
-    <v-spacer :class="showMobileFilter ? 'd-none' : ''" />
-    <documents-header-right />
+    <v-spacer v-show="!showMobileFilter" />
+    <documents-header-right v-if="!isMobile" />
   </div>
 </template>
 
