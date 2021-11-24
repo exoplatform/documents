@@ -9,6 +9,7 @@
     :locale="lang"
     :group-by="groupBy"
     :group-desc="groupDesc"
+    :disable-sort="isMobile"
     hide-default-footer
     disable-pagination
     disable-filtering
@@ -91,6 +92,7 @@ export default {
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
+    mobileUnfriendlyExtensions: ['lastUpdated', 'size', 'lastActivity', 'favorite'],
     dayFirstDay: 0,
     weekFirstDay: 0,
     monthFirstDay: 0,
@@ -155,6 +157,9 @@ export default {
       });
       return headers;
     },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs';
+    },
   },
   watch: {
     options() {
@@ -188,8 +193,10 @@ export default {
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.headerExtensions[extension.id] || this.headerExtensions[extension.id] !== extension)) {
-          this.headerExtensions[extension.id] = extension;
-          changed = true;
+          if (!this.isMobile || this.isMobile && !this.mobileUnfriendlyExtensions.includes(extension.id)) {
+            this.headerExtensions[extension.id] = extension;
+            changed = true;
+          }
         }
       });
       // force update of attribute to re-render switch new extension id
