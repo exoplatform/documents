@@ -2,7 +2,7 @@
   <div class="d-flex flex-row">
     <documents-header-left />
     <v-spacer v-show="!showMobileFilter" />
-    <documents-header-right />
+    <documents-header-right v-if="!isMobile" />
   </div>
 </template>
 
