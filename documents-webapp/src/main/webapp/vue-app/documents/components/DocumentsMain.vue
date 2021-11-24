@@ -1,11 +1,13 @@
 <template>
   <v-app
     class="documents-application singlePageApplication border-box-sizing"
+    :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
     <div class="pa-3 white">
       <documents-header
-        class="py-2" />
+        class="py-2"
+        :is-mobile="isMobile" />
       <documents-body
         :view-extension="selectedViewExtension"
         :files="files"
@@ -55,6 +57,9 @@ export default {
         return sortedViewExtensions[0];
       }
       return null;
+    },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs';
     },
   },
   created() {

@@ -10,11 +10,17 @@
       v-else
       size="22"
       :color="icon.color">{{ icon.class }}</v-icon>
-    <span
-      :title="file.name"
-      v-sanitized-html="file.name"
-      class="text-truncate hover-underline ms-2">
-    </span>
+    <div>
+      <span
+        :title="file.name"
+        v-sanitized-html="file.name"
+        class="text-truncate hover-underline ms-2">
+      </span>
+      <documents-last-updated-cell
+        v-if="isMobile"
+        :file="file"
+        :extension="extension" />
+    </div>
   </a>
 </template>
 <script>
@@ -33,6 +39,9 @@ export default {
     loading: false,
   }),
   computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs';
+    },
     icon() {
       const type = this.file && this.file.mimeType || '';
       if (type.includes('pdf')) {

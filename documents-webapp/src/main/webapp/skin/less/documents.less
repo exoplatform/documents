@@ -6,23 +6,73 @@
       .documents-table {
         tbody {
           td {
-            border-bottom: none!important;
+            border-bottom: none !important;
+
             .attachment {
               span {
                 a {
-                  color: @textColor!important;
+                  color: @textColor !important;
                   text-decoration-color: @greyColorLighten1;
                   pointer-events: none;
                 }
+
                 &:hover {
-                  text-decoration-color: @greyColorLighten1!important;
-                  text-decoration-thickness: 2px!important;
-                  text-underline-offset: 2px!important;
+                  text-decoration-color: @greyColorLighten1 !important;
+                  text-decoration-thickness: 2px !important;
+                  text-underline-offset: 2px !important;
                 }
               }
             }
           }
         }
+      }
+    }
+  }
+
+  .documents-application.mobile {
+    margin-top: 0;
+
+    .v-data-table-header-mobile {
+      display: none;
+    }
+
+    .documents-header-left-action {
+      button {
+        height: 42px;
+        min-width: 52px !important;
+      }
+    }
+
+    .v-data-table__mobile-row__header {
+      display: none;
+    }
+
+    .v-data-table__mobile-table-row > :first-child {
+      display: none;
+    }
+
+    .v-data-table__mobile-table-row > :last-child {
+      margin-bottom: 6px;
+      padding-left: 46px;
+    }
+
+    .v-data-table__mobile-row__cell {
+      .attachment {
+        i {
+          font-size: 32px !important;
+        }
+
+        span {
+          display: flex;
+          margin-left: 16px !important;
+        }
+      }
+    }
+
+    .v-data-table__mobile-table-row {
+      .text-no-wrap {
+        text-align: left;
+        margin-left: 16px;
       }
     }
   }
