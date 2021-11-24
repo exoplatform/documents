@@ -74,7 +74,7 @@ export default {
           class: 'fas fa-file-image',
           color: '#999999',
         };
-      } else if (type.includes('video') || type.includes('octet-stream') || type.includes('ogg')) {
+      } else if (type.includes('video') || type.includes('vob') || type.includes('ogg') || type.includes('m2v') || type.includes('mjpeg') || type.includes('asf')) {
         return {
           class: 'fas fa-file-video',
           color: '#79577A',
@@ -92,7 +92,7 @@ export default {
       } else if (type.includes('html') || type.includes('xml') || type.includes('css')) {
         return {
           class: 'fas fa-file-code',
-          color: '#d404b1',
+          color: '#6cf500',
         };
       } else {
         return {
