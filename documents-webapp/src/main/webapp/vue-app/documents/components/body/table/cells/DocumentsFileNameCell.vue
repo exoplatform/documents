@@ -92,7 +92,7 @@ export default {
       } else if (type.includes('html') || type.includes('xml') || type.includes('css')) {
         return {
           class: 'fas fa-file-code',
-          color: '#d404b1',
+          color: '#6cf500',
         };
       } else {
         return {
