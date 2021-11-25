@@ -74,7 +74,7 @@ export default {
           class: 'fas fa-file-image',
           color: '#999999',
         };
-      } else if (type.includes('video') || type.includes('vob') || type.includes('ogg') || type.includes('m2v') || type.includes('mjpeg') || type.includes('asf')) {
+      } else if (type.includes('video') || type.includes('octet-stream') || type.includes('ogg')) {
         return {
           class: 'fas fa-file-video',
           color: '#79577A',
