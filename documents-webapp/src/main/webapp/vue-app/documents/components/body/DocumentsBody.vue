@@ -52,7 +52,16 @@ export default {
       default: null,
     },
   },
+  data: () => ({
+    emptyDocs: '/documents-portlet/images/docs.png',
+    spaceDisplayName: eXo.env.portal.spaceDisplayName,
+  }),
   computed: {
+    welcomeTitle() {
+      return this.$t && this.$t('documents.label.no-content', {
+        '0': `<strong>${this.spaceDisplayName}</strong>`,
+      });
+    },
     params() {
       return {
         files: this.files,
@@ -67,5 +76,10 @@ export default {
       };
     },
   },
+  methods: {
+    openDrawer() {
+      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer'));
+    },
+  }
 };
 </script>

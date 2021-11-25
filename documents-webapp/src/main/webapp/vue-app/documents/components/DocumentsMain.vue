@@ -5,20 +5,26 @@
     role="main"
     flat>
     <div class="pa-3 white">
-      <documents-header
-        class="py-2"
-        :is-mobile="isMobile" />
-      <documents-body
-        :view-extension="selectedViewExtension"
-        :files="files"
-        :groups-sizes="groupsSizes"
-        :page-size="pageSize"
-        :offset="offset"
-        :limit="limit"
-        :has-more="hasMore"
-        :sort-field="sortField"
-        :ascending="ascending"
-        :loading="loading" />
+      <div v-if="filesLoad">
+        <documents-header
+          class="py-2" />
+        <documents-body
+          :view-extension="selectedViewExtension"
+          :files="files"
+          :groups-sizes="groupsSizes"
+          :page-size="pageSize"
+          :offset="offset"
+          :limit="limit"
+          :has-more="hasMore"
+          :sort-field="sortField"
+          :ascending="ascending"
+          :loading="loading" />
+      </div>
+      <div v-else>
+        <documents-header-left
+          class="py-2" />
+        <documents-no-body />
+      </div>
     </div>
   </v-app>
 </template>
@@ -49,6 +55,9 @@ export default {
     previewMode: false,
   }),
   computed: {
+    filesLoad(){
+      return this.files && this.files.length;
+    },
     selectedViewExtension() {
       if (this.selectedView) {
         return this.viewExtensions.find(viewExtension => viewExtension.id === this.selectedView);
