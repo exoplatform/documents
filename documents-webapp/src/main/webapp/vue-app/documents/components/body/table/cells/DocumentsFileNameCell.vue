@@ -18,14 +18,14 @@
       </span>
     </div>
     <div v-else>
-      <div class="document-title" :title="file.name">
+      <div class="document-title d-inline-flex" :title="file.name">
         <div
           v-sanitized-html="fileName"
-          class="document-name text-truncate hover-underline ms-2">
+          class="document-name text-truncate hover-underline ms-4">
         </div>
         <div
           v-sanitized-html="fileType"
-          class="document-type hover-underline ms-2">
+          class="document-type hover-underline ms-0">
         </div>
       </div>
       <documents-last-updated-cell
