@@ -8,11 +8,13 @@
       <div v-if="!filesLoad">
         <documents-header-left
           class="py-2" />
-        <documents-no-body />
+        <documents-no-body
+            :is-mobile="isMobile"/>
       </div>
       <div v-else>
         <documents-header
-          class="py-2" />
+          class="py-2"
+          :is-mobile="isMobile" />
         <documents-body
           :view-extension="selectedViewExtension"
           :files="files"
@@ -68,7 +70,7 @@ export default {
       return null;
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs';
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   created() {

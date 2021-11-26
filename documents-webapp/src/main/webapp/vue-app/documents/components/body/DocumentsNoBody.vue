@@ -30,6 +30,12 @@
 
 <script>
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
+  },
   data: () => ({
     emptyDocs: '/documents-portlet/images/docs.png',
     spaceDisplayName: eXo.env.portal.spaceDisplayName,
@@ -39,9 +45,6 @@ export default {
       return this.$t && this.$t('documents.label.no-content', {
         '0': `<strong>${this.spaceDisplayName}</strong>`,
       });
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   methods: {
