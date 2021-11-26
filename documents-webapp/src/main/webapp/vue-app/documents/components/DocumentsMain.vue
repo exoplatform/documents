@@ -9,7 +9,7 @@
         <documents-header-left
           class="py-2" />
         <documents-no-body
-            :is-mobile="isMobile"/>
+          :is-mobile="isMobile" />
       </div>
       <div v-else>
         <documents-header
