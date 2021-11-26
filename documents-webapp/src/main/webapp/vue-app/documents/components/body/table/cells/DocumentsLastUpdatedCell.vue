@@ -2,7 +2,7 @@
   <date-format
     :value="lastUpdated"
     :format="fullDateFormat"
-    class="text-no-wrap" />
+    class="document-time text-no-wrap" />
 </template>
 
 <script>

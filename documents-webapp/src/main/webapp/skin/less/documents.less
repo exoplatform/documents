@@ -1,7 +1,11 @@
 @import "./variables.less";
 
 .VuetifyApp {
-  .documents-application {
+  #DocumentsApplication {
+    .document-time {
+      color: @textLightColor;
+    }
+
     .documents-body {
       .documents-table {
         tbody {
@@ -38,8 +42,9 @@
 
     .documents-header-left-action {
       button {
-        height: 42px;
-        min-width: 52px !important;
+        height: 40px;
+        min-width: initial;
+        width: 40px;
       }
     }
 
@@ -62,18 +67,33 @@
           font-size: 32px !important;
         }
 
-        span {
-          display: flex;
-          margin-left: 16px !important;
+        .document-title {
+          display: inline-flex;
+          width: 28vh;
+
+          .document-name {
+            margin-left: 16px !important;
+          }
+
+          .document-type {
+            margin-left: 0 !important;
+          }
         }
       }
     }
 
     .v-data-table__mobile-table-row {
-      .text-no-wrap {
+      .document-time {
         text-align: left;
         margin-left: 16px;
+        font-size: 10px;
       }
     }
+  }
+}
+
+@media screen and (max-width: 599px) {
+  #switchToOldDocuments {
+    font-size: 12px;
   }
 }

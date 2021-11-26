@@ -10,14 +10,25 @@
       v-else
       size="22"
       :color="icon.color">{{ icon.class }}</v-icon>
-    <div>
+    <div v-if="!isMobile">
       <span
         :title="file.name"
         v-sanitized-html="file.name"
         class="text-truncate hover-underline ms-2">
       </span>
+    </div>
+    <div v-else>
+      <div class="document-title" :title="file.name">
+        <div
+          v-sanitized-html="fileName"
+          class="document-name text-truncate hover-underline ms-2">
+        </div>
+        <div
+          v-sanitized-html="fileType"
+          class="document-type hover-underline ms-2">
+        </div>
+      </div>
       <documents-last-updated-cell
-        v-if="isMobile"
         :file="file"
         :extension="extension" />
     </div>
@@ -100,6 +111,12 @@ export default {
           color: '#578DC9',
         };
       }
+    },
+    fileName() {
+      return this.file.name.split('.')[0];
+    },
+    fileType() {
+      return `.${this.file.name.split('.')[1]}`;
     },
   },
   methods: {
