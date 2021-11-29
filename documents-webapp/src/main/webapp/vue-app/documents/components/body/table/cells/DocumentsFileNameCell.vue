@@ -7,11 +7,28 @@
       indeterminate
       size="16" />
     <v-icon v-else :color="icon.color">{{ icon.class }}</v-icon>
-    <span
-      :title="file.name"
-      v-sanitized-html="file.name"
-      class="text-truncate hover-underline ms-2">
-    </span>
+    <div v-if="!isMobile">
+      <span
+        :title="file.name"
+        v-sanitized-html="file.name"
+        class="text-truncate hover-underline ms-2">
+      </span>
+    </div>
+    <div v-else>
+      <div class="document-title d-inline-flex" :title="file.name">
+        <div
+          v-sanitized-html="fileName"
+          class="document-name text-truncate hover-underline ms-4">
+        </div>
+        <div
+          v-sanitized-html="fileType"
+          class="document-type hover-underline ms-0">
+        </div>
+      </div>
+      <documents-last-updated-cell
+        :file="file"
+        :extension="extension" />
+    </div>
   </a>
 </template>
 <script>
@@ -30,6 +47,9 @@ export default {
     loading: false,
   }),
   computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs';
+    },
     icon() {
       const type = this.file && this.file.mimeType || '';
       if (type.includes('pdf')) {
@@ -68,6 +88,12 @@ export default {
           color: '#cdcccc',
         };
       }
+    },
+    fileName() {
+      return this.file.name.split('.')[0];
+    },
+    fileType() {
+      return `.${this.file.name.split('.')[1]}`;
     },
   },
   methods: {
