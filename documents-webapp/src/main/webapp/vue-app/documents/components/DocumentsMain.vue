@@ -5,7 +5,12 @@
     role="main"
     flat>
     <div class="pa-3 white">
-      <div v-if="!filesLoad">
+      <div v-if="searchResult">
+        <documents-header
+          class="py-2" />
+        <documents-no-result-body />
+      </div>
+      <div v-else-if="!filesLoad">
         <documents-header-left
           class="py-2" />
         <documents-no-body
@@ -13,8 +18,7 @@
       </div>
       <div v-else>
         <documents-header
-          class="py-2"
-          :is-mobile="isMobile" />
+          class="py-2" />
         <documents-body
           :view-extension="selectedViewExtension"
           :files="files"
@@ -72,6 +76,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    searchResult(){
+      return this.query && this.query.length && !this.files.length;
+    }
   },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
