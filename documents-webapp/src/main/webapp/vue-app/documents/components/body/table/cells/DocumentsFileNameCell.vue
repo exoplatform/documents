@@ -6,7 +6,7 @@
       v-if="loading"
       indeterminate
       size="16" />
-    <v-icon v-else :color="icon.color">{{ icon.class }}</v-icon>
+    <v-icon v-else size="22" :color="icon.color">{{ icon.class }}</v-icon>
     <div v-if="!isMobile">
       <span
         :title="file.name"
@@ -54,38 +54,58 @@ export default {
       const type = this.file && this.file.mimeType || '';
       if (type.includes('pdf')) {
         return {
-          class: 'mdi-file-pdf',
-          color: '#d07b7b',
+          class: 'fas fa-file-pdf',
+          color: '#FF0000',
         };
       } else if (type.includes('presentation') || type.includes('powerpoint')) {
         return {
-          class: 'mdi-file-powerpoint',
-          color: '#e45030',
+          class: 'fas fa-file-powerpoint',
+          color: '#CB4B32',
         };
-      } else if (type.includes('sheet') || type.includes('excel')) {
+      } else if (type.includes('sheet') || type.includes('excel') || type.includes('csv')) {
         return {
-          class: 'mdi-file-excel',
-          color: '#1a744b',
+          class: 'fas fa-file-excel',
+          color: '#217345',
         };
       } else if (type.includes('word') || type.includes('opendocument') || type.includes('rtf') ) {
         return {
-          class: 'mdi-file-word',
-          color: '#094d7f',
+          class: 'fas fa-file-word',
+          color: '#2A5699',
         };
       } else if (type.includes('plain')) {
         return {
-          class: 'mdi-clipboard-text',
-          color: '#1c9bd7',
+          class: 'fas fa-file-alt',
+          color: '#385989',
         };
       } else if (type.includes('image')) {
         return {
-          class: 'mdi-image',
-          color: '#eab320',
+          class: 'fas fa-file-image',
+          color: '#999999',
+        };
+      } else if (type.includes('video') || type.includes('octet-stream') || type.includes('ogg')) {
+        return {
+          class: 'fas fa-file-video',
+          color: '#79577A',
+        };
+      } else if (type.includes('zip') || type.includes('war') || type.includes('rar')) {
+        return {
+          class: 'fas fa-file-archive',
+          color: '#717272',
+        };
+      } else if (type.includes('illustrator') || type.includes('eps')) {
+        return {
+          class: 'fas fa-file-contract',
+          color: '#E79E24',
+        };
+      } else if (type.includes('html') || type.includes('xml') || type.includes('css')) {
+        return {
+          class: 'fas fa-file-code',
+          color: '#6cf500',
         };
       } else {
         return {
-          class: 'mdi-file',
-          color: '#cdcccc',
+          class: 'fas fa-file',
+          color: '#578DC9',
         };
       }
     },
