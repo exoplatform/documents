@@ -2,20 +2,19 @@
   <div>
     <v-icon
       size="20"
-      class="inputDocumentsFilter text-sub-title pa-1 my-auto "
-      v-show="isMobile && !showMobileFilter"
-      @click="mobileFilter">
+      class="inputDocumentsFilter text-sub-title pa-0 my-auto "
+      :class="isMobile && !showMobileFilter ? '' : 'd-none'"
+      @click="showMobileFilter = !showMobileFilter">
       fas fa-filter
     </v-icon>
     <v-text-field
       v-model="query"
-      ref="inputQuery"
       :placeholder="$t('documents.label.filterDocuments')"
-      v-show="isMobile && showMobileFilter || !isMobile"
+      :class="isMobile && showMobileFilter || !isMobile ? '' : 'd-none'"
       :append-icon="appendIcon"
       prepend-inner-icon="fa-filter"
-      class="inputDocumentsFilter pa-1 my-auto width-full"
-      @click:append="cancelSearch" />
+      class="inputDocumentsFilter pa-0 my-auto"
+      @click:append="query = null" />
   </div>
 </template>
 <script>
