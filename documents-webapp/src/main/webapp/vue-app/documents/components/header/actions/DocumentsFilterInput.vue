@@ -3,7 +3,7 @@
     <v-icon
       size="20"
       class="inputDocumentsFilter text-sub-title pa-1 my-auto "
-      :class="isMobile && !showMobileFilter ? '' : 'd-none'"
+      v-show="isMobile && !showMobileFilter"
       @click="mobileFilter">
       fas fa-filter
     </v-icon>
