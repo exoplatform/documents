@@ -3,7 +3,7 @@
     <v-icon
       size="20"
       class="inputDocumentsFilter text-sub-title pa-1 my-auto "
-      :class="isMobile && !showMobileFilter ? '' : 'd-none'"
+      v-show="isMobile && !showMobileFilter"
       @click="mobileFilter">
       fas fa-filter
     </v-icon>
@@ -11,7 +11,7 @@
       v-model="query"
       ref="inputQuery"
       :placeholder="$t('documents.label.filterDocuments')"
-      :class="isMobile && showMobileFilter || !isMobile ? '' : 'd-none'"
+      v-show="isMobile && showMobileFilter || !isMobile"
       :append-icon="appendIcon"
       prepend-inner-icon="fa-filter"
       class="inputDocumentsFilter pa-1 my-auto width-full"
