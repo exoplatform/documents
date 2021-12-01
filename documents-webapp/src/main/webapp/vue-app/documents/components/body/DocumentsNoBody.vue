@@ -5,11 +5,11 @@
         :src="emptyDocs"
         class="mx-auto mb-4 overflow-visible"
         overflow="visible"
-        max-height="150"
-        max-width="250"
+        :max-height="!isMobile ? 55 : 46"
+        :max-width="!isMobile ? 61 : 51"
         contain
         eager>
-        <v-icon size="30" class="closeIcon text-light-color white float-right">fas fa-times-circle</v-icon>
+        <v-icon :size="!isMobile ? 32 : 23" class="closeIcon text-light-color white float-right">fas fa-times-circle</v-icon>
       </v-img>
       <div>
         <p v-if="!isMobile" class="text-light-color">

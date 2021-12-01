@@ -51,6 +51,10 @@ export default {
       type: String,
       default: null,
     },
+    query: {
+      type: String,
+      default: null,
+    },
   },
   computed: {
     params() {
@@ -64,6 +68,7 @@ export default {
         loading: this.loading,
         offset: this.offset,
         limit: this.limit,
+        query: this.query,
       };
     },
   },
