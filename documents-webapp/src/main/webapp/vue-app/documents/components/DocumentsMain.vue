@@ -8,7 +8,8 @@
       <div v-if="searchResult">
         <documents-header
           class="py-2" />
-        <documents-no-result-body />
+        <documents-no-result-body
+          :is-mobile="isMobile" />
       </div>
       <div v-else-if="!filesLoad">
         <documents-header-left
@@ -29,7 +30,8 @@
           :has-more="hasMore"
           :sort-field="sortField"
           :ascending="ascending"
-          :loading="loading" />
+          :loading="loading"
+          :query="query" />
       </div>
     </div>
   </v-app>
