@@ -1,11 +1,21 @@
 <template>
-  <v-text-field
-    v-model="query"
-    :placeholder="$t('documents.label.filterDocuments')"
-    :append-icon="appendIcon"
-    prepend-inner-icon="fa-filter"
-    class="inputDocumentsFilter pa-0 my-auto"
-    @click:append="query = null" />
+  <div>
+    <v-icon
+      size="20"
+      class="inputDocumentsFilter text-sub-title pa-0 my-auto "
+      :class="isMobile && !showMobileFilter ? '' : 'd-none'"
+      @click="showMobileFilter = !showMobileFilter">
+      fas fa-filter
+    </v-icon>
+    <v-text-field
+      v-model="query"
+      :placeholder="$t('documents.label.filterDocuments')"
+      :class="isMobile && showMobileFilter || !isMobile ? '' : 'd-none'"
+      :append-icon="appendIcon"
+      prepend-inner-icon="fa-filter"
+      class="inputDocumentsFilter pa-0 my-auto"
+      @click:append="query = null" />
+  </div>
 </template>
 <script>
 export default {
@@ -15,8 +25,12 @@ export default {
     endTypingKeywordTimeout: 50,
     startTypingKeywordTimeout: 0,
     loading: false,
+    showMobileFilter: false,
   }),
   computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
     appendIcon() {
       return this.query && 'mdi-close primary--text' || null;
     },

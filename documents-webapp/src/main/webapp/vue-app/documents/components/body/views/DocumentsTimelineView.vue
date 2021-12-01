@@ -30,7 +30,8 @@
         :headers="headers"
         :files="items"
         :open="isOpen"
-        :toggle-function="toggle" />
+        :toggle-function="toggle"
+        :query="querySearch" />
     </template>
     <template v-if="hasMore" slot="footer">
       <v-flex class="d-flex py-2 border-box-sizing">
@@ -73,6 +74,10 @@ export default {
       type: String,
       default: null
     },
+    query: {
+      type: String,
+      default: null
+    },
     loading: {
       type: Number,
       default: 20
@@ -104,6 +109,9 @@ export default {
     },
     grouping() {
       return !this.sortField || this.sortField === 'lastUpdated';
+    },
+    querySearch() {
+      return this.query && this.query.length;
     },
     groupBy() {
       return this.grouping && 'groupValue' || [];
