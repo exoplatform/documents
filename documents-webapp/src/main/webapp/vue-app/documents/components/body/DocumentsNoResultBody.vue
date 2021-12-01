@@ -5,12 +5,12 @@
         :src="emptyDocs"
         class="mx-auto mb-4 overflow-visible"
         overflow="visible"
-        max-height="150"
-        max-width="250"
+        :max-height="!isMobile ? 55 : 46"
+        :max-width="!isMobile ? 61 : 51"
         contain
         eager>
         <v-icon
-          size="48"
+          :size="!isMobile ? 48 : 32"
           class="searchIcon text-light-color float-right">
           fas fa-search
         </v-icon>
@@ -26,7 +26,12 @@
 
 <script>
 export default {
-
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
+  },
   data: () => ({
     emptyDocs: '/documents-portlet/images/docs.png',
   }),
