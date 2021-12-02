@@ -71,7 +71,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
     vueComponent: Vue.options.components['documents-last-activity-cell'],
   },
 });*/
-if (eXo.env.portal.activityFavoritesEnabled) {
+if (eXo.env.portal.filesFavoritesEnabled &&  window.innerWidth <= 960) {
   extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
     id: 'favorite',
     labelKey: 'documents.label.favorite',
