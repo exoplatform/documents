@@ -5,20 +5,32 @@
     role="main"
     flat>
     <div class="pa-3 white">
-      <documents-header
-        class="py-2"
-        :is-mobile="isMobile" />
-      <documents-body
-        :view-extension="selectedViewExtension"
-        :files="files"
-        :groups-sizes="groupsSizes"
-        :page-size="pageSize"
-        :offset="offset"
-        :limit="limit"
-        :has-more="hasMore"
-        :sort-field="sortField"
-        :ascending="ascending"
-        :loading="loading" />
+      <div v-if="searchResult">
+        <documents-header
+          class="py-2" />
+        <documents-no-result-body />
+      </div>
+      <div v-else-if="!filesLoad">
+        <documents-header-left
+          class="py-2" />
+        <documents-no-body
+          :is-mobile="isMobile" />
+      </div>
+      <div v-else>
+        <documents-header
+          class="py-2" />
+        <documents-body
+          :view-extension="selectedViewExtension"
+          :files="files"
+          :groups-sizes="groupsSizes"
+          :page-size="pageSize"
+          :offset="offset"
+          :limit="limit"
+          :has-more="hasMore"
+          :sort-field="sortField"
+          :ascending="ascending"
+          :loading="loading" />
+      </div>
     </div>
   </v-app>
 </template>
@@ -49,6 +61,9 @@ export default {
     previewMode: false,
   }),
   computed: {
+    filesLoad(){
+      return this.files && this.files.length;
+    },
     selectedViewExtension() {
       if (this.selectedView) {
         return this.viewExtensions.find(viewExtension => viewExtension.id === this.selectedView);
@@ -59,8 +74,11 @@ export default {
       return null;
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs';
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    searchResult(){
+      return this.query && this.query.length && !this.files.length;
+    }
   },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
