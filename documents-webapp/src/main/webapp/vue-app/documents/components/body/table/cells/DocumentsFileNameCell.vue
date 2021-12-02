@@ -135,6 +135,7 @@ export default {
             },
             author: attachment.updater,
             showComments: false,
+            showOpenInFolderButton: false,
           });
         })
         .catch(e => console.error(e))
