@@ -5,6 +5,8 @@ import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
 import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
+import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
+import DocumentsNoResultBody from './components/body/DocumentsNoResultBody.vue';
 import DocumentsTimelineView from './components/body/views/DocumentsTimelineView.vue';
 import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimelineGroupHeader.vue';
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
@@ -22,6 +24,8 @@ const components = {
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-filter-input': DocumentsFilterInput,
   'documents-body': DocumentsBody,
+  'documents-no-body': DocumentsNoBody,
+  'documents-no-result-body': DocumentsNoResultBody,
   'documents-timeline-view': DocumentsTimelineView,
   'documents-timeline-group-header': DocumentsTimelineGroupHeader,
   'documents-table-cell': DocumentsTableCell,
