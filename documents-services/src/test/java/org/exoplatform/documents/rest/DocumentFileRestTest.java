@@ -32,6 +32,11 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.metadata.MetadataService;
+import org.exoplatform.social.metadata.model.Metadata;
+import org.exoplatform.social.metadata.model.MetadataItem;
+import org.exoplatform.social.metadata.model.MetadataObject;
+import org.exoplatform.social.metadata.model.MetadataType;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,6 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -54,6 +60,8 @@ public class DocumentFileRestTest {
 
   private IdentityRegistry identityRegistry;
 
+  private MetadataService metadataService;
+
   private Authenticator authenticator;
 
   private DocumentFileServiceImpl documentFileService;
@@ -65,10 +73,11 @@ public class DocumentFileRestTest {
     spaceService = mock(SpaceService.class);
     identityManager = mock(IdentityManager.class);
     identityRegistry = mock(IdentityRegistry.class);
+    metadataService = mock(MetadataService.class);
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage, authenticator, spaceService, identityManager, identityRegistry);
-    documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager);
+    documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
   }
 
   @Test
@@ -150,7 +159,27 @@ public class DocumentFileRestTest {
     nodeEntity.setSize(50);
 
     assertEquals(files_.size(),4);
-    Response response4 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"",null,false,0,0);
+
+    List<MetadataItem> metadataItems  = new ArrayList<>();
+    MetadataType metadataType= new MetadataType();
+    metadataType.setId(1);
+    metadataType.setName("favorites");
+    MetadataObject metadataObject = new MetadataObject();
+    metadataObject.setId("7694af9cc0a80104095f8da1bf22a7fb");
+    metadataObject.setType("file");
+    Metadata metadata = new Metadata();
+    metadata.setId(1);
+    metadata.setType(metadataType);
+    metadata.setName("1");
+    metadata.setAudienceId(2);
+    metadata.setCreatorId(2);
+    MetadataItem metadataItem = new MetadataItem();
+    metadataItem.setMetadata(metadata);
+    metadataItem.setObjectId(metadataObject.getId());
+    metadataItem.setCreatorId(2);
+    metadataItems.add(metadataItem);
+    when(metadataService.getMetadataItemsByObject(any())).thenReturn(metadataItems);
+    Response response4 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"metadatas",null,false,0,0);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
     List<FileNodeEntity> filesNodeEntity = new ArrayList<>();
     filesNodeEntity = (List<FileNodeEntity>) response4.getEntity();
@@ -160,7 +189,9 @@ public class DocumentFileRestTest {
     assertEquals(filesNodeEntity.get(0).getMimeType(),":file");
     assertEquals(filesNodeEntity.get(0).getVersionnedFileId(),"1");
     assertEquals(filesNodeEntity.get(0).getSize(),50);
-    assertTrue(nodeEntity.equals(filesNodeEntity.get(0)));
+    FileNodeEntity fileNodeEntity = filesNodeEntity.get(0);
+    fileNodeEntity.setMetadatas(null);
+    assertTrue(nodeEntity.equals(fileNodeEntity));
 
   }
   @Test
