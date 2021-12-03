@@ -8,7 +8,7 @@
   <artifactId>documents-services</artifactId>
   <name>eXo Documents - Services</name>
   <properties>
-    <exo.test.coverage.ratio>0.71</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.73</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>
@@ -44,6 +44,11 @@
     <dependency>
       <groupId>org.exoplatform.social</groupId>
       <artifactId>social-component-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.exoplatform.social</groupId>
+      <artifactId>social-component-service</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>

@@ -43,6 +43,7 @@ import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.resource.ResourceContainer;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.metadata.MetadataService;
 
 import io.swagger.annotations.*;
 
@@ -56,12 +57,18 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final SpaceService        spaceService;
 
+  private final MetadataService     metadataService;
+
   private final IdentityManager     identityManager;
 
-  public DocumentFileRest(DocumentFileService documentFileService, SpaceService spaceService, IdentityManager identityManager) {
+  public DocumentFileRest(DocumentFileService documentFileService,
+                          SpaceService spaceService,
+                          IdentityManager identityManager,
+                          MetadataService metadataService) {
     this.documentFileService = documentFileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
+    this.metadataService = metadataService;
   }
 
   @GET
@@ -73,15 +80,24 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
       @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
       @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
-  public Response getDocumentItems(@ApiParam(value = "Identity technical identifier", required = false) @QueryParam("ownerId") Long ownerId,
-                                   @ApiParam(value = "Parent folder technical identifier", required = false) @QueryParam("parentFolderId") String parentFolderId,
-                                   @ApiParam(value = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.", required = false) @QueryParam("listingType") FileListingType listingType,
-                                   @ApiParam(value = "Search query entered by the user", required = false) @QueryParam("query") String query,
-                                   @ApiParam(value = "File properties to expand.", required = false) @QueryParam("expand") String expand,
-                                   @ApiParam(value = "Document items sort field", required = false) @QueryParam("sortField") String sortField,
-                                   @ApiParam(value = "Sort ascending or descending", required = false) @QueryParam("ascending") boolean ascending,
-                                   @ApiParam(value = "Offset of results to return", required = false, defaultValue = "10") @QueryParam("offset") int offset,
-                                   @ApiParam(value = "Limit of results to return", required = false, defaultValue = "10") @QueryParam("limit") int limit) {
+  public Response getDocumentItems(@ApiParam(value = "Identity technical identifier", required = false)
+                                   @QueryParam("ownerId") Long ownerId,
+                                   @ApiParam(value = "Parent folder technical identifier", required = false)
+                                   @QueryParam("parentFolderId") String parentFolderId,
+                                   @ApiParam(value = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.", required = false)
+                                   @QueryParam("listingType") FileListingType listingType,
+                                   @ApiParam(value = "Search query entered by the user", required = false)
+                                   @QueryParam("query") String query,
+                                   @ApiParam(value = "File properties to expand.", required = false)
+                                   @QueryParam("expand") String expand,
+                                   @ApiParam(value = "Document items sort field", required = false)
+                                   @QueryParam("sortField") String sortField,
+                                   @ApiParam(value = "Sort ascending or descending", required = false)
+                                   @QueryParam("ascending") boolean ascending,
+                                   @ApiParam(value = "Offset of results to return", required = false, defaultValue = "10")
+                                   @QueryParam("offset") int offset,
+                                   @ApiParam(value = "Limit of results to return", required = false, defaultValue = "10")
+                                   @QueryParam("limit") int limit) {
 
     if (ownerId == null && StringUtils.isBlank(parentFolderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
@@ -101,8 +117,10 @@ public class DocumentFileRest implements ResourceContainer {
       List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
                                                                                        identityManager,
                                                                                        spaceService,
+                                                                                       metadataService,
                                                                                        documents,
-                                                                                       expand);
+                                                                                       expand,
+                                                                                       userIdentityId);
       return Response.ok(documentEntities).build();
     } catch (IllegalAccessException e) {
       LOG.warn("User '{}' attempts to access not authorized documents of owner Id '{}'", RestUtils.getCurrentUser(), ownerId, e);
@@ -125,9 +143,11 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
       @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
       @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
-  public Response getDocumentGroupsCount(@ApiParam(value = "Identity technical identifier", required = false) @QueryParam("ownerId") Long ownerId,
-                                         @QueryParam("parentFolderId") String parentFolderId,
-                                         @ApiParam(value = "Search query entered by the user", required = false) @QueryParam("query") String query) {
+  public Response getDocumentGroupsCount(@ApiParam(value = "Identity technical identifier", required = false)
+                                         @QueryParam("ownerId") Long ownerId,
+                                         @QueryParam("parentFolderId")  String parentFolderId,
+                                         @ApiParam(value = "Search query entered by the user", required = false)
+                                         @QueryParam("query")  String query) {
 
     if (ownerId == null && StringUtils.isBlank(parentFolderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();

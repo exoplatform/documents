@@ -19,10 +19,11 @@ package org.exoplatform.documents.rest.model;
 import java.util.List;
 import java.util.Map;
 
-import lombok.Setter;
 import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.social.rest.entity.MetadataItemEntity;
 
 import lombok.Data;
+
 @Data
 public class AbstractNodeEntity {
 
@@ -30,32 +31,31 @@ public class AbstractNodeEntity {
     this.folder = isFolder;
   }
 
-  private String                    id;
+  private String                                id;
 
-  private String                    name;
+  private String                                name;
 
-  private String                    description;
+  private String                                description;
 
-  private String                    datasource;
+  private String                                datasource;
 
-  private String                    parentFolderId;
+  private String                                parentFolderId;
 
-  private IdentityEntity            ownerIdentity;
+  private IdentityEntity                        ownerIdentity;
 
-  private IdentityEntity            creatorIdentity;
+  private IdentityEntity                        creatorIdentity;
 
-  private IdentityEntity            modifierIdentity;
+  private IdentityEntity                        modifierIdentity;
 
-  private NodePermission            acl;
+  private NodePermission                        acl;
 
-  private long                      createdDate;
+  private long                                  createdDate;
 
-  private long                      modifiedDate;
+  private long                                  modifiedDate;
 
-  private boolean                   folder;
+  private boolean                               folder;
 
-  private NodeAuditTrailsEntity     auditTrails;
+  private NodeAuditTrailsEntity                 auditTrails;
 
-  private Map<String, List<Object>> metadatas;
-
+  private Map<String, List<MetadataItemEntity>> metadatas;
 }
