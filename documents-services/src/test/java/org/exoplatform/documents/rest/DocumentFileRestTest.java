@@ -32,6 +32,7 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.metadata.MetadataService;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -54,6 +55,8 @@ public class DocumentFileRestTest {
 
   private IdentityRegistry identityRegistry;
 
+  private MetadataService metadataService;
+
   private Authenticator authenticator;
 
   private DocumentFileServiceImpl documentFileService;
@@ -65,10 +68,11 @@ public class DocumentFileRestTest {
     spaceService = mock(SpaceService.class);
     identityManager = mock(IdentityManager.class);
     identityRegistry = mock(IdentityRegistry.class);
+    metadataService = mock(MetadataService.class);
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage, authenticator, spaceService, identityManager, identityRegistry);
-    documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager);
+    documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
   }
 
   @Test
