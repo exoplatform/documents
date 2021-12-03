@@ -27,6 +27,10 @@ import lombok.Data;
 @Data
 public class AbstractNodeEntity {
 
+  public AbstractNodeEntity(boolean isFolder) {
+    this.folder = isFolder;
+  }
+
   private String                                id;
 
   private String                                name;
@@ -54,9 +58,4 @@ public class AbstractNodeEntity {
   private NodeAuditTrailsEntity                 auditTrails;
 
   private Map<String, List<MetadataItemEntity>> metadatas;
-
-  public AbstractNodeEntity(boolean isFolder) {
-    this.folder = isFolder;
-  }
-
 }

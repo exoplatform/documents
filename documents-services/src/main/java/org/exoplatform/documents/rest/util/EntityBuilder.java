@@ -16,15 +16,9 @@
  */
 package org.exoplatform.documents.rest.util;
 
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.stream.Collectors;
-
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
-
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FolderNode;
@@ -35,20 +29,24 @@ import org.exoplatform.documents.rest.model.IdentityEntity;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.social.core.activity.model.ExoSocialActivity;
 import org.exoplatform.social.core.identity.model.Identity;
-import org.exoplatform.social.rest.entity.MetadataItemEntity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.MetadataService;
 import org.exoplatform.social.metadata.model.MetadataItem;
 import org.exoplatform.social.metadata.model.MetadataObject;
+import org.exoplatform.social.rest.entity.MetadataItemEntity;
+
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class EntityBuilder {
-  private static final Log LOG                       = ExoLogger.getExoLogger(EntityBuilder.class);
+  private static final Log    LOG                       = ExoLogger.getExoLogger(EntityBuilder.class);
 
-  private static final String    FILE_METADATA_OBJECT_TYPE = "file";
+  private static final String FILE_METADATA_OBJECT_TYPE = "file";
 
   private EntityBuilder() {
   }
@@ -110,7 +108,14 @@ public class EntityBuilder {
                                             List<String> expandProperties,
                                             long authenticatedUserId) {
     FileNodeEntity fileEntity = new FileNodeEntity();
-    toNode(documentFileService, identityManager, spaceService, metadataService, file, fileEntity, expandProperties, authenticatedUserId);
+    toNode(documentFileService,
+           identityManager,
+           spaceService,
+           metadataService,
+           file,
+           fileEntity,
+           expandProperties,
+           authenticatedUserId);
     fileEntity.setLinkedFileId(file.getLinkedFileId());
     fileEntity.setVersionnedFileId(file.getVersionnedFileId());
     fileEntity.setMimeType(file.getMimeType());
@@ -130,7 +135,14 @@ public class EntityBuilder {
                                                 List<String> expandProperties,
                                                 long authenticatedUser) {
     FolderNodeEntity folderEntity = new FolderNodeEntity();
-    toNode(documentFileService, identityManager, spaceService, metadataService, folder, folderEntity, expandProperties, authenticatedUser);
+    toNode(documentFileService,
+           identityManager,
+           spaceService,
+           metadataService,
+           folder,
+           folderEntity,
+           expandProperties,
+           authenticatedUser);
     return folderEntity;
   }
 
@@ -176,7 +188,7 @@ public class EntityBuilder {
           }
           metadatas.get(type).add(metadataItem);
         });
-        nodeEntity.setMetadatas(retrieveMetadataItems(metadatas,authenticatedUserId));
+        nodeEntity.setMetadatas(retrieveMetadataItems(metadatas, authenticatedUserId));
       }
     } catch (Exception e) {
       LOG.error("==== exception occured when converting node with ID = {} and name = {}", node.getId(), node.getName(), e);
@@ -194,13 +206,23 @@ public class EntityBuilder {
       String metadataType = metadataEntry.getKey();
       List<MetadataItem> metadataItems = metadataEntry.getValue();
       if (MapUtils.isNotEmpty(metadatas)) {
-        List<MetadataItemEntity> activityMetadataEntities = metadataItems.stream()
-                .filter(metadataItem -> metadataItem.getMetadata()
-                        .getAudienceId() == 0
-                        || metadataItem.getMetadata()
-                        .getAudienceId() == authentiatedUserId)
-                .map(metadataItem -> new MetadataItemEntity(metadataItem.getId(), metadataItem.getMetadata().getName(),metadataItem.getObjectType(),metadataItem.getObjectId(), metadataItem.getParentObjectId(), metadataItem.getCreatorId(),metadataItem.getMetadata().getAudienceId(),metadataItem.getProperties()))
-                .collect(Collectors.toList());
+        List<MetadataItemEntity> activityMetadataEntities =
+                                                          metadataItems.stream()
+                                                                       .filter(metadataItem -> metadataItem.getMetadata()
+                                                                                                           .getAudienceId() == 0
+                                                                           || metadataItem.getMetadata()
+                                                                                          .getAudienceId() == authentiatedUserId)
+                                                                       .map(metadataItem -> new MetadataItemEntity(metadataItem.getId(),
+                                                                                                                   metadataItem.getMetadata()
+                                                                                                                               .getName(),
+                                                                                                                   metadataItem.getObjectType(),
+                                                                                                                   metadataItem.getObjectId(),
+                                                                                                                   metadataItem.getParentObjectId(),
+                                                                                                                   metadataItem.getCreatorId(),
+                                                                                                                   metadataItem.getMetadata()
+                                                                                                                               .getAudienceId(),
+                                                                                                                   metadataItem.getProperties()))
+                                                                       .collect(Collectors.toList());
         if (CollectionUtils.isNotEmpty(activityMetadataEntities)) {
           fileMetadatasToPublish.put(metadataType, activityMetadataEntities);
         }

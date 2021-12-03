@@ -81,32 +81,23 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
       @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
   public Response getDocumentItems(@ApiParam(value = "Identity technical identifier", required = false)
-  @QueryParam("ownerId")
-  Long ownerId,
+                                   @QueryParam("ownerId") Long ownerId,
                                    @ApiParam(value = "Parent folder technical identifier", required = false)
-                                   @QueryParam("parentFolderId")
-                                   String parentFolderId,
+                                   @QueryParam("parentFolderId") String parentFolderId,
                                    @ApiParam(value = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.", required = false)
-                                   @QueryParam("listingType")
-                                   FileListingType listingType,
+                                   @QueryParam("listingType") FileListingType listingType,
                                    @ApiParam(value = "Search query entered by the user", required = false)
-                                   @QueryParam("query")
-                                   String query,
+                                   @QueryParam("query") String query,
                                    @ApiParam(value = "File properties to expand.", required = false)
-                                   @QueryParam("expand")
-                                   String expand,
+                                   @QueryParam("expand") String expand,
                                    @ApiParam(value = "Document items sort field", required = false)
-                                   @QueryParam("sortField")
-                                   String sortField,
+                                   @QueryParam("sortField") String sortField,
                                    @ApiParam(value = "Sort ascending or descending", required = false)
-                                   @QueryParam("ascending")
-                                   boolean ascending,
+                                   @QueryParam("ascending") boolean ascending,
                                    @ApiParam(value = "Offset of results to return", required = false, defaultValue = "10")
-                                   @QueryParam("offset")
-                                   int offset,
+                                   @QueryParam("offset") int offset,
                                    @ApiParam(value = "Limit of results to return", required = false, defaultValue = "10")
-                                   @QueryParam("limit")
-                                   int limit) {
+                                   @QueryParam("limit") int limit) {
 
     if (ownerId == null && StringUtils.isBlank(parentFolderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
@@ -153,12 +144,10 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
       @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
   public Response getDocumentGroupsCount(@ApiParam(value = "Identity technical identifier", required = false)
-  @QueryParam("ownerId")
-  Long ownerId, @QueryParam("parentFolderId")
-  String parentFolderId,
+                                         @QueryParam("ownerId") Long ownerId,
+                                         @QueryParam("parentFolderId")  String parentFolderId,
                                          @ApiParam(value = "Search query entered by the user", required = false)
-                                         @QueryParam("query")
-                                         String query) {
+                                         @QueryParam("query")  String query) {
 
     if (ownerId == null && StringUtils.isBlank(parentFolderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
