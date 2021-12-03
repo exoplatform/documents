@@ -6,7 +6,10 @@
       v-if="loading"
       indeterminate
       size="16" />
-    <v-icon v-else size="22" :color="icon.color">{{ icon.class }}</v-icon>
+    <v-icon
+      v-else
+      size="22"
+      :color="icon.color">{{ icon.class }}</v-icon>
     <div v-if="!isMobile">
       <span
         :title="file.name"
