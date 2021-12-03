@@ -11,7 +11,7 @@
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else-if="filesLoad">
+      <div v-else-if="!filesLoad">
         <documents-header-left
           class="py-2" />
         <documents-no-body
@@ -64,7 +64,7 @@ export default {
   }),
   computed: {
     filesLoad(){
-      return !this.files.length;
+      return this.files && this.files.length;
     },
     selectedViewExtension() {
       if (this.selectedView) {
