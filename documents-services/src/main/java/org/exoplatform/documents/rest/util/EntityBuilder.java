@@ -16,22 +16,37 @@
  */
 package org.exoplatform.documents.rest.util;
 
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.FileNodeEntity;
+import org.exoplatform.documents.rest.model.FolderNodeEntity;
+import org.exoplatform.documents.rest.model.IdentityEntity;
+import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
+import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.metadata.MetadataService;
+import org.exoplatform.social.metadata.model.MetadataItem;
+import org.exoplatform.social.metadata.model.MetadataObject;
+import org.exoplatform.social.rest.entity.MetadataItemEntity;
+
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import org.apache.commons.lang3.StringUtils;
-
-import org.exoplatform.documents.model.*;
-import org.exoplatform.documents.rest.model.*;
-import org.exoplatform.documents.service.DocumentFileService;
-import org.exoplatform.social.core.identity.model.Identity;
-import org.exoplatform.social.core.manager.IdentityManager;
-import org.exoplatform.social.core.space.model.Space;
-import org.exoplatform.social.core.space.spi.SpaceService;
-
 public class EntityBuilder {
+  private static final Log    LOG                       = ExoLogger.getExoLogger(EntityBuilder.class);
+
+  private static final String FILE_METADATA_OBJECT_TYPE = "file";
 
   private EntityBuilder() {
   }
@@ -39,26 +54,48 @@ public class EntityBuilder {
   public static List<AbstractNodeEntity> toDocumentItemEntities(DocumentFileService documentFileService,
                                                                 IdentityManager identityManager,
                                                                 SpaceService spaceService,
+                                                                MetadataService metadataService,
                                                                 List<AbstractNode> documents,
-                                                                String expand) {
+                                                                String expand,
+                                                                long authenticatedUserId) {
     return documents.stream()
-                    .map(document -> toDocumentItemEntity(documentFileService, identityManager, spaceService, document, expand))
+                    .map(document -> toDocumentItemEntity(documentFileService,
+                                                          identityManager,
+                                                          spaceService,
+                                                          metadataService,
+                                                          document,
+                                                          expand,
+                                                          authenticatedUserId))
                     .collect(Collectors.toList());
   }
 
   public static AbstractNodeEntity toDocumentItemEntity(DocumentFileService documentFileService,
                                                         IdentityManager identityManager,
                                                         SpaceService spaceService,
+                                                        MetadataService metadataService,
                                                         AbstractNode document,
-                                                        String expand) {
-    List<String> expandProperties = StringUtils.isBlank(expand) ? Collections.emptyList()
-                                                                : Arrays.asList(StringUtils.split(expand.replaceAll(" ", ""),
-                                                                                                  ","));
+                                                        String expand,
+                                                        long authenticatedUserId) {
+    List<String> expandProperties =
+                                  StringUtils.isBlank(expand) ? Collections.emptyList()
+                                                              : Arrays.asList(StringUtils.split(expand.replaceAll(" ", ""), ","));
 
     if (document instanceof FileNode) {
-      return toFileEntity(documentFileService, identityManager, spaceService, (FileNode) document, expandProperties);
+      return toFileEntity(documentFileService,
+                          identityManager,
+                          spaceService,
+                          metadataService,
+                          (FileNode) document,
+                          expandProperties,
+                          authenticatedUserId);
     } else if (document instanceof FolderNode) {
-      return toFolderEntity(documentFileService, identityManager, spaceService, (FolderNode) document, expandProperties);
+      return toFolderEntity(documentFileService,
+                            identityManager,
+                            spaceService,
+                            metadataService,
+                            (FolderNode) document,
+                            expandProperties,
+                            authenticatedUserId);
     }
     return null;
   }
@@ -66,10 +103,19 @@ public class EntityBuilder {
   public static FileNodeEntity toFileEntity(DocumentFileService documentFileService,
                                             IdentityManager identityManager,
                                             SpaceService spaceService,
+                                            MetadataService metadataService,
                                             FileNode file,
-                                            List<String> expandProperties) {
+                                            List<String> expandProperties,
+                                            long authenticatedUserId) {
     FileNodeEntity fileEntity = new FileNodeEntity();
-    toNode(documentFileService, identityManager, spaceService, file, fileEntity, expandProperties);
+    toNode(documentFileService,
+           identityManager,
+           spaceService,
+           metadataService,
+           file,
+           fileEntity,
+           expandProperties,
+           authenticatedUserId);
     fileEntity.setLinkedFileId(file.getLinkedFileId());
     fileEntity.setVersionnedFileId(file.getVersionnedFileId());
     fileEntity.setMimeType(file.getMimeType());
@@ -84,46 +130,105 @@ public class EntityBuilder {
   public static FolderNodeEntity toFolderEntity(DocumentFileService documentFileService,
                                                 IdentityManager identityManager,
                                                 SpaceService spaceService,
+                                                MetadataService metadataService,
                                                 FolderNode folder,
-                                                List<String> expandProperties) {
+                                                List<String> expandProperties,
+                                                long authenticatedUser) {
     FolderNodeEntity folderEntity = new FolderNodeEntity();
-    toNode(documentFileService, identityManager, spaceService, folder, folderEntity, expandProperties);
+    toNode(documentFileService,
+           identityManager,
+           spaceService,
+           metadataService,
+           folder,
+           folderEntity,
+           expandProperties,
+           authenticatedUser);
     return folderEntity;
   }
 
   private static void toNode(DocumentFileService documentFileService,
                              IdentityManager identityManager,
                              SpaceService spaceService,
+                             MetadataService metadataService,
                              AbstractNode node,
                              AbstractNodeEntity nodeEntity,
-                             List<String> expandProperties) {
-    nodeEntity.setId(node.getId());
-    nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
-    nodeEntity.setDatasource(node.getDatasource());
-    nodeEntity.setDescription(node.getDescription());
-    nodeEntity.setAcl(node.getAcl());
-    nodeEntity.setCreatedDate(node.getCreatedDate());
-    nodeEntity.setModifiedDate(node.getModifiedDate());
-    nodeEntity.setParentFolderId(node.getParentFolderId());
-    if (expandProperties.contains("creator")) {
-      nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
+                             List<String> expandProperties,
+                             long authenticatedUserId) {
+    try {
+      nodeEntity.setId(node.getId());
+      nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
+      nodeEntity.setDatasource(node.getDatasource());
+      nodeEntity.setDescription(node.getDescription());
+      nodeEntity.setAcl(node.getAcl());
+      nodeEntity.setCreatedDate(node.getCreatedDate());
+      nodeEntity.setModifiedDate(node.getModifiedDate());
+      nodeEntity.setParentFolderId(node.getParentFolderId());
+      if (expandProperties.contains("creator")) {
+        nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
+      }
+      if (expandProperties.contains("modifier")) {
+        nodeEntity.setModifierIdentity(toIdentityEntity(identityManager, spaceService, node.getModifierId()));
+      }
+      if (expandProperties.contains("owner")) {
+        nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
+      }
+      if (expandProperties.contains("auditTrails")) {
+        // TODO (documentFileService.getNodeAuditTrails) think of using limit of
+        // file auditTrails to retrieve. In listing, we need only latest activity,
+        // so limit = 1
+      }
+      if (expandProperties.contains("metadatas")) {
+        List<MetadataItem> metadataItems = metadataService.getMetadataItemsByObject(new MetadataObject(FILE_METADATA_OBJECT_TYPE,
+                                                                                                       node.getId()));
+        Map<String, List<MetadataItem>> metadatas = new HashMap<>();
+        metadataItems.forEach(metadataItem -> {
+          String type = metadataItem.getMetadata().getType().getName();
+          if (metadatas.get(type) == null) {
+            metadatas.put(type, new ArrayList<>());
+          }
+          metadatas.get(type).add(metadataItem);
+        });
+        nodeEntity.setMetadatas(retrieveMetadataItems(metadatas, authenticatedUserId));
+      }
+    } catch (Exception e) {
+      LOG.error("==== exception occured when converting node with ID = {} and name = {}", node.getId(), node.getName(), e);
     }
-    if (expandProperties.contains("modifier")) {
-      nodeEntity.setModifierIdentity(toIdentityEntity(identityManager, spaceService, node.getModifierId()));
+  }
+
+  public static Map<String, List<MetadataItemEntity>> retrieveMetadataItems(Map<String, List<MetadataItem>> metadatas,
+                                                                            long authentiatedUserId) {
+    if (MapUtils.isEmpty(metadatas)) {
+      return null;// NOSONAR
     }
-    if (expandProperties.contains("owner")) {
-      nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
+    Map<String, List<MetadataItemEntity>> fileMetadatasToPublish = new HashMap<>();
+    Set<Map.Entry<String, List<MetadataItem>>> metadataEntries = metadatas.entrySet();
+    for (Map.Entry<String, List<MetadataItem>> metadataEntry : metadataEntries) {
+      String metadataType = metadataEntry.getKey();
+      List<MetadataItem> metadataItems = metadataEntry.getValue();
+      if (MapUtils.isNotEmpty(metadatas)) {
+        List<MetadataItemEntity> activityMetadataEntities =
+                                                          metadataItems.stream()
+                                                                       .filter(metadataItem -> metadataItem.getMetadata()
+                                                                                                           .getAudienceId() == 0
+                                                                           || metadataItem.getMetadata()
+                                                                                          .getAudienceId() == authentiatedUserId)
+                                                                       .map(metadataItem -> new MetadataItemEntity(metadataItem.getId(),
+                                                                                                                   metadataItem.getMetadata()
+                                                                                                                               .getName(),
+                                                                                                                   metadataItem.getObjectType(),
+                                                                                                                   metadataItem.getObjectId(),
+                                                                                                                   metadataItem.getParentObjectId(),
+                                                                                                                   metadataItem.getCreatorId(),
+                                                                                                                   metadataItem.getMetadata()
+                                                                                                                               .getAudienceId(),
+                                                                                                                   metadataItem.getProperties()))
+                                                                       .collect(Collectors.toList());
+        if (CollectionUtils.isNotEmpty(activityMetadataEntities)) {
+          fileMetadatasToPublish.put(metadataType, activityMetadataEntities);
+        }
+      }
     }
-    if (expandProperties.contains("auditTrails")) {
-      // TODO (documentFileService.getNodeAuditTrails) think of using limit of
-      // file auditTrails to retrieve. In listing, we need only latest activity,
-      // so limit = 1
-    }
-    if (expandProperties.contains("metadatas")) {
-      // TODO (documentFileService.getNodeMetadatas) retrieving all Metadata of
-      // a file, visible for current user only. The current user, by example
-      // must not see the metadata of other users, such as favorites metadata
-    }
+    return fileMetadatasToPublish;
   }
 
   public static IdentityEntity toIdentityEntity(IdentityManager identityManager, SpaceService spaceService, long identityId) {
