@@ -1,16 +1,16 @@
 <template>
   <div>
-    <div :class="isMobile && !showMobileFilter || !isMobile ? '' : 'd-none'">
+    <div v-show="isMobile && !showMobileFilter || !isMobile">
       <v-btn class="btn btn-primary" @click="openDrawer">
         <v-icon :class="!isMobile ? 'me-2' : ''">mdi-plus</v-icon>
         {{ !isMobile ? $t('documents.button.addNewFile') : '' }}
       </v-btn>
     </div>
-    <div :class="isMobile && showMobileFilter || !isMobile ? '' : 'd-none'">
+    <div v-show="isMobile && showMobileFilter || !isMobile">
       <v-icon
         size="20"
         class="inputDocumentsFilter text-sub-title pa-1 my-auto "
-        :class="isMobile && showMobileFilter ? '' : 'd-none'"
+        v-show="isMobile && showMobileFilter"
         @click="$root.$emit('resetSearch')">
         fas fa-arrow-left
       </v-icon>
