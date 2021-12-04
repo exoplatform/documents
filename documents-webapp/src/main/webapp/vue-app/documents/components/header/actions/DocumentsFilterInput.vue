@@ -1,10 +1,10 @@
 <template>
   <div>
     <v-icon
-      size="20"
-      class="inputDocumentsFilter text-sub-title pa-0 my-auto "
+      size="25"
+      class="inputDocumentsFilter text-sub-title pa-1 my-auto "
       :class="isMobile && !showMobileFilter ? '' : 'd-none'"
-      @click="showMobileFilter = !showMobileFilter">
+      @click="mobileFilter">
       fas fa-filter
     </v-icon>
     <v-text-field
@@ -13,7 +13,7 @@
       :class="isMobile && showMobileFilter || !isMobile ? '' : 'd-none'"
       :append-icon="appendIcon"
       prepend-inner-icon="fa-filter"
-      class="inputDocumentsFilter pa-0 my-auto"
+      class="inputDocumentsFilter pa-1 my-auto width-full"
       @click:append="query = null" />
   </div>
 </template>
@@ -50,6 +50,10 @@ export default {
     },
   },
   methods: {
+    mobileFilter(){
+      this.showMobileFilter = !this.showMobileFilter;
+      this.$root.$emit('show-mobile-filter', this.showMobileFilter);
+    },
     waitForEndTyping() {
       window.setTimeout(() => {
         if (Date.now() - this.startTypingKeywordTimeout > this.startSearchAfterInMilliseconds) {
