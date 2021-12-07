@@ -1,9 +1,9 @@
 <template>
   <div>
     <v-icon
-      size="16"
-      class="inputDocumentsFilter text-sub-title pa-1 my-auto mt-2"
-      v-show="isMobile && !showMobileFilter"
+      size="20"
+      class="inputDocumentsFilter text-sub-title pa-1 my-auto "
+      :class="isMobile && !showMobileFilter ? '' : 'd-none'"
       @click="mobileFilter">
       fas fa-filter
     </v-icon>
@@ -51,7 +51,7 @@ export default {
     },
   },
   created() {
-    this.$root.$on('resetSearch', this.resetSearch);
+    this.$root.$on('resetSearch', this.cancelSearch);
   },
   methods: {
     mobileFilter(){
@@ -61,10 +61,9 @@ export default {
     cancelSearch(){
       this.query = null;
       this.$refs.inputQuery.blur();
-    },
-    resetSearch(){
-      this.cancelSearch();
-      this.mobileFilter();
+      if (this.isMobile){
+        this.mobileFilter();
+      }
     },
     waitForEndTyping() {
       window.setTimeout(() => {
