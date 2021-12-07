@@ -8,10 +8,10 @@
     </div>
     <div :class="isMobile && showMobileFilter || !isMobile ? '' : 'd-none'">
       <v-icon
-        size="25"
+        size="20"
         class="inputDocumentsFilter text-sub-title pa-1 my-auto "
         :class="isMobile && showMobileFilter ? '' : 'd-none'"
-        @click="$root.$emit('document-search', null)">
+        @click="$root.$emit('resetSearch')">
         fas fa-arrow-left
       </v-icon>
     </div>
