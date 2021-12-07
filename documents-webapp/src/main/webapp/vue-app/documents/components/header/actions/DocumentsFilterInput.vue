@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-icon
-      size="25"
+      size="20"
       class="inputDocumentsFilter text-sub-title pa-1 my-auto "
       :class="isMobile && !showMobileFilter ? '' : 'd-none'"
       @click="mobileFilter">
@@ -9,12 +9,13 @@
     </v-icon>
     <v-text-field
       v-model="query"
+      ref="inputQuery"
       :placeholder="$t('documents.label.filterDocuments')"
       :class="isMobile && showMobileFilter || !isMobile ? '' : 'd-none'"
       :append-icon="appendIcon"
       prepend-inner-icon="fa-filter"
       class="inputDocumentsFilter pa-1 my-auto width-full"
-      @click:append="query = null" />
+      @click:append="cancelSearch" />
   </div>
 </template>
 <script>
@@ -49,10 +50,20 @@ export default {
       }
     },
   },
+  created() {
+    this.$root.$on('resetSearch', this.cancelSearch);
+  },
   methods: {
     mobileFilter(){
       this.showMobileFilter = !this.showMobileFilter;
       this.$root.$emit('show-mobile-filter', this.showMobileFilter);
+    },
+    cancelSearch(){
+      this.query = null;
+      this.$refs.inputQuery.blur();
+      if (this.isMobile){
+        this.mobileFilter();
+      }
     },
     waitForEndTyping() {
       window.setTimeout(() => {
