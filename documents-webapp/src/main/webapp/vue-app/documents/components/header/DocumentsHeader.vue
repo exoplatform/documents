@@ -1,7 +1,7 @@
 <template>
   <div class="d-flex flex-row">
     <documents-header-left />
-    <v-spacer :class="showMobileFilter ? 'd-none' : ''" />
+    <v-spacer v-show="!showMobileFilter" />
     <documents-header-right />
   </div>
 </template>
