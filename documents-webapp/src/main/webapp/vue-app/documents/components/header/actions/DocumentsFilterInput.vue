@@ -51,7 +51,7 @@ export default {
     },
   },
   created() {
-    this.$root.$on('resetSearch', this.cancelSearch);
+    this.$root.$on('resetSearch', this.resetSearch);
   },
   methods: {
     mobileFilter(){
@@ -61,9 +61,10 @@ export default {
     cancelSearch(){
       this.query = null;
       this.$refs.inputQuery.blur();
-      if (this.isMobile){
-        this.mobileFilter();
-      }
+    },
+    resetSearch(){
+      this.cancelSearch();
+      this.mobileFilter();
     },
     waitForEndTyping() {
       window.setTimeout(() => {
