@@ -68,16 +68,13 @@
       display: none;
     }
 
-    .v-data-table__mobile-table-row > :last-child {
-      padding: 0;
-      margin: 0;
-      min-height: 0;
-      height: 0;
+    .v-data-table__mobile-table-row > :nth-child(2) {
+      padding-right: 12px;
     }
 
     .v-data-table__mobile-table-row > :last-child {
-      margin-bottom: 6px;
-      padding-left: 46px;
+      padding: 0;
+      margin: 0;
     }
 
     .v-data-table__mobile-row__cell {
@@ -91,19 +88,13 @@
         }
       }
 
-      .uiIconVerticalDots {
-        position: relative;
-        top: -3vh;
-        left: 62vw;
-      }
-
       .fileActionMenu {
-        position: relative;
-        top: -4vh !important;
-        left: 16vw !important;
+        top: 2vh !important;
+        left: auto !important;
+        right: 4vw;
         max-width: none;
         min-width: 187px !important;
-        
+
         .v-list-item__title {
           flex: initial;
         }
@@ -111,6 +102,8 @@
     }
 
     .v-data-table__mobile-table-row {
+      display: inline-flex;
+
       .document-time {
         text-align: left;
         margin-left: 16px;

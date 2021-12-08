@@ -1,5 +1,7 @@
 <template>
-  <div :id="`favorite-cell-file-${fileId}`">
+  <div 
+    :id="`favorite-cell-file-${fileId}`" 
+    :class="isMobile ? 'position-relative' : ''">
     <div v-if="!isMobile">
       <favorite-button
         :id="fileId"
@@ -12,7 +14,7 @@
     </div>
     <div v-else>
       <v-icon
-        class="uiIconVerticalDots text-sub-title d-block"
+        class="pa-0 text-sub-title d-block"
         @click="displayActionMenu = !displayActionMenu">
         mdi-dots-vertical
       </v-icon>
