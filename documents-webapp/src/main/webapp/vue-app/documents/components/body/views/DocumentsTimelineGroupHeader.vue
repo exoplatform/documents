@@ -1,5 +1,8 @@
 <template>
-  <td :colspan="colspan" class="white ps-1">
+  <td
+    v-if="!query"
+    :colspan="colspan"
+    class="white ps-1">
     <v-btn
       class="white no-border no-box-shadow ps-3"
       text
@@ -14,6 +17,10 @@
 export default {
   props: {
     group: {
+      type: String,
+      default: null,
+    },
+    query: {
       type: String,
       default: null,
     },
