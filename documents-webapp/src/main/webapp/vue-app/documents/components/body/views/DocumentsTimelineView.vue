@@ -97,7 +97,7 @@ export default {
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
-    mobileUnfriendlyExtensions: ['lastUpdated', 'size', 'lastActivity', 'favorite'],
+    mobileUnfriendlyExtensions: ['lastUpdated', 'size', 'lastActivity'],
     dayFirstDay: 0,
     weekFirstDay: 0,
     monthFirstDay: 0,
