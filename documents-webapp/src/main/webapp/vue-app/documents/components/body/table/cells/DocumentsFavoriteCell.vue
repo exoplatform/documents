@@ -26,7 +26,9 @@
         offset-y
         offset-x>
         <v-list class="pa-0" dense>
-          <v-list-item class="px-2">
+          <v-list-item 
+            class="px-2" 
+            @click.prevent="hitFavoriteButton">
             <v-list-item-icon class="mr-0 mb-3">
               <favorite-button
                 :id="fileId"
@@ -100,6 +102,9 @@ export default {
     },
     addError() {
       this.displayAlert(this.$t('Favorite.tooltip.ErrorAddingAsFavorite', {0: this.$t('file.label')}), 'error');
+    },
+    hitFavoriteButton() {
+      $(`#FavoriteLink_file_${this.fileId}`).click();
     },
     displayAlert(message, type) {
       this.$root.$emit('activity-notification-alert', {
