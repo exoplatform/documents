@@ -168,7 +168,7 @@ export default {
       if (this.ascending) {
         filter.ascending = true;
       }
-      const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner';
+      const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
       this.limit = this.limit || this.pageSize;
       this.loading = true;
       return this.$documentFileService
