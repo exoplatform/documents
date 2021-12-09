@@ -28,7 +28,9 @@
         offset-y
         offset-x>
         <v-list class="pa-0" dense>
-          <v-list-item class="px-2">
+          <v-list-item 
+            class="px-2" 
+            @click.prevent="hitFavoriteButton">
             <v-list-item-icon class="mr-0 mb-3">
               <favorite-button
                 :id="fileId"
