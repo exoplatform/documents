@@ -1,5 +1,6 @@
 <template>
   <div 
+    v-show="isFavorite || isMobile"
     :id="`favorite-cell-file-${fileId}`" 
     :class="isMobile ? 'position-relative' : ''">
     <div v-if="!isMobile">
@@ -85,6 +86,21 @@ export default {
       }
     });
     this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
+  },
+  mounted() {
+    // show favorite button when hovering over the corresponding row.
+    if (!this.isMobile) {
+      const self = this;
+      $(`#favorite-cell-file-${this.fileId}`).parent().parent().parent().hover(function () {
+        if (!self.isFavorite) {
+          $(`#favorite-cell-file-${self.fileId}`).show();
+        }
+      }, function () {
+        if (!self.isFavorite) {
+          $(`#favorite-cell-file-${self.fileId}`).hide();
+        }
+      });
+    }
   },
   methods: {
     removed() {
