@@ -87,7 +87,6 @@ export default {
     this.refreshViewExtensions();
 
     this.$root.$on('documents-refresh-files', this.refreshFilesEvent);
-    this.getDocumentGroupSizes();
     this.refreshFiles().then(() => {
       this.watchDocumentPreview();
     }).finally(() => this.$root.$applicationLoaded());
@@ -149,7 +148,6 @@ export default {
       this.refreshFiles();
     },
     refreshFilesEvent() {
-      this.getDocumentGroupSizes();
       this.refreshFiles();
     },
     refreshFiles() {
@@ -180,24 +178,6 @@ export default {
         .then(files => {
           this.files = files && files.slice(this.offset, this.limit) || [];
           this.hasMore = files && files.length > this.limit;
-        })
-        .finally(() => this.loading = false);
-    },
-    getDocumentGroupSizes() {
-      if (!this.selectedViewExtension) {
-        return Promise.resolve(null);
-      }
-      const filter = {
-        ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-      };
-
-      if (this.query) {
-        filter.query = this.query;
-      }
-      return this.$documentFileService
-        .getDocumentGroupSizes(filter)
-        .then(sizes => {
-          this.groupsSizes =  sizes || {};
         })
         .finally(() => this.loading = false);
     },
