@@ -120,6 +120,13 @@ export default {
     },
   },
   methods: {
+    fileInfo() {
+      return `${this.$t('documents.preview.updatedOn')} ${this.absoluteDateModified()} ${this.$t('documents.preview.updatedBy')} ${this.file.lastEditor} ${this.file.size}`;
+    },
+    absoluteDateModified(options) {
+      const lang = eXo && eXo.env && eXo.env.portal && eXo.env.portal.language || 'en';
+      return new Date(this.file.date).toLocaleString(lang, options).split('/').join('-');
+    },
     openPreview() {
       this.loading = true;
       this.$attachmentService.getAttachmentById(this.file.id)
@@ -129,14 +136,17 @@ export default {
               id: this.file.id,
               repository: 'repository',
               workspace: 'collaboration',
-              path: attachment.path,
               title: attachment.title,
-              icon: attachment.icon,
-              size: attachment.size,
-              openUrl: attachment.openUrl,
               downloadUrl: attachment.downloadUrl,
+              openUrl: attachment.openUrl,
+              breadCrumb: attachment.previewBreadcrumb,
+              fileInfo: this.fileInfo(),
+              size: attachment.size,
             },
             author: attachment.updater,
+            version: {
+              number: attachment.version
+            },
             showComments: false,
             showOpenInFolderButton: false,
           });

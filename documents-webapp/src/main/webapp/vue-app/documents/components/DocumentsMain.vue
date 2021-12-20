@@ -111,13 +111,17 @@ export default {
               workspace: 'collaboration',
               path: attachment.path,
               title: attachment.title,
-              icon: attachment.icon,
-              size: attachment.size,
               openUrl: attachment.openUrl,
+              breadCrumb: attachment.previewBreadcrumb,
+              size: attachment.size,
               downloadUrl: attachment.downloadUrl,
             },
             author: attachment.updater,
+            version: {
+              number: attachment.version
+            },
             showComments: false,
+            showOpenInFolderButton: false,
           });
         })
         .catch(e => console.error(e))
