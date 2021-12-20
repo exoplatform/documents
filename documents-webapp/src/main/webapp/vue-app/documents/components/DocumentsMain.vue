@@ -11,7 +11,7 @@
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else-if="!filesLoad">
+      <div v-else-if="!filesLoad && !loadingFiles">
         <documents-header-left
           class="py-2" />
         <documents-no-body
@@ -80,6 +80,9 @@ export default {
     },
     searchResult(){
       return this.query && this.query.length && !this.files.length;
+    },
+    loadingFiles(){
+      return this.loading;
     }
   },
   created() {
