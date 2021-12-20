@@ -10,6 +10,7 @@
     :group-by="groupBy"
     :group-desc="groupDesc"
     :disable-sort="isMobile"
+    :loading-text="loadingLabel"
     hide-default-footer
     disable-pagination
     disable-filtering
@@ -164,6 +165,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs';
     },
+    loadingLabel() {
+      return this.$t('documents.loading');
+    }
   },
   watch: {
     options() {
