@@ -176,7 +176,15 @@ export default {
       return this.$documentFileService
         .getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
-          this.files = files && files.slice(this.offset, this.limit) || [];
+          this.files = this.sortField === 'favorite' ? files && files.slice(this.offset, this.limit).sort((file1, file2) => {
+            if (file1.favorite === false && file2.favorite === true) {
+              return this.ascending ? 1 : -1;
+            }
+            if (file1.favorite === true && file2.favorite === false) {
+              return this.ascending ? -1 : 1;
+            }
+            return 0;
+          }) || [] : files && files.slice(this.offset, this.limit) || [];
           this.hasMore = files && files.length > this.limit;
         })
         .finally(() => this.loading = false);
