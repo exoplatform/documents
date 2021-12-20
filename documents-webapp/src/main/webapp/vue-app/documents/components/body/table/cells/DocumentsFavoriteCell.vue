@@ -6,6 +6,7 @@
     <div v-if="!isMobile">
       <favorite-button
         :id="fileId"
+        :space-id="spaceId"
         :favorite="isFavorite"
         type="file"
         @removed="removed"
@@ -33,6 +34,7 @@
             <v-list-item-icon class="mr-0 mb-3">
               <favorite-button
                 :id="fileId"
+                :space-id="spaceId"
                 :favorite="isFavorite"
                 type="file"
                 @removed="removed"
@@ -69,6 +71,9 @@ export default {
   computed: {
     fileId() {
       return this.file && this.file.id;
+    },
+    spaceId() {
+      return eXo.env.portal.spaceId;
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
