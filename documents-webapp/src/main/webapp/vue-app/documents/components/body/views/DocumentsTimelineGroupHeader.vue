@@ -56,7 +56,7 @@ export default {
         return '';
       }
       const labelKey = this.group.split(':')[1];
-      return this.$t(`documents.timeline.${labelKey}`, {0: this.group.split(':')[2] || this.filesCount});
+      return this.$t(`documents.timeline.${labelKey}`);
     },
   },
 };
