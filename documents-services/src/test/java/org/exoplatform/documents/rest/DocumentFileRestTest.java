@@ -189,8 +189,10 @@ public class DocumentFileRestTest {
     assertEquals(filesNodeEntity.get(0).getMimeType(),":file");
     assertEquals(filesNodeEntity.get(0).getVersionnedFileId(),"1");
     assertEquals(filesNodeEntity.get(0).getSize(),50);
+    assertTrue(filesNodeEntity.get(0).isFavorite());
     FileNodeEntity fileNodeEntity = filesNodeEntity.get(0);
     fileNodeEntity.setMetadatas(null);
+    fileNodeEntity.setFavorite(false);
     assertTrue(nodeEntity.equals(fileNodeEntity));
 
   }

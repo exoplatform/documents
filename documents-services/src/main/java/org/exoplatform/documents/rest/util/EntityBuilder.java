@@ -188,6 +188,7 @@ public class EntityBuilder {
           }
           metadatas.get(type).add(metadataItem);
         });
+        nodeEntity.setFavorite(metadatas.containsKey("favorites"));
         nodeEntity.setMetadatas(retrieveMetadataItems(metadatas, authenticatedUserId));
       }
     } catch (Exception e) {
