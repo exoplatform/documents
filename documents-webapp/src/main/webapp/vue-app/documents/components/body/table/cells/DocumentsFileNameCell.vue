@@ -10,8 +10,7 @@
       v-else
       size="22"
       :color="icon.color">{{ icon.class }}</v-icon>
-    <div>
-      <div class="document-title d-inline-flex" :title="file.name">
+      <div class="document-title d-inline-flex width-full" :title="file.name">
         <div
           v-sanitized-html="fileName"
           class="document-name text-truncate hover-underline ms-4">
@@ -22,10 +21,9 @@
         </div>
       </div>
       <documents-last-updated-cell
-        v-if="isMobile"
+         v-if="isMobile"
         :file="file"
         :extension="extension" />
-    </div>
   </a>
 </template>
 <script>
