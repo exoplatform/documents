@@ -58,4 +58,6 @@ public class AbstractNodeEntity {
   private NodeAuditTrailsEntity                 auditTrails;
 
   private Map<String, List<MetadataItemEntity>> metadatas;
+  
+  private boolean                               isFavorite;
 }

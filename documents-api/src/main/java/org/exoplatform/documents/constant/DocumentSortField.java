@@ -34,6 +34,7 @@ public enum DocumentSortField {
       case "modified":
       case "modifiedDate":
       case "lastUpdated":
+      case "favorite":
         return MODIFIED_DATE;
       case "created":
       case "createdDate":
