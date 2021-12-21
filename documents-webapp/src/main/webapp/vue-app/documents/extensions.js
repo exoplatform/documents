@@ -76,7 +76,7 @@ if (eXo.env.portal.filesFavoritesEnabled) {
     id: 'favorite',
     labelKey: 'documents.label.favorite',
     align: 'center',
-    sortable: false,
+    sortable: true,
     cssClass: 'font-weight-bold text-no-wrap',
     width: '120px',
     rank: 60,

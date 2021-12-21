@@ -105,7 +105,7 @@ export default {
       return this.headers && this.headers.filter(header => header.cellExtension && header.cellExtension.componentOptions);
     },
     grouping() {
-      return !this.sortField || this.sortField === 'lastUpdated';
+      return !this.sortField || this.sortField === 'lastUpdated' || this.sortField === 'favorite';
     },
     querySearch() {
       return this.query && this.query.length;
