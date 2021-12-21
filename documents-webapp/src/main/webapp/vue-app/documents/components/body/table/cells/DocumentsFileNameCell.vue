@@ -33,24 +33,33 @@
     <div
       :id="`document-action-menu-cel-${file.id}`"
       class="position-relative">
-      <v-icon
-        v-show="isMobile"
-        size="18"
-        class="clickable text-sub-title"
-        @click="menuDispalayed = true">
-        mdi-dots-vertical
-      </v-icon>
-      <v-menu
-        v-model="menuDispalayed"
-        :attach="`#document-action-menu-cel-${file.id}`"
-        transition="slide-x-reverse-transition"
-        :content-class="isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'"
-        offset-y
-        offset-x
-        left>
-        <documents-actions-menu
-          :file="file" />
-      </v-menu>
+      <v-tooltip bottom>
+        <template v-slot:activator="{ on, attrs }">
+          <v-icon
+            v-show="isMobile || menuDisplayed"
+            size="18"
+            class="clickable text-sub-title"
+            v-bind="attrs"
+            v-on="on"
+            @click="displayActionMenu">
+            mdi-dots-vertical
+          </v-icon>
+          <v-menu
+            v-model="menuDisplayed"
+            :attach="`#document-action-menu-cel-${file.id}`"
+            transition="slide-x-reverse-transition"
+            :content-class="isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'"
+            offset-y
+            offset-x
+            left>
+            <documents-actions-menu
+              :file="file" />
+          </v-menu>
+        </template>
+        <span>
+          {{ menuActionTooltip }}
+        </span>
+      </v-tooltip>
     </div>
   </div>
 </template>
@@ -68,7 +77,7 @@ export default {
   },
   data: () => ({
     loading: false,
-    menuDispalayed: false,
+    menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
   }),
   computed: {
@@ -140,12 +149,16 @@ export default {
     fileType() {
       return `.${this.file.name.split('.')[1]}`;
     },
+    menuActionTooltip() {
+      return this.$t('documents.label.menu.action.tooltip');
+    },
   },
   created(){
     $(document).on('mousedown', () => {
-      if (this.menuDispalayed) {
+      if (this.menuDisplayed) {
         window.setTimeout(() => {
-          this.menuDispalayed = false;
+          $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#fff');
+          this.menuDisplayed = false;
         }, this.waitTimeUntilCloseMenu);
       }
     });
@@ -187,6 +200,10 @@ export default {
           window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.id}`);
           this.loading = false;
         });
+    },
+    displayActionMenu() {
+      this.menuDisplayed = true;
+      $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
     },
   },
 };
