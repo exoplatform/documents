@@ -171,7 +171,7 @@ export default {
         filter.sortField = this.sortField;
       }
       if (this.ascending) {
-        filter.ascending = true;
+        filter.ascending = this.sortField === 'favorite' ? false : true;
       }
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
       this.limit = this.limit || this.pageSize;

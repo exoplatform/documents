@@ -114,7 +114,7 @@ export default {
       return this.grouping && 'groupValue' || [];
     },
     groupDesc() {
-      return this.ascending;
+      return this.sortField === 'favorite' ? false : this.ascending;
     },
     items() {
       if (this.grouping) {
