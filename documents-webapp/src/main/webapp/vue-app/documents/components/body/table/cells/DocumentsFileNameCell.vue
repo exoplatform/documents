@@ -10,15 +10,7 @@
       v-else
       size="22"
       :color="icon.color">{{ icon.class }}</v-icon>
-    <div v-if="!isMobile">
-      <span
-        :title="file.name"
-        v-sanitized-html="file.name"
-        class="text-truncate hover-underline ms-2">
-      </span>
-    </div>
-    <div v-else>
-      <div class="document-title d-inline-flex" :title="file.name">
+      <div class="document-title d-inline-flex width-full" :title="file.name">
         <div
           v-sanitized-html="fileName"
           class="document-name text-truncate hover-underline ms-4">
@@ -29,9 +21,9 @@
         </div>
       </div>
       <documents-last-updated-cell
+         v-if="isMobile"
         :file="file"
         :extension="extension" />
-    </div>
   </a>
 </template>
 <script>
