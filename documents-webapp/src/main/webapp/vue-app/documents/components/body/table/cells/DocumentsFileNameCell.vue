@@ -10,20 +10,20 @@
       v-else
       size="22"
       :color="icon.color">{{ icon.class }}</v-icon>
-      <div class="document-title d-inline-flex width-full" :title="file.name">
-        <div
-          v-sanitized-html="fileName"
-          class="document-name text-truncate hover-underline ms-4">
-        </div>
-        <div
-          v-sanitized-html="fileType"
-          class="document-type hover-underline ms-0">
-        </div>
+    <div class="document-title d-inline-flex width-full" :title="file.name">
+      <div
+        v-sanitized-html="fileName"
+        class="document-name text-truncate hover-underline ms-4">
       </div>
-      <documents-last-updated-cell
-         v-if="isMobile"
-        :file="file"
-        :extension="extension" />
+      <div
+        v-sanitized-html="fileType"
+        class="document-type hover-underline ms-0">
+      </div>
+    </div>
+    <documents-last-updated-cell
+      v-if="isMobile"
+      :file="file"
+      :extension="extension" />
   </a>
 </template>
 <script>
