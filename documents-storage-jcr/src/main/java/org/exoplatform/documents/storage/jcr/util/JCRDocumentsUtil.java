@@ -110,7 +110,7 @@ public class JCRDocumentsUtil {
       FileNode fileNode = toFileNode(identityManager, aclIdentity, node);
       fileNodes.add(fileNode);
       size++;
-      if (size >= limit) {
+      if (size >= limit && limit != 0) {
         return fileNodes;
       }
     }

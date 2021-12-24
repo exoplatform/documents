@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.rest;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.security.RolesAllowed;
@@ -52,6 +53,12 @@ import io.swagger.annotations.*;
 public class DocumentFileRest implements ResourceContainer {
 
   private static final Log          LOG = ExoLogger.getLogger(DocumentFileRest.class);
+
+  private static final String FILE_METADATA_OBJECT_TYPE = "file";
+
+  private static final String FILE_METADATA_TYPE = "favorites";
+
+  private static final String FILE_METADATA_NAME = "1";
 
   private final DocumentFileService documentFileService;
 
@@ -90,6 +97,8 @@ public class DocumentFileRest implements ResourceContainer {
                                    @QueryParam("query") String query,
                                    @ApiParam(value = "File properties to expand.", required = false)
                                    @QueryParam("expand") String expand,
+                                   @ApiParam(value = "Filter primary", required = false)
+                                   @QueryParam("filterPrimary") String filterPrimary,
                                    @ApiParam(value = "Document items sort field", required = false)
                                    @QueryParam("sortField") String sortField,
                                    @ApiParam(value = "Sort ascending or descending", required = false)
@@ -112,8 +121,11 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setQuery(query);
       filter.setAscending(ascending);
       filter.setSortField(DocumentSortField.getFromAlias(sortField));
-
-      List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, offset, limit, userIdentityId);
+      List<String> metadataItems = new ArrayList<>();
+      if (filterPrimary != null && filterPrimary.equals(FILE_METADATA_TYPE)) {
+        metadataItems = metadataService.getMetadataObjectIds(FILE_METADATA_TYPE, FILE_METADATA_NAME, FILE_METADATA_OBJECT_TYPE, offset, limit);
+      }
+      List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, metadataItems, offset, limit, userIdentityId);
       List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
                                                                                        identityManager,
                                                                                        spaceService,

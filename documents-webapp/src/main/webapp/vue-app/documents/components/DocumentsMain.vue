@@ -61,6 +61,7 @@ export default {
     },
     selectedView: null,
     previewMode: false,
+    primaryFilter: 'all'
   }),
   computed: {
     filesLoad(){
@@ -97,7 +98,10 @@ export default {
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-search', this.search);
     this.$root.$on('documents-sort', this.sort);
-    
+    this.$root.$on('documents-favorite', filter => {
+      this.primaryFilter = filter;
+      this.refreshFiles(this.primaryFilter);
+    });
     const currentUrlSearchParams = window.location.search;
     const queryParams = new URLSearchParams(currentUrlSearchParams);
     if (queryParams.has('documentPreviewId')) {
@@ -147,13 +151,12 @@ export default {
     },
     loadMore() {
       this.limit += this.pageSize;
-
-      this.refreshFiles();
+      this.refreshFiles(this.primaryFilter);
     },
     refreshFilesEvent() {
       this.refreshFiles();
     },
-    refreshFiles() {
+    refreshFiles(filterPrimary) {
       if (!this.selectedViewExtension) {
         return Promise.resolve(null);
       }
@@ -177,7 +180,7 @@ export default {
       this.limit = this.limit || this.pageSize;
       this.loading = true;
       return this.$documentFileService
-        .getDocumentItems(filter, this.offset, this.limit + 1, expand)
+        .getDocumentItems(filter, filterPrimary, this.offset, this.limit + 1, expand)
         .then(files => {
           this.files = this.sortField === 'favorite' ? files && files.slice(this.offset, this.limit).sort((file1, file2) => {
             if (file1.favorite === false && file2.favorite === true) {

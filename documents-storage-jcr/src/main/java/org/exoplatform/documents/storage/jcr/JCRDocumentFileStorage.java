@@ -71,6 +71,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   @Override
   public List<FileNode> getFilesTimeline(DocumentTimelineFilter filter,
+                                         List<String> listFavorites,
                                          Identity aclIdentity,
                                          int offset,
                                          int limit) throws ObjectNotFoundException {
@@ -93,7 +94,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
 
-        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection);
+        String statement = getTimeLineQueryStatement(rootPath, listFavorites, sortField, sortDirection);
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         QueryResult queryResult = jcrQuery.execute();
         NodeIterator nodeIterator = queryResult.getNodes();
@@ -194,16 +195,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return null;
   }
 
-  private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {
-    return new StringBuilder().append("SELECT * FROM ")
-                              .append(NodeTypeConstants.NT_FILE)
-                              .append(" WHERE jcr:path LIKE '")
-                              .append(rootPath)
-                              .append("/%' ORDER BY ")
-                              .append(sortField)
-                              .append(" ")
-                              .append(sortDirection)
-                              .toString();
+  private String getTimeLineQueryStatement(String rootPath,List<String> listFavorites, String sortField, String sortDirection) {
+
+    StringBuilder sb = new StringBuilder().append("SELECT * FROM ")
+            .append(NodeTypeConstants.NT_FILE)
+            .append(" WHERE jcr:path LIKE '")
+            .append(rootPath)
+            .append("/%' ");
+    if( !listFavorites.isEmpty() ){
+      sb.append("AND (");
+      for(String idFavorite : listFavorites){
+        sb.append(" jcr:uuid='").append(idFavorite).append("' OR");
+      }
+      sb.delete(sb.lastIndexOf("OR"),sb.lastIndexOf("OR") + 2);
+      sb.append(")");
+    }
+    sb.append(" ORDER BY ")
+            .append(sortField)
+            .append(" ")
+            .append(sortDirection);
+    return  sb.toString();
   }
   private String getTimeLineGroupeSizeQueryStatement(String rootPath, Date before, Date after) {
     StringBuilder sb = new StringBuilder().append("SELECT * FROM ")

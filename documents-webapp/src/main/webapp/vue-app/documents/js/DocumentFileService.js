@@ -1,4 +1,4 @@
-export function getDocumentItems(itemsFilter, offset, limit, expand) {
+export function getDocumentItems(itemsFilter, filterPrimary, offset, limit, expand) {
   const formData = new FormData();
   if (itemsFilter) {
     Object.keys(itemsFilter).forEach(key => {
@@ -8,6 +8,10 @@ export function getDocumentItems(itemsFilter, offset, limit, expand) {
       }
     });
   }
+  if (filterPrimary) {
+    formData.append('filterPrimary', filterPrimary);
+  }
+
   if (expand) {
     formData.append('expand', expand);
   }
