@@ -76,8 +76,8 @@ export default {
       default: null
     },
     loading: {
-      type: Number,
-      default: 20
+      type: Boolean,
+      default: false
     },
     hasMore: {
       type: Boolean,
@@ -166,7 +166,7 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs';
     },
     loadingLabel() {
-      return this.$t('documents.loading');
+      return `${this.$t('documents.label.loading')}...`;
     }
   },
   watch: {
