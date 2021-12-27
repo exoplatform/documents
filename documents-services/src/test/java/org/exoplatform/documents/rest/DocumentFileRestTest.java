@@ -161,6 +161,7 @@ public class DocumentFileRestTest {
     assertEquals(files_.size(),4);
 
     List<MetadataItem> metadataItems  = new ArrayList<>();
+    List<String> metadataObjectIds  = new ArrayList<>();
     MetadataType metadataType= new MetadataType();
     metadataType.setId(1);
     metadataType.setName("favorites");
@@ -178,13 +179,16 @@ public class DocumentFileRestTest {
     metadataItem.setObjectId(metadataObject.getId());
     metadataItem.setCreatorId(2);
     metadataItems.add(metadataItem);
+    metadataObjectIds.add("7694af9cc0a80104095f8da1bf22a7fb");
     when(metadataService.getMetadataItemsByObject(any())).thenReturn(metadataItems);
+    when(metadataService.getMetadataObjectIds("favorites","1","file",0,0)).thenReturn(metadataObjectIds);
+    when(documentFileStorage.getFilesTimeline(filter, metadataObjectIds,spaceID,    0, 0)).thenReturn(files);
     Response response4 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"metadatas","favorites",null,false,0,0);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
     List<FileNodeEntity> filesNodeEntity = new ArrayList<>();
     filesNodeEntity = (List<FileNodeEntity>) response4.getEntity();
     assertNotNull(filesNodeEntity);
-    /*assertNotNull(filesNodeEntity.get(0).hashCode());
+    assertNotNull(filesNodeEntity.get(0).hashCode());
     assertNotNull(filesNodeEntity.get(0).toString());
     assertEquals(filesNodeEntity.get(0).getMimeType(),":file");
     assertEquals(filesNodeEntity.get(0).getVersionnedFileId(),"1");
@@ -193,7 +197,7 @@ public class DocumentFileRestTest {
     FileNodeEntity fileNodeEntity = filesNodeEntity.get(0);
     fileNodeEntity.setMetadatas(null);
     fileNodeEntity.setFavorite(false);
-    assertTrue(nodeEntity.equals(fileNodeEntity));*/
+    assertTrue(nodeEntity.equals(fileNodeEntity));
 
   }
   @Test

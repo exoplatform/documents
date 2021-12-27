@@ -32,7 +32,7 @@ public interface DocumentFileStorage {
    * 
    * @param filter {@link DocumentTimelineFilter} that contains filtering
    *          criteria
-   * @param listFavorites that contains list Favorites criteria
+   * @param listFavorites that contains list ids Favorites
    * @param offset Offset of the result list
    * @param limit Limit of the result list
    * @param aclIdentity {@link Identity} of the user acessing files

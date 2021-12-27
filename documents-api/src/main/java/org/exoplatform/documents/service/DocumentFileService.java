@@ -31,7 +31,7 @@ public interface DocumentFileService {
    * 
    * @param listingType {@link FileListingType}
    * @param filter {@link DocumentNodeFilter} that contains filtering criteria
-   * @param listFavorites  that contains list Favorites criteria
+   * @param listFavorites  that contains list ids Favorites
    * @param offset Offset of the result list
    * @param limit Limit of the result list
    * @param userIdentityId {@link Identity} technical identifier of the user
@@ -57,7 +57,7 @@ public interface DocumentFileService {
    * 
    * @param filter {@link DocumentTimelineFilter} that contains filtering
    *          criteria
-   * @param listFavorites that contains list Favorites criteria
+   * @param listFavorites that contains list ids Favorites
    * @param offset Offset of the result list
    * @param limit Limit of the result list
    * @param userIdentityId {@link Identity} technical identifier of the user

@@ -121,11 +121,11 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setQuery(query);
       filter.setAscending(ascending);
       filter.setSortField(DocumentSortField.getFromAlias(sortField));
-      List<String> metadataItems = new ArrayList<>();
+      List<String> metadataObjectIds = new ArrayList<>();
       if (filterPrimary != null && filterPrimary.equals(FILE_METADATA_TYPE)) {
-        metadataItems = metadataService.getMetadataObjectIds(FILE_METADATA_TYPE, FILE_METADATA_NAME, FILE_METADATA_OBJECT_TYPE, offset, limit);
+        metadataObjectIds = metadataService.getMetadataObjectIds(FILE_METADATA_TYPE, FILE_METADATA_NAME, FILE_METADATA_OBJECT_TYPE, offset, limit);
       }
-      List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, metadataItems, offset, limit, userIdentityId);
+      List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, metadataObjectIds, offset, limit, userIdentityId);
       List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
                                                                                        identityManager,
                                                                                        spaceService,
