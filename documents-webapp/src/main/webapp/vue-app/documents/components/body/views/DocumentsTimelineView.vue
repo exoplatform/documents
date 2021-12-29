@@ -14,6 +14,7 @@
     hide-default-footer
     disable-pagination
     disable-filtering
+    :class="loading && !items.length ? 'loadingClass' : ''"
     class="documents-table border-box-sizing">
     <template
       v-for="header in extendedCells"
