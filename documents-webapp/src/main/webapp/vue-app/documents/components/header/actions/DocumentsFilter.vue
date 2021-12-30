@@ -23,7 +23,7 @@ export default {
   }),
   methods: {
     changeDocumentsFilter(){
-      this.$root.$emit('documents-favorite', this.filterDocumentsSelected.toLowerCase());
+      this.$root.$emit('documents-filter', this.filterDocumentsSelected.toLowerCase());
     },
   },
 };

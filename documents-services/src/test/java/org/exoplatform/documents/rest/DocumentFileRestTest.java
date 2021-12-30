@@ -17,6 +17,20 @@
 
 package org.exoplatform.documents.rest;
 
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.ws.rs.core.Response;
+
+import org.junit.Before;
+import org.junit.Test;
+
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
@@ -37,36 +51,24 @@ import org.exoplatform.social.metadata.model.Metadata;
 import org.exoplatform.social.metadata.model.MetadataItem;
 import org.exoplatform.social.metadata.model.MetadataObject;
 import org.exoplatform.social.metadata.model.MetadataType;
-import org.junit.Before;
-import org.junit.Test;
-
-import javax.ws.rs.core.Response;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class DocumentFileRestTest {
 
-  private DocumentFileStorage documentFileStorage;
+  private DocumentFileStorage     documentFileStorage;
 
-  private IdentityManager     identityManager;
+  private IdentityManager         identityManager;
 
-  private SpaceService        spaceService;
+  private SpaceService            spaceService;
 
-  private IdentityRegistry identityRegistry;
+  private IdentityRegistry        identityRegistry;
 
-  private MetadataService metadataService;
+  private MetadataService         metadataService;
 
-  private Authenticator authenticator;
+  private Authenticator           authenticator;
 
   private DocumentFileServiceImpl documentFileService;
 
-  private DocumentFileRest documentFileRest;
+  private DocumentFileRest        documentFileRest;
 
   @Before
   public void setUp() {
@@ -76,7 +78,11 @@ public class DocumentFileRestTest {
     metadataService = mock(MetadataService.class);
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
-    documentFileService = new DocumentFileServiceImpl(documentFileStorage, authenticator, spaceService, identityManager, identityRegistry);
+    documentFileService = new DocumentFileServiceImpl(documentFileStorage,
+                                                      authenticator,
+                                                      spaceService,
+                                                      identityManager,
+                                                      identityRegistry);
     documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
   }
 
@@ -94,12 +100,11 @@ public class DocumentFileRestTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     DocumentTimelineFilter filter = null;
-    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()), false);
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-            eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
@@ -137,20 +142,38 @@ public class DocumentFileRestTest {
     files.add(file3);
     files.add(file4);
 
-    when(documentFileStorage.getFilesTimeline(filter, spaceID,    0, 0)).thenReturn(files);
+    when(documentFileStorage.getFilesTimeline(filter, spaceID, 0, 0)).thenReturn(files);
 
-    Response response1 = documentFileRest.getDocumentItems(null,    null,    FileListingType.TIMELINE,  null,"",null,false,0,0);
+    Response response1 = documentFileRest.getDocumentItems(null,
+                                                           null,
+                                                           FileListingType.TIMELINE,
+                                                           null,
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           false,
+                                                           0,
+                                                           0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId,    null,    null,  null,"",null,false,0,0);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null, null, null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
-    Response response3 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"",null,false,0,0);
+    Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
+                                                           FileListingType.TIMELINE,
+                                                           null,
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           false,
+                                                           0,
+                                                           0);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,filter,    0,    0,  Long.valueOf(currentIdentity.getId()));
+    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.valueOf(currentIdentity.getId()));
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     nodeEntity.setLinkedFileId("1");
@@ -158,10 +181,10 @@ public class DocumentFileRestTest {
     nodeEntity.setMimeType(":file");
     nodeEntity.setSize(50);
 
-    assertEquals(files_.size(),4);
+    assertEquals(files_.size(), 4);
 
-    List<MetadataItem> metadataItems  = new ArrayList<>();
-    MetadataType metadataType= new MetadataType();
+    List<MetadataItem> metadataItems = new ArrayList<>();
+    MetadataType metadataType = new MetadataType();
     metadataType.setId(1);
     metadataType.setName("favorites");
     MetadataObject metadataObject = new MetadataObject();
@@ -179,16 +202,25 @@ public class DocumentFileRestTest {
     metadataItem.setCreatorId(2);
     metadataItems.add(metadataItem);
     when(metadataService.getMetadataItemsByObject(any())).thenReturn(metadataItems);
-    Response response4 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"metadatas",null,false,0,0);
+    Response response4 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
+                                                           FileListingType.TIMELINE,
+                                                           null,
+                                                           false,
+                                                           "metadatas",
+                                                           null,
+                                                           false,
+                                                           0,
+                                                           0);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
     List<FileNodeEntity> filesNodeEntity = new ArrayList<>();
     filesNodeEntity = (List<FileNodeEntity>) response4.getEntity();
     assertNotNull(filesNodeEntity);
     assertNotNull(filesNodeEntity.get(0).hashCode());
     assertNotNull(filesNodeEntity.get(0).toString());
-    assertEquals(filesNodeEntity.get(0).getMimeType(),":file");
-    assertEquals(filesNodeEntity.get(0).getVersionnedFileId(),"1");
-    assertEquals(filesNodeEntity.get(0).getSize(),50);
+    assertEquals(filesNodeEntity.get(0).getMimeType(), ":file");
+    assertEquals(filesNodeEntity.get(0).getVersionnedFileId(), "1");
+    assertEquals(filesNodeEntity.get(0).getSize(), 50);
     assertTrue(filesNodeEntity.get(0).isFavorite());
     FileNodeEntity fileNodeEntity = filesNodeEntity.get(0);
     fileNodeEntity.setMetadatas(null);
@@ -196,6 +228,7 @@ public class DocumentFileRestTest {
     assertTrue(nodeEntity.equals(fileNodeEntity));
 
   }
+
   @Test
   public void testGETDocumentGroupsCount() throws Exception {
     String username = "testuser";
@@ -210,12 +243,11 @@ public class DocumentFileRestTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     DocumentTimelineFilter filter = null;
-    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()), false);
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-            eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
@@ -225,26 +257,23 @@ public class DocumentFileRestTest {
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
     when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
 
-
     DocumentGroupsSize documentGroupsSize = new DocumentGroupsSize();
     documentGroupsSize.setThisDay(4);
 
     when(documentFileService.getGroupDocumentsCount(filter, currentOwnerId)).thenReturn(documentGroupsSize);
 
-    Response response1 = documentFileRest.getDocumentGroupsCount(null,"",null);
+    Response response1 = documentFileRest.getDocumentGroupsCount(null, "", null, false);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentGroupsCount(currentOwnerId,"",null);
+    Response response2 = documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response2.getStatus());
-
-
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
 
-    Response response4 = documentFileRest.getDocumentGroupsCount(currentOwnerId,    "",null);
+    Response response4 = documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
 
-    assertEquals(((DocumentGroupsSize) response4.getEntity()).getThisDay(),4);
+    assertEquals(((DocumentGroupsSize) response4.getEntity()).getThisDay(), 4);
 
   }
 
@@ -276,7 +305,7 @@ public class DocumentFileRestTest {
     filter.setSortField(DocumentSortField.NAME);
 
     IdentityEntity identity1 = new IdentityEntity();
-    IdentityEntity identity2 = new IdentityEntity("3","userb",null,"organization","spacetest");
+    IdentityEntity identity2 = new IdentityEntity("3", "userb", null, "organization", "spacetest");
     identity1.setId("2");
     identity1.setName("usera");
     identity1.setAvatar(null);
@@ -317,7 +346,7 @@ public class DocumentFileRestTest {
     nodesEntities.add(documentEntities);
 
     List<AbstractNode> folder = new ArrayList<>();
-    
+
     AbstractNode folder1 = new FolderNode();
     AbstractNode folder2 = new FolderNode();
     folder1.setId("2");
@@ -328,11 +357,10 @@ public class DocumentFileRestTest {
     folder1.setCreatedDate(11111);
     folder1.setParentFolderId("1");
 
-
     folder.add(folder1);
     folder.add(folder2);
 
-    FolderNodeEntity  folderEntity= new FolderNodeEntity();
+    FolderNodeEntity folderEntity = new FolderNodeEntity();
     folderEntity.setId("2");
     folderEntity.setName("folder1");
     folderEntity.setCreatorIdentity(identity1);
@@ -343,15 +371,33 @@ public class DocumentFileRestTest {
 
     String expand = "creator";
 
-    when(documentFileStorage.getFolderChildNodes(filter, spaceID,    0, 0)).thenReturn(folder);
+    when(documentFileStorage.getFolderChildNodes(filter, spaceID, 0, 0)).thenReturn(folder);
 
-    Response response1 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.FOLDER,  null,"",null,false,0,0);
+    Response response1 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
+                                                           FileListingType.FOLDER,
+                                                           null,
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           false,
+                                                           0,
+                                                           0);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response1.getStatus());
 
-    Response response2= documentFileRest.getDocumentItems(null,    "2",    FileListingType.FOLDER,  null,"",null,false,0,0);
+    Response response2 = documentFileRest.getDocumentItems(null, "2", FileListingType.FOLDER, null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
-    Response response3 = documentFileRest.getDocumentItems(null,    "2",    FileListingType.FOLDER,  null, expand,null,false,0,0);
+    Response response3 = documentFileRest.getDocumentItems(null,
+                                                           "2",
+                                                           FileListingType.FOLDER,
+                                                           null,
+                                                           false,
+                                                           expand,
+                                                           null,
+                                                           false,
+                                                           0,
+                                                           0);
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
 
     List<FolderNodeEntity> foldersNodeEntity = new ArrayList<>();
@@ -359,14 +405,13 @@ public class DocumentFileRestTest {
     assertNotNull(foldersNodeEntity);
     assertNotNull(foldersNodeEntity.get(0).hashCode());
     assertNotNull(foldersNodeEntity.get(0).toString());
-    assertEquals(foldersNodeEntity.get(0).getName(),"folder1");
-    assertEquals(foldersNodeEntity.get(0).getCreatorIdentity(),identity1);
-    assertEquals(foldersNodeEntity.get(0).getDatasource(),"datasource");
-    assertEquals(foldersNodeEntity.get(0).getDescription(),"description");
-    assertEquals(foldersNodeEntity.get(0).getCreatedDate(),11111);
-    assertEquals(foldersNodeEntity.get(0).getParentFolderId(),"1");
+    assertEquals(foldersNodeEntity.get(0).getName(), "folder1");
+    assertEquals(foldersNodeEntity.get(0).getCreatorIdentity(), identity1);
+    assertEquals(foldersNodeEntity.get(0).getDatasource(), "datasource");
+    assertEquals(foldersNodeEntity.get(0).getDescription(), "description");
+    assertEquals(foldersNodeEntity.get(0).getCreatedDate(), 11111);
+    assertEquals(foldersNodeEntity.get(0).getParentFolderId(), "1");
     assertTrue(folderEntity.equals(foldersNodeEntity.get(0)));
   }
-
 
 }
