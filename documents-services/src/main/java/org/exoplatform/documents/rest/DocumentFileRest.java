@@ -16,7 +16,8 @@
  */
 package org.exoplatform.documents.rest;
 
-import java.util.List;
+import
+        java.util.List;
 
 import javax.annotation.security.RolesAllowed;
 import javax.ws.rs.GET;
