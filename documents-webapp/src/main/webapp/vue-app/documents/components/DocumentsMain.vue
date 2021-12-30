@@ -43,6 +43,7 @@ export default {
     extensionType: 'views',
     query: null,
     sortField: 'lastUpdated',
+    isFavorits: false,
     ascending: false,
     parentFolderId: null,
     pageSize: 50,
@@ -80,7 +81,7 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     searchResult(){
-      return this.query && this.query.length && !this.files.length;
+      return ((this.query && this.query.length) || this.isFavorits) && !this.files.length;
     },
     loadingFiles(){
       return this.loading;
@@ -176,9 +177,13 @@ export default {
       if (this.ascending) {
         filter.ascending = this.sortField === 'favorite' ? false : true;
       }
-      if (filterPrimary==='favorites') {
-        filter.favorites =  true;
+      if (filterPrimary && filterPrimary==='favorites') {
+        this.isFavorits = true;
       }
+      if (filterPrimary && filterPrimary==='all') {
+        this.isFavorits  =  false;
+      }
+      filter.favorites = this.isFavorits;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
       this.limit = this.limit || this.pageSize;
       this.loading = true;
