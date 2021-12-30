@@ -56,7 +56,7 @@ export default {
         return '';
       }
       const labelKey = this.group.split(':')[1];
-      return this.$t(`documents.timeline.${labelKey}`);
+      return this.$t(`documents.timeline.label.${labelKey}`);
     },
   },
 };
