@@ -31,7 +31,6 @@ public interface DocumentFileService {
    * 
    * @param listingType {@link FileListingType}
    * @param filter {@link DocumentNodeFilter} that contains filtering criteria
-   * @param listFavorites  that contains list ids Favorites
    * @param offset Offset of the result list
    * @param limit Limit of the result list
    * @param userIdentityId {@link Identity} technical identifier of the user
@@ -44,7 +43,6 @@ public interface DocumentFileService {
    */
   List<AbstractNode> getDocumentItems(FileListingType listingType,
                                       DocumentNodeFilter filter,
-                                      List<String> listFavorites,
                                       int offset,
                                       int limit,
                                       long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
@@ -57,7 +55,6 @@ public interface DocumentFileService {
    * 
    * @param filter {@link DocumentTimelineFilter} that contains filtering
    *          criteria
-   * @param listFavorites that contains list ids Favorites
    * @param offset Offset of the result list
    * @param limit Limit of the result list
    * @param userIdentityId {@link Identity} technical identifier of the user
@@ -68,7 +65,6 @@ public interface DocumentFileService {
    * @throws ObjectNotFoundException when ownerId doesn't exisits
    */
   List<FileNode> getFilesTimeline(DocumentTimelineFilter filter,
-                                  List<String> listFavorites,
                                   int offset,
                                   int limit,
                                   long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;

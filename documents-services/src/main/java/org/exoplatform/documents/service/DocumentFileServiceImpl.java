@@ -59,7 +59,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public List<AbstractNode> getDocumentItems(FileListingType listingType,
                                              DocumentNodeFilter filter,
-                                             List<String> listFavorites,
                                              int offset,
                                              int limit,
                                              long userIdentityId) throws IllegalAccessException,
@@ -80,7 +79,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
         if (timelinefilter.getOwnerId() == null || timelinefilter.getOwnerId() <= 0) {
           throw new IllegalArgumentException("OwnerId is mandatory");
         }
-        List<FileNode> files = getFilesTimeline(timelinefilter, listFavorites, offset, limit, userIdentityId);
+        List<FileNode> files = getFilesTimeline(timelinefilter, offset, limit, userIdentityId);
         return new ArrayList<>(files);
       case FOLDER:
         if (!(filter instanceof DocumentFolderFilter)) {
@@ -98,7 +97,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public List<FileNode> getFilesTimeline(DocumentTimelineFilter filter,
-                                         List<String> listFavorites,
                                          int offset,
                                          int limit,
                                          long userIdentityId) throws IllegalAccessException, ObjectNotFoundException {
@@ -123,7 +121,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (filter.getSortField() == null) {
       filter.setSortField(DocumentSortField.MODIFIED_DATE);
     }
-    return documentFileStorage.getFilesTimeline(filter, listFavorites, aclIdentity, offset, limit);
+    return documentFileStorage.getFilesTimeline(filter, aclIdentity, offset, limit);
   }
 
   @Override

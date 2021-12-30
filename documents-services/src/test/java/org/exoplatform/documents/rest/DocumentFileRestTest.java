@@ -137,20 +137,20 @@ public class DocumentFileRestTest {
     files.add(file3);
     files.add(file4);
 
-    when(documentFileStorage.getFilesTimeline(filter, null,spaceID,    0, 0)).thenReturn(files);
+    when(documentFileStorage.getFilesTimeline(filter, spaceID,    0, 0)).thenReturn(files);
 
-    Response response1 = documentFileRest.getDocumentItems(null,    null,    FileListingType.TIMELINE,  null,"",null,null,false,0,0);
+    Response response1 = documentFileRest.getDocumentItems(null,    null,    FileListingType.TIMELINE,  null,"",null,false,0,0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId,    null,    null,  null,"",null,null,false,0,0);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId,    null,    null,  null,"",null,false,0,0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
-    Response response3 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"",null,null,false,0,0);
+    Response response3 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"",null,false,0,0);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,filter, null,   0,    0,  Long.valueOf(currentIdentity.getId()));
+    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,filter,    0,    0,  Long.valueOf(currentIdentity.getId()));
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     nodeEntity.setLinkedFileId("1");
@@ -161,7 +161,6 @@ public class DocumentFileRestTest {
     assertEquals(files_.size(),4);
 
     List<MetadataItem> metadataItems  = new ArrayList<>();
-    List<String> metadataObjectIds  = new ArrayList<>();
     MetadataType metadataType= new MetadataType();
     metadataType.setId(1);
     metadataType.setName("favorites");
@@ -179,11 +178,8 @@ public class DocumentFileRestTest {
     metadataItem.setObjectId(metadataObject.getId());
     metadataItem.setCreatorId(2);
     metadataItems.add(metadataItem);
-    metadataObjectIds.add("7694af9cc0a80104095f8da1bf22a7fb");
     when(metadataService.getMetadataItemsByObject(any())).thenReturn(metadataItems);
-    when(metadataService.getMetadataObjectIds("favorites","1","file",0,0)).thenReturn(metadataObjectIds);
-    when(documentFileStorage.getFilesTimeline(filter, metadataObjectIds,spaceID,    0, 0)).thenReturn(files);
-    Response response4 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"metadatas","favorites",null,false,0,0);
+    Response response4 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.TIMELINE,  null,"metadatas",null,false,0,0);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
     List<FileNodeEntity> filesNodeEntity = new ArrayList<>();
     filesNodeEntity = (List<FileNodeEntity>) response4.getEntity();
@@ -349,13 +345,13 @@ public class DocumentFileRestTest {
 
     when(documentFileStorage.getFolderChildNodes(filter, spaceID,    0, 0)).thenReturn(folder);
 
-    Response response1 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.FOLDER,  null,"",null,null,false,0,0);
+    Response response1 = documentFileRest.getDocumentItems(currentOwnerId,    null,    FileListingType.FOLDER,  null,"",null,false,0,0);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response1.getStatus());
 
-    Response response2= documentFileRest.getDocumentItems(null,    "2",    FileListingType.FOLDER,  null,"",null,null,false,0,0);
+    Response response2= documentFileRest.getDocumentItems(null,    "2",    FileListingType.FOLDER,  null,"",null,false,0,0);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
-    Response response3 = documentFileRest.getDocumentItems(null,    "2",    FileListingType.FOLDER,  null, expand,null,null,false,0,0);
+    Response response3 = documentFileRest.getDocumentItems(null,    "2",    FileListingType.FOLDER,  null, expand,null,false,0,0);
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
 
     List<FolderNodeEntity> foldersNodeEntity = new ArrayList<>();

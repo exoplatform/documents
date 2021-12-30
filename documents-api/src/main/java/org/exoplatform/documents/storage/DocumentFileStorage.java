@@ -32,7 +32,6 @@ public interface DocumentFileStorage {
    * 
    * @param filter {@link DocumentTimelineFilter} that contains filtering
    *          criteria
-   * @param listFavorites that contains list ids Favorites
    * @param offset Offset of the result list
    * @param limit Limit of the result list
    * @param aclIdentity {@link Identity} of the user acessing files
@@ -40,7 +39,6 @@ public interface DocumentFileStorage {
    * @throws ObjectNotFoundException when parentFolderId doesn't exisits
    */
   List<FileNode> getFilesTimeline(DocumentTimelineFilter filter,
-                                  List<String> listFavorites,
                                   Identity aclIdentity,
                                   int offset,
                                   int limit) throws ObjectNotFoundException;
