@@ -15,6 +15,7 @@ import DocumentsFileSizeCell from './components/body/table/cells/DocumentsFileSi
 import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
 import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
+import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -23,6 +24,7 @@ const components = {
   'documents-header-right': DocumentsHeaderRight,
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-filter-input': DocumentsFilterInput,
+  'documents-filter': DocumentsFilter,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
   'documents-no-result-body': DocumentsNoResultBody,
