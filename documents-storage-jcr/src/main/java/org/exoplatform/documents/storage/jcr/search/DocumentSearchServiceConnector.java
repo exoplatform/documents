@@ -18,18 +18,26 @@ package org.exoplatform.documents.storage.jcr.search;
 
 import java.util.*;
 
+import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
 import org.json.simple.JSONObject;
 
 import org.exoplatform.commons.api.search.data.SearchContext;
 import org.exoplatform.commons.api.search.data.SearchResult;
-import org.exoplatform.commons.search.es.*;
+import org.exoplatform.commons.search.es.ElasticSearchFilter;
+import org.exoplatform.commons.search.es.ElasticSearchFilterType;
+import org.exoplatform.commons.search.es.ElasticSearchServiceConnector;
 import org.exoplatform.commons.search.es.client.ElasticSearchingClient;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.xml.InitParams;
+import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.MembershipEntry;
+import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
+import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.web.controller.metadata.ControllerDescriptor;
 import org.exoplatform.web.controller.router.Router;
 
@@ -43,8 +51,7 @@ public class DocumentSearchServiceConnector extends ElasticSearchServiceConnecto
 
   private ThreadLocal<Identity> aclIdentity       = new ThreadLocal<>();
 
-  public DocumentSearchServiceConnector(ElasticSearchingClient client,
-                                        InitParams initParams) {
+  public DocumentSearchServiceConnector(ElasticSearchingClient client, InitParams initParams) {
     super(initParams, client);
   }
 
@@ -61,7 +68,7 @@ public class DocumentSearchServiceConnector extends ElasticSearchServiceConnecto
   public Collection<SearchResult> appSearch(Identity userIdentity, // NOSONAR
                                             String workspace,
                                             String path,
-                                            String query,
+                                            DocumentTimelineFilter filter,
                                             int offset,
                                             int limit,
                                             String sort,
@@ -79,7 +86,15 @@ public class DocumentSearchServiceConnector extends ElasticSearchServiceConnecto
     try {
       SearchContext context = new SearchContext(new Router(new ControllerDescriptor()), "");
       context.lang(Locale.ENGLISH.toString());
-      return super.search(context, query, null, offset, limit, sort, order);
+      List<ElasticSearchFilter> recentFilters = new ArrayList<>();
+      if (BooleanUtils.isTrue(filter.getFavorites())) {
+        Map<String, List<String>> metadataFilters = buildMetadataFilter();
+        String metadataQuery = buildMetadataQueryStatement(metadataFilters);
+        StringBuilder recentFilter = new StringBuilder();
+        recentFilter.append(metadataQuery);
+        recentFilters.add(new ElasticSearchFilter(ElasticSearchFilterType.FILTER_MATADATAS, "", recentFilter.toString()));
+      }
+      return super.filteredSearch(context, filter.getQuery(), recentFilters, null, offset, limit, sort, order);
     } catch (Exception ex) {
       LOG.error("Can not create SearchContext", ex);
       return Collections.emptyList();
@@ -95,25 +110,13 @@ public class DocumentSearchServiceConnector extends ElasticSearchServiceConnecto
     String workspace = filteredWorkspace.get();
     String path = filteredPath.get();
     if (StringUtils.isNotEmpty(workspace)) {
-      filters =
-              addFilter(filters,
-                        new ElasticSearchFilter(ElasticSearchFilterType.FILTER_BY_TERM,
-                                                "workspace",
-                                                workspace));
+      filters = addFilter(filters, new ElasticSearchFilter(ElasticSearchFilterType.FILTER_BY_TERM, "workspace", workspace));
     }
 
     if (StringUtils.isNotEmpty(path)) {
-      String titleFilterQuery = "{ " +
-          " \"prefix\" : { " +
-          "  \"path\" :  { " +
-          "   \"value\" : \"" + path + "\" " +
-          "  } " +
-          " } " +
-          "}";
-      filters = addFilter(filters,
-                          new ElasticSearchFilter(ElasticSearchFilterType.FILTER_CUSTOM,
-                                                  "",
-                                                  titleFilterQuery));
+      String titleFilterQuery = "{ " + " \"prefix\" : { " + "  \"path\" :  { " + "   \"value\" : \"" + path + "\" " + "  } "
+          + " } " + "}";
+      filters = addFilter(filters, new ElasticSearchFilter(ElasticSearchFilterType.FILTER_CUSTOM, "", titleFilterQuery));
     }
     return super.getAdditionalFilters(filters);
   }
@@ -157,6 +160,31 @@ public class DocumentSearchServiceConnector extends ElasticSearchServiceConnecto
     }
     filters.add(elasticSearchFilter);
     return filters;
+  }
+
+  private String buildMetadataQueryStatement(Map<String, List<String>> metadataFilters) {
+    StringBuilder metadataQuerySB = new StringBuilder();
+    Set<Map.Entry<String, List<String>>> metadataFilterEntries = metadataFilters.entrySet();
+    for (Map.Entry<String, List<String>> metadataFilterEntry : metadataFilterEntries) {
+      metadataQuerySB.append("{\"terms\":{\"metadatas.")
+                     .append(metadataFilterEntry.getKey())
+                     .append(".metadataName.keyword")
+                     .append("\": [\"")
+                     .append(org.apache.commons.lang.StringUtils.join(metadataFilterEntry.getValue(), "\",\""))
+                     .append("\"]}},");
+    }
+    return metadataQuerySB.toString();
+  }
+
+  private Map<String, List<String>> buildMetadataFilter() {
+    org.exoplatform.social.core.identity.model.Identity viewerIdentity =
+                                                                       CommonsUtils.getService(IdentityManager.class)
+                                                                                   .getOrCreateIdentity(OrganizationIdentityProvider.NAME,
+                                                                                                        aclIdentity.get()
+                                                                                                                   .getUserId());
+    Map<String, List<String>> metadataFilters = new HashMap<>();
+    metadataFilters.put(FavoriteService.METADATA_TYPE.getName(), Collections.singletonList(viewerIdentity.getId()));
+    return metadataFilters;
   }
 
 }
