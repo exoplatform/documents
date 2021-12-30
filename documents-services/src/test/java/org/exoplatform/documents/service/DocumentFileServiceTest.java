@@ -81,14 +81,14 @@ public class DocumentFileServiceTest {
     });
     assertEquals(exception.getMessage(),"File filter is mandatory");
 
-    filter = new DocumentTimelineFilter(0L);
+    filter = new DocumentTimelineFilter(0L,false);
     DocumentTimelineFilter finalFilter1 = filter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
       documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
     });
     assertEquals(exception.getMessage(),"OwnerId is mandatory");
 
-    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()),false);
     DocumentTimelineFilter finalFilter = filter;
     exception = assertThrows(IllegalAccessException.class, () -> {
       documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter,    0,    0,  0);
@@ -157,7 +157,7 @@ public class DocumentFileServiceTest {
     currentIdentity.setProfile(currentProfile);
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
-    DocumentTimelineFilter filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    DocumentTimelineFilter filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()),false);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -165,7 +165,7 @@ public class DocumentFileServiceTest {
             eq(username))).thenReturn(currentIdentity);
 
 
-    DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L);
+    DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L,false);
     DocumentTimelineFilter finalFilter1 = filter_;
     Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
       documentFileService.getFilesTimeline(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
@@ -210,7 +210,7 @@ public class DocumentFileServiceTest {
     currentIdentity.setProfile(currentProfile);
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
-    DocumentTimelineFilter filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    DocumentTimelineFilter filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()),false);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -218,7 +218,7 @@ public class DocumentFileServiceTest {
             eq(username))).thenReturn(currentIdentity);
 
 
-    DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L);
+    DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L,false);
     DocumentTimelineFilter finalFilter1 = filter_;
     Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
       documentFileService.getFilesTimeline(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
