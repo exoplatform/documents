@@ -9,6 +9,12 @@ extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-ri
   vueComponent: Vue.options.components['documents-filter-input'],
   rank: 20,
 });
+extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
+  id: 'primary-filter',
+  cssClass: 'pt-1',
+  vueComponent: Vue.options.components['documents-filter'],
+  rank: 20,
+});
 
 if (eXo.env.portal.filesFavoritesEnabled) {
   extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
