@@ -128,11 +128,14 @@ export default {
       $(`#FavoriteLink_file_${this.fileId}`).click();
     },
     displayAlert(message, type) {
-      this.$root.$emit('activity-notification-alert', {
-        activityId: this.activityId,
-        message,
-        type: type || 'success',
-      });
+      document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
+        detail: {
+          messageObject: {
+            message: message,
+            type: type || 'success',
+          }
+        }
+      }));
     },
   },
 };
