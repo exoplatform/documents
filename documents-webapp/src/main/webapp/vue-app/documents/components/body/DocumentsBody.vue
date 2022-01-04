@@ -51,6 +51,10 @@ export default {
       type: String,
       default: null,
     },
+    primaryFilter: {
+      type: String,
+      default: null,
+    },
   },
   computed: {
     params() {
