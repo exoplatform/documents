@@ -31,7 +31,8 @@
           :sort-field="sortField"
           :ascending="ascending"
           :loading="loading"
-          :query="query" />
+          :query="query"
+          :primary-filter="primaryFilter" />
       </div>
     </div>
   </v-app>
