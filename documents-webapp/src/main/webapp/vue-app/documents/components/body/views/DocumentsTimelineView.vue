@@ -33,7 +33,8 @@
         :files="items"
         :open="isOpen"
         :toggle-function="toggle"
-        :query="querySearch" />
+        :query="querySearch"
+        :primary-filter="primaryFilterFavorite" />
     </template>
     <template v-if="hasMore" slot="footer">
       <v-flex class="d-flex py-2 border-box-sizing">
@@ -88,6 +89,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    primaryFilter: {
+      type: String,
+      default: null,
+    },
   },
   data: () => ({
     lang: eXo.env.portal.language,
@@ -110,6 +115,9 @@ export default {
     },
     querySearch() {
       return this.query && this.query.length;
+    },
+    primaryFilterFavorite() {
+      return this.primaryFilter === 'favorites';
     },
     groupBy() {
       return this.grouping && 'groupValue' || [];
@@ -191,6 +199,9 @@ export default {
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
+    this.$root.$on('documents-filter', filter => {
+      this.primaryFilter = filter;
+    });
   },
   methods: {
     setSortOptions(sortField, ascending) {
