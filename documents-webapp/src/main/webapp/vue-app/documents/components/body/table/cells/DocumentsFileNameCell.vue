@@ -1,32 +1,38 @@
 <template>
-  <a
-    class="attachment d-flex flex-nowrap text-color openPreviewDoc"
-    @click="openPreview">
-    <v-progress-circular
-      v-if="loading"
-      indeterminate
-      size="16" />
-    <v-icon
-      v-else
-      size="22"
-      :color="icon.color">{{ icon.class }}</v-icon>
-    <div>
-      <div class="document-title d-inline-flex" :title="file.name">
-        <div
-          v-sanitized-html="fileName"
-          class="document-name text-truncate hover-underline ms-4">
+  <div class="d-flex">
+    <a
+      class="attachment d-flex flex-nowrap text-color openPreviewDoc"
+      @click="openPreview">
+      <v-progress-circular
+        v-if="loading"
+        indeterminate
+        size="16" />
+      <v-icon
+        v-else
+        size="22"
+        :color="icon.color">{{ icon.class }}</v-icon>
+      <div>
+        <div class="document-title d-inline-flex" :title="file.name">
+          <div
+            v-sanitized-html="fileName"
+            class="document-name text-truncate hover-underline ms-4">
+          </div>
+          <div
+            v-sanitized-html="fileType"
+            class="document-type hover-underline ms-0">
+          </div>
         </div>
-        <div
-          v-sanitized-html="fileType"
-          class="document-type hover-underline ms-0">
-        </div>
+        <documents-last-updated-cell
+          v-if="isMobile"
+          :file="file"
+          :extension="extension" />
       </div>
-      <documents-last-updated-cell
-        v-if="isMobile"
-        :file="file"
-        :extension="extension" />
-    </div>
-  </a>
+    </a>
+    <v-spacer />
+    <documents-action-menu-cell
+      v-if="!isMobile"
+      :file="file" />
+  </div>
 </template>
 <script>
 export default {

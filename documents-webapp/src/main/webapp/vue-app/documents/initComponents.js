@@ -13,6 +13,7 @@ import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
 import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
 import DocumentsFileSizeCell from './components/body/table/cells/DocumentsFileSizeCell.vue';
 import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
+import DocumentsActionMenuCell from './components/body/table/cells/DocumentsActionMenuCell.vue';
 import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
@@ -34,6 +35,7 @@ const components = {
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
   'documents-file-size-cell': DocumentsFileSizeCell,
   'documents-last-activity-cell': DocumentsLastActivityCell,
+  'documents-action-menu-cell': DocumentsActionMenuCell,
   'documents-favorite-cell': DocumentsFavoriteCell,
   'documents-file-name-cell': DocumentsFileNameCell,
 };
