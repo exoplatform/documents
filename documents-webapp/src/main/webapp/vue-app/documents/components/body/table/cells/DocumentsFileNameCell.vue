@@ -1,32 +1,60 @@
 <template>
-  <a
-    class="attachment d-flex flex-nowrap text-color openPreviewDoc"
-    @click="openPreview">
-    <v-progress-circular
-      v-if="loading"
-      indeterminate
-      size="16" />
-    <v-icon
-      v-else
-      size="22"
-      :color="icon.color">{{ icon.class }}</v-icon>
-    <div>
-      <div class="document-title d-inline-flex" :title="file.name">
-        <div
-          v-sanitized-html="fileName"
-          class="document-name text-truncate hover-underline ms-4">
+  <div
+    @mouseover="hover = true"
+    @mouseleave="hover = false"
+    class="d-flex flex-nowrap">
+    <a
+      class="attachment d-flex flex-nowrap text-color openPreviewDoc"
+      @click="openPreview">
+      <v-progress-circular
+        v-if="loading"
+        indeterminate
+        size="16" />
+      <v-icon
+        v-else
+        size="22"
+        :color="icon.color">{{ icon.class }}</v-icon>
+      <div>
+        <div class="document-title d-inline-flex" :title="file.name">
+          <div
+            v-sanitized-html="fileName"
+            class="document-name text-truncate hover-underline ms-4">
+          </div>
+          <div
+            v-sanitized-html="fileType"
+            class="document-type hover-underline ms-0">
+          </div>
         </div>
-        <div
-          v-sanitized-html="fileType"
-          class="document-type hover-underline ms-0">
-        </div>
+        <documents-last-updated-cell
+          v-if="isMobile"
+          :file="file"
+          :extension="extension" />
       </div>
-      <documents-last-updated-cell
-        v-if="isMobile"
-        :file="file"
-        :extension="extension" />
+    </a>
+    <v-spacer />
+    <div
+      :id="`document-action-menu-cel-${file.id}`"
+      class="position-relative"
+      v-if="hover">
+      <i
+        icon
+        small
+        class="uiIcon uiIconVerticalDots"
+        @click="menuDispalayed = true">
+      </i>
+      <v-menu
+        v-model="menuDispalayed"
+        :attach="`#document-action-menu-cel-${file.id}`"
+        transition="slide-x-reverse-transition"
+        content-class="documentActionMenu"
+        offset-y
+        offset-x
+        left>
+        <documents-actions-menu
+          :file="file" />
+      </v-menu>
     </div>
-  </a>
+  </div>
 </template>
 <script>
 export default {
@@ -42,6 +70,9 @@ export default {
   },
   data: () => ({
     loading: false,
+    hover: false,
+    menuDispalayed: false,
+    waitTimeUntilCloseMenu: 200,
   }),
   computed: {
     isMobile() {
@@ -112,6 +143,15 @@ export default {
     fileType() {
       return `.${this.file.name.split('.')[1]}`;
     },
+  },
+  created(){
+    $(document).on('mousedown', () => {
+      if (this.menuDispalayed) {
+        window.setTimeout(() => {
+          this.menuDispalayed = false;
+        }, this.waitTimeUntilCloseMenu);
+      }
+    });
   },
   methods: {
     fileInfo() {

@@ -22,6 +22,9 @@
     }
     .documents-body {
       min-height: calc(~"100vh - 300px");
+      .action-menu-item {
+        min-height: 30px !important;
+      }
       .loadingClass {
         table {
           min-height: calc(~"100vh - 320px");
@@ -34,7 +37,12 @@
         tbody {
           td {
             border-bottom: none !important;
-
+            .documentActionMenu {
+              top: 18px !important;
+              left: auto !important;
+              right: 16px ;
+              min-width: 90px !important;
+            }
             .attachment {
               .document-title {
                 max-width: 490px;
