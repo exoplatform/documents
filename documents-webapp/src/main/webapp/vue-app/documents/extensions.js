@@ -10,6 +10,15 @@ extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-ri
   rank: 20,
 });
 
+if (eXo.env.portal.filesFavoritesEnabled) {
+  extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
+    id: 'primary-filter',
+    cssClass: 'pt-1',
+    vueComponent: Vue.options.components['documents-filter'],
+    rank: 20,
+  });
+}
+
 extensionRegistry.registerExtension('Documents', 'views', {
   id: 'timeline',
   labelKey: 'documents.label.timelineView',

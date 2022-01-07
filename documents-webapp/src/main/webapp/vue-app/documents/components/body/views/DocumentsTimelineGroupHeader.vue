@@ -1,6 +1,6 @@
 <template>
   <td
-    v-if="!query"
+    v-if="!query && !primaryFilter"
     :colspan="colspan"
     class="white ps-1">
     <v-btn
@@ -21,8 +21,8 @@ export default {
       default: null,
     },
     query: {
-      type: String,
-      default: null,
+      type: Boolean,
+      default: false,
     },
     headers: {
       type: Array,
@@ -39,6 +39,10 @@ export default {
     toggleFunction: {
       type: Object,
       default: null,
+    },
+    primaryFilter: {
+      type: Boolean,
+      default: false,
     },
   },
   computed: {

@@ -22,10 +22,13 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import javax.jcr.*;
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.Session;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 
+import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.api.search.data.SearchResult;
@@ -53,9 +56,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private DocumentSearchServiceConnector documentSearchServiceConnector;
 
-  private String DATE_FORMAT = "yyyy-MM-dd";
+  private String                         DATE_FORMAT = "yyyy-MM-dd";
 
-  private SimpleDateFormat formatter = new SimpleDateFormat(DATE_FORMAT);
+  private SimpleDateFormat               formatter   = new SimpleDateFormat(DATE_FORMAT);
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -89,7 +92,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
-      if (StringUtils.isBlank(filter.getQuery())) {
+      if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
 
@@ -105,7 +108,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Collection<SearchResult> filesSearchList = documentSearchServiceConnector.appSearch(aclIdentity,
                                                                                             workspace,
                                                                                             rootPath,
-                                                                                            filter.getQuery(),
+                                                                                            filter,
                                                                                             offset,
                                                                                             limit,
                                                                                             sortField,
@@ -123,7 +126,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public DocumentGroupsSize getGroupDocumentsCount(DocumentTimelineFilter filter, Identity aclIdentity) throws ObjectNotFoundException {
+  public DocumentGroupsSize getGroupDocumentsCount(DocumentTimelineFilter filter,
+                                                   Identity aclIdentity) throws ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     Long ownerId = filter.getOwnerId();
     org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
@@ -205,21 +209,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                               .append(sortDirection)
                               .toString();
   }
+
   private String getTimeLineGroupeSizeQueryStatement(String rootPath, Date before, Date after) {
     StringBuilder sb = new StringBuilder().append("SELECT * FROM ")
-                              .append(NodeTypeConstants.NT_FILE)
-                              .append(" WHERE jcr:path LIKE '")
-                              .append(rootPath)
-                              .append("/%'");
-    if(before!=null){
-      sb.append(" AND (").append(NodeTypeConstants.EXO_DATE_MODIFIED).append( " < TIMESTAMP '").append(formatter.format(before)).append("T00:00:00.000')");
+                                          .append(NodeTypeConstants.NT_FILE)
+                                          .append(" WHERE jcr:path LIKE '")
+                                          .append(rootPath)
+                                          .append("/%'");
+    if (before != null) {
+      sb.append(" AND (")
+        .append(NodeTypeConstants.EXO_DATE_MODIFIED)
+        .append(" < TIMESTAMP '")
+        .append(formatter.format(before))
+        .append("T00:00:00.000')");
     }
-    if(after!=null){
-      sb.append(" AND (").append(NodeTypeConstants.EXO_DATE_MODIFIED).append( " > TIMESTAMP '").append(formatter.format(after)).append("T00:00:00.000')");
+    if (after != null) {
+      sb.append(" AND (")
+        .append(NodeTypeConstants.EXO_DATE_MODIFIED)
+        .append(" > TIMESTAMP '")
+        .append(formatter.format(after))
+        .append("T00:00:00.000')");
     }
 
-
-    return  sb.toString();
+    return sb.toString();
   }
 
 }
