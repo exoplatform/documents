@@ -35,13 +35,13 @@
     <div
       :id="`document-action-menu-cel-${file.id}`"
       class="position-relative"
-      v-if="hover">
-      <i
-        icon
-        small
-        class="uiIcon uiIconVerticalDots"
+      v-show="hover">
+      <v-icon
+        size="21"
+        class="clickable primary--text"
         @click="menuDispalayed = true">
-      </i>
+        mdi-dots-vertical
+      </v-icon>
       <v-menu
         v-model="menuDispalayed"
         :attach="`#document-action-menu-cel-${file.id}`"

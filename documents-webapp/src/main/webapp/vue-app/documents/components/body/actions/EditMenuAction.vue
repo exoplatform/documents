@@ -2,7 +2,11 @@
   <div
     class="clickable"
     @click="editFile">
-    <i class="uiIcon uiIconEdit pe-1"></i>
+    <v-icon
+      size="18"
+      class="primary--text pe-1">
+      mdi-square-edit-outline
+    </v-icon>
     <span>{{ $t('document.label.edit') }}</span>
   </div>
 </template>
