@@ -35,10 +35,10 @@
     <div
       :id="`document-action-menu-cel-${file.id}`"
       class="position-relative"
-      v-show="hover">
+      v-show="hover || isMobile">
       <v-icon
-        size="21"
-        class="clickable primary--text"
+        size="18"
+        class="clickable text-sub-title"
         @click="menuDispalayed = true">
         mdi-dots-vertical
       </v-icon>
@@ -46,7 +46,7 @@
         v-model="menuDispalayed"
         :attach="`#document-action-menu-cel-${file.id}`"
         transition="slide-x-reverse-transition"
-        content-class="documentActionMenu"
+        :content-class="isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'"
         offset-y
         offset-x
         left>
