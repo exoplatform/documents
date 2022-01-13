@@ -1,7 +1,5 @@
 <template>
   <div
-    @mouseover="hover = true"
-    @mouseleave="hover = false"
     class="d-flex flex-nowrap">
     <a
       class="attachment d-flex flex-nowrap text-color openPreviewDoc"
@@ -34,9 +32,9 @@
     <v-spacer />
     <div
       :id="`document-action-menu-cel-${file.id}`"
-      class="position-relative"
-      v-show="hover || isMobile">
+      class="position-relative">
       <v-icon
+        v-show="isMobile"
         size="18"
         class="clickable text-sub-title"
         @click="menuDispalayed = true">
@@ -70,7 +68,6 @@ export default {
   },
   data: () => ({
     loading: false,
-    hover: false,
     menuDispalayed: false,
     waitTimeUntilCloseMenu: 200,
   }),
