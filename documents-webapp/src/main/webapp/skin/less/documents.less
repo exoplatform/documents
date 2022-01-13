@@ -23,7 +23,10 @@
     .documents-body {
       min-height: calc(~"100vh - 300px");
       .action-menu-item {
-        min-height: 20px !important;
+        min-height: 30px !important;
+        i.v-icon.fa-star {
+          padding-right: 8px!important;
+        }
       }
       .loadingClass {
         table {
@@ -41,7 +44,17 @@
               top: 18px !important;
               left: auto !important;
               right: 16px ;
-              min-width: 90px !important;
+              min-width: 110px !important;
+            }
+            .documentActionMenuMobile {
+              top: 2vh !important;
+              left: auto !important;
+              right: 4vw;
+              max-width: none;
+              min-width: 187px !important;
+              .v-list-item__title {
+                flex: initial;
+              }
             }
             .attachment {
               .document-title {
@@ -113,18 +126,6 @@
 
         .document-title {
           width: 28vh!important;
-        }
-      }
-
-      .fileActionMenu {
-        top: 2vh !important;
-        left: auto !important;
-        right: 4vw;
-        max-width: none;
-        min-width: 187px !important;
-
-        .v-list-item__title {
-          flex: initial;
         }
       }
     }

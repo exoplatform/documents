@@ -20,12 +20,11 @@ export default {
     }
   },
   data: () => ({
-    lang: eXo.env.portal.language,
-    options: {},
     menuExtensionApp: 'DocumentMenu',
     menuExtensionType: 'menuActionMenu',
     menuExtensions: {},
-    mobileOnlyExtensions: ['favorite-mobile-'],
+    mobileOnlyExtensions: ['favorite'],
+    desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
   }),
   created() {
@@ -37,6 +36,9 @@ export default {
       return {
         file: this.file
       };
+    },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     fileCanEdit(){
       const type = this.file && this.file.mimeType || '';
@@ -52,11 +54,8 @@ export default {
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.menuExtensions[extension.id] || this.menuExtensions[extension.id] !== extension)) {
-          if (!this.isMobile) {
-            this.menuExtensions[extension.id] = extension;
-            changed = true;
-          }
-          if (this.isMobile && this.mobileOnlyExtensions.includes(extension.id)) {
+          if ( (!this.isMobile && !this.mobileOnlyExtensions.includes(extension.id))
+              || (this.isMobile && !this.desktopOnlyExtensions.includes(extension.id))) {
             this.menuExtensions[extension.id] = extension;
             changed = true;
           }
