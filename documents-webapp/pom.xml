@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.exoplatform.documents</groupId>
     <artifactId>documents-parent</artifactId>
-    <version>1.0.0-20220112</version>
+    <version>1.0.x-SNAPSHOT</version>
   </parent>
   <artifactId>documents-webapp</artifactId>
   <packaging>war</packaging>
