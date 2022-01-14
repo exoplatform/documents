@@ -2,67 +2,103 @@
 
 .VuetifyApp {
   .documents-application {
-    .closeIcon {
-      border-radius: 50%;
-      top: 23px;
-    }
+    .documents-header-right-actions {
+      .inputDocumentsFilter {
+        width: 245px;
+      }
 
-    .searchIcon {
-      top: 20px;
-      left: 9px;
-    }
+      .v-input__slot:before {
+        border-color: @greyColorLighten1 !important;
+      }
 
-    .v-input__icon--append .v-icon {
-      font-size: 16px;
-    }
+      .v-input__prepend-inner {
+        margin-bottom: 8px;
 
-    #filterDocumentsSelect {
-      height: 40px;
-      width: 90px;
-    }
-    .documents-body {
-      min-height: calc(~"100vh - 300px");
-      .action-menu-item {
-        min-height: 30px !important;
-        i.v-icon.fa-star {
-          padding-right: 8px!important;
+        i {
+          font-size: 18px;
         }
       }
+
+      .v-text-field__slot {
+        margin-bottom: 6px;
+      }
+
+      .closeIcon {
+        border-radius: 50%;
+        top: 23px;
+      }
+
+      .searchIcon {
+        top: 20px;
+        left: 9px;
+      }
+
+      .v-input__icon--append .v-icon {
+        font-size: 16px;
+      }
+
+      #filterDocumentsSelect {
+        height: 40px;
+        width: -moz-fit-content;
+        width: fit-content;
+      }
+
+    }
+
+    .documents-body {
+      min-height: calc(~"100vh - 300px");
+
+      .action-menu-item {
+        min-height: 30px !important;
+
+        i.v-icon.fa-star {
+          padding-right: 8px !important;
+        }
+      }
+
       .loadingClass {
         table {
           min-height: calc(~"100vh - 320px");
+
           colgroup {
             display: none;
           }
         }
       }
+
       .documents-table {
         tbody {
           tr:hover button.v-icon.mdi-dots-vertical {
-            display: inline-block!important;
+            display: inline-block !important;
           }
+
           td {
             border-bottom: none !important;
+
             .documentActionMenu {
               top: -42px !important;
               left: auto !important;
               right: 20px;
               min-width: 110px !important;
             }
+
             .documentActionMenuMobile {
               top: 2vh !important;
               left: auto !important;
               right: 4vw;
               max-width: none;
               min-width: 187px !important;
+
               .v-list-item__title {
                 flex: initial;
               }
             }
+
             .attachment {
               .document-title {
                 max-width: 490px;
               }
+
               span {
                 a {
                   color: @textColor !important;
@@ -146,12 +182,13 @@
 }
 
 
-@media (max-width: 1024px){
+@media (max-width: 1024px) {
   .maskLayer .uiDocumentPreview .fileContent {
-    background: black!important;
-    width: 90%!important;
+    background: black !important;
+    width: 90% !important;
   }
 }
+
 @media screen and (max-width: 599px) {
   #switchToOldDocuments {
     font-size: 12px;
