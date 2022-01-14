@@ -36,16 +36,16 @@
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
           <v-icon
-            v-show="isMobile"
+            v-show="isMobile || menuDisplayed"
             size="18"
             class="clickable text-sub-title"
             v-bind="attrs"
             v-on="on"
-            @click="menuDispalayed = true">
+            @click="displayActionMenu">
             mdi-dots-vertical
           </v-icon>
           <v-menu
-            v-model="menuDispalayed"
+            v-model="menuDisplayed"
             :attach="`#document-action-menu-cel-${file.id}`"
             transition="slide-x-reverse-transition"
             :content-class="isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'"
@@ -77,7 +77,7 @@ export default {
   },
   data: () => ({
     loading: false,
-    menuDispalayed: false,
+    menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
   }),
   computed: {
@@ -155,9 +155,10 @@ export default {
   },
   created(){
     $(document).on('mousedown', () => {
-      if (this.menuDispalayed) {
+      if (this.menuDisplayed) {
         window.setTimeout(() => {
-          this.menuDispalayed = false;
+          $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#fff');
+          this.menuDisplayed = false;
         }, this.waitTimeUntilCloseMenu);
       }
     });
@@ -199,6 +200,10 @@ export default {
           window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.id}`);
           this.loading = false;
         });
+    },
+    displayActionMenu() {
+      this.menuDisplayed = true;
+      $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
     },
   },
 };
