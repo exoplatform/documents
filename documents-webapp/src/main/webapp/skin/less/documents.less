@@ -6,19 +6,23 @@
       .inputDocumentsFilter {
         width: 245px;
       }
+
       .v-input__slot:before {
-        border-color: @greyColorLighten1!important;
+        border-color: @greyColorLighten1 !important;
       }
+
       .v-input__prepend-inner {
         margin-bottom: 8px;
-        
+
         i {
           font-size: 18px;
         }
       }
+
       .v-text-field__slot {
         margin-bottom: 6px;
       }
+
       .closeIcon {
         border-radius: 50%;
         top: 23px;
@@ -118,18 +122,6 @@
   .documents-application.mobile {
     margin-top: 0;
 
-    .v-data-table__wrapper {
-      padding-bottom: 28px;
-    }
-
-    .v-data-table-header-mobile {
-      display: none;
-    }
-
-    #filterDocumentsSelect {
-      width: 60px;
-    }
-
     .documents-header-left-action {
       button {
         height: 40px;
@@ -138,42 +130,74 @@
       }
     }
 
-    .v-data-table__mobile-row__header {
-      display: none;
-    }
+    .documents-header-right-actions {
+      .inputDocumentsFilter {
+        width: auto;
+        margin-top: 6px !important;
+      }
 
-    .v-data-table__mobile-table-row > :first-child {
-      display: none;
-    }
-
-    .v-data-table__mobile-table-row > :nth-child(2) {
-      padding-right: 12px;
-    }
-
-    .v-data-table__mobile-table-row > :last-child {
-      padding: 0;
-      margin: 0;
-    }
-
-    .v-data-table__mobile-row__cell {
-      .attachment {
+      .v-input__prepend-inner {
         i {
-          font-size: 32px !important;
+          font-size: 16px;
         }
+      }
 
-        .document-title {
-          width: 28vh !important;
-        }
+      #filterDocumentsSelect {
+        width: 60px;
       }
     }
 
-    .v-data-table__mobile-table-row {
-      display: inline-flex;
+    .v-data-table__wrapper {
+      padding-bottom: 28px;
+      
+      .v-row-group__header {
+        button {
+          padding-left: 4px!important;
+        }
+      }
 
-      .document-time {
-        text-align: left;
-        margin-left: 16px;
-        font-size: 12px;
+      .v-data-table-header-mobile {
+        display: none;
+      }
+
+      .v-data-table__mobile-row__header {
+        display: none;
+      }
+
+      .v-data-table__mobile-table-row > :first-child {
+        display: none;
+      }
+
+      .v-data-table__mobile-table-row > :nth-child(2) {
+        padding-right: 12px;
+        padding-left: 38px;
+      }
+
+      .v-data-table__mobile-table-row > :last-child {
+        padding: 0;
+        margin: 0;
+      }
+
+      .v-data-table__mobile-row__cell {
+        .attachment {
+          i {
+            font-size: 32px !important;
+          }
+
+          .document-title {
+            width: 28vh !important;
+          }
+        }
+      }
+
+      .v-data-table__mobile-table-row {
+        display: inline-flex;
+
+        .document-time {
+          text-align: left;
+          margin-left: 16px;
+          font-size: 12px;
+        }
       }
     }
   }
