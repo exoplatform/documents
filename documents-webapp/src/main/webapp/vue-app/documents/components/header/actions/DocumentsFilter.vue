@@ -4,7 +4,7 @@
       id="filterDocumentsSelect"
       v-model="filterDocumentsSelected"
       name="documentsFilter"
-      class="selectPrimaryFilter input-block-level ignore-vuetify-classes  pa-0 my-auto"
+      class="selectPrimaryFilter input-block-level ignore-vuetify-classes  pa-0 my-auto ml-2"
       @change="changeDocumentsFilter">
       <option
         v-for="item in filterDocuments"
