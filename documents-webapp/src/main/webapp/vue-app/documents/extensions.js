@@ -79,19 +79,6 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 });
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-  id: 'download',
-  labelKey: 'documents.label.download',
-  align: 'center',
-  sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '190px',
-  rank: 40,
-  componentOptions: {
-    vueComponent: Vue.options.components['download-menu-action'],
-  },
-});
-
-extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'favorite',
   labelKey: 'favorite.label.download',
   align: 'center',
@@ -101,6 +88,19 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   rank: 40,
   componentOptions: {
     vueComponent: Vue.options.components['favorite-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'download',
+  labelKey: 'documents.label.download',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  componentOptions: {
+    vueComponent: Vue.options.components['download-menu-action'],
   },
 });
 
