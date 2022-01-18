@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable d-flex"
+    class="clickable"
     @click.prevent="hitFavoriteButton">
     <favorite-button
       :id="fileId"
@@ -13,6 +13,7 @@
       @added="added"
       @add-error="addError" />
     <span class="pt-1">{{ favoriteLabel }}</span>
+    <v-divider class="mt-2 f" dark />
   </div>
 </template>
 <script>
