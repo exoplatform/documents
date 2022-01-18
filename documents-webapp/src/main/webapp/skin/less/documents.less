@@ -22,6 +22,12 @@
     }
     .documents-body {
       min-height: calc(~"100vh - 300px");
+      .action-menu-item {
+        min-height: 30px !important;
+        i.v-icon.fa-star {
+          padding-right: 8px!important;
+        }
+      }
       .loadingClass {
         table {
           min-height: calc(~"100vh - 320px");
@@ -32,9 +38,27 @@
       }
       .documents-table {
         tbody {
+          tr:hover button.v-icon.mdi-dots-vertical {
+            display: inline-block!important;
+          }
           td {
             border-bottom: none !important;
-
+            .documentActionMenu {
+              top: -42px !important;
+              left: auto !important;
+              right: 20px;
+              min-width: 110px !important;
+            }
+            .documentActionMenuMobile {
+              top: 2vh !important;
+              left: auto !important;
+              right: 4vw;
+              max-width: none;
+              min-width: 187px !important;
+              .v-list-item__title {
+                flex: initial;
+              }
+            }
             .attachment {
               .document-title {
                 max-width: 490px;
@@ -105,18 +129,6 @@
 
         .document-title {
           width: 28vh!important;
-        }
-      }
-
-      .fileActionMenu {
-        top: 2vh !important;
-        left: auto !important;
-        right: 4vw;
-        max-width: none;
-        min-width: 187px !important;
-
-        .v-list-item__title {
-          flex: initial;
         }
       }
     }
