@@ -8,6 +8,7 @@
       mdi-square-edit-outline
     </v-icon>
     <span>{{ $t('document.label.edit') }}</span>
+    <v-divider class="mt-2" dark />
   </div>
 </template>
 <script>
