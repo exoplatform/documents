@@ -1,21 +1,20 @@
 <template>
-  <div 
-    v-show="isFavorite"
-    :id="`favorite-cell-file-${fileId}`">
-    <div v-if="!isMobile">
-      <favorite-button
-        :id="fileId"
-        :space-id="spaceId"
-        :favorite="isFavorite"
-        type="file"
-        @removed="removed"
-        @remove-error="removeError"
-        @added="added"
-        @add-error="addError" />
-    </div>
+  <div
+    class="clickable d-flex"
+    @click.prevent="hitFavoriteButton">
+    <favorite-button
+      :id="fileId"
+      :space-id="spaceId"
+      :favorite="isFavorite"
+      type="file"
+      class="favoriteDoc"
+      @removed="removed"
+      @remove-error="removeError"
+      @added="added"
+      @add-error="addError" />
+    <span class="pt-1">{{ favoriteLabel }}</span>
   </div>
 </template>
-
 <script>
 export default {
   props: {
@@ -30,6 +29,7 @@ export default {
   },
   data: () => ({
     isFavorite: false,
+    displayActionMenu: false,
   }),
   computed: {
     fileId() {
@@ -41,24 +41,19 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    favoriteLabel() {
+      return this.isFavorite ? this.$t('documents.label.remove.favorite') : this.$t('documents.label.add.favorite');
+    },
   },
   created() {
+    $(document).on('mousedown', () => {
+      if (this.displayActionMenu) {
+        window.setTimeout(() => {
+          this.displayActionMenu = false;
+        }, 200);
+      }
+    });
     this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
-  },
-  mounted() {
-    // show favorite button when hovering over the corresponding row.
-    if (!this.isMobile) {
-      const self = this;
-      $(`#favorite-cell-file-${this.fileId}`).parent().parent().parent().hover(function () {
-        if (!self.isFavorite) {
-          $(`#favorite-cell-file-${self.fileId}`).show();
-        }
-      }, function () {
-        if (!self.isFavorite) {
-          $(`#favorite-cell-file-${self.fileId}`).hide();
-        }
-      });
-    }
   },
   methods: {
     removed() {

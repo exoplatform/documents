@@ -1,7 +1,5 @@
 <template>
   <div
-    @mouseover="hover = true"
-    @mouseleave="hover = false"
     class="d-flex flex-nowrap">
     <a
       class="attachment d-flex flex-nowrap text-color openPreviewDoc"
@@ -34,11 +32,11 @@
     <v-spacer />
     <div
       :id="`document-action-menu-cel-${file.id}`"
-      class="position-relative"
-      v-show="hover">
+      class="position-relative">
       <v-icon
-        size="21"
-        class="clickable primary--text"
+        v-show="isMobile"
+        size="18"
+        class="clickable text-sub-title"
         @click="menuDispalayed = true">
         mdi-dots-vertical
       </v-icon>
@@ -46,7 +44,7 @@
         v-model="menuDispalayed"
         :attach="`#document-action-menu-cel-${file.id}`"
         transition="slide-x-reverse-transition"
-        content-class="documentActionMenu"
+        :content-class="isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'"
         offset-y
         offset-x
         left>
@@ -70,7 +68,6 @@ export default {
   },
   data: () => ({
     loading: false,
-    hover: false,
     menuDispalayed: false,
     waitTimeUntilCloseMenu: 200,
   }),
