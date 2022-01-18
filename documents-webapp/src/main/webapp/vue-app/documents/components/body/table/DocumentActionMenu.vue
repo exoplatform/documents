@@ -1,12 +1,13 @@
 <template>
-  <v-list>
+  <v-list dense>
     <v-list-item
       v-for="(extension, i) in menuExtensions"
       :key="i"
-      class="px-2 text-left action-menu-item">
+      class="menu-list px-2 text-left action-menu-item">
       <extension-registry-component
         :component="extension"
         :params="params"
+        class="width-full"
         :element="div" />
     </v-list-item>
   </v-list>
