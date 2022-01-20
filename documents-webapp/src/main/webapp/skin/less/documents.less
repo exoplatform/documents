@@ -68,7 +68,7 @@
 
       .documents-table {
         tbody {
-          tr:hover button.v-icon.mdi-dots-vertical {
+          tr:hover button.v-icon.mdi-dots-vertical.button-document-action {
             display: inline-block !important;
           }
 
@@ -76,7 +76,7 @@
             border-bottom: none !important;
 
             .documentActionMenu {
-              top: -42px !important;
+              top: -70px !important;
               left: auto !important;
               right: 20px;
               min-width: 110px !important;
@@ -96,7 +96,7 @@
 
             .attachment {
               .document-title {
-                max-width: 490px;
+                max-width: 438px;
               }
 
               span {
@@ -214,5 +214,13 @@
 @media screen and (max-width: 599px) {
   #switchToOldDocuments {
     font-size: 12px;
+  }
+  .documentEditName {
+    width: 206px;
+  }
+}
+@media screen and (max-width: 360px) {
+  .documentEditName {
+    width: 179px;
   }
 }
