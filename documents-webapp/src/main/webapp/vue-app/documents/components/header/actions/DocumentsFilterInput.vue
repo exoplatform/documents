@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-icon
-      size="20"
+      size="16"
       class="inputDocumentsFilter text-sub-title pa-1 my-auto "
       v-show="isMobile && !showMobileFilter"
       @click="mobileFilter">
