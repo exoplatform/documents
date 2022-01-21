@@ -30,3 +30,24 @@ export function getDocumentItems(itemsFilter, offset, limit, expand) {
   });
 
 }
+
+export function renameFile(newTitle,oldPath) {
+  const formData = new FormData();
+  if (oldPath) {
+    formData.append('oldPath', oldPath);
+  }
+  if (newTitle) {
+    formData.append('newTitle', newTitle);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/contents/rename/rename?${params}`, {
+    credentials: 'include',
+    method: 'GET',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.ok;
+    }
+  }).catch(e => {
+    throw new Error(`Error rename this file ${e}`);
+  });
+}
