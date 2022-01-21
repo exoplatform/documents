@@ -83,6 +83,19 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 });
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'rename',
+  labelKey: 'documents.label.rename',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  componentOptions: {
+    vueComponent: Vue.options.components['rename-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'download',
   labelKey: 'documents.label.download',
   align: 'center',
