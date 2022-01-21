@@ -2,7 +2,7 @@
   <div>
     <v-icon
       size="16"
-      class="inputDocumentsFilter text-sub-title pa-1 my-auto "
+      class="inputDocumentsFilter text-sub-title pa-1 my-auto mt-2"
       v-show="isMobile && !showMobileFilter"
       @click="mobileFilter">
       fas fa-filter
