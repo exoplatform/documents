@@ -32,7 +32,7 @@
     <v-spacer />
     <div
       :id="`document-action-menu-cel-${file.id}`"
-      class="position-relative">
+      class="position-relative ml-3">
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
           <v-icon

@@ -37,7 +37,7 @@
         :primary-filter="primaryFilterFavorite" />
     </template>
     <template v-if="hasMore" slot="footer">
-      <v-flex class="d-flex py-2 border-box-sizing">
+      <v-flex class="d-flex py-2 border-box-sizing mb-1">
         <v-btn
           :loading="loading"
           :disabled="loading"
