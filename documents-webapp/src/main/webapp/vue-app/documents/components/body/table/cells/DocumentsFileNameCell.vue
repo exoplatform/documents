@@ -73,6 +73,7 @@
         </span>
       </v-tooltip>
     </div>
+    <documents-actions-menu-mobile ref="documentActionsBottomMenu" :file="file" />
   </div>
 </template>
 <script>
@@ -180,6 +181,9 @@ export default {
         this.editNameMode = true;
       }
     });
+    this.$root.$on('close-file-action-menu', () => {
+      this.$refs.documentActionsBottomMenu.close();
+    });
     this.$root.$on('cancel-edit-mode', file => {
       if (this.file.id=== file.id) {
         this.editNameMode = false;
@@ -225,8 +229,12 @@ export default {
         });
     },
     displayActionMenu() {
-      this.menuDisplayed = true;
-      $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
+      if (this.isMobile){
+        this.$refs.documentActionsBottomMenu.open();
+      } else {
+        this.menuDisplayed = true;
+        $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
+      }
     },
   },
 };
