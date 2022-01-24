@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable d-flex"
+    class="downloadDocumentNewApp clickable d-flex"
     @click="download">
     <v-icon
       size="13"
