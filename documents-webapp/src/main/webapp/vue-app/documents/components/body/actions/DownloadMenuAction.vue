@@ -18,6 +18,11 @@ export default {
       default: null,
     }
   },
+  computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
+  },
   methods: {
     download() {
       this.$attachmentService.getAttachmentById(this.file.id)
@@ -50,6 +55,9 @@ export default {
             a.remove();
           });
         });
+      if ( this.isMobile ) {
+        this.$root.$emit('close-file-action-menu');
+      }
     }
   },
 };
