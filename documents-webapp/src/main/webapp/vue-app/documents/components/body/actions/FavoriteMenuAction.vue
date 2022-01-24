@@ -61,6 +61,9 @@ export default {
       this.isFavorite = !this.isFavorite;
       this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyDeletedFavorite', {0: this.$t('file.label')}));
       this.$emit('removed');
+      if ( this.isMobile ) {
+        this.$root.$emit('close-file-action-menu');
+      }
     },
     removeError() {
       this.displayAlert(this.$t('Favorite.tooltip.ErrorDeletingFavorite', {0: this.$t('file.label')}), 'error');
@@ -69,6 +72,9 @@ export default {
       this.isFavorite = !this.isFavorite;
       this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyAddedAsFavorite', {0: this.$t('file.label')}));
       this.$emit('added');
+      if ( this.isMobile ) {
+        this.$root.$emit('close-file-action-menu');
+      }
     },
     addError() {
       this.displayAlert(this.$t('Favorite.tooltip.ErrorAddingAsFavorite', {0: this.$t('file.label')}), 'error');
