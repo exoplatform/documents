@@ -18,6 +18,7 @@ import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNa
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
 import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
+import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import EditMenuAction from './components/body/actions/EditMenuAction.vue';
 import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
@@ -44,6 +45,7 @@ const components = {
   'documents-file-name-cell': DocumentsFileNameCell,
   'documents-file-edit-name-cell': DocumentsFileEditNameCell,
   'documents-actions-menu': DocumentActionMenu,
+  'documents-actions-menu-mobile': DocumentActionMenuMobile,
   'edit-menu-action': EditMenuAction,
   'rename-menu-action': RenameMenuAction,
   'download-menu-action': DownloadMenuAction,
