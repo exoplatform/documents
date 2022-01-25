@@ -122,16 +122,6 @@
   .documents-application.mobile {
     margin-top: 0;
 
-    .v-data-table__wrapper {
-      padding-bottom: 28px;
-    }
-    
-    .v-data-table-header-mobile {
-      display: none;
-    }
-    #filterDocumentsSelect {
-      width: 60px;
-    }
     .documents-header-left-action {
       button {
         height: 40px;
@@ -140,42 +130,73 @@
       }
     }
 
-    .v-data-table__mobile-row__header {
-      display: none;
-    }
+    .documents-header-right-actions {
+      .inputDocumentsFilter {
+        width: auto;
+      }
 
-    .v-data-table__mobile-table-row > :first-child {
-      display: none;
-    }
-
-    .v-data-table__mobile-table-row > :nth-child(2) {
-      padding-right: 12px;
-    }
-
-    .v-data-table__mobile-table-row > :last-child {
-      padding: 0;
-      margin: 0;
-    }
-
-    .v-data-table__mobile-row__cell {
-      .attachment {
+      .v-input__prepend-inner {
         i {
-          font-size: 32px !important;
+          font-size: 16px;
         }
+      }
 
-        .document-title {
-          width: 28vh!important;
-        }
+      #filterDocumentsSelect {
+        width: 60px;
       }
     }
 
-    .v-data-table__mobile-table-row {
-      display: inline-flex;
+    .v-data-table__wrapper {
+      padding-bottom: 28px;
 
-      .document-time {
-        text-align: left;
-        margin-left: 16px;
-        font-size: 12px;
+      .v-row-group__header {
+        button {
+          padding-left: 4px !important;
+        }
+      }
+
+      .v-data-table-header-mobile {
+        display: none;
+      }
+
+      .v-data-table__mobile-row__header {
+        display: none;
+      }
+
+      .v-data-table__mobile-table-row > :first-child {
+        display: none;
+      }
+
+      .v-data-table__mobile-table-row > :nth-child(2) {
+        padding-right: 0px;
+        padding-left: 34px;
+      }
+
+      .v-data-table__mobile-table-row > :last-child {
+        padding: 0;
+        margin: 0;
+      }
+
+      .v-data-table__mobile-row__cell {
+        .attachment {
+          i {
+            font-size: 32px !important;
+          }
+
+          .document-title {
+            width: 56vw !important;
+          }
+        }
+      }
+
+      .v-data-table__mobile-table-row {
+        display: inline-flex;
+
+        .document-time {
+          text-align: left;
+          margin-left: 16px;
+          font-size: 12px;
+        }
       }
     }
   }
