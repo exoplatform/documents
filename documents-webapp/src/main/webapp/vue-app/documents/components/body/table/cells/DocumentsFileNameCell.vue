@@ -31,6 +31,7 @@
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
+          :file-name="fileName"
           :is-mobile="isMobile"
           :edit-name-mode="editNameMode" />
 
