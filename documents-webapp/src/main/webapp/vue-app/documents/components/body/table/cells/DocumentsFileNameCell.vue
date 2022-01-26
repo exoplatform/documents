@@ -32,6 +32,7 @@
           v-if="editNameMode"
           :file="file"
           :file-name="fileName"
+          :file-type="fileType"
           :is-mobile="isMobile"
           :edit-name-mode="editNameMode" />
 

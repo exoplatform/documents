@@ -17,6 +17,7 @@
       <v-divider v-if="!isMobile" vertical />
       <v-icon
         class="primary--text ma-1 px-1"
+        :title="$t('documents.save')"
         small
         @click="checkInput(13,fileName)">
         fa-check
@@ -24,6 +25,7 @@
       <v-divider vertical />
       <v-icon
         class="clickable ma-1 px-1"
+        :title="$t('documents.close')"
         color="red"
         small
         @click="cancelEditNameMode(fileName)">
@@ -44,6 +46,10 @@ export default {
       default: false,
     },
     fileName: {
+      type: String,
+      default: '',
+    },
+    fileType: {
       type: String,
       default: '',
     },
@@ -80,7 +86,7 @@ export default {
     },
     renameFile(newTitle){
       if (newTitle){
-        this.file.name = this.fileName;
+        this.file.name = this.fileName.concat(this.fileType);
         this.$attachmentService.getAttachmentById(this.file.id)
           .then(attachment => {
             const path = attachment.path;
