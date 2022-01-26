@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable d-flex"
+    class="clickable d-flex align-center"
     @click="download">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
       fas fa-download
     </v-icon>
-    <span>{{ $t('documents.label.download') }}</span>
+    <span class="ps-1">{{ $t('documents.label.download') }}</span>
   </div>
 </template>
 <script>
