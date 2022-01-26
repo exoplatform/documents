@@ -2,8 +2,7 @@
   <div
     class="d-flex flex-nowrap">
     <a
-      class="attachment d-flex flex-nowrap text-color openPreviewDoc"
-      @click="openPreview">
+      class="attachment d-flex flex-nowrap text-color openPreviewDoc width-full">
       <v-progress-circular
         v-if="loading"
         indeterminate
@@ -11,9 +10,14 @@
       <v-icon
         v-else
         size="22"
+        @click="openPreview"
         :color="icon.color">{{ icon.class }}</v-icon>
-      <div>
-        <div class="document-title d-inline-flex" :title="file.name">
+      <div class="width-full">
+        <div
+          v-if="!editNameMode"
+          @click="openPreview"
+          class="document-title d-inline-flex"
+          :title="file.name">
           <div
             v-sanitized-html="fileName"
             class="document-name text-truncate hover-underline ms-4">
@@ -23,8 +27,17 @@
             class="document-type hover-underline ms-0">
           </div>
         </div>
+
+        <documents-file-edit-name-cell
+          v-if="editNameMode"
+          :file="file"
+          :file-name="fileName"
+          :file-type="fileType"
+          :is-mobile="isMobile"
+          :edit-name-mode="editNameMode" />
+
         <documents-last-updated-cell
-          v-if="isMobile"
+          v-if="isMobile && !editNameMode"
           :file="file"
           :extension="extension" />
       </div>
@@ -39,6 +52,7 @@
             v-show="isMobile || menuDisplayed"
             size="18"
             class="clickable text-sub-title"
+            :class="editNameMode ? '' : 'button-document-action'"
             v-bind="attrs"
             v-on="on"
             @click="displayActionMenu">
@@ -79,6 +93,7 @@ export default {
     loading: false,
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
+    editNameMode: false
   }),
   computed: {
     isMobile() {
@@ -160,6 +175,16 @@ export default {
           $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#fff');
           this.menuDisplayed = false;
         }, this.waitTimeUntilCloseMenu);
+      }
+    });
+    this.$root.$on('update-file-name', file => {
+      if (this.file.id=== file.id){
+        this.editNameMode = true;
+      }
+    });
+    this.$root.$on('cancel-edit-mode', file => {
+      if (this.file.id=== file.id) {
+        this.editNameMode = false;
       }
     });
   },
