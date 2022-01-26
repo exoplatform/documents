@@ -4,7 +4,7 @@
     @click="editNameMode">
     <v-icon
       size="18"
-      class="primary--text pe-1">
+      class="primary--text">
       mdi-form-textbox
     </v-icon>
     <span>{{ $t('document.label.rename') }}</span>

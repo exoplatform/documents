@@ -1,13 +1,13 @@
 <template>
   <div
-    class="downloadDocumentNewApp clickable d-flex"
+    class="downloadDocumentNewApp clickable d-flex align-center"
     @click="download">
     <v-icon
       size="18"
-      class="primary--text pe-2">
-      mdi-download
+      class="primary--text">
+      fas fa-download
     </v-icon>
-    <span>{{ $t('documents.label.download') }}</span>
+    <span class="ps-1">{{ $t('documents.label.download') }}</span>
   </div>
 </template>
 <script>
