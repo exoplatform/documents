@@ -38,10 +38,13 @@ import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
@@ -57,6 +60,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private DocumentSearchServiceConnector documentSearchServiceConnector;
 
   private String                         DATE_FORMAT = "yyyy-MM-dd";
+
+  private static final String COLLABORATION = "collaboration";
 
   private SimpleDateFormat               formatter   = new SimpleDateFormat(DATE_FORMAT);
 
@@ -121,9 +126,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      sessionProvider.close();
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
+
 
   @Override
   public DocumentGroupsSize getGroupDocumentsCount(DocumentTimelineFilter filter,
@@ -185,7 +193,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      sessionProvider.close();
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -194,9 +204,58 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                 Identity aclIdentity,
                                                 int offset,
                                                 int limit) throws IllegalAccessException, ObjectNotFoundException {
-    // TODO
-    return null;
+    String username = aclIdentity.getUserId();
+    String parentFolderId = filter.getParentFolderId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node parent= null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if(StringUtils.isBlank(parentFolderId)){
+        Long ownerId = filter.getOwnerId();
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        parent = getIdentityRootNode(spaceService,nodeHierarchyCreator,username,ownerIdentity,sessionProvider);
+        parentFolderId=((NodeImpl) parent).getIdentifier();
+      }else{
+        parent =  getNodeByIdentifier(session, parentFolderId);
+      }
+      if(parent!=null){
+        if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
+          NodeIterator nodeIterator = parent.getNodes();
+          return toNodes(identityManager, nodeIterator, aclIdentity, offset, limit);
+        }else {
+          String workspace = session.getWorkspace().getName();
+          String sortField = getSortField(filter, false);
+          String sortDirection = getSortDirection(filter);
+          Collection<SearchResult> filesSearchList = documentSearchServiceConnector.appSearch(aclIdentity,
+                  workspace,
+                  parent.getPath(),
+                  filter,
+                  offset,
+                  limit,
+                  sortField,
+                  sortDirection);
+          return filesSearchList.stream()
+                  .map(result -> toFileNode(identityManager, session, aclIdentity, result))
+                  .filter(Objects::nonNull)
+                  .collect(Collectors.toList());
+        }
+
+      }else{
+        throw new ObjectNotFoundException("Folder with Id : " + parentFolderId + " isn't found");
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
   }
+
+
+
 
   private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {
     return new StringBuilder().append("SELECT * FROM ")
