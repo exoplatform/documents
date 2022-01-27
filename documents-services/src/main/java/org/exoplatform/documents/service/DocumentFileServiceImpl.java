@@ -86,8 +86,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
           throw new IllegalArgumentException("filter must be an instance of DocumentFolderFilter");
         }
         DocumentFolderFilter folderFilter = (DocumentFolderFilter) filter;
-        if (StringUtils.isBlank(folderFilter.getParentFolderId())) {
-          throw new IllegalArgumentException("ParentFolderId is mandatory");
+        if (StringUtils.isBlank(folderFilter.getParentFolderId())&&(folderFilter.getOwnerId() == null || folderFilter.getOwnerId() <= 0)) {
+          throw new IllegalArgumentException("ParentFolderId or OwnerId is mandatory");
         }
         return getFolderChildNodes(folderFilter, offset, limit, userIdentityId);
       default:
@@ -157,6 +157,27 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                                 int limit,
                                                 long userIdentityId) throws IllegalAccessException, ObjectNotFoundException {
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
+    if(StringUtils.isBlank(filter.getParentFolderId())){
+      String username = aclIdentity.getUserId();
+      Long ownerId = filter.getOwnerId();
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+      if (ownerIdentity == null) {
+        throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+      }
+      if (ownerIdentity.isSpace()) {
+        Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+        if (!spaceService.hasAccessPermission(space, username)) {
+          throw new IllegalAccessException("User " + username
+                  + " attempts to access documents of space " + space.getDisplayName()
+                  + "while it's not a member");
+        }
+      } else if (ownerIdentity.isUser() && !StringUtils.equals(ownerIdentity.getRemoteId(), username)) {
+        throw new IllegalAccessException("User " + username
+                + " attempts to access private documents of user " + ownerIdentity.getRemoteId());
+      }
+    }
+
+
     if (filter.getSortField() == null) {
       filter.setSortField(DocumentSortField.NAME);
     }

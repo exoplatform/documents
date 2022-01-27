@@ -95,7 +95,7 @@ public class DocumentFileServiceTest {
     });
     assertEquals(exception.getMessage(),"User Identity is mandatory");
 
-    DocumentFolderFilter docFilter = new DocumentFolderFilter("");
+    DocumentFolderFilter docFilter = new DocumentFolderFilter("",0L,false);
     DocumentFolderFilter finalDocFilter = docFilter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
       documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter,    0,    0,  Long.valueOf(currentIdentity.getId()));
@@ -111,7 +111,7 @@ public class DocumentFileServiceTest {
     exception = assertThrows(IllegalArgumentException.class, () -> {
       documentFileService.getDocumentItems(FileListingType.FOLDER, finalDocFilter,    0,    0,  Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"ParentFolderId is mandatory");
+    assertEquals(exception.getMessage(),"ParentFolderId or OwnerId is mandatory");
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
