@@ -121,7 +121,7 @@ public class DocumentFileRest implements ResourceContainer {
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
       DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId, favorites)
-                                                                          : new DocumentFolderFilter(parentFolderId);
+                                                                          : new DocumentFolderFilter(parentFolderId, ownerId, favorites);
       filter.setQuery(query);
       filter.setAscending(ascending);
       filter.setSortField(DocumentSortField.getFromAlias(sortField));

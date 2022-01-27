@@ -29,5 +29,4 @@ public class FileNode extends AbstractNode {
   private long   size;
 
   private String mimeType;
-
 }

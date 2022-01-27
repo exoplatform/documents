@@ -20,6 +20,8 @@ import java.util.*;
 
 import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
+import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.json.simple.JSONObject;
 
 import org.exoplatform.commons.api.search.data.SearchContext;
@@ -68,7 +70,7 @@ public class DocumentSearchServiceConnector extends ElasticSearchServiceConnecto
   public Collection<SearchResult> appSearch(Identity userIdentity, // NOSONAR
                                             String workspace,
                                             String path,
-                                            DocumentTimelineFilter filter,
+                                            DocumentNodeFilter filter,
                                             int offset,
                                             int limit,
                                             String sort,
@@ -87,7 +89,14 @@ public class DocumentSearchServiceConnector extends ElasticSearchServiceConnecto
       SearchContext context = new SearchContext(new Router(new ControllerDescriptor()), "");
       context.lang(Locale.ENGLISH.toString());
       List<ElasticSearchFilter> recentFilters = new ArrayList<>();
-      if (BooleanUtils.isTrue(filter.getFavorites())) {
+      boolean isfavorites = false;
+      if (filter instanceof DocumentTimelineFilter) {
+        isfavorites = BooleanUtils.isTrue(((DocumentTimelineFilter) filter).getFavorites());
+      }
+      if (filter instanceof DocumentFolderFilter) {
+        isfavorites = BooleanUtils.isTrue(((DocumentFolderFilter) filter).getFavorites());
+      }
+      if (isfavorites) {
         Map<String, List<String>> metadataFilters = buildMetadataFilter();
         String metadataQuery = buildMetadataQueryStatement(metadataFilters);
         StringBuilder recentFilter = new StringBuilder();
