@@ -3,11 +3,15 @@
     class="clickable"
     @click="editFile">
     <v-icon
-      size="18"
-      class="primary--text pe-1">
-      mdi-square-edit-outline
+      size="13"
+      dark
+      class="pe-1 iconStyle">
+      fas fa-edit
     </v-icon>
     <span>{{ $t('document.label.edit') }}</span>
+    <v-divider
+      v-if="!isMobile"
+      class="mt-2 dividerStyle" />
   </div>
 </template>
 <script>
@@ -21,6 +25,9 @@ export default {
   computed: {
     fileId() {
       return this.file && this.file.id;
+    },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   methods: {

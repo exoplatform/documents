@@ -3,15 +3,14 @@
     class="clickable pt-1"
     @click="editNameMode">
     <v-icon
-      size="18"
-      class="primary--text">
+      size="13"
+      class="pe-1 iconStyle">
       mdi-form-textbox
     </v-icon>
     <span>{{ $t('document.label.rename') }}</span>
     <v-divider
       v-if="!isMobile"
-      class="mt-2"
-      dark />
+      class="mt-2 dividerStyle" />
   </div>
 </template>
 <script>
