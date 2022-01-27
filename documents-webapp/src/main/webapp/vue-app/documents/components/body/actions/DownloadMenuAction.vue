@@ -3,8 +3,8 @@
     class="downloadDocumentNewApp clickable d-flex align-center"
     @click="download">
     <v-icon
-      size="18"
-      class="primary--text">
+      size="13"
+      class="pe-1 iconStyle">
       fas fa-download
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.download') }}</span>
