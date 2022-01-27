@@ -117,6 +117,63 @@ public class JCRDocumentsUtil {
     return fileNodes;
   }
 
+  public static List<AbstractNode> toNodes(IdentityManager identityManager,
+                                           NodeIterator nodeIterator,
+                                           Identity aclIdentity,
+                                           int offset,
+                                           int limit) {
+    List<AbstractNode> fileNodes = new ArrayList<>();
+    int index = 0;
+    int size = 0;
+    while (nodeIterator.hasNext()) {
+      if (index < offset) {
+        index++;
+        continue;
+      }
+      Node node = nodeIterator.nextNode();
+
+      try {
+        if(node.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.NT_FOLDER)){
+          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node);
+          fileNodes.add(folderNode);
+          size++;
+        }
+        if(node.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.NT_FILE)) {
+          FileNode fileNode = toFileNode(identityManager, aclIdentity, node);
+          fileNodes.add(fileNode);
+          size++;
+        }
+      } catch (RepositoryException e) {
+        LOG.warn("Error getting Folder Node for search result with path {}", node, e);
+      }
+      if (size >= limit) {
+        return fileNodes;
+      }
+    }
+    return fileNodes;
+  }
+
+  public static FolderNode toFolderNode(IdentityManager identityManager,
+                                 Identity aclIdentity,
+                                 Node node) {
+    try {
+      if (node == null) {
+        return null;
+      }
+      FolderNode folderNode = new FolderNode();
+      folderNode.setDatasource(JCR_DATASOURCE_NAME);
+      retrieveFileProperties(identityManager, node, aclIdentity, folderNode);
+      return folderNode;
+    } catch (Exception e) {
+      try {
+        LOG.warn("Error computing Folder Node for search result with path {}", node.getPath(), e);
+      } catch (Exception e1) {
+        LOG.warn("Error computing Folder Node for search result with path {}", node, e);
+      }
+      return null;
+    }
+  }
+
   public static FileNode toFileNode(IdentityManager identityManager,
                                     Session session,
                                     Identity aclIdentity,
@@ -309,11 +366,11 @@ public class JCRDocumentsUtil {
     return identityRootNode;
   }
 
-  public static String getSortDirection(DocumentTimelineFilter filter) {
+  public static String getSortDirection(DocumentNodeFilter filter) {
     return filter.isAscending() ? "ASC" : "DESC";
   }
 
-  public static String getSortField(DocumentTimelineFilter filter, boolean isJcr) {
+  public static String getSortField(DocumentNodeFilter filter, boolean isJcr) {
     DocumentSortField sortField = filter.getSortField();
     if (isJcr) {
       return SORT_FIELDS_JCR_CORRESPONDING.get(sortField);

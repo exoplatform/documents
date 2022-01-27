@@ -301,9 +301,8 @@ public class DocumentFileRestTest {
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
     DocumentFolderFilter filter = null;
-    filter = new DocumentFolderFilter(currentIdentity.getId());
+    filter = new DocumentFolderFilter(null,currentOwnerId, false);
     filter.setSortField(DocumentSortField.NAME);
-
     IdentityEntity identity1 = new IdentityEntity();
     IdentityEntity identity2 = new IdentityEntity("3", "userb", null, "organization", "spacetest");
     identity1.setId("2");
@@ -369,11 +368,12 @@ public class DocumentFileRestTest {
     folderEntity.setCreatedDate(11111);
     folderEntity.setParentFolderId("1");
 
+
     String expand = "creator";
 
     when(documentFileStorage.getFolderChildNodes(filter, spaceID, 0, 0)).thenReturn(folder);
 
-    Response response1 = documentFileRest.getDocumentItems(currentOwnerId,
+    Response response1 = documentFileRest.getDocumentItems(null,
                                                            null,
                                                            FileListingType.FOLDER,
                                                            null,
@@ -383,13 +383,13 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0);
-    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response1.getStatus());
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
     Response response2 = documentFileRest.getDocumentItems(null, "2", FileListingType.FOLDER, null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
-    Response response3 = documentFileRest.getDocumentItems(null,
-                                                           "2",
+    Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
                                                            FileListingType.FOLDER,
                                                            null,
                                                            false,
