@@ -3,9 +3,9 @@
     class="clickable d-flex"
     @click="download">
     <v-icon
-      size="18"
-      class="primary--text pe-2">
-      mdi-download
+      size="13"
+      class="pe-1 iconStyle">
+      fas fa-download
     </v-icon>
     <span>{{ $t('documents.label.download') }}</span>
   </div>
