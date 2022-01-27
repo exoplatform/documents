@@ -34,6 +34,7 @@ import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
+import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -245,6 +246,82 @@ public class DocumentFileServiceTest {
 
   @Test
   public void testGetFolderChildNodes() throws Exception { // NOSONAR
-    //Todo
+    String username = "testuser";
+    long currentOwnerId = 2;
+    long spaceId = 4;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    String user2name = "testuser2";
+    long user2Id = 3;
+    Identity user2Identity = new Identity(OrganizationIdentityProvider.NAME, user2name);
+    user2Identity.setId(String.valueOf(user2Id));
+    Profile user2Profile = new Profile();
+    user2Profile.setProperty(Profile.FULL_NAME, user2name);
+    user2Identity.setProfile(user2Profile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    org.exoplatform.services.security.Identity user2ID = new org.exoplatform.services.security.Identity(user2name);
+    DocumentFolderFilter filter = new DocumentFolderFilter(null,Long.valueOf(currentIdentity.getId()),false);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
+            eq(username))).thenReturn(currentIdentity);
+
+    when(identityRegistry.getIdentity(user2name)).thenReturn(user2ID);
+    when(identityManager.getIdentity(eq(String.valueOf(user2Id)))).thenReturn(user2Identity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
+            eq(user2name))).thenReturn(user2Identity);
+
+
+
+    DocumentFolderFilter filter_ = new DocumentFolderFilter(null,0L,false);
+    DocumentFolderFilter finalFilter1 = filter_;
+    Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
+      documentFileService.getFolderChildNodes(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
+    });
+    assertEquals(exception.getMessage(),"Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
+
+    String spacePrettyName = "spacetest";
+
+    Space space = new Space();
+    org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
+
+    Identity spaceIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    spaceIdentity.setId(String.valueOf(spaceId));
+    spaceIdentity.setRemoteId(spacePrettyName);
+    spaceIdentity.setProviderId(SpaceIdentityProvider.NAME);
+
+    when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
+    when(identityManager.getIdentity(eq(String.valueOf(spaceId)))).thenReturn(spaceIdentity);
+    when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
+    when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
+    when(spaceService.hasAccessPermission(space, user2name)).thenReturn(false);
+
+    filter_ = new DocumentFolderFilter(null,Long.valueOf(spaceIdentity.getId()),false);
+    DocumentFolderFilter finalFilter2 = filter_;
+    List<AbstractNode> files = new ArrayList<>();
+
+    AbstractNode file1 = new FileNode();
+    AbstractNode file2 = new FileNode();
+    AbstractNode file3 = new FileNode();
+    AbstractNode file4 = new FileNode();
+
+    files.add(file1);
+    files.add(file2);
+    files.add(file3);
+    files.add(file4);
+
+    exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.getFolderChildNodes(finalFilter2,    0,    0,  Long.valueOf(user2Identity.getId()));
+    });
+    assertEquals(exception.getMessage(),"User " + user2name
+            + " attempts to access documents of space " + space.getDisplayName()
+            + "while it's not a member");
+
+    when(documentFileStorage.getFolderChildNodes(finalFilter2, userID,    0, 0)).thenReturn(files);
+    List<AbstractNode> files_ = new ArrayList<>();
+    files_ = documentFileService.getFolderChildNodes(finalFilter2,    0,    0,  Long.valueOf(currentIdentity.getId()));
+    assertEquals(files_.size(),4);
   }
 }
