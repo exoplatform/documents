@@ -126,7 +126,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      sessionProvider.close();
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -191,7 +193,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      sessionProvider.close();
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -212,6 +216,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Long ownerId = filter.getOwnerId();
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
         parent = getIdentityRootNode(spaceService,nodeHierarchyCreator,username,ownerIdentity,sessionProvider);
+        parentFolderId=((NodeImpl) parent).getIdentifier();
       }else{
         parent =  getNodeByIdentifier(session, parentFolderId);
       }
@@ -238,12 +243,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
 
       }else{
-        throw new ObjectNotFoundException("Folder : " + parent.getPath() + " isn't found");
+        throw new ObjectNotFoundException("Folder with Id : " + parentFolderId + " isn't found");
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      sessionProvider.close();
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
