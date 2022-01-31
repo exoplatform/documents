@@ -43,6 +43,11 @@
       </div>
     </a>
     <v-spacer />
+    <documents-info-details-cell
+      v-if="!isMobile"
+      :file="file"
+      :class="editNameMode ? '' : 'button-info-details'"
+      @open-info-drawer="openInfoDetailsDrawer" />
     <div
       :id="`document-action-menu-cel-${file.id}`"
       class="position-relative ml-3">
@@ -75,6 +80,13 @@
         </span>
       </v-tooltip>
     </div>
+    <documents-info-drawer
+      ref="documentInfoDrawer"
+      :file="file"
+      :file-name="fileName"
+      :file-type="fileType"
+      :is-mobile="isMobile"
+      :icon="icon" />
     <documents-actions-menu-mobile ref="documentActionsBottomMenu" :file="file" />
   </div>
 </template>
@@ -191,6 +203,12 @@ export default {
         this.editNameMode = false;
       }
     });
+    this.$root.$on('open-info-drawer', fileId => {
+      if (this.file.id=== fileId) {
+        this.openInfoDetailsDrawer();
+        this.$refs.documentActionsBottomMenu.close();
+      }
+    });
   },
   methods: {
     fileInfo() {
@@ -238,6 +256,9 @@ export default {
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
     },
+    openInfoDetailsDrawer(){
+      this.$refs.documentInfoDrawer.open();
+    }
   },
 };
 </script>

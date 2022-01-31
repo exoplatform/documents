@@ -19,10 +19,13 @@ import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFi
 import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
+import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
 import EditMenuAction from './components/body/actions/EditMenuAction.vue';
 import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
+import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
+import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -46,10 +49,13 @@ const components = {
   'documents-file-edit-name-cell': DocumentsFileEditNameCell,
   'documents-actions-menu': DocumentActionMenu,
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
+  'documents-info-drawer': DocumentInfoDrawer,
   'edit-menu-action': EditMenuAction,
   'rename-menu-action': RenameMenuAction,
   'download-menu-action': DownloadMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
+  'details-menu-action': DetailsMenuAction,
+  'documents-info-details-cell': DocumentsInfoDetailsCell,
 };
 
 for (const key in components) {
