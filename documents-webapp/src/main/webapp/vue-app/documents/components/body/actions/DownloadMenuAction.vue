@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable d-flex align-center"
+    class="downloadDocumentNewApp clickable"
     @click="download">
     <v-icon
       size="13"
@@ -8,6 +8,10 @@
       fas fa-download
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.download') }}</span>
+    <v-divider
+      v-if="isMobile"
+      class="mt-2 dividerStyle"
+      dark />
   </div>
 </template>
 <script>
