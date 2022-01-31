@@ -24,7 +24,7 @@ export default {
     menuExtensionApp: 'DocumentMenu',
     menuExtensionType: 'menuActionMenu',
     menuExtensions: {},
-    mobileOnlyExtensions: ['favorite'],
+    mobileOnlyExtensions: ['favorite','details'],
     desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
   }),
