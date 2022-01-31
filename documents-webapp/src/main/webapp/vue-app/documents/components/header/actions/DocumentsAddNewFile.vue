@@ -21,6 +21,9 @@
 export default {
   data: () => ({
     showMobileFilter: false,
+    attachmentAppConfiguration: {
+      'sourceApp': 'NEW.APP',
+    }
   }),
   computed: {
     isMobile() {
@@ -41,7 +44,9 @@ export default {
       this.$root.$emit('documents-refresh-files');
     },
     openDrawer() {
-      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer'));
+      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {
+        detail: this.attachmentAppConfiguration
+      }));
     },
   },
 };
