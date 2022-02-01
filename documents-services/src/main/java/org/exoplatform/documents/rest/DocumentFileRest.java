@@ -16,8 +16,7 @@
  */
 package org.exoplatform.documents.rest;
 
-import
-        java.util.List;
+import java.util.List;
 
 import javax.annotation.security.RolesAllowed;
 import javax.ws.rs.GET;
@@ -121,7 +120,9 @@ public class DocumentFileRest implements ResourceContainer {
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
       DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId, favorites)
-                                                                          : new DocumentFolderFilter(parentFolderId, ownerId, favorites);
+                                                                          : new DocumentFolderFilter(parentFolderId,
+                                                                                                     ownerId,
+                                                                                                     favorites);
       filter.setQuery(query);
       filter.setAscending(ascending);
       filter.setSortField(DocumentSortField.getFromAlias(sortField));
@@ -186,6 +187,40 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.warn("Error retrieving list of documents", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/breadcrumb")
+  @ApiOperation(value = "Get breadcrumb of given .", httpMethod = "GET", response = Response.class, produces = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+      @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
+  public Response getBreadcrumb(@ApiParam(value = "Identity technical identifier", required = false)
+  @QueryParam("ownerId")
+  Long ownerId,
+                                @ApiParam(value = "Folder technical identifier", required = false)
+                                @QueryParam("folderId")
+                                String folderId) {
+
+    if (ownerId == null && StringUtils.isBlank(folderId)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      return Response.ok(EntityBuilder.toBreadCrumbItemEntities(documentFileService.getBreadcrumb(ownerId, folderId, userIdentityId)))
+                     .build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving breadcrumb", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
