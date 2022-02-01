@@ -41,6 +41,7 @@ const components = {
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
   'documents-no-result-body': DocumentsNoResultBody,
+  'documents-folder-view': DocumentsFolderView,
   'documents-timeline-view': DocumentsTimelineView,
   'documents-timeline-group-header': DocumentsTimelineGroupHeader,
   'documents-table-cell': DocumentsTableCell,
