@@ -114,6 +114,12 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs';
     },
     icon() {
+      if (this.file && this.file.folder){
+        return {
+          class: 'fas fa-folder',
+          color: '#2A5699',
+        };
+      }
       const type = this.file && this.file.mimeType || '';
       if (type.includes('pdf')) {
         return {
@@ -176,7 +182,7 @@ export default {
       return this.file.name.split('.')[0];
     },
     fileType() {
-      return `.${this.file.name.split('.')[1]}`;
+      return this.file.name.split('.')[1]?`.${this.file.name.split('.')[1]}`:'';
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
@@ -226,33 +232,37 @@ export default {
     },
     openPreview() {
       this.loading = true;
-      this.$attachmentService.getAttachmentById(this.file.id)
-        .then(attachment => {
-          documentPreview.init({
-            doc: {
-              id: this.file.id,
-              repository: 'repository',
-              workspace: 'collaboration',
-              title: attachment.title,
-              downloadUrl: attachment.downloadUrl,
-              openUrl: attachment.openUrl,
-              breadCrumb: attachment.previewBreadcrumb,
-              fileInfo: this.fileInfo(),
-              size: attachment.size,
-            },
-            author: attachment.updater,
-            version: {
-              number: attachment.version
-            },
-            showComments: false,
-            showOpenInFolderButton: false,
+      if (this.file && this.file.folder){
+        this.$root.$emit('document-open-folder', this.file);
+      } else {
+        this.$attachmentService.getAttachmentById(this.file.id)
+          .then(attachment => {
+            documentPreview.init({
+              doc: {
+                id: this.file.id,
+                repository: 'repository',
+                workspace: 'collaboration',
+                title: attachment.title,
+                downloadUrl: attachment.downloadUrl,
+                openUrl: attachment.openUrl,
+                breadCrumb: attachment.previewBreadcrumb,
+                fileInfo: this.fileInfo(),
+                size: attachment.size,
+              },
+              author: attachment.updater,
+              version: {
+                number: attachment.version
+              },
+              showComments: false,
+              showOpenInFolderButton: false,
+            });
+          })
+          .catch(e => console.error(e))
+          .finally(() => {
+            window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.id}`);
+            this.loading = false;
           });
-        })
-        .catch(e => console.error(e))
-        .finally(() => {
-          window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.id}`);
-          this.loading = false;
-        });
+      }
     },
     displayActionMenu() {
       if (this.isMobile){
