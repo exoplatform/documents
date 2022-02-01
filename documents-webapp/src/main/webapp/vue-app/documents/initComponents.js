@@ -8,6 +8,7 @@ import DocumentsBody from './components/body/DocumentsBody.vue';
 import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
 import DocumentsNoResultBody from './components/body/DocumentsNoResultBody.vue';
 import DocumentsTimelineView from './components/body/views/DocumentsTimelineView.vue';
+import DocumentsFolderView from './components/body/views/DocumentsFolderView.vue';
 import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimelineGroupHeader.vue';
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
 import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
@@ -23,6 +24,7 @@ import EditMenuAction from './components/body/actions/EditMenuAction.vue';
 import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
+import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -36,6 +38,7 @@ const components = {
   'documents-no-body': DocumentsNoBody,
   'documents-no-result-body': DocumentsNoResultBody,
   'documents-timeline-view': DocumentsTimelineView,
+  'documents-folder-view': DocumentsFolderView,
   'documents-timeline-group-header': DocumentsTimelineGroupHeader,
   'documents-table-cell': DocumentsTableCell,
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
@@ -50,6 +53,7 @@ const components = {
   'rename-menu-action': RenameMenuAction,
   'download-menu-action': DownloadMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
+  'documents-breadcrumb': DocumentsBreadcrumb,
 };
 
 for (const key in components) {
