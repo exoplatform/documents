@@ -14,7 +14,7 @@
     hide-default-footer
     disable-pagination
     disable-filtering
-    :class="loading && !items.length ? 'loadingClass' : ''"
+    :class="loadingClass"
     class="documents-table border-box-sizing">
     <template
       v-for="header in extendedCells"
@@ -107,6 +107,12 @@ export default {
     yearFirstDay: 0,
   }),
   computed: {
+    loadingClass() {
+      if (this.loading && !this.items.length) {
+        return this.isMobile ? 'loadingClassMobile' : 'loadingClass';
+      }
+      return '';
+    },
     extendedCells() {
       return this.headers && this.headers.filter(header => header.cellExtension && header.cellExtension.componentOptions);
     },
