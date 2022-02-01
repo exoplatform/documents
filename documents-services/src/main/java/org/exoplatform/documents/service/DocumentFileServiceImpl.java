@@ -184,10 +184,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getFolderChildNodes(filter, aclIdentity, offset, limit);
   }
 
-  private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) {
+  @Override
+  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getBreadcrumb(ownerId, folderId, getAclUserIdentity(authenticatedUserId));
+  }
+
+  private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
     Identity userIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
     if (userIdentity == null) {
-      throw new IllegalStateException("Can't find user identity with id " + userIdentityId);
+      throw new IllegalAccessException("Can't find user identity with id " + userIdentityId);
     }
     String username = userIdentity.getRemoteId();
     org.exoplatform.services.security.Identity aclIdentity = identityRegistry.getIdentity(username);
@@ -195,7 +200,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       try {
         aclIdentity = authenticator.createIdentity(username);
       } catch (Exception e) {
-        throw new IllegalStateException("Error retrieving user ACL identity with name : " + username, e);
+        throw new IllegalAccessException("Error retrieving user ACL identity with name : " + username);
       }
     }
     return aclIdentity;

@@ -14,21 +14,16 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.rest.model;
+package org.exoplatform.documents.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.Setter;
-
-import java.util.ArrayList;
-import java.util.List;
+import lombok.NoArgsConstructor;
 
 @Data
-@EqualsAndHashCode(callSuper = true)
-public class FolderNodeEntity extends AbstractNodeEntity {
-
-  private List<BreadCrumbItemEntity> breadcrumb;
-  public FolderNodeEntity() {
-    super(true);
-  }
+@NoArgsConstructor
+@AllArgsConstructor
+public class BreadCrumbItem {
+  private String                                id;
+  private String                                name;
 }
