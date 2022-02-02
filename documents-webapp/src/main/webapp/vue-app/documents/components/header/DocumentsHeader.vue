@@ -76,7 +76,8 @@ export default {
       //const i = this.tabsExtensions.indexOf(viewId);
       if (i===0){
         return 'firstTab';
-      } if (i===this.tabsList.length-1){
+      } 
+      if (i===this.tabsList.length-1){
         return 'lastTab';
       }  
       return 'middleTab';
