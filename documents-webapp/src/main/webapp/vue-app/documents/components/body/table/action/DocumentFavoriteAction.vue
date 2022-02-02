@@ -1,21 +1,19 @@
 <template>
-  <div 
-    v-show="isFavorite"
-    :id="`favorite-cell-file-${fileId}`">
-    <div v-if="!isMobile">
-      <documents-favorite-action :file="file" />
-    </div>
-  </div>
+  <favorite-button
+    :id="fileId"
+    :space-id="spaceId"
+    :favorite="isFavorite"
+    type="file"
+    @removed="removed"
+    @remove-error="removeError"
+    @added="added"
+    @add-error="addError" />
 </template>
 
 <script>
 export default {
   props: {
     file: {
-      type: Object,
-      default: null,
-    },
-    extension: {
       type: Object,
       default: null,
     },
@@ -30,27 +28,6 @@ export default {
     spaceId() {
       return eXo.env.portal.spaceId;
     },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
-  },
-  created() {
-    this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
-  },
-  mounted() {
-    // show favorite button when hovering over the corresponding row.
-    if (!this.isMobile) {
-      const self = this;
-      $(`#favorite-cell-file-${this.fileId}`).parent().parent().parent().hover(function () {
-        if (!self.isFavorite) {
-          $(`#favorite-cell-file-${self.fileId}`).show();
-        }
-      }, function () {
-        if (!self.isFavorite) {
-          $(`#favorite-cell-file-${self.fileId}`).hide();
-        }
-      });
-    }
   },
   methods: {
     removed() {
@@ -68,9 +45,6 @@ export default {
     },
     addError() {
       this.displayAlert(this.$t('Favorite.tooltip.ErrorAddingAsFavorite', {0: this.$t('file.label')}), 'error');
-    },
-    hitFavoriteButton() {
-      $(`#FavoriteLink_file_${this.fileId}`).click();
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
