@@ -56,6 +56,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final NodeHierarchyCreator           nodeHierarchyCreator;
   private final DocumentSearchServiceConnector documentSearchServiceConnector;
   private final String                         DATE_FORMAT   = "yyyy-MM-dd";
+  private final String                         SPACE_PATH_PREFIX   = "/Groups/spaces/";
   private final SimpleDateFormat               formatter     = new SimpleDateFormat(DATE_FORMAT);
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
@@ -267,9 +268,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       String homePath = "";
       if (node != null) {
         parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName()));
-        if (node.getPath().contains("/Groups/spaces/")) {
-          String[] pathParts = node.getPath().split("/Groups/spaces/")[1].split("/");
-          homePath = "/Groups/spaces/" + pathParts[0] + "/" + pathParts[1];
+        if (node.getPath().contains(SPACE_PATH_PREFIX)) {
+          String[] pathParts = node.getPath().split("SPACE_PATH_PREFIX")[1].split("/");
+          homePath = "SPACE_PATH_PREFIX" + pathParts[0] + "/" + pathParts[1];
         }
         while (node != null && !node.getPath().equals(homePath)) {
           try {
