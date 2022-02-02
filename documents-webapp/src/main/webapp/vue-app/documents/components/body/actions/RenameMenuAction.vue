@@ -7,7 +7,7 @@
       class="pe-1 iconStyle">
       mdi-form-textbox
     </v-icon>
-    <span>{{ $t('document.label.rename') }}</span>
+    <span class="ps-1">{{ $t('document.label.rename') }}</span>
     <v-divider
       v-if="!isMobile"
       class="mt-2 dividerStyle" />

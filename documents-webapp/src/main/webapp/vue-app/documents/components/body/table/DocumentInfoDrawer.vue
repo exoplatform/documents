@@ -2,6 +2,7 @@
   <exo-drawer 
     ref="documentInfoDrawer"
     class="documentInfoDrawer"
+    @closed="close"
     right>
     <template slot="title">
       {{ $t('documents.drawer.details.title') }}
@@ -9,14 +10,14 @@
     <template slot="content">
       <v-list-item>
         <v-list-item-content class="ma-1">
-          <a class="text-center d-flex align-center">
+          <a class="fileName text-center not-clickable d-flex align-center">
             <v-spacer />
             <v-icon :color="iconColor">{{ iconClass }}</v-icon>
             <span
-              class="text-truncate text-color ms-2 px-2">
+              class="text-truncate font-weight-bold text-color ms-2 px-2">
               {{ file.name }}
             </span>
-            <documents-favorite-cell :file="file" />
+            <documents-favorite-action :file="file" />
             <v-spacer />
           </a>
         </v-list-item-content>
@@ -29,12 +30,12 @@
           <v-list-item-content class="mt-4 ma-1">
             <v-list-item-title>
               <a
-                class=" text-color d-flex">
-                <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.modified') }}:</span>
+                class="fileDetails text-color d-flex">
+                <span class="text-center not-clickable font-weight-bold">{{ $t('documents.drawer.details.modified') }}:</span>
                 <date-format
                   :value="lastUpdated"
                   :format="fullDateFormat"
-                  class="document-date text-no-wrap mx-1" />
+                  class="document-date not-clickable text-no-wrap mx-1" />
                 {{ $t('documents.drawer.details.by') }}
                 <p class="text-decoration-underline text-truncate font-weight-bold mx-1" v-sanitized-html="profileLinkUpdated"></p>
               </a>
@@ -46,13 +47,13 @@
           <v-list-item-content class="ma-1">
             <v-list-item-title>
               <a
-                class="text-color d-flex ">
-                <span class="text-center font-weight-bold">
+                class="fileDetails text-color d-flex ">
+                <span class="text-center not-clickable font-weight-bold">
                   {{ $t('documents.drawer.details.created') }}:</span>
                 <date-format
                   :value="fileCreated"
                   :format="fullDateFormat"
-                  class="document-date text-no-wrap mx-1" />
+                  class="document-date not-clickable text-no-wrap mx-1" />
                 {{ $t('documents.drawer.details.by') }}
                 <p class="text-decoration-underline text-truncate font-weight-bold mx-1" v-sanitized-html="profileLinkCreated"></p>
               </a>
@@ -64,7 +65,7 @@
           <v-list-item-content class="ma-1">
             <v-list-item-title>
               <a
-                class="text-color d-flex">
+                class="fileDetails not-clickable text-color d-flex">
                 <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
                 <documents-file-size-cell class="mx-1 text-color" :file="file" />
               </a>
@@ -149,6 +150,7 @@ export default {
       this.$refs.documentInfoDrawer.open();
     },
     close() {
+      this.$root.$emit('close-info-drawer',this.file.id);
       this.$refs.documentInfoDrawer.close();
     },
   }
