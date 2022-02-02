@@ -3,10 +3,10 @@
     :id="`info-cell-file-${fileId}`">
     <div>
       <v-icon
-        class="text-light-color d-none ma-1 px-1"
+        class="text-sub-title d-none px-3 mt-1"
+        size="16"
         @click="$emit('open-info-drawer')"
-        :title="$t('documents.label.show.details')"
-        small>
+        :title="$t('documents.label.show.details')">
         fa-info-circle
       </v-icon>
     </div>

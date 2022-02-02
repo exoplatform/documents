@@ -1,12 +1,13 @@
 <template>
   <div
-    class="clickable pt-1"
+    class="clickable"
     @click="$root.$emit('open-info-drawer',file.id)">
     <v-icon
-      size="18">
+      size="13"
+      class="pe-1 iconStyle">
       fa-info-circle
     </v-icon>
-    <span>{{ $t('documents.drawer.details.title') }}</span>
+    <span class="ps-1">{{ $t('documents.drawer.details.title') }}</span>
   </div>
 </template>
 <script>

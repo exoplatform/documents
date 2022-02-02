@@ -44,20 +44,20 @@
     </a>
     <v-spacer />
     <documents-info-details-cell
-      v-if="!isMobile"
+      v-if="!isMobile && !drawerDetails"
       :file="file"
       :class="editNameMode ? '' : 'button-info-details'"
       @open-info-drawer="openInfoDetailsDrawer" />
     <div
       :id="`document-action-menu-cel-${file.id}`"
-      class="position-relative ml-3">
+      class="position-relative">
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
           <v-icon
             v-show="isMobile || menuDisplayed"
-            size="18"
+            :size="isMobile ? 14 : 18"
             class="clickable text-sub-title"
-            :class="editNameMode ? '' : 'button-document-action'"
+            :class="editNameMode || drawerDetails ? '' : 'button-document-action'"
             v-bind="attrs"
             v-on="on"
             @click="displayActionMenu">
@@ -106,7 +106,8 @@ export default {
     loading: false,
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
-    editNameMode: false
+    editNameMode: false,
+    drawerDetails: false
   }),
   computed: {
     isMobile() {
@@ -209,6 +210,11 @@ export default {
         this.$refs.documentActionsBottomMenu.close();
       }
     });
+    this.$root.$on('close-info-drawer', fileId => {
+      if (this.file.id=== fileId) {
+        this.drawerDetails=false;
+      }
+    });
   },
   methods: {
     fileInfo() {
@@ -257,6 +263,7 @@ export default {
       }
     },
     openInfoDetailsDrawer(){
+      this.drawerDetails=true;
       this.$refs.documentInfoDrawer.open();
     }
   },
