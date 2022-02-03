@@ -28,8 +28,10 @@ import java.util.List;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.rest.model.BreadCrumbItemEntity;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.services.security.Authenticator;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
@@ -40,6 +42,8 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.junit.Before;
 import org.junit.Test;
+
+import javax.ws.rs.core.Response;
 
 public class DocumentFileServiceTest {
 
@@ -323,5 +327,55 @@ public class DocumentFileServiceTest {
     List<AbstractNode> files_ = new ArrayList<>();
     files_ = documentFileService.getFolderChildNodes(finalFilter2,    0,    0,  Long.valueOf(currentIdentity.getId()));
     assertEquals(files_.size(),4);
+  }
+  @Test
+  public void testGetBreadCrumbs() throws Exception { // NOSONAR
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1");
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2");
+    BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
+    breadCrumbItem3.setId("3");
+    breadCrumbItem3.setName("Folder3");
+    BreadCrumbItem breadCrumbItem4 = new BreadCrumbItem();
+    breadCrumbItem4.setId("4");
+    breadCrumbItem4.setName("Folder4");
+
+    List<BreadCrumbItem> breadCrumbItems = new ArrayList<>();
+    breadCrumbItems.add(breadCrumbItem1);
+    breadCrumbItems.add(breadCrumbItem2);
+    breadCrumbItems.add(breadCrumbItem3);
+    breadCrumbItems.add(breadCrumbItem4);
+
+
+    List<BreadCrumbItem> breadCrumbItems_ = new ArrayList<>();
+
+
+    when(documentFileStorage.getBreadcrumb(2,"Folder1",userID)).thenReturn(breadCrumbItems);
+
+    Exception exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.getBreadcrumb(0,"",0);
+    });
+   assertEquals(exception.getMessage(),"Can't find user identity with id 0");
+
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    breadCrumbItems_ = documentFileService.getBreadcrumb(Long.valueOf(2),"Folder1",2);
+    assertEquals(breadCrumbItems_.size(), 4);
+    assertEquals(breadCrumbItems_.get(0).getId(),"1");
+    assertEquals(breadCrumbItems_.get(0).getName(),"Folder1");
   }
 }

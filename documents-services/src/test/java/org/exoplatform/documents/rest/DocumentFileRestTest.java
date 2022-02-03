@@ -18,6 +18,7 @@
 package org.exoplatform.documents.rest;
 
 import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
@@ -266,7 +267,7 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
     Response response2 = documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
-    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response2.getStatus());
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
 
@@ -413,5 +414,62 @@ public class DocumentFileRestTest {
     assertEquals(foldersNodeEntity.get(0).getParentFolderId(), "1");
     assertTrue(folderEntity.equals(foldersNodeEntity.get(0)));
   }
+
+  @Test
+  public void testGetBreadCrumbs() throws Exception {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1");
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2");
+    BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
+    breadCrumbItem3.setId("3");
+    breadCrumbItem3.setName("Folder3");
+    BreadCrumbItem breadCrumbItem4 = new BreadCrumbItem();
+    breadCrumbItem4.setId("4");
+    breadCrumbItem4.setName("Folder4");
+
+    List<BreadCrumbItem> breadCrumbItems = new ArrayList<>();
+    breadCrumbItems.add(breadCrumbItem1);
+    breadCrumbItems.add(breadCrumbItem2);
+    breadCrumbItems.add(breadCrumbItem3);
+    breadCrumbItems.add(breadCrumbItem4);
+
+
+    List<BreadCrumbItemEntity> breadCrumbItemEntities = new ArrayList<>();
+
+
+    when(documentFileStorage.getBreadcrumb(2,"Folder1",userID)).thenReturn(breadCrumbItems);
+
+    Response response1 = documentFileRest.getBreadcrumb(null,
+            null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
+
+    Response response2 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1");
+
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    Response response3 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1");
+    assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
+    breadCrumbItemEntities = (List<BreadCrumbItemEntity>) response3.getEntity();
+    assertEquals(breadCrumbItemEntities.size(), 4);
+    assertEquals(breadCrumbItemEntities.get(0).getId(),"4");
+    assertEquals(breadCrumbItemEntities.get(0).getName(),"Folder4");
+
+  }
+
 
 }

@@ -19,13 +19,12 @@ package org.exoplatform.documents.rest.util;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FolderNode;
-import org.exoplatform.documents.rest.model.AbstractNodeEntity;
-import org.exoplatform.documents.rest.model.FileNodeEntity;
-import org.exoplatform.documents.rest.model.FolderNodeEntity;
-import org.exoplatform.documents.rest.model.IdentityEntity;
+import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -146,6 +145,13 @@ public class EntityBuilder {
     return folderEntity;
   }
 
+  public static List<BreadCrumbItemEntity> toBreadCrumbItemEntities(List<BreadCrumbItem> folders) {
+    List<BreadCrumbItemEntity>  brList = new ArrayList<BreadCrumbItemEntity>();
+    brList = folders.stream().map(document -> new BreadCrumbItemEntity(document.getId(), document.getName())).collect(Collectors.toList());
+    Collections.reverse(brList);
+    return brList;
+  }
+
   private static void toNode(DocumentFileService documentFileService,
                              IdentityManager identityManager,
                              SpaceService spaceService,
@@ -191,6 +197,10 @@ public class EntityBuilder {
         nodeEntity.setFavorite(metadatas.containsKey("favorites"));
         nodeEntity.setMetadatas(retrieveMetadataItems(metadatas, authenticatedUserId));
       }
+
+      if (expandProperties.contains("breadcrumb") && (node instanceof FolderNode)) {
+        ((FolderNodeEntity)nodeEntity).setBreadcrumb(getBreadCrumbs(documentFileService, node, authenticatedUserId));
+      }
     } catch (Exception e) {
       LOG.error("==== exception occured when converting node with ID = {} and name = {}", node.getId(), node.getName(), e);
     }
@@ -230,6 +240,19 @@ public class EntityBuilder {
       }
     }
     return fileMetadatasToPublish;
+  }
+
+  public static List<BreadCrumbItemEntity> getBreadCrumbs (DocumentFileService documentFileService,
+                                                           AbstractNode node,
+                                                           long authenticatedUserId){
+    try {
+      return toBreadCrumbItemEntities(documentFileService.getBreadcrumb(0, node.getId(),authenticatedUserId));
+    } catch (IllegalAccessException e) {
+      LOG.error("Cannot get folder breadcrumb, Current user is not allowed to access the folder");
+    } catch (ObjectNotFoundException e) {
+      LOG.error("Cannot get folder breadcrumb, node folder not found");
+    }
+    return new ArrayList<BreadCrumbItemEntity>();
   }
 
   public static IdentityEntity toIdentityEntity(IdentityManager identityManager, SpaceService spaceService, long identityId) {

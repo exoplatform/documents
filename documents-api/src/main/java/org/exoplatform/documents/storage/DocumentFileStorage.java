@@ -76,4 +76,16 @@ public interface DocumentFileStorage {
                                          int offset,
                                          int limit) throws IllegalAccessException, ObjectNotFoundException;
 
+  /**
+   * Retrieves breadcrumb of the given node.
+   *
+   * @param folderId Id of the given folder
+   * @param aclIdentity {@link Identity} of the user acessing files
+   * @return {@link List} of {@link AbstractNode}
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   */
+  List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+
 }
