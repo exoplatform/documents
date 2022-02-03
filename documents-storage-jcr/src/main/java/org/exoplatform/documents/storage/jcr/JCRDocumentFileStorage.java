@@ -269,8 +269,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (node != null) {
         parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName()));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
-          String[] pathParts = node.getPath().split("SPACE_PATH_PREFIX")[1].split("/");
-          homePath = "SPACE_PATH_PREFIX" + pathParts[0] + "/" + pathParts[1];
+          String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
+          homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
         }
         while (node != null && !node.getPath().equals(homePath)) {
           try {
