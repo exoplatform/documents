@@ -20,9 +20,6 @@ export default {
       default: null,
     },
   },
-  data: () => ({
-    isFavorite: false,
-  }),
   computed: {
     fileId() {
       return this.file && this.file.id;
@@ -33,6 +30,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    isFavorite() {
+      return this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
+    }
   },
   created() {
     this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
@@ -53,34 +53,8 @@ export default {
     }
   },
   methods: {
-    removed() {
-      this.isFavorite = !this.isFavorite;
-      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyDeletedFavorite', {0: this.$t('file.label')}));
-      this.$emit('removed');
-    },
-    removeError() {
-      this.displayAlert(this.$t('Favorite.tooltip.ErrorDeletingFavorite', {0: this.$t('file.label')}), 'error');
-    },
-    added() {
-      this.isFavorite = !this.isFavorite;
-      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyAddedAsFavorite', {0: this.$t('file.label')}));
-      this.$emit('added');
-    },
-    addError() {
-      this.displayAlert(this.$t('Favorite.tooltip.ErrorAddingAsFavorite', {0: this.$t('file.label')}), 'error');
-    },
     hitFavoriteButton() {
       $(`#FavoriteLink_file_${this.fileId}`).click();
-    },
-    displayAlert(message, type) {
-      document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
-        detail: {
-          messageObject: {
-            message: message,
-            type: type || 'success',
-          }
-        }
-      }));
     },
   },
 };

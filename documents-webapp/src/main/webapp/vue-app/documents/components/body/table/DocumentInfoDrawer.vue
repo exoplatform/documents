@@ -10,11 +10,11 @@
     <template slot="content">
       <v-list-item>
         <v-list-item-content class="ma-1">
-          <a class="fileName text-center not-clickable d-flex align-center">
+          <a class="text-center not-clickable d-flex align-center">
             <v-spacer />
             <v-icon :color="iconColor">{{ iconClass }}</v-icon>
             <span
-              class="text-truncate font-weight-bold text-color ms-2 px-2">
+              class="fileName font-weight-bold text-color ms-2 px-2">
               {{ file.name }}
             </span>
             <documents-favorite-action :file="file" />
@@ -27,7 +27,7 @@
 
       <template>
         <v-list-item>
-          <v-list-item-content class="mt-4 ma-1">
+          <v-list-item-content class="mt-4 mx-4">
             <v-list-item-title>
               <a
                 class="fileDetails text-color d-flex">
@@ -44,7 +44,7 @@
         </v-list-item>
 
         <v-list-item>
-          <v-list-item-content class="ma-1">
+          <v-list-item-content class="mx-4">
             <v-list-item-title>
               <a
                 class="fileDetails text-color d-flex ">
@@ -62,7 +62,7 @@
         </v-list-item>
 
         <v-list-item>
-          <v-list-item-content class="ma-1">
+          <v-list-item-content class="mx-4">
             <v-list-item-title>
               <a
                 class="fileDetails not-clickable text-color d-flex">
