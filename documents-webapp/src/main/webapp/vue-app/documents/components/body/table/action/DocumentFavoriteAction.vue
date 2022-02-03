@@ -29,9 +29,13 @@ export default {
       return eXo.env.portal.spaceId;
     },
   },
+  created() {
+    this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
+  },
   methods: {
     removed() {
       this.isFavorite = !this.isFavorite;
+      this.$root.$emit('documents-refresh-files');
       this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyDeletedFavorite', {0: this.$t('file.label')}));
       this.$emit('removed');
     },
@@ -42,6 +46,7 @@ export default {
       this.isFavorite = !this.isFavorite;
       this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyAddedAsFavorite', {0: this.$t('file.label')}));
       this.$emit('added');
+      this.$root.$emit('documents-refresh-files');
     },
     addError() {
       this.displayAlert(this.$t('Favorite.tooltip.ErrorAddingAsFavorite', {0: this.$t('file.label')}), 'error');
