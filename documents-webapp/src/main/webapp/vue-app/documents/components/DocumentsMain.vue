@@ -61,7 +61,7 @@ export default {
       'thisYear': 0,
       'beforeThisYear': 0,
     },
-    selectedView: null,
+    selectedView: 'timeline',
     previewMode: false,
     primaryFilter: 'all'
   }),
@@ -71,7 +71,7 @@ export default {
     },
     selectedViewExtension() {
       if (this.selectedView) {
-        return this.viewExtensions.find(viewExtension => viewExtension.id === this.selectedView);
+        return Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === this.selectedView);
       } else if (Object.keys(this.viewExtensions).length) {
         const sortedViewExtensions = Object.values(this.viewExtensions).sort((ext1, ext2) => ext1.rank - ext2.rank);
         return sortedViewExtensions[0];
@@ -98,6 +98,8 @@ export default {
     }).finally(() => this.$root.$applicationLoaded());
 
     this.$root.$on('document-load-more', this.loadMore);
+    this.$root.$on('document-change-view', this.changeView);
+    this.$root.$on('document-open-folder', this.openFolder);
     this.$root.$on('document-search', this.search);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-filter', filter => {
@@ -151,8 +153,17 @@ export default {
 
       this.refreshFiles();
     },
+    openFolder(parentFolder) {
+      this.parentFolderId = parentFolder.id;
+      this.refreshFiles();
+      this.$root.$emit('set-breadcrumb', parentFolder.breadcrumb);
+    },
     loadMore() {
       this.limit += this.pageSize;
+      this.refreshFiles(this.primaryFilter);
+    },
+    changeView(view) {
+      this.selectedView=view;
       this.refreshFiles(this.primaryFilter);
     },
     refreshFilesEvent() {

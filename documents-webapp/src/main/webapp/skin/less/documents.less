@@ -2,6 +2,81 @@
 
 .VuetifyApp {
   .documents-application {
+
+    .document-tree-items {
+      max-width: 100% !important;
+      width: 100% !important;
+  
+      .document-tree-item {
+        .path-clickable {
+          max-width: 97% !important;
+  
+          &:hover {
+            color: @primaryColor !important;
+          }
+        }
+      }
+    }
+
+    .document-breadcrumb-wrapper {
+      max-width: 95% !important;
+      width: 95% !important;
+  
+      .document-long-path {
+        .long-path-first-item {
+          max-width: 100px;
+          min-width: 60px;
+        }
+  
+        .long-path-second-item {
+          max-width: 42px;
+        }
+  
+        .long-path-third-item {
+          max-width: 50%;
+          min-width: 60px;
+        }
+      }
+    }
+
+    .documentViewTabs {
+         .v-tab.v-tab--active {
+           border: 1px solid var(--allPagesPrimaryColor, #578dc9) !important;
+           background-color: var(--allPagesTabNormalLinkBackground, #f0f4f7) !important;
+           .tabIcon{
+             color: var(--allPagesPrimaryColor, #578dc9) !important;
+             }
+         }
+         .v-tabs-slider-wrapper {
+           display: none;
+         }
+      .v-tabs-bar {
+        height: auto!important;
+        .tabIcon{
+          font-size: 14px;
+          color: @greyColorLighten1 !important;
+          padding-right: 8px;
+        }
+        .firstTab {
+          border: 1px solid @borderColor;
+          border-radius: 5px 0 0 5px;
+          height: 38px;
+          min-height: 38px;
+        }
+        .middleTab {
+          border: 1px solid @borderColor;
+          border-radius: 0;
+          height: 38px;
+          min-height: 38px;
+        }
+        .lastTab {
+          border: 1px solid @borderColor;
+          border-radius: 0 5px 5px 0;
+          height: 38px;
+          min-height: 38px;
+        }
+      }
+    }
     .documents-header-right-actions {
       .inputDocumentsFilter {
         width: 245px;

@@ -105,4 +105,16 @@ public interface DocumentFileService {
                                          int limit,
                                          long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
 
+  /**
+   * Retrieves breadcrumb of the given node.
+   *
+   * @param folderId Id of the given folder
+   *  @param authenticatedUserId of the user acessing files
+   * @return {@link List} of {@link BreadCrumbItem}
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   */
+  List<BreadCrumbItem> getBreadcrumb(long ownerId,String folderId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+
 }

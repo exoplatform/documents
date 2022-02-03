@@ -13,6 +13,17 @@
             </properties-param>
         </init-params>
     </component>
+    <component>
+        <key>FolderViewFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>FolderViewFeatureProperties</name>
+                <description>Folder View Feature enablement flag</description>
+                <property name="exo.feature.FolderView.enabled" value="${exo.feature.FolderView.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
 
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
