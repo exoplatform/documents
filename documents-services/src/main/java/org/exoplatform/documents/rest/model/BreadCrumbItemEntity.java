@@ -16,19 +16,20 @@
  */
 package org.exoplatform.documents.rest.model;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.Setter;
-
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.social.rest.entity.MetadataItemEntity;
+
+import lombok.Data;
 
 @Data
-@EqualsAndHashCode(callSuper = true)
-public class FolderNodeEntity extends AbstractNodeEntity {
-
-  private List<BreadCrumbItemEntity> breadcrumb;
-  public FolderNodeEntity() {
-    super(true);
-  }
+@NoArgsConstructor
+@AllArgsConstructor
+public class BreadCrumbItemEntity {
+  private String                                id;
+  private String                                name;
 }
