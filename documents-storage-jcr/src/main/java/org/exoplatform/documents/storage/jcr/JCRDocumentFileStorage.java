@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
@@ -38,27 +39,25 @@ import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
-  private SpaceService                   spaceService;
-
-  private RepositoryService              repositoryService;
-
-  private IdentityManager                identityManager;
-
-  private NodeHierarchyCreator           nodeHierarchyCreator;
-
-  private DocumentSearchServiceConnector documentSearchServiceConnector;
-
-  private String                         DATE_FORMAT = "yyyy-MM-dd";
-
-  private SimpleDateFormat               formatter   = new SimpleDateFormat(DATE_FORMAT);
+  private static final String            COLLABORATION = "collaboration";
+  private final SpaceService                   spaceService;
+  private final RepositoryService              repositoryService;
+  private final IdentityManager                identityManager;
+  private final NodeHierarchyCreator           nodeHierarchyCreator;
+  private final DocumentSearchServiceConnector documentSearchServiceConnector;
+  private final String                         DATE_FORMAT   = "yyyy-MM-dd";
+  private final String                         SPACE_PATH_PREFIX   = "/Groups/spaces/";
+  private final SimpleDateFormat               formatter     = new SimpleDateFormat(DATE_FORMAT);
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -121,7 +120,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      sessionProvider.close();
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -185,7 +186,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      sessionProvider.close();
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -194,8 +197,100 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                 Identity aclIdentity,
                                                 int offset,
                                                 int limit) throws IllegalAccessException, ObjectNotFoundException {
-    // TODO
-    return null;
+    String username = aclIdentity.getUserId();
+    String parentFolderId = filter.getParentFolderId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node parent = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(parentFolderId)) {
+        Long ownerId = filter.getOwnerId();
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        parent = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        parentFolderId = ((NodeImpl) parent).getIdentifier();
+      } else {
+        parent = getNodeByIdentifier(session, parentFolderId);
+      }
+      if (parent != null) {
+        if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
+          NodeIterator nodeIterator = parent.getNodes();
+          return toNodes(identityManager, nodeIterator, aclIdentity, offset, limit);
+        } else {
+          String workspace = session.getWorkspace().getName();
+          String sortField = getSortField(filter, false);
+          String sortDirection = getSortDirection(filter);
+          Collection<SearchResult> filesSearchList = documentSearchServiceConnector.appSearch(aclIdentity,
+                                                                                              workspace,
+                                                                                              parent.getPath(),
+                                                                                              filter,
+                                                                                              offset,
+                                                                                              limit,
+                                                                                              sortField,
+                                                                                              sortDirection);
+          return filesSearchList.stream()
+                                .map(result -> toFileNode(identityManager, session, aclIdentity, result))
+                                .filter(Objects::nonNull)
+                                .collect(Collectors.toList());
+        }
+
+      } else {
+        throw new ObjectNotFoundException("Folder with Id : " + parentFolderId + " isn't found");
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, Identity aclIdentity) throws IllegalAccessException,
+                                                                               ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    List<BreadCrumbItem> parents = new ArrayList<>();
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(folderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        folderId = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, folderId);
+      }
+      String homePath = "";
+      if (node != null) {
+        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName()));
+        if (node.getPath().contains(SPACE_PATH_PREFIX)) {
+          String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
+          homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
+        }
+        while (node != null && !node.getPath().equals(homePath)) {
+          try {
+            node = node.getParent();
+            if (node != null) {
+              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName()));
+            }
+          } catch (RepositoryException repositoryException) {
+            node = null;
+          }
+        }
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+    return parents;
   }
 
   private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {

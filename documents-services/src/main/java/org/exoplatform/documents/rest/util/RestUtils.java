@@ -39,5 +39,4 @@ public class RestUtils {
     Identity identity = identityManager.getOrCreateUserIdentity(currentUser);
     return identity == null ? 0 : Long.parseLong(identity.getId());
   }
-
 }

@@ -86,8 +86,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
           throw new IllegalArgumentException("filter must be an instance of DocumentFolderFilter");
         }
         DocumentFolderFilter folderFilter = (DocumentFolderFilter) filter;
-        if (StringUtils.isBlank(folderFilter.getParentFolderId())) {
-          throw new IllegalArgumentException("ParentFolderId is mandatory");
+        if (StringUtils.isBlank(folderFilter.getParentFolderId())&&(folderFilter.getOwnerId() == null || folderFilter.getOwnerId() <= 0)) {
+          throw new IllegalArgumentException("ParentFolderId or OwnerId is mandatory");
         }
         return getFolderChildNodes(folderFilter, offset, limit, userIdentityId);
       default:
@@ -157,16 +157,42 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                                 int limit,
                                                 long userIdentityId) throws IllegalAccessException, ObjectNotFoundException {
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
+    if(StringUtils.isBlank(filter.getParentFolderId())){
+      String username = aclIdentity.getUserId();
+      Long ownerId = filter.getOwnerId();
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+      if (ownerIdentity == null) {
+        throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+      }
+      if (ownerIdentity.isSpace()) {
+        Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+        if (!spaceService.hasAccessPermission(space, username)) {
+          throw new IllegalAccessException("User " + username
+                  + " attempts to access documents of space " + space.getDisplayName()
+                  + "while it's not a member");
+        }
+      } else if (ownerIdentity.isUser() && !StringUtils.equals(ownerIdentity.getRemoteId(), username)) {
+        throw new IllegalAccessException("User " + username
+                + " attempts to access private documents of user " + ownerIdentity.getRemoteId());
+      }
+    }
+
+
     if (filter.getSortField() == null) {
       filter.setSortField(DocumentSortField.NAME);
     }
     return documentFileStorage.getFolderChildNodes(filter, aclIdentity, offset, limit);
   }
 
-  private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) {
+  @Override
+  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getBreadcrumb(ownerId, folderId, getAclUserIdentity(authenticatedUserId));
+  }
+
+  private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
     Identity userIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
     if (userIdentity == null) {
-      throw new IllegalStateException("Can't find user identity with id " + userIdentityId);
+      throw new IllegalAccessException("Can't find user identity with id " + userIdentityId);
     }
     String username = userIdentity.getRemoteId();
     org.exoplatform.services.security.Identity aclIdentity = identityRegistry.getIdentity(username);
@@ -174,7 +200,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       try {
         aclIdentity = authenticator.createIdentity(username);
       } catch (Exception e) {
-        throw new IllegalStateException("Error retrieving user ACL identity with name : " + username, e);
+        throw new IllegalAccessException("Error retrieving user ACL identity with name : " + username);
       }
     }
     return aclIdentity;

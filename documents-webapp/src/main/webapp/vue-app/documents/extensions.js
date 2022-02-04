@@ -145,6 +145,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
     vueComponent: Vue.options.components['documents-last-activity-cell'],
   },
 });*/
+
 if (eXo.env.portal.filesFavoritesEnabled) {
   extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
     id: 'favorite',
@@ -161,3 +162,34 @@ if (eXo.env.portal.filesFavoritesEnabled) {
 }
 
 
+if (eXo.env.portal.folderViewEnabled) {
+  extensionRegistry.registerExtension('Documents', 'views', {
+    id: 'folder',
+    labelKey: 'documents.label.folderView',
+    listingType: 'FOLDER',
+    filePropertiesExpand: 'creator,modifier,owner,metadatas,breadcrumb',
+    componentOptions: {
+      vueComponent: Vue.options.components['documents-folder-view'],
+    },
+    rank: 30,
+  });
+}
+
+if (eXo.env.portal.folderViewEnabled) {
+  extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
+    id: 'recentView',
+    viewName: 'timeline',
+    icon: 'fas fa-history',
+    labelKey: 'documents.label.timelineView',
+    rank: 10,
+  });
+}
+if (eXo.env.portal.folderViewEnabled) {
+  extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
+    id: 'folderView',
+    viewName: 'folder',
+    icon: 'fas fa-folder',
+    labelKey: 'documents.label.folderView',
+    rank: 20,
+  });
+}
