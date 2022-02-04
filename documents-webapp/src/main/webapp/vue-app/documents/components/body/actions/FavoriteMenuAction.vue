@@ -7,6 +7,7 @@
       :space-id="spaceId"
       :favorite="isFavorite"
       type="file"
+      typeLabel="Documents"
       class="favoriteDoc"
       @removed="removed"
       @remove-error="removeError"
