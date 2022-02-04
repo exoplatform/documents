@@ -43,16 +43,21 @@
       </div>
     </a>
     <v-spacer />
+    <documents-info-details-cell
+      v-if="!isMobile && !drawerDetails"
+      :file="file"
+      :class="editNameMode ? '' : 'button-info-details'"
+      @open-info-drawer="openInfoDetailsDrawer" />
     <div
       :id="`document-action-menu-cel-${file.id}`"
-      class="position-relative ml-3">
+      class="position-relative">
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
           <v-icon
             v-show="isMobile || menuDisplayed"
-            size="18"
+            :size="isMobile ? 14 : 18"
             class="clickable text-sub-title"
-            :class="editNameMode ? '' : 'button-document-action'"
+            :class="editNameMode || drawerDetails ? '' : 'button-document-action'"
             v-bind="attrs"
             v-on="on"
             @click="displayActionMenu">
@@ -75,6 +80,13 @@
         </span>
       </v-tooltip>
     </div>
+    <documents-info-drawer
+      ref="documentInfoDrawer"
+      :file="file"
+      :file-name="fileName"
+      :file-type="fileType"
+      :is-mobile="isMobile"
+      :icon="icon" />
     <documents-actions-menu-mobile ref="documentActionsBottomMenu" :file="file" />
   </div>
 </template>
@@ -94,7 +106,8 @@ export default {
     loading: false,
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
-    editNameMode: false
+    editNameMode: false,
+    drawerDetails: false
   }),
   computed: {
     isMobile() {
@@ -191,6 +204,17 @@ export default {
         this.editNameMode = false;
       }
     });
+    this.$root.$on('open-info-drawer', fileId => {
+      if (this.file.id=== fileId) {
+        this.openInfoDetailsDrawer();
+        this.$refs.documentActionsBottomMenu.close();
+      }
+    });
+    this.$root.$on('close-info-drawer', fileId => {
+      if (this.file.id=== fileId) {
+        this.drawerDetails=false;
+      }
+    });
   },
   methods: {
     fileInfo() {
@@ -238,6 +262,10 @@ export default {
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
     },
+    openInfoDetailsDrawer(){
+      this.drawerDetails=true;
+      this.$refs.documentInfoDrawer.open();
+    }
   },
 };
 </script>

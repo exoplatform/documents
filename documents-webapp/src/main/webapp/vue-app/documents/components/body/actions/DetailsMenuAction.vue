@@ -1,16 +1,13 @@
 <template>
   <div
-    class="clickable pt-1"
-    @click="editNameMode">
+    class="clickable"
+    @click="$root.$emit('open-info-drawer',file.id)">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
-      mdi-form-textbox
+      fa-info-circle
     </v-icon>
-    <span class="ps-1">{{ $t('document.label.rename') }}</span>
-    <v-divider
-      v-if="!isMobile"
-      class="mt-2 dividerStyle" />
+    <span class="ps-1">{{ $t('documents.drawer.details.title') }}</span>
   </div>
 </template>
 <script>
