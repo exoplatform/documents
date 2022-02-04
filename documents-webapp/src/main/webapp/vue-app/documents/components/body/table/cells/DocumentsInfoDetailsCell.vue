@@ -1,14 +1,20 @@
 <template>
-  <div
-    :id="`info-cell-file-${fileId}`"
-    class="px-4">
-    <v-icon
-      class="text-sub-title d-none px-3"
-      size="16"
-      @click="$emit('open-info-drawer')"
-      :title="$t('documents.label.show.details')">
-      fa-info-circle
-    </v-icon>
+  <div :id="`info-cell-file-${fileId}`">
+    <v-tooltip bottom>
+      <template v-slot:activator="{ on, attrs }">
+        <v-icon
+          class="text-sub-title d-none px-3"
+          size="16"
+          @click="$emit('open-info-drawer')"
+          v-bind="attrs"
+          v-on="on">
+          fa-info-circle
+        </v-icon>
+      </template>
+      <span>
+        {{ documentInfoActionTooltip }}
+      </span>
+    </v-tooltip>
     <documents-info-drawer ref="documentInfoDrawer" :file="file" />
   </div>
 </template>
@@ -32,6 +38,10 @@ export default {
     fileId() {
       return this.file && this.file.id;
     },
+    documentInfoActionTooltip() {
+      return this.$t('documents.label.show.details');
+    },
+
   },
   methods: {
     openInfoDetailsDrawer(){
