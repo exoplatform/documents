@@ -1,15 +1,14 @@
 <template>
   <div
-    :id="`info-cell-file-${fileId}`">
-    <div>
-      <v-icon
-        class="text-sub-title d-none px-3 mt-1"
-        size="16"
-        @click="$emit('open-info-drawer')"
-        :title="$t('documents.label.show.details')">
-        fa-info-circle
-      </v-icon>
-    </div>
+    :id="`info-cell-file-${fileId}`"
+    class="px-4">
+    <v-icon
+      class="text-sub-title d-none px-3"
+      size="16"
+      @click="$emit('open-info-drawer')"
+      :title="$t('documents.label.show.details')">
+      fa-info-circle
+    </v-icon>
     <documents-info-drawer ref="documentInfoDrawer" :file="file" />
   </div>
 </template>
