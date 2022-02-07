@@ -35,6 +35,12 @@
           :primary-filter="primaryFilter" />
       </div>
     </div>
+    <v-alert
+      v-model="alert"
+      :type="alertType"
+      dismissible>
+      {{ message }}
+    </v-alert>
   </v-app>
 </template>
 <script>
@@ -63,7 +69,10 @@ export default {
     },
     selectedView: 'timeline',
     previewMode: false,
-    primaryFilter: 'all'
+    primaryFilter: 'all',
+    alert: false,
+    alertType: '',
+    message: '',
   }),
   computed: {
     filesLoad(){
@@ -105,6 +114,9 @@ export default {
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
       this.refreshFiles(this.primaryFilter);
+    });
+    this.$root.$on('show-alert', message => {
+      this.displayMessage(message);
     });
     const currentUrlSearchParams = window.location.search;
     const queryParams = new URLSearchParams(currentUrlSearchParams);
@@ -252,6 +264,12 @@ export default {
 
       // Start observing the target node for configured mutations
       observer.observe(bodyElement, config);
+    },
+    displayMessage(message) {
+      this.message = message.message;
+      this.alertType = message.type;
+      this.alert = true;
+      window.setTimeout(() => this.alert = false, 5000);
     },
   },
 };

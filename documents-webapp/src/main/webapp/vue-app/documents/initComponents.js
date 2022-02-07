@@ -26,6 +26,7 @@ import EditMenuAction from './components/body/actions/EditMenuAction.vue';
 import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
+import CopyLinkMenuAction from './components/body/actions/CopyLinkMenuAction.vue';
 import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue';
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
@@ -58,6 +59,7 @@ const components = {
   'edit-menu-action': EditMenuAction,
   'rename-menu-action': RenameMenuAction,
   'download-menu-action': DownloadMenuAction,
+  'copy-link-menu-action': CopyLinkMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
   'details-menu-action': DetailsMenuAction,
