@@ -8,10 +8,7 @@
       class="pe-1 iconStyle">
       fas fa-edit
     </v-icon>
-    <span>{{ $t('document.label.edit') }}</span>
-    <v-divider
-      v-if="!isMobile"
-      class="mt-2 dividerStyle" />
+    <span class="ps-1">{{ $t('document.label.edit') }}</span>
   </div>
 </template>
 <script>
