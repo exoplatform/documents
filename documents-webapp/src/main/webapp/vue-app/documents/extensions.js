@@ -66,19 +66,6 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
 });
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-  id: 'edit',
-  labelKey: 'documents.label.edit',
-  align: 'center',
-  sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '190px',
-  rank: 40,
-  componentOptions: {
-    vueComponent: Vue.options.components['edit-menu-action'],
-  },
-});
-
-extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'favorite',
   labelKey: 'favorite.label.download',
   align: 'center',
@@ -88,6 +75,32 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   rank: 40,
   componentOptions: {
     vueComponent: Vue.options.components['favorite-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'copyLink',
+  labelKey: 'documents.label.copy.link',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  componentOptions: {
+    vueComponent: Vue.options.components['copy-link-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'edit',
+  labelKey: 'documents.label.edit',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  componentOptions: {
+    vueComponent: Vue.options.components['edit-menu-action'],
   },
 });
 
