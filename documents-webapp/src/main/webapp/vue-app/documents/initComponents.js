@@ -24,6 +24,7 @@ import DocumentActionMenuMobile from './components/body/table/DocumentActionMenu
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
 import EditMenuAction from './components/body/actions/EditMenuAction.vue';
 import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue';
+import DuplicateMenuAction from './components/body/actions/DuplicateMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
 import CopyLinkMenuAction from './components/body/actions/CopyLinkMenuAction.vue';
