@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable"
+    class="clickable pt-1"
     @click="copyLink">
     <v-icon
       size="13"
