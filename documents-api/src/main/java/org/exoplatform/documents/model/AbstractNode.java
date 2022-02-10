@@ -45,4 +45,8 @@ public abstract class AbstractNode {
 
   private NodePermission acl;
 
+
+  public  boolean isFolder(){
+    return this instanceof FolderNode;
+  }
 }

@@ -123,34 +123,36 @@ public class JCRDocumentsUtil {
                                            int offset,
                                            int limit) {
     List<AbstractNode> fileNodes = new ArrayList<>();
-    int index = 0;
-    int size = 0;
     while (nodeIterator.hasNext()) {
-      if (index < offset) {
-        index++;
-        continue;
-      }
       Node node = nodeIterator.nextNode();
-
       try {
         if(node.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.NT_FOLDER)){
           FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node);
           fileNodes.add(folderNode);
-          size++;
         }
         if(node.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.NT_FILE)) {
           FileNode fileNode = toFileNode(identityManager, aclIdentity, node);
           fileNodes.add(fileNode);
-          size++;
         }
       } catch (RepositoryException e) {
         LOG.warn("Error getting Folder Node for search result with path {}", node, e);
       }
-      if (size >= limit) {
-        return fileNodes;
-      }
     }
-    return fileNodes;
+    Collections.sort(fileNodes, new Comparator<AbstractNode>(){
+      public int compare(AbstractNode s1, AbstractNode s2) {
+        return s1.getName().compareToIgnoreCase(s2.getName());
+      }
+    });
+    Collections.sort(fileNodes, new Comparator<AbstractNode>(){
+      public int compare(AbstractNode n1, AbstractNode n2) {
+        return Boolean.compare(n2.isFolder(),n1.isFolder());
+      }
+    });
+
+    if(limit < fileNodes.size()){
+      return fileNodes.subList(offset,limit);
+    }
+    return fileNodes.subList(offset,fileNodes.size());
   }
 
   public static FolderNode toFolderNode(IdentityManager identityManager,
