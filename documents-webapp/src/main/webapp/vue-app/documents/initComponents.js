@@ -60,6 +60,7 @@ const components = {
   'edit-menu-action': EditMenuAction,
   'rename-menu-action': RenameMenuAction,
   'download-menu-action': DownloadMenuAction,
+  'duplicate-menu-action': DuplicateMenuAction,
   'copy-link-menu-action': CopyLinkMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
