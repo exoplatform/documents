@@ -100,7 +100,7 @@ public class DocumentFileServiceTest {
     });
     assertEquals(exception.getMessage(),"User Identity is mandatory");
 
-    DocumentFolderFilter docFilter = new DocumentFolderFilter("",0L,false);
+    DocumentFolderFilter docFilter = new DocumentFolderFilter("","",0L,false);
     DocumentFolderFilter finalDocFilter = docFilter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
       documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter,    0,    0,  Long.valueOf(currentIdentity.getId()));
@@ -265,7 +265,7 @@ public class DocumentFileServiceTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     org.exoplatform.services.security.Identity user2ID = new org.exoplatform.services.security.Identity(user2name);
-    DocumentFolderFilter filter = new DocumentFolderFilter(null,Long.valueOf(currentIdentity.getId()),false);
+    DocumentFolderFilter filter = new DocumentFolderFilter(null,null,Long.valueOf(currentIdentity.getId()),false);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -279,7 +279,7 @@ public class DocumentFileServiceTest {
 
 
 
-    DocumentFolderFilter filter_ = new DocumentFolderFilter(null,0L,false);
+    DocumentFolderFilter filter_ = new DocumentFolderFilter(null,null,0L,false);
     DocumentFolderFilter finalFilter1 = filter_;
     Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
       documentFileService.getFolderChildNodes(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
@@ -302,7 +302,7 @@ public class DocumentFileServiceTest {
     when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
     when(spaceService.hasAccessPermission(space, user2name)).thenReturn(false);
 
-    filter_ = new DocumentFolderFilter(null,Long.valueOf(spaceIdentity.getId()),false);
+    filter_ = new DocumentFolderFilter(null,null,Long.valueOf(spaceIdentity.getId()),false);
     DocumentFolderFilter finalFilter2 = filter_;
     List<AbstractNode> files = new ArrayList<>();
 
@@ -345,8 +345,8 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1");
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2");
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1","");
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2","");
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
@@ -364,16 +364,16 @@ public class DocumentFileServiceTest {
     List<BreadCrumbItem> breadCrumbItems_ = new ArrayList<>();
 
 
-    when(documentFileStorage.getBreadcrumb(2,"Folder1",userID)).thenReturn(breadCrumbItems);
+    when(documentFileStorage.getBreadcrumb(2,"Folder1","",userID)).thenReturn(breadCrumbItems);
 
     Exception exception = assertThrows(IllegalAccessException.class, () -> {
-      documentFileService.getBreadcrumb(0,"",0);
+      documentFileService.getBreadcrumb(0,"","",0);
     });
    assertEquals(exception.getMessage(),"Can't find user identity with id 0");
 
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    breadCrumbItems_ = documentFileService.getBreadcrumb(Long.valueOf(2),"Folder1",2);
+    breadCrumbItems_ = documentFileService.getBreadcrumb(Long.valueOf(2),"Folder1","", 2);
     assertEquals(breadCrumbItems_.size(), 4);
     assertEquals(breadCrumbItems_.get(0).getId(),"1");
     assertEquals(breadCrumbItems_.get(0).getName(),"Folder1");

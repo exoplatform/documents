@@ -24,6 +24,7 @@ import lombok.*;
 public class DocumentFolderFilter extends DocumentNodeFilter {
 
   private String parentFolderId;
+  private String folderPath;
   private Long ownerId;
   private Boolean favorites;
 

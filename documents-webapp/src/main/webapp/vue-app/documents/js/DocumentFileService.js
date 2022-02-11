@@ -31,11 +31,14 @@ export function getDocumentItems(itemsFilter, offset, limit, expand) {
 
 }
 
-export function getBreadCrumbs(folderId,ownerId) {
+export function getBreadCrumbs(folderId,ownerId,folderPath) {
   const formData = new FormData();
 
   if (folderId) {
     formData.append('folderId', folderId);
+  }
+  if (folderPath) {
+    formData.append('folderPath', folderPath);
   }
   if (ownerId) {
     formData.append('ownerId', ownerId);
