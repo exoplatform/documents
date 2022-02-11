@@ -35,6 +35,8 @@ public abstract class AbstractNode {
 
   private String         parentFolderId;
 
+  private String         path;
+
   private long           creatorId;
 
   private long           createdDate;

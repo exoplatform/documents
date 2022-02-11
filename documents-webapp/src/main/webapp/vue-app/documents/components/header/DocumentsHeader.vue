@@ -4,6 +4,7 @@
     <v-spacer :class="showMobileFilter ? 'd-none' : ''" />
     <div>
       <v-tabs
+        v-model="tab"
         class="documentViewTabs">
         <v-tab
           v-for="(extension, i) in tabsList"
@@ -30,6 +31,7 @@ export default {
     mobileOnlyTabsExtensions: [],
     desktopOnlyTabsExtensions: [],
     tabsList: [],
+    tab: 0,
   }),
   computed: {
     showMobileFilter() {
@@ -45,6 +47,17 @@ export default {
     this.$root.$on('show-mobile-filter', data => {
       this.showMobileFilter= data;
     });
+    const currentUrlSearchParams = window.location.search;
+    const queryParams = new URLSearchParams(currentUrlSearchParams);
+    if (queryParams.has('folderId')) {
+      this.tab = 1;
+    } else {
+      const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+      if (pathParts.length>1){
+        this.tab = 1;
+      }
+    }
+
   },
   methods: {
 
@@ -81,7 +94,7 @@ export default {
         return 'lastTab';
       }  
       return 'middleTab';
-    }
+    },
     
   }
 };

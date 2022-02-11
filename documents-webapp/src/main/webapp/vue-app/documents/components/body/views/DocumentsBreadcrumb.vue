@@ -98,33 +98,47 @@ export default {
   data: () => ({
     documentsBreadcrumb: [],
     actualFolderId: '',
+    folderPath: '',
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
   created() {
     this.$root.$on('set-breadcrumb', data => {
+      this.folderPath='';
       if (data.length>0){
         this.documentsBreadcrumb= data;
         this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
       } else {
-        this.getBreadCrumbs(this.actualFolderId,this.ownerId);
+        this.getBreadCrumbs();
       }
     });
 
-    this.getBreadCrumbs(this.actualFolderId,this.ownerId);
+    const currentUrlSearchParams = window.location.search;
+    const queryParams = new URLSearchParams(currentUrlSearchParams);
+    if (queryParams.has('folderId')) {
+      this.actualFolderId = queryParams.get('folderId');
+    } else {
+      const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+      if (pathParts.length>1){
+        this.folderPath = pathParts[1];
+      }
+    }
+
+    this.getBreadCrumbs();
     
   },
   methods: {
     openFolder(folder) {
       if (folder.id !== this.actualFolderId ) {
+        this.folderPath='';
         this.actualFolderId=folder.id;  
-        this.getBreadCrumbs(this.actualFolderId,this.ownerId);
+        this.getBreadCrumbs();
         this.$root.$emit('document-open-folder', folder);
       }
     },
 
-    getBreadCrumbs(folderId) {
+    getBreadCrumbs() {
       return this.$documentFileService
-        .getBreadCrumbs(folderId,this.ownerId)
+        .getBreadCrumbs(this.actualFolderId,this.ownerId,this.folderPath)
         .then(breadCrumbs => {this.documentsBreadcrumb = breadCrumbs;
           this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;})
         .finally(() => this.loading = false);
