@@ -23,7 +23,13 @@ export default {
   methods: {
     copyLink() {
       const inputTemp = $('<input>');
-      const path = `${window.location.href}?documentPreviewId=${this.file.id}`;
+      const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+      let path = `${pathParts[0]}${eXo.env.portal.selectedNodeUri}`;
+      if (this.file.folder){
+        path = `${path}?folderId=${this.file.id}`;
+      } else {
+        path = `${path}?documentPreviewId=${this.file.id}`;
+      }
       $('body').append(inputTemp);
       inputTemp.val(path).select();
       document.execCommand('copy');

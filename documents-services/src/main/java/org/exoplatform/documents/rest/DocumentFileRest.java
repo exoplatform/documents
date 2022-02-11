@@ -86,6 +86,9 @@ public class DocumentFileRest implements ResourceContainer {
                                    @ApiParam(value = "Parent folder technical identifier", required = false)
                                    @QueryParam("parentFolderId")
                                    String parentFolderId,
+                                   @ApiParam(value = "Parent folder path", required = false)
+                                   @QueryParam("folderPath")
+                                   String folderPath,
                                    @ApiParam(value = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.", required = false)
                                    @QueryParam("listingType")
                                    FileListingType listingType,
@@ -121,6 +124,7 @@ public class DocumentFileRest implements ResourceContainer {
     try {
       DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId, favorites)
                                                                           : new DocumentFolderFilter(parentFolderId,
+                                                                                                     folderPath,
                                                                                                      ownerId,
                                                                                                      favorites);
       filter.setQuery(query);
@@ -206,14 +210,17 @@ public class DocumentFileRest implements ResourceContainer {
   Long ownerId,
                                 @ApiParam(value = "Folder technical identifier", required = false)
                                 @QueryParam("folderId")
-                                String folderId) {
+                                String folderId,
+                                @ApiParam(value = "Folder path", required = false)
+                                @QueryParam("folderPath")
+                                String folderPath) {
 
     if (ownerId == null && StringUtils.isBlank(folderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-      return Response.ok(EntityBuilder.toBreadCrumbItemEntities(documentFileService.getBreadcrumb(ownerId, folderId, userIdentityId)))
+      return Response.ok(EntityBuilder.toBreadCrumbItemEntities(documentFileService.getBreadcrumb(ownerId, folderId, folderPath, userIdentityId)))
                      .build();
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();

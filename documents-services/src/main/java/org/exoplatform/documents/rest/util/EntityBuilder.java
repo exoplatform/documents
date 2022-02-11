@@ -147,7 +147,7 @@ public class EntityBuilder {
 
   public static List<BreadCrumbItemEntity> toBreadCrumbItemEntities(List<BreadCrumbItem> folders) {
     List<BreadCrumbItemEntity>  brList = new ArrayList<BreadCrumbItemEntity>();
-    brList = folders.stream().map(document -> new BreadCrumbItemEntity(document.getId(), document.getName())).collect(Collectors.toList());
+    brList = folders.stream().map(document -> new BreadCrumbItemEntity(document.getId(), document.getName(), document.getPath())).collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;
   }
@@ -169,6 +169,11 @@ public class EntityBuilder {
       nodeEntity.setCreatedDate(node.getCreatedDate());
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
+
+      if ((node instanceof FolderNode)) {
+        ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());
+      }
+
       if (expandProperties.contains("creator")) {
         nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
       }
@@ -246,7 +251,7 @@ public class EntityBuilder {
                                                            AbstractNode node,
                                                            long authenticatedUserId){
     try {
-      return toBreadCrumbItemEntities(documentFileService.getBreadcrumb(0, node.getId(),authenticatedUserId));
+      return toBreadCrumbItemEntities(documentFileService.getBreadcrumb(0, node.getId(),"",authenticatedUserId));
     } catch (IllegalAccessException e) {
       LOG.error("Cannot get folder breadcrumb, Current user is not allowed to access the folder");
     } catch (ObjectNotFoundException e) {

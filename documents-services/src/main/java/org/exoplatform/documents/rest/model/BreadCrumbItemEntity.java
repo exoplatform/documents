@@ -32,4 +32,5 @@ import lombok.Data;
 public class BreadCrumbItemEntity {
   private String                                id;
   private String                                name;
+  private String                                path;
 }

@@ -115,6 +115,6 @@ public interface DocumentFileService {
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
-  List<BreadCrumbItem> getBreadcrumb(long ownerId,String folderId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+  List<BreadCrumbItem> getBreadcrumb(long ownerId,String folderId, String folderPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
 
 }
