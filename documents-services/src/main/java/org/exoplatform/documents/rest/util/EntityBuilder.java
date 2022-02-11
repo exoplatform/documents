@@ -119,7 +119,6 @@ public class EntityBuilder {
     fileEntity.setVersionnedFileId(file.getVersionnedFileId());
     fileEntity.setMimeType(file.getMimeType());
     fileEntity.setSize(file.getSize());
-    fileEntity.setPath(file.getPath());
     if (expandProperties.contains("versions")) {
       // TODO (documentFileService.getFileVersions) think of using limit of file
       // versions to retrieve
@@ -167,10 +166,14 @@ public class EntityBuilder {
       nodeEntity.setDatasource(node.getDatasource());
       nodeEntity.setDescription(node.getDescription());
       nodeEntity.setAcl(node.getAcl());
-      nodeEntity.setPath(node.getPath());
       nodeEntity.setCreatedDate(node.getCreatedDate());
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
+
+      if ((node instanceof FolderNode)) {
+        ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());
+      }
+
       if (expandProperties.contains("creator")) {
         nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
       }

@@ -61,5 +61,4 @@ public class AbstractNodeEntity {
   
   private boolean                               isFavorite;
 
-  private String                                path;
 }

@@ -164,7 +164,9 @@ public class JCRDocumentsUtil {
       }
       FolderNode folderNode = new FolderNode();
       folderNode.setDatasource(JCR_DATASOURCE_NAME);
+      folderNode.setPath(node.getPath());
       retrieveFileProperties(identityManager, node, aclIdentity, folderNode);
+
       return folderNode;
     } catch (Exception e) {
       try {
@@ -251,7 +253,6 @@ public class JCRDocumentsUtil {
                                             AbstractNode documentNode) throws RepositoryException {
     documentNode.setId(((NodeImpl) node).getIdentifier());
     documentNode.setParentFolderId(((NodeImpl) node.getParent()).getIdentifier());
-    documentNode.setPath(node.getPath());
     if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
       documentNode.setName(node.getProperty(NodeTypeConstants.EXO_TITLE).getString());
     } else {
