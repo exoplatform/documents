@@ -9,7 +9,7 @@
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.duplicate') }}</span>
     <v-divider
-      v-if="!isMobile"
+      v-if="!file.folder"
       class="mt-2 dividerStyle" />
   </div>
 </template>
