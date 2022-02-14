@@ -53,7 +53,7 @@ export default {
       this.tab = 1;
     } else {
       const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-      if (pathParts.length>1){
+      if (pathParts.length>1 && pathParts[1]){
         this.tab = 1;
       }
     }
