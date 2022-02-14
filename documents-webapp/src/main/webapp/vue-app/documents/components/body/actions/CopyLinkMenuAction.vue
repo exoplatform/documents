@@ -23,7 +23,7 @@ export default {
   methods: {
     copyLink() {
       const inputTemp = $('<input>');
-      const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+      const pathParts = window.location.href.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
       let path = `${pathParts[0]}${eXo.env.portal.selectedNodeUri}`;
       if (this.file.folder){
         path = `${path}?folderId=${this.file.id}`;
