@@ -2,7 +2,7 @@
   <div
     class="d-flex flex-nowrap">
     <a
-      class="attachment d-flex flex-nowrap text-color openPreviewDoc width-full">
+      class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-full">
       <v-progress-circular
         v-if="loading"
         indeterminate
@@ -10,21 +10,20 @@
       <v-icon
         v-else
         size="22"
-        @click="openPreview"
         :color="icon.color">{{ icon.class }}</v-icon>
       <div class="width-full">
         <div
           v-if="!editNameMode"
           @click="openPreview"
-          class="document-title d-inline-flex"
+          class="document-title clickable hover-underline d-inline-flex"
           :title="file.name">
           <div
             v-sanitized-html="fileName"
-            class="document-name text-truncate hover-underline ms-4">
+            class="document-name text-truncate ms-4">
           </div>
           <div
             v-sanitized-html="fileType"
-            class="document-type hover-underline ms-0">
+            class="document-type ms-0">
           </div>
         </div>
 
@@ -53,16 +52,20 @@
       class="position-relative">
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
-          <v-icon
-            v-show="isMobile || menuDisplayed"
-            :size="isMobile ? 14 : 18"
-            class="clickable text-sub-title"
-            :class="editNameMode || drawerDetails ? '' : 'button-document-action'"
+          <v-btn
+            icon
+            small
             v-bind="attrs"
-            v-on="on"
-            @click="displayActionMenu">
-            mdi-dots-vertical
-          </v-icon>
+            v-on="on">
+            <v-icon
+              v-show="isMobile || menuDisplayed"
+              :size="isMobile ? 14 : 18"
+              class="clickable text-sub-title"
+              :class="editNameMode || drawerDetails ? '' : 'button-document-action'"
+              @click="displayActionMenu">
+              mdi-dots-vertical
+            </v-icon>
+          </v-btn>
           <v-menu
             v-model="menuDisplayed"
             :attach="`#document-action-menu-cel-${file.id}`"

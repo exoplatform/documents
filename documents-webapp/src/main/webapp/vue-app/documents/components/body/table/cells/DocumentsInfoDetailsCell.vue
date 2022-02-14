@@ -2,14 +2,20 @@
   <div :id="`info-cell-file-${fileId}`">
     <v-tooltip bottom>
       <template v-slot:activator="{ on, attrs }">
-        <v-icon
-          class="text-sub-title d-none px-3"
-          size="16"
-          @click="$emit('open-info-drawer')"
+        <v-btn
+          icon
+          small
           v-bind="attrs"
           v-on="on">
-          fa-info-circle
-        </v-icon>
+          <v-icon
+            class="text-sub-title d-none mx-0 px-0"
+            size="16"
+            @click="$emit('open-info-drawer')"
+            v-bind="attrs"
+            v-on="on">
+            fa-info-circle
+          </v-icon>
+        </v-btn>
       </template>
       <span>
         {{ documentInfoActionTooltip }}
