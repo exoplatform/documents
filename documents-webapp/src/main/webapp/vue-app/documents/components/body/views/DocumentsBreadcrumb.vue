@@ -104,7 +104,7 @@ export default {
   created() {
     this.$root.$on('set-breadcrumb', data => {
       this.folderPath='';
-      if (data.length>0){
+      if (data && data.length>0){
         this.documentsBreadcrumb= data;
         this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
       } else {

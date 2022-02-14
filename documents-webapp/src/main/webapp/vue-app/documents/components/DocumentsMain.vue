@@ -180,12 +180,16 @@ export default {
       this.refreshFiles();
       this.$root.$emit('set-breadcrumb', parentFolder.breadcrumb);
       let folderPath ='';
-      let pathParts = parentFolder.path.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-      if (pathParts.length>1){
-        folderPath = pathParts[1];
+      if (eXo.env.portal.spaceName){
+        let newParentPath = parentFolder.path;
+        newParentPath = newParentPath.replace(`/spaces/${eXo.env.portal.spaceGroup}`, `/spaces/${eXo.env.portal.spaceGroup}/${eXo.env.portal.spaceName}`);
+        let pathParts = newParentPath.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+        if (pathParts.length>1){
+          folderPath = pathParts[1];
+        }
+        pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}`);
       }
-      pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-      window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}`);
     },
     loadMore() {
       this.limit += this.pageSize;
