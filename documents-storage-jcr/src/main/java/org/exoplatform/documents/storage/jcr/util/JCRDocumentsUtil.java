@@ -164,7 +164,9 @@ public class JCRDocumentsUtil {
       }
       FolderNode folderNode = new FolderNode();
       folderNode.setDatasource(JCR_DATASOURCE_NAME);
+      folderNode.setPath(node.getPath());
       retrieveFileProperties(identityManager, node, aclIdentity, folderNode);
+
       return folderNode;
     } catch (Exception e) {
       try {

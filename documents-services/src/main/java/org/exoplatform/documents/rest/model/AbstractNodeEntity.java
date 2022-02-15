@@ -60,4 +60,5 @@ public class AbstractNodeEntity {
   private Map<String, List<MetadataItemEntity>> metadatas;
   
   private boolean                               isFavorite;
+
 }

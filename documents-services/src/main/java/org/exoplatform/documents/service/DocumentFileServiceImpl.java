@@ -185,8 +185,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileStorage.getBreadcrumb(ownerId, folderId, getAclUserIdentity(authenticatedUserId));
+  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, String folderPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getBreadcrumb(ownerId, folderId, folderPath, getAclUserIdentity(authenticatedUserId));
   }
 
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{

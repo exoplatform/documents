@@ -147,6 +147,7 @@ public class DocumentFileRestTest {
 
     Response response1 = documentFileRest.getDocumentItems(null,
                                                            null,
+                                                           null,
                                                            FileListingType.TIMELINE,
                                                            null,
                                                            false,
@@ -157,10 +158,11 @@ public class DocumentFileRestTest {
                                                            0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null, null, null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null,null, null, null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
                                                            null,
                                                            FileListingType.TIMELINE,
                                                            null,
@@ -204,6 +206,7 @@ public class DocumentFileRestTest {
     metadataItems.add(metadataItem);
     when(metadataService.getMetadataItemsByObject(any())).thenReturn(metadataItems);
     Response response4 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
                                                            null,
                                                            FileListingType.TIMELINE,
                                                            null,
@@ -302,7 +305,7 @@ public class DocumentFileRestTest {
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
     DocumentFolderFilter filter = null;
-    filter = new DocumentFolderFilter(null,currentOwnerId, false);
+    filter = new DocumentFolderFilter(null,null,currentOwnerId, false);
     filter.setSortField(DocumentSortField.NAME);
     IdentityEntity identity1 = new IdentityEntity();
     IdentityEntity identity2 = new IdentityEntity("3", "userb", null, "organization", "spacetest");
@@ -376,6 +379,7 @@ public class DocumentFileRestTest {
 
     Response response1 = documentFileRest.getDocumentItems(null,
                                                            null,
+                                                           null,
                                                            FileListingType.FOLDER,
                                                            null,
                                                            false,
@@ -386,10 +390,11 @@ public class DocumentFileRestTest {
                                                            0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(null, "2", FileListingType.FOLDER, null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(null, "2", null, FileListingType.FOLDER, null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
                                                            null,
                                                            FileListingType.FOLDER,
                                                            null,
@@ -432,8 +437,8 @@ public class DocumentFileRestTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1");
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2");
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1","");
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2","");
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
@@ -451,18 +456,18 @@ public class DocumentFileRestTest {
     List<BreadCrumbItemEntity> breadCrumbItemEntities = new ArrayList<>();
 
 
-    when(documentFileStorage.getBreadcrumb(2,"Folder1",userID)).thenReturn(breadCrumbItems);
+    when(documentFileStorage.getBreadcrumb(2,"Folder1","",userID)).thenReturn(breadCrumbItems);
 
     Response response1 = documentFileRest.getBreadcrumb(null,
-            null);
+            null,"");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1");
+    Response response2 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1","");
 
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    Response response3 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1");
+    Response response3 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1","");
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
     breadCrumbItemEntities = (List<BreadCrumbItemEntity>) response3.getEntity();
     assertEquals(breadCrumbItemEntities.size(), 4);

@@ -28,6 +28,7 @@ import java.util.List;
 public class FolderNodeEntity extends AbstractNodeEntity {
 
   private List<BreadCrumbItemEntity> breadcrumb;
+  private String                     path;
   public FolderNodeEntity() {
     super(true);
   }
