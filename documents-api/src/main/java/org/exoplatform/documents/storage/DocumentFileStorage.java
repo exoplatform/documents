@@ -86,6 +86,6 @@ public interface DocumentFileStorage {
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
-  List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+  List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, String folderPath, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
 }

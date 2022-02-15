@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -199,6 +200,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                 int limit) throws IllegalAccessException, ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     String parentFolderId = filter.getParentFolderId();
+    String folderPath = filter.getFolderPath();
     SessionProvider sessionProvider = null;
     try {
       Node parent = null;
@@ -212,6 +214,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parentFolderId = ((NodeImpl) parent).getIdentifier();
       } else {
         parent = getNodeByIdentifier(session, parentFolderId);
+      }
+      if(StringUtils.isNotBlank(folderPath)){
+        try {
+          parent = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+        } catch (RepositoryException repositoryException) {
+          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+        }
       }
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
@@ -248,7 +257,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, Identity aclIdentity) throws IllegalAccessException,
+  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, String folderPath, Identity aclIdentity) throws IllegalAccessException,
                                                                                ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
@@ -265,9 +274,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, folderId);
       }
+      if(StringUtils.isNotBlank(folderPath)){
+        try {
+          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+        } catch (RepositoryException repositoryException) {
+          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+        }
+      }
       String homePath = "";
       if (node != null) {
-        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName()));
+        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), node.getPath()));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -276,7 +292,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           try {
             node = node.getParent();
             if (node != null) {
-              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName()));
+              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), node.getPath()));
             }
           } catch (RepositoryException repositoryException) {
             node = null;
