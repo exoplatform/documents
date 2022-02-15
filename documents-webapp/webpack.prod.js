@@ -23,6 +23,7 @@ const config = {
   },
   entry: {
     documents: './src/main/webapp/vue-app/documents/main.js',
+    documentsSnackbarComponent :'./src/main/webapp/vue-app/snackbar/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
