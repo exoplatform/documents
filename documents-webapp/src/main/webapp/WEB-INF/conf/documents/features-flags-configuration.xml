@@ -24,6 +24,17 @@
             </properties-param>
         </init-params>
     </component>
+    <component>
+        <key>DuplicateActionFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>DuplicateActionFeatureProperties</name>
+                <description>Documents Duplicate Action Feature enablement flag</description>
+                <property name="exo.feature.DocumentsDuplicateAction.enabled" value="${exo.feature.DocumentsDuplicateAction.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
 
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
