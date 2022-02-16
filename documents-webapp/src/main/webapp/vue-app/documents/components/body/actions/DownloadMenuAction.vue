@@ -26,6 +26,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    spaceId() {
+      return eXo.env.portal.spaceId;
+    },
   },
   methods: {
     download() {
@@ -57,6 +60,13 @@ export default {
             document.body.appendChild(a);
             a.click();
             a.remove();
+            document.dispatchEvent(new CustomEvent('download-file', {
+              detail: {
+                'type': 'file',
+                'id': this.file.id,
+                'spaceId': this.spaceId,
+              }
+            }));
           });
         });
       if ( this.isMobile ) {
