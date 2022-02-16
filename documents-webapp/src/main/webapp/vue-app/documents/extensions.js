@@ -117,18 +117,20 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
-extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-  id: 'duplicate',
-  labelKey: 'documents.label.duplicate',
-  align: 'center',
-  sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '190px',
-  rank: 40,
-  componentOptions: {
-    vueComponent: Vue.options.components['duplicate-menu-action'],
-  },
-});
+if (eXo.env.portal.filesDuplicateActionEnabled) {
+  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+    id: 'duplicate',
+    labelKey: 'documents.label.duplicate',
+    align: 'center',
+    sortable: true,
+    cssClass: 'font-weight-bold text-no-wrap',
+    width: '190px',
+    rank: 40,
+    componentOptions: {
+      vueComponent: Vue.options.components['duplicate-menu-action'],
+    },
+  });
+}
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'download',
