@@ -33,6 +33,7 @@
           :loading="loading"
           :query="query"
           :primary-filter="primaryFilter" />
+        <exo-document-notification-alerts />
       </div>
     </div>
     <v-alert

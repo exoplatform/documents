@@ -30,6 +30,7 @@ import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
 import CopyLinkMenuAction from './components/body/actions/CopyLinkMenuAction.vue';
 import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue';
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
+import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 
 const components = {
@@ -63,6 +64,7 @@ const components = {
   'duplicate-menu-action': DuplicateMenuAction,
   'copy-link-menu-action': CopyLinkMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
+  'delete-menu-action': DeleteMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,

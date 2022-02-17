@@ -158,6 +158,19 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'delete',
+  labelKey: 'documents.label.delete',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  componentOptions: {
+    vueComponent: Vue.options.components['delete-menu-action'],
+  },
+});
+
 /*extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   id: 'size',
   labelKey: 'documents.label.fileSize',
