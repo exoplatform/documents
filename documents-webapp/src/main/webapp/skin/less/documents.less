@@ -174,7 +174,8 @@
         }
       }
 
-      .documents-table {
+
+      .documents-table,.documents-folder-table {
         tbody {
           tr:hover button.v-icon.mdi-dots-vertical.button-document-action {
             display: flex !important;
@@ -277,6 +278,13 @@
       }
     }
 
+    .documents-table {
+      tbody {
+        .v-data-table__mobile-table-row > :first-child {
+          display: none;
+        }
+      }
+    }
     .v-data-table__wrapper {
       padding-bottom: 28px;
 
@@ -291,10 +299,6 @@
       }
 
       .v-data-table__mobile-row__header {
-        display: none;
-      }
-
-      .v-data-table__mobile-table-row > :first-child {
         display: none;
       }
 
