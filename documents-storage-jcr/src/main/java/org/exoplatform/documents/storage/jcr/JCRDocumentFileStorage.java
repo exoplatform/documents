@@ -17,7 +17,11 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFileNode;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -59,6 +63,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final String                         DATE_FORMAT   = "yyyy-MM-dd";
   private final String                         SPACE_PATH_PREFIX   = "/Groups/spaces/";
   private final SimpleDateFormat               formatter     = new SimpleDateFormat(DATE_FORMAT);
+  public  final String                         PREFIX_CLONE = "Copy of ";
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -307,6 +312,65 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
     return parents;
+  }
+
+  @Override
+  public AbstractNode duplicateDocument(long ownerId, String fileId, Identity aclIdentity) throws IllegalAccessException,
+          ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    Node newNode = null;
+    try {
+      Node oldNode = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(fileId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        oldNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        fileId = ((NodeImpl) oldNode).getIdentifier();
+      } else {
+        oldNode = getNodeByIdentifier(session, fileId);
+      }
+      Node parentNode = oldNode.getParent();
+
+      if (oldNode != null) {
+        newNode = parentNode.addNode(PREFIX_CLONE + oldNode.getName(), NodeTypeConstants.NT_FILE);
+
+        if(!newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
+        newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
+
+        if(!newNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE))
+          newNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
+
+        if(!newNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE))
+          newNode.addMixin(NodeTypeConstants.MIX_COMMENTABLE);
+
+        if(!newNode.isNodeType(NodeTypeConstants.MIX_VOTABLE))
+          newNode.addMixin(NodeTypeConstants.MIX_VOTABLE);
+
+        if(!newNode.isNodeType(NodeTypeConstants.MIX_I18N))
+          newNode.addMixin(NodeTypeConstants.MIX_I18N);
+
+        newNode.setProperty(NodeTypeConstants.EXO_TITLE, PREFIX_CLONE + oldNode.getName());
+        Node resourceNode = newNode.addNode(NodeTypeConstants.JCR_CONTENT, NodeTypeConstants.NT_RESOURCE);
+
+        Calendar now = Calendar.getInstance();
+        resourceNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, now);
+        resourceNode.setProperty(NodeTypeConstants.JCR_DATA, oldNode.getNode(NodeTypeConstants.JCR_CONTENT).getProperty(NodeTypeConstants.JCR_DATA).getStream());
+        resourceNode.setProperty(NodeTypeConstants.JCR_MIME_TYPE, oldNode.getNode(NodeTypeConstants.JCR_CONTENT).getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
+        resourceNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+         }
+      parentNode.save();
+      return toFileNode(identityManager, aclIdentity, parentNode);
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+
   }
 
   private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {

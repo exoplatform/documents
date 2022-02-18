@@ -96,4 +96,10 @@ public class NodeTypeConstants {
 
   public static final String EXO_WORKSPACE          = "exo:workspace";
 
+  public static final String MIX_I18N               = "mix:i18n";
+
+  public static final String MIX_VOTABLE          = "mix:votable";
+
+  public static final String MIX_COMMENTABLE          = "mix:commentable";
+
 }

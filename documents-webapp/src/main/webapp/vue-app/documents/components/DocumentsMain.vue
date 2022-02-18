@@ -74,6 +74,7 @@ export default {
     alert: false,
     alertType: '',
     message: '',
+    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
   computed: {
     filesLoad(){
@@ -107,6 +108,7 @@ export default {
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
+    this.$root.$on('duplicate-document', this.duplicateDocument);
     this.$root.$on('document-search', this.search);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-filter', filter => {
@@ -174,6 +176,15 @@ export default {
       this.query = query;
 
       this.refreshFiles();
+    },
+    duplicateDocument(document){
+      this.parentFolderId = document.id;
+      return this.$documentFileService
+        .duplicateDocument(this.parentFolderId,this.ownerId)
+        .then( () => {
+          this.refreshFiles();
+          this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
+        }).catch(e => console.error(e));
     },
     openFolder(parentFolder) {
       this.folderPath='';

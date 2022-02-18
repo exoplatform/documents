@@ -189,6 +189,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getBreadcrumb(ownerId, folderId, folderPath, getAclUserIdentity(authenticatedUserId));
   }
 
+  @Override
+  public AbstractNode duplicateDocument(long ownerId, String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.duplicateDocument(ownerId, fileId, getAclUserIdentity(authenticatedUserId));
+  }
+
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
     Identity userIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
     if (userIdentity == null) {
