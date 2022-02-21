@@ -19,10 +19,7 @@ package org.exoplatform.documents.rest;
 import java.util.List;
 
 import javax.annotation.security.RolesAllowed;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
@@ -228,6 +225,51 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.warn("Error retrieving breadcrumb", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @POST
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/duplicate")
+  @ApiOperation(value = "POST DUPLICATE of given .", httpMethod = "POST", response = Response.class, produces = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+          @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
+          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
+  public Response duplicateDocument(@ApiParam(value = "Identity technical identifier", required = false)
+                                @QueryParam("ownerId")
+                                        Long ownerId,
+                                @ApiParam(value = "File technical identifier", required = false)
+                                @QueryParam("fileId")
+                                        String fileId,
+                                @ApiParam(value = "File properties to expand.", required = false)
+                                @QueryParam("expand")
+                                         String expand) {
+
+    if (ownerId == null && StringUtils.isBlank(fileId)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_FileID_is_mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      AbstractNode abstractNode = documentFileService.duplicateDocument(ownerId, fileId, userIdentityId);
+      AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
+              identityManager,
+              spaceService,
+              metadataService,
+              abstractNode,
+              expand,
+              userIdentityId);
+      return Response.ok(abstractNodeEntity)
+              .build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving duplicate file", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }

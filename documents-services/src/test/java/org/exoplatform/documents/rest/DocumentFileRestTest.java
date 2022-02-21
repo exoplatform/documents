@@ -476,5 +476,56 @@ public class DocumentFileRestTest {
 
   }
 
+  @Test
+  public void testDuplicateDocument() throws Exception {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+
+    FileNode file1 = new FileNode();
+    file1.setId("1");
+    file1.setName("oldFile");
+    file1.setDatasource("datasource");
+    file1.setMimeType(":file");
+    file1.setSize(50);
+
+    FileNode file2 = new FileNode();
+    file2.setId("2");
+    file2.setName("Copy of oldFile");
+    file2.setDatasource("datasource");
+    file2.setMimeType(":file");
+    file2.setSize(50);
+
+    when(documentFileStorage.duplicateDocument(2,"oldFile",userID)).thenReturn(file2);
+
+
+    Response response1 = documentFileRest.duplicateDocument(null,
+            null,"");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
+
+    Response response2 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile","");
+
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    Response response3 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile","");
+    assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
+    AbstractNodeEntity fileNode = (AbstractNodeEntity) response3.getEntity();
+    assertEquals(fileNode.getName(), "Copy of oldFile");
+    assertEquals(fileNode.getId(),"2");
+
+  }
+
 
 }

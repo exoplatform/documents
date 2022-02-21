@@ -57,6 +57,29 @@ export function getBreadCrumbs(folderId,ownerId,folderPath) {
 
 }
 
+export function duplicateDocument(fileId,ownerId) {
+  const formData = new FormData();
+
+  if (fileId) {
+    formData.append('fileId', fileId);
+  }
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/duplicate?${params}`, {
+    method: 'post',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.json();
+    }
+  });
+
+}
+
 export function renameFile(newTitle,oldPath) {
   const formData = new FormData();
   if (oldPath) {
