@@ -14,6 +14,17 @@
         </init-params>
     </component>
     <component>
+        <key>FolderActionFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>FolderActionFeatureProperties</name>
+                <description>Folder Action Feature enablement flag</description>
+                <property name="exo.feature.FolderAction.enabled" value="${exo.feature.FolderAction.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
+    <component>
         <key>FolderViewFeatureProperties</key>
         <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
         <init-params>
