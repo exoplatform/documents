@@ -49,6 +49,7 @@
       @open-info-drawer="openInfoDetailsDrawer" />
     <div
       :id="`document-action-menu-cel-${file.id}`"
+      v-if="displayAction"
       class="position-relative">
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
@@ -115,6 +116,9 @@ export default {
   computed: {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs';
+    },
+    displayAction(){
+      return !this.file.folder || (this.file.folder && eXo.env.portal.folderActionEnabled);
     },
     icon() {
       if (this.file && this.file.folder){
