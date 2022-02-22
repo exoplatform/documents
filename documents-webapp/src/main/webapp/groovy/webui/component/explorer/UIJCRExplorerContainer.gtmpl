@@ -14,9 +14,10 @@
     addScripts("ecmutil.ECMUtils.onDbClickOnTreeExplorer();").
     addScripts("ecmutil.ECMUtils.init('UIJCRExplorerPortlet');").
     addScripts("eXo.session.itvInit();");
+    jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("app.removeClass();");
   }
 %>
-<div class="$uicomponent.id VuetifyApp" id="$uicomponent.id">
+<div class="$uicomponent.id" id="$uicomponent.id">
   <%
   if (uicomponent.isNewDocumentsFeatureEnabled()) {
     _ctx.include("app:/groovy/webui/component/explorer/UIDocumentsFeatureSwitch.gtmpl");

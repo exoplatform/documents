@@ -38,4 +38,16 @@ export function init() {
       i18n
     }, `#${appId}`, 'Documents');
   });
+  //Temporarily used to add VuetifyApp class on new documents view
+  if ( !document.getElementById('UIJcrExplorerContainer').classList.contains('VuetifyApp') ){
+    document.getElementById('UIJcrExplorerContainer').classList.add('VuetifyApp');
+  }
 }
+
+//Temporarily used to remove VuetifyApp class on old documents view
+export function removeClass() {
+  if ( document.getElementById('UIJcrExplorerContainer').classList.contains('VuetifyApp') ){
+    document.getElementById('UIJcrExplorerContainer').classList.remove('VuetifyApp');
+  }
+}
+
