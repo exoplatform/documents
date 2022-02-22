@@ -1,6 +1,7 @@
 <template>
   <div class="documents-breadcrumb-wrapper">
     <div v-if="documentsBreadcrumb && documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
+      <v-icon class="text-sub-title pe-2" size="16">fas fa-sitemap</v-icon>
       <div
         v-for="(documents, index) in documentsBreadcrumb"
         :key="index"
@@ -23,7 +24,7 @@
                 :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-color' || 'text-sub-title not-clickable'">{{ documents.name }}</a>
             </v-btn>
           </template>
-          <span class="caption">{{ documents.name }}</span>
+          <span class="caption breadcrumbName">{{ documents.name }}</span>
         </v-tooltip>
         <v-icon v-if="index < documentsBreadcrumb.length-1" size="18">mdi-chevron-right</v-icon>
       </div>
@@ -117,7 +118,7 @@ export default {
     if (queryParams.has('folderId')) {
       this.actualFolderId = queryParams.get('folderId');
     } else {
-      const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+      const pathParts  = document.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
       if (pathParts.length>1){
         this.folderPath = pathParts[1];
       }

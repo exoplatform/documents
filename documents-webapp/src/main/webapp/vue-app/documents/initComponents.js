@@ -6,6 +6,7 @@ import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile
 import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
 import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
+import DocumentsNoBodyFolder from './components/body/DocumentsNoBodyFolder.vue';
 import DocumentsNoResultBody from './components/body/DocumentsNoResultBody.vue';
 import DocumentsTimelineView from './components/body/views/DocumentsTimelineView.vue';
 import DocumentsFolderView from './components/body/views/DocumentsFolderView.vue';
@@ -42,6 +43,7 @@ const components = {
   'documents-filter': DocumentsFilter,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
+  'documents-no-body-folder': DocumentsNoBodyFolder,
   'documents-no-result-body': DocumentsNoResultBody,
   'documents-folder-view': DocumentsFolderView,
   'documents-timeline-view': DocumentsTimelineView,
