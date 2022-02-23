@@ -158,11 +158,7 @@ export default {
       this.parentFolderId = queryParams.get('folderId');
       this.selectedView = 'folder';
     } else {
-      const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-      if (pathParts.length>1){
-        this.folderPath = pathParts[1];
-        this.selectedView = 'folder';
-      }
+      this.getFolderPath();
     }
     this.refreshFiles().then(() => {
       this.watchDocumentPreview();
@@ -183,11 +179,20 @@ export default {
 
       this.refreshFiles();
     },
-    duplicateDocument(document){
-      this.parentFolderId = document.id;
+    getFolderPath(){
+      const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+      if (pathParts.length>1){
+        this.folderPath = pathParts[1];
+        this.selectedView = 'folder';
+      }
+    },
+    duplicateDocument(documents){
+      this.parentFolderId = documents.id;
       return this.$documentFileService
         .duplicateDocument(this.parentFolderId,this.ownerId)
         .then( () => {
+          this.parentFolderId=null;
+          this.getFolderPath();
           this.refreshFiles();
           this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
         }).catch(e => console.error(e));
