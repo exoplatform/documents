@@ -11,12 +11,6 @@
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else-if="!filesLoad && !loadingFiles && selectedView == 'folder' ">
-        <documents-header-left
-          class="py-2" />
-        <documents-no-body-folder
-          :is-mobile="isMobile" />
-      </div>
       <div v-else-if="!filesLoad && !loadingFiles">
         <documents-header-left
           class="py-2" />
@@ -39,7 +33,6 @@
           :loading="loading"
           :query="query"
           :primary-filter="primaryFilter" />
-        <exo-document-notification-alerts />
       </div>
     </div>
     <v-alert
@@ -67,6 +60,7 @@ export default {
     loading: false,
     hasMore: false,
     viewExtensions: {},
+    currentFolderPath: '',
     groupsSizes: {
       'thisDay': 0,
       'thisWeek': 0,
@@ -80,7 +74,9 @@ export default {
     alert: false,
     alertType: '',
     message: '',
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
+    attachmentAppConfiguration: {
+      'sourceApp': 'NEW.APP',
+    }
   }),
   computed: {
     filesLoad(){
@@ -114,7 +110,11 @@ export default {
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
-    this.$root.$on('duplicate-document', this.duplicateDocument);
+    this.$root.$on('documents-add-folder', this.addFolder);
+    this.$root.$on('documents-create-folder', this.createFolder);
+    this.$root.$on('documents-open-drawer', this.openDrawer);
+    this.$root.$on('set-current-folder-url', this.setFolderUrl);
+    this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-filter', filter => {
@@ -182,15 +182,6 @@ export default {
       this.query = query;
 
       this.refreshFiles();
-    },
-    duplicateDocument(document){
-      this.parentFolderId = document.id;
-      return this.$documentFileService
-        .duplicateDocument(this.parentFolderId,this.ownerId)
-        .then( () => {
-          this.refreshFiles();
-          this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
-        }).catch(e => console.error(e));
     },
     openFolder(parentFolder) {
       this.folderPath='';
@@ -311,6 +302,50 @@ export default {
 
       // Start observing the target node for configured mutations
       observer.observe(bodyElement, config);
+    },
+    addFolder(){
+      const newFolder={
+        'id': -1,
+        'name': 'new folder',
+        'folder': true
+      };
+      this.files.unshift(newFolder);
+    },
+    cancelAddFolder(folder){
+      this.files.splice(this.files.indexOf(folder), 1);
+    },
+    createFolder(name){
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name) 
+        .then( () => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
+    openDrawer() {
+
+      let attachmentAppConfiguration = {
+        'sourceApp': 'NEW.APP'
+      };
+      if (eXo.env.portal.spaceName){
+        const pathparts = eXo.env.server.portalBaseURL.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        if (pathparts.length>1){
+          attachmentAppConfiguration= {
+            'sourceApp': 'NEW.APP',
+            'defaultFolder': decodeURI(pathparts[1]),
+            'defaultDrive': {
+              isSelected: true,
+              name: `.spaces.${eXo.env.portal.spaceGroup}`,
+              title: eXo.env.portal.spaceDisplayName,
+            }
+          };
+        }
+      }
+      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
+    },
+    setFolderUrl(url) {
+      this.currentFolderPath=url;
     },
     displayMessage(message) {
       this.message = message.message;

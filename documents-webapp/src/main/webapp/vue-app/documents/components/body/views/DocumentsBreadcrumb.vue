@@ -100,6 +100,7 @@ export default {
     documentsBreadcrumb: [],
     actualFolderId: '',
     folderPath: '',
+    currentFolderPath: '',
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
   created() {
@@ -108,6 +109,8 @@ export default {
       if (data && data.length>0){
         this.documentsBreadcrumb= data;
         this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
+        this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
+        this.$root.$emit('set-current-folder-url', this.currentFolderPath);
       } else {
         this.getBreadCrumbs();
       }
@@ -123,9 +126,7 @@ export default {
         this.folderPath = pathParts[1];
       }
     }
-
-    this.getBreadCrumbs();
-    
+    this.getBreadCrumbs();   
   },
   methods: {
     openFolder(folder) {
@@ -141,7 +142,10 @@ export default {
       return this.$documentFileService
         .getBreadCrumbs(this.actualFolderId,this.ownerId,this.folderPath)
         .then(breadCrumbs => {this.documentsBreadcrumb = breadCrumbs;
-          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;})
+          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
+          this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
+          this.$root.$emit('set-current-folder-url', this.currentFolderPath);
+        })
         .finally(() => this.loading = false);
     },
   }

@@ -21,8 +21,7 @@ import static org.junit.Assert.*;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -528,4 +527,39 @@ public class DocumentFileRestTest {
   }
 
 
+  @Test
+  public void testCreateFolder() throws Exception {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+
+    Response response = documentFileRest.createFolder(null,null,null,"");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("either_ownerId_or_parentid_is_mandatory", response.getEntity());
+
+    response = documentFileRest.createFolder("11111111",null,null,"");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("Folder Name should not be empty", response.getEntity());
+
+    response = documentFileRest.createFolder("11111111",null,null,"222");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("Folder Name should not be number", response.getEntity());
+
+    doNothing().when(documentFileStorage).createFolder(2L, "11111111", null, "test", userID);
+    response = documentFileRest.createFolder("11111111",null,2L,"test");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
 }

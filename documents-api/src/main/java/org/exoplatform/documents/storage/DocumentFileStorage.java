@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage;
 
 import java.util.List;
 
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.services.security.Identity;
@@ -100,4 +101,6 @@ public interface DocumentFileStorage {
    */
   AbstractNode duplicateDocument(long ownerId, String fileId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
+  void createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
+                                                                               ObjectNotFoundException;
 }

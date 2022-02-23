@@ -256,6 +256,29 @@
     }
   }
 
+  .documents-header-left-action {
+    #addItemMenu {
+      font-weight: normal !important;
+      height: 38px;
+      width: 129px;
+
+      .add-menu-btn {
+        left: 11px !important;
+        right: 20px;
+        top: 60px !important;
+        background: white;
+        width: 129px !important;
+      }
+      #addBtn {
+        &:focus {
+          &::after {
+            opacity: 0 !important;
+          }
+        }
+      }
+    }
+  }
+
   .documents-application.mobile {
     margin-top: 0;
 

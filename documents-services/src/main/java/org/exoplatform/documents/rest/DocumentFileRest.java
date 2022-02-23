@@ -24,6 +24,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import org.apache.commons.lang.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.common.http.HTTPStatus;
@@ -38,6 +39,8 @@ import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.resource.ResourceContainer;
+import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.MetadataService;
@@ -274,4 +277,36 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
-}
+  @POST
+  @Path("/folder")
+  @RolesAllowed("users")
+  @ApiOperation(value = "Add a new Folder", httpMethod = "POST", response = Response.class, notes = "This adds a new Folder under givin Folder.")
+  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
+          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
+          @ApiResponse(code = 404, message = "Resource not found")})
+  public Response createFolder (@ApiParam(value = "parentid", required = false) @QueryParam("parentid") String parentid,
+                                @ApiParam(value = "folderPath", required = false) @QueryParam("folderPath") String folderPath,
+                                @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
+                                @ApiParam(value = "folder name", required = false) @QueryParam("name") String name) {
+
+    if (ownerId == null && StringUtils.isBlank(parentid)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_parentid_is_mandatory").build();
+    }
+    if (StringUtils.isEmpty(name)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Folder Name should not be empty").build();
+    }
+    if (NumberUtils.isNumber(name)) {
+      LOG.warn("Folder Name should not be number");
+      return Response.status(Response.Status.BAD_REQUEST).entity("Folder Name should not be number").build();
+    }
+    try {
+      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+        documentFileService.createFolder(ownerId, parentid, folderPath, name, userIdentityId);
+        return Response.ok().build();
+      } catch (Exception ex) {
+        LOG.warn("Failed to create Folder", ex);
+        return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+      }
+    }
+  }
+
