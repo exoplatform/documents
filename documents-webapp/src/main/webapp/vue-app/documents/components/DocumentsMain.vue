@@ -134,7 +134,46 @@ export default {
     this.$root.$on('show-alert', message => {
       this.displayMessage(message);
     });
-    this.getDocumentDataFromUrl();
+    const currentUrlSearchParams = window.location.search;
+    const queryParams = new URLSearchParams(currentUrlSearchParams);
+    if (queryParams.has('documentPreviewId')) {
+      this.loading = true;
+      this.previewMode = true;
+      const documentPreviewId = queryParams.get('documentPreviewId');
+      this.$attachmentService.getAttachmentById(documentPreviewId)
+        .then(attachment => {
+          documentPreview.init({
+            doc: {
+              id: documentPreviewId,
+              repository: 'repository',
+              workspace: 'collaboration',
+              path: attachment.path,
+              title: attachment.title,
+              openUrl: attachment.openUrl,
+              breadCrumb: attachment.previewBreadcrumb,
+              size: attachment.size,
+              downloadUrl: attachment.downloadUrl,
+            },
+            author: attachment.updater,
+            version: {
+              number: attachment.version
+            },
+            showComments: false,
+            showOpenInFolderButton: false,
+          });
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    } else  if (queryParams.has('folderId')) {
+      this.parentFolderId = queryParams.get('folderId');
+      this.selectedView = 'folder';
+    } else {
+      const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+      if (pathParts.length>1){
+        this.folderPath = pathParts[1];
+        this.selectedView = 'folder';
+      }
+    }
     this.refreshFiles().then(() => {
       this.watchDocumentPreview();
     }).finally(() => this.$root.$applicationLoaded());
@@ -170,7 +209,7 @@ export default {
           this.getFolderPath();
           this.refreshFiles();
           if (documents.folder){
-            this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateFolder')});     
+            this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateFolder')});
           } else {
             this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
           }
@@ -310,7 +349,7 @@ export default {
     },
     createFolder(name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name) 
+      this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name)
         .then( () => {
           this.refreshFiles();
         })
