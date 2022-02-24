@@ -9,7 +9,7 @@
     colored-border
     outlined>
     <div class="d-flex">
-      <div>
+      <div :class="isMobile ? 'pr-6' : 'pr-12'">
         <span class="text-color">
           {{ alertMessage }}
         </span>
@@ -17,13 +17,15 @@
           {{ administratorMessage }}
         </div>
       </div>
-      <v-btn
-        v-if="alert.click"
-        class="primary--text pl-3"
-        text
-        @click="alert.click">
-        {{ alert.clickMessage }}
-      </v-btn>
+      <div class="pt-3">
+        <v-btn
+          v-if="alert.click"
+          class="primary--text"
+          text
+          @click="alert.click">
+          {{ alert.clickMessage }}
+        </v-btn>
+      </div>
       <v-btn
         slot="close"
         slot-scope="{toggle}"
@@ -57,6 +59,9 @@ export default {
     },
     alertType() {
       return this.alert.type;
+    },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   watch: {
