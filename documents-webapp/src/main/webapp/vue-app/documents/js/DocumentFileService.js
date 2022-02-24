@@ -100,3 +100,29 @@ export function renameFile(newTitle,oldPath) {
     throw new Error(`Error rename this file ${e}`);
   });
 }
+export function createFolder(ownerId,parentid,folderPath,name) {
+  const formData = new FormData();
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  if (parentid) {
+    formData.append('parentid', parentid);
+  }
+  if (folderPath) {
+    formData.append('folderPath', folderPath);
+  }
+  if (name) {
+    formData.append('name', name);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/folder?${params}`, {
+    credentials: 'include',
+    method: 'POST',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.ok;
+    }
+  }).catch(e => {
+    throw new Error(`Error creating folder ${e}`);
+  });
+}

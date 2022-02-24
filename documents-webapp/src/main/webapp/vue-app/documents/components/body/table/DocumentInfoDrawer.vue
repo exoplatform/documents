@@ -125,10 +125,10 @@ export default {
       return this.file && this.file.createdDate || '';
     },
     urlUpdated() {
-      return this.file && this.file.modifierIdentity.remoteId ? `${eXo.env.portal.context}/${eXo.env.portal.portalName}/profile/${this.file.modifierIdentity.remoteId}` : '#';
+      return this.file && this.file.modifierIdentity && this.file.modifierIdentity.remoteId ? `${eXo.env.portal.context}/${eXo.env.portal.portalName}/profile/${this.file.modifierIdentity.remoteId}` : '#';
     },
     urlCreated() {
-      return this.file && this.file.creatorIdentity.remoteId ? `${eXo.env.portal.context}/${eXo.env.portal.portalName}/profile/${this.file.creatorIdentity.remoteId}` : '#';
+      return this.file && this.file.creatorIdentity && this.file.creatorIdentity.remoteId ? `${eXo.env.portal.context}/${eXo.env.portal.portalName}/profile/${this.file.creatorIdentity.remoteId}` : '#';
     },
     profileLinkUpdated() {
       return `<a href="${this.urlUpdated}"><strong>${this.identityModifier}</strong></a>`;
@@ -137,9 +137,11 @@ export default {
       return `<a href="${this.urlCreated}"><strong>${this.identityCreated}</strong></a>`;
     },
     identityModifier(){
+      if (!(this.file && this.file.modifierIdentity)) {return '';}
       return this.currentUser === this.file.modifierIdentity.remoteId ? this.$t('documents.drawer.details.me') : this.file.modifierIdentity.name;
     },
     identityCreated(){
+      if (!(this.file && this.file.creatorIdentity)) {return '';}
       return this.currentUser === this.file.creatorIdentity.remoteId ? this.$t('documents.drawer.details.me') : this.file.creatorIdentity.name;
 
     },

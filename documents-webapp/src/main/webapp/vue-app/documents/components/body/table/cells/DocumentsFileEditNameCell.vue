@@ -73,6 +73,9 @@ export default {
       this.$root.$emit('update-file-name', this.file);
     },
     cancelEditNameMode(){
+      if (this.file.id===-1){
+        this.$root.$emit('cancel-add-folder', this.file); 
+      }
       this.editNameMode=false;
       this.$root.$emit('cancel-edit-mode', this.file);
     },
@@ -85,7 +88,9 @@ export default {
       }
     },
     renameFile(newTitle){
-      if (newTitle){
+      if (this.file.folder){
+        this.$root.$emit('documents-create-folder', newTitle);
+      } else if (newTitle){
         this.file.name = this.fileName.concat(this.fileType);
         this.$attachmentService.getAttachmentById(this.file.id)
           .then(attachment => {
