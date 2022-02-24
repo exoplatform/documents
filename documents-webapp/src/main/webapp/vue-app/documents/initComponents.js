@@ -33,6 +33,7 @@ import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
 import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
+import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -59,6 +60,7 @@ const components = {
   'documents-file-edit-name-cell': DocumentsFileEditNameCell,
   'documents-actions-menu': DocumentActionMenu,
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
+  'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-info-drawer': DocumentInfoDrawer,
   'edit-menu-action': EditMenuAction,
   'rename-menu-action': RenameMenuAction,

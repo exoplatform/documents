@@ -1,29 +1,33 @@
 <template>
   <div>
     <div v-show="isMobile && !showMobileFilter || !isMobile">
-      <button v-if="!isFolderView" id="addItemMenu" class="btn btn-primary primary px-2 py-0" @click="openDrawer">
+      <button
+        v-if="!isFolderView"
+        id="addItemMenu"
+        class="btn btn-primary primary px-2 py-0"
+        @click="openDrawer">
         <v-icon
           id="addBtn"
-          dark
-          >
+          dark>
           mdi-plus
         </v-icon>
         {{ !isMobile ? $t('documents.button.addNew') : '' }}
       </button>
-      <button v-if="isFolderView"
+      <button
+        v-if="isFolderView"
         id="addItemMenu"
         class="btn btn-primary primary px-2 py-0"
         :key="postKey"
-        @click.once="openAddItemMenu">
+        @click="openAddItemMenu">
         <v-icon
           id="addBtn"
-          dark
-          >
+          dark>
           mdi-plus
         </v-icon>
         {{ !isMobile ? $t('documents.button.addNew') : '' }}
       </button> 
-      <v-menu v-if="isFolderView"
+      <v-menu
+        v-if="isFolderView"
         v-model="addMenu"
         :attach="'#addItemMenu'"
         transition="scroll-y-transition"
@@ -62,6 +66,7 @@
         fas fa-arrow-left
       </v-icon>
     </div>
+    <documents-add-new-menu-mobile ref="documentAddItemMenu" />
   </div>
 </template>
 <script>
@@ -108,21 +113,31 @@ export default {
     refreshFilesList() {
       this.$root.$emit('documents-refresh-files');
     },
-    openAddItemMenu(event) {
-      this.addMenu = !this.addMenu;
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
+    openAddItemMenu() {
+      if (this.isMobile){
+        this.displayAddMenuMobile();
+      } else {
+        this.addMenu = !this.addMenu;
       }
     },
     openDrawer() {
       this.$root.$emit('documents-open-drawer');
+      this.hideAddMenuMobile();
     },
     addFolder() {
       this.$root.$emit('documents-add-folder');
+      this.hideAddMenuMobile();
     },
     changeView(view) {
       this.isFolderView = view==='folder' && eXo.env.portal.folderViewEnabled;
+    },
+    displayAddMenuMobile() {
+      if (this.isMobile){
+        this.$refs.documentAddItemMenu.open();
+      }
+    }, 
+    hideAddMenuMobile() {
+      this.$refs.documentAddItemMenu.close();
     },
   },
 };
