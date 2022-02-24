@@ -1,7 +1,7 @@
 <template>
   <div class="documents-body">
-    <documents-breadcrumb class="pt-2 pe-1 pl-1" />
-    <div class="ma-4 d-flex flex-column justify-center text-center text-color">
+    <documents-breadcrumb class="pa-3 pe-1 pl-1" />
+    <div class="ma-4 d-flex documents-no-body flex-column justify-center text-center text-color">
       <v-img
         :src="emptyDocs"
         class="mx-auto mb-4 overflow-visible"
@@ -13,8 +13,8 @@
         <v-icon :size="!isMobile ? 28 : 23" class="closeIcon text-light-color white float-right">fas fa-times-circle</v-icon>
       </v-img>
       <div>
-        <p v-if="!isMobile" class="text-light-color">
-          <span v-sanitized-html="noContentFolderLabel"></span>
+        <p class="text-light-color">
+          <span>{{ noContentFolderLabel }}</span>
         </p>
         <div>
           <span class="ps-1">{{ addFolderLabel }}</span>
