@@ -422,7 +422,7 @@ public class JCRDocumentsUtil {
     Transliterator accentsconverter = Transliterator.getInstance("Latin; NFD; [:Nonspacing Mark:] Remove; NFC;");
     str = accentsconverter.transliterate(str);
     //the character ? seems to not be changed to d by the transliterate function
-    StringBuffer cleanedStr = new StringBuffer(str.trim());
+    StringBuilder cleanedStr = new StringBuilder(str.trim());
     // delete special character
     int strLength = cleanedStr.length();
     int i = 0;

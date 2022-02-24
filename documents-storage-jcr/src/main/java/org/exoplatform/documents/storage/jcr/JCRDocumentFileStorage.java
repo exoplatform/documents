@@ -51,7 +51,6 @@ import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.exoplatform.web.application.ApplicationMessage;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
