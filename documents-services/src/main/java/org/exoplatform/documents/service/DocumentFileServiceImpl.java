@@ -20,6 +20,7 @@ import java.util.*;
 
 import org.apache.commons.lang3.StringUtils;
 
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
@@ -192,6 +193,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public AbstractNode duplicateDocument(long ownerId, String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
     return documentFileStorage.duplicateDocument(ownerId, fileId, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
+  public void createFolder(long ownerId, String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
+    documentFileStorage.createFolder(ownerId, folderId, folderPath, name, getAclUserIdentity(authenticatedUserId));
   }
 
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
