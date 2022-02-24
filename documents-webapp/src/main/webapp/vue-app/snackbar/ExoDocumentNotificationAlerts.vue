@@ -10,6 +10,7 @@
       v-for="alert in alerts"
       :key="alert.message"
       :alert="alert"
+      :is-mobile="isMobile"
       @dismissed="deleteAlert(alert)" />
   </v-snackbar>
 </template>
@@ -24,6 +25,9 @@ export default {
     displayAlerts() {
       return this.alerts && this.alerts.length;
     },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
   },
   created() {
     this.$root.$on('document-notification-alert', alert => this.alerts.push(alert));
@@ -31,7 +35,7 @@ export default {
       if (documentId) {
         const clickMessage = this.$t('documents.label.undoDelete');
         const message = this.$t('documents.label.deleteSuccess');
-        const administratorMessage = this.$t('documents.label.contact.administrator');
+        const administratorMessage = this.isMobile ? '' : this.$t('documents.label.contact.administrator');
         this.$root.$emit('document-notification-alert', {
           message,
           administratorMessage,

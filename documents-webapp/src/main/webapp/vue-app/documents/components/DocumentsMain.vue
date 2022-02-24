@@ -13,9 +13,9 @@
       </div>
       <div v-else-if="!filesLoad && !loadingFiles && selectedView == 'folder' ">
         <documents-header-left
-            class="py-2" />
+          class="py-2" />
         <documents-no-body-folder
-            :is-mobile="isMobile" />
+          :is-mobile="isMobile" />
       </div>
       <div v-else-if="!filesLoad && !loadingFiles">
         <documents-header-left
@@ -39,6 +39,7 @@
           :loading="loading"
           :query="query"
           :primary-filter="primaryFilter" />
+        <exo-document-notification-alerts />
       </div>
     </div>
     <v-alert
