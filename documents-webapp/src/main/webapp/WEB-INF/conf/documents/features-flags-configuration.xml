@@ -46,6 +46,17 @@
             </properties-param>
         </init-params>
     </component>
+    <component>
+        <key>DeleteActionFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>DeleteActionFeatureProperties</name>
+                <description>Delete Action Feature enablement flag</description>
+                <property name="exo.feature.DeleteAction.enabled" value="${exo.feature.DeleteAction.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
 
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
