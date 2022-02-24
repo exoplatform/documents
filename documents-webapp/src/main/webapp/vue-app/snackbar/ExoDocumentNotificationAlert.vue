@@ -17,7 +17,7 @@
           {{ administratorMessage }}
         </div>
       </div>
-      <div class="pt-3">
+      <div :class="isMobile ? 'pt-0' : 'pt-3'">
         <v-btn
           v-if="alert.click"
           class="primary--text"
@@ -46,6 +46,10 @@ export default {
       type: Object,
       default: null
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   data: () => ({
     displayAlert: true,
@@ -59,9 +63,6 @@ export default {
     },
     alertType() {
       return this.alert.type;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   watch: {
