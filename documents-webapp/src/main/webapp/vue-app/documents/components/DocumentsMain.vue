@@ -11,6 +11,12 @@
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
+      <div v-else-if="!filesLoad && !loadingFiles && selectedView == 'folder' ">
+        <documents-header-left
+            class="py-2" />
+        <documents-no-body-folder
+            :is-mobile="isMobile" />
+      </div>
       <div v-else-if="!filesLoad && !loadingFiles">
         <documents-header-left
           class="py-2" />
@@ -74,6 +80,7 @@ export default {
     alert: false,
     alertType: '',
     message: '',
+    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     attachmentAppConfiguration: {
       'sourceApp': 'NEW.APP',
     }
@@ -111,6 +118,7 @@ export default {
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
     this.$root.$on('documents-add-folder', this.addFolder);
+    this.$root.$on('duplicate-document', this.duplicateDocument);
     this.$root.$on('documents-create-folder', this.createFolder);
     this.$root.$on('documents-open-drawer', this.openDrawer);
     this.$root.$on('set-current-folder-url', this.setFolderUrl);
