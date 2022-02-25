@@ -79,6 +79,7 @@ export default {
     alert: false,
     alertType: '',
     message: '',
+    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
   computed: {
     filesLoad(){
@@ -112,6 +113,7 @@ export default {
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
+    this.$root.$on('duplicate-document', this.duplicateDocument);
     this.$root.$on('document-search', this.search);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-filter', filter => {
@@ -155,11 +157,7 @@ export default {
       this.parentFolderId = queryParams.get('folderId');
       this.selectedView = 'folder';
     } else {
-      const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-      if (pathParts.length>1){
-        this.folderPath = pathParts[1];
-        this.selectedView = 'folder';
-      }
+      this.getFolderPath();
     }
     this.refreshFiles().then(() => {
       this.watchDocumentPreview();
@@ -179,6 +177,24 @@ export default {
       this.query = query;
 
       this.refreshFiles();
+    },
+    getFolderPath(){
+      const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+      if (pathParts.length>1){
+        this.folderPath = pathParts[1];
+        this.selectedView = 'folder';
+      }
+    },
+    duplicateDocument(documents){
+      this.parentFolderId = documents.id;
+      return this.$documentFileService
+        .duplicateDocument(this.parentFolderId,this.ownerId)
+        .then( () => {
+          this.parentFolderId=null;
+          this.getFolderPath();
+          this.refreshFiles();
+          this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
+        }).catch(e => console.error(e));
     },
     openFolder(parentFolder) {
       this.folderPath='';

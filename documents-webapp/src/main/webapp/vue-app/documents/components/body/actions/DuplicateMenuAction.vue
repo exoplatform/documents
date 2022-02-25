@@ -31,7 +31,10 @@ export default {
   },
   methods: {
     duplicate(){
-      this.$root.$emit('duplicateFile');
+      this.$root.$emit('duplicate-document',this.file);
+      if ( this.isMobile ) {
+        this.$root.$emit('close-file-action-menu');
+      }
     }
   },
 };

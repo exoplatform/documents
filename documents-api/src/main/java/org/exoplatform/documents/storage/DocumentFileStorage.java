@@ -88,4 +88,16 @@ public interface DocumentFileStorage {
    */
   List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, String folderPath, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
+  /**
+   * Duplicate the given node.
+   *
+   * @param fileId Id of the given file
+   * @param aclIdentity {@link Identity} of the user acessing files
+   * @return  {@link AbstractNode}
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   */
+  AbstractNode duplicateDocument(long ownerId, String fileId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+
 }
