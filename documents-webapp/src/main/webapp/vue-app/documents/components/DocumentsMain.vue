@@ -125,6 +125,8 @@ export default {
     this.$root.$on('duplicate-document', this.duplicateDocument);
     this.$root.$on('documents-create-folder', this.createFolder);
     this.$root.$on('documents-rename', this.renameDocument);
+    this.$root.$on('confirm-document-deletion', this.deleteDocument);
+    this.$root.$on('undo-delete-document', this.undoDeleteDocument);
     this.$root.$on('documents-open-drawer', this.openDrawer);
     this.$root.$on('set-current-folder-url', this.setFolderUrl);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
@@ -180,6 +182,21 @@ export default {
 
         }).catch(e => console.error(e));
     },
+    deleteDocument(documentId){
+      const redirectionTime = 500;
+      setTimeout(() => {
+        const deletedDocument = localStorage.getItem('deletedDocument');
+        if (deletedDocument != null) {
+          this.refreshFiles(null, true, documentId);
+        }
+      }, redirectionTime);
+    },
+    undoDeleteDocument(){
+      const deletedDocument = localStorage.getItem('deletedDocument');
+      if (deletedDocument != null) {
+        this.refreshFiles();
+      }
+    },
     openFolder(parentFolder) {
       this.folderPath='';
       this.parentFolderId = parentFolder.id;
@@ -213,7 +230,7 @@ export default {
     refreshFilesEvent() {
       this.refreshFiles();
     },
-    refreshFiles(filterPrimary) {
+    refreshFiles(filterPrimary, deleted, documentId) {
       if (!this.selectedViewExtension) {
         return Promise.resolve(null);
       }
@@ -258,6 +275,7 @@ export default {
             }
             return 0;
           }) || [] : files && files.slice(this.offset, this.limit) || [];
+          this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
           this.hasMore = files && files.length > this.limit;
         })
         .finally(() => this.loading = false);

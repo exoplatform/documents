@@ -40,7 +40,7 @@ export default {
           message,
           administratorMessage,
           type: 'success',
-          click: () => this.undoDeleteNewsTarget(documentId),
+          click: () => this.undoDeleteDocument(documentId),
           clickMessage,
         });
       }
@@ -59,8 +59,9 @@ export default {
       this.alerts.splice(index, 1);
       this.$forceUpdate();
     },
-    undoDeleteNewsTarget(targetName) {
-      return this.$newsTargetingService.undoDeleteTarget(targetName)
+    undoDeleteDocument(documentId) {
+      this.$root.$emit('undo-delete-document', documentId);
+      return this.$documentFileService.undoDeleteDocument(documentId)
         .then(() => {
           this.deleteAlert(alert);
           this.addAlert({

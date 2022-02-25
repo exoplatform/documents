@@ -27,6 +27,8 @@ public abstract class AbstractNode {
 
   private String         name;
 
+  private String         path;
+
   private String         description;
 
   private String         datasource;

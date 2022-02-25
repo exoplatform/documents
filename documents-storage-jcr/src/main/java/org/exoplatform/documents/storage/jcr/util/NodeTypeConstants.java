@@ -112,4 +112,14 @@ public class NodeTypeConstants {
 
   public static final String JCR_PRIMARY_TYPE        = "jcr:primaryType";
 
+  public static final String EXO_RESTORE_LOCATION = "exo:restoreLocation";
+
+  public static final String RESTORE_PATH = "exo:restorePath";
+
+  public static final String TAXONOMY_LINK   = "exo:taxonomyLink";
+
+  public static final String RESTORE_WORKSPACE = "exo:restoreWorkspace";
+
+  public static final String TRASH_ID = "exo:trashId";
+
 }
