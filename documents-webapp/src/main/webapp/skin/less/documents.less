@@ -5,6 +5,16 @@
     .v-alert {
       z-index: 9999;
     }
+    .closeIcon {
+      border-radius: 50%;
+      top: 35px;
+      left: 10px;
+    }
+
+    .searchIcon {
+      top: 20px;
+      left: 9px;
+    }
     .document-tree-items {
       max-width: 100% !important;
       width: 100% !important;
@@ -100,15 +110,7 @@
         margin-bottom: 6px;
       }
 
-      .closeIcon {
-        border-radius: 50%;
-        top: 23px;
-      }
 
-      .searchIcon {
-        top: 20px;
-        left: 9px;
-      }
 
       .v-input__icon--append .v-icon {
         font-size: 16px;
@@ -124,8 +126,14 @@
 
     .documents-body {
       min-height: calc(~"100vh - 300px");
+      .documents-no-body {
+        height: 208px;
+      }
       .action-menu-item:hover {
         background-color: #e4e5e7;
+      }
+      .breadCrumb-link {
+        font-size: 20px !important;
       }
       .action-menu-item {
         min-height: 30px !important;
@@ -253,6 +261,9 @@
 
   .documents-application.mobile {
     margin-top: 0;
+    .documents-no-body {
+      height: 370px;
+    }
 
     .documents-header-left-action {
       button {
