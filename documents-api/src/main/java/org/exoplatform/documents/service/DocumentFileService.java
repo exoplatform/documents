@@ -131,4 +131,6 @@ public interface DocumentFileService {
   AbstractNode duplicateDocument(long ownerId,String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
 
   void createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
+
+  void renameDocument(long ownerId,String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 }

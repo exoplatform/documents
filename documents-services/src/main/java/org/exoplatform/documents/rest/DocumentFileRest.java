@@ -306,5 +306,36 @@ public class DocumentFileRest implements ResourceContainer {
         return Response.status(HTTPStatus.INTERNAL_ERROR).build();
       }
     }
+
+  @PUT
+  @Path("/rename")
+  @RolesAllowed("users")
+  @ApiOperation(value = "Rename documents", httpMethod = "POST", response = Response.class, notes = "This rename a giving document.")
+  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
+          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
+          @ApiResponse(code = 404, message = "Resource not found")})
+  public Response renameDocument (@ApiParam(value = "documentID", required = false) @QueryParam("documentID") String documentID,
+                                @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
+                                @ApiParam(value = "new name", required = false) @QueryParam("newName") String newName) {
+
+    if (ownerId == null && StringUtils.isBlank(documentID)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
+    }
+    if (StringUtils.isEmpty(newName)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document Name should not be empty").build();
+    }
+    if (NumberUtils.isNumber(newName)) {
+      LOG.warn("Document Name should not be number");
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document Name should not be number").build();
+    }
+    try {
+      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+      documentFileService.renameDocument(ownerId, documentID, newName, userIdentityId);
+      return Response.ok().build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to rename Document", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
   }
+}
 
