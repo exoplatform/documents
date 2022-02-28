@@ -108,4 +108,6 @@ public class NodeTypeConstants {
 
   public static final String MIX_COMMENTABLE        = "mix:commentable";
 
+  public static final String EXO_THUMBNAILS_FOLDER        = "exo:thumbnails";
+
 }
