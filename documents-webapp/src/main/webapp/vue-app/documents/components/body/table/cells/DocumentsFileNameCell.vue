@@ -3,14 +3,17 @@
     class="d-flex flex-nowrap">
     <a
       class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-full">
-      <v-progress-circular
-        v-if="loading"
-        indeterminate
-        size="16" />
-      <v-icon
-        v-else
-        size="22"
-        :color="icon.color">{{ icon.class }}</v-icon>
+      <div>
+        <v-progress-circular
+          v-if="loading"
+          indeterminate
+          size="16" />
+
+        <v-icon
+          v-else
+          size="22"
+          :color="icon.color">{{ icon.class }}</v-icon>
+      </div>
       <div class="width-full">
         <div
           v-if="!editNameMode"
