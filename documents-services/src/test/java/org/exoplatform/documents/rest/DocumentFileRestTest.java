@@ -561,5 +561,9 @@ public class DocumentFileRestTest {
     doNothing().when(documentFileStorage).createFolder(2L, "11111111", null, "test", userID);
     response = documentFileRest.createFolder("11111111",null,2L,"test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+
+    doNothing().when(documentFileStorage).renameDocument(2L, "11111111", "renameTest", userID);
+    Response response1 = documentFileRest.renameDocument("11111111",2L,"renameTest");
+    assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
   }
 }

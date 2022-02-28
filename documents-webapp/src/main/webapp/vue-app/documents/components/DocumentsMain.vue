@@ -121,6 +121,7 @@ export default {
     this.$root.$on('documents-add-folder', this.addFolder);
     this.$root.$on('duplicate-document', this.duplicateDocument);
     this.$root.$on('documents-create-folder', this.createFolder);
+    this.$root.$on('documents-rename', this.renameDocument);
     this.$root.$on('documents-open-drawer', this.openDrawer);
     this.$root.$on('set-current-folder-url', this.setFolderUrl);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
@@ -340,6 +341,15 @@ export default {
     createFolder(name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name) 
+        .then( () => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
+    renameDocument(file,name){
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.renameDocument(ownerId,file.id,name)
         .then( () => {
           this.refreshFiles();
         })

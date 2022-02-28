@@ -88,24 +88,9 @@ export default {
       }
     },
     renameFile(newTitle){
-      if (this.file.folder){
-        this.$root.$emit('documents-create-folder', newTitle);
-      } else if (newTitle){
-        this.file.name = this.fileName.concat(this.fileType);
-        this.$attachmentService.getAttachmentById(this.file.id)
-          .then(attachment => {
-            const path = attachment.path;
-            this.oldPath = this.workspace.concat(':', path);
-          })
-          .catch(e => console.error(e))
-          .finally(() => {
-            return this.$documentFileService.renameFile(newTitle,this.oldPath).then( () => {
-              this.$root.$emit('cancel-edit-mode', this.file);
-            }).catch(e => {
-              console.error('Error when updating title', e);
-            });
-          });
-      }
+      this.$root.$emit('cancel-edit-mode', this.file);
+      this.file.name = this.fileName.concat(this.fileType);
+      this.$root.$emit('documents-rename', this.file,newTitle);
     }
   },
 };
