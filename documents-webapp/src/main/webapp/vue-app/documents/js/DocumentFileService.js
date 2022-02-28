@@ -80,24 +80,27 @@ export function duplicateDocument(fileId,ownerId) {
 
 }
 
-export function renameFile(newTitle,oldPath) {
+export function renameDocument(ownerId,documentID,newName) {
   const formData = new FormData();
-  if (oldPath) {
-    formData.append('oldPath', oldPath);
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
   }
-  if (newTitle) {
-    formData.append('newTitle', newTitle);
+  if (documentID) {
+    formData.append('documentID', documentID);
+  }
+  if (newName) {
+    formData.append('newName', newName);
   }
   const params = new URLSearchParams(formData).toString();
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/contents/rename/rename?${params}`, {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/rename?${params}`, {
     credentials: 'include',
-    method: 'GET',
+    method: 'PUT',
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
     }
   }).catch(e => {
-    throw new Error(`Error rename this file ${e}`);
+    throw new Error(`Error renaming document ${e}`);
   });
 }
 export function createFolder(ownerId,parentid,folderPath,name) {

@@ -326,6 +326,15 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
+    renameDocument(file,name){
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.renameDocument(ownerId,file.id,name)
+        .then( () => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
     openDrawer() {
 
       let attachmentAppConfiguration = {
