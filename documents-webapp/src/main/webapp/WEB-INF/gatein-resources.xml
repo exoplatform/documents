@@ -40,7 +40,21 @@
         <module>jquery</module>
         <as>$</as>
       </depends>
+      <depends>
+        <module>documentsSnackbarComponent</module>
+      </depends>
     </module>
   </portlet>
+
+  <module>
+    <name>documentsSnackbarComponent</name>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsSnackbarComponent.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+  </module>
 
 </gatein-resources>
