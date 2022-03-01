@@ -204,7 +204,12 @@ export default {
           this.parentFolderId=null;
           this.getFolderPath();
           this.refreshFiles();
-          this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
+          if (documents.folder){
+            this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateFolder')});     
+          } else {
+            this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
+          }
+
         }).catch(e => console.error(e));
     },
     openFolder(parentFolder) {
