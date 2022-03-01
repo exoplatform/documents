@@ -115,17 +115,8 @@ export default {
         this.getBreadCrumbs();
       }
     });
-
-    const currentUrlSearchParams = window.location.search;
-    const queryParams = new URLSearchParams(currentUrlSearchParams);
-    if (queryParams.has('folderId')) {
-      this.actualFolderId = queryParams.get('folderId');
-    } else {
-      const pathParts  = document.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-      if (pathParts.length>1){
-        this.folderPath = pathParts[1];
-      }
-    }
+    this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
+    this.getFolderPath();
     this.getBreadCrumbs();   
   },
   methods: {
@@ -138,6 +129,20 @@ export default {
       }
     },
 
+    getFolderPath() {
+      const currentUrlSearchParams = window.location.search;
+      const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (queryParams.has('folderId')) {
+        this.actualFolderId = queryParams.get('folderId');
+      } else {
+        this.actualFolderId = '';
+        const pathParts  = document.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        if (pathParts.length>1){
+          this.folderPath = pathParts[1];
+        }
+      }
+    },
+
     getBreadCrumbs() {
       return this.$documentFileService
         .getBreadCrumbs(this.actualFolderId,this.ownerId,this.folderPath)
@@ -147,6 +152,11 @@ export default {
           this.$root.$emit('set-current-folder-url', this.currentFolderPath);
         })
         .finally(() => this.loading = false);
+    },
+
+    updateBreadcrumb() {
+      this.getFolderPath();
+      this.getBreadCrumbs();  
     },
   }
 };
