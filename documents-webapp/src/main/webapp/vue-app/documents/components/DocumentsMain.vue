@@ -67,6 +67,7 @@ export default {
     loading: false,
     hasMore: false,
     viewExtensions: {},
+    currentFolderPath: '',
     groupsSizes: {
       'thisDay': 0,
       'thisWeek': 0,
@@ -107,6 +108,9 @@ export default {
   },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
+
+    window.addEventListener('popstate', e => {this.onBrowserNavChange(e);});
+
     this.refreshViewExtensions();
 
     this.$root.$on('documents-refresh-files', this.refreshFilesEvent);
@@ -114,7 +118,13 @@ export default {
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
+    this.$root.$on('documents-add-folder', this.addFolder);
     this.$root.$on('duplicate-document', this.duplicateDocument);
+    this.$root.$on('documents-create-folder', this.createFolder);
+    this.$root.$on('documents-rename', this.renameDocument);
+    this.$root.$on('documents-open-drawer', this.openDrawer);
+    this.$root.$on('set-current-folder-url', this.setFolderUrl);
+    this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-filter', filter => {
@@ -124,42 +134,7 @@ export default {
     this.$root.$on('show-alert', message => {
       this.displayMessage(message);
     });
-    const currentUrlSearchParams = window.location.search;
-    const queryParams = new URLSearchParams(currentUrlSearchParams);
-    if (queryParams.has('documentPreviewId')) {
-      this.loading = true;
-      this.previewMode = true;
-      const documentPreviewId = queryParams.get('documentPreviewId');
-      this.$attachmentService.getAttachmentById(documentPreviewId)
-        .then(attachment => {
-          documentPreview.init({
-            doc: {
-              id: documentPreviewId,
-              repository: 'repository',
-              workspace: 'collaboration',
-              path: attachment.path,
-              title: attachment.title,
-              openUrl: attachment.openUrl,
-              breadCrumb: attachment.previewBreadcrumb,
-              size: attachment.size,
-              downloadUrl: attachment.downloadUrl,
-            },
-            author: attachment.updater,
-            version: {
-              number: attachment.version
-            },
-            showComments: false,
-            showOpenInFolderButton: false,
-          });
-        })
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
-    } else  if (queryParams.has('folderId')) {
-      this.parentFolderId = queryParams.get('folderId');
-      this.selectedView = 'folder';
-    } else {
-      this.getFolderPath();
-    }
+    this.getDocumentDataFromUrl();
     this.refreshFiles().then(() => {
       this.watchDocumentPreview();
     }).finally(() => this.$root.$applicationLoaded());
@@ -216,7 +191,7 @@ export default {
           folderPath = pathParts[1];
         }
         pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}`);
+        window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}`);
       }
     },
     loadMore() {
@@ -321,6 +296,104 @@ export default {
 
       // Start observing the target node for configured mutations
       observer.observe(bodyElement, config);
+    },
+    addFolder(){
+      const newFolder={
+        'id': -1,
+        'name': 'new folder',
+        'folder': true
+      };
+      this.files.unshift(newFolder);
+    },
+    cancelAddFolder(folder){
+      this.files.splice(this.files.indexOf(folder), 1);
+    },
+    createFolder(name){
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name) 
+        .then( () => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
+    renameDocument(file,name){
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.renameDocument(ownerId,file.id,name)
+        .then( () => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
+    openDrawer() {
+
+      let attachmentAppConfiguration = {
+        'sourceApp': 'NEW.APP'
+      };
+      if (eXo.env.portal.spaceName){
+        const pathparts = eXo.env.server.portalBaseURL.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        if (pathparts.length>1){
+          attachmentAppConfiguration= {
+            'sourceApp': 'NEW.APP',
+            'defaultFolder': decodeURI(pathparts[1]),
+            'defaultDrive': {
+              isSelected: true,
+              name: `.spaces.${eXo.env.portal.spaceGroup}`,
+              title: eXo.env.portal.spaceDisplayName,
+            }
+          };
+        }
+      }
+      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
+    },
+    setFolderUrl(url) {
+      this.currentFolderPath=url;
+    },
+    getDocumentDataFromUrl() {
+      const currentUrlSearchParams = window.location.search;
+      const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (queryParams.has('documentPreviewId')) {
+        this.loading = true;
+        this.previewMode = true;
+        const documentPreviewId = queryParams.get('documentPreviewId');
+        this.$attachmentService.getAttachmentById(documentPreviewId)
+          .then(attachment => {
+            documentPreview.init({
+              doc: {
+                id: documentPreviewId,
+                repository: 'repository',
+                workspace: 'collaboration',
+                path: attachment.path,
+                title: attachment.title,
+                openUrl: attachment.openUrl,
+                breadCrumb: attachment.previewBreadcrumb,
+                size: attachment.size,
+                downloadUrl: attachment.downloadUrl,
+              },
+              author: attachment.updater,
+              version: {
+                number: attachment.version
+              },
+              showComments: false,
+              showOpenInFolderButton: false,
+            });
+          })
+          .catch(e => console.error(e))
+          .finally(() => this.loading = false);
+      } else  if (queryParams.has('folderId')) {
+        this.parentFolderId = queryParams.get('folderId');
+        this.selectedView = 'folder';
+      } else {
+        this.parentFolderId=null;
+        this.selectedView = 'timeline';
+        this.getFolderPath();
+      }
+    },
+    onBrowserNavChange() {
+      this.getDocumentDataFromUrl();
+      this.refreshFiles();
+      this.$root.$emit('update-breadcrumb');
     },
     displayMessage(message) {
       this.message = message.message;
