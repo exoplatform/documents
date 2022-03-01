@@ -69,27 +69,33 @@
       .v-tabs-bar {
         height: auto!important;
         .tabIcon{
-          font-size: 14px;
+          font-size: 16px;
           color: @greyColorLighten1 !important;
           padding-right: 8px;
+        }
+        .mobile {
+          padding-right: 0px!important;
         }
         .firstTab {
           border: 1px solid @borderColor;
           border-radius: 5px 0 0 5px;
-          height: 38px;
-          min-height: 38px;
+          height: 40px;
+          min-height: 40px;
+          min-width: 40px;
         }
         .middleTab {
           border: 1px solid @borderColor;
           border-radius: 0;
-          height: 38px;
-          min-height: 38px;
+          height: 40px;
+          min-height: 40px;
+          min-width: 40px;
         }
         .lastTab {
           border: 1px solid @borderColor;
           border-radius: 0 5px 5px 0;
-          height: 38px;
-          min-height: 38px;
+          height: 40px;
+          min-width: 40px;
+          min-height: 40px;
         }
       }
     }
@@ -266,9 +272,11 @@
   .documents-header-left-action {
     #addItemMenu {
       font-weight: normal !important;
-      height: 38px;
+      height: 40px;
       width: 129px;
-
+      .mobile{
+        width: 40px !important;
+      }
       .add-menu-btn {
         left: 11px !important;
         right: 20px;

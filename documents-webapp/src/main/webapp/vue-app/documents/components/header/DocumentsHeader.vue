@@ -1,22 +1,22 @@
 <template>
   <div class="d-flex flex-row">
     <documents-header-left />
-    <v-spacer :class="showMobileFilter ? 'd-none' : ''" />
-    <div>
+    <v-spacer v-show="!showMobileFilter" />
+    <div v-show="!showMobileFilter">
       <v-tabs
         v-model="tab"
         class="documentViewTabs">
         <v-tab
           v-for="(extension, i) in tabsList"
           :key="i"
-          :class="tabClass(i)"
+          :class="isMobile ? tabClass(i) + ' px-0' : tabClass(i)"
           @change="changeDocumentView(extension.viewName)">
-          <v-icon class="tabIcon">{{ extension.icon }}</v-icon>
+          <v-icon :class="isMobile ? 'tabIcon mobile':'tabIcon'">{{ extension.icon }}</v-icon>
           {{ !isMobile ? $t(extension.labelKey) : '' }}
         </v-tab>
       </v-tabs>
     </div>
-    <v-spacer :class="showMobileFilter ? 'd-none' : ''" />
+    <v-spacer v-show="!showMobileFilter" />
     <documents-header-right />
   </div>
 </template>
