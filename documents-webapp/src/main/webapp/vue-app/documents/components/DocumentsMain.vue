@@ -111,6 +111,9 @@ export default {
   },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
+
+    window.addEventListener('popstate', e => {this.onBrowserNavChange(e);});
+
     this.refreshViewExtensions();
 
     this.$root.$on('documents-refresh-files', this.refreshFilesEvent);
@@ -134,42 +137,7 @@ export default {
     this.$root.$on('show-alert', message => {
       this.displayMessage(message);
     });
-    const currentUrlSearchParams = window.location.search;
-    const queryParams = new URLSearchParams(currentUrlSearchParams);
-    if (queryParams.has('documentPreviewId')) {
-      this.loading = true;
-      this.previewMode = true;
-      const documentPreviewId = queryParams.get('documentPreviewId');
-      this.$attachmentService.getAttachmentById(documentPreviewId)
-        .then(attachment => {
-          documentPreview.init({
-            doc: {
-              id: documentPreviewId,
-              repository: 'repository',
-              workspace: 'collaboration',
-              path: attachment.path,
-              title: attachment.title,
-              openUrl: attachment.openUrl,
-              breadCrumb: attachment.previewBreadcrumb,
-              size: attachment.size,
-              downloadUrl: attachment.downloadUrl,
-            },
-            author: attachment.updater,
-            version: {
-              number: attachment.version
-            },
-            showComments: false,
-            showOpenInFolderButton: false,
-          });
-        })
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
-    } else  if (queryParams.has('folderId')) {
-      this.parentFolderId = queryParams.get('folderId');
-      this.selectedView = 'folder';
-    } else {
-      this.getFolderPath();
-    }
+    this.getDocumentDataFromUrl();
     this.refreshFiles().then(() => {
       this.watchDocumentPreview();
     }).finally(() => this.$root.$applicationLoaded());
@@ -226,7 +194,7 @@ export default {
           folderPath = pathParts[1];
         }
         pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}`);
+        window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}`);
       }
     },
     loadMore() {
@@ -384,6 +352,51 @@ export default {
     },
     setFolderUrl(url) {
       this.currentFolderPath=url;
+    },
+    getDocumentDataFromUrl() {
+      const currentUrlSearchParams = window.location.search;
+      const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (queryParams.has('documentPreviewId')) {
+        this.loading = true;
+        this.previewMode = true;
+        const documentPreviewId = queryParams.get('documentPreviewId');
+        this.$attachmentService.getAttachmentById(documentPreviewId)
+          .then(attachment => {
+            documentPreview.init({
+              doc: {
+                id: documentPreviewId,
+                repository: 'repository',
+                workspace: 'collaboration',
+                path: attachment.path,
+                title: attachment.title,
+                openUrl: attachment.openUrl,
+                breadCrumb: attachment.previewBreadcrumb,
+                size: attachment.size,
+                downloadUrl: attachment.downloadUrl,
+              },
+              author: attachment.updater,
+              version: {
+                number: attachment.version
+              },
+              showComments: false,
+              showOpenInFolderButton: false,
+            });
+          })
+          .catch(e => console.error(e))
+          .finally(() => this.loading = false);
+      } else  if (queryParams.has('folderId')) {
+        this.parentFolderId = queryParams.get('folderId');
+        this.selectedView = 'folder';
+      } else {
+        this.parentFolderId=null;
+        this.selectedView = 'timeline';
+        this.getFolderPath();
+      }
+    },
+    onBrowserNavChange() {
+      this.getDocumentDataFromUrl(); 
+      this.refreshFiles(); 
+      this.$root.$emit('update-breadcrumb');
     },
     displayMessage(message) {
       this.message = message.message;
