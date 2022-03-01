@@ -126,11 +126,11 @@ public class JCRDocumentsUtil {
     while (nodeIterator.hasNext()) {
       Node node = nodeIterator.nextNode();
       try {
-        if(node.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.NT_FOLDER)){
+        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER)){
           FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node);
           fileNodes.add(folderNode);
         }
-        if(node.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.NT_FILE)) {
+        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FILE)) {
           FileNode fileNode = toFileNode(identityManager, aclIdentity, node);
           fileNodes.add(fileNode);
         }
