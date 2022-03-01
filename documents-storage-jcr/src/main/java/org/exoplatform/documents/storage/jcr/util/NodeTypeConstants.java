@@ -110,4 +110,6 @@ public class NodeTypeConstants {
 
   public static final String EXO_THUMBNAILS_FOLDER        = "exo:thumbnails";
 
+  public static final String JCR_PRIMARY_TYPE        = "jcr:primaryType";
+
 }

@@ -451,13 +451,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   private void duplicateItem(Node oldNode, Node destinationNode, Node parentNode) throws Exception{
-    if (oldNode.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
+    if (oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
       return;
     }
     Node newNode = null;
     String name = oldNode.getName();
     String title = oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString();
-    if (((NodeImpl) destinationNode).getIdentifier()==((NodeImpl) parentNode).getIdentifier()){
+    if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())){
       name = PREFIX_CLONE + name;
       title = PREFIX_CLONE + title;
       String newName = name;
@@ -471,7 +471,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         title = title + " (" + i + ")";
       }
     }
-    if (oldNode.getProperty("jcr:primaryType").getString().equals(NodeTypeConstants.NT_FOLDER)) {
+    if (oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER)) {
       newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
       NodeIterator nodeIterator = oldNode.getNodes();
@@ -480,7 +480,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         duplicateItem(node, newNode, parentNode);
       }
     } else {
-      newNode = destinationNode.addNode(name, oldNode.getProperty("jcr:primaryType").getString());
+      newNode = destinationNode.addNode(name, oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString());
 
       if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
         newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
