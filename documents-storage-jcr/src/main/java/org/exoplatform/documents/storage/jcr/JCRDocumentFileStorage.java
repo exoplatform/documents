@@ -34,33 +34,36 @@ import javax.jcr.query.QueryResult;
 import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.search.data.SearchResult;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
-  private static final String            COLLABORATION = "collaboration";
+  private static final String                  COLLABORATION     = "collaboration";
+  public final String                          PREFIX_CLONE      = "Copy of ";
   private final SpaceService                   spaceService;
   private final RepositoryService              repositoryService;
   private final IdentityManager                identityManager;
   private final NodeHierarchyCreator           nodeHierarchyCreator;
   private final DocumentSearchServiceConnector documentSearchServiceConnector;
-  private final String                         DATE_FORMAT   = "yyyy-MM-dd";
-  private final String                         SPACE_PATH_PREFIX   = "/Groups/spaces/";
-  private final SimpleDateFormat               formatter     = new SimpleDateFormat(DATE_FORMAT);
-  public  final String                         PREFIX_CLONE = "Copy of ";
+  private final String                         DATE_FORMAT       = "yyyy-MM-dd";
+  private final String                         SPACE_PATH_PREFIX = "/Groups/spaces/";
+  private final SimpleDateFormat               formatter         = new SimpleDateFormat(DATE_FORMAT);
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -217,7 +220,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         parent = getNodeByIdentifier(session, parentFolderId);
       }
-      if(StringUtils.isNotBlank(folderPath)){
+      if (StringUtils.isNotBlank(folderPath)) {
         try {
           parent = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
         } catch (RepositoryException repositoryException) {
@@ -259,8 +262,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, String folderPath, Identity aclIdentity) throws IllegalAccessException,
-                                                                               ObjectNotFoundException {
+  public List<BreadCrumbItem> getBreadcrumb(long ownerId,
+                                            String folderId,
+                                            String folderPath,
+                                            Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     List<BreadCrumbItem> parents = new ArrayList<>();
@@ -276,7 +281,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, folderId);
       }
-      if(StringUtils.isNotBlank(folderPath)){
+      if (StringUtils.isNotBlank(folderPath)) {
         try {
           node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
         } catch (RepositoryException repositoryException) {
@@ -312,8 +317,53 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public void createFolder(long ownerId,
+                           String folderId,
+                           String folderPath,
+                           String title,
+                           Identity aclIdentity) throws IllegalAccessException,
+                                                 ObjectAlreadyExistsException,
+                                                 ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(folderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        folderId = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, folderId);
+      }
+      if (StringUtils.isNotBlank(folderPath)) {
+        try {
+          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+        } catch (RepositoryException repositoryException) {
+          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+        }
+      }
+      String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanString(title.toLowerCase()));
+      if (node.hasNode(name)) {
+        throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
+      }
+      Node addedNode = node.addNode(name, NodeTypeConstants.NT_FOLDER);
+      addedNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
+      node.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
   public AbstractNode duplicateDocument(long ownerId, String fileId, Identity aclIdentity) throws IllegalAccessException,
-          ObjectNotFoundException {
+                                                                                           ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     Node newNode = null;
@@ -332,33 +382,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node parentNode = oldNode.getParent();
 
       if (oldNode != null) {
-        newNode = parentNode.addNode(PREFIX_CLONE + oldNode.getName(), NodeTypeConstants.NT_FILE);
+          duplicateItem(oldNode, parentNode, parentNode);
+        parentNode.save();
+      }
 
-        if(!newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
-        newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
-
-        if(!newNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE))
-          newNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
-
-        if(!newNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE))
-          newNode.addMixin(NodeTypeConstants.MIX_COMMENTABLE);
-
-        if(!newNode.isNodeType(NodeTypeConstants.MIX_VOTABLE))
-          newNode.addMixin(NodeTypeConstants.MIX_VOTABLE);
-
-        if(!newNode.isNodeType(NodeTypeConstants.MIX_I18N))
-          newNode.addMixin(NodeTypeConstants.MIX_I18N);
-
-        newNode.setProperty(NodeTypeConstants.EXO_TITLE, PREFIX_CLONE + oldNode.getName());
-        Node resourceNode = newNode.addNode(NodeTypeConstants.JCR_CONTENT, NodeTypeConstants.NT_RESOURCE);
-
-        Calendar now = Calendar.getInstance();
-        resourceNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, now);
-        resourceNode.setProperty(NodeTypeConstants.JCR_DATA, oldNode.getNode(NodeTypeConstants.JCR_CONTENT).getProperty(NodeTypeConstants.JCR_DATA).getStream());
-        resourceNode.setProperty(NodeTypeConstants.JCR_MIME_TYPE, oldNode.getNode(NodeTypeConstants.JCR_CONTENT).getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
-        resourceNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
-         }
-      parentNode.save();
       return toFileNode(identityManager, aclIdentity, parentNode);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
@@ -368,6 +395,72 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
 
+  }
+
+  private void duplicateItem(Node oldNode, Node destinationNode, Node parentNode) throws Exception{
+    if (oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
+      return;
+    }
+    Node newNode = null;
+    String name = oldNode.getName();
+    String title = oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString();
+    if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())){
+      name = PREFIX_CLONE + name;
+      title = PREFIX_CLONE + title;
+      String newName = name;
+      int i =0;
+      while((destinationNode.hasNode(newName))){
+        i++;
+        newName = name + " (" + i + ")";
+      }
+      name = newName.toLowerCase();
+      if(i>0){
+        title = title + " (" + i + ")";
+      }
+    }
+    if (oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER)) {
+      newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
+      newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
+      NodeIterator nodeIterator = oldNode.getNodes();
+      while (nodeIterator.hasNext()) {
+        Node node = nodeIterator.nextNode();
+        duplicateItem(node, newNode, parentNode);
+      }
+    } else {
+      newNode = destinationNode.addNode(name, oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString());
+
+      if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
+        newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
+
+      if (oldNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE))
+        newNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
+
+      if (oldNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE))
+        newNode.addMixin(NodeTypeConstants.MIX_COMMENTABLE);
+
+      if (oldNode.isNodeType(NodeTypeConstants.MIX_VOTABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VOTABLE))
+        newNode.addMixin(NodeTypeConstants.MIX_VOTABLE);
+
+      if (oldNode.isNodeType(NodeTypeConstants.MIX_I18N) && !newNode.isNodeType(NodeTypeConstants.MIX_I18N))
+        newNode.addMixin(NodeTypeConstants.MIX_I18N);
+
+      newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
+      if(oldNode.hasNode(NodeTypeConstants.JCR_CONTENT)){
+        Node resourceNode = newNode.addNode(NodeTypeConstants.JCR_CONTENT, NodeTypeConstants.NT_RESOURCE);
+
+        Calendar now = Calendar.getInstance();
+        resourceNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, now);
+        resourceNode.setProperty(NodeTypeConstants.JCR_DATA,
+                oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
+                        .getProperty(NodeTypeConstants.JCR_DATA)
+                        .getStream());
+        resourceNode.setProperty(NodeTypeConstants.JCR_MIME_TYPE,
+                oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
+                        .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
+                        .getString());
+        resourceNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      }
+    }
   }
 
   private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {
