@@ -84,6 +84,8 @@ public class NodeTypeConstants {
 
   public static final String EXO_TITLE              = "exo:title";
 
+  public static final String EXO_NAME              = "exo:name";
+
   public static final String EXO_DATE_CREATED       = "exo:dateCreated";
 
   public static final String EXO_DATE_MODIFIED      = "exo:dateModified";

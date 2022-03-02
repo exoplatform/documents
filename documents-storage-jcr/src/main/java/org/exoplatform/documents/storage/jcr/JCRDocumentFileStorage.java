@@ -289,7 +289,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String homePath = "";
       if (node != null) {
-        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), node.getPath()));
+        String nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -298,7 +299,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           try {
             node = node.getParent();
             if (node != null) {
-              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), node.getPath()));
+              nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
             }
           } catch (RepositoryException repositoryException) {
             node = null;
@@ -403,7 +405,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
       }
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
-      node.setProperty(NodeTypeConstants.EXO_TITLE, title);
+      node.setProperty(NodeTypeConstants.EXO_NAME, title);
       node.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentID, e);
