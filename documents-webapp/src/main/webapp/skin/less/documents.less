@@ -267,22 +267,36 @@
     #addItemMenu {
       font-weight: normal !important;
       height: 38px;
-      width: 129px;
+      width: 91px;
+      font-size: 13px;
+
+      .menu-text {
+        font-size: 13px !important;
+        color: var(--allPagesDarkGrey, #4d5466) !important;
+      }
 
       .add-menu-btn {
         left: 11px !important;
         right: 20px;
         top: 60px !important;
         background: white;
-        width: 129px !important;
+        width: 110px !important;
+        font-size: 13px;
       }
       #addBtn {
+        font-size: 13px !important;
         &:focus {
           &::after {
             opacity: 0 !important;
           }
         }
       }
+    }
+    .add-menu-list-item{
+      min-height: 35px !important;
+    }
+    .add-menu-list-item .v-icon{
+      color: var(--allPagesDarkGrey, #4d5466) !important;
     }
   }
 
