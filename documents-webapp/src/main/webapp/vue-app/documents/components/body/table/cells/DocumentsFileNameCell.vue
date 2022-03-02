@@ -189,13 +189,13 @@ export default {
       }
     },
     fileName() {
-      return this.file.name.split('.')[0];
+      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(0,this.file.name.lastIndexOf('.')):this.file.name;
     },
     editNameMode() {
       return this.file.id===this.fileToEditId;
     },
     fileType() {
-      return this.file.name.split('.')[1]?`.${this.file.name.split('.')[1]}`:'';
+      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')):'';
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
