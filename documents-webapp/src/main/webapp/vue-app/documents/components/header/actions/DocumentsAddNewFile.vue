@@ -20,6 +20,7 @@
         :key="postKey"
         @click="openAddItemMenu">
         <v-icon
+          size="13"
           id="addBtn"
           dark>
           mdi-plus
@@ -36,23 +37,23 @@
         down>
         <v-list-item
           @click="addFolder"
-          class="px-2">
+          class="px-2 add-menu-list-item">
           <v-icon
-            size="19"
+            size="13"
             class="clickable pr-2">
             fa-folder
           </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color">{{ $t('documents.button.addNewFolder') }}</span>
+          <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.button.addNewFolder') }}</span>
         </v-list-item>
         <v-list-item
           @click="openDrawer"
-          class="px-2">
+          class="px-2 add-menu-list-item">
           <v-icon
-            size="19"
+            size="13"
             class="clickable pr-2">
             fa-file-alt
           </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color">{{ $t('documents.button.addNewFile') }}</span>
+          <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.button.addNewFile') }}</span>
         </v-list-item>
       </v-menu>
     </div>
