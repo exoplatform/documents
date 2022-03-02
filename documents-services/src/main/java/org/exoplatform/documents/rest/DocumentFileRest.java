@@ -324,10 +324,6 @@ public class DocumentFileRest implements ResourceContainer {
     if (StringUtils.isEmpty(newName)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Document Name should not be empty").build();
     }
-    if (NumberUtils.isNumber(newName)) {
-      LOG.warn("Document Name should not be number");
-      return Response.status(Response.Status.BAD_REQUEST).entity("Document Name should not be number").build();
-    }
     try {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
       documentFileService.renameDocument(ownerId, documentID, newName, userIdentityId);
