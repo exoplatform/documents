@@ -2,7 +2,7 @@
   <div class="d-flex flex-row">
     <documents-header-left />
     <v-spacer v-show="!showMobileFilter" />
-    <div>
+    <div v-show="!showMobileFilter">
       <v-tabs
         v-model="tab"
         class="documentViewTabs">
