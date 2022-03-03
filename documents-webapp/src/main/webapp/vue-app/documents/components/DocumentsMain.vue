@@ -7,24 +7,28 @@
     <div class="pa-3 white">
       <div v-if="searchResult">
         <documents-header
+          :files-size="files.length" 
           class="py-2" />
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
       <div v-else-if="!filesLoad && !loadingFiles && selectedView == 'folder' ">
-        <documents-header-left
+        <documents-header
+          :files-size="files.length" 
           class="py-2" />
         <documents-no-body-folder
           :is-mobile="isMobile" />
       </div>
       <div v-else-if="!filesLoad && !loadingFiles">
-        <documents-header-left
+        <documents-header
+          :files-size="files.length" 
           class="py-2" />
         <documents-no-body
           :is-mobile="isMobile" />
       </div>
       <div v-else>
         <documents-header
+          :files-size="files.length" 
           class="py-2" />
         <documents-body
           :view-extension="selectedViewExtension"
@@ -203,12 +207,10 @@ export default {
     },
     changeView(view) {
       this.selectedView=view;
-      this.refreshFiles(this.primaryFilter);
-      if (view!=='folder'){
-        const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
+      if (view.toLowerCase() !== 'folder'){
+        this.parentFolderId=null;
       }
-
+      this.refreshFiles(this.primaryFilter);
     },
     refreshFilesEvent() {
       this.refreshFiles();
