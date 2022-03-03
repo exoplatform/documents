@@ -170,7 +170,7 @@ export default {
           this.getFolderPath();
           this.refreshFiles();
           if (documents.folder){
-            this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateFolder')});     
+            this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateFolder')});
           } else {
             this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateDocument')});
           }
@@ -310,7 +310,7 @@ export default {
     },
     createFolder(name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name) 
+      this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name)
         .then( () => {
           this.refreshFiles();
         })

@@ -110,8 +110,8 @@ export default {
     loading: false,
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
-    editNameMode: false,
-    drawerDetails: false
+    drawerDetails: false,
+    fileToEditId: -1
   }),
   computed: {
     isMobile() {
@@ -188,6 +188,9 @@ export default {
     fileName() {
       return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(0,this.file.name.lastIndexOf('.')):this.file.name;
     },
+    editNameMode() {
+      return this.file.id===this.fileToEditId;
+    },
     fileType() {
       return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')):'';
     },
@@ -206,7 +209,7 @@ export default {
     });
     this.$root.$on('update-file-name', file => {
       if (this.file.id=== file.id){
-        this.editNameMode = true;
+        this.fileToEditId=file.id;
       }
     });
     this.$root.$on('close-file-action-menu', () => {
@@ -214,7 +217,7 @@ export default {
     });
     this.$root.$on('cancel-edit-mode', file => {
       if (this.file.id=== file.id) {
-        this.editNameMode = false;
+        this.fileToEditId=-1;
       }
     });
     this.$root.$on('open-info-drawer', fileId => {
