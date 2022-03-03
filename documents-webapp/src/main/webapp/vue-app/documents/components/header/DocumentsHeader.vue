@@ -57,6 +57,14 @@ export default {
         this.tab = 1;
       }
     }
+    if (queryParams.has('view')) {
+      const view = queryParams.get('view');
+      if (view.toLowerCase() === 'folder'){
+        this.tab = 1;
+      } else {
+        this.tab = 0;
+      }
+    }
 
   },
   methods: {
@@ -82,7 +90,10 @@ export default {
     },
 
     changeDocumentView(view) {
+      const url= new URL(window.location.href);
+      url.searchParams.set('view',view);
       this.$root.$emit('document-change-view', view);
+      window.history.pushState('documents', 'Documents', url.toString());
     },
 
     tabClass(i) {
