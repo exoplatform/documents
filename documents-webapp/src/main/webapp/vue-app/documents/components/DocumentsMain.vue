@@ -194,7 +194,7 @@ export default {
           folderPath = pathParts[1];
         }
         pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-        window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}`);
+        window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}?view=folder`);
       }
     },
     loadMore() {
@@ -206,7 +206,7 @@ export default {
       this.refreshFiles(this.primaryFilter);
       if (view!=='folder'){
         const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}`);
+        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
       }
 
     },
@@ -391,6 +391,17 @@ export default {
         this.parentFolderId=null;
         this.selectedView = 'timeline';
         this.getFolderPath();
+      }
+      if (queryParams.has('view')) {
+        const view = queryParams.get('view');
+        if (view.toLowerCase() === 'folder'){
+          this.selectedView='folder';
+        } else {
+          this.parentFolderId=null;
+          this.selectedView='timeline';
+          const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+          window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
+        }
       }
     },
     onBrowserNavChange() {
