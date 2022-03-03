@@ -100,6 +100,7 @@ export default {
     documentsBreadcrumb: [],
     actualFolderId: '',
     folderPath: '',
+    currentFolderPath: '',
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
   created() {
@@ -108,32 +109,37 @@ export default {
       if (data && data.length>0){
         this.documentsBreadcrumb= data;
         this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
+        this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
+        this.$root.$emit('set-current-folder-url', this.currentFolderPath);
       } else {
         this.getBreadCrumbs();
       }
     });
-
-    const currentUrlSearchParams = window.location.search;
-    const queryParams = new URLSearchParams(currentUrlSearchParams);
-    if (queryParams.has('folderId')) {
-      this.actualFolderId = queryParams.get('folderId');
-    } else {
-      const pathParts  = document.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-      if (pathParts.length>1){
-        this.folderPath = pathParts[1];
-      }
-    }
-
+    this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
+    this.getFolderPath();
     this.getBreadCrumbs();
-    
   },
   methods: {
     openFolder(folder) {
       if (folder.id !== this.actualFolderId ) {
         this.folderPath='';
-        this.actualFolderId=folder.id;  
+        this.actualFolderId=folder.id;
         this.getBreadCrumbs();
         this.$root.$emit('document-open-folder', folder);
+      }
+    },
+
+    getFolderPath() {
+      const currentUrlSearchParams = window.location.search;
+      const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (queryParams.has('folderId')) {
+        this.actualFolderId = queryParams.get('folderId');
+      } else {
+        this.actualFolderId = '';
+        const pathParts  = document.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        if (pathParts.length>1){
+          this.folderPath = pathParts[1];
+        }
       }
     },
 
@@ -141,8 +147,16 @@ export default {
       return this.$documentFileService
         .getBreadCrumbs(this.actualFolderId,this.ownerId,this.folderPath)
         .then(breadCrumbs => {this.documentsBreadcrumb = breadCrumbs;
-          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;})
+          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
+          this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
+          this.$root.$emit('set-current-folder-url', this.currentFolderPath);
+        })
         .finally(() => this.loading = false);
+    },
+
+    updateBreadcrumb() {
+      this.getFolderPath();
+      this.getBreadCrumbs();
     },
   }
 };
