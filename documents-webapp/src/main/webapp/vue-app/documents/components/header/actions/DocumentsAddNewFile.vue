@@ -3,7 +3,7 @@
     <div v-show="isMobile && !showMobileFilter || !isMobile">
       <button
         v-if="!isFolderView"
-        id="addItemMenu"
+        :id="isMobile ? 'addItemMenuMobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
         @click="openDrawer">
         <v-icon
@@ -15,7 +15,7 @@
       </button>
       <button
         v-if="isFolderView"
-        id="addItemMenu"
+        :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
         :key="postKey"
         @click="openAddItemMenu">
