@@ -200,6 +200,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     documentFileStorage.createFolder(ownerId, folderId, folderPath, name, getAclUserIdentity(authenticatedUserId));
   }
 
+  @Override
+  public void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
+    documentFileStorage.renameDocument(ownerId, documentID, name, getAclUserIdentity(authenticatedUserId));
+  }
+
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
     Identity userIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
     if (userIdentity == null) {

@@ -290,7 +290,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String homePath = "";
       if (node != null) {
-        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), node.getPath()));
+        String nodeName = node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -299,7 +300,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           try {
             node = node.getParent();
             if (node != null) {
-              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), node.getPath()));
+              nodeName = node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
             }
           } catch (RepositoryException repositoryException) {
             node = null;
@@ -349,6 +351,60 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws IllegalAccessException, ObjectAlreadyExistsException,
+          ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(documentID) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        documentID = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, documentID);
+      }
+      String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanString(title));
+      String oldName = node.getName();
+      if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
+        String ext = oldName.substring(oldName.lastIndexOf('.'));
+        title = title.concat(ext);
+      }
+
+      if (node.hasNode(name)) {
+        throw new ObjectAlreadyExistsException("Document'" + title + "' already exist") ;
+      }
+      if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
+        node.addMixin(NodeTypeConstants.EXO_MODIFY);
+      }
+      Calendar now = Calendar.getInstance();
+      node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+
+      // Update exo:name
+      if(node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
+        node.addMixin(NodeTypeConstants.EXO_SORTABLE);
+      }
+      if (!node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+        node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TITLE, title);
+      node.setProperty(NodeTypeConstants.EXO_NAME, title);
+      node.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error renaming document'" + documentID, e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();

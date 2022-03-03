@@ -4,7 +4,7 @@
     :space-id="spaceId"
     :favorite="isFavorite"
     type="file"
-    typeLabel="Documents"
+    type-label="Documents"
     @removed="removed"
     @remove-error="removeError"
     @added="added"

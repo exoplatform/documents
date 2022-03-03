@@ -74,9 +74,17 @@ public class NodeTypeConstants {
 
   public static final String EXO_OWNEABLE           = "exo:owneable";
 
+  public static final String EXO_MODIFY             = "exo:modify";
+
+  public static final String EXO_SORTABLE           = "exo:sortable";
+
+  public static final String EXO_RSS_ENABLE         = "exo:rss-enable";
+
   public static final String EXO_PRIVILEGEABLE      = "exo:privilegeable";
 
   public static final String EXO_TITLE              = "exo:title";
+
+  public static final String EXO_NAME               = "exo:name";
 
   public static final String EXO_DATE_CREATED       = "exo:dateCreated";
 
@@ -102,8 +110,8 @@ public class NodeTypeConstants {
 
   public static final String MIX_COMMENTABLE        = "mix:commentable";
 
-  public static final String EXO_THUMBNAILS_FOLDER        = "exo:thumbnails";
+  public static final String EXO_THUMBNAILS_FOLDER  = "exo:thumbnails";
 
-  public static final String JCR_PRIMARY_TYPE        = "jcr:primaryType";
+  public static final String JCR_PRIMARY_TYPE       = "jcr:primaryType";
 
 }
