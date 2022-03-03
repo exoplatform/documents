@@ -30,6 +30,7 @@ import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
@@ -70,14 +71,17 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
 
   private PortalContainer container;
 
+  private SessionProviderService sessionProviderService;
+
   private Map<String, String> documentsToDeleteQueue               = new HashMap<>();
 
-  public JCRDeleteFileStorageImpl(RepositoryService repositoryService, IdentityManager identityManager, TrashStorage trashStorage, FavoriteService favoriteService, PortalContainer container) {
+  public JCRDeleteFileStorageImpl(RepositoryService repositoryService, IdentityManager identityManager, TrashStorage trashStorage, FavoriteService favoriteService, PortalContainer container, SessionProviderService sessionProviderService) {
     this.repositoryService = repositoryService;
     this.identityManager = identityManager;
     this.trashStorage = trashStorage;
     this.favoriteService = favoriteService;
     this.container = container;
+    this.sessionProviderService = sessionProviderService;
   }
 
   @Override
@@ -244,7 +248,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         throw new VersionException("node is locked, can't move to trash node :" + node.getPath());
       if (!canRemoveNode(node))
         throw new AccessDeniedException("access denied, can't move to trash node:" + node.getPath());
-      SessionProvider sessionProvider = JCRDocumentsUtil.getSystemSessionProvider();
+      SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
 
       try {
         trashId = trashStorage.moveToTrash(node, sessionProvider);

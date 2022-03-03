@@ -21,12 +21,12 @@ import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.storage.TrashStorage;
-import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.ActivityTypeUtils;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.ItemImpl;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
@@ -46,23 +46,28 @@ import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import java.util.*;
 
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getUserSessionProvider;
-
 public class TrashStorageImpl implements TrashStorage {
 
   private static final String FILE_EXPLORER_PORTLET = "FileExplorerPortlet";
+
   private static final String TRASH_WORKSPACE = "trashWorkspace";
+
   private static final String TRASH_HOME_PATH = "trashHomeNodePath";
 
   private RepositoryService repositoryService;
+
+  private SessionProviderService sessionProviderService;
+
   private String trashWorkspace;
+
   private String trashHome;
 
   /** The log. */
   private static final Log LOG = ExoLogger.getLogger(TrashStorageImpl.class.getName());
 
-  public TrashStorageImpl(RepositoryService repositoryService, InitParams initParams) throws PortletInvokerException {
+  public TrashStorageImpl(RepositoryService repositoryService, SessionProviderService sessionProviderService, InitParams initParams) throws PortletInvokerException {
     this.repositoryService = repositoryService;
+    this.sessionProviderService = sessionProviderService;
     this.trashWorkspace = initParams.getValueParam(TRASH_WORKSPACE).getValue();
     this.trashHome = initParams.getValueParam(TRASH_HOME_PATH).getValue();
     ExoContainer manager = ExoContainerContext.getCurrentContainer();
@@ -133,7 +138,7 @@ public class TrashStorageImpl implements TrashStorage {
     if (!node.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
       String restorePath = fixRestorePath(node.getPath());
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      Session trashSession = JCRDocumentsUtil.getSystemSessionProvider().getSession(this.trashWorkspace, manageableRepository);
+      Session trashSession = sessionProviderService.getSystemSessionProvider(null).getSession(this.trashWorkspace, manageableRepository);
       String actualTrashPath = this.trashHome + (this.trashHome.endsWith("/") ? "" : "/")
           + fixRestorePath(nodeName);
       if (trashSession.getWorkspace().getName().equals(
@@ -242,9 +247,8 @@ public class TrashStorageImpl implements TrashStorage {
    */
   public Node getTrashHomeNode() {
     try {
-      Session session = JCRDocumentsUtil.getSystemSessionProvider()
-                                    .getSession(trashWorkspace,
-                                                repositoryService.getCurrentRepository());
+      Session session = sessionProviderService.getSystemSessionProvider(null).getSession(trashWorkspace,
+                      repositoryService.getCurrentRepository());
       return (Node) session.getItem(trashHome);
     } catch (Exception e) {
       return null;
@@ -255,7 +259,7 @@ public class TrashStorageImpl implements TrashStorage {
   public Node getNodeByTrashId(String trashId) throws RepositoryException {
     QueryResult queryResult;
     NodeIterator iter;
-    SessionProvider sessionProvider = JCRDocumentsUtil.getSystemSessionProvider();
+    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
     Session session = sessionProvider.getSession(trashWorkspace,
                     repositoryService.getCurrentRepository());
     QueryManager queryManager = session.getWorkspace().getQueryManager();
@@ -272,7 +276,7 @@ public class TrashStorageImpl implements TrashStorage {
   public List<Node> getAllLinks(Node targetNode, String linkType, SessionProvider sessionProvider) {
     try {
       List<Node> result = new ArrayList<>();
-      ManageableRepository repository  = JCRDocumentsUtil.getRepository();
+      ManageableRepository repository  = repositoryService.getCurrentRepository();
       String[] workspaces = repository.getWorkspaceNames();
       String queryString = new StringBuilder().append("SELECT * FROM ").
               append(linkType).
@@ -326,7 +330,7 @@ public class TrashStorageImpl implements TrashStorage {
 
   @Override
   public List<Node> getAllLinks(Node targetNode, String linkType) {
-    return getAllLinks(targetNode, linkType, getUserSessionProvider());
+    return getAllLinks(targetNode, linkType, sessionProviderService.getSessionProvider(null));
   }
 
   private boolean isDocumentNodeType(Node node) throws RepositoryException {
