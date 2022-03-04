@@ -30,6 +30,7 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.BreadCrumbItemEntity;
 import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -59,6 +60,8 @@ public class DocumentFileServiceTest {
 
   private DocumentFileServiceImpl documentFileService;
 
+  private JCRDeleteFileStorage jcrDeleteFileStorage;
+
   @Before
   public void setUp() {
     spaceService = mock(SpaceService.class);
@@ -66,7 +69,7 @@ public class DocumentFileServiceTest {
     identityRegistry = mock(IdentityRegistry.class);
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
-    documentFileService = new DocumentFileServiceImpl(documentFileStorage, authenticator, spaceService, identityManager, identityRegistry);
+    documentFileService = new DocumentFileServiceImpl(documentFileStorage, jcrDeleteFileStorage, authenticator, spaceService, identityManager, identityRegistry);
   }
 
   @Test

@@ -28,6 +28,7 @@ import java.util.List;
 
 import javax.ws.rs.core.Response;
 
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -70,6 +71,8 @@ public class DocumentFileRestTest {
 
   private DocumentFileRest        documentFileRest;
 
+  private JCRDeleteFileStorage jcrDeleteFileStorage;
+
   @Before
   public void setUp() {
     spaceService = mock(SpaceService.class);
@@ -78,7 +81,9 @@ public class DocumentFileRestTest {
     metadataService = mock(MetadataService.class);
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
+    jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
+                                                      jcrDeleteFileStorage,
                                                       authenticator,
                                                       spaceService,
                                                       identityManager,
