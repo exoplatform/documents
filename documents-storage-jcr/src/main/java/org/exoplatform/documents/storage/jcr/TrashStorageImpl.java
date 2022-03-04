@@ -44,6 +44,7 @@ import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class TrashStorageImpl implements TrashStorage {
 
@@ -392,25 +393,7 @@ public class TrashStorageImpl implements TrashStorage {
       // Before removing symlinks, We order symlinks by name descending, index descending.
       // Example: symlink[3],symlink[2], symlink[1] to avoid the case that
       // the index of same name symlink automatically changed to increasing one by one
-      symlinks.stream().sorted(new Comparator<>()
-      {
-        @Override
-        public int compare(Node node1, Node node2) {
-          try {
-            String name1 = node1.getName();
-            String name2 = node2.getName();
-            if (name1.equals(name2)) {
-              int index1 = node1.getIndex();
-              int index2 = node2.getIndex();
-              return -1 * ((Integer)index1).compareTo(index2);
-            }
-            return -1 * name1.compareTo(name2);
-          } catch (RepositoryException e) {
-            return 0;
-          }
-        }
-      });
-
+      symlinks = symlinks.stream().sorted(this::compare).filter(Objects::nonNull).collect(Collectors.toList());
       for (Node symlink : symlinks) {
         synchronized (symlink) {
           if (keepInTrash) {
@@ -429,6 +412,21 @@ public class TrashStorageImpl implements TrashStorage {
       if (LOG.isWarnEnabled()) {
         LOG.warn(e.getMessage());
       }
+    }
+  }
+
+  private int compare(Node node1, Node node2) {
+    try {
+      String name1 = node1.getName();
+      String name2 = node2.getName();
+      if (name1.equals(name2)) {
+        int index1 = node1.getIndex();
+        int index2 = node2.getIndex();
+        return -1 * ((Integer)index1).compareTo(index2);
+      }
+      return -1 * name1.compareTo(name2);
+    } catch (RepositoryException e) {
+      return 0;
     }
   }
 
