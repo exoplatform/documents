@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -380,13 +381,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node = getNodeByIdentifier(session, documentID);
       }
       String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanString(title));
+      //clean node name
+      name = cleanString(name);
+
+      name = URLDecoder.decode(name,"UTF-8");
+
       String oldName = node.getName();
       if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
         String ext = oldName.substring(oldName.lastIndexOf('.'));
-        title = title.concat(ext);
+        title = name.concat(ext);
       }
 
-      if (node.hasNode(name)) {
+      if (node.getName().equals(title)) {
         throw new ObjectAlreadyExistsException("Document'" + title + "' already exist") ;
       }
       if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
@@ -404,6 +410,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (!node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
         node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
       }
+
+      Node parent = node.getParent();
+      String srcPath = node.getPath();
+      String destPath = (parent.getPath().equals("/") ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat("/").concat(title);
+      node.getSession().getWorkspace().move(srcPath, destPath);
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.setProperty(NodeTypeConstants.EXO_NAME, title);
       node.save();
