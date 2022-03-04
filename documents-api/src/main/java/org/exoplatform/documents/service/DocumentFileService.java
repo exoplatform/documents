@@ -110,7 +110,7 @@ public interface DocumentFileService {
    * Retrieves breadcrumb of the given node.
    *
    * @param folderId Id of the given folder
-   *  @param authenticatedUserId of the user acessing files
+   * @param authenticatedUserId of the user acessing files
    * @return {@link List} of {@link BreadCrumbItem}
    * @throws IllegalAccessException when the user isn't allowed to access
    *           documents of the designated parentFolderId
@@ -122,13 +122,36 @@ public interface DocumentFileService {
    * Duplicate the given node.
    *
    * @param fileId Id of the given file
-   *  @param authenticatedUserId of the user acessing files
+   * @param authenticatedUserId of the user acessing files
    * @return {@link AbstractNode}
    * @throws IllegalAccessException when the user isn't allowed to access
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
   AbstractNode duplicateDocument(long ownerId,String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
+   * Delete a document.
+   *
+   * @param documentPath the path of document
+   * @param documentId the Id of document
+   * @param favorite Is favorite document
+   * @param delay the delay to apply the delete atcion
+   * @param authenticatedUserId of the user acessing files
+   * @throws IllegalAccessException when the user isn't allowed to delete
+   *           document
+   */
+  void deleteDocument(String documentPath, String documentId, boolean favorite, long delay, long authenticatedUserId) throws IllegalAccessException;
+
+  /**
+   * Undo delete a document (Cancel the delete action).
+   *
+   * @param documentId the Id of document
+   * @param authenticatedUserId of the user acessing files
+   * @throws IllegalAccessException when the user isn't allowed to delete
+   *           document
+   */
+  void undoDeleteDocument(String documentId, long authenticatedUserId);
 
   void createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 

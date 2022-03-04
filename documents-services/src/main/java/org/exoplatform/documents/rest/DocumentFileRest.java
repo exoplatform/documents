@@ -333,5 +333,57 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
   }
+
+  @DELETE
+  @Path("{documentId}")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @ApiOperation(value = "Delete document", httpMethod = "DELETE", response = Response.class, notes = "This deletes document", consumes = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Document deleted"),
+          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "User not authorized to delete the document"),
+          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
+  public Response deleteTarget(@ApiParam(value = "Document id", required = true)
+                               @PathParam("documentId") String documentId,
+                               @ApiParam(value = "folder path", required = true)
+                               @QueryParam("documentPath") String documentPath,
+                               @ApiParam(value = "Is favorite document", required = false)
+                               @QueryParam("favorite") boolean favorite,
+                               @ApiParam(value = "Time to effectively delete document", required = false)
+                               @QueryParam("delay") long delay) {
+    if (StringUtils.isBlank(documentId)) {
+      return Response.status(Status.BAD_REQUEST).entity("document_id_is_mandatory").build();
+    }
+    if (StringUtils.isBlank(documentPath)) {
+      return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    String originPath = documentPath.replace(":", "/");
+    try {
+      documentFileService.deleteDocument(originPath,documentId,  favorite, delay, userIdentityId);
+      return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error when deleting the news target with name " + userIdentityId, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @Path("{documentId}/undoDelete")
+  @POST
+  @RolesAllowed("users")
+  @ApiOperation(value = "Undo deleting news target if not yet effectively deleted.", httpMethod = "POST", response = Response.class)
+  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+                         @ApiResponse(code = HTTPStatus.FORBIDDEN, message = "Forbidden operation"), })
+  public Response undoDeleteTarget(@ApiParam(value = "Document identifier", required = true)
+                                   @PathParam("documentId") String documentId) {
+    if (StringUtils.isBlank(documentId)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document id is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    documentFileService.undoDeleteDocument(documentId, userIdentityId);
+    return Response.noContent().build();
+  }
 }
 
