@@ -249,13 +249,13 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       if (!canRemoveNode(node))
         throw new AccessDeniedException("access denied, can't move to trash node:" + node.getPath());
       SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+      trashId = trashStorage.moveToTrash(node, sessionProvider);
 
-      try {
-        trashId = trashStorage.moveToTrash(node, sessionProvider);
-      } catch (PathNotFoundException ex) {
-        ret = false;
+    } catch (PathNotFoundException e) {
+      if (LOG.isErrorEnabled()) {
+        LOG.error("Error to find node with the path :" + node.getPath());
       }
-
+      ret = false;
     } catch (LockException e) {
       if (LOG.isErrorEnabled()) {
         LOG.error("node is locked, can't move to trash node :" + node.getPath());

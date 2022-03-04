@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.storage.jcr;
 
-import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.xml.InitParams;
@@ -58,6 +57,8 @@ public class TrashStorageImpl implements TrashStorage {
 
   private SessionProviderService sessionProviderService;
 
+  private ListenerService listenerService;
+
   private String trashWorkspace;
 
   private String trashHome;
@@ -65,9 +66,10 @@ public class TrashStorageImpl implements TrashStorage {
   /** The log. */
   private static final Log LOG = ExoLogger.getLogger(TrashStorageImpl.class.getName());
 
-  public TrashStorageImpl(RepositoryService repositoryService, SessionProviderService sessionProviderService, InitParams initParams) throws PortletInvokerException {
+  public TrashStorageImpl(RepositoryService repositoryService, SessionProviderService sessionProviderService, ListenerService listenerService, InitParams initParams) throws PortletInvokerException {
     this.repositoryService = repositoryService;
     this.sessionProviderService = sessionProviderService;
+    this.listenerService = listenerService;
     this.trashWorkspace = initParams.getValueParam(TRASH_WORKSPACE).getValue();
     this.trashHome = initParams.getValueParam(TRASH_HOME_PATH).getValue();
     ExoContainer manager = ExoContainerContext.getCurrentContainer();
@@ -122,7 +124,6 @@ public class TrashStorageImpl implements TrashStorage {
         }
       }
     }
-    ListenerService listenerService =  CommonsUtils.getService(ListenerService.class);
     try {
       if (node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE) || node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         if (isBroadcastNTFileEvents(node)) {
@@ -313,7 +314,6 @@ public class TrashStorageImpl implements TrashStorage {
    */
   private void removeDeadSymlinksFromTrash(Node node) throws RepositoryException {
     List<Node> symlinks = getAllLinks(node, NodeTypeConstants.EXO_SYMLINK);
-    ListenerService listenerService =  CommonsUtils.getService(ListenerService.class);
     for (Node symlink : symlinks) {
       symlink.remove();
       try {
@@ -371,50 +371,7 @@ public class TrashStorageImpl implements TrashStorage {
       while (!queue.isEmpty()) {
         node = queue.poll();
         if (!node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-          try {
-            List<Node> symlinks = getAllLinks(node, NodeTypeConstants.EXO_SYMLINK, sessionProvider);
-            // Before removing symlinks, We order symlinks by name descending, index descending.
-            // Example: symlink[3],symlink[2], symlink[1] to avoid the case that
-            // the index of same name symlink automatically changed to increasing one by one
-            Collections.sort(symlinks, new Comparator<Node>()
-            {
-              @Override
-              public int compare(Node node1, Node node2) {
-                try {
-                  String name1 = node1.getName();
-                  String name2 = node2.getName();
-                  if (name1.equals(name2)) {
-                    int index1 = node1.getIndex();
-                    int index2 = node2.getIndex();
-                    return -1 * ((Integer)index1).compareTo(index2);
-                  }
-                  return -1 * name1.compareTo(name2);
-                } catch (RepositoryException e) {
-                  return 0;
-                }
-              }
-            });
-
-            for (Node symlink : symlinks) {
-              synchronized (symlink) {
-                if (keepInTrash) {
-                  moveToTrash(symlink, sessionProvider, 1);
-                } else {
-                  if (symlink.isNodeType(ActivityTypeUtils.EXO_ACTIVITY_INFO) && node.hasProperty(ActivityTypeUtils.EXO_ACTIVITY_ID)) {
-                    ListenerService listenerService =  CommonsUtils.getService(ListenerService.class);
-                    listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, symlink);
-                  }
-                  Session nodeSession = symlink.getSession();
-                  symlink.remove();
-                  nodeSession.save();
-                }
-              }
-            }
-          } catch (Exception e) {
-            if (LOG.isWarnEnabled()) {
-              LOG.warn(e.getMessage());
-            }
-          }
+          removeSymlinks(node, keepInTrash, sessionProvider);
           for (NodeIterator iter = node.getNodes(); iter.hasNext(); ) {
             queue.add(iter.nextNode());
           }
@@ -426,6 +383,52 @@ public class TrashStorageImpl implements TrashStorage {
       }
     } finally {
       sessionProvider.close();
+    }
+  }
+
+  private void removeSymlinks(Node node, boolean keepInTrash, SessionProvider sessionProvider) {
+    try {
+      List<Node> symlinks = getAllLinks(node, NodeTypeConstants.EXO_SYMLINK, sessionProvider);
+      // Before removing symlinks, We order symlinks by name descending, index descending.
+      // Example: symlink[3],symlink[2], symlink[1] to avoid the case that
+      // the index of same name symlink automatically changed to increasing one by one
+      symlinks.stream().sorted(new Comparator<>()
+      {
+        @Override
+        public int compare(Node node1, Node node2) {
+          try {
+            String name1 = node1.getName();
+            String name2 = node2.getName();
+            if (name1.equals(name2)) {
+              int index1 = node1.getIndex();
+              int index2 = node2.getIndex();
+              return -1 * ((Integer)index1).compareTo(index2);
+            }
+            return -1 * name1.compareTo(name2);
+          } catch (RepositoryException e) {
+            return 0;
+          }
+        }
+      });
+
+      for (Node symlink : symlinks) {
+        synchronized (symlink) {
+          if (keepInTrash) {
+            moveToTrash(symlink, sessionProvider, 1);
+          } else {
+            if (symlink.isNodeType(ActivityTypeUtils.EXO_ACTIVITY_INFO) && node.hasProperty(ActivityTypeUtils.EXO_ACTIVITY_ID)) {
+              listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, symlink);
+            }
+            Session nodeSession = symlink.getSession();
+            symlink.remove();
+            nodeSession.save();
+          }
+        }
+      }
+    } catch (Exception e) {
+      if (LOG.isWarnEnabled()) {
+        LOG.warn(e.getMessage());
+      }
     }
   }
 
