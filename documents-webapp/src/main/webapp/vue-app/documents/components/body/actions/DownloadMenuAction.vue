@@ -1,6 +1,6 @@
 <template>
   <div
-    class="downloadDocumentNewApp clickable"
+    class="downloadDocumentNewApp clickable mx-2"
     @click="download">
     <v-icon
       size="13"
