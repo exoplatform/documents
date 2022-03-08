@@ -253,6 +253,7 @@ public class JCRDocumentsUtil {
                                             Identity aclIdentity,
                                             AbstractNode documentNode) throws RepositoryException {
     documentNode.setId(((NodeImpl) node).getIdentifier());
+    documentNode.setPath(((NodeImpl) node).getPath());
     documentNode.setParentFolderId(((NodeImpl) node.getParent()).getIdentifier());
     if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
       documentNode.setName(node.getProperty(NodeTypeConstants.EXO_TITLE).getString());

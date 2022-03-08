@@ -26,6 +26,7 @@ import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -45,12 +46,16 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private Authenticator       authenticator;
 
+  private JCRDeleteFileStorage       jcrDeleteFileStorage;
+
   public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage,
+                                 JCRDeleteFileStorage jcrDeleteFileStorage,
                                  Authenticator authenticator,
                                  SpaceService spaceService,
                                  IdentityManager identityManager,
                                  IdentityRegistry identityRegistry) {
     this.documentFileStorage = documentFileStorage;
+    this.jcrDeleteFileStorage = jcrDeleteFileStorage;
     this.spaceService = spaceService;
     this.identityManager = identityManager;
     this.identityRegistry = identityRegistry;
@@ -203,6 +208,16 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
     documentFileStorage.renameDocument(ownerId, documentID, name, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
+  public void deleteDocument(String folderPath,String documentId, boolean favorite,long delay, long authenticatedUserId) throws IllegalAccessException {
+    jcrDeleteFileStorage.deleteDocument(folderPath, documentId, favorite, true, delay, getAclUserIdentity(authenticatedUserId), authenticatedUserId);
+  }
+
+  @Override
+  public void undoDeleteDocument(String documentId, long authenticatedUserId) {
+    jcrDeleteFileStorage.undoDelete(documentId, authenticatedUserId);
   }
 
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{

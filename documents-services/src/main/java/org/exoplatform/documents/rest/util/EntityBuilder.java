@@ -162,6 +162,7 @@ public class EntityBuilder {
                              long authenticatedUserId) {
     try {
       nodeEntity.setId(node.getId());
+      nodeEntity.setPath(node.getPath());
       nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
       nodeEntity.setDatasource(node.getDatasource());
       nodeEntity.setDescription(node.getDescription());

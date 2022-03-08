@@ -13,9 +13,9 @@
 <script>
 export default {
   props: {
-    documentId: {
-      type: String,
-      default: '1',
+    file: {
+      type: Object,
+      default: null,
     }
   },
   computed: {
@@ -25,7 +25,12 @@ export default {
   },
   methods: {
     deleteAction() {
-      this.$root.$emit('confirm-document-deletion', this.documentId);
+      this.$root.$emit('confirm-document-deletion', this.file.id);
+      if ( this.isMobile ) {
+        this.$root.$emit('close-file-action-menu');
+      }
+      const deleteDelay = 6;
+      this.$documentFileService.deleteDocument(this.file.path, this.file.id, this.file.favorite, deleteDelay);
     }
   },
 };

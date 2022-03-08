@@ -8,6 +8,26 @@
   </component>
 
   <component>
+    <key>org.exoplatform.documents.storage.JCRDeleteFileStorage</key>
+    <type>org.exoplatform.documents.storage.jcr.JCRDeleteFileStorageImpl</type>
+  </component>
+
+  <component>
+    <key>org.exoplatform.documents.storage.TrashStorage</key>
+    <type>org.exoplatform.documents.storage.jcr.TrashStorageImpl</type>
+    <init-params>
+      <value-param>
+        <name>trashWorkspace</name>
+        <value>collaboration</value>
+      </value-param>
+      <value-param>
+        <name>trashHomeNodePath</name>
+        <value>/Trash</value>
+      </value-param>
+    </init-params>
+  </component>
+
+  <component>
     <key>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</key>
     <type>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</type>
     <init-params>

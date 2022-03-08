@@ -35,6 +35,8 @@ public class AbstractNodeEntity {
 
   private String                                name;
 
+  private String                                path;
+
   private String                                description;
 
   private String                                datasource;
