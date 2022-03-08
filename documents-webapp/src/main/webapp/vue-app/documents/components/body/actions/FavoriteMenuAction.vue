@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable"
+    class="clickable mx-2"
     @click.prevent="hitFavoriteButton">
     <favorite-button
       :id="fileId"
