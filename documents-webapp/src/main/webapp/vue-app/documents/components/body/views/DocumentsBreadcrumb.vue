@@ -21,10 +21,10 @@
               @click="openFolder(documents)">
               <a
                 class="caption text-truncate breadCrumb-link"
-                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ documents.name }}</a>
+                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name)}}</a>
             </v-btn>
           </template>
-          <span class="caption breadcrumbName">{{ documents.name }}</span>
+          <span class="caption breadcrumbName">{{ getName(documents.name) }}</span>
         </v-tooltip>
         <v-icon v-if="index < documentsBreadcrumb.length-1" size="18">mdi-chevron-right</v-icon>
       </div>
@@ -59,7 +59,7 @@
             v-for="(documents, index) in documentsBreadcrumb"
             :key="index"
             class="mb-0">
-            <span v-if="index > 0 && index < documentsBreadcrumb.length-2" class="caption"><v-icon size="18" class="tooltip-chevron">mdi-chevron-right</v-icon> {{ documents.name }}</span>
+            <span v-if="index > 0 && index < documentsBreadcrumb.length-2" class="caption"><v-icon size="18" class="tooltip-chevron">mdi-chevron-right</v-icon> {{ getName(documents.name) }}</span>
           </p>
         </v-tooltip>
         <v-icon class="clickable" size="18">mdi-chevron-right</v-icon>
@@ -113,6 +113,9 @@ export default {
         this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
         this.$root.$emit('set-current-folder-url', this.currentFolderPath);
       } else {
+        this.actualFolderId= '';
+        this.folderPath= '';
+        this.currentFolderPath= '';
         this.getBreadCrumbs();
       }
     });
@@ -122,7 +125,9 @@ export default {
   },
   methods: {
     openFolder(folder) {
-      if (folder.id !== this.actualFolderId ) {
+      if (folder.name==='Private' || folder.name==='Public'){
+        this.$root.$emit('document-open-home');
+      } else if (folder.id !== this.actualFolderId ) {
         this.folderPath='';
         this.actualFolderId=folder.id;  
         this.getBreadCrumbs();
@@ -130,16 +135,31 @@ export default {
       }
     },
 
-    getFolderPath() {
-      const currentUrlSearchParams = window.location.search;
-      const queryParams = new URLSearchParams(currentUrlSearchParams);
-      if (queryParams.has('folderId')) {
-        this.actualFolderId = queryParams.get('folderId');
-      } else {
-        this.actualFolderId = '';
-        const pathParts  = document.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+    getName(name){
+      if (name==='Private' || name==='Public'){
+        return this.$t('documents.label.userHomeDocuments');
+      }
+      return name;
+    },
+
+    getFolderPath(){
+      if (eXo.env.portal.spaceName){
+        const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length>1){
           this.folderPath = pathParts[1];
+        }
+      } else {
+        if (window.location.pathname.includes('/Private')){
+          const pathParts  = window.location.pathname.split('/Private');
+          if (pathParts.length>1){
+            this.folderPath = `Private${pathParts[1]}`;
+          }
+        }
+        if (window.location.pathname.includes('/Public')){
+          const pathParts  = window.location.pathname.split('/Public');
+          if (pathParts.length>1){
+            this.folderPath = `Public${pathParts[1]}`;
+          }
         }
       }
     },

@@ -222,6 +222,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         try {
+          if((parent.getName().equals("Private") || parent.getName().equals("Public") ) && (folderPath.startsWith("Private") || folderPath.startsWith("Public"))){
+            parent = parent.getParent();
+          }
           parent = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
         } catch (RepositoryException repositoryException) {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
@@ -230,7 +233,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
           NodeIterator nodeIterator = parent.getNodes();
-          return toNodes(identityManager, nodeIterator, aclIdentity, offset, limit);
+          return toNodes(identityManager, session, nodeIterator, aclIdentity, offset, limit);
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -283,6 +286,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         try {
+          if((node.getName().equals("Private") || node.getName().equals("Public") ) && (folderPath.startsWith("Private") || folderPath.startsWith("Public"))){
+            node = node.getParent();
+          }
           node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
         } catch (RepositoryException repositoryException) {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
@@ -295,6 +301,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
+        }
+        String userPrivatePathPrefix = username+"/Private";
+        String userPublicPathPrefix = username+"/Public";
+        if (node.getPath().contains(userPrivatePathPrefix)) {
+          homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPrivatePathPrefix)+userPrivatePathPrefix.length());
+        }
+        if (node.getPath().contains(userPublicPathPrefix)) {
+          homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPublicPathPrefix)+userPublicPathPrefix.length());
         }
         while (node != null && !node.getPath().equals(homePath)) {
           try {
@@ -452,7 +466,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parentNode.save();
       }
 
-      return toFileNode(identityManager, aclIdentity, parentNode);
+      return toFileNode(identityManager, aclIdentity, parentNode, "");
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
     } finally {
