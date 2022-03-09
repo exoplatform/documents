@@ -186,12 +186,12 @@ export default {
 
         }).catch(e => console.error(e));
     },
-    deleteDocument(documentId){
+    deleteDocument(file){
       const redirectionTime = 500;
       setTimeout(() => {
         const deletedDocument = localStorage.getItem('deletedDocument');
         if (deletedDocument != null) {
-          this.refreshFiles(null, true, documentId);
+          this.refreshFiles(null, true, file.id);
         }
       }, redirectionTime);
     },
