@@ -25,7 +25,7 @@ export default {
   },
   methods: {
     deleteAction() {
-      this.$root.$emit('confirm-document-deletion', this.file.id);
+      this.$root.$emit('confirm-document-deletion', this.file);
       if ( this.isMobile ) {
         this.$root.$emit('close-file-action-menu');
       }
