@@ -125,6 +125,7 @@ export default {
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
+    this.$root.$on('document-open-home', this.openHome);
     this.$root.$on('documents-add-folder', this.addFolder);
     this.$root.$on('duplicate-document', this.duplicateDocument);
     this.$root.$on('documents-create-folder', this.createFolder);
@@ -164,10 +165,27 @@ export default {
       this.refreshFiles();
     },
     getFolderPath(){
-      const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-      if (pathParts.length>1){
-        this.folderPath = pathParts[1];
-        this.selectedView = 'folder';
+      if (eXo.env.portal.spaceName){
+        const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        if (pathParts.length>1){
+          this.folderPath = pathParts[1];
+          this.selectedView = 'folder';
+        }
+      } else {
+        if (window.location.pathname.includes('/Private')){
+          const pathParts  = window.location.pathname.split('/Private');
+          if (pathParts.length>1){
+            this.folderPath = `Private${pathParts[1]}`;
+            this.selectedView = 'folder';
+          }
+        }
+        if (window.location.pathname.includes('/Public')){
+          const pathParts  = window.location.pathname.split('/Public');
+          if (pathParts.length>1){
+            this.folderPath = `Public${pathParts[1]}`;
+            this.selectedView = 'folder';
+          }
+        } 
       }
     },
     duplicateDocument(documents){
@@ -216,6 +234,26 @@ export default {
         }
         pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
         window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}?view=folder`);
+      } else {
+        const userName = eXo.env.portal.userName;
+        const userPrivatePathPrefix = `${userName}/Private`;
+        const userPublicPathPrefix = `${userName}/Public`;
+        if (parentFolder.path.includes(userPrivatePathPrefix)){
+          const pathParts = parentFolder.path.split(userPrivatePathPrefix);
+          if (pathParts.length>1){
+            folderPath = pathParts[1];
+          }
+          
+          window.history.pushState(parentFolder.name, parentFolder.title, `${eXo.env.server.portalBaseURL.split('/Private')[0]}/Private${folderPath}?view=folder`);
+        }
+        if (parentFolder.path.includes(userPublicPathPrefix)){
+          const pathParts = parentFolder.path.split(userPublicPathPrefix);
+          if (pathParts.length>1){
+            folderPath = pathParts[1];
+          }
+          window.history.pushState(parentFolder.name, parentFolder.title, `${eXo.env.server.portalBaseURL.split('/Public')[0]}/Public${folderPath}?view=folder`);
+        }
+      
       }
     },
     loadMore() {
@@ -228,6 +266,19 @@ export default {
         this.parentFolderId=null;
       }
       this.refreshFiles(this.primaryFilter);
+    },
+    openHome() {
+      this.parentFolderId=null;  
+      this.folderPath='';
+      this.refreshFiles(this.primaryFilter);
+      this.$root.$emit('set-breadcrumb', null);
+      if (eXo.env.server.portalBaseURL.includes('/Private')){
+        window.history.pushState('Documents', 'Personal Documents', `${eXo.env.server.portalBaseURL.split('/Private')[0]}?view=${this.selectedView}`);
+      } else if (eXo.env.server.portalBaseURL.includes('/Public')){
+        window.history.pushState('Documents', 'Personal Documents', `${eXo.env.server.portalBaseURL.split('/Public')[0]}?view=${this.selectedView}`);
+      } else {
+        window.history.pushState('Documents', 'Personal Documents', `${eXo.env.server.portalBaseURL}?view=${this.selectedView}`);
+      }
     },
     refreshFilesEvent() {
       this.refreshFiles();
@@ -409,6 +460,7 @@ export default {
         this.selectedView = 'folder';
       } else {
         this.parentFolderId=null;
+        this.folderPath='';
         this.selectedView = 'timeline';
         this.getFolderPath();
       }

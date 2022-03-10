@@ -53,6 +53,10 @@ public class JCRDocumentsUtil {
 
   private static final String                           JCR_DATASOURCE_NAME           = "jcr";
 
+  public static final String                           USER_PRIVATE_ROOT_NODE           = "Private";
+
+  public static final String                           USER_PUBLIC_ROOT_NODE           = "Public";
+
   protected static final Map<DocumentSortField, String> SORT_FIELDS_ES_CORRESPONDING  = new EnumMap<>(DocumentSortField.class);
 
   protected static final Map<DocumentSortField, String> SORT_FIELDS_JCR_CORRESPONDING = new EnumMap<>(DocumentSortField.class);
@@ -108,7 +112,7 @@ public class JCRDocumentsUtil {
         continue;
       }
       Node node = nodeIterator.nextNode();
-      FileNode fileNode = toFileNode(identityManager, aclIdentity, node);
+      FileNode fileNode = toFileNode(identityManager, aclIdentity, node,"");
       fileNodes.add(fileNode);
       size++;
       if (size >= limit) {
@@ -119,6 +123,7 @@ public class JCRDocumentsUtil {
   }
 
   public static List<AbstractNode> toNodes(IdentityManager identityManager,
+                                           Session session,
                                            NodeIterator nodeIterator,
                                            Identity aclIdentity,
                                            int offset,
@@ -126,13 +131,22 @@ public class JCRDocumentsUtil {
     List<AbstractNode> fileNodes = new ArrayList<>();
     while (nodeIterator.hasNext()) {
       Node node = nodeIterator.nextNode();
+      String symlinkID = "";
       try {
-        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER)){
-          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node);
+        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.EXO_SYMLINK)){
+          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          symlinkID=((NodeImpl) node).getIdentifier();
+          node = getNodeByIdentifier(session, sourceNodeId);
+          if(node==null){
+            break;
+          }
+        }
+        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER) || node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_UNSTRUCTURED)){
+          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, symlinkID);
           fileNodes.add(folderNode);
         }
         if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FILE)) {
-          FileNode fileNode = toFileNode(identityManager, aclIdentity, node);
+          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, symlinkID);
           fileNodes.add(fileNode);
         }
       } catch (RepositoryException e) {
@@ -158,12 +172,16 @@ public class JCRDocumentsUtil {
 
   public static FolderNode toFolderNode(IdentityManager identityManager,
                                  Identity aclIdentity,
-                                 Node node) {
+                                 Node node,
+                                 String symlinkID) {
     try {
       if (node == null) {
         return null;
       }
       FolderNode folderNode = new FolderNode();
+      if(StringUtils.isNotBlank(symlinkID)){
+        folderNode.setSymLinkID(symlinkID);
+      }
       folderNode.setDatasource(JCR_DATASOURCE_NAME);
       folderNode.setPath(node.getPath());
       retrieveFileProperties(identityManager, node, aclIdentity, folderNode);
@@ -197,11 +215,15 @@ public class JCRDocumentsUtil {
 
   public static FileNode toFileNode(IdentityManager identityManager,
                                     Identity aclIdentity,
-                                    Node node) {
+                                    Node node,
+                                    String symlinkID) {
     if (node == null) {
       return null;
     }
     FileNode fileNode = new FileNode();
+    if(StringUtils.isNotBlank(symlinkID)){
+      fileNode.setSymLinkID(symlinkID);
+    }
     toFileNode(identityManager, aclIdentity, node, fileNode);
     return fileNode;
   }
@@ -368,6 +390,7 @@ public class JCRDocumentsUtil {
       identityRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
     } else if (ownerIdentity.isUser()) {
       identityRootNode = nodeHierarchyCreator.getUserNode(sessionProvider, username);
+      identityRootNode = identityRootNode.getNode(USER_PRIVATE_ROOT_NODE);
     }
     return identityRootNode;
   }
