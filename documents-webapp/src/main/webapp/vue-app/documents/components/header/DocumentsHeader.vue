@@ -17,12 +17,18 @@
       </v-tabs>
     </div>
     <v-spacer v-show="!showMobileFilter" />
-    <documents-header-right />
+    <documents-header-right v-if="filesSize>0" />
   </div>
 </template>
 
 <script>
 export default {
+  props: {
+    filesSize: {
+      type: Number,
+      default: 0
+    }
+  },
   data: () => ({
     showMobileFilter: false,
     tabsExtensionApp: 'DocumentTabs',
@@ -57,6 +63,14 @@ export default {
         this.tab = 1;
       }
     }
+    if (queryParams.has('view')) {
+      const view = queryParams.get('view');
+      if (view.toLowerCase() === 'folder'){
+        this.tab = 1;
+      } else {
+        this.tab = 0;
+      }
+    }
 
   },
   methods: {
@@ -83,6 +97,14 @@ export default {
 
     changeDocumentView(view) {
       this.$root.$emit('document-change-view', view);
+      if (view ==='folder'){
+        const url= new URL(window.location.href);
+        url.searchParams.set('view',view);
+        window.history.pushState('documents', 'Documents', url.toString());
+      } else {
+        const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
+      }   
     },
 
     tabClass(i) {
