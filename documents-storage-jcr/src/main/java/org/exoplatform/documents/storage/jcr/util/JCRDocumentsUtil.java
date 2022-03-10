@@ -53,6 +53,10 @@ public class JCRDocumentsUtil {
 
   private static final String                           JCR_DATASOURCE_NAME           = "jcr";
 
+  public static final String                           USER_PRIVATE_ROOT_NODE           = "Private";
+
+  public static final String                           USER_PUBLIC_ROOT_NODE           = "Public";
+
   protected static final Map<DocumentSortField, String> SORT_FIELDS_ES_CORRESPONDING  = new EnumMap<>(DocumentSortField.class);
 
   protected static final Map<DocumentSortField, String> SORT_FIELDS_JCR_CORRESPONDING = new EnumMap<>(DocumentSortField.class);
@@ -142,7 +146,7 @@ public class JCRDocumentsUtil {
           FileNode fileNode = toFileNode(identityManager, aclIdentity, node, symlinkID);
           fileNodes.add(fileNode);
         }
-      } catch (RepositoryException e) {
+      } catch (Exception e) {
         LOG.warn("Error getting Folder Node for search result with path {}", node, e);
       }
     }
@@ -383,7 +387,7 @@ public class JCRDocumentsUtil {
       identityRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
     } else if (ownerIdentity.isUser()) {
       identityRootNode = nodeHierarchyCreator.getUserNode(sessionProvider, username);
-      identityRootNode = identityRootNode.getNode("Private");
+      identityRootNode = identityRootNode.getNode(USER_PRIVATE_ROOT_NODE);
     }
     return identityRootNode;
   }

@@ -222,7 +222,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         try {
-          if((parent.getName().equals("Private") || parent.getName().equals("Public") ) && (folderPath.startsWith("Private") || folderPath.startsWith("Public"))){
+          if((parent.getName().equals(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || parent.getName().equals(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE) ) && (folderPath.startsWith(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || folderPath.startsWith(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE))){
             parent = parent.getParent();
           }
           parent = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
@@ -286,7 +286,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         try {
-          if((node.getName().equals("Private") || node.getName().equals("Public") ) && (folderPath.startsWith("Private") || folderPath.startsWith("Public"))){
+          if((node.getName().equals(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || node.getName().equals(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE) ) && (folderPath.startsWith(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || folderPath.startsWith(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE))){
             node = node.getParent();
           }
           node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
@@ -302,8 +302,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
         }
-        String userPrivatePathPrefix = username+"/Private";
-        String userPublicPathPrefix = username+"/Public";
+        String userPrivatePathPrefix = username+"/"+JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE;
+        String userPublicPathPrefix = username+"/"+JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE;
         if (node.getPath().contains(userPrivatePathPrefix)) {
           homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPrivatePathPrefix)+userPrivatePathPrefix.length());
         }
