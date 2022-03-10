@@ -143,6 +143,9 @@ export default {
     },
 
     getFolderPath(){
+      this.actualFolderId= '';
+      this.folderPath= '';
+      this.currentFolderPath= '';
       if (eXo.env.portal.spaceName){
         const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length>1){
