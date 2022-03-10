@@ -58,7 +58,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'favorite',
-  labelKey: 'favorite.label.download',
+  labelKey: 'documents.label.favorite',
   align: 'center',
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',

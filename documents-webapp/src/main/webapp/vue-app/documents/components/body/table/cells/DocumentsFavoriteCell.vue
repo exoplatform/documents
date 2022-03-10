@@ -1,6 +1,6 @@
 <template>
   <div 
-    v-show="isFavorite"
+    v-show="isFavorite && !file.folder"
     :id="`favorite-cell-file-${fileId}`">
     <div v-if="!isMobile">
       <documents-favorite-action :file="file" />
@@ -42,7 +42,7 @@ export default {
     if (!this.isMobile) {
       const self = this;
       $(`#favorite-cell-file-${this.fileId}`).parent().parent().parent().hover(function () {
-        if (!self.isFavorite) {
+        if (!self.isFavorite && !self.file.folder) {
           $(`#favorite-cell-file-${self.fileId}`).show();
         }
       }, function () {
