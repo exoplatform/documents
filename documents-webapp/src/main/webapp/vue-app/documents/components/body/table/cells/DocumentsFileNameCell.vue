@@ -52,8 +52,7 @@
       @open-info-drawer="openInfoDetailsDrawer" />
     <div
       :id="`document-action-menu-cel-${file.id}`"
-      v-if="displayAction"
-      class="position-relative">
+      v-if="displayAction">
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
           <v-btn
@@ -77,7 +76,8 @@
             :content-class="isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'"
             offset-y
             offset-x
-            left>
+            close-on-click
+            absolute>
             <documents-actions-menu
               :file="file" />
           </v-menu>
