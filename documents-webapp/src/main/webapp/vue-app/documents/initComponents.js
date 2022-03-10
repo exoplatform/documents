@@ -2,6 +2,7 @@ import DocumentsMain from './components/DocumentsMain.vue';
 import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
 import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
+import DocumentsHeaderCenter from './components/header/DocumentsHeaderCenter.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
 import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
@@ -40,6 +41,7 @@ const components = {
   'documents-header': DocumentsHeader,
   'documents-header-left': DocumentsHeaderLeft,
   'documents-header-right': DocumentsHeaderRight,
+  'documents-header-center': DocumentsHeaderCenter,
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-filter-input': DocumentsFilterInput,
   'documents-filter': DocumentsFilter,

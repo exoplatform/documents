@@ -21,8 +21,7 @@
               @click="openFolder(documents)">
               <a
                 class="caption text-truncate breadCrumb-link"
-                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ documents.name }}</a>
-            </v-btn>
+                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ documents.name }}</a>            </v-btn>
           </template>
           <span class="caption breadcrumbName">{{ documents.name }}</span>
         </v-tooltip>
@@ -34,7 +33,7 @@
         <v-tooltip max-width="300" bottom>
           <template v-slot:activator="{ on, attrs }">
             <a
-              class="caption text-color text-truncate path-clickable breadCrumb-link"
+              class="caption text-sub-title text-truncate path-clickable breadCrumb-link"
               :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
               v-bind="attrs"
               v-on="on"
@@ -50,6 +49,7 @@
             <v-icon
               v-bind="attrs"
               v-on="on"
+              class="text-sub-title"
               size="24">
               mdi-dots-horizontal
             </v-icon>
@@ -67,7 +67,7 @@
         <v-tooltip max-width="300" bottom>
           <template v-slot:activator="{ on, attrs }">
             <a
-              class="caption text-color text-truncate path-clickable breadCrumb-link"
+              class="caption text-sub-title text-truncate path-clickable breadCrumb-link"
               :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
               v-bind="attrs"
               v-on="on"
@@ -81,8 +81,8 @@
         <v-tooltip max-width="300" bottom>
           <template v-slot:activator="{ on, attrs }">
             <a
-              class="caption text-color text-truncate text-sub-title breadCrumb-link"
-              :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
+              class="caption text-truncate breadCrumb-link"
+              :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'text-color' || 'clickable'"
               v-bind="attrs"
               v-on="on"
               @click="openFolder(documentsBreadcrumb[documentsBreadcrumb.length-1])">{{ documentsBreadcrumb[documentsBreadcrumb.length-1].name }}</a>
