@@ -137,6 +137,9 @@ public class JCRDocumentsUtil {
           String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           symlinkID=((NodeImpl) node).getIdentifier();
           node = getNodeByIdentifier(session, sourceNodeId);
+          if(node==null){
+            break;
+          }
         }
         if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER) || node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_UNSTRUCTURED)){
           FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, symlinkID);
@@ -146,7 +149,7 @@ public class JCRDocumentsUtil {
           FileNode fileNode = toFileNode(identityManager, aclIdentity, node, symlinkID);
           fileNodes.add(fileNode);
         }
-      } catch (Exception e) {
+      } catch (RepositoryException e) {
         LOG.warn("Error getting Folder Node for search result with path {}", node, e);
       }
     }
