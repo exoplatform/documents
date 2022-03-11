@@ -230,6 +230,40 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/fullTree")
+  @ApiOperation(value = "Get Full Tree of given .", httpMethod = "GET", response = Response.class, produces = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+          @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
+          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
+  public Response getFullTreeData(@ApiParam(value = "Identity technical identifier", required = false)
+                                @QueryParam("ownerId")
+                                        Long ownerId,
+                                @ApiParam(value = "Folder technical identifier", required = false)
+                                @QueryParam("folderId")
+                                        String folderId) {
+
+    if (ownerId == null && StringUtils.isBlank(folderId)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId, userIdentityId)))
+              .build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving tree folder", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
   @POST
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")

@@ -57,6 +57,28 @@ export function getBreadCrumbs(folderId,ownerId,folderPath) {
 
 }
 
+export function getFullTreeData(ownerId, folderId) {
+  const formData = new FormData();
+  if (folderId) {
+    formData.append('folderId', folderId);
+  }
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/fullTree?${params}`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.json();
+    }
+  });
+
+}
+
 export function duplicateDocument(fileId,ownerId) {
   const formData = new FormData();
 

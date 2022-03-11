@@ -322,8 +322,65 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException, ObjectAlreadyExistsException,
-                                                                               ObjectNotFoundException {
+  public List<FullTreeItem> getFullTreeData(long ownerId,
+                                            String folderId,
+                                            Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    List<FullTreeItem> parents = new ArrayList<>();
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(folderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        folderId = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, folderId);
+      }
+      if (node != null) {
+        String nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+        List<FullTreeItem> children = new ArrayList<>();
+        children = getAllFolderInNode(node);
+
+        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(),children));
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving tree folder'" + folderId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+    return parents;
+  }
+
+  private List<FullTreeItem> getAllFolderInNode(Node node) throws RepositoryException {
+    List<FullTreeItem> folderListNodes = new ArrayList<>();
+    List<FullTreeItem> folderChildListNodes = new ArrayList<>();
+    NodeIterator nodeIter = node.getNodes();
+    Node childNode = null;
+    while(nodeIter.hasNext()) {
+      childNode = nodeIter.nextNode();
+      if(childNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
+        folderChildListNodes = getAllFolderInNode(childNode);
+        String nodeName= childNode.hasProperty(NodeTypeConstants.EXO_NAME) ? childNode.getProperty(NodeTypeConstants.EXO_NAME).getString() : childNode.getName();
+        folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(), nodeName, childNode.getPath(),folderChildListNodes));
+      }
+    }
+    return folderListNodes;
+  }
+
+  @Override
+  public void createFolder(long ownerId,
+                           String folderId,
+                           String folderPath,
+                           String title,
+                           Identity aclIdentity) throws IllegalAccessException,
+                                                 ObjectAlreadyExistsException,
+                                                 ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {
