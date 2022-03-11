@@ -31,16 +31,16 @@ export default {
   },
   created() {
     this.$root.$on('document-notification-alert', alert => this.alerts.push(alert));
-    this.$root.$on('confirm-document-deletion', (documentId) => {
-      if (documentId) {
+    this.$root.$on('confirm-document-deletion', (file) => {
+      if (file && file.id) {
         const clickMessage = this.$t('documents.label.undoDelete');
-        const message = this.$t('documents.label.deleteSuccess');
+        const message = this.$t('documents.label.deleteSuccess', {'0': file.folder ? this.$t('documents.label.folder') : this.$t('documents.label.file') });
         const administratorMessage = this.isMobile ? '' : this.$t('documents.label.contact.administrator');
         this.$root.$emit('document-notification-alert', {
           message,
           administratorMessage,
           type: 'success',
-          click: () => this.undoDeleteDocument(documentId),
+          click: () => this.undoDeleteDocument(file.id, file.folder),
           clickMessage,
         });
       }
@@ -59,13 +59,13 @@ export default {
       this.alerts.splice(index, 1);
       this.$forceUpdate();
     },
-    undoDeleteDocument(documentId) {
+    undoDeleteDocument(documentId, isFolder) {
       this.$root.$emit('undo-delete-document', documentId);
       return this.$documentFileService.undoDeleteDocument(documentId)
         .then(() => {
           this.deleteAlert(alert);
           this.addAlert({
-            message: this.$t('documents.label.deleteCanceled'),
+            message: this.$t('documents.label.deleteCanceled', {'0': isFolder ? this.$t('documents.label.folder') : this.$t('documents.label.file') }),
             type: 'success',
           });
         });
