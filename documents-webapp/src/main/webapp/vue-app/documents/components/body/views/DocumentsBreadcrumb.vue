@@ -1,7 +1,12 @@
 <template>
   <div class="documents-breadcrumb-wrapper">
     <div v-if="documentsBreadcrumb && documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
-      <v-icon class="text-sub-title pe-2" size="16">fas fa-sitemap</v-icon>
+      <v-icon
+        class="text-sub-title pe-2"
+        size="16"
+        @click="$refs.folderBreadcrumb.open()">
+        fas fa-sitemap
+      </v-icon>
       <div
         v-for="(documents, index) in documentsBreadcrumb"
         :key="index"
@@ -92,6 +97,9 @@
         </v-tooltip>
       </div>
     </div>
+    <folder-treeview-drawer
+      ref="folderBreadcrumb"
+      @open-folder="openFolder($event)" />
   </div>
 </template>
 <script>

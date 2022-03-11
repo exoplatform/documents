@@ -194,6 +194,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public List<BreadCrumbItem> getBreadcrumb(long ownerId, String folderId, String folderPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
     return documentFileStorage.getBreadcrumb(ownerId, folderId, folderPath, getAclUserIdentity(authenticatedUserId));
   }
+  @Override
+  public List<FullTreeItem> getFullTreeData(long ownerId, String folderId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getFullTreeData(ownerId, folderId, getAclUserIdentity(authenticatedUserId));
+  }
 
   @Override
   public AbstractNode duplicateDocument(long ownerId, String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
