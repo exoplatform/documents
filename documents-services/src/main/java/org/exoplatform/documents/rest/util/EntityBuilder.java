@@ -20,10 +20,7 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.documents.model.AbstractNode;
-import org.exoplatform.documents.model.BreadCrumbItem;
-import org.exoplatform.documents.model.FileNode;
-import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.log.ExoLogger;
@@ -148,6 +145,13 @@ public class EntityBuilder {
   public static List<BreadCrumbItemEntity> toBreadCrumbItemEntities(List<BreadCrumbItem> folders) {
     List<BreadCrumbItemEntity>  brList = new ArrayList<BreadCrumbItemEntity>();
     brList = folders.stream().map(document -> new BreadCrumbItemEntity(document.getId(), document.getName(), document.getPath())).collect(Collectors.toList());
+    Collections.reverse(brList);
+    return brList;
+  }
+
+  public static List<FullTreeItemEntity> toFullTreeItemEntities(List<FullTreeItem> folders) {
+    List<FullTreeItemEntity>  brList = new ArrayList<>();
+    brList = folders.stream().map(document -> new FullTreeItemEntity(document.getId(), document.getName(), document.getPath(),document.getChildren())).collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;
   }
