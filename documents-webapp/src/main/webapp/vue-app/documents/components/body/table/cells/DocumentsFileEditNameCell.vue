@@ -81,7 +81,11 @@ export default {
     },
     checkInput: function(e,newTitle) {
       if (e.keyCode === 13 || e === 13) {
-        this.renameFile(newTitle);
+        if (this.file.folder){
+          this.$root.$emit('documents-create-folder', newTitle);
+        } else {
+          this.renameFile(newTitle);
+        }
       }
       if (e.keyCode === 27) {
         this.cancelEditNameMode(newTitle);
