@@ -36,6 +36,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    spaceId() {
+      return eXo.env.portal.spaceId;
+    },
   },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshTabExtensions);
@@ -83,6 +86,14 @@ export default {
 
     changeDocumentView(view) {
       this.$root.$emit('document-change-view', view);
+      const viewTab = view ==='folder'? 'FOLDER' : 'RECENT';
+      document.dispatchEvent(new CustomEvent('document-change', {
+        detail: {
+          'type': 'document',
+          'spaceId': this.spaceId,
+          'name': `Switch View ${viewTab}`
+        }
+      }));
       if (view ==='folder'){
         const url= new URL(window.location.href);
         url.searchParams.set('view',view);

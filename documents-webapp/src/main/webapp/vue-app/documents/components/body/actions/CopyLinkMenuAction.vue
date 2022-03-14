@@ -20,6 +20,10 @@ export default {
       default: null,
     }
   },
+  data: () => ({
+    viewTab: 'RECENT',
+    spaceId: eXo.env.portal.spaceId,
+  }),
   methods: {
     copyLink() {
       const inputTemp = $('<input>');
@@ -34,8 +38,25 @@ export default {
       inputTemp.val(path).select();
       document.execCommand('copy');
       inputTemp.remove();
-      this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.linkCopied')});
-    }
+      this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.alert.success.label.linkCopied')});
+      this.getDocumentView();
+      document.dispatchEvent(new CustomEvent('document-change', {
+        detail: {
+          'type': this.file.folder ? 'folder' : 'file',
+          'spaceId': this.spaceId,
+          'name': 'Copy link action',
+          'category': this.viewTab
+        }
+      }));
+    },
+    getDocumentView() {
+      const currentUrlSearchParams = window.location.search;
+      const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (queryParams.has('view')) {
+        const view = queryParams.get('view');
+        this.viewTab = view.toLowerCase() === 'FOLDER' ? 'Folder' : 'RECENT';
+      }
+    },
   },
 };
 </script>
