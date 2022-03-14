@@ -232,7 +232,7 @@ export default {
         if (pathParts.length>1){
           folderPath = pathParts[1];
         }
-        pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+        pathParts = window.location.pathname.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
         window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}?view=folder`);
       } else {
         const userName = eXo.env.portal.userName;
@@ -244,14 +244,14 @@ export default {
             folderPath = pathParts[1];
           }
           
-          window.history.pushState(parentFolder.name, parentFolder.title, `${eXo.env.server.portalBaseURL.split('/Private')[0]}/Private${folderPath}?view=folder`);
+          window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Private')[0]}/Private${folderPath}?view=folder`);
         }
         if (parentFolder.path.includes(userPublicPathPrefix)){
           const pathParts = parentFolder.path.split(userPublicPathPrefix);
           if (pathParts.length>1){
             folderPath = pathParts[1];
           }
-          window.history.pushState(parentFolder.name, parentFolder.title, `${eXo.env.server.portalBaseURL.split('/Public')[0]}/Public${folderPath}?view=folder`);
+          window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Public')[0]}/Public${folderPath}?view=folder`);
         }
       
       }
@@ -272,12 +272,12 @@ export default {
       this.folderPath='';
       this.refreshFiles(this.primaryFilter);
       this.$root.$emit('set-breadcrumb', null);
-      if (eXo.env.server.portalBaseURL.includes('/Private')){
-        window.history.pushState('Documents', 'Personal Documents', `${eXo.env.server.portalBaseURL.split('/Private')[0]}?view=${this.selectedView}`);
-      } else if (eXo.env.server.portalBaseURL.includes('/Public')){
-        window.history.pushState('Documents', 'Personal Documents', `${eXo.env.server.portalBaseURL.split('/Public')[0]}?view=${this.selectedView}`);
+      if (window.location.pathname.includes('/Private')){
+        window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname.split('/Private')[0]}?view=${this.selectedView}`);
+      } else if (window.location.pathname.includes('/Public')){
+        window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname.split('/Public')[0]}?view=${this.selectedView}`);
       } else {
-        window.history.pushState('Documents', 'Personal Documents', `${eXo.env.server.portalBaseURL}?view=${this.selectedView}`);
+        window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
     },
     refreshFilesEvent() {
@@ -406,7 +406,7 @@ export default {
         'sourceApp': 'NEW.APP'
       };
       if (eXo.env.portal.spaceName){
-        const pathparts = eXo.env.server.portalBaseURL.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathparts.length>1){
           attachmentAppConfiguration= {
             'sourceApp': 'NEW.APP',
@@ -415,6 +415,22 @@ export default {
               isSelected: true,
               name: `.spaces.${eXo.env.portal.spaceGroup}`,
               title: eXo.env.portal.spaceDisplayName,
+            }
+          };
+        }
+      } else {
+        let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
+        if (pathparts.length>1 && pathparts[1].startsWith('Private/')){
+          pathparts = pathparts[1].split('Private/');
+        }
+        if (pathparts.length>1){
+          attachmentAppConfiguration= {
+            'sourceApp': 'NEW.APP',
+            'defaultFolder': decodeURI(pathparts[1]),
+            'defaultDrive': {
+              isSelected: true,
+              name: 'Personal Documents',
+              title: 'Personal Documents'
             }
           };
         }
@@ -471,7 +487,7 @@ export default {
         } else {
           this.parentFolderId=null;
           this.selectedView='timeline';
-          const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+          const pathParts = window.location.pathname.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
           window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
         }
       }
