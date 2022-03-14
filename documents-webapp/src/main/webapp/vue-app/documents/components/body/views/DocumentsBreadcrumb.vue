@@ -26,7 +26,7 @@
               @click="openFolder(documents)">
               <a
                 class="caption text-truncate breadCrumb-link"
-                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name)}}</a>
+                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name) }}</a>
             </v-btn>
           </template>
           <span class="caption breadcrumbName">{{ getName(documents.name) }}</span>
