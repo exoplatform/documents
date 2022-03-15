@@ -40,7 +40,6 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
-import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ManageableRepository;
@@ -97,6 +96,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
+      if (ownerIdentity.isUser()) {
+        rootPath = rootPath.split("/"+USER_PRIVATE_ROOT_NODE)[0];
+      }
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
@@ -222,7 +224,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         try {
-          if((parent.getName().equals(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || parent.getName().equals(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE) ) && (folderPath.startsWith(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || folderPath.startsWith(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE))){
+          if((parent.getName().equals(USER_PRIVATE_ROOT_NODE) || parent.getName().equals(USER_PUBLIC_ROOT_NODE) ) && (folderPath.startsWith(USER_PRIVATE_ROOT_NODE) || folderPath.startsWith(USER_PUBLIC_ROOT_NODE))){
             parent = parent.getParent();
           }
           parent = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
@@ -286,7 +288,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         try {
-          if((node.getName().equals(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || node.getName().equals(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE) ) && (folderPath.startsWith(JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE) || folderPath.startsWith(JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE))){
+          if((node.getName().equals(USER_PRIVATE_ROOT_NODE) || node.getName().equals(USER_PUBLIC_ROOT_NODE) ) && (folderPath.startsWith(USER_PRIVATE_ROOT_NODE) || folderPath.startsWith(USER_PUBLIC_ROOT_NODE))){
             node = node.getParent();
           }
           node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
@@ -302,8 +304,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
         }
-        String userPrivatePathPrefix = username+"/"+JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE;
-        String userPublicPathPrefix = username+"/"+JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE;
+        String userPrivatePathPrefix = username+"/"+USER_PRIVATE_ROOT_NODE;
+        String userPublicPathPrefix = username+"/"+USER_PUBLIC_ROOT_NODE;
         if (node.getPath().contains(userPrivatePathPrefix)) {
           homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPrivatePathPrefix)+userPrivatePathPrefix.length());
         }
@@ -413,7 +415,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
-      String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanString(title.toLowerCase()));
+      String name = Text.escapeIllegalJcrChars(cleanString(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
       }
@@ -446,7 +448,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, documentID);
       }
-      String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanString(title));
+      String name = Text.escapeIllegalJcrChars(cleanString(title));
       //clean node name
       name = cleanString(name);
 
