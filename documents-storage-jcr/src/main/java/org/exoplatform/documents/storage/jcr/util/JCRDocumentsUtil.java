@@ -276,7 +276,16 @@ public class JCRDocumentsUtil {
                                             AbstractNode documentNode) throws RepositoryException {
     documentNode.setId(((NodeImpl) node).getIdentifier());
     documentNode.setPath(((NodeImpl) node).getPath());
-    documentNode.setParentFolderId(((NodeImpl) node.getParent()).getIdentifier());
+
+    try {
+      Node parent = node.getParent();
+      if(parent != null){
+        documentNode.setParentFolderId(((NodeImpl) parent).getIdentifier());
+      }
+    } catch (RepositoryException repositoryException) {
+      //Do noting, it means that the current user don't have access to the parent node
+    }
+
     if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
       documentNode.setName(node.getProperty(NodeTypeConstants.EXO_TITLE).getString());
     } else {
@@ -389,8 +398,13 @@ public class JCRDocumentsUtil {
       Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
       identityRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
     } else if (ownerIdentity.isUser()) {
-      identityRootNode = nodeHierarchyCreator.getUserNode(sessionProvider, username);
-      identityRootNode = identityRootNode.getNode(USER_PRIVATE_ROOT_NODE);
+      SessionProvider systemSession = SessionProvider.createSystemProvider();
+      Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, username);
+      Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
+      String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
+      if (session.itemExists(privatePathNode)) {
+        identityRootNode = (Node) session.getItem(privatePathNode);
+      }
     }
     return identityRootNode;
   }
