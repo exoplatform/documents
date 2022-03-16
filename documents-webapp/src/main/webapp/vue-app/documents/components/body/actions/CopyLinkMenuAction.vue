@@ -44,7 +44,7 @@ export default {
         detail: {
           'type': this.file.folder ? 'folder' : 'file',
           'spaceId': this.spaceId,
-          'name': 'Copy link action',
+          'name': 'Action copy link',
           'category': this.viewTab
         }
       }));

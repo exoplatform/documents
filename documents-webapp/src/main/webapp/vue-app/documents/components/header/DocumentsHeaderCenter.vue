@@ -91,7 +91,7 @@ export default {
         detail: {
           'type': 'document',
           'spaceId': this.spaceId,
-          'name': `Switch View ${viewTab}`
+          'name': `Switch View ${viewTab} Tab`
         }
       }));
       if (view ==='folder'){
