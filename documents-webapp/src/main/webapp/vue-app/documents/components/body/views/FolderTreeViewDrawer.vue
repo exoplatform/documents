@@ -11,18 +11,21 @@
       <v-treeview
         :open.sync="openLevel"
         :items="items"
+        class="treeView-item my-2"
+        item-key="name"
+        hoverable
         activatable
         open-on-click
-        transition
-        item-key="name"
-        dense>
+        transition>
         <template v-slot:label="{ item }">
-          <v-list-item-title @click="openFolder(item)" class="body-2 clickable">
+          <div class="d-flex clickable" @click="openFolder(item)">
             <v-icon size="24" class="primary--text">
               {{ 'fas fa-folder' }}
             </v-icon>
-            <span class="mx-2">{{ item.name }}</span>
-          </v-list-item-title>
+            <v-list-item-title class="body-2 mx-2 mt-1">
+              {{ item.name }}
+            </v-list-item-title>
+          </div>
         </template>
       </v-treeview>
     </template>
@@ -51,7 +54,7 @@ export default {
       this.$refs.folderBreadcrumb.close();
     },
     openFolder(folder){
-      this.$emit('open-folder', folder);
+      this.$root.$emit('open-folder', folder);
     },
     retrieveNoteTree(){
       this.$documentFileService

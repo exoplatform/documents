@@ -29,7 +29,7 @@
             size="10"
             class="pe-1 iconStyle pb-1 ps-1">
             mdi-link-variant
-        </v-icon>
+          </v-icon>
           <div
             v-sanitized-html="fileType"
             class="document-type ms-0">
