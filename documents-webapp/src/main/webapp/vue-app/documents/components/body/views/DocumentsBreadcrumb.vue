@@ -4,7 +4,7 @@
       <v-icon
         class="text-sub-title pe-2"
         size="16"
-        @click="$refs.folderBreadcrumb.open()">
+        @click="openTreeFolderDrawer()">
         fas fa-sitemap
       </v-icon>
       <div
@@ -97,9 +97,6 @@
         </v-tooltip>
       </div>
     </div>
-    <folder-treeview-drawer
-      ref="folderBreadcrumb"
-      @open-folder="openFolder($event)" />
   </div>
 </template>
 <script>
@@ -120,14 +117,10 @@ export default {
         this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
         this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
         this.$root.$emit('set-current-folder-url', this.currentFolderPath);
-      } else {
-        this.actualFolderId= '';
-        this.folderPath= '';
-        this.currentFolderPath= '';
-        this.getBreadCrumbs();
       }
     });
     this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
+    this.$root.$on('open-folder', this.openFolder);
     this.getFolderPath();
     this.getBreadCrumbs();   
   },
@@ -142,7 +135,9 @@ export default {
         this.$root.$emit('document-open-folder', folder);
       }
     },
-
+    openTreeFolderDrawer(){
+      this.$root.$emit('openTreeFolderDrawer');
+    },
     getName(name){
       if (name==='Private' || name==='Public'){
         return this.$t('documents.label.userHomeDocuments');
