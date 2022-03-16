@@ -52,6 +52,8 @@
       dismissible>
       {{ message }}
     </v-alert>
+    <folder-treeview-drawer
+      ref="folderTreeDrawer" />
   </v-app>
 </template>
 <script>
@@ -121,6 +123,7 @@ export default {
     this.refreshViewExtensions();
 
     this.$root.$on('documents-refresh-files', this.refreshFilesEvent);
+    this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
 
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
@@ -153,6 +156,11 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    folderTreeDrawer(){
+      if (this.$refs.folderTreeDrawer){
+        this.$refs.folderTreeDrawer.open();
+      }
+    },
     sort(sortField, ascending) {
       this.sortField = sortField;
       this.ascending = ascending;
