@@ -47,6 +47,8 @@ public abstract class AbstractNode {
 
   private NodePermission acl;
 
+  private String         symLinkID;
+
 
   public  boolean isFolder(){
     return this instanceof FolderNode;

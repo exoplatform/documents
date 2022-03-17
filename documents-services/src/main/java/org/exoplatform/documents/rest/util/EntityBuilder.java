@@ -170,6 +170,7 @@ public class EntityBuilder {
       nodeEntity.setCreatedDate(node.getCreatedDate());
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
+      nodeEntity.setSymlinkID(node.getSymLinkID());
 
       if ((node instanceof FolderNode)) {
         ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());

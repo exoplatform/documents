@@ -17,8 +17,8 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFileNode;
 
+import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -41,7 +41,6 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
-import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ManageableRepository;
@@ -98,6 +97,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
+      if (ownerIdentity.isUser()) {
+        rootPath = rootPath.split("/"+USER_PRIVATE_ROOT_NODE)[0];
+      }
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
@@ -222,16 +224,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parent = getNodeByIdentifier(session, parentFolderId);
       }
       if (StringUtils.isNotBlank(folderPath)) {
-        try {
-          parent = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
-        } catch (RepositoryException repositoryException) {
-          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
-        }
+        parent = getNodeByPath(parent, folderPath, sessionProvider);
       }
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
           NodeIterator nodeIterator = parent.getNodes();
-          return toNodes(identityManager, nodeIterator, aclIdentity, offset, limit);
+          return toNodes(identityManager, session, nodeIterator, aclIdentity, offset, limit);
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -283,25 +281,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node = getNodeByIdentifier(session, folderId);
       }
       if (StringUtils.isNotBlank(folderPath)) {
-        try {
-          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
-        } catch (RepositoryException repositoryException) {
-          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
-        }
+        node = getNodeByPath(node, folderPath, sessionProvider);
       }
       String homePath = "";
       if (node != null) {
-        String nodeName = node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+        String nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
         parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
         }
+        String userPrivatePathPrefix = username+"/"+USER_PRIVATE_ROOT_NODE;
+        String userPublicPathPrefix = username+"/"+USER_PUBLIC_ROOT_NODE;
+        if (node.getPath().contains(userPrivatePathPrefix)) {
+          homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPrivatePathPrefix)+userPrivatePathPrefix.length());
+        }
+        if (node.getPath().contains(userPublicPathPrefix)) {
+          homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPublicPathPrefix)+userPublicPathPrefix.length());
+        }
         while (node != null && !node.getPath().equals(homePath)) {
           try {
             node = node.getParent();
             if (node != null) {
-              nodeName = node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+              nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
               parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
             }
           } catch (RepositoryException repositoryException) {
@@ -343,9 +345,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
-      String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanString(title));
+      String name = Text.escapeIllegalJcrChars(cleanString(title.toLowerCase()));
       if (node.hasNode(name)) {
-        throw new ObjectAlreadyExistsException("Folder'" + title + "' already exist") ;
+        throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
       }
       Node addedNode = node.addNode(name, NodeTypeConstants.NT_FOLDER);
       addedNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
@@ -376,7 +378,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, documentID);
       }
-      String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanString(title));
+      String name = Text.escapeIllegalJcrChars(cleanString(title));
       //clean node name
       name = cleanString(name);
 
@@ -428,7 +430,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                            ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
-    Node newNode = null;
+
     try {
       Node oldNode = null;
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
@@ -448,7 +450,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parentNode.save();
       }
 
-      return toFileNode(identityManager, aclIdentity, parentNode);
+      return toFileNode(identityManager, aclIdentity, parentNode, "");
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
     } finally {
@@ -559,6 +561,33 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
 
     return sb.toString();
+  }
+
+  private Node getNodeByPath(Node node, String folderPath, SessionProvider sessionProvider) throws ObjectNotFoundException {
+    try {
+      if((node.getName().equals(USER_PRIVATE_ROOT_NODE) || node.getName().equals(USER_PUBLIC_ROOT_NODE) ) ){
+        if(folderPath.startsWith(USER_PRIVATE_ROOT_NODE)){
+          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE+"/")[1];
+          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
+        }
+        if(folderPath.startsWith(USER_PUBLIC_ROOT_NODE)){
+          SessionProvider systemSessionProvides = SessionProvider.createSystemProvider();
+          Session systemSession = systemSessionProvides.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
+          Node parent = getNodeByIdentifier(systemSession, ((NodeImpl) node).getIdentifier()).getParent();
+          node = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+          Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
+          if (session.itemExists(node.getPath())) {
+            return (Node) session.getItem(node.getPath());
+          }
+          return null;
+        }
+      }
+      return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
+    } catch (RepositoryException repositoryException) {
+      throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalStateException("Error retrieving folder'" + folderPath , e);
+    }
   }
 
 }

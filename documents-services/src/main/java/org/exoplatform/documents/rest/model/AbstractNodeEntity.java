@@ -63,4 +63,6 @@ public class AbstractNodeEntity {
   
   private boolean                               isFavorite;
 
+  private String                                symlinkID;
+
 }
