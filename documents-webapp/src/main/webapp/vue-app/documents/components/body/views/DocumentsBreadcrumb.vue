@@ -1,7 +1,12 @@
 <template>
   <div class="documents-breadcrumb-wrapper">
     <div v-if="documentsBreadcrumb && documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
-      <v-icon class="text-sub-title pe-2" size="16">fas fa-sitemap</v-icon>
+      <v-icon
+        class="text-sub-title pe-2"
+        size="16"
+        @click="openTreeFolderDrawer()">
+        fas fa-sitemap
+      </v-icon>
       <div
         v-for="(documents, index) in documentsBreadcrumb"
         :key="index"
@@ -21,7 +26,7 @@
               @click="openFolder(documents)">
               <a
                 class="caption text-truncate breadCrumb-link"
-                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name)}}</a>
+                :class="index < documentsBreadcrumb.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name) }}</a>
             </v-btn>
           </template>
           <span class="caption breadcrumbName">{{ getName(documents.name) }}</span>
@@ -112,11 +117,10 @@ export default {
         this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
         this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
         this.$root.$emit('set-current-folder-url', this.currentFolderPath);
-      } else {
-        this.getBreadCrumbs();
       }
     });
     this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
+    this.$root.$on('open-folder', this.openFolder);
     this.getFolderPath();
     this.getBreadCrumbs();
   },
@@ -131,7 +135,9 @@ export default {
         this.$root.$emit('document-open-folder', folder);
       }
     },
-
+    openTreeFolderDrawer(){
+      this.$root.$emit('openTreeFolderDrawer');
+    },
     getName(name){
       if (name==='Private' || name==='Public'){
         return this.$t('documents.label.userHomeDocuments');

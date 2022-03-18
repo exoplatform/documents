@@ -544,6 +544,10 @@ public class DocumentFileRestTest {
     currentProfile.setProperty(Profile.FULL_NAME, username);
     currentIdentity.setProfile(currentProfile);
 
+    List<FullTreeItem> children = new ArrayList<>();
+    FullTreeItem fullTreeItem = new FullTreeItem("11111222","test","path",null);
+    children.add(fullTreeItem);
+
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
@@ -570,5 +574,9 @@ public class DocumentFileRestTest {
     doNothing().when(documentFileStorage).renameDocument(2L, "11111111", "renameTest", userID);
     Response response1 = documentFileRest.renameDocument("11111111",2L,"renameTest");
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
+
+    when(documentFileStorage.getFullTreeData(2L, "11111111", userID)).thenReturn(children);
+    Response response2 = documentFileRest.getFullTreeData(2L,"11111111");
+    assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
   }
 }
