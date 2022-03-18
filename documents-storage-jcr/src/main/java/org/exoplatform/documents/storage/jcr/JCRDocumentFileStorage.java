@@ -444,7 +444,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       String oldName = node.getName();
       if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
         String ext = oldName.substring(oldName.lastIndexOf('.'));
-        title = name.concat(ext);
+        title = title.concat(ext);
+        name = name.concat(ext);
       }
 
       if (node.getName().equals(title)) {
@@ -468,10 +469,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
-      String destPath = (parent.getPath().equals("/") ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat("/").concat(title);
+      String destPath = (parent.getPath().equals("/") ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat("/").concat(name);
       node.getSession().getWorkspace().move(srcPath, destPath);
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
-      node.setProperty(NodeTypeConstants.EXO_NAME, title);
+      node.setProperty(NodeTypeConstants.EXO_NAME, name);
       node.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentID, e);
@@ -539,6 +540,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         title = title + " (" + i + ")";
       }
     }
+    name = URLDecoder.decode(name,"UTF-8");
     if (oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER)) {
       newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
