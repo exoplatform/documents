@@ -18,7 +18,6 @@ package org.exoplatform.documents.storage.jcr;
 
 import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.RequestLifeCycle;
@@ -53,8 +52,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
-
 public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable {
 
   private static final Log LOG = ExoLogger.getLogger(JCRDeleteFileStorageImpl.class.getName());
@@ -73,15 +70,18 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
 
   private SessionProviderService sessionProviderService;
 
-  private Map<String, String> documentsToDeleteQueue               = new HashMap<>();
+  private ListenerService listenerService;
 
-  public JCRDeleteFileStorageImpl(RepositoryService repositoryService, IdentityManager identityManager, TrashStorage trashStorage, FavoriteService favoriteService, PortalContainer container, SessionProviderService sessionProviderService) {
+  public static final  Map<String, String> documentsToDeleteQueue = new HashMap<>();
+
+  public JCRDeleteFileStorageImpl(RepositoryService repositoryService, IdentityManager identityManager, TrashStorage trashStorage, FavoriteService favoriteService, PortalContainer container, SessionProviderService sessionProviderService, ListenerService listenerService) {
     this.repositoryService = repositoryService;
     this.identityManager = identityManager;
     this.trashStorage = trashStorage;
     this.favoriteService = favoriteService;
     this.container = container;
     this.sessionProviderService = sessionProviderService;
+    this.listenerService = listenerService;
   }
 
   @Override
@@ -101,7 +101,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     if (documentsToDeleteQueue.containsKey(documentId)) {
       String originalModifierUser = documentsToDeleteQueue.get(documentId);
       if (!originalModifierUser.equals(String.valueOf(userIdentityId))) {
-        LOG.warn("User {} attempts to cancel deletion of a news target deleted by user {}", userIdentityId, originalModifierUser);
+        LOG.warn("User {} attempts to cancel deletion of a document deleted by user {}", userIdentityId, originalModifierUser);
         return;
       }
       documentsToDeleteQueue.remove(documentId);
@@ -112,14 +112,9 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   public void deleteDocument(String folderPath, String documentId, boolean favorite, boolean checkToMoveToTrash, long delay, Identity identity, long userIdentityId) {
     SessionProvider sessionProvider = null;
     try {
-      String username = identity.getUserId();
-      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
-      if (ownerIdentity == null) {
-        throw new ObjectNotFoundException("Owner Identity with id : " + username + " isn't found");
-      }
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      sessionProvider = getUserSessionProvider(repositoryService, identity);
-      Session session = sessionProvider.getSession(repositoryService.getCurrentRepository().getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+      sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
       if (delay > 0) {
         documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
         scheduledExecutor.schedule(() -> {
@@ -128,7 +123,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
             RequestLifeCycle.begin(container);
             try {
               documentsToDeleteQueue.remove(documentId);
-              moveToTrash(folderPath, session,userIdentityId, favorite, checkToMoveToTrash);
+              moveToTrash(folderPath, session, userIdentityId, favorite, checkToMoveToTrash);
             } catch (Exception e) {
               LOG.error("Error when deleting the document with path" + folderPath, e);
             } finally {
@@ -137,8 +132,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
           }
         }, delay, TimeUnit.SECONDS);
       } else {
-        moveToTrash(folderPath, session,userIdentityId, favorite, checkToMoveToTrash);
+        moveToTrash(folderPath, session, userIdentityId, favorite, checkToMoveToTrash);
       }
+    } catch (PathNotFoundException path) {
+      LOG.error("The document with this path is not found" + folderPath, path);
     } catch (Exception e) {
       LOG.error("Error when deleting the document" + folderPath, e);
     }
@@ -146,6 +143,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
 
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
     Node node = null;
+    String trashId;
     if(StringUtils.isNotBlank(folderPath)){
       node = JCRDocumentsUtil.getNodeByPath(session, folderPath);
     }
@@ -154,7 +152,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         Favorite favoriteDocument = new Favorite("file", node.getUUID(), null, userIdentityId);
         favoriteService.deleteFavorite(favoriteDocument);
       }
-      processRemoveOrMoveToTrash(node, checkToMoveToTrash);
+      trashId = processRemoveOrMoveToTrash(node, checkToMoveToTrash);
+      if (trashId.equals("-1")) {
+        LOG.error("an unexpected error occurs while removing or moving the node to trash");
+      }
     }
   }
 
@@ -178,7 +179,6 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       trashId = moveToTrash(node);
       if (!trashId.equals("-1")) {
         //Broadcast the event when delete folder, in case deleting file, Thrash service will broadcast event
-        ListenerService listenerService =  CommonsUtils.getService(ListenerService.class);
         node = trashStorage.getNodeByTrashId(trashId);
         if(!node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE)){
           Queue<Node> queue = new LinkedList<>();

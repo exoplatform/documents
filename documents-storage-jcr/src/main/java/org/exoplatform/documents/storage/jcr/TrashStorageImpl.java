@@ -109,8 +109,8 @@ public class TrashStorageImpl implements TrashStorage {
    */
   @Override
   public String moveToTrash(Node node,
-                          SessionProvider sessionProvider,
-                          int deep) throws RepositoryException {
+                            SessionProvider sessionProvider,
+                            int deep) throws RepositoryException {
     ((SessionImpl)node.getSession()).getActionHandler().preRemoveItem((ItemImpl)node);
     String trashId = null;
     String nodeName = node.getName();

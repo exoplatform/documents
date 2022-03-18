@@ -148,8 +148,6 @@ public interface DocumentFileService {
    *
    * @param documentId the Id of document
    * @param authenticatedUserId of the user acessing files
-   * @throws IllegalAccessException when the user isn't allowed to delete
-   *           document
    */
   void undoDeleteDocument(String documentId, long authenticatedUserId);
 
