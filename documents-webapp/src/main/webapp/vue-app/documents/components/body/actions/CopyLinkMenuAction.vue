@@ -42,10 +42,10 @@ export default {
       this.getDocumentView();
       document.dispatchEvent(new CustomEvent('document-change', {
         detail: {
-          'type': this.file.folder ? 'folder' : 'file',
+          'category': this.file.folder ? 'Folder' : 'Document',
           'spaceId': this.spaceId,
           'name': 'Action copy link',
-          'category': this.viewTab
+          'view': this.viewTab
         }
       }));
     },
