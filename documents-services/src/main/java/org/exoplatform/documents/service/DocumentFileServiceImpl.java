@@ -166,7 +166,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if(StringUtils.isBlank(filter.getParentFolderId())){
       String username = aclIdentity.getUserId();
       Long ownerId = filter.getOwnerId();
-      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+      String userId = filter.getUserId();
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = null;
+      if(StringUtils.isNotEmpty(userId)){
+        ownerIdentity = identityManager.getOrCreateUserIdentity(userId);
+      } else{
+        ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+      }
       if (ownerIdentity == null) {
         throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
       }
@@ -177,9 +183,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                   + " attempts to access documents of space " + space.getDisplayName()
                   + "while it's not a member");
         }
-      } else if (ownerIdentity.isUser() && !StringUtils.equals(ownerIdentity.getRemoteId(), username)) {
-        throw new IllegalAccessException("User " + username
-                + " attempts to access private documents of user " + ownerIdentity.getRemoteId());
       }
     }
 

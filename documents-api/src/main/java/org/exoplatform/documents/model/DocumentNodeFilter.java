@@ -31,4 +31,8 @@ public abstract class DocumentNodeFilter {
 
   private boolean           ascending;
 
+  private Boolean           favorites;
+
+  private String           userId;
+
 }

@@ -24,6 +24,6 @@ import lombok.*;
 public class DocumentTimelineFilter extends DocumentNodeFilter {
 
   private Long ownerId;
-  private Boolean favorites;
+
 
 }
