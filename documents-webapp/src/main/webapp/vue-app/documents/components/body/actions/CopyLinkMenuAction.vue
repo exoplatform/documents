@@ -54,7 +54,7 @@ export default {
       const queryParams = new URLSearchParams(currentUrlSearchParams);
       if (queryParams.has('view')) {
         const view = queryParams.get('view');
-        this.viewTab = view.toLowerCase() === 'FOLDER' ? 'Folder' : 'RECENT';
+        this.viewTab = view.toLowerCase() === 'folder' ? 'Folder' : 'RECENT';
       }
     },
   },
