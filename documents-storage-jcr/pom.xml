@@ -8,7 +8,7 @@
   <artifactId>documents-storage-jcr</artifactId>
   <name>eXo Documents - Storage JCR Implementation</name>
   <properties>
-    <exo.test.coverage.ratio>0</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.16</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>
@@ -56,6 +56,33 @@
     <dependency>
       <groupId>org.exoplatform</groupId>
       <artifactId>exo-jcr-services</artifactId>
+    </dependency>
+
+    <!-- Test -->
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>xml-apis</groupId>
+      <artifactId>xml-apis</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-api-mockito2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-module-junit4</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
   <build>

@@ -579,4 +579,78 @@ public class DocumentFileRestTest {
     Response response2 = documentFileRest.getFullTreeData(2L,"11111111");
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
   }
+
+  @Test
+  public void testDeleteDocument() {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    FileNode file1 = new FileNode();
+    file1.setId("1");
+    file1.setName("oldFile");
+    file1.setPath("/document/oldFile");
+    file1.setDatasource("datasource");
+    file1.setMimeType(":file");
+    file1.setSize(50);
+
+    Response response = documentFileRest.deleteDocument(null,"/document/oldFile",false, 6);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("document_id_is_mandatory", response.getEntity());
+
+    response = documentFileRest.deleteDocument("1",null,false, 6);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("document_path_is_mandatory", response.getEntity());
+
+    doNothing().when(jcrDeleteFileStorage).deleteDocument("1","/document/oldFile",false, true, 6, root, currentOwnerId);
+    response = documentFileRest.deleteDocument("1","/document/oldFile",false, 6);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void testUndoDeleteDocument() {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    FileNode file1 = new FileNode();
+    file1.setId("2");
+    file1.setName("oldFile");
+    file1.setPath("/document/oldFile");
+    file1.setDatasource("datasource");
+    file1.setMimeType(":file");
+    file1.setSize(50);
+
+    Response response = documentFileRest.undoDeleteDocument(null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("document_id_is_mandatory", response.getEntity());
+
+    doNothing().when(jcrDeleteFileStorage).undoDelete("2", currentOwnerId);
+    response = documentFileRest.undoDeleteDocument("2");
+    assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+  }
 }
