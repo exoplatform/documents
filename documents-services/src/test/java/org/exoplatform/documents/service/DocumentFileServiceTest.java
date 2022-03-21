@@ -28,7 +28,6 @@ import java.util.List;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
-import org.exoplatform.documents.rest.model.BreadCrumbItemEntity;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.security.Authenticator;
@@ -43,8 +42,6 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.junit.Before;
 import org.junit.Test;
-
-import javax.ws.rs.core.Response;
 
 public class DocumentFileServiceTest {
 

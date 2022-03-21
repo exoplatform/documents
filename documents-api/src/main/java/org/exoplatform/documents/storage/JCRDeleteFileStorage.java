@@ -20,7 +20,6 @@ import org.exoplatform.services.security.Identity;
 
 public interface JCRDeleteFileStorage {
 
-
   /**
    * Delete document (Move to trash)
    * 
