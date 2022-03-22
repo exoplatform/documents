@@ -47,6 +47,18 @@
         </init-params>
     </component>
 
+    <component>
+        <key>VisibilityActionFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>VisibilityActionFeatureProperties</name>
+                <description>Visibility Action Feature enablement flag</description>
+                <property name="exo.feature.VisibilityAction.enabled" value="${exo.feature.VisibilityAction.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
+
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
         <component-plugin>

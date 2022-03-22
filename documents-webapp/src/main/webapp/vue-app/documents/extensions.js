@@ -121,6 +121,21 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+if (eXo.env.portal.visibilityActionEnabled) {
+  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+    id: 'visibility',
+    labelKey: 'documents.label.visibility',
+    align: 'center',
+    sortable: true,
+    cssClass: 'font-weight-bold text-no-wrap',
+    width: '190px',
+    rank: 40,
+    componentOptions: {
+      vueComponent: Vue.options.components['visibility-menu-action'],
+    },
+  });
+}
+
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'download',
   labelKey: 'documents.label.download',
