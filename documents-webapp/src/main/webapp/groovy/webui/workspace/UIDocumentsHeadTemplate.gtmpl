@@ -11,4 +11,5 @@
      eXo.env.portal.filesDuplicateActionEnabled = <%=featureService.isFeatureActiveForUser("DuplicateAction", userName)%>;
      eXo.env.portal.folderActionEnabled = <%=featureService.isFeatureActiveForUser("FolderAction", userName)%>;
      eXo.env.portal.deleteActionEnabled = <%=featureService.isFeatureActiveForUser("DeleteAction", userName)%>;
+     eXo.env.portal.visibilityActionEnabled = <%=featureService.isFeatureActiveForUser("VisibilityAction", userName)%>;
 </script>

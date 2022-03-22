@@ -27,6 +27,7 @@ import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
 import EditMenuAction from './components/body/actions/EditMenuAction.vue';
 import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue';
 import DuplicateMenuAction from './components/body/actions/DuplicateMenuAction.vue';
+import VisibilityMenuAction from './components/body/actions/VisibilityMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
 import CopyLinkMenuAction from './components/body/actions/CopyLinkMenuAction.vue';
@@ -69,6 +70,7 @@ const components = {
   'rename-menu-action': RenameMenuAction,
   'download-menu-action': DownloadMenuAction,
   'duplicate-menu-action': DuplicateMenuAction,
+  'visibility-menu-action': VisibilityMenuAction,
   'copy-link-menu-action': CopyLinkMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
   'delete-menu-action': DeleteMenuAction,
