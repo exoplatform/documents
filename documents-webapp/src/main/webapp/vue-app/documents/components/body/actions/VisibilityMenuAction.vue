@@ -1,7 +1,7 @@
 <template>
   <div
     class="clickable pt-1 mx-2"
-    @click="visibility">
+    @click="$root.$emit('open-visibility-drawer',file)">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
@@ -29,7 +29,7 @@ export default {
     },
   },
   methods: {
-    visibility(){
+    dvisibility(){
       this.$root.$emit('visibility-document',this.file);
     }
   },
