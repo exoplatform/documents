@@ -28,10 +28,5 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
-  methods: {
-    dvisibility(){
-      this.$root.$emit('visibility-document',this.file);
-    }
-  },
 };
 </script>
