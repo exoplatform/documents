@@ -75,6 +75,21 @@
 
       <v-divider dark class="mx-4" />
     </template>
+    <template slot="footer">
+      <div class="d-flex">
+        <v-spacer />
+        <v-btn
+            class="btn me-2"
+            @click="close">
+          {{ $t('documents.label.visibility.cancel') }}
+        </v-btn>
+        <v-btn
+            class="btn btn-primary"
+            @click="saveVisibility">
+          {{ $t('documents.label.visibility.save') }}
+        </v-btn>
+      </div>
+    </template>
   </exo-drawer>
 </template>
 <script>
@@ -137,6 +152,10 @@ export default {
     close() {
       this.$refs.documentVisibilityDrawer.close();
     },
+    saveVisibility(){
+      this.$root.$emit('save-visibility');
+      this.close();
+    }
   }
 };
 </script>
