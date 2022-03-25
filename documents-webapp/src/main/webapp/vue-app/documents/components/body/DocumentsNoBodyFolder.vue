@@ -1,6 +1,6 @@
 <template>
   <div class="documents-body">
-    <documents-breadcrumb class="pa-3 pe-1 pl-1" />
+    <documents-breadcrumb class="pa-6 pe-1 pl-1" />
     <div class="ma-4 d-flex documents-no-body flex-column justify-center text-center text-color">
       <v-img
         :src="emptyDocs"
