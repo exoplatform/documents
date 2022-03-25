@@ -2,7 +2,7 @@
   <div class="documents-breadcrumb-wrapper">
     <div v-if="documentsBreadcrumb && documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
       <v-icon
-        class="text-sub-title pe-2"
+        class="text-sub-title pe-2 ps-3"
         size="16"
         @click="openTreeFolderDrawer()">
         fas fa-sitemap

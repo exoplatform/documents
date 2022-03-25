@@ -348,6 +348,11 @@ export default {
           }) || [] : files && files.slice(this.offset, this.limit) || [];
           this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
           this.hasMore = files && files.length > this.limit;
+          if (document.getElementsByClassName('v-data-table') && this.selectedView === 'folder') {
+            window.setTimeout(() => {
+              document.getElementsByClassName('v-data-table')[0].classList.add('ms-8');
+            }, 200);
+          }
           if (this.fileName){
             const result = files.filter(file => file.name===this.fileName);
             if (result.length>0){
