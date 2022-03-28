@@ -10,7 +10,7 @@
     <span class="ps-1">{{ $t('document.label.rename') }}</span>
     <v-divider
       v-if="!isMobile"
-      class="mt-2 dividerStyle" />
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>

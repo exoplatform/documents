@@ -13,7 +13,7 @@
       @added="added"
       @add-error="addError" />
     <span class="pt-1">{{ favoriteLabel }}</span>
-    <v-divider class="mt-2 dividerStyle" />
+    <v-divider class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
