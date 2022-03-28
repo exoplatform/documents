@@ -8,6 +8,7 @@
           class="ma-0">
           <img
             :src="avatarUrl"
+            :alt="displayName"
             class="object-fit-cover ma-auto"
             loading="lazy"
             role="presentation">
@@ -71,8 +72,7 @@ export default {
     },
     displayName() {
       const profile = this.user && (this.user.profile || this.user.space);
-      const fullName = profile && (profile.displayName || profile.fullname || profile.fullName);
-      return fullName;
+      return profile && (profile.displayName || profile.fullname || profile.fullName);
     },
   },
   methods: {
