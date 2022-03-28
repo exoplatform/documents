@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable pt-1 mx-2"
+    class="clickable ma-auto pt-1 mx-2"
     @click="$root.$emit('open-visibility-drawer',file)">
     <v-icon
       size="13"
@@ -9,8 +9,7 @@
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.visibility') }}</span>
     <v-divider
-      v-if="!file.folder"
-      class="mt-2 dividerStyle" />
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
