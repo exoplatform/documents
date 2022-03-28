@@ -1,5 +1,5 @@
 <template>
-  <exo-drawer 
+  <exo-drawer
     ref="documentVisibilityDrawer"
     class="documentVisibilityDrawer"
     @closed="close"
@@ -58,6 +58,36 @@
       </v-list-item>
 
       <v-divider dark class="mx-4" />
+
+      <v-list-item>
+        <v-list-item-content class="my-1">
+          <v-label for="collaborator">
+            <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.collaborator') }}</span>
+          </v-label>
+          <exo-identity-suggester
+            ref="invitedCollaborators"
+            :labels="suggesterLabels"
+            v-model="collaborators"
+            :search-options="searchOptions"
+            name="collaborator"
+            type-of-relations="user_to_invite"
+            height="40"
+            include-users
+            include-spaces />
+          <p class="text-sub-title text-left mb-0">
+            <span class="caption">
+              {{ $t('documents.label.visibility.collaborator.info') }}
+            </span>
+          </p>
+        </v-list-item-content>
+      </v-list-item>
+      <div v-if="users.length">
+        <documents-visibility-collaborators
+          v-for="user in users"
+          :key="user"
+          :user="user"
+          @remove-user="removeUser" />
+      </div>
     </template>
     <template slot="footer">
       <div class="d-flex">
@@ -93,6 +123,11 @@ export default {
     ownerIdentity: [],
     visibilitySelected: 'allMembers',
     allowEveryone: true,
+    collaborators: [],
+    searchOptions: {
+      currentUser: '',
+    },
+    users: [],
   }),
   computed: {
     visibilityTitle(){
@@ -122,7 +157,31 @@ export default {
     },
     showSwitch(){
       return this.visibilitySelected === 'allMembers';
-    }
+    },
+    suggesterLabels() {
+      return {
+        placeholder: this.$t('documents.label.visibility.placeholder'),
+        noDataLabel: this.$t('documents.label.visibility.noDataLabel'),
+      };
+    },
+  },
+  watch: {
+    collaborators() {
+      if (!this.collaborators) {
+        this.$nextTick(this.$refs.invitedCollaborators.$refs.selectAutoComplete.deleteCurrentItem);
+        return;
+      }
+      const found = this.users.find(user => {
+        return user.remoteId === this.collaborators.remoteId
+            && user.providerId === this.collaborators.providerId;
+      });
+      if (!found) {
+        this.users.push(
+          this.collaborators,
+        );
+      }
+      this.collaborators = null;
+    },
   },
   mounted(){
     this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
@@ -139,7 +198,15 @@ export default {
     saveVisibility(){
       this.$root.$emit('save-visibility');
       this.close();
-    }
+    },
+    removeUser(user) {
+      const index = this.users.findIndex(addedUser => {
+        return user.remoteId === addedUser.remoteId;
+      });
+      if (index >= 0) {
+        this.users.splice(index, 1);
+      }
+    },
   }
 };
 </script>

@@ -25,6 +25,8 @@ import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
 import DocumentsVisibilityDrawer from './components/body/table/DocumentsVisibilityDrawer.vue';
+import DocumentsVisibilityCollaborators from './components/body/table/DocumentsVisibilityCollaborators.vue';
+import DocumentsVisibilityMenu from './components/body/table/DocumentsVisibilityMenu.vue';
 import EditMenuAction from './components/body/actions/EditMenuAction.vue';
 import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue';
 import DuplicateMenuAction from './components/body/actions/DuplicateMenuAction.vue';
@@ -68,6 +70,8 @@ const components = {
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-info-drawer': DocumentInfoDrawer,
   'documents-visibility-drawer': DocumentsVisibilityDrawer,
+  'documents-visibility-collaborators': DocumentsVisibilityCollaborators,
+  'documents-visibility-menu': DocumentsVisibilityMenu,
   'edit-menu-action': EditMenuAction,
   'rename-menu-action': RenameMenuAction,
   'download-menu-action': DownloadMenuAction,
