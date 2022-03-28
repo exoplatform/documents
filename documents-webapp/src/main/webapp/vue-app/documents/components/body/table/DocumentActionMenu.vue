@@ -27,7 +27,7 @@ export default {
     mobileOnlyExtensions: ['favorite','details'],
     desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
-    fileOnlyExtension: ['download','favorite']
+    fileOnlyExtension: ['download','favorite','visibility']
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
