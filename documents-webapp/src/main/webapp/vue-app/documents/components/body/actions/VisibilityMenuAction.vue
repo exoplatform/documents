@@ -1,15 +1,15 @@
 <template>
   <div
     class="clickable pt-1 mx-2"
-    @click="duplicate">
+    @click="visibility">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
-      fas fa-clone
+      fas fa-eye
     </v-icon>
-    <span class="ps-1">{{ $t('documents.label.duplicate') }}</span>
+    <span class="ps-1">{{ $t('documents.label.visibility') }}</span>
     <v-divider
-      v-if="!isMobile"
+      v-if="!file.folder"
       class="mt-2 dividerStyle" />
   </div>
 </template>
@@ -22,7 +22,6 @@ export default {
     }
   },
   data: () => ({
-    workspace: 'collaboration',
   }),
   computed: {
     isMobile() {
@@ -30,11 +29,8 @@ export default {
     },
   },
   methods: {
-    duplicate(){
-      this.$root.$emit('duplicate-document',this.file);
-      if ( this.isMobile ) {
-        this.$root.$emit('close-file-action-menu');
-      }
+    visibility(){
+      this.$root.$emit('visibility-document',this.file);
     }
   },
 };
