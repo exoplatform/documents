@@ -176,6 +176,7 @@ export default {
     },
     suggesterLabels() {
       return {
+        searchPlaceholder: this.$t('documents.label.visibility.searchPlaceholder'),
         placeholder: this.$t('documents.label.visibility.placeholder'),
         noDataLabel: this.$t('documents.label.visibility.noDataLabel'),
       };
