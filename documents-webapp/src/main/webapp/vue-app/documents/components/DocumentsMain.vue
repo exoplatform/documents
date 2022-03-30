@@ -138,6 +138,7 @@ export default {
     this.$root.$on('set-current-folder-url', this.setFolderUrl);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
+    this.$root.$on('save-visibility', this.saveVisibility);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
@@ -416,6 +417,14 @@ export default {
     renameDocument(file,name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.renameDocument(ownerId,file.id,name)
+        .then( () => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
+    saveVisibility(file){
+      this.$documentFileService.saveVisibility(file)
         .then( () => {
           this.refreshFiles();
         })

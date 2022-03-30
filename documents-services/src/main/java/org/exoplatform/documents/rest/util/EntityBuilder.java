@@ -34,6 +34,7 @@ import org.exoplatform.social.metadata.model.MetadataItem;
 import org.exoplatform.social.metadata.model.MetadataObject;
 import org.exoplatform.social.rest.entity.MetadataItemEntity;
 
+import javax.jcr.RepositoryException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -43,6 +44,12 @@ public class EntityBuilder {
   private static final Log    LOG                       = ExoLogger.getExoLogger(EntityBuilder.class);
 
   private static final String FILE_METADATA_OBJECT_TYPE = "file";
+
+  private static final String        SPACE_PATH_PREFIX = "/Groups/spaces/";
+
+  public static final String         USER_PRIVATE_ROOT_NODE           = "/Private";
+
+  public static final String         USER_PUBLIC_ROOT_NODE           = "/Public";
 
   private EntityBuilder() {
   }
@@ -170,7 +177,7 @@ public class EntityBuilder {
       nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
       nodeEntity.setDatasource(node.getDatasource());
       nodeEntity.setDescription(node.getDescription());
-      nodeEntity.setAcl(node.getAcl());
+      nodeEntity.setAcl(toNodePermissionEntity(node,identityManager, spaceService));
       nodeEntity.setCreatedDate(node.getCreatedDate());
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
@@ -215,6 +222,111 @@ public class EntityBuilder {
     } catch (Exception e) {
       LOG.error("==== exception occured when converting node with ID = {} and name = {}", node.getId(), node.getName(), e);
     }
+  }
+
+  private static NodePermissionEntity toNodePermissionEntity(AbstractNode node, IdentityManager identityManager, SpaceService spaceService){
+    String path = node.getPath();
+    NodePermission nodePermission = node.getAcl();
+    if(nodePermission == null) return null;
+    boolean allCanRead = false;
+    boolean allCanEdit = false;
+    Identity identity = getOwnerIdentityFromNodePath(path, identityManager, spaceService);
+    List<PermissionEntryEntity> collaborators = new ArrayList<>();
+    List<PermissionEntry> permissions = nodePermission.getPermissions();
+    for(PermissionEntry permissionEntry : permissions){
+      if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))){
+        continue;
+      }
+      if(identity != null && permissionEntry.getIdentity().getId().equals(identity.getId())){
+        if (permissionEntry.getPermission().equals("read")){
+          allCanRead = true;
+        }
+        if (permissionEntry.getPermission().contains("add_node") || permissionEntry.getPermission().contains("set_property") || permissionEntry.getPermission().contains("remove") ){
+          allCanEdit = true;
+        }
+      } else {
+        collaborators.add(toPermissionEntryEntity(permissionEntry, spaceService));
+      }
+    }
+    return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name(), collaborators);
+  }
+  private static PermissionEntryEntity toPermissionEntryEntity(PermissionEntry permissionEntry, SpaceService spaceService){
+    if(permissionEntry == null) return null;
+    String permission = "read";
+    if(permissionEntry.getPermission().contains("add_node") || permissionEntry.getPermission().contains("set_property") || permissionEntry.getPermission().contains("remove") ){
+      permission = "edit";
+    }
+    return new PermissionEntryEntity(toIdentityEntity(permissionEntry.getIdentity(),spaceService), permission);
+  }
+  public static NodePermission toNodePermission(AbstractNodeEntity node, DocumentFileService documentFileService, SpaceService spaceService, IdentityManager identityManager){
+    if(node.getAcl() == null) return null;
+    NodePermissionEntity nodePermissionEntity = node.getAcl();
+    Identity identity = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
+    if(identity!=null){
+      List<PermissionEntryEntity> collaborators = nodePermissionEntity.getCollaborators();
+      List<PermissionEntry> permissions = new ArrayList<>();
+      Map<Long,String> toShare = new HashMap<>();
+
+      for(PermissionEntryEntity permissionEntryEntity : collaborators){
+        Identity ownerId = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
+        if(ownerId != null && !ownerId.getId().equals(permissionEntryEntity.getIdentity().getId())) {
+          if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
+            toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+          } else {
+            try {
+              if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()))) {
+                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+              }
+            } catch (Exception exception) {
+              LOG.warn("Cannot get user Identity");
+            }
+          }
+        }
+        permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
+      }
+      if(nodePermissionEntity.getVisibilityChoice().equals(Visibility.ALL_MEMBERS.name())){
+        permissions.add(new PermissionEntry(identity,"read", PermissionRole.ALL.name()));
+        if(nodePermissionEntity.isAllMembersCanEdit()){
+          permissions.add(new PermissionEntry(identity,"edit",PermissionRole.ALL.name()));
+        } else {
+          permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS.name()));
+        }
+      }
+      return new NodePermission(nodePermissionEntity.isCanAccess(),nodePermissionEntity.isCanEdit(),nodePermissionEntity.isCanDelete(),permissions,toShare);
+    }
+    return null;
+  }
+
+  static Identity getOwnerIdentityFromNodePath(String path, IdentityManager identityManager, SpaceService spaceService){
+    Identity identity = null;
+    if (path.contains(SPACE_PATH_PREFIX)) {
+      String[] pathParts = path.split(SPACE_PATH_PREFIX)[1].split("/");
+      String groupId = "/spaces/" + pathParts[0];
+      Space space = spaceService.getSpaceByGroupId(groupId);
+      if(space != null){
+        identity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+      }
+    } else if(path.contains(USER_PRIVATE_ROOT_NODE)) {
+      String[] pathParts = path.split(USER_PRIVATE_ROOT_NODE)[0].split("/");
+      String userName = pathParts[pathParts.length-1];
+      identity = identityManager.getOrCreateUserIdentity(userName);
+    } else if(path.contains(USER_PUBLIC_ROOT_NODE)) {
+      String[] pathParts = path.split(USER_PUBLIC_ROOT_NODE)[0].split("/");
+      String userName = pathParts[pathParts.length-1];
+      identity = identityManager.getOrCreateUserIdentity(userName);
+    }
+    return identity;
+  }
+  private static PermissionEntry toPermissionEntry(PermissionEntryEntity permissionEntryEntity, IdentityManager identityManager){
+    if(permissionEntryEntity == null) return null;
+    Identity identity = null;
+    if(permissionEntryEntity.getIdentity().getProviderId().equals("space")){
+      identity = identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId());
+    } else {
+      identity = identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId());
+    }
+    if(identity == null) return null;
+    return new PermissionEntry(identity, permissionEntryEntity.getPermission(),PermissionRole.ALL.name());
   }
 
   public static Map<String, List<MetadataItemEntity>> retrieveMetadataItems(Map<String, List<MetadataItem>> metadatas,
@@ -268,6 +380,27 @@ public class EntityBuilder {
 
   public static IdentityEntity toIdentityEntity(IdentityManager identityManager, SpaceService spaceService, long identityId) {
     Identity identity = identityManager.getIdentity(String.valueOf(identityId));
+    if (identity == null) {
+      return null;
+    }
+    IdentityEntity identityEntity = new IdentityEntity();
+    identityEntity.setId(identity.getId());
+    identityEntity.setProviderId(identity.getProviderId());
+    identityEntity.setRemoteId(identity.getRemoteId());
+    if (identity.isUser()) {
+      identityEntity.setName(identity.getProfile().getFullName());
+      identityEntity.setAvatar(identity.getProfile().getAvatarUrl());
+    } else if (identity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(identity.getRemoteId());
+      if (space != null) {
+        identityEntity.setName(space.getDisplayName());
+        identityEntity.setAvatar(space.getAvatarUrl());
+      }
+    }
+    return identityEntity;
+  }
+
+  public static IdentityEntity toIdentityEntity(Identity identity, SpaceService spaceService) {
     if (identity == null) {
       return null;
     }

@@ -101,6 +101,30 @@ export function duplicateDocument(fileId,ownerId) {
   });
 
 }
+export function saveVisibility(file) {
+  const abFile ={
+    'id': file.id,
+    'path': file.path,
+    'ownerId': file.ownerId,
+    'creatorId': file.creatorId,
+    'acl': file.acl,
+  };
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/permissions`, {
+    method: 'post',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(abFile),
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.json();
+    }
+  });
+
+}
 
 export function renameDocument(ownerId,documentID,newName) {
   const formData = new FormData();

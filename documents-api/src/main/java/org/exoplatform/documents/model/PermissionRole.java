@@ -16,24 +16,7 @@
  */
 package org.exoplatform.documents.model;
 
-import lombok.*;
-
-import java.util.List;
-import java.util.Map;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class NodePermission {
-
-  private boolean canAccess;
-
-  private boolean canEdit;
-
-  private boolean canDelete;
-
-  private List<PermissionEntry> permissions;
-
-  private Map<Long,String> toShare;
-
+public enum PermissionRole {
+  ALL,
+  MANAGERS_REDACTORS;
 }

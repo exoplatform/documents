@@ -14,26 +14,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.model;
+package org.exoplatform.documents.rest.model;
 
-import lombok.*;
-
-import java.util.List;
-import java.util.Map;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class NodePermission {
-
-  private boolean canAccess;
-
-  private boolean canEdit;
-
-  private boolean canDelete;
-
-  private List<PermissionEntry> permissions;
-
-  private Map<Long,String> toShare;
-
+public enum Visibility {
+  ALL_MEMBERS,
+  SPECIFIC_COLLABORATOR;
 }

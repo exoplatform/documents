@@ -41,17 +41,17 @@
     <v-spacer />
     <div
       class="my-auto d-flex pe-2">
-      <v-icon
-        v-if="userVisibility === 'view'"
-        class="pb-2"
-        :size="13">
-        fas fa-eye
-      </v-icon>
-      <v-icon
-        v-if="userVisibility !== 'view'"
+            <v-icon
+        v-if="userVisibility && userVisibility === 'edit' || user.permission === 'edit'"
         class="pb-2"
         :size="13">
         fas fa-edit
+      </v-icon>
+      <v-icon
+        v-else
+        class="pb-2"
+        :size="13">
+        fas fa-eye
       </v-icon>
       <documents-visibility-menu
         @visibility-user="visibilityUser" />
@@ -78,22 +78,24 @@ export default {
   },
   data() {
     return {
-      userVisibility: 'view',
+      userVisibility: null,
     };
   },
   computed: {
     avatarUrl() {
       const profile = this.user && (this.user.profile || this.user.space);
-      return profile && (profile.avatarUrl || profile.avatar);
+      return profile && (profile.avatarUrl || profile.avatar) || this.user  && this.user.avatar ;
     },
     displayName() {
       const profile = this.user && (this.user.profile || this.user.space);
-      return profile && (profile.displayName || profile.fullname || profile.fullName);
+      return profile && (profile.displayName || profile.fullname || profile.fullName) || this.user &&  this.user.name;
     },
   },
   methods: {
     visibilityUser(value){
       this.userVisibility=value;
+      this.user.permission=value;
+      this.$emit('set-visibility', this.user);
     }
   }
 };

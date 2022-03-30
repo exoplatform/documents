@@ -8,7 +8,7 @@
   <artifactId>documents-services</artifactId>
   <name>eXo Documents - Services</name>
   <properties>
-    <exo.test.coverage.ratio>0.67</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.60</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>
@@ -111,6 +111,16 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-module-junit4</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-api-mockito2</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

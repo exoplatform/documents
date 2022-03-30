@@ -45,7 +45,7 @@ export default {
   data: () => ({
     items: [
       { title: 'edit' },
-      { title: 'view' },
+      { title: 'read' },
     ],
   }),
   computed: {
@@ -53,7 +53,7 @@ export default {
       return [
         {
           title: this.$t('documents.label.accessibility.view'),
-          value: 'view',
+          value: 'read',
         },
         {
           title: this.$t('documents.label.accessibility.edit'),
