@@ -8,7 +8,7 @@
   <artifactId>documents-storage-jcr</artifactId>
   <name>eXo Documents - Storage JCR Implementation</name>
   <properties>
-    <exo.test.coverage.ratio>0.14</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.12</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>

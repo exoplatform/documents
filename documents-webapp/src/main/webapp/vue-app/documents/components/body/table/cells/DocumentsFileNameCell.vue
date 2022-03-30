@@ -24,16 +24,16 @@
             v-sanitized-html="fileName"
             class="document-name text-truncate ms-4">
           </div>
+          <div
+            v-sanitized-html="fileType"
+            class="document-type ms-0">
+          </div>
           <v-icon
             v-if="file.symlinkID"
             size="10"
             class="pe-1 iconStyle pb-1 ps-1">
             mdi-link-variant
           </v-icon>
-          <div
-            v-sanitized-html="fileType"
-            class="document-type ms-0">
-          </div>
         </div>
 
         <documents-file-edit-name-cell
@@ -101,9 +101,7 @@
       :is-mobile="isMobile"
       :icon="icon" />
     <documents-visibility-drawer
-      ref="documentVisibilityDrawer"
-      :file="file"
-      :file-name="fileName" />
+      ref="documentVisibilityDrawer" />
     <documents-actions-menu-mobile ref="documentActionsBottomMenu" :file="file" />
   </div>
 </template>
@@ -241,7 +239,7 @@ export default {
     });
     this.$root.$on('open-visibility-drawer', file => {
       if (this.file.id=== file.id) {
-        this.openVisibilityDrawer();
+        this.openVisibilityDrawer(file,file.name);
       }
     });
     this.$root.$on('close-info-drawer', fileId => {
@@ -308,7 +306,7 @@ export default {
       if ( this.isMobile ) {
         this.$root.$emit('close-file-action-menu');
       }
-      this.$refs.documentVisibilityDrawer.open();
+      this.$refs.documentVisibilityDrawer.open(this.file,this.fileName);
     }
   },
 };

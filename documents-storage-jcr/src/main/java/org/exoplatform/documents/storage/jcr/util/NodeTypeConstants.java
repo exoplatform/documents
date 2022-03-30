@@ -70,6 +70,10 @@ public class NodeTypeConstants {
 
   public static final String MIX_VERSIONABLE        = "mix:versionable";
 
+  public static final String MIX_FILE_TYPE          = "mix:fileType";
+
+  public static final String EXO_FILE_TYPE          = "exo:fileType";
+
   public static final String EXO_OWNER              = "exo:owner";
 
   public static final String EXO_OWNEABLE           = "exo:owneable";
@@ -110,18 +114,20 @@ public class NodeTypeConstants {
 
   public static final String MIX_COMMENTABLE        = "mix:commentable";
 
-  public static final String EXO_THUMBNAILS_FOLDER        = "exo:thumbnails";
+  public static final String EXO_THUMBNAILS_FOLDER  = "exo:thumbnails";
 
   public static final String JCR_PRIMARY_TYPE        = "jcr:primaryType";
 
-  public static final String EXO_RESTORE_LOCATION = "exo:restoreLocation";
+  public static final String EXO_RESTORE_LOCATION    = "exo:restoreLocation";
 
-  public static final String RESTORE_PATH = "exo:restorePath";
+  public static final String RESTORE_PATH            = "exo:restorePath";
 
-  public static final String TAXONOMY_LINK   = "exo:taxonomyLink";
+  public static final String TAXONOMY_LINK           = "exo:taxonomyLink";
 
-  public static final String RESTORE_WORKSPACE = "exo:restoreWorkspace";
+  public static final String RESTORE_WORKSPACE       = "exo:restoreWorkspace";
 
-  public static final String TRASH_ID = "exo:trashId";
+  public static final String TRASH_ID                = "exo:trashId";
+
+  public static final String EXO_PRIMARY_TYPE        = "exo:primaryType";
 
 }
