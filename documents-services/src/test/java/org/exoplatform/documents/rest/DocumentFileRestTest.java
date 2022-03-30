@@ -273,7 +273,6 @@ public class DocumentFileRestTest {
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
     Space space = new Space();
-    space.setPrettyName(spacePrettyName);
     org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
@@ -461,7 +460,7 @@ public class DocumentFileRestTest {
                                                            0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(null, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
