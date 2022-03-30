@@ -761,7 +761,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
       }
-      Node linkNode = shared.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
+      Node linkNode = null;
+      if(shared.hasNode(currentNode.getName())){
+        linkNode = shared.getNode(currentNode.getName());
+      } else {
+        if(linkNode == null || !linkNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+          linkNode = shared.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
+        }
+      }
       linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
       linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
       linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, currentNode.getUUID());
