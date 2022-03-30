@@ -51,7 +51,6 @@ import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.util.Text;
-import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.MembershipEntry;
@@ -71,6 +70,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final String                         SPACE_PATH_PREFIX = "/Groups/spaces/";
   private final SimpleDateFormat               formatter         = new SimpleDateFormat(DATE_FORMAT);
   private static final String                  GROUP_ADMINISTRATORS = "*:/platform/administrators";
+  private static final String                  SPACE_PROVIDER_ID = "space";
+  private static final String                  SHARED_FOLDER_NAME = "Shared";
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -679,14 +680,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   public void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity){
-    String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Node node = getNodeByIdentifier(session, documentID);
-      String userId = aclIdentity.getUserId();
       Map<String, String[]> permissions = new HashMap<>();
       List<PermissionEntry> permissionsList = nodePermissionEntity.getPermissions();
       if (node.hasProperty(NodeTypeConstants.EXO_OWNER)) {
@@ -695,7 +694,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
       for(PermissionEntry permission : permissionsList){
-        if(permission.getIdentity().getProviderId().equals("space")) {
+        if(permission.getIdentity().getProviderId().equals(SPACE_PROVIDER_ID)) {
           if (permission.getPermission().equals("edit")) {
             if(permission.getRole().equals(PermissionRole.ALL.name())){
               permissions.put("*:/spaces/" + permission.getIdentity().getRemoteId(), PermissionType.ALL);
@@ -723,8 +722,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           }
         }
         }
-      if (node.canAddMixin("exo:privilegeable")) {
-        node.addMixin("exo:privilegeable");
+      if (node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
       ((ExtendedNode) node).setPermissions(permissions);
       session.save();
@@ -750,13 +749,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       //add symlink to destination user
       org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
       rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
-      if(!destIdentity.getProviderId().equals("space")){
+      if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
         rootNode = rootNode.getNode("Documents");
       }
-      if(!rootNode.hasNode("Shared")){
-        shared = rootNode.addNode("Shared");
+      if(!rootNode.hasNode(SHARED_FOLDER_NAME)){
+        shared = rootNode.addNode(SHARED_FOLDER_NAME);
       }else{
-        shared = rootNode.getNode("Shared");
+        shared = rootNode.getNode(SHARED_FOLDER_NAME);
       }
       if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
@@ -778,7 +777,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       linkNode.setProperty(NodeTypeConstants.EXO_FILE_TYPE, nodeMimeType);
       rootNode.save();
       Map<String, String[]> permissions = new HashMap<>();
-      if(destIdentity.getProviderId().equals("space")) {
+      if(destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
         if (permission.equals("edit")) {
           permissions.put("*:/spaces/" + destIdentity.getRemoteId(), PermissionType.ALL);
         }
@@ -793,8 +792,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           permissions.put(destIdentity.getRemoteId(), new String[]{PermissionType.READ});
         }
       }
-      if (linkNode.canAddMixin("exo:privilegeable")) {
-        linkNode.addMixin("exo:privilegeable");
+      if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
       ((ExtendedNode) linkNode).setPermissions(permissions);
       systemSession.save();

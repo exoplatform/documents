@@ -22,8 +22,6 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.services.security.Identity;
-
-import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 
 public interface DocumentFileStorage {

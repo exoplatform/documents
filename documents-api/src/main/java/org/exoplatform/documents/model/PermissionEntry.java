@@ -28,6 +28,6 @@ public class PermissionEntry {
 
   private  Identity identity;
   private  String permission;
-  private  String Role;
+  private  String role;
 
 }

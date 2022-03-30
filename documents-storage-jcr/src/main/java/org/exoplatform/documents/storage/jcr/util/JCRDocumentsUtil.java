@@ -391,7 +391,7 @@ public class JCRDocumentsUtil {
   }
 
   private static String getPermissionRole (String membershipType){
-    if(membershipType.equals("manager") || membershipType.equals("manager") ){
+    if(membershipType.equals("manager") || membershipType.equals("redactor") ){
       return PermissionRole.MANAGERS_REDACTORS.name();
     }
     return PermissionRole.ALL.name();
@@ -558,8 +558,7 @@ public class JCRDocumentsUtil {
 
   public static String getMimeType(Node node) {
     try {
-      if (node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE)) {
-        if (node.hasNode(NodeTypeConstants.JCR_CONTENT))
+      if (node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE) && node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
           return node.getNode(NodeTypeConstants.JCR_CONTENT)
                   .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
                   .getString();

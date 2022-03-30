@@ -237,7 +237,7 @@ public class EntityBuilder {
       if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))){
         continue;
       }
-      if(permissionEntry.getIdentity().getId().equals(identity.getId())){
+      if(identity != null && permissionEntry.getIdentity().getId().equals(identity.getId())){
         if (permissionEntry.getPermission().equals("read")){
           allCanRead = true;
         }
@@ -269,7 +269,7 @@ public class EntityBuilder {
 
       for(PermissionEntryEntity permissionEntryEntity : collaborators){
         Identity ownerId = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
-        if(!ownerId.getId().equals(permissionEntryEntity.getIdentity().getId())) {
+        if(ownerId != null && !ownerId.getId().equals(permissionEntryEntity.getIdentity().getId())) {
           if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
             toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
           } else {

@@ -34,7 +34,6 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
-import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 
 public class DocumentFileServiceImpl implements DocumentFileService {

@@ -23,8 +23,6 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.social.core.identity.model.Identity;
-
-import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 
 public interface DocumentFileService {

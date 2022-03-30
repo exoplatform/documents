@@ -334,7 +334,7 @@ public class DocumentFileRestTest {
 
 
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getIdentity(eq(String.valueOf(userId)))).thenReturn(userIdentity);
+    when(identityManager.getIdentity(String.valueOf(userId))).thenReturn(userIdentity);
     when(identityManager.getOrCreateSpaceIdentity(spacePrettyName)).thenReturn(currentIdentity);
 
 

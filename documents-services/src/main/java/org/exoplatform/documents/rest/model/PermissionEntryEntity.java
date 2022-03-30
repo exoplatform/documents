@@ -16,8 +16,6 @@
  */
 package org.exoplatform.documents.rest.model;
 
-import org.exoplatform.social.core.identity.model.Identity;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
