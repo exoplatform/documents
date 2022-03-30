@@ -49,7 +49,7 @@ public class AbstractNodeEntity {
 
   private IdentityEntity                        modifierIdentity;
 
-  private NodePermission                        acl;
+  private NodePermissionEntity                        acl;
 
   private long                                  createdDate;
 

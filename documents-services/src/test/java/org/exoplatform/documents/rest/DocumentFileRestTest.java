@@ -23,11 +23,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
+import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
+import org.powermock.api.mockito.PowerMockito;
+
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.ws.rs.core.Response;
 
+import org.apache.ecs.wml.P;
+import org.exoplatform.documents.rest.util.EntityBuilder;
+import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.junit.Before;
 import org.junit.Test;
@@ -115,6 +121,7 @@ public class DocumentFileRestTest {
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
     Space space = new Space();
+    space.setPrettyName(spacePrettyName);
     org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
@@ -139,6 +146,7 @@ public class DocumentFileRestTest {
     file1.setVersionnedFileId("1");
     file1.setMimeType(":file");
     file1.setSize(50);
+
     FileNode file2 = new FileNode();
     FileNode file3 = new FileNode();
     FileNode file4 = new FileNode();
@@ -265,6 +273,7 @@ public class DocumentFileRestTest {
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
     Space space = new Space();
+    space.setPrettyName(spacePrettyName);
     org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
@@ -303,15 +312,32 @@ public class DocumentFileRestTest {
     currentIdentity.setProfile(currentProfile);
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
 
+    String userbname = "userb";
+    long userId = 3;
+    Identity userIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    userIdentity.setId(String.valueOf(userId));
+    Profile userProfile = new Profile();
+    userProfile.setProperty(Profile.FULL_NAME, userbname);
+    userIdentity.setProfile(userProfile);
+    when(identityManager.getOrCreateUserIdentity(userbname)).thenReturn(userIdentity);
+
     String spacePrettyName = "spacetest";
+    String groupId = "/spaces/spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
     Space space = new Space();
+    space.setPrettyName(spacePrettyName);
     org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
+    when(spaceService.getSpaceByGroupId(groupId)).thenReturn(space);
     when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
 
+
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(eq(String.valueOf(userId)))).thenReturn(userIdentity);
+    when(identityManager.getOrCreateSpaceIdentity(spacePrettyName)).thenReturn(currentIdentity);
+
+
 
     DocumentFolderFilter filter = null;
     filter = new DocumentFolderFilter(null,null,currentOwnerId);
@@ -324,6 +350,7 @@ public class DocumentFileRestTest {
     identity1.setAvatar(null);
     identity1.setProviderId("organization");
     identity1.setRemoteId("spacetest");
+
 
     NodeAuditTrailItemEntity nodeAuditTrailItemEntity = new NodeAuditTrailItemEntity();
     nodeAuditTrailItemEntity.setId(11);
@@ -369,9 +396,25 @@ public class DocumentFileRestTest {
     folder1.setDescription("description");
     folder1.setCreatedDate(11111);
     folder1.setParentFolderId("1");
+    folder1.setPath("/Groups/spaces/spacetest");
 
-    folder.add(folder1);
-    folder.add(folder2);
+    PermissionEntry permissionEntry1 = new PermissionEntry(currentIdentity, "add_node", PermissionRole.ALL.name());
+    PermissionEntry permissionEntry2 = new PermissionEntry(currentIdentity, "set_property", PermissionRole.ALL.name());
+    PermissionEntry permissionEntry3 = new PermissionEntry(currentIdentity, "read", PermissionRole.ALL.name());
+    PermissionEntry permissionEntry4 = new PermissionEntry(currentIdentity, "remove", PermissionRole.ALL.name());
+    PermissionEntry permissionEntry5 = new PermissionEntry(userIdentity, "add_node", PermissionRole.ALL.name());
+    PermissionEntry permissionEntry6 = new PermissionEntry(userIdentity, "set_property", PermissionRole.ALL.name());
+    List<PermissionEntry> permissionEntries = new ArrayList<>();
+    permissionEntries.add(permissionEntry1);
+    permissionEntries.add(permissionEntry2);
+    permissionEntries.add(permissionEntry3);
+    permissionEntries.add(permissionEntry4);
+    permissionEntries.add(permissionEntry5);
+    permissionEntries.add(permissionEntry6);
+    NodePermission nodePermission = new NodePermission(true,true,true,permissionEntries,null);
+    folder1.setAcl(nodePermission);
+
+
 
     FolderNodeEntity folderEntity = new FolderNodeEntity();
     folderEntity.setId("2");
@@ -381,9 +424,26 @@ public class DocumentFileRestTest {
     folderEntity.setDescription("description");
     folderEntity.setCreatedDate(11111);
     folderEntity.setParentFolderId("1");
-
+    List<PermissionEntryEntity> collaborators = new ArrayList<>();
+    PermissionEntryEntity permissionEntryEntity = new PermissionEntryEntity();
+    PermissionEntryEntity permissionEntryEntity1 = new PermissionEntryEntity(EntityBuilder.toIdentityEntity(identityManager,spaceService,Long.valueOf(userIdentity.getId())),"set_property");
+    permissionEntryEntity.setPermission("add_node");
+    permissionEntryEntity.setIdentity(EntityBuilder.toIdentityEntity(identityManager,spaceService,Long.valueOf(userIdentity.getId())));
+    collaborators.add(permissionEntryEntity1);
+    collaborators.add(permissionEntryEntity);
+    NodePermissionEntity nodePermissionEntity = new NodePermissionEntity();
+    nodePermissionEntity.setCanAccess(true);
+    nodePermissionEntity.setCanDelete(true);
+    nodePermissionEntity.setCanEdit(true);
+    nodePermissionEntity.setAllMembersCanEdit(true);
+    nodePermissionEntity.setVisibilityChoice(Visibility.ALL_MEMBERS.name());
+    nodePermissionEntity.setCollaborators(collaborators);
+    folderEntity.setAcl(nodePermissionEntity);
 
     String expand = "creator";
+
+    folder.add(folder1);
+    folder.add(folder2);
 
     when(documentFileStorage.getFolderChildNodes(filter, spaceID, 0, 0)).thenReturn(folder);
 
@@ -401,7 +461,7 @@ public class DocumentFileRestTest {
                                                            0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(null, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
@@ -429,7 +489,15 @@ public class DocumentFileRestTest {
     assertEquals(foldersNodeEntity.get(0).getDescription(), "description");
     assertEquals(foldersNodeEntity.get(0).getCreatedDate(), 11111);
     assertEquals(foldersNodeEntity.get(0).getParentFolderId(), "1");
-    assertTrue(folderEntity.equals(foldersNodeEntity.get(0)));
+    NodePermissionEntity nodePermissionEntity1 = foldersNodeEntity.get(0).getAcl();
+    assertEquals(nodePermissionEntity1.getVisibilityChoice(), Visibility.SPECIFIC_COLLABORATOR.name());
+    assertEquals(nodePermissionEntity1.isAllMembersCanEdit(), false);
+    assertEquals(nodePermissionEntity1.isCanAccess(), true);
+    assertEquals(nodePermissionEntity1.isCanDelete(), true);
+    assertEquals(nodePermissionEntity1.isCanDelete(), true);
+    assertEquals(nodePermissionEntity1.getCollaborators().size(), 2);
+    assertEquals(nodePermissionEntity1.getCollaborators().get(0).getPermission(), "edit");
+    assertEquals(nodePermissionEntity1.getCollaborators().get(0).getIdentity().getId(), String.valueOf(userId));
   }
 
   @Test

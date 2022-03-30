@@ -34,6 +34,9 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
+import javax.jcr.Node;
+import javax.jcr.RepositoryException;
+
 public class DocumentFileServiceImpl implements DocumentFileService {
 
   private DocumentFileStorage documentFileStorage;
@@ -227,12 +230,50 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     jcrDeleteFileStorage.undoDelete(documentId, authenticatedUserId);
   }
 
+  @Override
+  public void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException {
+
+    documentFileStorage.updatePermissions(documentId, nodePermissionEntity, getAclUserIdentity(authenticatedUserId));
+    nodePermissionEntity.getToShare().forEach((destId,permission)-> {
+      try {
+        shareDocument(documentId,destId,permission);
+      } catch (IllegalAccessException e) {
+        throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
+      }
+    });
+
+  }
+
+  @Override
+  public void shareDocument(String documentId, long destId, String permission) throws IllegalAccessException {
+
+    documentFileStorage.shareDocument(documentId, destId, permission);
+  }
+
+  @Override
+  public boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity) throws RepositoryException {
+   return documentFileStorage.canAccess(documentID, aclIdentity);
+  }
+
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
     Identity userIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
     if (userIdentity == null) {
       throw new IllegalAccessException("Can't find user identity with id " + userIdentityId);
     }
     String username = userIdentity.getRemoteId();
+    org.exoplatform.services.security.Identity aclIdentity = identityRegistry.getIdentity(username);
+    if (aclIdentity == null) {
+      try {
+        aclIdentity = authenticator.createIdentity(username);
+      } catch (Exception e) {
+        throw new IllegalAccessException("Error retrieving user ACL identity with name : " + username);
+      }
+    }
+    return aclIdentity;
+  }
+  @Override
+  public org.exoplatform.services.security.Identity getAclUserIdentity(String username) throws IllegalAccessException{
+
     org.exoplatform.services.security.Identity aclIdentity = identityRegistry.getIdentity(username);
     if (aclIdentity == null) {
       try {

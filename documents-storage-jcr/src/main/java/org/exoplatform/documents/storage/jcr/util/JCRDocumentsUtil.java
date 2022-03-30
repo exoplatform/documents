@@ -101,6 +101,8 @@ public class JCRDocumentsUtil {
   public static List<FileNode> toFileNodes(IdentityManager identityManager,
                                            NodeIterator nodeIterator,
                                            Identity aclIdentity,
+                                           Session session,
+                                           SpaceService spaceService,
                                            int offset,
                                            int limit) {
     List<FileNode> fileNodes = new ArrayList<>();
@@ -111,8 +113,22 @@ public class JCRDocumentsUtil {
         index++;
         continue;
       }
+      String symlinkID = "";
       Node node = nodeIterator.nextNode();
-      FileNode fileNode = toFileNode(identityManager, aclIdentity, node,"");
+
+      try {
+        if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          symlinkID=((NodeImpl) node).getIdentifier();
+          node = getNodeByIdentifier(session, sourceNodeId);
+          if(node==null || node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
+            break;
+          }
+        }
+      } catch (RepositoryException repositoryException) {
+        LOG.warn("Cannot check if the current node is a symlink");
+      }
+      FileNode fileNode = toFileNode(identityManager, aclIdentity, node,symlinkID, spaceService);
       fileNodes.add(fileNode);
       size++;
       if (size >= limit) {
@@ -126,6 +142,7 @@ public class JCRDocumentsUtil {
                                            Session session,
                                            NodeIterator nodeIterator,
                                            Identity aclIdentity,
+                                           SpaceService spaceService,
                                            int offset,
                                            int limit) {
     List<AbstractNode> fileNodes = new ArrayList<>();
@@ -133,7 +150,7 @@ public class JCRDocumentsUtil {
       Node node = nodeIterator.nextNode();
       String symlinkID = "";
       try {
-        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.EXO_SYMLINK)){
+        if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
           String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           symlinkID=((NodeImpl) node).getIdentifier();
           node = getNodeByIdentifier(session, sourceNodeId);
@@ -141,12 +158,12 @@ public class JCRDocumentsUtil {
             break;
           }
         }
-        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER) || node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_UNSTRUCTURED)){
-          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, symlinkID);
+        if(node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
+          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, symlinkID,spaceService);
           fileNodes.add(folderNode);
         }
-        if(node.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FILE)) {
-          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, symlinkID);
+        if(node.isNodeType(NodeTypeConstants.NT_FILE)) {
+          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, symlinkID, spaceService);
           fileNodes.add(fileNode);
         }
       } catch (RepositoryException e) {
@@ -173,7 +190,8 @@ public class JCRDocumentsUtil {
   public static FolderNode toFolderNode(IdentityManager identityManager,
                                  Identity aclIdentity,
                                  Node node,
-                                 String symlinkID) {
+                                 String symlinkID,
+                                 SpaceService spaceService) {
     try {
       if (node == null) {
         return null;
@@ -184,7 +202,7 @@ public class JCRDocumentsUtil {
       }
       folderNode.setDatasource(JCR_DATASOURCE_NAME);
       folderNode.setPath(node.getPath());
-      retrieveFileProperties(identityManager, node, aclIdentity, folderNode);
+      retrieveFileProperties(identityManager, node, aclIdentity, folderNode, spaceService);
 
       return folderNode;
     } catch (Exception e) {
@@ -200,12 +218,13 @@ public class JCRDocumentsUtil {
   public static FileNode toFileNode(IdentityManager identityManager,
                                     Session session,
                                     Identity aclIdentity,
-                                    SearchResult searchResult) {
+                                    SearchResult searchResult,
+                                    SpaceService spaceService) {
     DocumentFileSearchResult fileSearchResult = (DocumentFileSearchResult) searchResult;
     try {
       FileNode fileNode = new FileNode();
       Node node = getNode(session, fileNode, fileSearchResult);
-      toFileNode(identityManager, aclIdentity, node, fileNode);
+      toFileNode(identityManager, aclIdentity, node, fileNode, spaceService);
       return fileNode;
     } catch (Exception e) {
       LOG.warn("Error computing File Node for search result with id {}", fileSearchResult.getId(), e);
@@ -216,7 +235,8 @@ public class JCRDocumentsUtil {
   public static FileNode toFileNode(IdentityManager identityManager,
                                     Identity aclIdentity,
                                     Node node,
-                                    String symlinkID) {
+                                    String symlinkID,
+                                    SpaceService spaceService) {
     if (node == null) {
       return null;
     }
@@ -224,17 +244,18 @@ public class JCRDocumentsUtil {
     if(StringUtils.isNotBlank(symlinkID)){
       fileNode.setSymLinkID(symlinkID);
     }
-    toFileNode(identityManager, aclIdentity, node, fileNode);
+    toFileNode(identityManager, aclIdentity, node, fileNode , spaceService);
     return fileNode;
   }
 
   public static void toFileNode(IdentityManager identityManager,
                                 Identity aclIdentity,
                                 Node node,
-                                FileNode fileNode) {
+                                FileNode fileNode,
+                                SpaceService spaceService) {
     try {
       fileNode.setDatasource(JCR_DATASOURCE_NAME);
-      retrieveFileProperties(identityManager, node, aclIdentity, fileNode);
+      retrieveFileProperties(identityManager, node, aclIdentity, fileNode, spaceService);
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
         retrieveFileContentProperties(content, fileNode);
@@ -273,7 +294,8 @@ public class JCRDocumentsUtil {
   public static void retrieveFileProperties(IdentityManager identityManager,
                                             Node node,
                                             Identity aclIdentity,
-                                            AbstractNode documentNode) throws RepositoryException {
+                                            AbstractNode documentNode,
+                                            SpaceService spaceService) throws RepositoryException {
     documentNode.setId(((NodeImpl) node).getIdentifier());
     documentNode.setPath(((NodeImpl) node).getPath());
 
@@ -318,7 +340,7 @@ public class JCRDocumentsUtil {
     if (node.isNodeType(NodeTypeConstants.DC_DESCRIPTION)) {
       documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());
     }
-    computeDocumentAcl(node, documentNode, aclIdentity);
+    computeDocumentAcl(node, documentNode, aclIdentity,identityManager, spaceService);
   }
 
   public static void retrieveFileContentProperties(Node content, FileNode fileNode) throws RepositoryException {
@@ -333,9 +355,10 @@ public class JCRDocumentsUtil {
     }
   }
 
-  public static void computeDocumentAcl(Node node, AbstractNode documentNode, Identity aclIdentity) throws RepositoryException {
+  public static void computeDocumentAcl(Node node, AbstractNode documentNode, Identity aclIdentity, IdentityManager identityManager, SpaceService spaceService) throws RepositoryException {
     boolean canEdit = false;
     boolean canDelete = false;
+    List<PermissionEntry> permissions = new ArrayList<>();
     String userId = aclIdentity.getUserId();
     ExtendedNode extendedNode = (ExtendedNode) node;
     List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
@@ -348,8 +371,30 @@ public class JCRDocumentsUtil {
         canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.SET_PROPERTY);
         canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
       }
+      if(membershipEntry!=null && StringUtils.isNotEmpty(membershipEntry.getGroup())){
+        Space space = spaceService.getSpaceByGroupId(membershipEntry.getGroup());
+        if(space!=null){
+          org.exoplatform.social.core.identity.model.Identity identity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+          if(identity!=null){
+            permissions.add(new PermissionEntry(identity, accessControlEntry.getPermission(),getPermissionRole(accessControlEntry.getMembershipEntry().getMembershipType())));
+          }
+        }
+      } else{
+        org.exoplatform.social.core.identity.model.Identity identity = identityManager.getOrCreateUserIdentity(nodeAclIdentity);
+        if(identity!=null){
+          permissions.add(new PermissionEntry(identity, accessControlEntry.getPermission(),PermissionRole.ALL.name()));
+        }
+      }
+
     }
-    documentNode.setAcl(new NodePermission(true, canEdit, canDelete));
+    documentNode.setAcl(new NodePermission(true, canEdit, canDelete, permissions,null));
+  }
+
+  private static String getPermissionRole (String membershipType){
+    if(membershipType.equals("manager") || membershipType.equals("manager") ){
+      return PermissionRole.MANAGERS_REDACTORS.name();
+    }
+    return PermissionRole.ALL.name();
   }
 
   public static Node getNodeByIdentifier(Session session, String nodeId) {
@@ -412,6 +457,24 @@ public class JCRDocumentsUtil {
       }
 
     }
+    return identityRootNode;
+  }
+  public static Node getIdentityRootNode(SpaceService spaceService,
+                                         NodeHierarchyCreator nodeHierarchyCreator,
+                                         org.exoplatform.social.core.identity.model.Identity ownerIdentity,
+                                         Session session) throws Exception {
+    Node identityRootNode = null;
+    if (ownerIdentity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      identityRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
+    } else if (ownerIdentity.isUser()) {
+      SessionProvider systemSession = SessionProvider.createSystemProvider();
+      Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
+      String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
+        if (session.itemExists(privatePathNode)) {
+          identityRootNode = (Node) session.getItem(privatePathNode);
+        }
+     }
     return identityRootNode;
   }
 
@@ -492,5 +555,20 @@ public class JCRDocumentsUtil {
 
     return clean;
   }
+
+  public static String getMimeType(Node node) {
+    try {
+      if (node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE)) {
+        if (node.hasNode(NodeTypeConstants.JCR_CONTENT))
+          return node.getNode(NodeTypeConstants.JCR_CONTENT)
+                  .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
+                  .getString();
+      }
+    } catch (RepositoryException e) {
+      LOG.error(e.getMessage(), e);
+    }
+    return "";
+  }
+
 
 }

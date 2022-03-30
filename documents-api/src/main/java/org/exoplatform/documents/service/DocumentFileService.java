@@ -24,6 +24,9 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.social.core.identity.model.Identity;
 
+import javax.jcr.Node;
+import javax.jcr.RepositoryException;
+
 public interface DocumentFileService {
 
   /**
@@ -163,7 +166,15 @@ public interface DocumentFileService {
    */
   void undoDeleteDocument(String documentId, long authenticatedUserId);
 
+  void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException;
+
+  void shareDocument(String documentId, long destId, String permission) throws IllegalAccessException;
+
   void createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
   void renameDocument(long ownerId,String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
+
+  boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity) throws RepositoryException;
+
+  org.exoplatform.services.security.Identity getAclUserIdentity(String userName) throws IllegalAccessException;
 }

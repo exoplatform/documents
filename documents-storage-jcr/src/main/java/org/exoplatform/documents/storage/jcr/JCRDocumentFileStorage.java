@@ -43,12 +43,18 @@ import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.AccessControlEntry;
+import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.util.Text;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
+import org.exoplatform.services.security.IdentityConstants;
+import org.exoplatform.services.security.MembershipEntry;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
@@ -64,6 +70,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final String                         DATE_FORMAT       = "yyyy-MM-dd";
   private final String                         SPACE_PATH_PREFIX = "/Groups/spaces/";
   private final SimpleDateFormat               formatter         = new SimpleDateFormat(DATE_FORMAT);
+  private static final String                  GROUP_ADMINISTRATORS = "*:/platform/administrators";
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -82,6 +89,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                          Identity aclIdentity,
                                          int offset,
                                          int limit) throws ObjectNotFoundException {
+    List<FileNode> files = null;
     String username = aclIdentity.getUserId();
     Long ownerId = filter.getOwnerId();
     org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
@@ -103,12 +111,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
-
-        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection);
+        String statement = getTimeLineQueryStatement(rootPath, NodeTypeConstants.NT_FILE, sortField, sortDirection);
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         QueryResult queryResult = jcrQuery.execute();
         NodeIterator nodeIterator = queryResult.getNodes();
-        return toFileNodes(identityManager, nodeIterator, aclIdentity, offset, limit);
+        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session,spaceService, offset, limit);
+
+        statement = getTimeLineQueryStatement(rootPath, NodeTypeConstants.EXO_SYMLINK, sortField, sortDirection);
+        jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+        queryResult = jcrQuery.execute();
+        nodeIterator = queryResult.getNodes();
+        files.addAll(toFileNodes(identityManager, nodeIterator, aclIdentity, session,spaceService, offset, limit));
+        return files;
       } else {
         String workspace = session.getWorkspace().getName();
         String sortField = getSortField(filter, false);
@@ -122,7 +136,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                             sortField,
                                                                                             sortDirection);
         return filesSearchList.stream()
-                              .map(result -> toFileNode(identityManager, session, aclIdentity, result))
+                              .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
                               .filter(Objects::nonNull)
                               .collect(Collectors.toList());
       }
@@ -235,7 +249,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
           NodeIterator nodeIterator = parent.getNodes();
-          return toNodes(identityManager, session, nodeIterator, aclIdentity, offset, limit);
+          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, offset, limit);
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -249,7 +263,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                               sortField,
                                                                                               sortDirection);
           return filesSearchList.stream()
-                                .map(result -> toFileNode(identityManager, session, aclIdentity, result))
+                                .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
                                 .filter(Objects::nonNull)
                                 .collect(Collectors.toList());
         }
@@ -514,7 +528,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parentNode.save();
       }
 
-      return toFileNode(identityManager, aclIdentity, parentNode, "");
+      return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
     } finally {
@@ -592,9 +606,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {
+  private String getTimeLineQueryStatement(String rootPath, String nodeType, String sortField, String sortDirection) {
     return new StringBuilder().append("SELECT * FROM ")
-                              .append(NodeTypeConstants.NT_FILE)
+                              .append(nodeType)
                               .append(" WHERE jcr:path LIKE '")
                               .append(rootPath)
                               .append("/%' ORDER BY ")
@@ -661,6 +675,165 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
     } catch (UnsupportedEncodingException e) {
       throw new IllegalStateException("Error retrieving folder'" + folderPath , e);
+    }
+  }
+
+  public void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity){
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node node = getNodeByIdentifier(session, documentID);
+      String userId = aclIdentity.getUserId();
+      Map<String, String[]> permissions = new HashMap<>();
+      List<PermissionEntry> permissionsList = nodePermissionEntity.getPermissions();
+      if (node.hasProperty(NodeTypeConstants.EXO_OWNER)) {
+        String owner = node.getProperty(NodeTypeConstants.EXO_OWNER).getString();
+        permissions.put(owner, PermissionType.ALL);
+      }
+      permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
+      for(PermissionEntry permission : permissionsList){
+        if(permission.getIdentity().getProviderId().equals("space")) {
+          if (permission.getPermission().equals("edit")) {
+            if(permission.getRole().equals(PermissionRole.ALL.name())){
+              permissions.put("*:/spaces/" + permission.getIdentity().getRemoteId(), PermissionType.ALL);
+            }
+            if(permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())){
+              permissions.put("manager:/spaces/" + permission.getIdentity().getRemoteId(), PermissionType.ALL);
+              permissions.put("redactor:/spaces/" + permission.getIdentity().getRemoteId(), PermissionType.ALL);
+            }
+          }
+          if (permission.getPermission().equals("read")) {
+            if(permission.getRole().equals(PermissionRole.ALL.name())){
+              permissions.put("*:/spaces/" + permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
+            }
+            if(permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())){
+              permissions.put("manager:/spaces/" + permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
+              permissions.put("redactor:/spaces/" + permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
+            }
+          }
+        }else{
+          if (permission.getPermission().equals("edit")) {
+            permissions.put(permission.getIdentity().getRemoteId(), PermissionType.ALL);
+          }
+          if (permission.getPermission().equals("read")) {
+            permissions.put(permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
+          }
+        }
+        }
+      if (node.canAddMixin("exo:privilegeable")) {
+        node.addMixin("exo:privilegeable");
+      }
+      ((ExtendedNode) node).setPermissions(permissions);
+      session.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error updating permissi" +
+              "ons of document'" + documentID, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  public void shareDocument(String documentId, long destId, String permission) {
+    Node rootNode = null;
+    Node shared = null;
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node currentNode = getNodeByIdentifier(systemSession, documentId);
+      //add symlink to destination user
+      org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
+      rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
+      if(!destIdentity.getProviderId().equals("space")){
+        rootNode = rootNode.getNode("Documents");
+      }
+      if(!rootNode.hasNode("Shared")){
+        shared = rootNode.addNode("Shared");
+      }else{
+        shared = rootNode.getNode("Shared");
+      }
+      if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+        String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
+      }
+      Node linkNode = shared.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
+      linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
+      linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
+      linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, currentNode.getUUID());
+      if(linkNode.canAddMixin("exo:sortable")) {
+        linkNode.addMixin("exo:sortable");
+      }
+      if (currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+        linkNode.setProperty(NodeTypeConstants.EXO_TITLE,currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString());
+      }
+      linkNode.setProperty(NodeTypeConstants.EXO_NAME, currentNode.getName());
+      String nodeMimeType = getMimeType(currentNode);
+      linkNode.addMixin(NodeTypeConstants.MIX_FILE_TYPE);
+      linkNode.setProperty(NodeTypeConstants.EXO_FILE_TYPE, nodeMimeType);
+      rootNode.save();
+      Map<String, String[]> permissions = new HashMap<>();
+      if(destIdentity.getProviderId().equals("space")) {
+        if (permission.equals("edit")) {
+          permissions.put("*:/spaces/" + destIdentity.getRemoteId(), PermissionType.ALL);
+        }
+        if (permission.equals("read")) {
+          permissions.put("*:/spaces/" + destIdentity.getRemoteId(), new String[]{PermissionType.READ});
+        }
+      }else{
+        if (permission.equals("edit")) {
+          permissions.put(destIdentity.getRemoteId(), PermissionType.ALL);
+        }
+        if (permission.equals("read")) {
+          permissions.put(destIdentity.getRemoteId(), new String[]{PermissionType.READ});
+        }
+      }
+      if (linkNode.canAddMixin("exo:privilegeable")) {
+        linkNode.addMixin("exo:privilegeable");
+      }
+      ((ExtendedNode) linkNode).setPermissions(permissions);
+      systemSession.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
+    }finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  public boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException {
+    SessionProvider sessionProvider = null;
+    boolean canAccess = false;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node node = getNodeByIdentifier(session, documentID);
+      if(node == null) return false;
+
+      String userId = aclIdentity.getUserId();
+      ExtendedNode extendedNode = (ExtendedNode) node;
+      List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
+      for (AccessControlEntry accessControlEntry : permsList) {
+        String nodeAclIdentity = accessControlEntry.getIdentity();
+        MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
+        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
+          canAccess = true;
+        }
+      }
+      return canAccess;
+    } catch (Exception e) {
+      throw new IllegalStateException("Error checking access rights for on document'" + documentID + " fro user " + aclIdentity.getUserId(), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 

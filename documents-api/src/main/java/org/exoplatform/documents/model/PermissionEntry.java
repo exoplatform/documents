@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2021 eXo Platform SAS
  *  
- *  This program is free software: you can redistribute it and/or modify
+ *  This program is free snullare: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -16,24 +16,18 @@
  */
 package org.exoplatform.documents.model;
 
-import lombok.*;
-
-import java.util.List;
-import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.exoplatform.social.core.identity.model.Identity;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class NodePermission {
+public class PermissionEntry {
 
-  private boolean canAccess;
-
-  private boolean canEdit;
-
-  private boolean canDelete;
-
-  private List<PermissionEntry> permissions;
-
-  private Map<Long,String> toShare;
+  private  Identity identity;
+  private  String permission;
+  private  String Role;
 
 }
