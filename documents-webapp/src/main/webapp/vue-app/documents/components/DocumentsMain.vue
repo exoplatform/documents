@@ -483,8 +483,8 @@ export default {
           this.fileName = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
           nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));         
         }
-        this.getFolderPath(nodePath);
         this.selectedView = 'folder';
+        this.getFolderPath(nodePath);
       } else {
         this.parentFolderId=null;
         this.fileName=null;
