@@ -9,7 +9,7 @@
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.copy.link') }}</span>
     <v-divider
-      class="mt-2 dividerStyle" />
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
