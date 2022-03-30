@@ -282,7 +282,7 @@ public class EntityBuilder {
             }
           }
         }
-        permissions.add(toPermissionEntry(permissionEntryEntity, spaceService, identityManager));
+        permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
       }
       if(nodePermissionEntity.getVisibilityChoice().equals(Visibility.ALL_MEMBERS.name())){
         permissions.add(new PermissionEntry(identity,"read", PermissionRole.ALL.name()));
@@ -317,7 +317,7 @@ public class EntityBuilder {
     }
     return identity;
   }
-  private static PermissionEntry toPermissionEntry(PermissionEntryEntity permissionEntryEntity, SpaceService spaceService, IdentityManager identityManager){
+  private static PermissionEntry toPermissionEntry(PermissionEntryEntity permissionEntryEntity, IdentityManager identityManager){
     if(permissionEntryEntity == null) return null;
     Identity identity = null;
     if(permissionEntryEntity.getIdentity().getProviderId().equals("space")){
