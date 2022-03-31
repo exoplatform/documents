@@ -158,9 +158,10 @@ export default {
         this.selectedView = 'folder';
       } else  if (queryParams.has('path')) {
         let nodePath = queryParams.get('path');
-        if (nodePath.includes('.')){
-          this.fileName = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
-          nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));         
+        const lastpart = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
+        if (lastpart.includes('.')){
+          this.fileName = lastpart;
+          nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));
         }
         this.getFolderPath(nodePath);
         this.selectedView = 'folder';

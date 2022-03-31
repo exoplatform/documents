@@ -491,13 +491,13 @@ export default {
         this.parentFolderId = queryParams.get('folderId');
         this.selectedView = 'folder';
       } else  if (queryParams.has('path')) {
+        this.selectedView = 'folder';
         let nodePath = queryParams.get('path');
-        //let path = nodePath.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase())[1];
-        if (nodePath.includes('.')){
-          this.fileName = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
+        const lastpart = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
+        if (lastpart.includes('.')){
+          this.fileName = lastpart;
           nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));
         }
-        this.selectedView = 'folder';
         this.getFolderPath(nodePath);
       } else {
         this.parentFolderId=null;
