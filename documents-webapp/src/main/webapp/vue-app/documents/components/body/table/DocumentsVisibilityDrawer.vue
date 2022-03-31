@@ -61,9 +61,26 @@
 
       <v-list-item>
         <v-list-item-content class="my-1">
-          <v-label for="collaborator">
-            <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.collaborator') }}</span>
-          </v-label>
+          <div class="d-flex">
+            <v-label for="collaborator">
+              <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.collaborator') }}</span>
+            </v-label>
+            <v-tooltip bottom v-if="!isMobile">
+              <template v-slot:activator="{ on, attrs }">
+                <v-icon
+                  color="grey lighten-1"
+                  dark
+                  v-bind="attrs"
+                  v-on="on"
+                  size="16"
+                  class="px-2 iconStyle"
+                  @mouseenter="applyItemClass()">
+                  fa-info-circle
+                </v-icon>
+              </template>
+              <span class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
+            </v-tooltip>
+          </div>
           <exo-identity-suggester
             ref="invitedCollaborators"
             :labels="suggesterLabels"
@@ -74,11 +91,6 @@
             height="40"
             include-users
             include-spaces />
-          <p class="text-sub-title text-left mb-0">
-            <span class="caption">
-              {{ $t('documents.label.visibility.collaborator.info') }}
-            </span>
-          </p>
         </v-list-item-content>
       </v-list-item>
       <div v-if="users.length">
@@ -86,7 +98,8 @@
           v-for="user in users"
           :key="user"
           :user="user"
-          @remove-user="removeUser" @set-visibility="setUserVisibility" />
+          @remove-user="removeUser"
+          @set-visibility="setUserVisibility" />
       </div>
     </template>
     <template slot="footer">
@@ -158,6 +171,9 @@ export default {
         noDataLabel: this.$t('documents.label.visibility.noDataLabel'),
       };
     },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
   },
   watch: {
     collaborators() {
@@ -178,6 +194,16 @@ export default {
     },
   },
   methods: {
+    applyItemClass(){
+      window.setTimeout(() => {
+        const elements = document.getElementsByClassName('v-tooltip__content');
+        for (let i = 0; i < elements.length; i++){
+          if (elements[i].innerText.includes(this.$t('documents.label.visibility.collaborator.info'))){
+            elements[i].style.left = '880px';
+          }
+        }      }, 100);
+
+    },
     open(file,fileName) {
       this.file=file;
       this.fileName=fileName;
