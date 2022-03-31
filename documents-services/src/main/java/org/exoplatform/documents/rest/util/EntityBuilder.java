@@ -231,29 +231,37 @@ public class EntityBuilder {
     boolean allCanRead = false;
     boolean allCanEdit = false;
     Identity identity = getOwnerIdentityFromNodePath(path, identityManager, spaceService);
-    List<PermissionEntryEntity> collaborators = new ArrayList<>();
+    Map<String, PermissionEntryEntity> map = new HashMap<>();
     List<PermissionEntry> permissions = nodePermission.getPermissions();
     for(PermissionEntry permissionEntry : permissions){
       if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))){
         continue;
       }
       if(identity != null && permissionEntry.getIdentity().getId().equals(identity.getId())){
-        if (permissionEntry.getPermission().equals("read")){
+        if (permissionEntry.getPermission().equals("read") && permissionEntry.getRole().equals(PermissionRole.ALL.name())){
           allCanRead = true;
         }
-        if (permissionEntry.getPermission().contains("add_node") || permissionEntry.getPermission().contains("set_property") || permissionEntry.getPermission().contains("remove") ){
+        if (permissionEntry.getRole().equals(PermissionRole.ALL.name()) && isEditPermission(permissionEntry.getPermission())){
           allCanEdit = true;
         }
       } else {
-        collaborators.add(toPermissionEntryEntity(permissionEntry, spaceService));
+        PermissionEntryEntity permissionEntry_ = map.get(permissionEntry.getIdentity().getRemoteId());
+        if(permissionEntry_ == null){
+          map.put(permissionEntry.getIdentity().getRemoteId(),toPermissionEntryEntity(permissionEntry, spaceService));
+        } else{
+          if(isEditPermission(permissionEntry.getPermission()) && !isEditPermission(permissionEntry_.getPermission()) ){
+            map.put(permissionEntry.getIdentity().getRemoteId(),toPermissionEntryEntity(permissionEntry, spaceService));
+          }
+        }
+
       }
     }
-    return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name(), collaborators);
+    return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name(), new ArrayList<>(map.values()));
   }
   private static PermissionEntryEntity toPermissionEntryEntity(PermissionEntry permissionEntry, SpaceService spaceService){
     if(permissionEntry == null) return null;
     String permission = "read";
-    if(permissionEntry.getPermission().contains("add_node") || permissionEntry.getPermission().contains("set_property") || permissionEntry.getPermission().contains("remove") ){
+    if(isEditPermission(permissionEntry.getPermission())){
       permission = "edit";
     }
     return new PermissionEntryEntity(toIdentityEntity(permissionEntry.getIdentity(),spaceService), permission);
@@ -419,6 +427,9 @@ public class EntityBuilder {
       }
     }
     return identityEntity;
+  }
+  private static boolean isEditPermission(String permission){
+    return  permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove") ? true : false;
   }
 
 }

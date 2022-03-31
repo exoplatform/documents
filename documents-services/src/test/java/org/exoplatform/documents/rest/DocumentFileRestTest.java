@@ -495,7 +495,7 @@ public class DocumentFileRestTest {
     assertEquals(nodePermissionEntity1.isCanAccess(), true);
     assertEquals(nodePermissionEntity1.isCanDelete(), true);
     assertEquals(nodePermissionEntity1.isCanDelete(), true);
-    assertEquals(nodePermissionEntity1.getCollaborators().size(), 2);
+    assertEquals(nodePermissionEntity1.getCollaborators().size(), 1);
     assertEquals(nodePermissionEntity1.getCollaborators().get(0).getPermission(), "edit");
     assertEquals(nodePermissionEntity1.getCollaborators().get(0).getIdentity().getId(), String.valueOf(userId));
   }
