@@ -93,6 +93,9 @@ public class DocumentFileRest implements ResourceContainer {
                                    @ApiParam(value = "Search query entered by the user", required = false)
                                    @QueryParam("query")
                                    String query,
+                                   @ApiParam(value = "userId", required = false)
+                                   @QueryParam("userId")
+                                   String userId,
                                    @ApiParam(value = "favorites", required = false, defaultValue = "false")
                                    @QueryParam("favorites")
                                    boolean favorites,
@@ -120,12 +123,13 @@ public class DocumentFileRest implements ResourceContainer {
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-      DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId, favorites)
+      DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId)
                                                                           : new DocumentFolderFilter(parentFolderId,
                                                                                                      folderPath,
-                                                                                                     ownerId,
-                                                                                                     favorites);
+                                                                                                     ownerId);
       filter.setQuery(query);
+      filter.setFavorites(favorites);
+      filter.setUserId(userId);
       filter.setAscending(ascending);
       filter.setSortField(DocumentSortField.getFromAlias(sortField));
 
@@ -176,8 +180,9 @@ public class DocumentFileRest implements ResourceContainer {
 
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-      DocumentTimelineFilter filter = new DocumentTimelineFilter(ownerId, favorites);
+      DocumentTimelineFilter filter = new DocumentTimelineFilter(ownerId);
       filter.setQuery(query);
+      filter.setFavorites(favorites);
 
       DocumentGroupsSize documentGroupsSize = documentFileService.getGroupDocumentsCount(filter, userIdentityId);
 

@@ -121,8 +121,8 @@ export default {
     });
     this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$on('open-folder', this.openFolder);
-    this.getFolderPath();
-    this.getBreadCrumbs();
+    this.getDocumentDataFromUrl();
+    this.getBreadCrumbs();   
   },
   methods: {
     openFolder(folder) {
@@ -145,24 +145,47 @@ export default {
       return name;
     },
 
-    getFolderPath(){
+    getDocumentDataFromUrl() {
+      const currentUrlSearchParams = window.location.search;
+      const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (queryParams.has('folderId')) {
+        this.parentFolderId = queryParams.get('folderId');
+        this.selectedView = 'folder';
+      } else  if (queryParams.has('path')) {
+        let nodePath = queryParams.get('path');
+        const lastpart = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
+        if (lastpart.includes('.')){
+          this.fileName = lastpart;
+          nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));
+        }
+        this.getFolderPath(nodePath);
+        this.selectedView = 'folder';
+      } else {
+        this.getFolderPath();
+      }
+    },
+
+    getFolderPath(path){
+      if (!path){
+        path = window.location.pathname;
+      }
       this.actualFolderId= '';
       this.folderPath= '';
       this.currentFolderPath= '';
       if (eXo.env.portal.spaceName){
-        const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        const pathParts  = path.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length>1){
           this.folderPath = pathParts[1];
         }
       } else {
-        if (window.location.pathname.includes('/Private')){
-          const pathParts  = window.location.pathname.split('/Private');
+        if (path.includes('/Private')){
+          const pathParts  = path.split('/Private');
           if (pathParts.length>1){
             this.folderPath = `Private${pathParts[1]}`;
           }
         }
-        if (window.location.pathname.includes('/Public')){
-          const pathParts  = window.location.pathname.split('/Public');
+        if (path.includes('/Public')){
+          const pathParts  = path.split('/Public');
           if (pathParts.length>1){
             this.folderPath = `Public${pathParts[1]}`;
           }
@@ -182,8 +205,8 @@ export default {
     },
 
     updateBreadcrumb() {
-      this.getFolderPath();
-      this.getBreadCrumbs();
+      this.getDocumentDataFromUrl();
+      this.getBreadCrumbs();  
     },
   }
 };

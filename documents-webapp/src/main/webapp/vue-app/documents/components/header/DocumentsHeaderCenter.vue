@@ -61,6 +61,9 @@ export default {
         this.tab = 0;
       }
     }
+    if (queryParams.has('path')) {
+      this.tab = 1;
+    }
 
   },
   methods: {
