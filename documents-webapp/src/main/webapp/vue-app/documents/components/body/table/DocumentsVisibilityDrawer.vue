@@ -15,125 +15,138 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <exo-drawer
-    ref="documentVisibilityDrawer"
-    class="documentVisibilityDrawer"
-    @closed="close"
-    right>
-    <template slot="title">
-      {{ visibilityTitle }}
-    </template>
-    <template slot="content">
-      <v-list-item>
-        <v-list-item-content class="my-1">
-          <exo-user-avatar
-            :identity="ownerIdentity"
-            avatar-class="me-2"
-            size="42"
-            bold-title>
-            <template slot="subTitle">
-              <span class="caption font-italic">
-                {{ $t('documents.label.owner') }}
-              </span>
-            </template>
-          </exo-user-avatar>
-        </v-list-item-content>
-      </v-list-item>
-
-      <v-divider dark class="mx-4" />
-
-      <v-list-item>
-        <v-list-item-content class="my-1">
-          <div class="my-4">
-            <v-label for="choice">
-              <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
-            </v-label>
-            <v-select
-              v-model="file.acl.visibilityChoice"
-              :items="visibilityLabel"
-              item-text="text"
-              item-value="value"
-              dense
-              class="caption"
-              outlined
-              :hint="infoMessage"
-              persistent-hint />
-          </div>
-          <div v-if="showSwitch" class="d-flex flex-row align-center my-4">
-            <v-label for="visibility">
-              <span class="text-color body-2">
-                {{ $t('documents.label.visibility.allowEveryone') }}
-              </span>
-            </v-label>
-            <v-spacer />
-            <v-switch
-              v-model="file.acl.allMembersCanEdit"
-              class="mt-0 me-1" />
-          </div>
-        </v-list-item-content>
-      </v-list-item>
-
-      <v-divider dark class="mx-4" />
-
-      <v-list-item>
-        <v-list-item-content class="my-1">
-          <div class="d-flex">
-            <v-label for="collaborator">
-              <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.collaborator') }}</span>
-            </v-label>
-            <v-tooltip bottom v-if="!isMobile">
-              <template v-slot:activator="{ on, attrs }">
-                <v-icon
-                  color="grey lighten-1"
-                  dark
-                  v-bind="attrs"
-                  v-on="on"
-                  size="16"
-                  class="px-2 iconStyle"
-                  @mouseenter="applyItemClass()">
-                  fa-info-circle
-                </v-icon>
+  <div>
+    <exo-drawer
+      ref="documentVisibilityDrawer"
+      class="documentVisibilityDrawer"
+      @closed="close"
+      right>
+      <template slot="title">
+        {{ visibilityTitle }}
+      </template>
+      <template slot="content">
+        <v-list-item>
+          <v-list-item-content class="my-1">
+            <exo-user-avatar
+              :identity="ownerIdentity"
+              avatar-class="me-2"
+              size="42"
+              bold-title>
+              <template slot="subTitle">
+                <span class="caption font-italic">
+                  {{ $t('documents.label.owner') }}
+                </span>
               </template>
-              <span class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
-            </v-tooltip>
+            </exo-user-avatar>
+          </v-list-item-content>
+        </v-list-item>
+
+        <v-divider dark class="mx-4" />
+
+        <v-list-item>
+          <v-list-item-content class="my-1">
+            <div class="my-4">
+              <v-label for="choice">
+                <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
+              </v-label>
+              <v-select
+                v-model="file.acl.visibilityChoice"
+                :items="visibilityLabel"
+                item-text="text"
+                item-value="value"
+                dense
+                class="caption"
+                outlined
+                :hint="infoMessage"
+                persistent-hint />
+            </div>
+            <div v-if="showSwitch" class="d-flex flex-row align-center my-4">
+              <v-label for="visibility">
+                <span class="text-color body-2">
+                  {{ $t('documents.label.visibility.allowEveryone') }}
+                </span>
+              </v-label>
+              <v-spacer />
+              <v-switch
+                v-model="file.acl.allMembersCanEdit"
+                class="mt-0 me-1" />
+            </div>
+          </v-list-item-content>
+        </v-list-item>
+
+        <v-divider dark class="mx-4" />
+
+        <v-list-item>
+          <v-list-item-content class="my-1">
+            <div class="d-flex">
+              <v-label for="collaborator">
+                <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.collaborator') }}</span>
+              </v-label>
+              <v-tooltip bottom v-if="!isMobile">
+                <template v-slot:activator="{ on, attrs }">
+                  <v-icon
+                    color="grey lighten-1"
+                    dark
+                    v-bind="attrs"
+                    v-on="on"
+                    size="16"
+                    class="px-2 iconStyle"
+                    @mouseenter="applyItemClass()">
+                    fa-info-circle
+                  </v-icon>
+                </template>
+                <span class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
+              </v-tooltip>
+            </div>
+            <exo-identity-suggester
+              ref="invitedCollaborators"
+              :labels="suggesterLabels"
+              v-model="collaborators"
+              :search-options="searchOptions"
+              name="collaborator"
+              type-of-relations="user_to_invite"
+              height="40"
+              include-users
+              include-spaces />
+          </v-list-item-content>
+        </v-list-item>
+        <div v-if="users.length">
+          <documents-visibility-collaborators
+            v-for="user in usersToDisplay"
+            :key="user"
+            :user="user"
+            @remove-user="removeUser"
+            @set-visibility="setUserVisibility" />
+          <div class="seeMoreUsers">
+            <div
+              v-if="users.length > maxUsersToShow"
+              class="seeMoreItem  clickable center "
+              @click="displayAllListUsers()">
+              <span class="seeMoreUsersList text-sub-title clickable">+{{ showMoreUsersNumber }}</span>
+            </div>
           </div>
-          <exo-identity-suggester
-            ref="invitedCollaborators"
-            :labels="suggesterLabels"
-            v-model="collaborators"
-            :search-options="searchOptions"
-            name="collaborator"
-            type-of-relations="user_to_invite"
-            height="40"
-            include-users
-            include-spaces />
-        </v-list-item-content>
-      </v-list-item>
-      <div v-if="users.length">
-        <documents-visibility-collaborators
-          v-for="user in users"
-          :key="user"
-          :user="user"
-          @remove-user="removeUser"
-          @set-visibility="setUserVisibility" />
-      </div>
-    </template>
-    <template slot="footer">
-      <div class="d-flex">
-        <v-spacer />
-        <v-btn
-          class="btn me-2"
-          @click="close">
-          {{ $t('documents.label.visibility.cancel') }}
-        </v-btn>
-        <v-btn
-          class="btn btn-primary"
-          @click="saveVisibility">
-          {{ $t('documents.label.visibility.save') }}
-        </v-btn>
-      </div>
-    </template>
-  </exo-drawer>
+        </div>
+      </template>
+      <template slot="footer">
+        <div class="d-flex">
+          <v-spacer />
+          <v-btn
+            class="btn me-2"
+            @click="close">
+            {{ $t('documents.label.visibility.cancel') }}
+          </v-btn>
+          <v-btn
+            class="btn btn-primary"
+            @click="saveVisibility">
+            {{ $t('documents.label.visibility.save') }}
+          </v-btn>
+        </div>
+      </template>
+    </exo-drawer>
+    <documents-visibility-all-users-drawer
+      ref="documentAllUsersVisibilityDrawer"
+      :users="users" />
+  </div>
 </template>
 <script>
 
@@ -190,6 +203,19 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    maxUsersToShow(){
+      return this.$vuetify.breakpoint.width < 1600 ? 2 : 4;
+    },
+    usersToDisplay () {
+      if (this.users.length > this.maxUsersToShow) {
+        return this.users.slice(0, this.maxUsersToShow);
+      } else {
+        return this.users;
+      }
+    },
+    showMoreUsersNumber() {
+      return `${this.users.length - this.maxUsersToShow  } ${  this.$t('documents.label.visibility.others')}`;
+    },
   },
   watch: {
     collaborators() {
@@ -236,6 +262,9 @@ export default {
     },
     close() {
       this.$refs.documentVisibilityDrawer.close();
+    },
+    displayAllListUsers(){
+      this.$refs.documentAllUsersVisibilityDrawer.open();
     },
     saveVisibility(){
       const collaborators = [];
