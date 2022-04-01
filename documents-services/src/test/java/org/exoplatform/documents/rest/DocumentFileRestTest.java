@@ -105,7 +105,8 @@ public class DocumentFileRestTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     DocumentTimelineFilter filter = null;
-    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()), false);
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    filter.setFavorites(false);
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -154,6 +155,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.TIMELINE,
                                                            null,
+                                                           null,
                                                            false,
                                                            "",
                                                            null,
@@ -162,13 +164,14 @@ public class DocumentFileRestTest {
                                                            0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null,null, null, null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null,null, null, null,null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
                                                            null,
                                                            null,
                                                            FileListingType.TIMELINE,
+                                                           null,
                                                            null,
                                                            false,
                                                            "",
@@ -214,6 +217,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.TIMELINE,
                                                            null,
+                                                           null,
                                                            false,
                                                            "metadatas",
                                                            null,
@@ -251,7 +255,8 @@ public class DocumentFileRestTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     DocumentTimelineFilter filter = null;
-    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()), false);
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    filter.setFavorites(false);
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -309,7 +314,8 @@ public class DocumentFileRestTest {
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
     DocumentFolderFilter filter = null;
-    filter = new DocumentFolderFilter(null,null,currentOwnerId, false);
+    filter = new DocumentFolderFilter(null,null,currentOwnerId);
+    filter.setFavorites(false);
     filter.setSortField(DocumentSortField.NAME);
     IdentityEntity identity1 = new IdentityEntity();
     IdentityEntity identity2 = new IdentityEntity("3", "userb", null, "organization", "spacetest");
@@ -386,6 +392,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.FOLDER,
                                                            null,
+                                                           null,
                                                            false,
                                                            "",
                                                            null,
@@ -394,13 +401,14 @@ public class DocumentFileRestTest {
                                                            0);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(null, "2", null, FileListingType.FOLDER, null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(null, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
                                                            null,
                                                            null,
                                                            FileListingType.FOLDER,
+                                                           null,
                                                            null,
                                                            false,
                                                            expand,

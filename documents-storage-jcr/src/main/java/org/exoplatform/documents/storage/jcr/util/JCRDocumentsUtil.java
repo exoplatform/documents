@@ -399,12 +399,18 @@ public class JCRDocumentsUtil {
       identityRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
     } else if (ownerIdentity.isUser()) {
       SessionProvider systemSession = SessionProvider.createSystemProvider();
-      Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, username);
+      Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
       Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
-      String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
-      if (session.itemExists(privatePathNode)) {
-        identityRootNode = (Node) session.getItem(privatePathNode);
+      if(username.equals(ownerIdentity.getRemoteId())){
+        String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
+        if (session.itemExists(privatePathNode)) {
+          identityRootNode = (Node) session.getItem(privatePathNode);
+        }
+      }else{
+        String publicPathNode = identityNode.getPath()+"/"+USER_PUBLIC_ROOT_NODE;
+        identityRootNode = (Node) session.getItem(publicPathNode);
       }
+
     }
     return identityRootNode;
   }

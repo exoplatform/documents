@@ -217,7 +217,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       if (StringUtils.isBlank(parentFolderId)) {
         Long ownerId = filter.getOwnerId();
-        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        String userId = filter.getUserId();
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = null;
+        if(StringUtils.isNotEmpty(filter.getUserId())){
+          ownerIdentity = identityManager.getOrCreateUserIdentity(userId);
+        } else{
+          ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        }
         parent = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
         parentFolderId = ((NodeImpl) parent).getIdentifier();
       } else {
@@ -624,7 +630,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private Node getNodeByPath(Node node, String folderPath, SessionProvider sessionProvider) throws ObjectNotFoundException {
     try {
-      if((node.getName().equals(USER_PRIVATE_ROOT_NODE) || node.getName().equals(USER_PUBLIC_ROOT_NODE) ) ){
+      if((node.getName().equals(USER_PRIVATE_ROOT_NODE)) ){
         if(folderPath.startsWith(USER_PRIVATE_ROOT_NODE)){
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE+"/")[1];
           return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
@@ -639,6 +645,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             return (Node) session.getItem(node.getPath());
           }
           return null;
+        }
+      }if((node.getName().equals(USER_PUBLIC_ROOT_NODE)) ){
+        if(folderPath.startsWith(USER_PRIVATE_ROOT_NODE+"/"+USER_PUBLIC_ROOT_NODE)){
+          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE+"/"+USER_PUBLIC_ROOT_NODE+"/")[1];
+          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
+        }
+        if(folderPath.startsWith(USER_PUBLIC_ROOT_NODE)){
+          folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE+"/")[1];
+          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
         }
       }
       return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));

@@ -62,6 +62,8 @@ export default {
     extensionApp: 'Documents',
     extensionType: 'views',
     query: null,
+    fileName: null,
+    userId: null,
     sortField: 'lastUpdated',
     isFavorits: false,
     ascending: false,
@@ -169,23 +171,26 @@ export default {
 
       this.refreshFiles();
     },
-    getFolderPath(){
+    getFolderPath(path){
+      if (!path){
+        path = window.location.pathname;
+      }
       if (eXo.env.portal.spaceName){
-        const pathParts  = window.location.pathname.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        const pathParts  = path.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length>1){
           this.folderPath = pathParts[1];
           this.selectedView = 'folder';
         }
       } else {
-        if (window.location.pathname.includes('/Private')){
-          const pathParts  = window.location.pathname.split('/Private');
+        if (path.includes('/Private')){
+          const pathParts  = path.split('/Private');
           if (pathParts.length>1){
             this.folderPath = `Private${pathParts[1]}`;
             this.selectedView = 'folder';
           }
         }
-        if (window.location.pathname.includes('/Public')){
-          const pathParts  = window.location.pathname.split('/Public');
+        if (path.includes('/Public')){
+          const pathParts  = path.split('/Public');
           if (pathParts.length>1){
             this.folderPath = `Public${pathParts[1]}`;
             this.selectedView = 'folder';
@@ -226,6 +231,7 @@ export default {
     },
     openFolder(parentFolder) {
       this.folderPath='';
+      this.fileName=null;
       this.parentFolderId = parentFolder.id;
       this.refreshFiles();
       this.$root.$emit('set-breadcrumb', parentFolder.breadcrumb);
@@ -275,6 +281,7 @@ export default {
     openHome() {
       this.parentFolderId=null;  
       this.folderPath='';
+      this.fileName=null;
       this.refreshFiles(this.primaryFilter);
       this.$root.$emit('set-breadcrumb', null);
       if (window.location.pathname.includes('/Private')){
@@ -308,6 +315,9 @@ export default {
       if (this.sortField) {
         filter.sortField = this.sortField;
       }
+      if (this.userId) {
+        filter.userId = this.userId;
+      }
       if (this.ascending) {
         filter.ascending = this.sortField === 'favorite' ? false : true;
       }
@@ -335,6 +345,13 @@ export default {
           }) || [] : files && files.slice(this.offset, this.limit) || [];
           this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
           this.hasMore = files && files.length > this.limit;
+          if (this.fileName){
+            const result = files.filter(file => file.name===this.fileName);
+            if (result.length>0){
+              this.showPreview(result[0].id);
+            }
+          }
+
         })
         .finally(() => this.loading = false);
     },
@@ -452,35 +469,22 @@ export default {
         this.loading = true;
         this.previewMode = true;
         const documentPreviewId = queryParams.get('documentPreviewId');
-        this.$attachmentService.getAttachmentById(documentPreviewId)
-          .then(attachment => {
-            documentPreview.init({
-              doc: {
-                id: documentPreviewId,
-                repository: 'repository',
-                workspace: 'collaboration',
-                path: attachment.path,
-                title: attachment.title,
-                openUrl: attachment.openUrl,
-                breadCrumb: attachment.previewBreadcrumb,
-                size: attachment.size,
-                downloadUrl: attachment.downloadUrl,
-              },
-              author: attachment.updater,
-              version: {
-                number: attachment.version
-              },
-              showComments: false,
-              showOpenInFolderButton: false,
-            });
-          })
-          .catch(e => console.error(e))
-          .finally(() => this.loading = false);
+        this.showPreview(documentPreviewId);
       } else  if (queryParams.has('folderId')) {
         this.parentFolderId = queryParams.get('folderId');
         this.selectedView = 'folder';
+      } else  if (queryParams.has('path')) {
+        this.selectedView = 'folder';
+        let nodePath = queryParams.get('path');
+        const lastpart = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
+        if (lastpart.includes('.')){
+          this.fileName = lastpart;
+          nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));
+        }
+        this.getFolderPath(nodePath);
       } else {
         this.parentFolderId=null;
+        this.fileName=null;
         this.folderPath='';
         this.selectedView = 'timeline';
         this.getFolderPath();
@@ -496,6 +500,12 @@ export default {
           window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
         }
       }
+      if (!eXo.env.portal.spaceName && queryParams.has('userId')) {
+        const userId = queryParams.get('userId');
+        this.userId=userId;
+      } else {
+        this.userId=null;
+      }
     },
     onBrowserNavChange() {
       this.getDocumentDataFromUrl();
@@ -507,6 +517,32 @@ export default {
       this.alertType = message.type;
       this.alert = true;
       window.setTimeout(() => this.alert = false, 5000);
+    },
+    showPreview(documentPreviewId) {
+      this.$attachmentService.getAttachmentById(documentPreviewId)
+        .then(attachment => {
+          documentPreview.init({
+            doc: {
+              id: documentPreviewId,
+              repository: 'repository',
+              workspace: 'collaboration',
+              path: attachment.path,
+              title: attachment.title,
+              openUrl: attachment.openUrl,
+              breadCrumb: attachment.previewBreadcrumb,
+              size: attachment.size,
+              downloadUrl: attachment.downloadUrl,
+            },
+            author: attachment.updater,
+            version: {
+              number: attachment.version
+            },
+            showComments: false,
+            showOpenInFolderButton: false,
+          });
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
     },
   },
 };
