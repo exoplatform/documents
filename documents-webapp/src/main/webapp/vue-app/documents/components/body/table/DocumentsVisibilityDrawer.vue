@@ -49,7 +49,7 @@
               <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
             </v-label>
             <v-select
-              v-model="visibilitySelected"
+              v-model="file.acl.visibilityChoice"
               :items="visibilityLabel"
               item-text="text"
               item-value="value"
@@ -67,7 +67,7 @@
             </v-label>
             <v-spacer />
             <v-switch
-              v-model="allowEveryone"
+              v-model="file.acl.allMembersCanEdit"
               class="mt-0 me-1" />
           </div>
         </v-list-item-content>
@@ -102,7 +102,7 @@
           v-for="user in users"
           :key="user"
           :user="user"
-          @remove-user="removeUser" />
+          @remove-user="removeUser" @set-visibility="setUserVisibility" />
       </div>
     </template>
     <template slot="footer">
@@ -125,20 +125,13 @@
 <script>
 
 export default {
-  props: {
-    file: {
-      type: Object,
-      default: null,
-    },
-    fileName: {
-      type: String,
-      default: '',
-    },
-  },
+  
   data: () => ({
     ownerIdentity: [],
-    visibilitySelected: 'allMembers',
-    allowEveryone: true,
+    file: { 'acl': {
+      'visibilityChoice': 'ALL_MEMBERS'
+    }},
+    fileName: '',
     collaborators: [],
     searchOptions: {
       currentUser: '',
@@ -153,26 +146,26 @@ export default {
       return [
         {
           text: this.$t('documents.label.visibility.allMembers'),
-          value: 'allMembers',
+          value: 'ALL_MEMBERS',
         },
         {
           text: this.$t('documents.label.visibility.specific'),
-          value: 'specific',
+          value: 'SPECIFIC_COLLABORATOR',
         },
       ];
     },
     infoMessage(){
-      switch (this.visibilitySelected) {
-      case 'specific':
+      switch (this.file.acl.visibilityChoice) {
+      case 'SPECIFIC_COLLABORATOR':
         return this.$t('documents.label.visibility.user.info');
-      case 'allMembers':
+      case 'ALL_MEMBERS':
         return this.allowEveryone ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
       default:
         return this.$t('documents.label.visibility.allMembers.info');
       }
     },
     showSwitch(){
-      return this.visibilitySelected === 'allMembers';
+      return this.file.acl.visibilityChoice === 'ALL_MEMBERS';
     },
     suggesterLabels() {
       return {
@@ -200,20 +193,42 @@ export default {
       this.collaborators = null;
     },
   },
-  mounted(){
-    this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
-      this.ownerIdentity = user;
-    });
-  },
   methods: {
-    open() {
+    open(file,fileName) {
+      this.file=file;
+      this.fileName=fileName;
+      this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
+        this.ownerIdentity = user;
+      });
+      this.users = [];
+      for (const collaborator of file.acl.collaborators){
+        const user = collaborator.identity;
+        user.permission = collaborator.permission;
+        this.users.push(user);
+      }
       this.$refs.documentVisibilityDrawer.open();
     },
     close() {
       this.$refs.documentVisibilityDrawer.close();
     },
     saveVisibility(){
-      this.$root.$emit('save-visibility');
+      const collaborators = [];
+      for (const user of  this.users) {
+        const  collaborator= {
+          'permission': user.permission || 'read',
+          'identity': {
+            'id': user.id,
+            'name': user.displayName || user.name,
+            'remoteId': user.remoteId,
+            'providerId': user.providerId,
+          }
+        };
+        collaborators.push(collaborator);      }
+      this.file.acl.collaborators=collaborators;
+      if (this.file.acl.visibilityChoice==='SPECIFIC_COLLABORATOR'){
+        this.file.acl.allMembersCanEdit=false;
+      }
+      this.$root.$emit('save-visibility',this.file);
       this.close();
     },
     removeUser(user) {
@@ -222,6 +237,14 @@ export default {
       });
       if (index >= 0) {
         this.users.splice(index, 1);
+      }
+    },
+    setUserVisibility(user) {
+      const index = this.users.findIndex(addedUser => {
+        return user.remoteId === addedUser.remoteId;
+      });
+      if (index >= 0) {
+        this.users[index].permission=user.permission;
       }
     },
   }

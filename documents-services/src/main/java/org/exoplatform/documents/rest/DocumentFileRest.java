@@ -33,6 +33,9 @@ import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.FileNodeEntity;
+import org.exoplatform.documents.rest.model.IdentityEntity;
+import org.exoplatform.documents.rest.model.NodePermissionEntity;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
@@ -422,6 +425,32 @@ public class DocumentFileRest implements ResourceContainer {
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     documentFileService.undoDeleteDocument(documentId, userIdentityId);
+    return Response.noContent().build();
+  }
+  @Path("permissions")
+  @POST
+  @RolesAllowed("users")
+  @ApiOperation(value = "Undo deleting document if not yet effectively deleted.", httpMethod = "POST", response = Response.class)
+  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+                         @ApiResponse(code = HTTPStatus.FORBIDDEN, message = "Forbidden operation"), })
+  public Response updatePermissions( @ApiParam(value = "Permission object", required = true)
+                                             FileNodeEntity nodeEntity) {
+
+    if (nodeEntity == null) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("node_object_is_mandatory").build();
+    }
+    NodePermissionEntity nodePermissionEntity = nodeEntity.getAcl();
+
+    if (nodePermissionEntity == null) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("permissions_object_is_mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+
+    try {
+      documentFileService.updatePermissions(nodeEntity.getId(),EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager), userIdentityId);
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    }
     return Response.noContent().build();
   }
 }

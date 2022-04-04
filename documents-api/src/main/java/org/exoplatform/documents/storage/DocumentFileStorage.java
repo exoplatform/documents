@@ -22,6 +22,7 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.services.security.Identity;
+import javax.jcr.RepositoryException;
 
 public interface DocumentFileStorage {
 
@@ -115,6 +116,11 @@ public interface DocumentFileStorage {
 
   void createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
                                                                                ObjectNotFoundException;
-void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
+  void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
                                                                                ObjectNotFoundException;
+  void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity);
+
+  void shareDocument(String documentId, long destId, String permission) throws IllegalAccessException;
+
+  boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException;
 }

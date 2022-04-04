@@ -19,7 +19,6 @@ package org.exoplatform.documents.rest.model;
 import java.util.List;
 import java.util.Map;
 
-import org.exoplatform.documents.model.NodePermission;
 import org.exoplatform.social.rest.entity.MetadataItemEntity;
 
 import lombok.Data;
@@ -49,7 +48,7 @@ public class AbstractNodeEntity {
 
   private IdentityEntity                        modifierIdentity;
 
-  private NodePermission                        acl;
+  private NodePermissionEntity                        acl;
 
   private long                                  createdDate;
 
