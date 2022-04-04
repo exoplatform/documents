@@ -169,7 +169,7 @@ export default {
       case 'SPECIFIC_COLLABORATOR':
         return this.$t('documents.label.visibility.user.info');
       case 'ALL_MEMBERS':
-        return this.allowEveryone ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
+        return this.file.acl.allMembersCanEdit ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
       default:
         return this.$t('documents.label.visibility.allMembers.info');
       }
