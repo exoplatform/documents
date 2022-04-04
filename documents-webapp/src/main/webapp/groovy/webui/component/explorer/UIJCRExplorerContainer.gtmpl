@@ -16,7 +16,9 @@
     addScripts("eXo.session.itvInit();");
     jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("app.removeClass();");
   }
+   String skinUrl = skinService.getSkin("documents-portlet/Documents", "Enterprise").createURL(_ctx.getRequestContext().getParentAppRequestContext().controllerContext);
 %>
+<link rel="stylesheet" href="$skinUrl"/>
 <div class="$uicomponent.id" id="$uicomponent.id">
   <%
   if (uicomponent.isNewDocumentsFeatureEnabled()) {
@@ -24,9 +26,8 @@
   }
   %>
   <% if(isNewDocumentsEnabledForUser) {
-    String skinUrl = skinService.getSkin("documents-portlet/Documents", "Enterprise").createURL(_ctx.getRequestContext().getParentAppRequestContext().controllerContext);
     %>
-   <link rel="stylesheet" href="$skinUrl"/>
+
   <div id="DocumentsApplication">
   </div>
   <% } else { %>
