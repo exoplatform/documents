@@ -1,25 +1,29 @@
 <%
     boolean isActive = uicomponent.isDisplayNewDocumentsForUser();
-    String buttonLabel = isActive ? _ctx.appRes("documents.switchToOldDocuments") : _ctx.appRes("documents.switchToNewDocuments");
-    String buttonTitle = isActive ? _ctx.appRes("documents.switchToOldDocuments.title") : _ctx.appRes("documents.switchToNewDocuments.title");
-    String buttonClass = isActive ?  "mdi-backburger" : "mdi-star-four-points";
-    String buttonId = isActive ? "switchToOldDocuments" : "switchToNewDocuments";
+    String switchLabel = _ctx.appRes("documents.switchToNewDocuments");
+    String switchButtonId = isActive ? "switchToOldDocuments" : "switchToNewDocuments";
+    def rcontext = _ctx.getRequestContext() ;
+    def jsManager = rcontext.getJavascriptManager();
+    jsManager.require("SHARED/jquery", "jq");
+    jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("jq('#switchToNewDocuments').click(function() {app.switchNewDocument();});");
 %>
-<div class="VuetifyApp">
+<div class="VuetifyApp newAppSwitch">
   <div data-app="true" class="v-application white v-application--is-ltr theme--light">
     <div class="v-application--wrap">
-      <div class="white mb-3 py-2 primary--text">
-        <button type="button"
-          class="primary--text font-weight-bold text-capitalize v-btn v-btn--flat v-btn--text theme--light v-size--default"
-          id="$buttonId"
-          onclick="<%=uicomponent.event("SwitchDocuments")%>">
-          <span class="v-btn__content" title="$buttonTitle">
-            <i aria-hidden="true"
-              class="v-icon notranslate theme--light me-3 mdi $buttonClass"
-              style="font-size: 20px;"></i>
-            $buttonLabel
-          </span>
-        </button>
+      <div class="pb-4">
+        <div class="switchPosition">
+          <span class="pr-4 labelStyle">$switchLabel</span>
+          <label class="switch">
+            <input
+              id="switchToNewDocuments"
+              checked="$isActive"
+              name="switchToNewDocuments"
+              type="checkbox"
+              onclick="<%=uicomponent.event("SwitchDocuments")%>" >
+            <div class="slider round"><span class="absolute-activate"></span></div>
+            <span class="absolute-deactivated"></span>
+          </label>
+        </div>
       </div>
     </div>
   </div>
