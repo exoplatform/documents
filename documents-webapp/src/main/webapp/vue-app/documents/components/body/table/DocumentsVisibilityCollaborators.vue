@@ -41,16 +41,16 @@
     <v-spacer />
     <div
       class="my-auto d-flex pe-2">
-            <v-icon
+      <v-icon
         v-if="userVisibility && userVisibility === 'edit' || user.permission === 'edit'"
         class="pb-2"
-        :size="13">
+        :size="16">
         fas fa-edit
       </v-icon>
       <v-icon
         v-else
         class="pb-2"
-        :size="13">
+        :size="16">
         fas fa-eye
       </v-icon>
       <documents-visibility-menu
@@ -88,7 +88,7 @@ export default {
     },
     displayName() {
       const profile = this.user && (this.user.profile || this.user.space);
-      return profile && (profile.displayName || profile.fullname || profile.fullName) || this.user &&  this.user.name;
+      return profile && (profile.displayName || profile.fullname || profile.fullName.substring(0,profile.fullName.lastIndexOf(' ('))) || this.user &&  this.user.name;
     },
   },
   methods: {
