@@ -46,6 +46,30 @@
     </module>
   </portlet>
 
+  <portlet>
+    <name>DocumentsExtensions</name>
+    <module>
+      <script>
+        <path>/js/documentsExtensions.bundle.js</path>
+      </script>
+      <depends>
+        <module>extensionRegistry</module>
+      </depends>
+      <depends>
+        <module>eXoVueI18n</module>
+      </depends>
+      <depends>
+        <module>vue</module>
+      </depends>
+      <depends>
+        <module>commonVueComponents</module>
+      </depends>
+      <depends>
+        <module>documentPreview</module>
+      </depends>
+    </module>
+  </portlet>
+
   <module>
     <name>documentsSnackbarComponent</name>
     <script>
