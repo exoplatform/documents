@@ -204,6 +204,9 @@ export default {
     },
     duplicateDocument(documents){
       this.parentFolderId = documents.id;
+      if (documents.symlinkID){
+        this.parentFolderId = documents.symlinkID;
+      }
       return this.$documentFileService
         .duplicateDocument(this.parentFolderId,this.ownerId)
         .then( () => {
