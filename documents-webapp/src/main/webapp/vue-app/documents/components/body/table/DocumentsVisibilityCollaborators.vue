@@ -75,7 +75,7 @@ export default {
     },
     displayName() {
       const profile = this.user && (this.user.profile || this.user.space);
-      return profile && (profile.displayName || profile.fullname || profile.fullName.substring(0,profile.fullName.lastIndexOf(' ('))) || this.user &&  this.user.name;
+      return profile && (profile.displayName || profile.fullname || profile.fullName.substring(0,profile.fullName.lastIndexOf(' ('))) || this.user &&  (this.user.name || this.user.displayName);
     },
   },
   methods: {
