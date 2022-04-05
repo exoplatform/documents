@@ -571,7 +571,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         duplicateItem(node, newNode, parentNode);
       }
     } else {
-      newNode = destinationNode.addNode(name, oldNode.getPrimaryNodeType().getName());//oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString());
+      newNode = destinationNode.addNode(name, oldNode.getPrimaryNodeType().getName());
 
       if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
         newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
