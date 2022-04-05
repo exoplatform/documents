@@ -274,7 +274,11 @@ export default {
           'identity': {
             'id': user.id,
             'name': user.displayName || user.name,
+            'profile': {
+              'fullName': user.profile.fullName,
+            },
             'remoteId': user.remoteId,
+            'avatar': user.profile.avatarUrl,
             'providerId': user.providerId,
           }
         };
