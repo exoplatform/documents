@@ -114,12 +114,14 @@ public class JCRDocumentsUtil {
         continue;
       }
       String symlinkID = "";
+      String symlinkName = "";
       Node node = nodeIterator.nextNode();
 
       try {
         if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
           String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           symlinkID=((NodeImpl) node).getIdentifier();
+          symlinkName=node.getName();
           node = getNodeByIdentifier(session, sourceNodeId);
           if(node==null || node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
             break;
@@ -129,6 +131,9 @@ public class JCRDocumentsUtil {
         LOG.warn("Cannot check if the current node is a symlink");
       }
       FileNode fileNode = toFileNode(identityManager, aclIdentity, node,symlinkID, spaceService);
+      if(StringUtils.isNotEmpty(symlinkID) && StringUtils.isNotEmpty(symlinkName)){
+        fileNode.setName(symlinkName);
+      }
       fileNodes.add(fileNode);
       size++;
       if (size >= limit) {
