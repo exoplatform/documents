@@ -11,4 +11,5 @@
      eXo.env.portal.folderActionEnabled = <%=featureService.isFeatureActiveForUser("FolderAction", userName)%>;
      eXo.env.portal.deleteActionEnabled = <%=featureService.isFeatureActiveForUser("DeleteAction", userName)%>;
      eXo.env.portal.visibilityActionEnabled = <%=featureService.isFeatureActiveForUser("VisibilityAction", userName)%>;
+     eXo.env.portal.moveActionEnabled = <%=featureService.isFeatureActiveForUser("MoveAction", userName)%>;
 </script>
