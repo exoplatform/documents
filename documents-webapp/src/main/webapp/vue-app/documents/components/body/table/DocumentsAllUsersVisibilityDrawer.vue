@@ -21,7 +21,16 @@
     @closed="close"
     right>
     <template slot="title">
-      {{ specificCollaborators }}
+      <div class="d-flex">
+        <v-icon
+          size="16"
+          color="grey lighten-1"
+          class="clickable"
+          @click="close()">
+          fas fa-arrow-left
+        </v-icon>
+        <span class="ps-2">{{ specificCollaborators }}</span>
+      </div>
     </template>
     <template slot="content">
       <div v-if="users.length" class="my-4">
