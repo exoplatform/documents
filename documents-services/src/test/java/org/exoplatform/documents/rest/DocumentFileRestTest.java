@@ -22,18 +22,18 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
+import static org.powermock.api.mockito.PowerMockito.doThrow;
 
-import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
-import org.powermock.api.mockito.PowerMockito;
+import org.exoplatform.documents.rest.util.RestUtils;
+import org.exoplatform.documents.service.DocumentFileService;
+import org.junit.runner.RunWith;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.ws.rs.core.Response;
 
-import org.apache.ecs.wml.P;
 import org.exoplatform.documents.rest.util.EntityBuilder;
-import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.junit.Before;
 import org.junit.Test;
@@ -58,7 +58,11 @@ import org.exoplatform.social.metadata.model.Metadata;
 import org.exoplatform.social.metadata.model.MetadataItem;
 import org.exoplatform.social.metadata.model.MetadataObject;
 import org.exoplatform.social.metadata.model.MetadataType;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
+@RunWith(PowerMockRunner.class)
 public class DocumentFileRestTest {
 
   private DocumentFileStorage     documentFileStorage;
@@ -727,5 +731,32 @@ public class DocumentFileRestTest {
     doNothing().when(jcrDeleteFileStorage).undoDelete("2", currentOwnerId);
     response = documentFileRest.undoDeleteDocument("2");
     assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  @PrepareForTest({ RestUtils.class, EntityBuilder.class })
+  public void testUpdatePermissions() throws Exception {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    PowerMockito.mockStatic(RestUtils.class);
+    PowerMockito.mockStatic(EntityBuilder.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
+
+    FileNodeEntity nodeEntity = new FileNodeEntity();
+    NodePermission nodePermission = mock(NodePermission.class);
+    NodePermissionEntity nodePermissionEntity = new NodePermissionEntity();
+    Response response = documentFileRest1.updatePermissions(null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    Response response1 = documentFileRest1.updatePermissions(nodeEntity);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
+    nodeEntity.setAcl(nodePermissionEntity);
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    nodeEntity.setId("123");
+    when(EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager)).thenReturn(nodePermission);
+    doNothing().when(documentFileService).updatePermissions("123", nodePermission, 1L);
+    Response response2 = documentFileRest1.updatePermissions(nodeEntity);
+    assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response2.getStatus());
+    doThrow(new IllegalAccessException()).when(documentFileService).updatePermissions("123", nodePermission, 1L);
+    Response response3 = documentFileRest1.updatePermissions(nodeEntity);
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
   }
 }
