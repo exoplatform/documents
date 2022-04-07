@@ -6,31 +6,37 @@
   def jsManager = rcontext.getJavascriptManager();
 
   def skinService = ExoContainerContext.getService(SkinService.class) ;
-  boolean isNewDocumentsEnabledForUser = uicomponent.isDisplayNewDocumentsForUser();
+  boolean isNewDocumentsEnabledForUser = uicomponent.isNewDocumentsFeatureEnabled();
   if (isNewDocumentsEnabledForUser) {
     jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("app.init();");
-  } else {
-    jsManager.require("SHARED/ecm-utils", "ecmutil").require("SHARED/base", "base").
-    addScripts("ecmutil.ECMUtils.onDbClickOnTreeExplorer();").
-    addScripts("ecmutil.ECMUtils.init('UIJCRExplorerPortlet');").
-    addScripts("eXo.session.itvInit();");
-    jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("app.removeClass();");
-  }
-   String skinUrl = skinService.getSkin("documents-portlet/Documents", "Enterprise").createURL(_ctx.getRequestContext().getParentAppRequestContext().controllerContext);
+  } 
+  jsManager.require("SHARED/ecm-utils", "ecmutil").require("SHARED/base", "base").
+  addScripts("ecmutil.ECMUtils.onDbClickOnTreeExplorer();").
+  addScripts("ecmutil.ECMUtils.init('UIJCRExplorerPortlet');").
+  addScripts("eXo.session.itvInit();");  
+  String skinUrl = skinService.getSkin("documents-portlet/Documents", "Enterprise").createURL(_ctx.getRequestContext().getParentAppRequestContext().controllerContext);
 %>
 <link rel="stylesheet" href="$skinUrl"/>
-<div class="$uicomponent.id" id="$uicomponent.id">
-  <%
-  if (uicomponent.isSwitchDocumentsFeatureEnabled()) {
+<%
+  if (uicomponent.isSwitchDocumentsFeatureEnabled() && isNewDocumentsEnabledForUser) {
     _ctx.include("app:/groovy/webui/component/explorer/UIDocumentsFeatureSwitch.gtmpl");
   }
   %>
-  <% if(isNewDocumentsEnabledForUser) {
-    %>
-
+  <div class="$uicomponent.id" id="$uicomponent.id">
+    <%
+  if (isNewDocumentsEnabledForUser) {
+   %>
   <div id="DocumentsApplication">
   </div>
-  <% } else { %>
+  <div id="OldDocumentsApplication" style="display: none;">
+<%
+}
+else {
+  %>
+<div id="OldDocumentsApplication">
+<%
+}
+%>
 	<div style="height: 0px;">
 		<div style="width: 880px;" >
 			<span style="display: none;"></span>
@@ -39,5 +45,6 @@
 	<div style="!width: expression(this.previousSibling.offsetWidth - 2 + 'px'); margin: auto; !border: 1px solid white;">
  		<%  uicomponent.renderChildren(); %>
   </div>
-  <% } %>
+  </div>
+
 </div>

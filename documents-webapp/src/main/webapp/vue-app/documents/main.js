@@ -44,9 +44,13 @@ export function init() {
   }
 }
 
-//Temporarily used to remove VuetifyApp class on old documents view
-export function removeClass() {
-  if ( document.getElementById('UIJcrExplorerContainer').classList.contains('VuetifyApp') ){
-    document.getElementById('UIJcrExplorerContainer').classList.remove('VuetifyApp');
-  }
+export function initSwitchApp() {
+  exoi18n.loadLanguageAsync(lang, url).then(i18n => {
+    // init Vue app when locale ressources are ready
+    Vue.createApp({
+      template: '<switch-new-document id="#newAppSwitch" />',
+      vuetify,
+      i18n
+    }, '#newAppSwitch', 'SwitchDocuments');
+  });
 }
