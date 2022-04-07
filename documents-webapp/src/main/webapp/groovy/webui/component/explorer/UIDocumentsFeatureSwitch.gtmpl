@@ -1,11 +1,7 @@
 <%
     boolean isActive = uicomponent.isDisplayNewDocumentsForUser();
     String switchLabel = _ctx.appRes("documents.switchToNewDocuments");
-    String switchButtonId = isActive ? "switchToOldDocuments" : "switchToNewDocuments";
-    def rcontext = _ctx.getRequestContext() ;
-    def jsManager = rcontext.getJavascriptManager();
-    jsManager.require("SHARED/jquery", "jq");
-    jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("jq('#switchToNewDocuments').click(function() {app.switchNewDocument();});");
+    String checked = isActive ? "checked" : "";
 %>
 <div class="VuetifyApp newAppSwitch">
   <div data-app="true" class="v-application white v-application--is-ltr theme--light">
@@ -16,7 +12,7 @@
           <label class="switch">
             <input
               id="switchToNewDocuments"
-              checked="$isActive"
+              $checked
               name="switchToNewDocuments"
               type="checkbox"
               onclick="<%=uicomponent.event("SwitchDocuments")%>" >

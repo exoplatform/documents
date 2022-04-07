@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="$skinUrl"/>
 <div class="$uicomponent.id" id="$uicomponent.id">
   <%
-  if (uicomponent.isNewDocumentsFeatureEnabled()) {
+  if (uicomponent.isSwitchDocumentsFeatureEnabled()) {
     _ctx.include("app:/groovy/webui/component/explorer/UIDocumentsFeatureSwitch.gtmpl");
   }
   %>

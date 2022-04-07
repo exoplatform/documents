@@ -50,16 +50,3 @@ export function removeClass() {
     document.getElementById('UIJcrExplorerContainer').classList.remove('VuetifyApp');
   }
 }
-
-export function switchNewDocument() {
-  if ( $('#switchToNewDocuments')[0].attributes[1].value === 'true') {
-    window.setTimeout(() => {
-      document.getElementById('switchToNewDocuments').removeAttribute('checked');
-    }, 200);
-  } else {
-    window.setTimeout(() => {
-      document.getElementById('switchToNewDocuments').setAttribute('checked', true);
-    }, 200);
-  }
-}
-
