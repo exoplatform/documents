@@ -53,10 +53,11 @@ export default {
       if (!this.fileCanEdit) {
         extensions = extensions.filter(extension => extension.id !== this.editExtensions);
       }
+      extensions = extensions.filter(extension => extension.enabled(this.file.acl));
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.menuExtensions[extension.id] || this.menuExtensions[extension.id] !== extension)) {
-          if ( ((!this.isMobile && !this.mobileOnlyExtensions.includes(extension.id))
+          if (((!this.isMobile && !this.mobileOnlyExtensions.includes(extension.id))
               || (this.isMobile && !this.desktopOnlyExtensions.includes(extension.id)))
           && (!this.file.folder || (this.file.folder && !this.fileOnlyExtension.includes(extension.id)))) {
             this.menuExtensions[extension.id] = extension;
