@@ -96,7 +96,7 @@ export default {
           'permission': user.permission || 'read',
           'identity': {
             'id': user.id,
-            'name': user.displayName || user.name,
+            'name': user.displayName || user.fullName,
             'remoteId': user.remoteId,
             'providerId': user.providerId,
           }

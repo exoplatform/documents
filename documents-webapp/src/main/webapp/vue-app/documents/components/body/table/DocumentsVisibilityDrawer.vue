@@ -213,13 +213,30 @@ export default {
       });
       if (!found) {
         this.users.push(
-          this.collaborators,
+          this.mapCollaborator(this.collaborators),
         );
       }
       this.collaborators = null;
     },
   },
   methods: {
+    mapCollaborator(collaborator) {
+      const fullName = collaborator.profile
+          && collaborator.profile.fullName
+          && collaborator.profile.fullName.substring(0, collaborator.profile.fullName.lastIndexOf(' ('));
+      return {
+        'permission': collaborator.permission || 'read',
+        'id': collaborator.id,
+        'profile': {
+          'fullName': fullName,
+        },
+        'name': collaborator.displayName || fullName,
+        'remoteId': collaborator.remoteId,
+        'providerId': collaborator.providerId,
+        'avatar': collaborator.profile.avatarUrl
+
+      };
+    },
     applyItemClass(){
       window.setTimeout(() => {
         const elements = document.getElementsByClassName('v-tooltip__content');
@@ -257,12 +274,12 @@ export default {
           'permission': user.permission || 'read',
           'identity': {
             'id': user.id,
-            'name': user.displayName || user.name,
+            'name': user.name,
             'profile': {
-              'fullName': user.profile.fullName,
+              'fullName': user.fullName,
             },
             'remoteId': user.remoteId,
-            'avatar': user.profile.avatarUrl,
+            'avatar': user.avatar,
             'providerId': user.providerId,
           }
         };
