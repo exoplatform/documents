@@ -108,6 +108,21 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+if (eXo.env.portal.moveActionEnabled) {
+  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+    id: 'move',
+    labelKey: 'documents.label.move',
+    align: 'center',
+    sortable: true,
+    cssClass: 'font-weight-bold text-no-wrap',
+    width: '190px',
+    rank: 40,
+    componentOptions: {
+      vueComponent: Vue.options.components['move-menu-action'],
+    },
+  });
+}
+
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'duplicate',
   labelKey: 'documents.label.duplicate',
