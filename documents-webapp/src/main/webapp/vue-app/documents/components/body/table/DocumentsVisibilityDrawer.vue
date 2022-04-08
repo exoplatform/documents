@@ -103,6 +103,7 @@
               :labels="suggesterLabels"
               v-model="collaborators"
               :search-options="searchOptions"
+              :ignore-items="ignoreItems"
               name="collaborator"
               type-of-relations="user_to_invite"
               height="40"
@@ -165,6 +166,9 @@ export default {
     users: [],
   }),
   computed: {
+    ignoreItems() {
+      return eXo.env.portal.spaceName && [`space:${eXo.env.portal.spaceName}`] || [];
+    },
     visibilityTitle(){
       return this.$t('documents.label.visibilityTitle').replace('{0}', this.fileName);
     },
@@ -227,7 +231,7 @@ export default {
         return user.remoteId === this.collaborators.remoteId
             && user.providerId === this.collaborators.providerId;
       });
-      if (!found) {
+      if (!found && this.collaborators.id !== this.ignoreItems[0]) {
         this.users.push(
           this.mapCollaborator(this.collaborators),
         );
