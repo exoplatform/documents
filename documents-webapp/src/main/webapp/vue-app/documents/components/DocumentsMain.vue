@@ -201,9 +201,6 @@ export default {
     },
     duplicateDocument(documents){
       this.parentFolderId = documents.id;
-      if (documents.symlinkID){
-        this.parentFolderId = documents.symlinkID;
-      }
       return this.$documentFileService
         .duplicateDocument(this.parentFolderId,this.ownerId)
         .then( () => {
@@ -237,6 +234,9 @@ export default {
       this.folderPath='';
       this.fileName=null;
       this.parentFolderId = parentFolder.id;
+      if (parentFolder.sourceID){
+        this.parentFolderId = parentFolder.sourceID; 
+      }
       this.refreshFiles();
       this.$root.$emit('set-breadcrumb', parentFolder.breadcrumb);
       let folderPath ='';

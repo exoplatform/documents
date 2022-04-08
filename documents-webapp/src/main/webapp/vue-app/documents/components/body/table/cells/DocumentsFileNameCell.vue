@@ -29,7 +29,7 @@
             class="document-type ms-0">
           </div>
           <v-icon
-            v-if="file.symlinkID"
+            v-if="file.sourceID"
             size="10"
             class="pe-1 iconStyle pb-1 ps-1">
             mdi-link-variant
@@ -261,11 +261,15 @@ export default {
       if (this.file && this.file.folder){
         this.$root.$emit('document-open-folder', this.file);
       } else {
-        this.$attachmentService.getAttachmentById(this.file.id)
+        let id = this.file.id;
+        if (this.file.sourceID){
+          id = this.file.sourceID;
+        }
+        this.$attachmentService.getAttachmentById(id)
           .then(attachment => {
             documentPreview.init({
               doc: {
-                id: this.file.id,
+                id: id,
                 repository: 'repository',
                 workspace: 'collaboration',
                 title: attachment.title,
