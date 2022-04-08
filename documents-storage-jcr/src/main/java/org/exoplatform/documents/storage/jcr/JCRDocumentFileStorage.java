@@ -42,6 +42,7 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
+import org.exoplatform.documents.storage.jcr.util.Utils;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -51,6 +52,7 @@ import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.util.Text;
+import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.MembershipEntry;
@@ -66,6 +68,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final IdentityManager                identityManager;
   private final NodeHierarchyCreator           nodeHierarchyCreator;
   private final DocumentSearchServiceConnector documentSearchServiceConnector;
+  private final ListenerService                listenerService;
   private final String                         DATE_FORMAT       = "yyyy-MM-dd";
   private final String                         SPACE_PATH_PREFIX = "/Groups/spaces/";
   private final SimpleDateFormat               formatter         = new SimpleDateFormat(DATE_FORMAT);
@@ -77,12 +80,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 RepositoryService repositoryService,
                                 DocumentSearchServiceConnector documentSearchServiceConnector,
                                 IdentityManager identityManager,
-                                SpaceService spaceService) {
+                                SpaceService spaceService,
+                                ListenerService listenerService) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.repositoryService = repositoryService;
     this.nodeHierarchyCreator = nodeHierarchyCreator;
     this.documentSearchServiceConnector = documentSearchServiceConnector;
+    this.listenerService = listenerService;
   }
 
   @Override
@@ -804,6 +809,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       ((ExtendedNode) linkNode).setPermissions(permissions);
       systemSession.save();
+      Utils.broadcast(listenerService, "share_document_event", destIdentity, currentNode);
     } catch (Exception e) {
       throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
     }finally {
