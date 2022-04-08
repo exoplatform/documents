@@ -1,6 +1,6 @@
 <template>
   <div>
-    <documents-breadcrumb class="pa-3 pe-1 pl-1" />
+    <documents-breadcrumb class="pa-4 pe-1 pl-1" />
     <v-data-table
       ref="dataTable"
       :headers="headers"

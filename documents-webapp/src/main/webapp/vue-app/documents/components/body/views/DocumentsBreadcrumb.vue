@@ -31,7 +31,12 @@
           </template>
           <span class="caption breadcrumbName">{{ getName(documents.name) }}</span>
         </v-tooltip>
-        <v-icon v-if="index < documentsBreadcrumb.length-1" size="18">mdi-chevron-right</v-icon>
+        <v-icon
+          v-if="index < documentsBreadcrumb.length-1"
+          size="14"
+          class="px-3">
+          fa-chevron-right
+        </v-icon>
       </div>
     </div>
     <div v-else class="documentss-tree-items documentss-long-path d-flex align-center">
@@ -47,7 +52,7 @@
           </template>
           <span class="caption">{{ documentsBreadcrumb && documentsBreadcrumb.length && documentsBreadcrumb[0].name }}</span>
         </v-tooltip>
-        <v-icon size="18">mdi-chevron-right</v-icon>
+        <v-icon size="14" class="px-3">fa-chevron-right</v-icon>
       </div>
       <div class="documentss-tree-item long-path-second-item d-flex">
         <v-tooltip bottom>
@@ -64,10 +69,10 @@
             v-for="(documents, index) in documentsBreadcrumb"
             :key="index"
             class="mb-0">
-            <span v-if="index > 0 && index < documentsBreadcrumb.length-2" class="caption"><v-icon size="18" class="tooltip-chevron">mdi-chevron-right</v-icon> {{ getName(documents.name) }}</span>
+            <span v-if="index > 0 && index < documentsBreadcrumb.length-2" class="caption"><v-icon size="14" class="tooltip-chevron px-3">fa-chevron-right</v-icon> {{ getName(documents.name) }}</span>
           </p>
         </v-tooltip>
-        <v-icon class="clickable" size="18">mdi-chevron-right</v-icon>
+        <v-icon class="clickable px-3" size="14">fa-chevron-right</v-icon>
       </div>
       <div class="documentss-tree-item long-path-third-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
@@ -81,7 +86,7 @@
           </template>
           <span class="caption">{{ documentsBreadcrumb[documentsBreadcrumb.length-2].name }}</span>
         </v-tooltip>
-        <v-icon size="18">mdi-chevron-right</v-icon>
+        <v-icon size="14" class="px-3">fa-chevron-right</v-icon>
       </div>
       <div class="documentss-tree-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>

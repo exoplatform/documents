@@ -16,14 +16,14 @@
 */
 package org.exoplatform.documents.service;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.*;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
@@ -146,7 +146,6 @@ public class DocumentFileServiceTest {
     when(documentFileStorage.getFilesTimeline(filter, spaceID,    0, 0)).thenReturn(files);
     List<AbstractNode> files_ = new ArrayList<>();
     files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,filter,    0,    0,  Long.valueOf(currentIdentity.getId()));
-
     assertEquals(files_.size(),4);
   }
 
@@ -244,8 +243,17 @@ public class DocumentFileServiceTest {
 
     when(documentFileStorage.getGroupDocumentsCount(filter, spaceID)).thenReturn(documentGroupsSize);
     DocumentGroupsSize documentGroupsSize_ = new DocumentGroupsSize();
-    documentGroupsSize_ = documentFileService.getGroupDocumentsCount(filter,  Long.valueOf(currentIdentity.getId()));
-    assertEquals(documentGroupsSize_.getThisDay(),4);
+    documentGroupsSize_ = documentFileService.getGroupDocumentsCount(filter, Long.valueOf(currentIdentity.getId()));
+
+    currentIdentity.setProviderId("space");
+    when(spaceService.getSpaceByPrettyName(spacePrettyName)).thenReturn(space);
+    when(spaceService.hasAccessPermission(space, spacePrettyName)).thenReturn(true);
+    DocumentGroupsSize documentGroupsSize_2 = documentFileService.getGroupDocumentsCount(filter,
+                                                                                         Long.valueOf(currentIdentity.getId()));
+
+    assertEquals(4, documentGroupsSize_.getThisDay());
+    assertEquals(4, documentGroupsSize_2.getThisDay());
+
   }
 
   @Test
@@ -377,5 +385,33 @@ public class DocumentFileServiceTest {
     assertEquals(breadCrumbItems_.size(), 4);
     assertEquals(breadCrumbItems_.get(0).getId(),"1");
     assertEquals(breadCrumbItems_.get(0).getName(),"Folder1");
+  }
+
+  @Test
+  public void testUpdatePermissions() throws IllegalAccessException {
+    NodePermission nodePermission = new NodePermission();
+    Map<Long, String> toShare = new HashMap<>();
+    toShare.put(1L, "read");
+    nodePermission.setToShare(toShare);
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity socialIdentity =  mock(Identity.class);
+    when(identityRegistry.getIdentity("username")).thenReturn(identity);
+    when(socialIdentity.getRemoteId()).thenReturn("username");
+    when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
+    verify(documentFileStorage, times(1)).shareDocument("123", 1L, "read");
+  }
+
+  @Test
+  public void getAclUserIdentity () throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(null);
+    when(authenticator.createIdentity("user")).thenReturn(identity);
+    org.exoplatform.services.security.Identity aclIdentity = documentFileService.getAclUserIdentity("user");
+    assertNotNull(aclIdentity);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    org.exoplatform.services.security.Identity aclIdentity1 = documentFileService.getAclUserIdentity("user");
+    assertNotNull(aclIdentity1);
   }
 }
