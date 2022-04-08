@@ -102,6 +102,8 @@
       :icon="icon" />
     <documents-visibility-drawer
       ref="documentVisibilityDrawer" />
+    <documents-move-drawer
+      ref="documentMoveDrawer" />
     <documents-actions-menu-mobile ref="documentActionsBottomMenu" :file="file" />
   </div>
 </template>
@@ -242,6 +244,11 @@ export default {
         this.openVisibilityDrawer(file,file.name);
       }
     });
+    this.$root.$on('open-move-drawer', file => {
+      if (this.file.id=== file.id) {
+        this.openMoveDrawer(file);
+      }
+    });
     this.$root.$on('close-info-drawer', fileId => {
       if (this.file.id=== fileId) {
         this.drawerDetails=false;
@@ -311,6 +318,9 @@ export default {
         this.$root.$emit('close-file-action-menu');
       }
       this.$refs.documentVisibilityDrawer.open(this.file,this.fileName);
+    },
+    openMoveDrawer(){
+      this.$refs.documentMoveDrawer.open(this.file);
     }
   },
 };

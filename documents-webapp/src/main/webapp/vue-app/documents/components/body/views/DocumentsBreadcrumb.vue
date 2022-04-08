@@ -106,9 +106,17 @@
 </template>
 <script>
 export default {
-
+  props: {
+    documentsBreadcrumb: {
+      type: Array,
+      default: () => null
+    },
+    showIcon: {
+      type: Boolean,
+      default: true,
+    },
+  },
   data: () => ({
-    documentsBreadcrumb: [],
     actualFolderId: '',
     folderPath: '',
     currentFolderPath: '',
