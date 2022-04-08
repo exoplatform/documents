@@ -113,26 +113,25 @@ public class JCRDocumentsUtil {
         index++;
         continue;
       }
-      String symlinkID = "";
-      String symlinkName = "";
+      String sourceID = "";
+      String sourceMimeType = "";
       Node node = nodeIterator.nextNode();
 
       try {
         if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
-          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-          symlinkID=((NodeImpl) node).getIdentifier();
-          symlinkName=node.getName();
-          node = getNodeByIdentifier(session, sourceNodeId);
-          if(node==null || node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
+          sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          Node sourceNode = getNodeByIdentifier(session, sourceID);
+          if(sourceNode==null || sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
             break;
           }
+          sourceMimeType = getMimeType(sourceNode);
         }
       } catch (RepositoryException repositoryException) {
         LOG.warn("Cannot check if the current node is a symlink");
       }
-      FileNode fileNode = toFileNode(identityManager, aclIdentity, node,symlinkID, spaceService);
-      if(StringUtils.isNotEmpty(symlinkID) && StringUtils.isNotEmpty(symlinkName)){
-        fileNode.setName(symlinkName);
+      FileNode fileNode = toFileNode(identityManager, aclIdentity, node,sourceID, spaceService);
+      if(StringUtils.isNotBlank(sourceMimeType)){
+        fileNode.setMimeType(sourceMimeType);
       }
       fileNodes.add(fileNode);
       size++;
@@ -153,23 +152,33 @@ public class JCRDocumentsUtil {
     List<AbstractNode> fileNodes = new ArrayList<>();
     while (nodeIterator.hasNext()) {
       Node node = nodeIterator.nextNode();
-      String symlinkID = "";
+      String sourceID = "";
+      Node sourceNode = null;
       try {
         if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
-          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-          symlinkID=((NodeImpl) node).getIdentifier();
-          node = getNodeByIdentifier(session, sourceNodeId);
-          if(node==null){
+          sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          sourceNode = getNodeByIdentifier(session, sourceID);
+          if(sourceNode==null){
             break;
           }
-        }
-        if(node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
-          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, symlinkID,spaceService);
-          fileNodes.add(folderNode);
-        }
-        if(node.isNodeType(NodeTypeConstants.NT_FILE)) {
-          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, symlinkID, spaceService);
-          fileNodes.add(fileNode);
+          if(sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
+            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID,spaceService);
+            fileNodes.add(folderNode);
+          }
+          if(sourceNode.isNodeType(NodeTypeConstants.NT_FILE)) {
+            FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+            fileNode.setMimeType(getMimeType(sourceNode));
+            fileNodes.add(fileNode);
+          }
+        } else{
+          if(node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
+            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID,spaceService);
+            fileNodes.add(folderNode);
+          }
+          if(node.isNodeType(NodeTypeConstants.NT_FILE)) {
+            FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+            fileNodes.add(fileNode);
+          }
         }
       } catch (RepositoryException e) {
         LOG.warn("Error getting Folder Node for search result with path {}", node, e);
@@ -195,15 +204,15 @@ public class JCRDocumentsUtil {
   public static FolderNode toFolderNode(IdentityManager identityManager,
                                  Identity aclIdentity,
                                  Node node,
-                                 String symlinkID,
+                                 String sourceID,
                                  SpaceService spaceService) {
     try {
       if (node == null) {
         return null;
       }
       FolderNode folderNode = new FolderNode();
-      if(StringUtils.isNotBlank(symlinkID)){
-        folderNode.setSymLinkID(symlinkID);
+      if(StringUtils.isNotBlank(sourceID)){
+        folderNode.setSourceID(sourceID);
       }
       folderNode.setDatasource(JCR_DATASOURCE_NAME);
       folderNode.setPath(node.getPath());
@@ -240,14 +249,14 @@ public class JCRDocumentsUtil {
   public static FileNode toFileNode(IdentityManager identityManager,
                                     Identity aclIdentity,
                                     Node node,
-                                    String symlinkID,
+                                    String sourceID,
                                     SpaceService spaceService) {
     if (node == null) {
       return null;
     }
     FileNode fileNode = new FileNode();
-    if(StringUtils.isNotBlank(symlinkID)){
-      fileNode.setSymLinkID(symlinkID);
+    if(StringUtils.isNotBlank(sourceID)){
+      fileNode.setSourceID(sourceID);
     }
     toFileNode(identityManager, aclIdentity, node, fileNode , spaceService);
     return fileNode;
