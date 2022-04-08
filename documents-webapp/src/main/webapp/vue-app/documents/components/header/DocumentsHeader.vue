@@ -4,7 +4,7 @@
     <v-spacer v-show="!showMobileFilter" />
     <documents-header-center v-show="!showMobileFilter" />
     <v-spacer v-show="!showMobileFilter" />
-    <documents-header-right v-if="filesSize>0" />
+    <documents-header-right />
   </div>
 </template>
 
