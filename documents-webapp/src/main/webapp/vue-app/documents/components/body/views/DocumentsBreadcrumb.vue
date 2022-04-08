@@ -2,6 +2,7 @@
   <div class="documents-breadcrumb-wrapper">
     <div v-if="documentsBreadcrumb && documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
       <v-icon
+        v-if="showIcon"
         class="text-sub-title pe-2 ps-3"
         size="16"
         @click="openTreeFolderDrawer()">
@@ -106,9 +107,17 @@
 </template>
 <script>
 export default {
-
+  props: {
+    documentsBreadcrumb: {
+      type: Array,
+      default: () => null
+    },
+    showIcon: {
+      type: Boolean,
+      default: true,
+    },
+  },
   data: () => ({
-    documentsBreadcrumb: [],
     actualFolderId: '',
     folderPath: '',
     currentFolderPath: '',
