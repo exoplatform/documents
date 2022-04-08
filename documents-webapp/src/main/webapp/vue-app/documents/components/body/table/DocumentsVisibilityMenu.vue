@@ -25,7 +25,7 @@
           v-on="on">
           <v-icon
             class="pb-2"
-            :size="14">
+            :size="16">
             mdi-chevron-down
           </v-icon>
         </v-btn>
