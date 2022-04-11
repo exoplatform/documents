@@ -546,7 +546,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   private void duplicateItem(Node oldNode, Node destinationNode, Node parentNode) throws Exception{
-    if (oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
+    if (oldNode.isNodeType(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
       return;
     }
     Node newNode = null;
@@ -567,7 +567,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
     name = URLDecoder.decode(name,"UTF-8");
-    if (oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString().equals(NodeTypeConstants.NT_FOLDER)) {
+    if (oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
       newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
       NodeIterator nodeIterator = oldNode.getNodes();
@@ -576,7 +576,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         duplicateItem(node, newNode, parentNode);
       }
     } else {
-      newNode = destinationNode.addNode(name, oldNode.getProperty(NodeTypeConstants.JCR_PRIMARY_TYPE).getString());
+      newNode = destinationNode.addNode(name, oldNode.getPrimaryNodeType().getName());
 
       if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
         newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
@@ -608,6 +608,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                         .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
                         .getString());
         resourceNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      }
+
+      if(oldNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+        newNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, oldNode.getSession().getWorkspace().getName());
+        newNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, oldNode.getPrimaryNodeType().getName());
+        newNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, oldNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
       }
     }
   }

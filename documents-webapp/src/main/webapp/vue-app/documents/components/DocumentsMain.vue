@@ -234,6 +234,9 @@ export default {
       this.folderPath='';
       this.fileName=null;
       this.parentFolderId = parentFolder.id;
+      if (parentFolder.sourceID){
+        this.parentFolderId = parentFolder.sourceID; 
+      }
       this.refreshFiles();
       this.$root.$emit('set-breadcrumb', parentFolder.breadcrumb);
       let folderPath ='';
