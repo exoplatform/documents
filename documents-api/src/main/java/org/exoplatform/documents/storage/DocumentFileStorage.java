@@ -114,6 +114,17 @@ public interface DocumentFileStorage {
    */
   AbstractNode duplicateDocument(long ownerId, String fileId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
+  /**
+   * Move the given node.
+   *
+   * @param fileId Id of the given file
+   * @param aclIdentity {@link Identity} of the user acessing files
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   */
+  void moveDocument(long ownerId, String fileId, String destPath, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+
   void createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
                                                                                ObjectNotFoundException;
   void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,

@@ -144,6 +144,17 @@ public interface DocumentFileService {
   AbstractNode duplicateDocument(long ownerId,String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
+   * Move the given node.
+   *
+   * @param fileId Id of the given file
+   * @param authenticatedUserId of the user acessing files
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   */
+  void moveDocument(long ownerId,String fileId, String destPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
    * Delete a document.
    *
    * @param documentPath the path of document

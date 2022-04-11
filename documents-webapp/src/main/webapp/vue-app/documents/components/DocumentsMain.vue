@@ -135,6 +135,7 @@ export default {
     this.$root.$on('duplicate-document', this.duplicateDocument);
     this.$root.$on('documents-create-folder', this.createFolder);
     this.$root.$on('documents-rename', this.renameDocument);
+    this.$root.$on('documents-move', this.moveDocument);
     this.$root.$on('confirm-document-deletion', this.deleteDocument);
     this.$root.$on('undo-delete-document', this.undoDeleteDocument);
     this.$root.$on('documents-open-drawer', this.openDrawer);
@@ -428,6 +429,14 @@ export default {
     renameDocument(file,name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.renameDocument(ownerId,file.id,name)
+        .then( () => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
+    moveDocument(ownerId,fileId,destPath){
+      this.$documentFileService.moveDocument(ownerId,fileId,destPath)
         .then( () => {
           this.refreshFiles();
         })
