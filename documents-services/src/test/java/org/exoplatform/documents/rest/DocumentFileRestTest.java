@@ -658,6 +658,13 @@ public class DocumentFileRestTest {
     when(documentFileStorage.getFullTreeData(2L, "11111111", userID)).thenReturn(children);
     Response response2 = documentFileRest.getFullTreeData(2L,"11111111");
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
+
+    Response response3 = documentFileRest.moveDocument("11111111",2L,null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response3.getStatus());
+
+    doNothing().when(documentFileStorage).moveDocument(2L, "11111111", "/Groups/spaces/test/Documents/test", userID);
+    Response response4 = documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test");
+    assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
   }
 
   @Test

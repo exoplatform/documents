@@ -122,6 +122,7 @@ export default {
       this.$refs.documentsMoveDrawer.close();
     },
     getDestination(folder) {
+      this.folder=folder;
       this.folderPath='';
       this.destinationFolderId=folder.id;
       return this.$documentFileService
@@ -142,8 +143,9 @@ export default {
         });
     },
     moveDocument(){
-      this.$root.$emit('move-document');
-    }
+      this.$root.$emit('documents-move', this.ownerId, this.file.id, this.folder.path);
+      this.close();
+    },
   }
 };
 </script>
