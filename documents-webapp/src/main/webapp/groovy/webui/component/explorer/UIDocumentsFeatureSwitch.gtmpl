@@ -1,26 +1,8 @@
 <%
-    boolean isActive = uicomponent.isDisplayNewDocumentsForUser();
-    String buttonLabel = isActive ? _ctx.appRes("documents.switchToOldDocuments") : _ctx.appRes("documents.switchToNewDocuments");
-    String buttonTitle = isActive ? _ctx.appRes("documents.switchToOldDocuments.title") : _ctx.appRes("documents.switchToNewDocuments.title");
-    String buttonClass = isActive ?  "mdi-backburger" : "mdi-star-four-points";
-    String buttonId = isActive ? "switchToOldDocuments" : "switchToNewDocuments";
+    String switchLabel = _ctx.appRes("documents.switchToNewDocuments");
+	def rcontext = _ctx.getRequestContext() ;
+	def jsManager = rcontext.getJavascriptManager();
+	jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("app.initSwitchApp();");
 %>
-<div class="VuetifyApp">
-  <div data-app="true" class="v-application white v-application--is-ltr theme--light">
-    <div class="v-application--wrap">
-      <div class="white mb-3 py-2 primary--text">
-        <button type="button"
-          class="primary--text font-weight-bold text-capitalize v-btn v-btn--flat v-btn--text theme--light v-size--default"
-          id="$buttonId"
-          onclick="<%=uicomponent.event("SwitchDocuments")%>">
-          <span class="v-btn__content" title="$buttonTitle">
-            <i aria-hidden="true"
-              class="v-icon notranslate theme--light me-3 mdi $buttonClass"
-              style="font-size: 20px;"></i>
-            $buttonLabel
-          </span>
-        </button>
-      </div>
-    </div>
-  </div>
+<div id="newAppSwitch" >
 </div>
