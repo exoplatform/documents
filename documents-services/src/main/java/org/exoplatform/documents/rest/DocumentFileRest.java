@@ -317,6 +317,33 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
+  @PUT
+  @Path("/move")
+  @RolesAllowed("users")
+  @ApiOperation(value = "Move documents", httpMethod = "POST", response = Response.class, notes = "This rename a giving document.")
+  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
+          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
+          @ApiResponse(code = 404, message = "Resource not found")})
+  public Response moveDocument (@ApiParam(value = "documentID", required = false) @QueryParam("documentID") String documentID,
+                                  @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
+                                  @ApiParam(value = "new path", required = false) @QueryParam("destPath") String destPath) {
+
+    if (ownerId == null && StringUtils.isBlank(documentID)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
+    }
+    if (StringUtils.isEmpty(destPath)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document destination path should not be empty").build();
+    }
+    try {
+      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+      documentFileService.moveDocument(ownerId, documentID, destPath, userIdentityId);
+      return Response.ok().build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to rename Document", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
+  }
+
   @POST
   @Path("/folder")
   @RolesAllowed("users")
