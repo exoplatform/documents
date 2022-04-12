@@ -220,6 +220,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public String getNewName(long ownerId, String folderId, String folderPath, String name) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
+    return documentFileStorage.getNewName(ownerId, folderId, folderPath, name);
+  }
+
+  @Override
   public void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
     documentFileStorage.renameDocument(ownerId, documentID, name, getAclUserIdentity(authenticatedUserId));
   }
