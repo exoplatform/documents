@@ -110,9 +110,9 @@ public class JCRDocumentFileStorageTest {
     when(currentNode.getUUID()).thenReturn("123");
     when(identity.getRemoteId()).thenReturn("username");
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
-    jcrDocumentFileStorage.shareDocument("1", 1L, "read");
+    jcrDocumentFileStorage.shareDocument("1", 1L);
     PowerMockito.verifyStatic(Utils.class, times(1));
-    Utils.broadcast(listenerService, "share_document_event", identity, currentNode);
+    Utils.broadcast(listenerService, "share_document_event", identity, linkNode);
     verify(sessionProvider, times(1)).close();
   }
 }

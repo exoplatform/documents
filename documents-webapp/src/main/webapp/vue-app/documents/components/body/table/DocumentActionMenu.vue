@@ -48,12 +48,15 @@ export default {
     }
   },
   methods: {
+    isSymlink() {
+      return this.file && this.file.sourceID;
+    },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
       if (!this.fileCanEdit) {
         extensions = extensions.filter(extension => extension.id !== this.editExtensions);
       }
-      extensions = extensions.filter(extension => extension.enabled(this.file.acl));
+      extensions = extensions.filter(extension => extension.enabled(this.file.acl, this.isSymlink()));
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.menuExtensions[extension.id] || this.menuExtensions[extension.id] !== extension)) {

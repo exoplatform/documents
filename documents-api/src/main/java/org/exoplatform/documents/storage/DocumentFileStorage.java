@@ -131,7 +131,14 @@ public interface DocumentFileStorage {
                                                                                ObjectNotFoundException;
   void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity);
 
-  void shareDocument(String documentId, long destId, String permission) throws IllegalAccessException;
+  /**
+   * Shares a document with given user or space
+   *
+   * @param documentId document id
+   * @param destId target user or space identity id
+   * @throws IllegalAccessException
+   */
+  void shareDocument(String documentId, long destId) throws IllegalAccessException;
 
   boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException;
 }

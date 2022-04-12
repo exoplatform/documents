@@ -27,6 +27,7 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.jcr.Node;
+import javax.jcr.Property;
 
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -86,6 +87,9 @@ public class ShareDocumentNotificationListenerTest {
     Identity targetIdentity = mock(Identity.class);
     Event<Identity, Node> event = new Event<>("share_document_event", targetIdentity, targetNode);
     when(targetIdentity.getProviderId()).thenReturn("USER");
+    Property property = mock(Property.class);
+    when(targetNode.getProperty("exo:uuid")).thenReturn(property);
+    when(property.getString()).thenReturn("313445hegefezd");
     when(NotificationUtils.getDocumentTitle(targetNode)).thenReturn("document");
     when(targetIdentity.getRemoteId()).thenReturn("user");
     shareDocumentNotificationListener.onEvent(event);
