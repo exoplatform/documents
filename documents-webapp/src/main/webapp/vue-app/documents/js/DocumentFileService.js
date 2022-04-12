@@ -76,7 +76,6 @@ export function getFullTreeData(ownerId, folderId) {
       return resp.json();
     }
   });
-
 }
 
 export function duplicateDocument(fileId,ownerId) {
@@ -173,6 +172,32 @@ export function createFolder(ownerId,parentid,folderPath,name) {
     }
   }).catch(e => {
     throw new Error(`Error creating folder ${e}`);
+  });
+}
+export function getNewName(ownerId,parentid,folderPath,name) {
+  const formData = new FormData();
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  if (parentid) {
+    formData.append('parentid', parentid);
+  }
+  if (folderPath) {
+    formData.append('folderPath', folderPath);
+  }
+  if (name) {
+    formData.append('name', name);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/newname?${params}`, {
+    credentials: 'include',
+    method: 'GET',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.text();
+    }
   });
 }
 export function deleteDocument(documentPath, documentId, favorite, delay) {
