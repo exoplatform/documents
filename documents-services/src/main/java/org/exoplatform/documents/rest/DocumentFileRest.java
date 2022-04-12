@@ -380,7 +380,7 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("/newname")
   @Produces(MediaType.TEXT_PLAIN)
   @RolesAllowed("users")
-  @ApiOperation(value = "Add a new Folder", httpMethod = "GET", response = Response.class, notes = "This adds a new Folder under givin Folder.")
+  @ApiOperation(value = "propose a new name for Folder is there is already a folder with the provided name", httpMethod = "GET", response = Response.class, notes = "propse a new name for Folder is there is already a folder with the provided name")
   @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
           @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
           @ApiResponse(code = 404, message = "Resource not found")})
@@ -402,7 +402,7 @@ public class DocumentFileRest implements ResourceContainer {
     try {
         return Response.ok(documentFileService.getNewName(ownerId, parentid, folderPath, name)).build();
       } catch (Exception ex) {
-        LOG.warn("Failed to create Folder", ex);
+        LOG.warn("Failed to propose new Folder name", ex);
         return Response.status(HTTPStatus.INTERNAL_ERROR).build();
       }
     }
