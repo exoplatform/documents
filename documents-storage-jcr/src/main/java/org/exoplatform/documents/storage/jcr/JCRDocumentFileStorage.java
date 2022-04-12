@@ -444,6 +444,51 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
+  @Override
+  public String getNewName(long ownerId,
+                           String folderId,
+                           String folderPath,
+                           String title) throws IllegalAccessException,
+                                                 ObjectAlreadyExistsException,
+                                                 ObjectNotFoundException {
+    SessionProvider systemSessionProvider = null;
+    try {
+      Node node = null;
+      systemSessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = systemSessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      if (StringUtils.isBlank(folderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, ownerIdentity, systemSession);
+        folderId = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(systemSession, folderId);
+      }
+      if(StringUtils.isNotBlank(folderPath)){
+        try {
+          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+        } catch (RepositoryException repositoryException) {
+          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+        }
+      }
+      String name = Text.escapeIllegalJcrChars(cleanString(title.toLowerCase()));
+      int i =0;
+      String newName = name;
+      String newTitle = title;
+      while((node.hasNode(newName))){
+        i++;
+        newTitle = title + " (" + i + ")";
+        newName = Text.escapeIllegalJcrChars(cleanString(newTitle.toLowerCase()));
+      }
+      return newTitle;
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
+    } finally {
+      if (systemSessionProvider != null) {
+        systemSessionProvider.close();
+      }
+    }
+  }
 
   @Override
   public void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws IllegalAccessException, ObjectAlreadyExistsException,

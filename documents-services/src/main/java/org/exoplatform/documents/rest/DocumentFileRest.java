@@ -376,6 +376,37 @@ public class DocumentFileRest implements ResourceContainer {
       }
     }
 
+  @GET
+  @Path("/newname")
+  @Produces(MediaType.TEXT_PLAIN)
+  @RolesAllowed("users")
+  @ApiOperation(value = "propose a new name for Folder is there is already a folder with the provided name", httpMethod = "GET", response = Response.class, notes = "propse a new name for Folder is there is already a folder with the provided name")
+  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
+          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
+          @ApiResponse(code = 404, message = "Resource not found")})
+  public Response getNewName (@ApiParam(value = "parentid", required = false) @QueryParam("parentid") String parentid,
+                                @ApiParam(value = "folderPath", required = false) @QueryParam("folderPath") String folderPath,
+                                @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
+                                @ApiParam(value = "folder name", required = false) @QueryParam("name") String name) {
+
+    if (ownerId == null && StringUtils.isBlank(parentid)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_parentid_is_mandatory").build();
+    }
+    if (StringUtils.isEmpty(name)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Folder Name should not be empty").build();
+    }
+    if (NumberUtils.isNumber(name)) {
+      LOG.warn("Folder Name should not be number");
+      return Response.status(Response.Status.BAD_REQUEST).entity("Folder Name should not be number").build();
+    }
+    try {
+        return Response.ok(documentFileService.getNewName(ownerId, parentid, folderPath, name)).build();
+      } catch (Exception ex) {
+        LOG.warn("Failed to propose new Folder name", ex);
+        return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+      }
+    }
+
   @PUT
   @Path("/rename")
   @RolesAllowed("users")
