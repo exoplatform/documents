@@ -178,7 +178,7 @@ export default {
       this.folderPath= '';
       this.currentFolderPath= '';
       if (eXo.env.portal.spaceName){
-        const pathParts  = path.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        const pathParts  = path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length>1){
           this.folderPath = pathParts[1];
         }

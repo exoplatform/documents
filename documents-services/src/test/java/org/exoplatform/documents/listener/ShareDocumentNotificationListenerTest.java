@@ -1,6 +1,5 @@
 package org.exoplatform.documents.listener;
 
-import org.exoplatform.commons.api.notification.NotificationContext;
 import org.exoplatform.commons.api.notification.channel.ChannelManager;
 import org.exoplatform.commons.api.notification.model.PluginKey;
 import org.exoplatform.commons.api.notification.service.NotificationCompletionService;
@@ -16,6 +15,8 @@ import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
 import org.exoplatform.social.core.service.LinkProvider;
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.core.space.spi.SpaceService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -28,6 +29,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.jcr.Node;
 import javax.jcr.Property;
+import javax.jcr.Value;
 
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -54,12 +56,13 @@ public class ShareDocumentNotificationListenerTest {
 
   @Mock
   private ChannelManager                    channelManager;
-
+  @Mock
+  private SpaceService                      spaceService;
   private ShareDocumentNotificationListener shareDocumentNotificationListener;
 
   @Before
   public void setUp() throws Exception {
-    this.shareDocumentNotificationListener = new ShareDocumentNotificationListener();
+    this.shareDocumentNotificationListener = new ShareDocumentNotificationListener(spaceService);
     PowerMockito.mockStatic(ConversationState.class);
     PowerMockito.mockStatic(CommonsUtils.class);
     PowerMockito.mockStatic(LinkProvider.class);
@@ -83,6 +86,9 @@ public class ShareDocumentNotificationListenerTest {
 
   @Test
   public void onEvent() throws Exception {
+    Space space = new Space();
+    space.setGroupId("/spaces/spacename");
+    when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
     Node targetNode = mock(Node.class);
     Identity targetIdentity = mock(Identity.class);
     Event<Identity, Node> event = new Event<>("share_document_event", targetIdentity, targetNode);
@@ -90,11 +96,17 @@ public class ShareDocumentNotificationListenerTest {
     Property property = mock(Property.class);
     when(targetNode.getProperty("exo:uuid")).thenReturn(property);
     when(property.getString()).thenReturn("313445hegefezd");
-    when(NotificationUtils.getDocumentTitle(targetNode)).thenReturn("document");
+    Property propertyTitle = mock(Property.class);
+    Value value = mock(Value.class);
+    when(propertyTitle.getValue()).thenReturn(value);
+    when(value.getString()).thenReturn("document");
+    when(targetNode.hasProperty("exo:title")).thenReturn(true);
+    when(targetNode.getProperty("exo:title")).thenReturn(propertyTitle);
     when(targetIdentity.getRemoteId()).thenReturn("user");
     shareDocumentNotificationListener.onEvent(event);
     verifyStatic(PluginKey.class, times(1));
     PluginKey.key(AddDocumentCollaboratorPlugin.ID);
+    when(targetIdentity.getRemoteId()).thenReturn("space_name");
     when(targetIdentity.getProviderId()).thenReturn(SpaceIdentityProvider.NAME);
     shareDocumentNotificationListener.onEvent(event);
     verifyStatic(PluginKey.class, times(2));
