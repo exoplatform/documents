@@ -7,6 +7,8 @@ import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.core.space.spi.SpaceService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -32,6 +34,10 @@ public class NotificationUtilsTest {
 
   @Mock
   private IdentityManager identityManager;
+
+  @Mock
+  private SpaceService    spaceService;
+
   @Before
   public void setUp() throws Exception {
     PowerMockito.mockStatic(CommonsUtils.class);
@@ -41,13 +47,15 @@ public class NotificationUtilsTest {
     when(CommonsUtils.getCurrentDomain()).thenReturn("http://domain");
     when(LinkProvider.getPortalName(null)).thenReturn("portal");
   }
-
   @Test
   public void getSharedDocumentLink() {
-    String link = NotificationUtils.getSharedDocumentLink("123", null);
+    Space space = new Space();
+    space.setGroupId("/spaces/spacename");
+    when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
+    String link = NotificationUtils.getSharedDocumentLink("123", null,null);
     assertEquals("http://domain/portal/dw/documents/Private/Documents/Shared?documentPreviewId=123", link);
-    String link1 = NotificationUtils.getSharedDocumentLink("123", "space_name");
-    assertEquals("http://domain/portal/g/:spaces:space/space_name/documents/Shared?documentPreviewId=123", link1);
+    String link1 = NotificationUtils.getSharedDocumentLink("123", spaceService,"space_name");
+    assertEquals("http://domain/portal/g/:spaces:spacename/space_name/documents/Shared?documentPreviewId=123", link1);
   }
 
   @Test

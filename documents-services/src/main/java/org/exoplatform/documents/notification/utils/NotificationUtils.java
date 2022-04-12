@@ -6,6 +6,8 @@ import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.core.space.spi.SpaceService;
 
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
@@ -13,15 +15,19 @@ import javax.jcr.RepositoryException;
 public class NotificationUtils {
 
 
-  public static String getSharedDocumentLink(String nodeUuid, String spacePrettyName) {
+  public static String getSharedDocumentLink(String nodeUuid, SpaceService spaceService, String spacePrettyName) {
     StringBuilder stringBuilder = new StringBuilder();
     String portalOwner = CommonsUtils.getCurrentPortalOwner();
     String domain = CommonsUtils.getCurrentDomain();
     stringBuilder.append(domain)
                  .append("/")
                  .append(LinkProvider.getPortalName(null)).append("/");
-    if (spacePrettyName != null) {
-      stringBuilder.append("g/:spaces:space/")
+    if (spaceService!= null && spacePrettyName != null) {
+      Space space = spaceService.getSpaceByPrettyName(spacePrettyName);
+      String groupId = space.getGroupId().replace("/", ":");
+      stringBuilder.append("g/")
+                   .append(groupId)
+                   .append("/")
                    .append(spacePrettyName)
                    .append("/documents/Shared?documentPreviewId=");
     } else {
