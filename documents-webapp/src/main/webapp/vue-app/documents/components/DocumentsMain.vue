@@ -181,7 +181,7 @@ export default {
         path = window.location.pathname;
       }
       if (eXo.env.portal.spaceName){
-        const pathParts  = path.toLowerCase().split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        const pathParts  = path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length>1){
           this.folderPath = pathParts[1];
           this.selectedView = 'folder';
@@ -247,11 +247,12 @@ export default {
       if (eXo.env.portal.spaceName){
         let newParentPath = parentFolder.path;
         newParentPath = newParentPath.replace(`/spaces/${eXo.env.portal.spaceGroup}`, `/spaces/${eXo.env.portal.spaceGroup}/${eXo.env.portal.spaceName}`);
-        let pathParts = newParentPath.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+        const nodeUri = eXo.env.portal.selectedNodeUri.replace('/documents', '/Documents');
+        let pathParts = newParentPath.split(nodeUri);
         if (pathParts.length>1){
           folderPath = pathParts[1];
         }
-        pathParts = window.location.pathname.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
+        pathParts = window.location.pathname.split(eXo.env.portal.selectedNodeUri);
         window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}?view=folder`);
       } else {
         const userName = eXo.env.portal.userName;
