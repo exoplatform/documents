@@ -6,8 +6,8 @@
   def jsManager = rcontext.getJavascriptManager();
 
   def skinService = ExoContainerContext.getService(SkinService.class) ;
-  boolean isNewDocumentsEnabledForUser = uicomponent.isNewDocumentsFeatureEnabled();
-  if (isNewDocumentsEnabledForUser) {
+  boolean isOldDocumentsEnabledForUser = uicomponent.isOldDocumentsFeatureEnabled();
+  if (!isOldDocumentsEnabledForUser) {
     jsManager.require("PORTLET/documents-portlet/Documents", "app").addScripts("app.init();");
   } 
   jsManager.require("SHARED/ecm-utils", "ecmutil").require("SHARED/base", "base").
@@ -18,13 +18,13 @@
 %>
 <link rel="stylesheet" href="$skinUrl"/>
 <%
-  if (uicomponent.isSwitchDocumentsFeatureEnabled() && isNewDocumentsEnabledForUser) {
+  if (uicomponent.isSwitchDocumentsFeatureEnabled() && !isOldDocumentsEnabledForUser) {
     _ctx.include("app:/groovy/webui/component/explorer/UIDocumentsFeatureSwitch.gtmpl");
   }
   %>
   <div class="$uicomponent.id" id="$uicomponent.id">
     <%
-  if (isNewDocumentsEnabledForUser) {
+  if (!isOldDocumentsEnabledForUser) {
    %>
   <div id="DocumentsApplication">
   </div>
