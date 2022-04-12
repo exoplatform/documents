@@ -751,7 +751,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  public void shareDocument(String documentId, long destId, String permission) {
+  public void shareDocument(String documentId, long destId) {
     Node rootNode = null;
     Node shared = null;
     SessionProvider sessionProvider = null;
@@ -776,17 +776,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
       }
       Node linkNode = null;
-      if(shared.hasNode(currentNode.getName())){
+      if (shared.hasNode(currentNode.getName())) {
         linkNode = shared.getNode(currentNode.getName());
       } else {
-        if(linkNode == null || !linkNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
-          linkNode = shared.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
-        }
+        linkNode = shared.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
       }
       linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
       linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
       linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, currentNode.getUUID());
-      if(linkNode.canAddMixin("exo:sortable")) {
+      if(linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         linkNode.addMixin("exo:sortable");
       }
       if (currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
@@ -801,26 +799,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
         Space space = spaceService.getSpaceByPrettyName(destIdentity.getRemoteId());
         String groupId = space.getGroupId();
-        if (permission.equals("edit")) {
-          permissions.put("*:" + groupId , PermissionType.ALL);
-        }
-        if (permission.equals("read")) {
-          permissions.put("*:" + groupId, new String[] { PermissionType.READ });
-        }
+        permissions.put("*:" + groupId, PermissionType.ALL);
       } else {
-        if (permission.equals("edit")) {
-          permissions.put(destIdentity.getRemoteId(), PermissionType.ALL);
-        }
-        if (permission.equals("read")) {
-          permissions.put(destIdentity.getRemoteId(), new String[]{PermissionType.READ});
-        }
+        permissions.put(destIdentity.getRemoteId(), PermissionType.ALL);
       }
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
       ((ExtendedNode) linkNode).setPermissions(permissions);
       systemSession.save();
-      Utils.broadcast(listenerService, "share_document_event", destIdentity, currentNode);
+      Utils.broadcast(listenerService, "share_document_event", destIdentity, linkNode);
     } catch (Exception e) {
       throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
     }finally {
