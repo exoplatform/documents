@@ -145,6 +145,9 @@ if (eXo.env.portal.visibilityActionEnabled) {
     cssClass: 'font-weight-bold text-no-wrap',
     width: '190px',
     rank: 40,
+    enabled: (acl, isSymlink) => {
+      return acl.canEdit && !isSymlink;
+    },
     componentOptions: {
       vueComponent: Vue.options.components['visibility-menu-action'],
     },
