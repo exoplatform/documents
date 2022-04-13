@@ -166,7 +166,14 @@ public interface DocumentFileService {
 
   void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException;
 
-  void shareDocument(String documentId, long destId, String permission) throws IllegalAccessException;
+  /**
+   * Shares a document with given user or space
+   *
+   * @param documentId document id
+   * @param destId target user or space identity id
+   * @throws IllegalAccessException
+   */
+  void shareDocument(String documentId, long destId) throws IllegalAccessException;
 
   void createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 

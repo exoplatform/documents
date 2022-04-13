@@ -32,15 +32,18 @@ import javax.jcr.Node;
 
 public class ShareDocumentNotificationListener extends Listener<Identity, Node> {
 
+  private static final String EXO_SYMLINK_UUID = "exo:uuid";
+
   @Override
   public void onEvent(Event<Identity, Node> event) throws Exception {
     Node targetNode = event.getData();
     Identity targetIdentity = event.getSource();
     String currentUser = ConversationState.getCurrent().getIdentity().getUserId();
     NotificationContext ctx = NotificationContextImpl.cloneInstance();
-    String documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getUUID(), null);
+    String documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(), null);
     if (targetIdentity.getProviderId().equals(SpaceIdentityProvider.NAME)) {
-      documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getUUID(), targetIdentity.getRemoteId());
+      documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(),
+                                                             targetIdentity.getRemoteId());
     }
     ctx.append(NotificationConstants.FROM_USER, currentUser);
     ctx.append(NotificationConstants.DOCUMENT_URL, documentLink);
