@@ -398,12 +398,16 @@ export default {
       observer.observe(bodyElement, config);
     },
     addFolder(){
-      const newFolder={
-        'id': -1,
-        'name': 'new folder',
-        'folder': true
-      };
-      this.files.unshift(newFolder);
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.getNewName(ownerId,this.parentFolderId,this.folderPath,'new folder') 
+        .then( newName => {
+          const newFolder={
+            'id': -1,
+            'name': newName,
+            'folder': true
+          };
+          this.files.unshift(newFolder);
+        }).catch(e => console.error(e));
     },
     cancelAddFolder(folder){
       this.files.splice(this.files.indexOf(folder), 1);
