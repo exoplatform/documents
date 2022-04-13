@@ -9,9 +9,15 @@
     </v-list-item-content>
 
     <v-list-item-action>
-      <v-btn icon>
-        <v-icon class="yellow--text text--darken-2" size="18">fa-star</v-icon>
-      </v-btn>
+      <favorite-button
+        :id="id"
+        :favorite="isFavorite"
+        :top="top"
+        :right="right"
+        type="file"
+        type-label="Documents"
+        @removed="removed"
+        @remove-error="removeError" />
     </v-list-item-action>
   </v-list-item>
 </template>
@@ -25,6 +31,7 @@ export default {
   },
   data: () => ({
     documentTitle: '',
+    file: {},
     documentPreviewInit: {},
     dateFormat: {
       year: 'numeric',
@@ -34,10 +41,12 @@ export default {
       minute: 'numeric',
       second: 'numeric',
     },
+    isFavorite: true,
   }),
   created() {
     this.$attachmentService.getAttachmentById(this.id)
       .then(file => { 
+        this.file = file;
         this.documentTitle = file.title;
         const updaterFullName = file && file.updater && file.updater.profile && file.updater.profile.fullname || '';
         const updateDate = new Date(file.updated);
@@ -68,7 +77,26 @@ export default {
     openPreview() {
       documentPreview.init(this.documentPreviewInit);
       this.$root.$emit('close-favorite-drawer');
-    }
+    },
+    removed() {
+      this.isFavorite = !this.isFavorite;
+      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyDeletedFavorite', {0: this.$t('file.label')}));
+      this.$emit('removed');
+      this.$root.$emit('refresh-favorite-list');
+    },
+    removeError() {
+      this.displayAlert(this.$t('Favorite.tooltip.ErrorDeletingFavorite', {0: this.$t('file.label')}), 'error');
+    },
+    displayAlert(message, type) {
+      document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
+        detail: {
+          messageObject: {
+            message: message,
+            type: type || 'success',
+          }
+        }
+      }));
+    },
   }
 
 };
