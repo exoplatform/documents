@@ -57,6 +57,7 @@ import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.MembershipEntry;
 import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
@@ -706,25 +707,27 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
       for(PermissionEntry permission : permissionsList){
         if(permission.getIdentity().getProviderId().equals(SPACE_PROVIDER_ID)) {
+          Space space = spaceService.getSpaceByPrettyName(permission.getIdentity().getRemoteId());
+          String groupId = space.getGroupId();
           if (permission.getPermission().equals("edit")) {
             if(permission.getRole().equals(PermissionRole.ALL.name())){
-              permissions.put("*:/spaces/" + permission.getIdentity().getRemoteId(), PermissionType.ALL);
+              permissions.put("*:" + groupId, PermissionType.ALL);
             }
             if(permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())){
-              permissions.put("manager:/spaces/" + permission.getIdentity().getRemoteId(), PermissionType.ALL);
-              permissions.put("redactor:/spaces/" + permission.getIdentity().getRemoteId(), PermissionType.ALL);
+              permissions.put("manager:"+ groupId, PermissionType.ALL);
+              permissions.put("redactor:" + groupId, PermissionType.ALL);
             }
           }
           if (permission.getPermission().equals("read")) {
             if(permission.getRole().equals(PermissionRole.ALL.name())){
-              permissions.put("*:/spaces/" + permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
+              permissions.put("*:" + groupId, new String[] { PermissionType.READ });
             }
             if(permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())){
-              permissions.put("manager:/spaces/" + permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
-              permissions.put("redactor:/spaces/" + permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
+              permissions.put("manager:" + groupId, new String[] { PermissionType.READ });
+              permissions.put("redactor:" + groupId, new String[] { PermissionType.READ });
             }
           }
-        }else{
+        } else {
           if (permission.getPermission().equals("edit")) {
             permissions.put(permission.getIdentity().getRemoteId(), PermissionType.ALL);
           }
@@ -795,14 +798,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       linkNode.setProperty(NodeTypeConstants.EXO_FILE_TYPE, nodeMimeType);
       rootNode.save();
       Map<String, String[]> permissions = new HashMap<>();
-      if(destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
+      if (destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
+        Space space = spaceService.getSpaceByPrettyName(destIdentity.getRemoteId());
+        String groupId = space.getGroupId();
         if (permission.equals("edit")) {
-          permissions.put("*:/spaces/" + destIdentity.getRemoteId(), PermissionType.ALL);
+          permissions.put("*:" + groupId , PermissionType.ALL);
         }
         if (permission.equals("read")) {
-          permissions.put("*:/spaces/" + destIdentity.getRemoteId(), new String[]{PermissionType.READ});
+          permissions.put("*:" + groupId, new String[] { PermissionType.READ });
         }
-      }else{
+      } else {
         if (permission.equals("edit")) {
           permissions.put(destIdentity.getRemoteId(), PermissionType.ALL);
         }
