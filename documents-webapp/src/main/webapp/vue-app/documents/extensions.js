@@ -64,6 +64,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
+  enabled: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['favorite-menu-action'],
   },
@@ -77,6 +78,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
+  enabled: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['copy-link-menu-action'],
   },
@@ -90,6 +92,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
+  enabled: (acl) => {
+    return acl.canEdit;
+  },
   componentOptions: {
     vueComponent: Vue.options.components['edit-menu-action'],
   },
@@ -103,6 +108,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
+  enabled: (acl) => {
+    return acl.canEdit;
+  },
   componentOptions: {
     vueComponent: Vue.options.components['rename-menu-action'],
   },
@@ -117,24 +125,32 @@ if (eXo.env.portal.moveActionEnabled) {
     cssClass: 'font-weight-bold text-no-wrap',
     width: '190px',
     rank: 40,
+    enabled: (acl) => {
+      return acl.canEdit;
+    },
     componentOptions: {
       vueComponent: Vue.options.components['move-menu-action'],
     },
   });
 }
 
-extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-  id: 'duplicate',
-  labelKey: 'documents.label.duplicate',
-  align: 'center',
-  sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '190px',
-  rank: 40,
-  componentOptions: {
-    vueComponent: Vue.options.components['duplicate-menu-action'],
-  },
-});
+if (eXo.env.portal.filesDuplicateActionEnabled) {
+  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+    id: 'duplicate',
+    labelKey: 'documents.label.duplicate',
+    align: 'center',
+    sortable: true,
+    cssClass: 'font-weight-bold text-no-wrap',
+    width: '190px',
+    rank: 40,
+    enabled: (acl) => {
+      return acl.canEdit;
+    },
+    componentOptions: {
+      vueComponent: Vue.options.components['duplicate-menu-action'],
+    },
+  });
+}
 
 if (eXo.env.portal.visibilityActionEnabled) {
   extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
@@ -145,6 +161,9 @@ if (eXo.env.portal.visibilityActionEnabled) {
     cssClass: 'font-weight-bold text-no-wrap',
     width: '190px',
     rank: 40,
+    enabled: (acl) => {
+      return acl.canEdit;
+    },
     componentOptions: {
       vueComponent: Vue.options.components['visibility-menu-action'],
     },
@@ -159,6 +178,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
+  enabled: (acl) => {
+    return acl.canEdit;
+  },
   componentOptions: {
     vueComponent: Vue.options.components['download-menu-action'],
   },
@@ -172,6 +194,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
+  enabled: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['details-menu-action'],
   },
@@ -186,6 +209,9 @@ if (eXo.env.portal.deleteActionEnabled) {
     cssClass: 'font-weight-bold text-no-wrap',
     width: '190px',
     rank: 40,
+    enabled: (acl) => {
+      return acl.canEdit;
+    },
     componentOptions: {
       vueComponent: Vue.options.components['delete-menu-action'],
     },
