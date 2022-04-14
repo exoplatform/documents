@@ -1,9 +1,9 @@
 <template>
   <div class="d-flex flex-row">
     <documents-header-left />
-    <v-spacer v-show="!showMobileFilter" />
-    <documents-header-center v-show="!showMobileFilter" />
-    <v-spacer v-show="!showMobileFilter" />
+    <v-spacer v-show="!canShowMobileFilter" />
+    <documents-header-center v-show="!canShowMobileFilter" />
+    <v-spacer v-show="!canShowMobileFilter" />
     <documents-header-right />
   </div>
 </template>
@@ -20,7 +20,7 @@ export default {
     showMobileFilter: false,
   }),
   computed: {
-    showMobileFilter() {
+    canShowMobileFilter() {
       return this.isMobile && this.showMobileFilter;
     },
     isMobile() {

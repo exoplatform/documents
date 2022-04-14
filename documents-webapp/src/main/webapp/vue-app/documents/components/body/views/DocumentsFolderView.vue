@@ -21,7 +21,7 @@
       class="documents-folder-table border-box-sizing">
       <template
         v-for="header in extendedCells"
-        v-slot:[`item.${header.value}`]="{item}">
+        #[`item.${header.value}`]="{item}">
         <documents-table-cell
           :key="header.value"
           :extension="header.cellExtension"
