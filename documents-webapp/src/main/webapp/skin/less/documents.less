@@ -405,8 +405,10 @@
       }
 
       .v-data-table__mobile-table-row > :nth-child(2) {
-        padding-right: 0px;
-        padding-left: 34px;
+        padding-right: 0px ~'; /** orientation=lt */ ';
+        padding-right: 46px ~'; /** orientation=rt */ ';
+        padding-left: 46px ~'; /** orientation=lt */ ';
+        padding-left: 0px ~'; /** orientation=rt */ ';
       }
 
       .v-data-table__mobile-table-row > :last-child {
@@ -438,6 +440,10 @@
         }
       }
     }
+  }
+
+  .custom-list-item-min-height {
+    min-height: 40px !important;
   }
 }
 
