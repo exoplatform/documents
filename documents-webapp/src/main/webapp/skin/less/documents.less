@@ -9,6 +9,37 @@
     .v-alert {
       z-index: 9999;
     }
+    .inputSpaceName {
+      box-shadow: none!important;
+      border: none!important;
+      .v-input__prepend-outer {
+        margin-top: 8px;
+        i {
+          color: @primaryColor;
+          font-size: 18px;
+        }
+
+      }
+      .v-input__control {
+        min-height: 27px!important;
+        height: 27px;
+        > .v-input__slot {
+          box-shadow: none!important;
+          padding: 0!important;
+          .v-select__slot {
+            label {
+              color: @greyColorLighten1;
+            }
+            .v-select__selections {
+              max-width: 90%!important;
+            }
+          }
+        }
+        .v-input__append-inner {
+          display: none;
+        }
+      }
+    }
     .closeIcon {
       border-radius: 50%;
       top: 35px;

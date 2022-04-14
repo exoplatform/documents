@@ -26,6 +26,7 @@ import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
 import DocumentsMoveDrawer from './components/body/table/DocumentsMoveDrawer.vue';
+import DocumentsMoveSpaces from './components/body/table/DocumentsMoveSpaces.vue';
 import DocumentsVisibilityDrawer from './components/body/table/DocumentsVisibilityDrawer.vue';
 import DocumentsAllUsersVisibilityDrawer from './components/body/table/DocumentsAllUsersVisibilityDrawer.vue';
 import DocumentsVisibilityCollaborators from './components/body/table/DocumentsVisibilityCollaborators.vue';
@@ -74,6 +75,7 @@ const components = {
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-info-drawer': DocumentInfoDrawer,
   'documents-move-drawer': DocumentsMoveDrawer,
+  'documents-move-spaces': DocumentsMoveSpaces,
   'documents-visibility-drawer': DocumentsVisibilityDrawer,
   'documents-visibility-all-users-drawer': DocumentsAllUsersVisibilityDrawer,
   'documents-visibility-collaborators': DocumentsVisibilityCollaborators,
