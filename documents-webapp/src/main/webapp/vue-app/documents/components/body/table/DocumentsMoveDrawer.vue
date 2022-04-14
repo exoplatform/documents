@@ -7,7 +7,7 @@
     <template slot="title">
       {{ $t('documents.move.drawer.title') }}
     </template>
-    <template slot="content" class="d-flex justify-space-between">
+    <template slot="content">
       <v-layout column>
         <v-list-item>
           <div class="d-flex align-center">
