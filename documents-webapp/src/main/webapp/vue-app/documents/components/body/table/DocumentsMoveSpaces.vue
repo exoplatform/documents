@@ -29,7 +29,7 @@
         class="pt-0 ps-2 mb-0 inputSpaceName"
         solo
         @change="deleteSpace()">
-        <template v-slot:selection="{ attrs, item, parent, selected }">
+        <template #selection="{ attrs, item, parent, selected }">
           <v-chip
             v-if="item === Object(item)"
             v-bind="attrs"
@@ -46,7 +46,7 @@
             </span>
           </v-chip>
         </template>
-        <template v-slot:item="{ index, item }">
+        <template #item="{ item }">
           <v-list-item @click="updateSpace(item)">
             <v-chip
               close>
