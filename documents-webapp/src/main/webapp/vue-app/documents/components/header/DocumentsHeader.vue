@@ -17,11 +17,11 @@ export default {
     }
   },
   data: () => ({
-    showMobileFilter: false,
+    showFilter: false,
   }),
   computed: {
     showMobileFilter() {
-      return this.isMobile && this.showMobileFilter;
+      return this.isMobile && this.showFilter;
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
@@ -29,7 +29,7 @@ export default {
   },
   created() {
     this.$root.$on('show-mobile-filter', data => {
-      this.showMobileFilter= data;
+      this.showFilter = data;
     });
   },
 };

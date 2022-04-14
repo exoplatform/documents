@@ -4,5 +4,8 @@
   ],
   "globals": {
     "documentPreview": true
+  },
+  "rules": {
+    "vue/no-mutating-props": "warn"
   }
 }
