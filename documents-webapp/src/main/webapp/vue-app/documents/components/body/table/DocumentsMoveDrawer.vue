@@ -7,18 +7,16 @@
     <template slot="title">
       {{ $t('documents.move.drawer.title') }}
     </template>
-    <template slot="content">
+    <template slot="content" class="d-flex justify-space-between">
       <v-layout column>
         <v-list-item>
           <div class="d-flex align-center">
-            <div class="pr-4"><span class="font-weight-bold text-color">{{ $t('documents.move.drawer.space') }}</span></div>
-            <div class="identitySuggester no-border mt-0">
-              <v-chip
-                class="identitySuggesterItem me-2 mt-2">
-                <span class="text-truncate">
-                  {{ spaceDisplayName }}
-                </span>
-              </v-chip>
+            <div class="pr-4 d-flex">
+              <span class="font-weight-bold pt-1 text-color">{{ $t('documents.move.drawer.space') }}</span>
+              <div class="">
+                <documents-move-spaces
+                  :space="space" />
+              </div>
             </div>
           </div>
         </v-list-item>
@@ -96,13 +94,16 @@ export default {
     destinationFolderPath: '',
     currentFolderPath: '',
     spaceDisplayName: eXo.env.portal.spaceDisplayName,
+    spaceName: eXo.env.portal.spaceName,
+    userName: eXo.env.portal.userName,
+    space: []
   }),
   computed: {
     openLevel() {
       return this.items && this.items.length && [this.items[0].name];
     },
     saving() {
-      return this.destinationFolderPath && this.destinationFolderPath === this.currentFolderPath;
+      return !this.space || this.space.displayName === this.spaceDisplayName && this.destinationFolderPath && this.destinationFolderPath === this.currentFolderPath;
     }
   },
   created() {
@@ -111,11 +112,23 @@ export default {
         this.currentFolderPath = data;
       }
     });
+    this.$root.$on('current-space',data => {
+      const ownerId = data ? data.identity.id : null;
+      this.items = [];
+      this.space = data;
+      this.retrieveNoteTree(ownerId);
+    });
   },
   methods: {
     open(file) {
       this.file = file;
-      this.retrieveNoteTree();
+      const  ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.retrieveNoteTree(ownerId);
+      this.space = {
+        displayName: this.spaceDisplayName ? this.spaceDisplayName : this.userName ,
+        avatarUrl: this.spaceDisplayName ? `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/spaces/${this.spaceName}/avatar` :
+          `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/users/${this.userName}/avatar`,
+      };
       this.$refs.documentsMoveDrawer.open();
     },
     close() {
@@ -133,9 +146,9 @@ export default {
         })
         .finally(() => this.loading = false);
     },
-    retrieveNoteTree(){
+    retrieveNoteTree(ownerId){
       this.$documentFileService
-        .getFullTreeData(this.ownerId).then(data => {
+        .getFullTreeData(ownerId).then(data => {
           if (data) {
             this.items = [];
             this.items = data;
