@@ -242,7 +242,9 @@ export default {
         this.parentFolderId = parentFolder.sourceID; 
       }
       this.refreshFiles();
-      this.$root.$emit('set-breadcrumb', parentFolder.breadcrumb);
+      this.$documentFileService.getBreadCrumbs(parentFolder.id,this.ownerId,this.folderPath)
+        .then(breadCrumbs => {this.$root.$emit('set-breadcrumb', breadCrumbs);
+        });
       let folderPath ='';
       if (eXo.env.portal.spaceName){
         let newParentPath = parentFolder.path;

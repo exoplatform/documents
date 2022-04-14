@@ -140,7 +140,7 @@ export default {
   },
   methods: {
     openFolder(folder) {
-      if (folder.name==='Private' || folder.name==='Public'){
+      if (folder.name==='Private'){
         this.$root.$emit('document-open-home');
       } else if (folder.id !== this.actualFolderId ) {
         this.folderPath='';
@@ -153,7 +153,7 @@ export default {
       this.$root.$emit('openTreeFolderDrawer');
     },
     getName(name){
-      if (name==='Private' || name==='Public'){
+      if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
       }
       return name;
