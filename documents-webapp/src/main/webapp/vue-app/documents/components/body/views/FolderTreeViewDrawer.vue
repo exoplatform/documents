@@ -17,7 +17,7 @@
         activatable
         open-on-click
         transition>
-        <template v-slot:label="{ item }">
+        <template #label="{ item }">
           <div class="d-flex clickable" @click="openFolder(item)">
             <v-icon size="24" class="primary--text">
               {{ 'fas fa-folder' }}

@@ -1,6 +1,9 @@
 const path = require('path');
+const ESLintPlugin = require('eslint-webpack-plugin');
+const { VueLoaderPlugin } = require('vue-loader')
 
 const config = {
+  mode: 'production',
   context: path.resolve(__dirname, '.'),
   module: {
     rules: [
@@ -9,18 +12,27 @@ const config = {
         exclude: /node_modules/,
         use: [
           'babel-loader',
-          'eslint-loader',
         ]
       },
       {
         test: /\.vue$/,
         use: [
           'vue-loader',
-          'eslint-loader',
         ]
       }
     ]
   },
+  plugins: [
+    new ESLintPlugin({
+      files: [
+        './src/main/webapp/vue-app/*.js',
+        './src/main/webapp/vue-app/*.vue',
+        './src/main/webapp/vue-app/**/*.js',
+        './src/main/webapp/vue-app/**/*.vue',
+      ],
+    }),
+    new VueLoaderPlugin()
+  ],
   entry: {
     documents: './src/main/webapp/vue-app/documents/main.js',
     documentsSnackbarComponent :'./src/main/webapp/vue-app/snackbar/main.js',

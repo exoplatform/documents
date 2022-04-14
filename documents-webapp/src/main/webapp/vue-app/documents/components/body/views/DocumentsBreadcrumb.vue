@@ -14,7 +14,7 @@
         class="documentss-tree-item d-flex text-truncate"
         :style="`max-width: ${100 / (documentsBreadcrumb.length)}%`">
         <v-tooltip max-width="300" bottom>
-          <template v-slot:activator="{ on, attrs }">
+          <template #activator="{ on, attrs }">
             <v-btn
               height="20px"
               min-width="45px"
@@ -42,7 +42,7 @@
     <div v-else class="documentss-tree-items documentss-long-path d-flex align-center">
       <div class="documentss-tree-item long-path-first-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
-          <template v-slot:activator="{ on, attrs }">
+          <template #activator="{ on, attrs }">
             <a
               class="caption text-sub-title text-truncate path-clickable breadCrumb-link"
               :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
@@ -56,7 +56,7 @@
       </div>
       <div class="documentss-tree-item long-path-second-item d-flex">
         <v-tooltip bottom>
-          <template v-slot:activator="{ on, attrs }">
+          <template #activator="{ on, attrs }">
             <v-icon
               v-bind="attrs"
               v-on="on"
@@ -76,7 +76,7 @@
       </div>
       <div class="documentss-tree-item long-path-third-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
-          <template v-slot:activator="{ on, attrs }">
+          <template #activator="{ on, attrs }">
             <a
               class="caption text-sub-title text-truncate path-clickable breadCrumb-link"
               :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
@@ -90,7 +90,7 @@
       </div>
       <div class="documentss-tree-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
-          <template v-slot:activator="{ on, attrs }">
+          <template #activator="{ on, attrs }">
             <a
               class="caption text-truncate breadCrumb-link"
               :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'text-color' || 'clickable'"

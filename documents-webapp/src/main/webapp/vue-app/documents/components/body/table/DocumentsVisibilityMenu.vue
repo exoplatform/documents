@@ -17,7 +17,7 @@
 <template>
   <div class="text-center pe-1">
     <v-menu offset-y>
-      <template v-slot:activator="{ on, attrs }">
+      <template #activator="{ on, attrs }">
         <v-btn
           icon
           small

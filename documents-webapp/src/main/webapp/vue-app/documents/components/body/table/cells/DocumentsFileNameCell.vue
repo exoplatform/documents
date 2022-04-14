@@ -60,7 +60,7 @@
       :id="`document-action-menu-cel-${file.id}`"
       v-if="displayAction">
       <v-tooltip bottom>
-        <template v-slot:activator="{ on, attrs }">
+        <template #activator="{ on, attrs }">
           <v-btn
             icon
             small
