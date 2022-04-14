@@ -35,7 +35,6 @@
             mdi-link-variant
           </v-icon>
         </div>
-
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
@@ -43,11 +42,11 @@
           :file-type="fileType"
           :is-mobile="isMobile"
           :edit-name-mode="editNameMode" />
-
-        <documents-last-updated-cell
+        <date-format
           v-if="isMobile && !editNameMode"
-          :file="file"
-          :extension="extension" />
+          :value="lastUpdated"
+          :format="fullDateFormat"
+          class="document-time text-light-color text-no-wrap" />
       </div>
     </a>
     <v-spacer />
@@ -124,9 +123,19 @@ export default {
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
     drawerDetails: false,
-    fileToEditId: -1
+    fileToEditId: -1,
+    fullDateFormat: {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
   }),
   computed: {
+    lastUpdated() {
+      return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
+    },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs';
     },
