@@ -1,5 +1,6 @@
 <template>
   <date-format
+    v-if="!isMobile"
     :value="lastUpdated"
     :format="fullDateFormat"
     class="document-time text-light-color text-no-wrap" />
@@ -29,6 +30,9 @@ export default {
   computed: {
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
+    },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs';
     },
   },
 };
