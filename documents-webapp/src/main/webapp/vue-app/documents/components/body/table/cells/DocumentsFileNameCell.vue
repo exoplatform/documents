@@ -56,8 +56,7 @@
       :class="editNameMode ? '' : 'button-info-details'"
       @open-info-drawer="openInfoDetailsDrawer" />
     <div
-      :id="`document-action-menu-cel-${file.id}`"
-      v-if="displayAction">
+      :id="`document-action-menu-cel-${file.id}`">
       <v-tooltip bottom>
         <template #activator="{ on, attrs }">
           <v-btn
@@ -138,9 +137,6 @@ export default {
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs';
-    },
-    displayAction(){
-      return !this.file.folder || (this.file.folder && eXo.env.portal.folderActionEnabled);
     },
     icon() {
       if (this.file && this.file.folder){
