@@ -329,7 +329,7 @@ export default {
       this.$refs.documentVisibilityDrawer.open(this.file,this.fileName);
     },
     openMoveDrawer(){
-      this.$refs.documentMoveDrawer.open(this.file);
+      this.$refs.documentMoveDrawer.open(this.file ,this.fileName);
     }
   },
 };

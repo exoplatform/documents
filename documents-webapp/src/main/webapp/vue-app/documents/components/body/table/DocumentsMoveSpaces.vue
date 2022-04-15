@@ -30,33 +30,39 @@
         solo
         @change="deleteSpace()">
         <template #selection="{ attrs, item, parent, selected }">
-          <v-chip
-            v-if="item === Object(item)"
-            v-bind="attrs"
-            :input-value="selected"
-            close
-            @click:close="deleteSpace">
-            <v-avatar left>
-              <v-img :src="item.avatarUrl" />
-            </v-avatar>
-            <span
-              class="body-2 text-truncate"
-              @click="parent.selectItem(item)">
-              {{ item.displayName }}
-            </span>
-          </v-chip>
-        </template>
-        <template #item="{ item }">
-          <v-list-item @click="updateSpace(item)">
+          <div class="identitySuggester no-border mt-0">
             <v-chip
-              close>
+              v-if="item === Object(item)"
+              v-bind="attrs"
+              :input-value="selected"
+              close
+              class="identitySuggesterItem me-2 mt-2"
+              @click:close="deleteSpace">
               <v-avatar left>
                 <v-img :src="item.avatarUrl" />
               </v-avatar>
-              <span class="text-truncate">
+              <span
+                class="body-2 text-truncate"
+                @click="parent.selectItem(item)">
                 {{ item.displayName }}
               </span>
             </v-chip>
+          </div>
+        </template>
+        <template #item="{ item }">
+          <v-list-item @click="updateSpace(item)">
+            <div class="identitySuggester no-border mt-0">
+              <v-chip
+                class="identitySuggesterItem me-2 mt-2"
+                close>
+                <v-avatar left>
+                  <v-img :src="item.avatarUrl" />
+                </v-avatar>
+                <span class="text-truncate">
+                  {{ item.displayName }}
+                </span>
+              </v-chip>
+            </div>
           </v-list-item>
         </template>
       </v-combobox>
