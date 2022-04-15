@@ -54,9 +54,11 @@
     </v-alert>
     <folder-treeview-drawer
       ref="folderTreeDrawer" />
+    <documents-app-reminder />
   </v-app>
 </template>
 <script>
+
 export default {
   data: () => ({
     extensionApp: 'Documents',
