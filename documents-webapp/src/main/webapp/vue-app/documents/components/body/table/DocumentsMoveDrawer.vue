@@ -5,14 +5,14 @@
     @closed="close"
     right>
     <template slot="title">
-      {{ $t('documents.move.drawer.title') }}
+      {{ moveTitle }}
     </template>
     <template slot="content">
       <v-layout column>
         <v-list-item>
           <div class="d-flex align-center">
             <div class="pr-4 d-flex">
-              <span class="font-weight-bold pt-1 text-color">{{ $t('documents.move.drawer.space') }}</span>
+              <span class="font-weight-bold text-color">{{ $t('documents.move.drawer.space') }}</span>
               <div class="">
                 <documents-move-spaces
                   :space="space" />
@@ -24,7 +24,8 @@
           <div class="py-2 width-full">
             <span class="font-weight-bold text-color  pb-2">{{ $t('documents.move.drawer.currentPosition') }}</span>
             <documents-breadcrumb
-              :show-icon="false" />
+              :show-icon="false"
+              move />
           </div>
         </v-list-item>
         <v-list-item>
@@ -32,7 +33,8 @@
             <span class="font-weight-bold text-color pb-2">{{ $t('documents.move.drawer.destination') }}</span>
             <documents-breadcrumb
               :show-icon="false"
-              :documents-breadcrumb="documentsBreadcrumbDestination" />
+              :documents-breadcrumb="documentsBreadcrumbDestination"
+              move />
           </div>
         </v-list-item>
         <v-list-item class="position-title">
@@ -96,6 +98,7 @@ export default {
     spaceDisplayName: eXo.env.portal.spaceDisplayName,
     spaceName: eXo.env.portal.spaceName,
     userName: eXo.env.portal.userName,
+    fileName: '',
     space: []
   }),
   computed: {
@@ -104,7 +107,10 @@ export default {
     },
     saving() {
       return !this.space || this.space.displayName === this.spaceDisplayName && this.destinationFolderPath && this.destinationFolderPath === this.currentFolderPath;
-    }
+    },
+    moveTitle(){
+      return this.$t('documents.move.drawer.title').replace('{0}', this.fileName);
+    },
   },
   created() {
     this.$root.$on('set-current-folder-url', data => {
@@ -116,12 +122,16 @@ export default {
       const ownerId = data ? data.identity.id : null;
       this.items = [];
       this.space = data;
+      this.documentsBreadcrumbDestination = [{
+        name: 'Documents'
+      }];
       this.retrieveNoteTree(ownerId);
     });
   },
   methods: {
-    open(file) {
+    open(file, fileName) {
       this.file = file;
+      this.fileName = fileName;
       const  ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.retrieveNoteTree(ownerId);
       this.space = {
