@@ -89,6 +89,11 @@ export default {
     const queryParams = new URLSearchParams(currentUrlSearchParams);
     if (queryParams.has('folderId')) {
       this.isFolderView = eXo.env.portal.folderViewEnabled;
+    } else if (queryParams.has('view')) {
+      const view = queryParams.get('view');
+      if (view.toLowerCase() === 'folder'){
+        this.isFolderView = eXo.env.portal.folderViewEnabled;
+      } 
     } else {
       const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
       if (pathParts.length>1 && pathParts[1]){

@@ -1,4 +1,5 @@
 import DocumentsMain from './components/DocumentsMain.vue';
+import DocumentsAppReminder from './components/DocumentsAppReminder.vue';
 import SwitchNewDocument from './components/SwitchNewDocument.vue';
 import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
@@ -25,6 +26,8 @@ import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
+import DocumentsMoveDrawer from './components/body/table/DocumentsMoveDrawer.vue';
+import DocumentsMoveSpaces from './components/body/table/DocumentsMoveSpaces.vue';
 import DocumentsVisibilityDrawer from './components/body/table/DocumentsVisibilityDrawer.vue';
 import DocumentsAllUsersVisibilityDrawer from './components/body/table/DocumentsAllUsersVisibilityDrawer.vue';
 import DocumentsVisibilityCollaborators from './components/body/table/DocumentsVisibilityCollaborators.vue';
@@ -72,6 +75,8 @@ const components = {
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-info-drawer': DocumentInfoDrawer,
+  'documents-move-drawer': DocumentsMoveDrawer,
+  'documents-move-spaces': DocumentsMoveSpaces,
   'documents-visibility-drawer': DocumentsVisibilityDrawer,
   'documents-visibility-all-users-drawer': DocumentsAllUsersVisibilityDrawer,
   'documents-visibility-collaborators': DocumentsVisibilityCollaborators,
@@ -90,6 +95,7 @@ const components = {
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
   'switch-new-document': SwitchNewDocument,
+  'documents-app-reminder': DocumentsAppReminder
 };
 
 for (const key in components) {

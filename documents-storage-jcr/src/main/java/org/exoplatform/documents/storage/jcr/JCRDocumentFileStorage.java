@@ -113,7 +113,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
       if (ownerIdentity.isUser()) {
-        rootPath = rootPath.split("/"+USER_PRIVATE_ROOT_NODE)[0];
+        rootPath = rootPath.split("/" + USER_PRIVATE_ROOT_NODE)[0];
       }
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
         String sortField = getSortField(filter, true);
@@ -122,13 +122,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         QueryResult queryResult = jcrQuery.execute();
         NodeIterator nodeIterator = queryResult.getNodes();
-        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session,spaceService, offset, limit);
+        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, offset, limit);
 
         statement = getTimeLineQueryStatement(rootPath, NodeTypeConstants.EXO_SYMLINK, sortField, sortDirection);
         jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         queryResult = jcrQuery.execute();
         nodeIterator = queryResult.getNodes();
-        files.addAll(toFileNodes(identityManager, nodeIterator, aclIdentity, session,spaceService, offset, limit));
+        files.addAll(toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, offset, limit));
         return files;
       } else {
         String workspace = session.getWorkspace().getName();
@@ -300,12 +300,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
       if (StringUtils.isBlank(folderId) && ownerId > 0) {
-        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
         node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
         folderId = ((NodeImpl) node).getIdentifier();
       } else {
         node = getNodeByIdentifier(session, folderId);
+        if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          node = getNodeByIdentifier(session, sourceNodeId);
+        }
       }
       if (StringUtils.isNotBlank(folderPath)) {
         node = getNodeByPath(node, folderPath, sessionProvider);
@@ -326,12 +330,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (node.getPath().contains(userPublicPathPrefix)) {
           homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPublicPathPrefix)+userPublicPathPrefix.length());
         }
-        while (node != null && !node.getPath().equals(homePath)) {
+        while (node != null && (!node.getPath().equals(homePath) || node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
           try {
-            node = node.getParent();
-            if (node != null) {
-              nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
-              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+            if(node.getName().equals(USER_PUBLIC_ROOT_NODE)){
+              node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+              if (node != null) {
+                nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+              }
+              break;
+            } else{
+              node = node.getParent();
+              if (node != null) {
+                nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+              }
             }
           } catch (RepositoryException repositoryException) {
             node = null;
@@ -532,7 +545,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
 
       // Update exo:name
-      if(node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
+      if (node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         node.addMixin(NodeTypeConstants.EXO_SORTABLE);
       }
       if (!node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
@@ -583,6 +596,37 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+
+  }
+
+  @Override
+  public void moveDocument(long ownerId, String fileId, String destPath, Identity aclIdentity) throws IllegalAccessException,
+          ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(fileId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        fileId = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, fileId);
+      }
+      String srcPath = node.getPath();
+      node.getSession().getWorkspace().move(srcPath, destPath.concat("/").concat(node.getName()));
+
+      node.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error moving document'" + fileId, e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();

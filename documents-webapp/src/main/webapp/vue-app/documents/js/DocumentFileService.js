@@ -148,6 +148,31 @@ export function renameDocument(ownerId,documentID,newName) {
     throw new Error(`Error renaming document ${e}`);
   });
 }
+
+export function moveDocument(ownerId,documentID,destPath) {
+  const formData = new FormData();
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  if (documentID) {
+    formData.append('documentID', documentID);
+  }
+  if (destPath) {
+    formData.append('destPath', destPath);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/move?${params}`, {
+    credentials: 'include',
+    method: 'PUT',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.ok;
+    }
+  }).catch(e => {
+    throw new Error(`Error renaming document ${e}`);
+  });
+}
+
 export function createFolder(ownerId,parentid,folderPath,name) {
   const formData = new FormData();
   if (ownerId) {

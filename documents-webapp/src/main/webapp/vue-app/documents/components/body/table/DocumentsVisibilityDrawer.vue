@@ -83,7 +83,7 @@
                 <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.collaborator') }}</span>
               </v-label>
               <v-tooltip bottom v-if="!isMobile">
-                <template v-slot:activator="{ on, attrs }">
+                <template #activator="{ on, attrs }">
                   <v-icon
                     color="grey lighten-1"
                     dark

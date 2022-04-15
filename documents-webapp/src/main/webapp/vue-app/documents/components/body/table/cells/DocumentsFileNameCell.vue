@@ -35,7 +35,6 @@
             mdi-link-variant
           </v-icon>
         </div>
-
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
@@ -43,11 +42,11 @@
           :file-type="fileType"
           :is-mobile="isMobile"
           :edit-name-mode="editNameMode" />
-
-        <documents-last-updated-cell
+        <date-format
           v-if="isMobile && !editNameMode"
-          :file="file"
-          :extension="extension" />
+          :value="lastUpdated"
+          :format="fullDateFormat"
+          class="document-time text-light-color text-no-wrap" />
       </div>
     </a>
     <v-spacer />
@@ -60,7 +59,7 @@
       :id="`document-action-menu-cel-${file.id}`"
       v-if="displayAction">
       <v-tooltip bottom>
-        <template v-slot:activator="{ on, attrs }">
+        <template #activator="{ on, attrs }">
           <v-btn
             icon
             small
@@ -102,6 +101,8 @@
       :icon="icon" />
     <documents-visibility-drawer
       ref="documentVisibilityDrawer" />
+    <documents-move-drawer
+      ref="documentMoveDrawer" />
     <documents-actions-menu-mobile ref="documentActionsBottomMenu" :file="file" />
   </div>
 </template>
@@ -122,9 +123,19 @@ export default {
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
     drawerDetails: false,
-    fileToEditId: -1
+    fileToEditId: -1,
+    fullDateFormat: {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
   }),
   computed: {
+    lastUpdated() {
+      return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
+    },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs';
     },
@@ -242,6 +253,11 @@ export default {
         this.openVisibilityDrawer(file,file.name);
       }
     });
+    this.$root.$on('open-move-drawer', file => {
+      if (this.file.id=== file.id) {
+        this.openMoveDrawer(file);
+      }
+    });
     this.$root.$on('close-info-drawer', fileId => {
       if (this.file.id=== fileId) {
         this.drawerDetails=false;
@@ -311,6 +327,9 @@ export default {
         this.$root.$emit('close-file-action-menu');
       }
       this.$refs.documentVisibilityDrawer.open(this.file,this.fileName);
+    },
+    openMoveDrawer(){
+      this.$refs.documentMoveDrawer.open(this.file ,this.fileName);
     }
   },
 };

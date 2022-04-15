@@ -210,6 +210,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public void moveDocument(long ownerId, String fileId, String destPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+     documentFileStorage.moveDocument(ownerId, fileId, destPath, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
   public void createFolder(long ownerId, String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
     documentFileStorage.createFolder(ownerId, folderId, folderPath, name, getAclUserIdentity(authenticatedUserId));
   }
