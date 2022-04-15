@@ -88,16 +88,16 @@ export default {
     const currentUrlSearchParams = window.location.search;
     const queryParams = new URLSearchParams(currentUrlSearchParams);
     if (queryParams.has('folderId')) {
-      this.isFolderView = eXo.env.portal.folderViewEnabled;
+      this.isFolderView = true;
     } else if (queryParams.has('view')) {
       const view = queryParams.get('view');
       if (view.toLowerCase() === 'folder'){
-        this.isFolderView = eXo.env.portal.folderViewEnabled;
+        this.isFolderView = true;
       } 
     } else {
       const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
       if (pathParts.length>1 && pathParts[1]){
-        this.isFolderView = eXo.env.portal.folderViewEnabled;
+        this.isFolderView = true;
       }
     }
     $(document).on('mousedown', () => {
@@ -135,7 +135,7 @@ export default {
       this.hideAddMenuMobile();
     },
     changeView(view) {
-      this.isFolderView = view==='folder' && eXo.env.portal.folderViewEnabled;
+      this.isFolderView = view==='folder';
     },
     displayAddMenuMobile() {
       if (this.isMobile){
