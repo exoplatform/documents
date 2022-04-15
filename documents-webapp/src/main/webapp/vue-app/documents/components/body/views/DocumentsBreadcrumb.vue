@@ -125,22 +125,22 @@ export default {
   created() {
     this.$root.$on('set-breadcrumb', data => {
       this.folderPath='';
-      if (data && data.length>0){
-        this.documentsBreadcrumb= data;
-        this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
-        this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
-        this.$root.$emit('set-current-folder-url', this.currentFolderPath);
+      if (data){
+        this.actualFolderId = data.id;
+        this.getBreadCrumbs(); 
       }
     });
     this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$on('open-folder', this.openFolder);
-    this.getDocumentDataFromUrl();
-    this.getBreadCrumbs();   
+    this.getDocumentDataFromUrl();   
   },
   methods: {
     openFolder(folder) {
-      if (folder.name==='Private' || folder.name==='Public'){
+      if (folder.name==='Private'){
         this.$root.$emit('document-open-home');
+        this.folderPath='';
+        this.actualFolderId ='';
+        this.getBreadCrumbs();
       } else if (folder.id !== this.actualFolderId ) {
         this.folderPath='';
         this.actualFolderId=folder.id;
@@ -152,7 +152,7 @@ export default {
       this.$root.$emit('openTreeFolderDrawer');
     },
     getName(name){
-      if (name==='Private' || name==='Public'){
+      if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
       }
       return name;
@@ -162,8 +162,9 @@ export default {
       const currentUrlSearchParams = window.location.search;
       const queryParams = new URLSearchParams(currentUrlSearchParams);
       if (queryParams.has('folderId')) {
-        this.parentFolderId = queryParams.get('folderId');
+        this.actualFolderId = queryParams.get('folderId');
         this.selectedView = 'folder';
+        this.getBreadCrumbs();
       } else  if (queryParams.has('path')) {
         let nodePath = queryParams.get('path');
         const lastpart = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
@@ -204,6 +205,7 @@ export default {
           }
         }
       }
+      this.getBreadCrumbs();
     },
 
     getBreadCrumbs() {

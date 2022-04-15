@@ -300,12 +300,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
       if (StringUtils.isBlank(folderId) && ownerId > 0) {
-        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
         node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
         folderId = ((NodeImpl) node).getIdentifier();
       } else {
         node = getNodeByIdentifier(session, folderId);
+        if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          node = getNodeByIdentifier(session, sourceNodeId);
+        }
       }
       if (StringUtils.isNotBlank(folderPath)) {
         node = getNodeByPath(node, folderPath, sessionProvider);
@@ -326,12 +330,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (node.getPath().contains(userPublicPathPrefix)) {
           homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPublicPathPrefix)+userPublicPathPrefix.length());
         }
-        while (node != null && !node.getPath().equals(homePath)) {
+        while (node != null && (!node.getPath().equals(homePath) || node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
           try {
-            node = node.getParent();
-            if (node != null) {
-              nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
-              parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+            if(node.getName().equals(USER_PUBLIC_ROOT_NODE)){
+              node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+              if (node != null) {
+                nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+              }
+              break;
+            } else{
+              node = node.getParent();
+              if (node != null) {
+                nodeName= node.hasProperty(NodeTypeConstants.EXO_NAME) ? node.getProperty(NodeTypeConstants.EXO_NAME).getString() : node.getName();
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+              }
             }
           } catch (RepositoryException repositoryException) {
             node = null;

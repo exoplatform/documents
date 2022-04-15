@@ -264,7 +264,7 @@ if (eXo.env.portal.folderViewEnabled) {
     id: 'folder',
     labelKey: 'documents.label.folderView',
     listingType: 'FOLDER',
-    filePropertiesExpand: 'creator,modifier,owner,metadatas,breadcrumb',
+    filePropertiesExpand: 'creator,modifier,owner,metadatas',
     componentOptions: {
       vueComponent: Vue.options.components['documents-folder-view'],
     },
