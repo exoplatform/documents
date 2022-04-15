@@ -242,9 +242,7 @@ export default {
         this.parentFolderId = parentFolder.sourceID; 
       }
       this.refreshFiles();
-      this.$documentFileService.getBreadCrumbs(parentFolder.id,this.ownerId,this.folderPath)
-        .then(breadCrumbs => {this.$root.$emit('set-breadcrumb', breadCrumbs);
-        });
+      this.$root.$emit('set-breadcrumb', parentFolder);
       let folderPath ='';
       if (eXo.env.portal.spaceName){
         let newParentPath = parentFolder.path;
@@ -294,7 +292,6 @@ export default {
       this.folderPath='';
       this.fileName=null;
       this.refreshFiles(this.primaryFilter);
-      this.$root.$emit('set-breadcrumb', null);
       if (window.location.pathname.includes('/Private')){
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname.split('/Private')[0]}?view=${this.selectedView}`);
       } else if (window.location.pathname.includes('/Public')){
