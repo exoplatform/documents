@@ -131,9 +131,6 @@ export default {
     currentFolderPath: '',
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
-  computed: {
-
-  },
   created() {
     this.$root.$on('set-breadcrumb', data => {
       this.folderPath='';
