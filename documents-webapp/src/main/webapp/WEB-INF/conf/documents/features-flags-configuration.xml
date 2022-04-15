@@ -95,6 +95,19 @@
         </init-params>
     </component>
 
+    <component>
+        <key>IntroduceSwitchOldDocAppFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>IntroduceSwitchOldDocAppFeatureProperties</name>
+                <description>Introduce Switch to old Document App Feature enablement flag</description>
+                <property name="exo.feature.IntroduceSwitchOldDocApp.enabled"
+                          value="${exo.feature.IntroduceSwitchOldDocApp.enabled:false}"/>
+            </properties-param>
+        </init-params>
+    </component>
+
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
         <component-plugin>
@@ -119,7 +132,7 @@
             <type>org.exoplatform.documents.plugin.DocumentsFeaturePlugin</type>
         </component-plugin>
         <component-plugin>
-            <name>SwitchOldDocuments</name>
+            <name>IntroduceSwitchOldDocApp</name>
             <set-method>addFeaturePlugin</set-method>
             <type>org.exoplatform.documents.plugin.DocumentsFeaturePlugin</type>
         </component-plugin>
