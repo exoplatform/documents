@@ -1,7 +1,7 @@
 <template>
   <v-main>
     <changes-reminder :reminder="introduceNewDocAppReminder" />
-    <changes-reminder :reminder="switchOldDocAppReminder" />
+    <changes-reminder :reminder="introduceSwitchOldAppReminder" />
   </v-main>
 </template>
 
@@ -15,8 +15,8 @@ export default {
         img: '/documents-portlet/images/newdocapp.png',
         description: this.$t('documents.reminder.newDocApp.Dialog.message'),
       },
-      switchOldDocAppReminder: {
-        name: 'SwitchOldDocuments',
+      introduceSwitchOldAppReminder: {
+        name: 'IntroduceSwitchOldDocApp',
         title: this.$t('documents.reminder.oldDocSwitch.dialog.title'),
         img: '/documents-portlet/images/switcholdapp.gif',
         description: this.$t('documents.reminder.oldDocSwitch.Dialog.message'),
