@@ -44,6 +44,14 @@ export default {
         $('#OldDocumentsApplication').hide();
         $('#DocumentsApplication').show();
       }
+      document.dispatchEvent(new CustomEvent('document-change', {
+        detail: {
+          'type': 'Switch',
+          'category': 'Switch App',
+          'spaceId': eXo.env.portal.spaceId,
+          'name': this.classicApp ? 'Switch classic App' : 'Switch new App',
+        }
+      }));
     },
   }
  
