@@ -10,14 +10,12 @@ extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-ri
   rank: 20,
 });
 
-if (eXo.env.portal.filesFavoritesEnabled) {
-  extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
-    id: 'primary-filter',
-    cssClass: 'pt-1',
-    vueComponent: Vue.options.components['documents-filter'],
-    rank: 20,
-  });
-}
+extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
+  id: 'primary-filter',
+  cssClass: 'pt-1',
+  vueComponent: Vue.options.components['documents-filter'],
+  rank: 20,
+});
 
 extensionRegistry.registerExtension('Documents', 'views', {
   id: 'timeline',
@@ -116,59 +114,53 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
-if (eXo.env.portal.moveActionEnabled) {
-  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-    id: 'move',
-    labelKey: 'documents.label.move',
-    align: 'center',
-    sortable: true,
-    cssClass: 'font-weight-bold text-no-wrap',
-    width: '190px',
-    rank: 40,
-    enabled: (acl) => {
-      return acl.canEdit;
-    },
-    componentOptions: {
-      vueComponent: Vue.options.components['move-menu-action'],
-    },
-  });
-}
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'move',
+  labelKey: 'documents.label.move',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  enabled: (acl) => {
+    return acl.canEdit;
+  },
+  componentOptions: {
+    vueComponent: Vue.options.components['move-menu-action'],
+  },
+});
 
-if (eXo.env.portal.filesDuplicateActionEnabled) {
-  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-    id: 'duplicate',
-    labelKey: 'documents.label.duplicate',
-    align: 'center',
-    sortable: true,
-    cssClass: 'font-weight-bold text-no-wrap',
-    width: '190px',
-    rank: 40,
-    enabled: (acl) => {
-      return acl.canEdit;
-    },
-    componentOptions: {
-      vueComponent: Vue.options.components['duplicate-menu-action'],
-    },
-  });
-}
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'duplicate',
+  labelKey: 'documents.label.duplicate',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  enabled: (acl) => {
+    return acl.canEdit;
+  },
+  componentOptions: {
+    vueComponent: Vue.options.components['duplicate-menu-action'],
+  },
+});
 
-if (eXo.env.portal.visibilityActionEnabled) {
-  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-    id: 'visibility',
-    labelKey: 'documents.label.visibility',
-    align: 'center',
-    sortable: true,
-    cssClass: 'font-weight-bold text-no-wrap',
-    width: '190px',
-    rank: 40,
-    enabled: (acl, isSymlink) => {
-      return acl.canEdit && !isSymlink;
-    },
-    componentOptions: {
-      vueComponent: Vue.options.components['visibility-menu-action'],
-    },
-  });
-}
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'visibility',
+  labelKey: 'documents.label.visibility',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  enabled: (acl, isSymlink) => {
+    return acl.canEdit && !isSymlink;
+  },
+  componentOptions: {
+    vueComponent: Vue.options.components['visibility-menu-action'],
+  },
+});
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'download',
@@ -200,93 +192,61 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
-if (eXo.env.portal.deleteActionEnabled) {
-  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-    id: 'delete',
-    labelKey: 'documents.label.delete',
-    align: 'center',
-    sortable: true,
-    cssClass: 'font-weight-bold text-no-wrap',
-    width: '190px',
-    rank: 40,
-    enabled: (acl) => {
-      return acl.canEdit;
-    },
-    componentOptions: {
-      vueComponent: Vue.options.components['delete-menu-action'],
-    },
-  });
-}
-
-/*extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'size',
-  labelKey: 'documents.label.fileSize',
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'delete',
+  labelKey: 'documents.label.delete',
   align: 'center',
-  sortable: false,
+  sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
-  width: '120px',
-  rank: 50,
+  width: '190px',
+  rank: 40,
+  enabled: (acl) => {
+    return acl.canEdit;
+  },
   componentOptions: {
-    vueComponent: Vue.options.components['documents-file-size-cell'],
+    vueComponent: Vue.options.components['delete-menu-action'],
   },
 });
+
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'lastActivity',
-  labelKey: 'documents.label.lastActivity',
+  id: 'favorite',
+  labelKey: 'documents.label.favorite',
   align: 'center',
-  sortable: false,
+  sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '120px',
-  rank: 30,
+  rank: 60,
   componentOptions: {
-    vueComponent: Vue.options.components['documents-last-activity-cell'],
+    vueComponent: Vue.options.components['documents-favorite-cell'],
   },
-});*/
+});
 
-if (eXo.env.portal.filesFavoritesEnabled) {
-  extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-    id: 'favorite',
-    labelKey: 'documents.label.favorite',
-    align: 'center',
-    sortable: true,
-    cssClass: 'font-weight-bold text-no-wrap',
-    width: '120px',
-    rank: 60,
-    componentOptions: {
-      vueComponent: Vue.options.components['documents-favorite-cell'],
-    },
-  });
-}
+extensionRegistry.registerExtension('Documents', 'views', {
+  id: 'folder',
+  labelKey: 'documents.label.folderView',
+  listingType: 'FOLDER',
+  filePropertiesExpand: 'creator,modifier,owner,metadatas',
+  componentOptions: {
+    vueComponent: Vue.options.components['documents-folder-view'],
+  },
+  rank: 30,
+});
 
 
-if (eXo.env.portal.folderViewEnabled) {
-  extensionRegistry.registerExtension('Documents', 'views', {
-    id: 'folder',
-    labelKey: 'documents.label.folderView',
-    listingType: 'FOLDER',
-    filePropertiesExpand: 'creator,modifier,owner,metadatas',
-    componentOptions: {
-      vueComponent: Vue.options.components['documents-folder-view'],
-    },
-    rank: 30,
-  });
-}
+extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
+  id: 'recentView',
+  viewName: 'timeline',
+  icon: 'fas fa-history',
+  labelKey: 'documents.label.timelineView',
+  rank: 10,
+});
 
-if (eXo.env.portal.folderViewEnabled) {
-  extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
-    id: 'recentView',
-    viewName: 'timeline',
-    icon: 'fas fa-history',
-    labelKey: 'documents.label.timelineView',
-    rank: 10,
-  });
-}
-if (eXo.env.portal.folderViewEnabled) {
-  extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
-    id: 'folderView',
-    viewName: 'folder',
-    icon: 'fas fa-folder',
-    labelKey: 'documents.label.folderView',
-    rank: 20,
-  });
-}
+
+extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
+  id: 'folderView',
+  viewName: 'folder',
+  icon: 'fas fa-folder',
+  labelKey: 'documents.label.folderView',
+  rank: 20,
+});
+
