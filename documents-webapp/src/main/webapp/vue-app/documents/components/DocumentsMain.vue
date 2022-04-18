@@ -78,6 +78,7 @@ export default {
     hasMore: false,
     viewExtensions: {},
     currentFolderPath: '',
+    currentFolder: null,
     groupsSizes: {
       'thisDay': 0,
       'thisWeek': 0,
@@ -138,7 +139,7 @@ export default {
     this.$root.$on('confirm-document-deletion', this.deleteDocument);
     this.$root.$on('undo-delete-document', this.undoDeleteDocument);
     this.$root.$on('documents-open-drawer', this.openDrawer);
-    this.$root.$on('set-current-folder-url', this.setFolderUrl);
+    this.$root.$on('set-current-folder', this.setCurrentFolder);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
     this.$root.$on('save-visibility', this.saveVisibility);
@@ -459,7 +460,7 @@ export default {
         if (pathparts.length>1){
           attachmentAppConfiguration= {
             'sourceApp': 'NEW.APP',
-            'defaultFolder': decodeURI(pathparts[1]),
+            'defaultFolder': this.extractDefaultFolder(pathparts[1]),
             'defaultDrive': {
               isSelected: true,
               name: `.spaces.${eXo.env.portal.spaceGroup}`,
@@ -475,7 +476,7 @@ export default {
         if (pathparts.length>1){
           attachmentAppConfiguration= {
             'sourceApp': 'NEW.APP',
-            'defaultFolder': decodeURI(pathparts[1]),
+            'defaultFolder': this.extractDefaultFolder(pathparts[1]),
             'defaultDrive': {
               isSelected: true,
               name: 'Personal Documents',
@@ -486,8 +487,13 @@ export default {
       }
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
-    setFolderUrl(url) {
-      this.currentFolderPath=url;
+    extractDefaultFolder(targetPath) {
+      const path = decodeURI(targetPath);
+      const folderName = path && path.substring(path.lastIndexOf('/'));
+      return folderName && path.replace(folderName, `/${this.currentFolder.name}`);
+    },
+    setCurrentFolder(folder) {
+      this.currentFolder = folder;
     },
     getDocumentDataFromUrl() {
       const currentUrlSearchParams = window.location.search;
