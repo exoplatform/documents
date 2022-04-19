@@ -222,7 +222,7 @@ export default {
         .then(breadCrumbs => {this.documentsBreadcrumb = breadCrumbs;
           this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
           this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
-          this.$root.$emit('set-current-folder-url', this.currentFolderPath);
+          this.$root.$emit('set-current-folder', this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1]);
         })
         .finally(() => this.loading = false);
     },
