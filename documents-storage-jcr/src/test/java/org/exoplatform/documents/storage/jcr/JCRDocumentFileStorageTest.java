@@ -1,5 +1,11 @@
 package org.exoplatform.documents.storage.jcr;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.constant.DocumentSortField;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -10,6 +16,8 @@ import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -22,11 +30,16 @@ import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import javax.jcr.Node;
-import javax.jcr.Property;
-import javax.jcr.Session;
+import javax.jcr.*;
 import javax.jcr.nodetype.NodeType;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
+import javax.jcr.query.QueryResult;
 
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.powermock.api.mockito.PowerMockito.*;
@@ -115,4 +128,107 @@ public class JCRDocumentFileStorageTest {
     Utils.broadcast(listenerService, "share_document_event", identity, linkNode);
     verify(sessionProvider, times(1)).close();
   }
+  
+  @Test
+  public void getFolderChildNodes() throws Exception {
+    Node parentNode = mock(Node.class);
+    Session userSession = mock(Session.class);
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity ownerIdentity = mock(Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "documents/path", 1L);
+
+    // mock session
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+            manageableRepository)).thenReturn(userSession);
+
+
+    when(JCRDocumentsUtil.getNodeByIdentifier(userSession, filter.getParentFolderId())).thenReturn(parentNode);
+    when(parentNode.getName()).thenReturn("documents");
+    when(parentNode.getNode(filter.getFolderPath())).thenReturn(parentNode);
+    filter.setSortField(DocumentSortField.MODIFIED_DATE);
+    filter.setAscending(true);
+    when(parentNode.getPath()).thenReturn("/documents/path");
+
+    // mock the query creation and execution
+    Workspace workspace = mock(Workspace.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    QueryImpl jcrQuery = mock(QueryImpl.class);
+    NodeIterator nodeIterator = mock(NodeIterator.class);
+    QueryResult queryResult = mock(QueryResult.class);
+    when(userSession.getWorkspace()).thenReturn(workspace);
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+    when(queryManager.createQuery(anyString(), anyString())).thenReturn(jcrQuery);
+    when(jcrQuery.execute()).thenReturn(queryResult);
+    when(queryResult.getNodes()).thenReturn(nodeIterator);
+
+    // mock toNodes method
+    FileNode file = new FileNode();
+    file.setName("file1");
+    FolderNode folder = new FolderNode();
+    folder.setName("folder1");
+    when(nodeIterator.hasNext()).thenReturn(true, true, false);
+    Node fileNode = mock(Node.class);
+    Node folderNode = mock(Node.class);
+    when(fileNode.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(folderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(nodeIterator.nextNode()).thenReturn(fileNode, folderNode);
+    doCallRealMethod().when(JCRDocumentsUtil.class,
+                            "toNodes",
+                            identityManager,
+                            userSession,
+                            nodeIterator,
+                            identity,
+                            spaceService);
+    when(JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
+    when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode, "", spaceService)).thenReturn(folder);
+
+    List<AbstractNode> nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
+    assertEquals(2, nodes.size());
+
+    // case of folderNodeId empty
+    filter.setParentFolderId(null);
+    when(identityManager.getIdentity(String.valueOf(filter.getOwnerId()))).thenReturn(ownerIdentity);
+    NodeImpl parentNodeImp = mock(NodeImpl.class);
+    when(parentNodeImp.getName()).thenReturn("documents");
+    when(parentNodeImp.getNode(filter.getFolderPath())).thenReturn(parentNodeImp);
+    when(parentNodeImp.getPath()).thenReturn("/documents/path");
+    when(JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                              nodeHierarchyCreator,
+                                              "user",
+                                              ownerIdentity,
+                                              sessionProvider)).thenReturn(parentNodeImp);
+    NodeIterator nodeIterator1 = mock(NodeIterator.class);
+    when(queryResult.getNodes()).thenReturn(nodeIterator1);
+    when(nodeIterator1.hasNext()).thenReturn(true, true, false);
+    when(nodeIterator1.nextNode()).thenReturn(fileNode, folderNode);
+    doCallRealMethod().when(JCRDocumentsUtil.class,
+            "toNodes",
+            identityManager,
+            userSession,
+            nodeIterator1,
+            identity,
+            spaceService);
+    List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
+    assertEquals(2, nodes1.size());
+
+    // case filter with query
+    filter.setQuery("docum");
+    when(userSession.getWorkspace()).thenReturn(workspace);
+    when(workspace.getName()).thenReturn("collaboration");
+    doCallRealMethod().when(JCRDocumentsUtil.class, "getSortField", filter, false);
+    doCallRealMethod().when(JCRDocumentsUtil.class, "getSortDirection", filter);
+    jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
+    verify(documentSearchServiceConnector,
+           times(1)).appSearch(identity, "collaboration", "/documents/path", filter, 0, 0, "lastUpdatedDate", "ASC");
+
+  }
+
 }

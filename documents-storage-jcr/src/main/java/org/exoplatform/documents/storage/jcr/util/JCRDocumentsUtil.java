@@ -146,9 +146,7 @@ public class JCRDocumentsUtil {
                                            Session session,
                                            NodeIterator nodeIterator,
                                            Identity aclIdentity,
-                                           SpaceService spaceService,
-                                           int offset,
-                                           int limit) {
+                                           SpaceService spaceService) {
     List<AbstractNode> fileNodes = new ArrayList<>();
     while (nodeIterator.hasNext()) {
       Node node = nodeIterator.nextNode();
@@ -184,21 +182,8 @@ public class JCRDocumentsUtil {
         LOG.warn("Error getting Folder Node for search result with path {}", node, e);
       }
     }
-    Collections.sort(fileNodes, new Comparator<AbstractNode>(){
-      public int compare(AbstractNode s1, AbstractNode s2) {
-        return s1.getName().compareToIgnoreCase(s2.getName());
-      }
-    });
-    Collections.sort(fileNodes, new Comparator<AbstractNode>(){
-      public int compare(AbstractNode n1, AbstractNode n2) {
-        return Boolean.compare(n2.isFolder(),n1.isFolder());
-      }
-    });
 
-    if(limit < fileNodes.size()){
-      return fileNodes.subList(offset,limit);
-    }
-    return fileNodes.subList(offset,fileNodes.size());
+    return fileNodes;
   }
 
   public static FolderNode toFolderNode(IdentityManager identityManager,
