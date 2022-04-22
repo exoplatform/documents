@@ -322,8 +322,8 @@ public class JCRDocumentsUtil {
       String owner = node.getProperty(NodeTypeConstants.EXO_OWNER).getString();
       documentNode.setCreatorId(getUserIdentityId(identityManager, owner));
     }
-    if (node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)) {
-      long modifiedDate = node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
+    if (node.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)) {
+      long modifiedDate = node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)
                               .getDate()
                               .getTimeInMillis();
       documentNode.setModifiedDate(modifiedDate);
