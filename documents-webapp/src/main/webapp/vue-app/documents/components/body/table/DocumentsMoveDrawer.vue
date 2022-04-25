@@ -113,10 +113,8 @@ export default {
     },
   },
   created() {
-    this.$root.$on('set-current-folder-url', data => {
-      if (data){
-        this.currentFolderPath = data;
-      }
+    this.$root.$on('set-current-folder', data => {
+      this.currentFolderPath = data && data.path;
     });
     this.$root.$on('current-space',data => {
       const ownerId = data ? data.identity.id : null;
