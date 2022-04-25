@@ -51,6 +51,7 @@ import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Identity;
@@ -255,8 +256,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
-          NodeIterator nodeIterator = parent.getNodes();
-          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, offset, limit);
+          String sortField = getSortField(filter, true);
+          String sortDirection = getSortDirection(filter);
+          String statement = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection);
+          Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+          ((QueryImpl)jcrQuery).setOffset(offset);
+          ((QueryImpl)jcrQuery).setLimit(limit);
+          QueryResult queryResult = jcrQuery.execute();
+          NodeIterator nodeIterator = queryResult.getNodes();
+          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService);
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -718,6 +726,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                               .append(" ")
                               .append(sortDirection)
                               .toString();
+  }
+
+  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection) {
+    return new StringBuilder().append("SELECT * FROM nt:base")
+            .append(" WHERE jcr:path LIKE '")
+            .append(folderPath)
+            .append("/%'")
+            .append(" AND NOT jcr:path LIKE '")
+            .append(folderPath)
+            .append("/%/%' ORDER BY ")
+            .append(sortField)
+            .append(" ")
+            .append(sortDirection)
+            .toString();
   }
 
   private String getTimeLineGroupeSizeQueryStatement(String rootPath, Date before, Date after) {
