@@ -142,7 +142,7 @@ export default {
       if (this.file && this.file.folder){
         return {
           class: 'fas fa-folder',
-          color: '#578DC9',
+          color: '#476A9C',
         };
       }
       const type = this.file && this.file.mimeType || '';
@@ -199,7 +199,7 @@ export default {
       } else {
         return {
           class: 'fas fa-file',
-          color: '#578DC9',
+          color: '#476A9C',
         };
       }
     },
