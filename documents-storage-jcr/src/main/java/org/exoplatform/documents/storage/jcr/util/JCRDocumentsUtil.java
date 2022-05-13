@@ -344,7 +344,7 @@ public class JCRDocumentsUtil {
 
   public static void retrieveFileContentProperties(Node content, FileNode fileNode) throws RepositoryException {
     if (content.hasProperty(NodeTypeConstants.DC_DESCRIPTION)) {
-      fileNode.setDescription(content.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());
+      fileNode.setDescription(content.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());
     }
     if (content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
       fileNode.setMimeType(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
