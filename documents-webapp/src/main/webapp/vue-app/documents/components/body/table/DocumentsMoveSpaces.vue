@@ -53,7 +53,7 @@
           <v-list-item @click="updateSpace(item)">
             <div class="identitySuggester no-border mt-0">
               <v-chip
-                class="identitySuggesterItem me-2 mt-2"
+                class="identitySuggesterItem me-2 col-8 mt-2"
                 close>
                 <v-avatar left>
                   <v-img :src="item.avatarUrl" />
