@@ -51,7 +51,7 @@
         </template>
         <template #item="{ item }">
           <v-list-item @click="updateSpace(item)">
-            <div class="identitySuggester no-border mt-0">
+            <div class="identitySuggester width-fit-content no-border mt-0">
               <v-chip
                 class="identitySuggesterItem me-2 mt-2"
                 close>
