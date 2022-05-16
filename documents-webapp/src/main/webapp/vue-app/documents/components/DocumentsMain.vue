@@ -502,11 +502,14 @@ export default {
         this.loading = true;
         this.previewMode = true;
         const documentPreviewId = queryParams.get('documentPreviewId');
+        this.selectedView = 'folder';
         this.showPreview(documentPreviewId);
-      } else  if (queryParams.has('folderId')) {
+      }
+      if (queryParams.has('folderId')) {
         this.parentFolderId = queryParams.get('folderId');
         this.selectedView = 'folder';
-      } else  if (queryParams.has('path')) {
+      }
+      if (queryParams.has('path')) {
         this.selectedView = 'folder';
         let nodePath = queryParams.get('path');
         const lastpart = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
@@ -515,11 +518,7 @@ export default {
           nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));
         }
         this.getFolderPath(nodePath);
-      } else {
-        this.parentFolderId=null;
-        this.fileName=null;
-        this.folderPath='';
-        this.selectedView = 'timeline';
+      } else if (this.selectedView === 'folder') {
         this.getFolderPath();
       }
       if (queryParams.has('view')) {
