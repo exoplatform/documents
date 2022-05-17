@@ -99,6 +99,7 @@ export default {
     spaceName: eXo.env.portal.spaceName,
     userName: eXo.env.portal.userName,
     fileName: '',
+    groupId: '',
     space: []
   }),
   computed: {
@@ -120,6 +121,7 @@ export default {
       const ownerId = data ? data.identity.id : null;
       this.items = [];
       this.space = data;
+      this.groupId = data.groupId;
       this.documentsBreadcrumbDestination = [{
         name: 'Documents'
       }];
@@ -164,7 +166,8 @@ export default {
         });
     },
     moveDocument(){
-      this.$root.$emit('documents-move', this.ownerId, this.file.id, this.folder.path);
+      const destinationPath = this.folder && this.folder.path ? this.folder.path:`/Groups${this.groupId}/Documents`;
+      this.$root.$emit('documents-move', this.ownerId, this.file.id, destinationPath);
       this.close();
     },
   }
