@@ -10,10 +10,10 @@
     <template slot="content">
       <v-layout column>
         <v-list-item>
-          <div class="d-flex align-center">
-            <div class="pr-4 d-flex">
+          <div class="d-flex align-center flex-grow-1">
+            <div class="pr-4 d-flex flex-grow-1">
               <span class="font-weight-bold text-color">{{ $t('documents.move.drawer.space') }}</span>
-              <div class="">
+              <div class="flex-grow-1">
                 <documents-move-spaces
                   :space="space" />
               </div>
