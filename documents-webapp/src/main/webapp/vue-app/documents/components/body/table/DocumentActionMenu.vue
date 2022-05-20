@@ -21,6 +21,7 @@ export default {
     }
   },
   data: () => ({
+    downloadEnabled: true,
     menuExtensionApp: 'DocumentMenu',
     menuExtensionType: 'menuActionMenu',
     menuExtensions: {},
@@ -31,7 +32,7 @@ export default {
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
-    this.refreshMenuExtensions();
+    Vue.prototype.$transferRulesService.getTransfertRulesDownloadDocumentStatus().then(data=>{this.downloadEnabled = data;this.refreshMenuExtensions();});
   },
   computed: {
     params() {
@@ -63,7 +64,12 @@ export default {
           if (((!this.isMobile && !this.mobileOnlyExtensions.includes(extension.id))
               || (this.isMobile && !this.desktopOnlyExtensions.includes(extension.id)))
           && (!this.file.folder || (this.file.folder && !this.fileOnlyExtension.includes(extension.id)))) {
-            this.menuExtensions[extension.id] = extension;
+            if (extension.id === 'download' && !this.downloadEnabled){
+              return;
+            }
+            else {
+              this.menuExtensions[extension.id] = extension;
+            } 
             changed = true;
           }
         }
