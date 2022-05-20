@@ -83,7 +83,8 @@
             close-on-click
             absolute>
             <documents-actions-menu
-              :file="file" />
+              :file="file"
+              :file-type="fileType" />
           </v-menu>
         </template>
         <span>

@@ -18,7 +18,11 @@ export default {
     file: {
       type: Object,
       default: null,
-    }
+    },
+    fileType: {
+      type: String,
+      default: null
+    },
   },
   data: () => ({
     menuExtensionApp: 'DocumentMenu',
@@ -27,7 +31,8 @@ export default {
     mobileOnlyExtensions: ['favorite','details'],
     desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
-    fileOnlyExtension: ['download','favorite','visibility']
+    fileOnlyExtension: ['download','favorite','visibility'],
+    fileExtensionsEditable: ['.docx','.pptx','.xlsx']
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
@@ -43,8 +48,7 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     fileCanEdit(){
-      const type = this.file && this.file.mimeType || '';
-      return ( type.includes('word') || type.includes('presentation') || type.includes('sheet') );
+      return this.fileExtensionsEditable.includes(this.fileType) ;
     }
   },
   methods: {
