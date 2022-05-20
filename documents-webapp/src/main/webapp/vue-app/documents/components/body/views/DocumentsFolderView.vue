@@ -18,7 +18,7 @@
       disable-pagination
       disable-filtering
       :class="loading && !items.length ? 'loadingClass' : ''"
-      class="documents-folder-table border-box-sizing">
+      class="documents-folder-table border-box-sizing ms-8">
       <template
         v-for="header in extendedCells"
         #[`item.${header.value}`]="{item}">
