@@ -32,7 +32,11 @@ export default {
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
-    Vue.prototype.$transferRulesService.getTransfertRulesDownloadDocumentStatus().then(data=>{this.downloadEnabled = data;this.refreshMenuExtensions();});
+    this.$transferRulesService.getTransfertRulesDownloadDocumentStatus()
+      .then(data=> {
+        this.downloadEnabled = data;
+        this.refreshMenuExtensions();
+      });
   },
   computed: {
     params() {
