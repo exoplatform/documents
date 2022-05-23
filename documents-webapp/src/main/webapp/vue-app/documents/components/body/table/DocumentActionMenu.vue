@@ -33,8 +33,8 @@ export default {
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
     this.$transferRulesService.getTransfertRulesDownloadDocumentStatus()
-      .then(data=> {
-        this.downloadEnabled = data;
+      .then(enabled=> {
+        this.downloadEnabled = enabled;
         this.refreshMenuExtensions();
       });
   },
