@@ -19,6 +19,7 @@
       disable-filtering
       :class="loading && !items.length ? 'loadingClass' : ''"
       class="documents-folder-table border-box-sizing ms-8">
+      <template slot="group.header"><div /></template>
       <template
         v-for="header in extendedCells"
         #[`item.${header.value}`]="{item}">
@@ -89,6 +90,9 @@ export default {
   data: () => ({
     lang: eXo.env.portal.language,
     options: {},
+    grouping: true,
+    groupBy: ['folder'],
+    groupDesc: [true],
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
