@@ -13,6 +13,7 @@
   </v-list>
 </template>
 <script>
+
 export default {
   props: {
     file: {
@@ -27,11 +28,17 @@ export default {
     mobileOnlyExtensions: ['favorite','details'],
     desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
-    fileOnlyExtension: ['download','favorite','visibility']
+    fileOnlyExtension: ['download','favorite','visibility'],
+    sharedDocumentStatus: false,
+    downloadDocumentStatus: false
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
-    this.refreshMenuExtensions();
+    this.$transferRulesService.getDocumentsTransferRules().then(rules => {
+      this.sharedDocumentStatus = rules.sharedDocumentStatus === 'true';
+      this.downloadDocumentStatus = rules.downloadDocumentStatus === 'true';
+      this.refreshMenuExtensions();
+    });
   },
   computed: {
     params() {
@@ -51,12 +58,22 @@ export default {
     isSymlink() {
       return this.file && this.file.sourceID;
     },
+    checkTransferRules(extension) {
+      if (extension.id === 'download') {
+        return this.downloadDocumentStatus;
+      }
+      if (extension.id === 'visibility') {
+        return this.sharedDocumentStatus;
+      }
+      return true;
+    },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
       if (!this.fileCanEdit) {
         extensions = extensions.filter(extension => extension.id !== this.editExtensions);
       }
-      extensions = extensions.filter(extension => extension.enabled(this.file.acl, this.isSymlink()));
+      extensions = extensions.filter(extension => this.checkTransferRules(extension)
+                                                     && extension.enabled(this.file.acl, this.isSymlink()));
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.menuExtensions[extension.id] || this.menuExtensions[extension.id] !== extension)) {
