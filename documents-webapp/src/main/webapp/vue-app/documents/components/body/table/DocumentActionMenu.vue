@@ -29,14 +29,14 @@ export default {
     desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
     fileOnlyExtension: ['download','favorite','visibility'],
-    sharedDocumentStatus: false,
-    downloadDocumentStatus: false
+    sharedDocumentSuspended: true,
+    downloadDocumentSuspended: true
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
     this.$transferRulesService.getDocumentsTransferRules().then(rules => {
-      this.sharedDocumentStatus = rules.sharedDocumentStatus === 'true';
-      this.downloadDocumentStatus = rules.downloadDocumentStatus === 'true';
+      this.sharedDocumentSuspended = rules.sharedDocumentStatus === 'true';
+      this.downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
       this.refreshMenuExtensions();
     });
   },
@@ -60,10 +60,10 @@ export default {
     },
     checkTransferRules(extension) {
       if (extension.id === 'download') {
-        return this.downloadDocumentStatus;
+        return !this.downloadDocumentSuspended;
       }
       if (extension.id === 'visibility') {
-        return this.sharedDocumentStatus;
+        return !this.sharedDocumentSuspended;
       }
       return true;
     },
