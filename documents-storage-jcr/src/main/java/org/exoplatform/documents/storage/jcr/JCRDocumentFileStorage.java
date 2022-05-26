@@ -407,15 +407,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private List<FullTreeItem> getAllFolderInNode(Node node) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
-    List<FullTreeItem> folderChildListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
-    Node childNode = null;
-    while(nodeIter.hasNext()) {
-      childNode = nodeIter.nextNode();
-      if(childNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
-        folderChildListNodes = getAllFolderInNode(childNode);
-        String nodeName= childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE).getString() : childNode.getName();
-        folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(), nodeName, childNode.getPath(),folderChildListNodes));
+    while (nodeIter.hasNext()) {
+      Node childNode = nodeIter.nextNode();
+      if (!childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
+          && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER))) {
+        String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
+                                                                                        .getString()
+                                                                             : childNode.getName();
+        List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode);
+        folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
+                                             nodeName,
+                                             childNode.getPath(),
+                                             folderChildListNodes));
       }
     }
     return folderListNodes;
@@ -559,6 +563,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (!node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
         node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
       }
+      node.save();
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
@@ -768,29 +773,32 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private Node getNodeByPath(Node node, String folderPath, SessionProvider sessionProvider) throws ObjectNotFoundException {
     try {
-      if((node.getName().equals(USER_PRIVATE_ROOT_NODE)) ){
-        if(folderPath.startsWith(USER_PRIVATE_ROOT_NODE)){
-          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE+"/")[1];
+      if ((node.getName().equals(USER_PRIVATE_ROOT_NODE))) {
+        if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE)) {
+          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + "/")[1];
           return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
         }
-        if(folderPath.startsWith(USER_PUBLIC_ROOT_NODE)){
+        if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
           SessionProvider systemSessionProvides = SessionProvider.createSystemProvider();
-          Session systemSession = systemSessionProvides.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
+          Session systemSession = systemSessionProvides.getSession(sessionProvider.getCurrentWorkspace(),
+                                                                   sessionProvider.getCurrentRepository());
           Node parent = getNodeByIdentifier(systemSession, ((NodeImpl) node).getIdentifier()).getParent();
           node = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
-          Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
+          Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(),
+                                                       sessionProvider.getCurrentRepository());
           if (session.itemExists(node.getPath())) {
             return (Node) session.getItem(node.getPath());
           }
           return null;
         }
-      }if((node.getName().equals(USER_PUBLIC_ROOT_NODE)) ){
-        if(folderPath.startsWith(USER_PRIVATE_ROOT_NODE+"/"+USER_PUBLIC_ROOT_NODE)){
-          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE+"/"+USER_PUBLIC_ROOT_NODE+"/")[1];
+      }
+      if ((node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
+        if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE + "/" + USER_PUBLIC_ROOT_NODE)) {
+          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + "/" + USER_PUBLIC_ROOT_NODE + "/")[1];
           return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
         }
-        if(folderPath.startsWith(USER_PUBLIC_ROOT_NODE)){
-          folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE+"/")[1];
+        if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
+          folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE + "/")[1];
           return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
         }
       }
@@ -798,7 +806,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException repositoryException) {
       throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
     } catch (UnsupportedEncodingException e) {
-      throw new IllegalStateException("Error retrieving folder'" + folderPath , e);
+      throw new IllegalStateException("Error retrieving folder'" + folderPath, e);
     }
   }
 

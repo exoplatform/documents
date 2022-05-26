@@ -1,10 +1,13 @@
 <template>
-  <div class="d-flex flex-row">
-    <documents-header-left />
-    <v-spacer v-show="!canShowMobileFilter" />
-    <documents-header-center v-show="!canShowMobileFilter" />
-    <v-spacer v-show="!canShowMobileFilter" />
-    <documents-header-right />
+  <div>
+    <div class="d-flex flex-row">
+      <documents-header-left :selected-view="selectedView" />
+      <v-spacer v-show="!canShowMobileFilter" />
+      <documents-header-center v-show="!canShowMobileFilter" :selected-view="selectedView" />
+      <v-spacer v-show="!canShowMobileFilter" />
+      <documents-header-right />
+    </div>
+    <documents-breadcrumb v-if="selectedView === 'folder'" class="py-4 px-1" />
   </div>
 </template>
 
@@ -14,7 +17,11 @@ export default {
     filesSize: {
       type: Number,
       default: 0
-    }
+    },
+    selectedView: {
+      type: String,
+      default: '',
+    },
   },
   data: () => ({
     showMobileFilter: false,

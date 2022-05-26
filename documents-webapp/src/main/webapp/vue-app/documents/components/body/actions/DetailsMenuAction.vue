@@ -1,7 +1,7 @@
 <template>
   <div
     class="clickable mx-2"
-    @click="$root.$emit('open-info-drawer',file.id)">
+    @click="displayDetails">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
@@ -27,9 +27,9 @@ export default {
     },
   },
   methods: {
-    editNameMode(){
-      this.$root.$emit('update-file-name', this.file);
-      if ( this.isMobile ) {
+    displayDetails(){
+      this.$root.$emit('open-info-drawer', this.file);
+      if (this.isMobile) {
         this.$root.$emit('close-file-action-menu');
       }
     }

@@ -10,7 +10,7 @@
           <v-icon
             class="text-sub-title d-none mx-0 px-0"
             size="16"
-            @click="$emit('open-info-drawer')"
+            @click="$root.$emit('open-info-drawer', file)"
             v-bind="attrs"
             v-on="on">
             fa-info-circle
@@ -21,7 +21,6 @@
         {{ documentInfoActionTooltip }}
       </span>
     </v-tooltip>
-    <documents-info-drawer ref="documentInfoDrawer" :file="file" />
   </div>
 </template>
 
@@ -37,9 +36,6 @@ export default {
       default: null,
     },
   },
-  data: () => ({
-
-  }),
   computed: {
     fileId() {
       return this.file && this.file.id;
@@ -47,12 +43,6 @@ export default {
     documentInfoActionTooltip() {
       return this.$t('documents.label.show.details');
     },
-
-  },
-  methods: {
-    openInfoDetailsDrawer(){
-      this.$refs.documentInfoDrawer.open();
-    }
   },
 };
 </script>

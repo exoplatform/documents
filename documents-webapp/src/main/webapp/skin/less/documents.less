@@ -9,6 +9,12 @@
     .v-alert {
       z-index: 9999;
     }
+    .documents-tree-item .documents-breadcrumb-element {
+      .v-btn__content {
+        overflow: hidden;
+        flex: 1 1 auto;
+      }
+    }
     .inputSpaceName {
       box-shadow: none!important;
       border: none!important;
@@ -77,24 +83,14 @@
       }
     }
 
-    .document-breadcrumb-wrapper {
-      max-width: 95% !important;
-      width: 95% !important;
-  
-      .document-long-path {
-        .long-path-first-item {
-          max-width: 100px;
-          min-width: 60px;
-        }
-  
-        .long-path-second-item {
-          max-width: 42px;
-        }
-  
-        .long-path-third-item {
-          max-width: 50%;
-          min-width: 60px;
-        }
+    .documents-breadcrumb-wrapper {
+      max-width: 100% !important;
+
+      #breadCrumb-link {
+        font-size: 20px !important;
+      }
+      #breadCrumb-link-move {
+        font-size: 12px !important;
       }
     }
 
@@ -185,13 +181,6 @@
       .action-menu-item:hover {
         background-color: #e4e5e7;
       }
-      #breadCrumb-link {
-        font-size: 20px !important;
-      }
-      #breadCrumb-link-move {
-        font-size: 12px !important;
-        max-width: 100px;
-      }
       .action-menu-item {
         min-height: 30px !important;
 
@@ -200,22 +189,6 @@
         }
         .v-icon.mdi-form-textbox, .v-icon.fa-download  {
           padding-right: 4px;
-        }
-      }
-      .documentInfoDrawer {
-        .v-list-item {
-          min-height: 30px!important;
-        }
-        .v-list-item__content {
-          padding: 10px 0;
-        }
-        .fileName {
-          max-width: 320px;
-          word-wrap: break-word;
-          display: inline-block;
-        }
-        .fileDetails {
-          font-size: 14px;
         }
       }
       .loadingClassMobile {
@@ -238,7 +211,6 @@
           }
         }
       }
-
 
       .documents-table,.documents-folder-table {
         tbody {
@@ -316,6 +288,22 @@
       }
     }
   }
+  .documentInfoDrawer {
+    .v-list-item {
+      min-height: 30px!important;
+    }
+    .v-list-item__content {
+      padding: 10px 0;
+    }
+    .fileName {
+      max-width: 320px;
+      word-wrap: break-word;
+      display: inline-block;
+    }
+    .fileDetails {
+      font-size: 14px;
+    }
+  }
 
   .documents-header-left-action {
     #addItemMenu {
@@ -384,13 +372,6 @@
       }
     }
 
-    .documents-table {
-      tbody {
-        .v-data-table__mobile-table-row > :first-child {
-          display: none;
-        }
-      }
-    }
     .v-data-table__wrapper {
       padding-bottom: 28px;
 
@@ -425,7 +406,6 @@
         .attachment {
           i {
             width: 7vw;
-            font-size: 32px !important;
           }
 
           .document-title {
@@ -435,8 +415,6 @@
       }
 
       .v-data-table__mobile-table-row {
-        display: inline-flex;
-
         .document-time {
           text-align: left;
           margin-left: 16px;

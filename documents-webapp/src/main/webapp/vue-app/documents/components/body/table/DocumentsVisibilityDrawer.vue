@@ -22,7 +22,7 @@
       @closed="close"
       right>
       <template slot="title">
-        {{ visibilityTitle }}
+        <span :title="visibilityTitle" class="text-truncate">{{ visibilityTitle }}</span>
       </template>
       <template slot="content">
         <v-list-item>
@@ -150,15 +150,12 @@
   </div>
 </template>
 <script>
-
 export default {
-  
   data: () => ({
     ownerIdentity: [],
     file: { 'acl': {
       'visibilityChoice': 'ALL_MEMBERS'
     }},
-    fileName: '',
     collaborators: [],
     searchOptions: {
       currentUser: '',
@@ -170,7 +167,7 @@ export default {
       return eXo.env.portal.spaceName && [`space:${eXo.env.portal.spaceName}`] || [];
     },
     visibilityTitle(){
-      return this.$t('documents.label.visibilityTitle').replace('{0}', this.fileName);
+      return this.$t('documents.label.visibilityTitle', {0: this.file?.name});
     },
     visibilityLabel(){
       return [
@@ -239,6 +236,11 @@ export default {
       this.collaborators = null;
     },
   },
+  created() {
+    this.$root.$on('open-visibility-drawer', file => {
+      this.open(file);
+    });
+  },
   methods: {
     mapCollaborator(collaborator) {
       const fullName = collaborator.profile
@@ -264,12 +266,11 @@ export default {
           if (elements[i].innerText.includes(this.$t('documents.label.visibility.collaborator.info'))){
             elements[i].style.left = '880px';
           }
-        }      }, 100);
-
+        }
+      }, 100);
     },
-    open(file,fileName) {
-      this.file=file;
-      this.fileName=fileName;
+    open(file) {
+      this.file = file;
       this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
         this.ownerIdentity = user;
       });

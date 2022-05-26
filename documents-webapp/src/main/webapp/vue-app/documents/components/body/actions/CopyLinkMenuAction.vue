@@ -48,6 +48,7 @@ export default {
           'view': this.viewTab
         }
       }));
+      this.$root.$emit('close-file-action-menu');
     },
     getDocumentView() {
       const currentUrlSearchParams = window.location.search;

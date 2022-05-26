@@ -23,13 +23,8 @@
 <script>
 
 export default {
-  props: {
-    file: {
-      type: Object,
-      default: null,
-    }
-  },
   data: () => ({
+    file: null,
     menuExtensionApp: 'DocumentMenu',
     menuExtensionType: 'menuActionMenu',
     menuExtensions: {},
@@ -53,11 +48,13 @@ export default {
     }
   },
   created() {
-    document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
-    this.refreshMenuExtensions();
+    this.$root.$on('open-file-action-menu', this.open);
+    this.$root.$on('close-file-action-menu', this.close);
   },
   methods: {
-    open() {
+    open(file) {
+      this.file = file;
+      this.refreshMenuExtensions();
       this.$refs.documentActionsMobileMenu.open();
     },
     close() {

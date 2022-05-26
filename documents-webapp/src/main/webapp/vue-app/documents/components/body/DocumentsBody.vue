@@ -23,6 +23,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    initialized: {
+      type: Boolean,
+      default: false,
+    },
     offset: {
       type: Number,
       default: () => 0,
@@ -64,6 +68,7 @@ export default {
         ascending: this.ascending,
         pageSize: this.pageSize,
         sortField: this.sortField,
+        initialized: this.initialized,
         loading: this.loading,
         offset: this.offset,
         limit: this.limit,

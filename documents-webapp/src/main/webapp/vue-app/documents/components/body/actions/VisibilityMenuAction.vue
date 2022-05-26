@@ -1,7 +1,7 @@
 <template>
   <div
     class="clickable ma-auto pt-1 mx-2"
-    @click="$root.$emit('open-visibility-drawer',file)">
+    @click="changeVisibility">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
@@ -26,6 +26,14 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+  },
+  methods: {
+    changeVisibility(){
+      this.$root.$emit('open-visibility-drawer', this.file);
+      if (this.isMobile) {
+        this.$root.$emit('close-file-action-menu');
+      }
+    }
   },
 };
 </script>
