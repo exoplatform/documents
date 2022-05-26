@@ -26,9 +26,7 @@ export default {
   methods: {
     deleteAction() {
       this.$root.$emit('confirm-document-deletion', this.file);
-      if ( this.isMobile ) {
-        this.$root.$emit('close-file-action-menu');
-      }
+      this.$root.$emit('close-file-action-menu');
       const deleteDelay = 6;
       this.$documentFileService.deleteDocument(this.file.path, this.file.id, this.file.favorite, deleteDelay);
     }

@@ -34,36 +34,32 @@
 <script>
 
 export default {
-  props: {
-  },
   data: () => ({
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     items: [],
   }),
   computed: {
     openLevel() {
-      return this.items && this.items.length && [this.items[0].name];
+      return this.items && this.items.length && [this.items[0].name] || [];
     },
   },
   methods: {
     open() {
       this.retrieveNoteTree();
-      this.$refs.folderBreadcrumb.open();
+      this.$refs.folderBreadcrumb?.open();
     },
     close() {
-      this.$refs.folderBreadcrumb.close();
+      this.$refs.folderBreadcrumb?.close();
     },
     openFolder(folder){
       this.$root.$emit('open-folder', folder);
     },
     retrieveNoteTree(){
-      this.$documentFileService
-        .getFullTreeData(this.ownerId).then(data => {
-          if (data) {
-            this.items = [];
-            this.items = data;
-          }
-        });
+      this.items = [];
+      this.$refs.folderBreadcrumb?.startLoading();
+      this.$documentFileService.getFullTreeData(this.ownerId)
+        .then(data => this.items = data || [])
+        .finally(() => this.$refs.folderBreadcrumb?.endLoading());
     }
   }
 };

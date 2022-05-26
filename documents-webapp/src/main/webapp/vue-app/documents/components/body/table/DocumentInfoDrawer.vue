@@ -7,7 +7,7 @@
     <template slot="title">
       {{ $t('documents.drawer.details.title') }}
     </template>
-    <template slot="content">
+    <template v-if="file" slot="content">
       <v-list-item>
         <v-list-item-content class="ma-1">
           <a class="text-center not-clickable d-flex align-center">
@@ -17,7 +17,7 @@
               class="fileName font-weight-bold text-color ms-2 px-2">
               {{ file.name }}
             </span>
-            <documents-favorite-action :file="file" />
+            <documents-favorite-action v-if="!file.folder" :file="file" />
             <v-spacer />
           </a>
         </v-list-item-content>
@@ -79,28 +79,6 @@
 <script>
 
 export default {
-  props: {
-    file: {
-      type: Object,
-      default: null,
-    },
-    icon: {
-      type: Array,
-      default: null,
-    },
-    fileName: {
-      type: String,
-      default: '',
-    },
-    fileType: {
-      type: String,
-      default: '',
-    },
-    isMobile: {
-      type: Boolean,
-      default: false,
-    },
-  },
   data: () => ({
     fullDateFormat: {
       year: 'numeric',
@@ -110,6 +88,10 @@ export default {
       minute: '2-digit',
     },
     currentUser: eXo.env.portal.userName,
+    file: null,
+    fileName: null,
+    fileType: null,
+    icon: null,
   }),
   computed: {
     iconColor(){
@@ -143,16 +125,24 @@ export default {
     identityCreated(){
       if (!(this.file && this.file.creatorIdentity)) {return '';}
       return this.currentUser === this.file.creatorIdentity.remoteId ? this.$t('documents.drawer.details.me') : this.file.creatorIdentity.name;
-
     },
-
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
+  },
+  created() {
+    this.$root.$on('open-info-drawer', this.open);
+    this.$root.$on('close-info-drawer', this.close);
   },
   methods: {
-    open() {
+    open(file, fileName, fileType, icon) {
+      this.file = file;
+      this.fileName = fileName;
+      this.fileType = fileType;
+      this.icon = icon;
       this.$refs.documentInfoDrawer.open();
     },
     close() {
-      this.$root.$emit('close-info-drawer',this.file.id);
       this.$refs.documentInfoDrawer.close();
     },
   }
