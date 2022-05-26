@@ -181,9 +181,9 @@ export default {
         path = window.location.pathname;
       }
       if (eXo.env.portal.spaceName){
-        const pathParts  = path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-        if (pathParts.length>1){
-          this.folderPath = pathParts[1];
+        const index = path.lastIndexOf('/');
+        if (index !== -1){
+          this.folderPath =  path.substring(index + 1);
           this.selectedView = 'folder';
         }
       } else {
