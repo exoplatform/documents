@@ -559,6 +559,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (!node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
         node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
       }
+      node.save();
 
       Node parent = node.getParent();
       String srcPath = node.getPath();

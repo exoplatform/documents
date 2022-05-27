@@ -18,15 +18,16 @@
       disable-pagination
       disable-filtering
       :class="loading && !items.length ? 'loadingClass' : ''"
-      class="documents-folder-table border-box-sizing ms-8">
-      <template slot="group.header"><div /></template>
+      class="documents-folder-table border-box-sizing">
+      <template slot="group.header"><span></span></template>
       <template
         v-for="header in extendedCells"
         #[`item.${header.value}`]="{item}">
         <documents-table-cell
           :key="header.value"
           :extension="header.cellExtension"
-          :file="item" />
+          :file="item"
+          class="ms-0 ms-sm-8" />
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">

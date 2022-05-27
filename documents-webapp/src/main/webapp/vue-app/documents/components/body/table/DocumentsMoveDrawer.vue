@@ -150,9 +150,10 @@ export default {
       this.destinationFolderId=folder.id;
       return this.$documentFileService
         .getBreadCrumbs(this.destinationFolderId,this.ownerId,this.folderPath)
-        .then(breadCrumbs => {this.documentsBreadcrumbDestination = breadCrumbs;
-          this.destinationFolderId = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length-1].id;
-          this.destinationFolderPath = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length-1].path;
+        .then(breadCrumbs => {
+          this.documentsBreadcrumbDestination = breadCrumbs;
+          this.destinationFolderId = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].id;
+          this.destinationFolderPath = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].path;
         })
         .finally(() => this.loading = false);
     },

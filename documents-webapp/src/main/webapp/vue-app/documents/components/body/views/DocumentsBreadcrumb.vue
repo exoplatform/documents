@@ -1,6 +1,6 @@
 <template>
-  <div class="documents-breadcrumb-wrapper">
-    <div v-if="documentsBreadcrumb && documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
+  <div v-if="documentsBreadcrumb && documentsBreadcrumb.length" class="documents-breadcrumb-wrapper">
+    <div v-if="documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
       <v-icon
         class="text-sub-title pe-2"
         size="16"
@@ -35,7 +35,7 @@
         <v-icon
           v-if="index < documentsBreadcrumb.length-1"
           :size="move ? 12 : 14"
-          :class="move ? 'px-1' : 'px3'">
+          :class="move ? 'px-1' : 'px-3'">
           fa-chevron-right
         </v-icon>
       </div>
@@ -54,7 +54,7 @@
           </template>
           <span class="caption">{{ documentsBreadcrumb && documentsBreadcrumb.length && documentsBreadcrumb[0].name }}</span>
         </v-tooltip>
-        <v-icon :size="move ? 12 : 14" :class="move ? 'px-1' : 'px3'">fa-chevron-right</v-icon>
+        <v-icon :size="move ? 12 : 14" :class="move ? 'px-1' : 'px-3'">fa-chevron-right</v-icon>
       </div>
       <div class="documentss-tree-item long-path-second-item d-flex">
         <v-tooltip bottom>
@@ -71,25 +71,25 @@
             v-for="(documents, index) in documentsBreadcrumb"
             :key="index"
             class="mb-0">
-            <span v-if="index > 0 && index < documentsBreadcrumb.length-2" class="caption"><v-icon :size="move ? 12 : 14" :class="move ? 'tooltip-chevron px-1' : 'tooltip-chevron px3'">fa-chevron-right</v-icon> {{ getName(documents.name) }}</span>
+            <span v-if="index > 0 && index < documentsBreadcrumb.length-2" class="caption"><v-icon :size="move ? 12 : 14" :class="move ? 'tooltip-chevron px-1' : 'tooltip-chevron px-3'">fa-chevron-right</v-icon> {{ getName(documents.name) }}</span>
           </p>
         </v-tooltip>
-        <v-icon :class="move ? 'clickable px-1' : 'clickable px3'" :size="move ? 12 : 14">fa-chevron-right</v-icon>
+        <v-icon :class="move ? 'clickable px-1' : 'clickable px-3'" :size="move ? 12 : 14">fa-chevron-right</v-icon>
       </div>
-      <div class="documentss-tree-item long-path-third-item d-flex text-truncate">
+      <div v-if="documentsBreadcrumb && documentsBreadcrumb.length > 1" class="documentss-tree-item long-path-third-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
           <template #activator="{ on, attrs }">
             <a
               :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
               class="caption text-sub-title text-truncate path-clickable"
-              :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
+              :class="documentsBreadcrumb[documentsBreadcrumb.length - 1].id === actualFolderId && 'clickable' || ''"
               v-bind="attrs"
               v-on="on"
-              @click="openFolder(documentsBreadcrumb[documentsBreadcrumb.length-2])">{{ documentsBreadcrumb[documentsBreadcrumb.length-2].name }}</a>
+              @click="openFolder(documentsBreadcrumb[documentsBreadcrumb.length - 2])">{{ documentsBreadcrumb[documentsBreadcrumb.length - 2].name }}</a>
           </template>
-          <span class="caption">{{ documentsBreadcrumb[documentsBreadcrumb.length-2].name }}</span>
+          <span class="caption">{{ documentsBreadcrumb[documentsBreadcrumb.length - 2].name }}</span>
         </v-tooltip>
-        <v-icon :size="move ? 12 : 14" :class="move ? 'px-1' : 'px3'">fa-chevron-right</v-icon>
+        <v-icon :size="move ? 12 : 14" :class="move ? 'px-1' : 'px-3'">fa-chevron-right</v-icon>
       </div>
       <div class="documentss-tree-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
@@ -219,9 +219,10 @@ export default {
     getBreadCrumbs() {
       return this.$documentFileService
         .getBreadCrumbs(this.actualFolderId,this.ownerId,this.folderPath)
-        .then(breadCrumbs => {this.documentsBreadcrumb = breadCrumbs;
-          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].id;
-          this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path;
+        .then(breadCrumbs => {
+          this.documentsBreadcrumb = breadCrumbs;
+          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1].id;
+          this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1].path;
           this.$root.$emit('set-current-folder', this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1]);
         })
         .finally(() => this.loading = false);
