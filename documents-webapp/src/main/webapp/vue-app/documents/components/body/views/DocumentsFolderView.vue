@@ -12,7 +12,6 @@
       :groupable="grouping"
       :group-by="groupBy"
       :group-desc="groupDesc"
-      :disable-sort="isMobile"
       :loading-text="loadingLabel"
       hide-default-footer
       disable-pagination
@@ -27,7 +26,7 @@
           :key="header.value"
           :extension="header.cellExtension"
           :file="item"
-          class="ms-0 ms-sm-8" />
+          class="ms-8" />
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">
@@ -166,7 +165,7 @@ export default {
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.headerExtensions[extension.id] || this.headerExtensions[extension.id] !== extension)) {
-          if (!this.isMobile || this.isMobile && !this.mobileUnfriendlyExtensions.includes(extension.id)) {
+          if (!this.isMobile || (this.isMobile && !this.mobileUnfriendlyExtensions.includes(extension.id))) {
             this.headerExtensions[extension.id] = extension;
             changed = true;
           }

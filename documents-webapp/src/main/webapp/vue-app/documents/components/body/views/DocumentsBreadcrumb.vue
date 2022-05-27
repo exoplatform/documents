@@ -1,6 +1,6 @@
 <template>
   <div v-if="documentsBreadcrumb && documentsBreadcrumb.length" class="documents-breadcrumb-wrapper">
-    <div v-if="documentsBreadcrumb.length <= 4" class="documentss-tree-items d-flex">
+    <div v-if="documentsBreadcrumb.length <= 4" class="documents-tree-items d-flex">
       <v-icon
         class="text-sub-title pe-2"
         size="16"
@@ -11,14 +11,14 @@
         v-for="(documents, index) in documentsBreadcrumb"
         :key="index"
         :class="documentsBreadcrumb && documentsBreadcrumb.length === 1 && 'single-path-element' || ''"
-        class="documentss-tree-item d-flex text-truncate"
+        class="documents-tree-item d-flex text-truncate"
         :style="`max-width: ${100 / (documentsBreadcrumb.length)}%`">
         <v-tooltip max-width="300" bottom>
           <template #activator="{ on, attrs }">
             <v-btn
               height="20px"
               min-width="45px"
-              class="pa-0"
+              class="pa-0 flex-shrink-1 text-truncate documents-breadcrumb-element"
               :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
               text
               v-bind="attrs"
@@ -40,8 +40,8 @@
         </v-icon>
       </div>
     </div>
-    <div v-else class="documentss-tree-items documentss-long-path d-flex align-center">
-      <div class="documentss-tree-item long-path-first-item d-flex text-truncate">
+    <div v-else class="documents-tree-items documents-long-path d-flex align-center">
+      <div class="documents-tree-item long-path-first-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
           <template #activator="{ on, attrs }">
             <a
@@ -49,14 +49,15 @@
               class="caption text-sub-title text-truncate path-clickable"
               :class="documentsBreadcrumb[documentsBreadcrumb.length-1].id === actualFolderId && 'clickable' || ''"
               v-bind="attrs"
-              v-on="on"
-              @click="openFolder(documentsBreadcrumb[0])">{{ documentsBreadcrumb && documentsBreadcrumb.length && documentsBreadcrumb[0].name }}</a>
+              v-on="on">
+              {{ documentsBreadcrumb && documentsBreadcrumb.length && documentsBreadcrumb[0].name }}
+            </a>
           </template>
           <span class="caption">{{ documentsBreadcrumb && documentsBreadcrumb.length && documentsBreadcrumb[0].name }}</span>
         </v-tooltip>
         <v-icon :size="move ? 12 : 14" :class="move ? 'px-1' : 'px-3'">fa-chevron-right</v-icon>
       </div>
-      <div class="documentss-tree-item long-path-second-item d-flex">
+      <div class="documents-tree-item long-path-second-item d-flex">
         <v-tooltip bottom>
           <template #activator="{ on, attrs }">
             <v-icon
@@ -76,7 +77,7 @@
         </v-tooltip>
         <v-icon :class="move ? 'clickable px-1' : 'clickable px-3'" :size="move ? 12 : 14">fa-chevron-right</v-icon>
       </div>
-      <div v-if="documentsBreadcrumb && documentsBreadcrumb.length > 1" class="documentss-tree-item long-path-third-item d-flex text-truncate">
+      <div v-if="documentsBreadcrumb && documentsBreadcrumb.length > 1" class="documents-tree-item long-path-third-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
           <template #activator="{ on, attrs }">
             <a
@@ -91,7 +92,7 @@
         </v-tooltip>
         <v-icon :size="move ? 12 : 14" :class="move ? 'px-1' : 'px-3'">fa-chevron-right</v-icon>
       </div>
-      <div class="documentss-tree-item d-flex text-truncate">
+      <div class="documents-tree-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
           <template #activator="{ on, attrs }">
             <a
