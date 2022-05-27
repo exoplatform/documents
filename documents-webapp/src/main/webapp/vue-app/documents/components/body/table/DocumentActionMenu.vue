@@ -30,15 +30,18 @@ export default {
     editExtensions: 'edit',
     fileOnlyExtension: ['download','favorite','visibility'],
     sharedDocumentSuspended: true,
-    downloadDocumentSuspended: true
+    downloadDocumentSuspended: true,
+    supportedDocuments: null
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
+    document.addEventListener('documents-supported-document-types-updated', this.refreshSupportedDocumentExtensions);
     this.$transferRulesService.getDocumentsTransferRules().then(rules => {
       this.sharedDocumentSuspended = rules.sharedDocumentStatus === 'true';
       this.downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
       this.refreshMenuExtensions();
     });
+    this.refreshSupportedDocumentExtensions();
   },
   computed: {
     params() {
@@ -51,7 +54,7 @@ export default {
     },
     fileCanEdit(){
       const type = this.file && this.file.mimeType || '';
-      return ( type.includes('word') || type.includes('presentation') || type.includes('sheet') );
+      return this.supportedDocuments && this.supportedDocuments.filter(doc => doc.edit && doc.mimeType === type).length > 0;
     }
   },
   methods: {
@@ -66,6 +69,9 @@ export default {
         return !this.sharedDocumentSuspended;
       }
       return true;
+    },
+    refreshSupportedDocumentExtensions () {
+      this.supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
