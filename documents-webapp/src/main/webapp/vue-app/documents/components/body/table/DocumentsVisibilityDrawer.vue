@@ -76,7 +76,7 @@
 
         <v-divider dark class="mx-4" />
 
-        <v-list-item>
+        <v-list-item class="d-block">
           <v-list-item-content class="my-1">
             <div class="d-flex">
               <v-label for="collaborator">
@@ -98,7 +98,8 @@
                 <span class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
               </v-tooltip>
             </div>
-            <exo-identity-suggester
+          </v-list-item-content>
+          <exo-identity-suggester
               ref="invitedCollaborators"
               :labels="suggesterLabels"
               v-model="collaborators"
@@ -109,7 +110,6 @@
               height="40"
               include-users
               include-spaces />
-          </v-list-item-content>
         </v-list-item>
         <div v-if="users.length">
           <documents-visibility-collaborators
