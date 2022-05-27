@@ -47,7 +47,7 @@ export default {
     this.$attachmentService.getAttachmentById(this.id)
       .then(file => { 
         this.file = file;
-        this.documentTitle = file.title;
+        this.documentTitle = decodeURI(file.title);
         const updaterFullName = file && file.updater && file.updater.profile && file.updater.profile.fullname || '';
         const updateDate = new Date(file.updated);
         const updateDateInfo = this.$dateUtil.formatDateObjectToDisplay(updateDate, this.dateFormat);
