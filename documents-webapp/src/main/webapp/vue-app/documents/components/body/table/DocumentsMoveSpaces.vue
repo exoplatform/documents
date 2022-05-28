@@ -93,9 +93,11 @@ export default {
   },
   watch: {
     spaceModel () {
-      if (this.$refs.select && this.$refs.select.isMenuActive) {
-        setTimeout(() => {
-          this.$refs.select.isMenuActive = false;
+      if (this.$refs?.select?.isMenuActive) {
+        window.setTimeout(() => {
+          if (this.$refs?.select?.isMenuActive) {
+            this.$refs.select.isMenuActive = false;
+          }
         }, 50);
       }
     },
@@ -110,9 +112,11 @@ export default {
     this.getSpaces();
     this.spaceModel = this.space;
     $(document).on('mousedown', () => {
-      if (this.$refs.select.isMenuActive) {
+      if (this.$refs?.select?.isMenuActive) {
         window.setTimeout(() => {
-          this.$refs.select.isMenuActive = false;
+          if (this.$refs?.select?.isMenuActive) {
+            this.$refs.select.isMenuActive = false;
+          }
         }, 200);
       }
     });

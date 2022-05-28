@@ -8,20 +8,23 @@
       <div v-if="searchResult">
         <documents-header
           :files-size="files.length" 
+          :selected-view="selectedView"
           class="py-2" />
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else-if="!filesLoad && !loadingFiles && selectedView == 'folder' ">
+      <div v-else-if="!filesLoad && !loading && selectedView == 'folder' ">
         <documents-header
           :files-size="files.length" 
+          :selected-view="selectedView"
           class="py-2" />
         <documents-no-body-folder
           :is-mobile="isMobile" />
       </div>
-      <div v-else-if="!filesLoad && !loadingFiles">
+      <div v-else-if="!filesLoad && !loading">
         <documents-header
           :files-size="files.length" 
+          :selected-view="selectedView"
           class="py-2" />
         <documents-no-body
           :is-mobile="isMobile" />
@@ -29,8 +32,10 @@
       <div v-else>
         <documents-header
           :files-size="files.length" 
+          :selected-view="selectedView"
           class="py-2" />
         <documents-body
+          v-if="optionsLoaded"
           :view-extension="selectedViewExtension"
           :files="files"
           :groups-sizes="groupsSizes"
@@ -40,12 +45,16 @@
           :has-more="hasMore"
           :sort-field="sortField"
           :ascending="ascending"
+          :initialized="initialized"
           :loading="loading"
           :query="query"
           :primary-filter="primaryFilter" />
         <exo-document-notification-alerts />
       </div>
     </div>
+    <documents-visibility-drawer />
+    <documents-move-drawer />
+    <documents-info-drawer />
     <v-alert
       v-model="alert"
       :type="alertType"
@@ -55,6 +64,7 @@
     <folder-treeview-drawer
       ref="folderTreeDrawer" />
     <documents-app-reminder />
+    <documents-actions-menu-mobile />
   </v-app>
 </template>
 <script>
@@ -66,14 +76,16 @@ export default {
     query: null,
     fileName: null,
     userId: null,
-    sortField: 'name',
-    isFavorits: false,
-    ascending: true,
+    sortField: 'lastUpdated',
+    isFavorites: false,
+    ascending: false,
     parentFolderId: null,
     pageSize: 50,
     files: [],
     offset: 0,
     limit: 0,
+    optionsLoaded: false,
+    initialized: false,
     loading: false,
     hasMore: false,
     viewExtensions: {},
@@ -111,11 +123,8 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     searchResult(){
-      return ((this.query && this.query.length) || this.isFavorits) && !this.files.length;
+      return ((this.query && this.query.length) || this.isFavorites) && !this.files.length;
     },
-    loadingFiles(){
-      return this.loading;
-    }
   },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
@@ -151,10 +160,22 @@ export default {
     this.$root.$on('show-alert', message => {
       this.displayMessage(message);
     });
-    this.getDocumentDataFromUrl();
-    this.refreshFiles().then(() => {
-      this.watchDocumentPreview();
-    }).finally(() => this.$root.$applicationLoaded());
+    this.getDocumentDataFromUrl()
+      .finally(() => {
+        this.checkDefaultViewOptions();
+        this.optionsLoaded = true;
+        this.refreshFiles()
+          .then(() => {
+            this.watchDocumentPreview();
+            if (this.selectedView === 'folder') {
+              this.$nextTick().then(() => this.$root.$emit('update-breadcrumb', this.folderPath));
+            }
+          })
+          .finally(() => {
+            this.initialized = true;
+            this.$root.$applicationLoaded();
+          });
+      });
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
@@ -169,6 +190,7 @@ export default {
       this.sortField = sortField;
       this.ascending = ascending;
 
+      this.files = [];
       this.refreshFiles();
     },
     search(query) {
@@ -181,9 +203,9 @@ export default {
         path = window.location.pathname;
       }
       if (eXo.env.portal.spaceName){
-        const index = path.lastIndexOf('/');
-        if (index !== -1){
-          this.folderPath =  path.substring(index + 1);
+        const index = path.indexOf('/Documents/');
+        if (index !== -1) {
+          this.folderPath = path.substring(index + '/Documents/'.length);
           this.selectedView = 'folder';
         }
       } else {
@@ -209,7 +231,7 @@ export default {
         .duplicateDocument(this.parentFolderId,this.ownerId)
         .then( () => {
           this.parentFolderId=null;
-          this.getFolderPath();
+          this.getFolderPath(this.folderPath);
           this.refreshFiles();
           if (documents.folder){
             this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateFolder')});
@@ -241,10 +263,11 @@ export default {
       if (parentFolder.sourceID){
         this.parentFolderId = parentFolder.sourceID; 
       }
+      this.files = [];
       this.refreshFiles();
       this.$root.$emit('set-breadcrumb', parentFolder);
       let folderPath ='';
-      if (eXo.env.portal.spaceName){
+      if (eXo.env.portal.spaceName) {
         let newParentPath = parentFolder.path;
         newParentPath = newParentPath.replace(`/spaces/${eXo.env.portal.spaceGroup}`, `/spaces/${eXo.env.portal.spaceGroup}/${eXo.env.portal.spaceName}`);
         const nodeUri = eXo.env.portal.selectedNodeUri.replace('/documents', '/Documents');
@@ -273,7 +296,6 @@ export default {
           }
           window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Public')[0]}/Public${folderPath}?view=folder`);
         }
-      
       }
     },
     loadMore() {
@@ -281,11 +303,22 @@ export default {
       this.refreshFiles(this.primaryFilter);
     },
     changeView(view) {
-      this.selectedView=view;
-      if (view.toLowerCase() !== 'folder'){
-        this.parentFolderId=null;
-      }
-      this.refreshFiles(this.primaryFilter);
+      const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
+      const url = new URL(window.location.href.substring(0, realPageUrlIndex));
+      url.searchParams.set('view', view);
+      window.history.replaceState('documents', 'Documents', url.toString());
+
+      this.selectedView = view;
+      this.parentFolderId = null;
+      this.folderPath = null;
+      this.files = [];
+      this.checkDefaultViewOptions();
+      this.refreshFiles(this.primaryFilter)
+        .finally(() => {
+          if (this.selectedView === 'folder') {
+            this.$nextTick().then(() => this.$root.$emit('update-breadcrumb'));
+          }
+        });
     },
     openHome() {
       this.parentFolderId=null;  
@@ -326,21 +359,22 @@ export default {
       if (this.userId) {
         filter.userId = this.userId;
       }
-      if (this.ascending) {
-        filter.ascending = this.sortField === 'favorite' ? false : true;
+      if (this.sortField === 'favorite') {
+        filter.ascending = this.ascending = false;
+      } else {
+        filter.ascending = this.ascending;
       }
       if (filterPrimary && filterPrimary==='favorites') {
-        this.isFavorits = true;
+        this.isFavorites = true;
       }
       if (filterPrimary && filterPrimary==='all') {
-        this.isFavorits  =  false;
+        this.isFavorites  =  false;
       }
-      filter.favorites = this.isFavorits;
+      filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
       this.limit = this.limit || this.pageSize;
       this.loading = true;
-      return this.$documentFileService
-        .getDocumentItems(filter, this.offset, this.limit + 1, expand)
+      return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
           this.files = this.sortField === 'favorite' ? files && files.slice(this.offset, this.limit).sort((file1, file2) => {
             if (file1.favorite === false && file2.favorite === true) {
@@ -353,15 +387,23 @@ export default {
           }) || [] : files && files.slice(this.offset, this.limit) || [];
           this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
           this.hasMore = files && files.length > this.limit;
-          if (this.fileName){
-            const result = files.filter(file => file.name===this.fileName);
-            if (result.length>0){
+          if (this.fileName) {
+            const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
+            if (result.length > 0) {
               this.showPreview(result[0].id);
             }
           }
-
         })
         .finally(() => this.loading = false);
+    },
+    checkDefaultViewOptions() {
+      if (this.selectedView === 'folder') {
+        this.sortField = 'name';
+        this.ascending = true;
+      } else if (this.selectedView === 'timeline') {
+        this.sortField = 'lastUpdated';
+        this.ascending = false;
+      }
     },
     refreshViewExtensions() {
       const extensions = extensionRegistry.loadExtensions(this.extensionApp, this.extensionType);
@@ -388,6 +430,7 @@ export default {
         if (!documentPreviewContainer && self.previewMode) {
           // Quit preview mode
           self.previewMode = false;
+          self.fileName = null;
           window.history.pushState('', '', eXo.env.server.portalBaseURL);
         } else if (documentPreviewContainer && !self.previewMode) {
           // Enter preview mode
@@ -405,7 +448,7 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.getNewName(ownerId,this.parentFolderId,this.folderPath,'new folder') 
         .then( newName => {
-          const newFolder={
+          const newFolder = {
             'id': -1,
             'name': newName,
             'folder': true
@@ -419,18 +462,14 @@ export default {
     createFolder(name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name)
-        .then( () => {
-          this.refreshFiles();
-        })
+        .then(() => this.refreshFiles())
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
     renameDocument(file,name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.renameDocument(ownerId,file.id,name)
-        .then( () => {
-          this.refreshFiles();
-        })
+        .then(() => this.refreshFiles())
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
@@ -444,9 +483,7 @@ export default {
     },
     saveVisibility(file){
       this.$documentFileService.saveVisibility(file)
-        .then( () => {
-          this.refreshFiles();
-        })
+        .then(() => this.refreshFiles())
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
@@ -498,12 +535,20 @@ export default {
     getDocumentDataFromUrl() {
       const currentUrlSearchParams = window.location.search;
       const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (!eXo.env.portal.spaceName && queryParams.has('userId')) {
+        this.userId = queryParams.get('userId');
+      }
       if (queryParams.has('documentPreviewId')) {
         this.loading = true;
         this.previewMode = true;
         const documentPreviewId = queryParams.get('documentPreviewId');
         this.selectedView = 'folder';
-        this.showPreview(documentPreviewId);
+        return this.showPreview(documentPreviewId)
+          .then(attachment => {
+            if (attachment?.path) {
+              this.selectFile(attachment.path);
+            }
+          });
       }
       if (queryParams.has('folderId')) {
         this.parentFolderId = queryParams.get('folderId');
@@ -511,38 +556,35 @@ export default {
       }
       if (queryParams.has('path')) {
         this.selectedView = 'folder';
-        let nodePath = queryParams.get('path');
-        const lastpart = nodePath.substring(nodePath.lastIndexOf('/')+1,nodePath.length);
-        if (lastpart.includes('.')){
-          this.fileName = lastpart;
-          nodePath = nodePath.substring(0,nodePath.lastIndexOf('/'));
-        }
-        this.getFolderPath(nodePath);
-      } else if (this.selectedView === 'folder') {
-        this.getFolderPath();
-      }
-      if (queryParams.has('view')) {
-        const view = queryParams.get('view');
-        if (view.toLowerCase() === 'folder'){
-          this.selectedView='folder';
-        } else {
-          this.parentFolderId=null;
-          this.selectedView='timeline';
-          const pathParts = window.location.pathname.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-          window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
-        }
-      }
-      if (!eXo.env.portal.spaceName && queryParams.has('userId')) {
-        const userId = queryParams.get('userId');
-        this.userId=userId;
+        const path = queryParams.get('path') || '';
+        this.selectFile(path);
       } else {
-        this.userId=null;
+        const path = window.location.pathname;
+        const pathParts  = path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        if (pathParts.length > 1) {
+          this.folderPath = pathParts[1];
+          this.selectedView = 'folder';
+        }
+        if (queryParams.has('view')) {
+          const view = queryParams.get('view');
+          if (view.toLowerCase() === 'folder'){
+            this.selectedView = 'folder';
+          } else {
+            this.parentFolderId = null;
+            this.folderPath = null;
+            this.selectedView ='timeline';
+          }
+        }
+        if (this.selectedView === 'folder') {
+          this.getFolderPath(this.folderPath);
+        }
       }
+      return this.$nextTick();
     },
     onBrowserNavChange() {
       this.getDocumentDataFromUrl();
-      this.refreshFiles();
-      this.$root.$emit('update-breadcrumb');
+      this.refreshFiles()
+        .finally(() => this.$root.$emit('update-breadcrumb'));
     },
     displayMessage(message) {
       this.message = message.message;
@@ -550,8 +592,18 @@ export default {
       this.alert = true;
       window.setTimeout(() => this.alert = false, 5000);
     },
+    selectFile(path) {
+      const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
+      const nodePath = path.substring(path.indexOf(parentDriveFolder) + parentDriveFolder.length);
+      const nodePathParts = nodePath.split('/');
+
+      this.selectedView = 'folder';
+      this.fileName = nodePathParts.pop();
+      this.folderPath = nodePathParts.join('/');
+      return this.getFolderPath(this.folderPath);
+    },
     showPreview(documentPreviewId) {
-      this.$attachmentService.getAttachmentById(documentPreviewId)
+      return this.$attachmentService.getAttachmentById(documentPreviewId)
         .then(attachment => {
           documentPreview.init({
             doc: {
@@ -572,6 +624,7 @@ export default {
             showComments: false,
             showOpenInFolderButton: false,
           });
+          return attachment;
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);

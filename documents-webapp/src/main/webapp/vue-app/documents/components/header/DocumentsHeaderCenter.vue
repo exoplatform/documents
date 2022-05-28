@@ -1,7 +1,7 @@
 <template>
   <div class="d-flex flex-row">
     <v-tabs
-      v-model="tab"
+      :value="tab"
       class="documentViewTabs">
       <v-tab
         v-for="(extension, i) in tabsList"
@@ -21,7 +21,11 @@ export default {
     filesSize: {
       type: Number,
       default: 0
-    }
+    },
+    selectedView: {
+      type: String,
+      default: '',
+    },
   },
   data: () => ({
     tabsExtensionApp: 'DocumentTabs',
@@ -40,31 +44,22 @@ export default {
       return eXo.env.portal.spaceId;
     },
   },
+  watch: {
+    selectedView: {
+      immediate: true,
+      handler() {
+        const tabsExtensionIds = Object.values(this.tabsExtensions).map(extension => extension.viewName);
+        this.tab = tabsExtensionIds.includes(this.selectedView) ? tabsExtensionIds.indexOf(this.selectedView) : 0;
+      },
+    },
+    tabsExtensions() {
+      const tabsExtensionIds = Object.values(this.tabsExtensions).map(extension => extension.viewName);
+      this.tab = tabsExtensionIds.includes(this.selectedView) ? tabsExtensionIds.indexOf(this.selectedView) : 0;
+    },
+  },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
-    const currentUrlSearchParams = window.location.search;
-    const queryParams = new URLSearchParams(currentUrlSearchParams);
-    if (queryParams.has('folderId')) {
-      this.tab = 1;
-    } else {
-      const pathParts  = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-      if (pathParts.length>1 && pathParts[1]){
-        this.tab = 1;
-      }
-    }
-    if (queryParams.has('view')) {
-      const view = queryParams.get('view');
-      if (view.toLowerCase() === 'folder'){
-        this.tab = 1;
-      } else {
-        this.tab = 0;
-      }
-    }
-    if (queryParams.has('path')) {
-      this.tab = 1;
-    }
-
   },
   methods: {
     refreshTabExtensions() {
@@ -84,9 +79,7 @@ export default {
         this.tabsExtensions = Object.assign({}, this.tabsExtensions);
         this.tabsList=Object.values(this.tabsExtensions);
       }
-
     },
-
     changeDocumentView(view) {
       this.$root.$emit('document-change-view', view);
       const viewTab = view ==='folder'? 'FOLDER' : 'RECENT';
@@ -97,16 +90,7 @@ export default {
           'name': `Switch View ${viewTab} Tab`
         }
       }));
-      if (view ==='folder'){
-        const url= new URL(window.location.href);
-        url.searchParams.set('view',view);
-        window.history.pushState('documents', 'Documents', url.toString());
-      } else {
-        const pathParts = eXo.env.server.portalBaseURL.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-        window.history.pushState('documents', 'Documents', `${pathParts[0]}${eXo.env.portal.selectedNodeUri}?view=timeline`);
-      }
     },
-
     tabClass(i) {
       if (i===0){
         return 'firstTab';
@@ -116,7 +100,6 @@ export default {
       }
       return 'middleTab';
     },
-
   }
 };
 </script>

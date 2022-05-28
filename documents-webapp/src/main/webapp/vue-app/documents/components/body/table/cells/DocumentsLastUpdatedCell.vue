@@ -32,7 +32,7 @@ export default {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs';
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
 };

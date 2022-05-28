@@ -1,5 +1,6 @@
 <template>
   <div class="documents-body">
+    <documents-breadcrumb class="py-4 px-1" />
     <div class="ma-4 d-flex flex-column justify-center text-center text-color">
       <v-img
         :src="emptyDocs"
