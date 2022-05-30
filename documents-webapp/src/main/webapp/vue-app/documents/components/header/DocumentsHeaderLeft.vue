@@ -1,5 +1,6 @@
 <template>
   <extension-registry-components
+    :params="params"
     name="DocumentsHeaderLeft"
     type="documents-header-left"
     class="d-flex flex-no-wrap documents-header-left-actions"
@@ -7,3 +8,20 @@
     element="div"
     element-class="ma-lg-0 documents-header-left-action" />
 </template>
+<script>
+export default {
+  props: {
+    selectedView: {
+      type: String,
+      default: '',
+    },
+  },
+  computed: {
+    params() {
+      return {
+        selectedView: this.selectedView,
+      };
+    },
+  },
+};
+</script>

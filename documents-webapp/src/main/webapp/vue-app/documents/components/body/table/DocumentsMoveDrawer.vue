@@ -1,18 +1,19 @@
 <template>
-  <exo-drawer 
+  <exo-drawer
+    v-model="drawer"
     ref="documentsMoveDrawer"
     class="documentsMoveDrawer"
     @closed="close"
     right>
     <template slot="title">
-      {{ moveTitle }}
+      <span :title="moveTitle" class="text-truncate">{{ moveTitle }}</span>
     </template>
-    <template slot="content">
-      <v-layout column>
+    <template v-if="file && drawer" slot="content">
+      <v-layout column class="mt-2">
         <v-list-item>
           <div class="d-flex align-center flex-grow-1">
             <div class="pr-4 d-flex flex-grow-1">
-              <span class="font-weight-bold text-color">{{ $t('documents.move.drawer.space') }}</span>
+              <span class="font-weight-bold text-color text-no-wrap">{{ $t('documents.move.drawer.space') }}</span>
               <div class="flex-grow-1">
                 <documents-move-spaces
                   :space="space" />
@@ -22,15 +23,16 @@
         </v-list-item>
         <v-list-item>
           <div class="py-2 width-full">
-            <span class="font-weight-bold text-color  pb-2">{{ $t('documents.move.drawer.currentPosition') }}</span>
+            <span class="font-weight-bold text-color text-no-wrap pb-2">{{ $t('documents.move.drawer.currentPosition') }}</span>
             <documents-breadcrumb
               :show-icon="false"
+              :documents-breadcrumb="documentsBreadcrumbSource"
               move />
           </div>
         </v-list-item>
         <v-list-item>
           <div class="py-2  width-full">
-            <span class="font-weight-bold text-color pb-2">{{ $t('documents.move.drawer.destination') }}</span>
+            <span class="font-weight-bold text-color text-no-wrap pb-2">{{ $t('documents.move.drawer.destination') }}</span>
             <documents-breadcrumb
               :show-icon="false"
               :documents-breadcrumb="documentsBreadcrumbDestination"
@@ -39,12 +41,12 @@
         </v-list-item>
         <v-list-item class="position-title">
           <div class="py-2">
-            <span class="font-weight-bold text-color">{{ $t('documents.move.drawer.position') }}</span>
+            <span class="font-weight-bold text-no-wrap text-color">{{ $t('documents.move.drawer.position') }}</span>
           </div>
         </v-list-item>
       </v-layout>
       <template>
-        <span class="text-color body-2 px-4">
+        <span class="text-color body-2 text-no-wrap px-4">
           {{ $t('documents.move.drawer.folder') }}
         </span>
         <v-treeview
@@ -77,7 +79,7 @@
           {{ $t('documents.move.drawer.button.cancel') }}
         </v-btn>
         <v-btn
-          :disabled="saving"
+          :disabled="disableButton"
           @click="moveDocument()"
           class="btn btn-primary ml-2">
           {{ $t('documents.move.drawer.button.move') }}
@@ -91,32 +93,31 @@
 export default {
   data: () => ({
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+    drawer: false,
     items: [],
     documentsBreadcrumbDestination: [],
+    documentsBreadcrumbSource: [],
     destinationFolderPath: '',
     currentFolderPath: '',
     spaceDisplayName: eXo.env.portal.spaceDisplayName,
     spaceName: eXo.env.portal.spaceName,
     userName: eXo.env.portal.userName,
-    fileName: '',
     groupId: '',
-    space: []
+    space: [],
+    file: {}
   }),
   computed: {
     openLevel() {
-      return this.items && this.items.length && [this.items[0].name];
+      return this.items && this.items.length && [this.items[0].name] || [];
     },
-    saving() {
+    disableButton() {
       return !this.space || this.space.displayName === this.spaceDisplayName && this.destinationFolderPath && this.destinationFolderPath === this.currentFolderPath;
     },
     moveTitle(){
-      return this.$t('documents.move.drawer.title').replace('{0}', this.fileName);
+      return this.$t('documents.move.drawer.title', {0: this.file?.name});
     },
   },
   created() {
-    this.$root.$on('set-current-folder', data => {
-      this.currentFolderPath = data && data.path;
-    });
     this.$root.$on('current-space',data => {
       const ownerId = data ? data.identity.id : null;
       this.items = [];
@@ -127,32 +128,43 @@ export default {
       }];
       this.retrieveNoteTree(ownerId);
     });
+    this.$root.$on('open-move-drawer', file => {
+      if (file) {
+        this.open(file);
+      }
+    });
   },
   methods: {
-    open(file, fileName) {
+    open(file) {
       this.file = file;
-      this.fileName = fileName;
-      const  ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.retrieveNoteTree(ownerId);
       this.space = {
         displayName: this.spaceDisplayName ? this.spaceDisplayName : this.userName ,
         avatarUrl: this.spaceDisplayName ? `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/spaces/${this.spaceName}/avatar` :
           `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/users/${this.userName}/avatar`,
       };
+      const lastFolderIndex = this.file.path.lastIndexOf('/');
+      this.currentFolderPath = this.file.path.substring(0, lastFolderIndex);
+      const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
+      const startIndex = this.currentFolderPath.indexOf(parentDriveFolder);
+      const nodePath = startIndex >= 0 ? this.currentFolderPath.substring(startIndex + parentDriveFolder.length) : '';
+      this.getDestination(null, nodePath)
+        .then(breadcrumb => this.documentsBreadcrumbSource = breadcrumb.slice());
       this.$refs.documentsMoveDrawer.open();
     },
     close() {
       this.$refs.documentsMoveDrawer.close();
     },
-    getDestination(folder) {
-      this.folder=folder;
-      this.folderPath='';
-      this.destinationFolderId=folder.id;
-      return this.$documentFileService
-        .getBreadCrumbs(this.destinationFolderId,this.ownerId,this.folderPath)
-        .then(breadCrumbs => {this.documentsBreadcrumbDestination = breadCrumbs;
-          this.destinationFolderId = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length-1].id;
-          this.destinationFolderPath = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length-1].path;
+    getDestination(folder, path) {
+      this.folder = folder;
+      this.destinationFolderId = folder?.id;
+      return this.$documentFileService.getBreadCrumbs(this.destinationFolderId, this.ownerId, !this.destinationFolderId && path || null)
+        .then(breadCrumbs => {
+          this.documentsBreadcrumbDestination = breadCrumbs;
+          this.destinationFolderId = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].id;
+          this.destinationFolderPath = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].path;
+          return breadCrumbs;
         })
         .finally(() => this.loading = false);
     },

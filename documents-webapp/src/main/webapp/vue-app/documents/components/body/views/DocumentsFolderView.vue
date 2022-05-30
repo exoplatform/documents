@@ -1,46 +1,43 @@
 <template>
-  <div>
-    <documents-breadcrumb class="pa-4 pe-1 pl-1" />
-    <v-data-table
-      ref="dataTable"
-      :headers="headers"
-      :items="items"
-      :items-per-page="pageSize"
-      :loading="loading"
-      :options.sync="options"
-      :locale="lang"
-      :groupable="grouping"
-      :group-by="groupBy"
-      :group-desc="groupDesc"
-      :disable-sort="isMobile"
-      :loading-text="loadingLabel"
-      hide-default-footer
-      disable-pagination
-      disable-filtering
-      :class="loading && !items.length ? 'loadingClass' : ''"
-      class="documents-folder-table border-box-sizing ms-8">
-      <template slot="group.header"><div /></template>
-      <template
-        v-for="header in extendedCells"
-        #[`item.${header.value}`]="{item}">
-        <documents-table-cell
-          :key="header.value"
-          :extension="header.cellExtension"
-          :file="item" />
-      </template>
-      <template v-if="hasMore" slot="footer">
-        <v-flex class="d-flex py-2 border-box-sizing mb-1">
-          <v-btn
-            :loading="loading"
-            :disabled="loading"
-            class="white mx-auto no-border primary--text no-box-shadow"
-            @click="$root.$emit('document-load-more')">
-            {{ $t('documents.loadMore') }}
-          </v-btn>
-        </v-flex>
-      </template>
-    </v-data-table>
-  </div>
+  <v-data-table
+    ref="dataTable"
+    :headers="headers"
+    :items="items"
+    :items-per-page="pageSize"
+    :loading="loading"
+    :options.sync="options"
+    :locale="lang"
+    :groupable="grouping"
+    :group-by="groupBy"
+    :group-desc="groupDesc"
+    :loading-text="loadingLabel"
+    :class="loadingClass"
+    hide-default-footer
+    disable-pagination
+    disable-filtering
+    class="documents-folder-table border-box-sizing">
+    <template slot="group.header"><span></span></template>
+    <template
+      v-for="header in extendedCells"
+      #[`item.${header.value}`]="{item}">
+      <documents-table-cell
+        :key="header.value"
+        :extension="header.cellExtension"
+        :file="item"
+        :class="header.value === 'name' && 'ms-8'" />
+    </template>
+    <template v-if="hasMore" slot="footer">
+      <v-flex class="d-flex py-2 border-box-sizing mb-1">
+        <v-btn
+          :loading="loading"
+          :disabled="loading"
+          class="white mx-auto no-border primary--text no-box-shadow"
+          @click="$root.$emit('document-load-more')">
+          {{ $t('documents.loadMore') }}
+        </v-btn>
+      </v-flex>
+    </template>
+  </v-data-table>
 </template>
 
 <script>
@@ -70,6 +67,10 @@ export default {
       type: String,
       default: null
     },
+    initialized: {
+      type: Boolean,
+      default: false
+    },
     loading: {
       type: Boolean,
       default: false
@@ -96,9 +97,15 @@ export default {
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
-    mobileUnfriendlyExtensions: ['lastUpdated', 'size', 'lastActivity'],
+    mobileUnfriendlyExtensions: ['lastUpdated', 'size', 'lastActivity', 'favorite'],
   }),
   computed: {
+    loadingClass() {
+      if (this.loading && !this.items.length) {
+        return this.isMobile ? 'loadingClassMobile' : 'loadingClass';
+      }
+      return '';
+    },
     extendedCells() {
       return this.headers && this.headers.filter(header => header.cellExtension && header.cellExtension.componentOptions);
     },
@@ -111,10 +118,14 @@ export default {
     items() {
       return this.files && this.files.slice() || [];
     },
+    sortedHeaderExtensions() {
+      return Object.values(this.headerExtensions || {}).filter(extension => {
+        return !this.isMobile || (this.isMobile && !this.mobileUnfriendlyExtensions.includes(extension.id));
+      }).sort((ext1, ext2) => ext1.rank - ext2.rank);
+    },
     headers() {
-      const sortedHeaderExtensions = Object.values(this.headerExtensions).sort((ext1, ext2) => ext1.rank - ext2.rank);
       const headers = [];
-      sortedHeaderExtensions.forEach(headerExtension => {
+      this.sortedHeaderExtensions.forEach(headerExtension => {
         headers.push({
           text: headerExtension.labelKey && this.$t(headerExtension.labelKey) || '',
           align: headerExtension.align || 'center',
@@ -128,7 +139,7 @@ export default {
       return headers;
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs';
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     loadingLabel() {
       return `${this.$t('documents.label.loading')}...`;
@@ -136,6 +147,9 @@ export default {
   },
   watch: {
     options() {
+      if (!this.initialized) {
+        return;
+      }
       const sortField = this.options.sortBy.length && this.options.sortBy[0] || this.sortField;
       const ascending = this.options.sortDesc.length ? !this.options.sortDesc[0] : true;
       if (!this.options.sortBy.length) {
@@ -151,30 +165,22 @@ export default {
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
-    this.$root.$on('documents-filter', filter => {
-      this.primaryFilter = filter;
-    });
+    this.$root.$on('documents-filter', this.updateFilter);
+  },
+  beforeDestroy() {
+    this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    updateFilter(filter) {
+      this.primaryFilter = filter;
+    },
     setSortOptions(sortField, ascending) {
       this.options.sortBy = [sortField];
       this.options.sortDesc = [!ascending];
     },
     refreshHeaderExtensions() {
       const extensions = extensionRegistry.loadExtensions(this.headerExtensionApp, this.headerExtensionType);
-      let changed = false;
-      extensions.forEach(extension => {
-        if (extension.id && (!this.headerExtensions[extension.id] || this.headerExtensions[extension.id] !== extension)) {
-          if (!this.isMobile || this.isMobile && !this.mobileUnfriendlyExtensions.includes(extension.id)) {
-            this.headerExtensions[extension.id] = extension;
-            changed = true;
-          }
-        }
-      });
-      // force update of attribute to re-render switch new extension id
-      if (changed) {
-        this.headerExtensions = Object.assign({}, this.headerExtensions);
-      }
+      extensions.forEach(extension => this.$set(this.headerExtensions, extension.id, extension));
     },
   },
 };
