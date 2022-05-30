@@ -11,10 +11,10 @@
     :group-desc="groupDesc"
     :disable-sort="isMobile"
     :loading-text="loadingLabel"
+    :class="loadingClass"
     hide-default-footer
     disable-pagination
     disable-filtering
-    :class="loadingClass"
     class="documents-table border-box-sizing">
     <template
       v-for="header in extendedCells"
@@ -22,7 +22,8 @@
       <documents-table-cell
         :key="header.value"
         :extension="header.cellExtension"
-        :file="item" />
+        :file="item"
+        :class="header.value === 'name' && 'ms-8'" />
     </template>
     <template
       v-if="grouping"
@@ -77,6 +78,10 @@ export default {
       type: String,
       default: null
     },
+    initialized: {
+      type: Boolean,
+      default: false
+    },
     loading: {
       type: Boolean,
       default: false
@@ -100,7 +105,7 @@ export default {
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
-    mobileUnfriendlyExtensions: ['lastUpdated', 'size', 'lastActivity'],
+    mobileUnfriendlyExtensions: ['lastUpdated', 'size', 'lastActivity', 'favorite'],
     dayFirstDay: 0,
     weekFirstDay: 0,
     monthFirstDay: 0,
@@ -153,18 +158,14 @@ export default {
         return this.files && this.files.slice() || [];
       }
     },
+    sortedHeaderExtensions() {
+      return Object.values(this.headerExtensions || {}).filter(extension => {
+        return !this.isMobile || (this.isMobile && !this.mobileUnfriendlyExtensions.includes(extension.id));
+      }).sort((ext1, ext2) => ext1.rank - ext2.rank);
+    },
     headers() {
-      const sortedHeaderExtensions = Object.values(this.headerExtensions).sort((ext1, ext2) => ext1.rank - ext2.rank);
       const headers = [];
-      if (this.grouping) {
-        headers.push({
-          text: '',
-          sortable: false,
-          value: 'empty',
-          width: '32px',
-        });
-      }
-      sortedHeaderExtensions.forEach(headerExtension => {
+      this.sortedHeaderExtensions.forEach(headerExtension => {
         headers.push({
           text: headerExtension.labelKey && this.$t(headerExtension.labelKey) || '',
           align: headerExtension.align || 'center',
@@ -178,7 +179,7 @@ export default {
       return headers;
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs';
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     loadingLabel() {
       return `${this.$t('documents.label.loading')}...`;
@@ -186,6 +187,9 @@ export default {
   },
   watch: {
     options() {
+      if (!this.initialized) {
+        return;
+      }
       const sortField = this.options.sortBy.length && this.options.sortBy[0] || this.sortField;
       const ascending = this.options.sortDesc.length ? !this.options.sortDesc[0] : true;
       if (!this.options.sortBy.length) {
@@ -205,30 +209,22 @@ export default {
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
-    this.$root.$on('documents-filter', filter => {
-      this.primaryFilter = filter;
-    });
+    this.$root.$on('documents-filter', this.updateFilter);
+  },
+  beforeDestroy() {
+    this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    updateFilter(filter) {
+      this.primaryFilter = filter;
+    },
     setSortOptions(sortField, ascending) {
       this.options.sortBy = [sortField];
       this.options.sortDesc = [!ascending];
     },
     refreshHeaderExtensions() {
       const extensions = extensionRegistry.loadExtensions(this.headerExtensionApp, this.headerExtensionType);
-      let changed = false;
-      extensions.forEach(extension => {
-        if (extension.id && (!this.headerExtensions[extension.id] || this.headerExtensions[extension.id] !== extension)) {
-          if (!this.isMobile || this.isMobile && !this.mobileUnfriendlyExtensions.includes(extension.id)) {
-            this.headerExtensions[extension.id] = extension;
-            changed = true;
-          }
-        }
-      });
-      // force update of attribute to re-render switch new extension id
-      if (changed) {
-        this.headerExtensions = Object.assign({}, this.headerExtensions);
-      }
+      extensions.forEach(extension => this.$set(this.headerExtensions, extension.id, extension));
     },
     isToday (someDate){
       const today = new Date();

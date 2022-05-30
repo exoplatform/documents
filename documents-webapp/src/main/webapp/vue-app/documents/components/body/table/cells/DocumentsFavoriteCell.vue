@@ -25,7 +25,7 @@ export default {
       return this.file && this.file.id;
     },
     spaceId() {
-      return eXo.env.portal.spaceId;
+      return eXo.env.portal.spaceId || 0;
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';

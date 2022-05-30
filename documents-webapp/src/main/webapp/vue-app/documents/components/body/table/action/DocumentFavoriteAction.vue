@@ -27,7 +27,7 @@ export default {
       return this.file && this.file.id;
     },
     spaceId() {
-      return eXo.env.portal.spaceId;
+      return eXo.env.portal.spaceId || 0;
     },
   },
   created() {

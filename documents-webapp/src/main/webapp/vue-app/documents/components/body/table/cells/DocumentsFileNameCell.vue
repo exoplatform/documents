@@ -8,10 +8,9 @@
           v-if="loading"
           indeterminate
           size="16" />
-
         <v-icon
           v-else
-          size="22"
+          :size="isMobile && 32 || 22"
           :color="icon.color">{{ icon.class }}</v-icon>
       </div>
       <div class="width-full">
@@ -51,10 +50,9 @@
     </a>
     <v-spacer />
     <documents-info-details-cell
-      v-if="!isMobile && !drawerDetails"
+      v-if="!isMobile"
       :file="file"
-      :class="editNameMode ? '' : 'button-info-details'"
-      @open-info-drawer="openInfoDetailsDrawer" />
+      :class="editNameMode ? '' : 'button-info-details'" />
     <div
       :id="`document-action-menu-cel-${file.id}`">
       <v-tooltip bottom>
@@ -68,7 +66,7 @@
               v-show="isMobile || menuDisplayed"
               :size="isMobile ? 14 : 18"
               class="clickable text-sub-title"
-              :class="editNameMode || drawerDetails ? '' : 'button-document-action'"
+              :class="editNameMode ? '' : 'button-document-action'"
               @click="displayActionMenu">
               mdi-dots-vertical
             </v-icon>
@@ -91,18 +89,6 @@
         </span>
       </v-tooltip>
     </div>
-    <documents-info-drawer
-      ref="documentInfoDrawer"
-      :file="file"
-      :file-name="fileName"
-      :file-type="fileType"
-      :is-mobile="isMobile"
-      :icon="icon" />
-    <documents-visibility-drawer
-      ref="documentVisibilityDrawer" />
-    <documents-move-drawer
-      ref="documentMoveDrawer" />
-    <documents-actions-menu-mobile ref="documentActionsBottomMenu" :file="file" />
   </div>
 </template>
 <script>
@@ -121,7 +107,6 @@ export default {
     loading: false,
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
-    drawerDetails: false,
     fileToEditId: -1,
     fullDateFormat: {
       year: 'numeric',
@@ -136,7 +121,7 @@ export default {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs';
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     icon() {
       if (this.file && this.file.folder){
@@ -216,7 +201,7 @@ export default {
       return this.$t('documents.label.menu.action.tooltip');
     },
   },
-  created(){
+  created() {
     $(document).on('mousedown', () => {
       if (this.menuDisplayed) {
         window.setTimeout(() => {
@@ -225,42 +210,24 @@ export default {
         }, this.waitTimeUntilCloseMenu);
       }
     });
-    this.$root.$on('update-file-name', file => {
-      if (this.file.id=== file.id){
-        this.fileToEditId=file.id;
-      }
-    });
-    this.$root.$on('close-file-action-menu', () => {
-      this.$refs.documentActionsBottomMenu.close();
-    });
-    this.$root.$on('cancel-edit-mode', file => {
-      if (this.file.id=== file.id) {
-        this.fileToEditId=-1;
-      }
-    });
-    this.$root.$on('open-info-drawer', fileId => {
-      if (this.file.id=== fileId) {
-        this.openInfoDetailsDrawer();
-        this.$refs.documentActionsBottomMenu.close();
-      }
-    });
-    this.$root.$on('open-visibility-drawer', file => {
-      if (this.file.id=== file.id) {
-        this.openVisibilityDrawer(file,file.name);
-      }
-    });
-    this.$root.$on('open-move-drawer', file => {
-      if (this.file.id=== file.id) {
-        this.openMoveDrawer(file);
-      }
-    });
-    this.$root.$on('close-info-drawer', fileId => {
-      if (this.file.id=== fileId) {
-        this.drawerDetails=false;
-      }
-    });
+    this.$root.$on('update-file-name', this.editFileName);
+    this.$root.$on('cancel-edit-mode', this.cancelEditMode);
+  },
+  beforeDestroy() {
+    this.$root.$off('update-file-name', this.editFileName);
+    this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
+    editFileName(file) {
+      if (this.file.id === file.id){
+        this.fileToEditId = file.id;
+      }
+    },
+    cancelEditMode(file) {
+      if (this.file.id === file.id) {
+        this.fileToEditId = -1;
+      }
+    },
     fileInfo() {
       return `${this.$t('documents.preview.updatedOn')} ${this.absoluteDateModified()} ${this.$t('documents.preview.updatedBy')} ${this.file.lastEditor} ${this.file.size}`;
     },
@@ -308,25 +275,12 @@ export default {
     },
     displayActionMenu() {
       if (this.isMobile){
-        this.$refs.documentActionsBottomMenu.open();
+        this.$root.$emit('open-file-action-menu', this.file);
       } else {
         this.menuDisplayed = true;
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
     },
-    openInfoDetailsDrawer(){
-      this.drawerDetails=true;
-      this.$refs.documentInfoDrawer.open();
-    },
-    openVisibilityDrawer(){
-      if ( this.isMobile ) {
-        this.$root.$emit('close-file-action-menu');
-      }
-      this.$refs.documentVisibilityDrawer.open(this.file,this.fileName);
-    },
-    openMoveDrawer(){
-      this.$refs.documentMoveDrawer.open(this.file ,this.fileName);
-    }
   },
 };
 </script>
