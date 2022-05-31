@@ -1,7 +1,7 @@
 <template>
   <div
     class="clickable mx-2"
-    @click="editFile">
+    @click="editFile()">
     <v-icon
       size="13"
       dark

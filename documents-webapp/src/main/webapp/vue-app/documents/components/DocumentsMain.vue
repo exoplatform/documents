@@ -208,21 +208,9 @@ export default {
           this.folderPath = path.substring(index + '/Documents/'.length);
           this.selectedView = 'folder';
         }
-      } else {
-        if (path.includes('/Private')){
-          const pathParts  = path.split('/Private');
-          if (pathParts.length>1){
-            this.folderPath = `Private${pathParts[1]}`;
-            this.selectedView = 'folder';
-          }
-        }
-        if (path.includes('/Public')){
-          const pathParts  = path.split('/Public');
-          if (pathParts.length>1){
-            this.folderPath = `Public${pathParts[1]}`;
-            this.selectedView = 'folder';
-          }
-        } 
+      } else if (path.includes('Private/')) {
+        this.folderPath = path.substring(path.indexOf('Private/') + 'Private/'.length);
+        this.selectedView = 'folder';
       }
     },
     duplicateDocument(documents){

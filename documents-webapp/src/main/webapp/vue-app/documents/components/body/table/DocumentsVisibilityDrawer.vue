@@ -133,12 +133,12 @@
           <v-spacer />
           <v-btn
             class="btn me-2"
-            @click="close">
+            @click="close()">
             {{ $t('documents.label.visibility.cancel') }}
           </v-btn>
           <v-btn
             class="btn btn-primary"
-            @click="saveVisibility">
+            @click="saveVisibility()">
             {{ $t('documents.label.visibility.save') }}
           </v-btn>
         </div>

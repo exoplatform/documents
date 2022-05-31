@@ -74,7 +74,7 @@
       <div class="d-flex">
         <v-spacer />
         <v-btn
-          @click="close"
+          @click="close()"
           class="btn ml-2">
           {{ $t('documents.move.drawer.button.cancel') }}
         </v-btn>
