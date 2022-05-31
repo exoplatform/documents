@@ -118,7 +118,7 @@ export default {
   }),
   computed: {
     title() {
-      return decodeURI(this.file.name);
+      return decodeURI(this.fileName);
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
