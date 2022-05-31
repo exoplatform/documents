@@ -1,7 +1,7 @@
 <template>
   <div
     class="clickable mx-2"
-    @click="deleteAction">
+    @click="deleteAction()">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
