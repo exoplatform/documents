@@ -18,9 +18,9 @@
           v-if="!editNameMode"
           @click="openPreview()"
           class="document-title clickable hover-underline d-inline-flex"
-          :title="file.name">
+          :title="title">
           <div
-            v-sanitized-html="fileName"
+            v-sanitized-html="title"
             class="document-name text-truncate ms-4">
           </div>
           <div
@@ -117,6 +117,9 @@ export default {
     },
   }),
   computed: {
+    title() {
+      return decodeURI(this.fileName);
+    },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
     },
@@ -251,7 +254,7 @@ export default {
                 id: id,
                 repository: 'repository',
                 workspace: 'collaboration',
-                title: attachment.title,
+                title: decodeURI(attachment.title),
                 downloadUrl: attachment.downloadUrl,
                 openUrl: attachment.openUrl,
                 breadCrumb: attachment.previewBreadcrumb,
