@@ -16,7 +16,7 @@
       <div class="width-full">
         <div
           v-if="!editNameMode"
-          @click="openPreview"
+          @click="openPreview()"
           class="document-title clickable hover-underline d-inline-flex"
           :title="file.name">
           <div
@@ -67,7 +67,7 @@
               :size="isMobile ? 14 : 18"
               class="clickable text-sub-title"
               :class="editNameMode ? '' : 'button-document-action'"
-              @click="displayActionMenu">
+              @click="displayActionMenu()">
               mdi-dots-vertical
             </v-icon>
           </v-btn>

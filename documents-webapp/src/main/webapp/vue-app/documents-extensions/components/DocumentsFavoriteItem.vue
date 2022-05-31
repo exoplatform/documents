@@ -1,5 +1,5 @@
 <template>
-  <v-list-item class="clickable" @click="openPreview">
+  <v-list-item class="clickable" @click="openPreview()">
     <v-list-item-icon class="me-3 my-auto">
       <v-icon size="22" class="icon-default-color"> fas fa-folder-open </v-icon>
     </v-list-item-icon>
