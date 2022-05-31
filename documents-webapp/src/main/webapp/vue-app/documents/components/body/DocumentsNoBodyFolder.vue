@@ -19,7 +19,8 @@
           <span class="ps-1">{{ addFolderLabel }}</span>
           <v-icon
             size="13"
-            class="pe-1 text-sub-title">
+            class="pe-1 text-sub-title"
+            @click="addFolder()">
             fas fa-folder
           </v-icon>
           <span class="ps-1">{{ addDocumentLabel }}</span>
@@ -58,6 +59,9 @@ export default {
     },
   },
   methods: {
+    addFolder() {
+      this.$root.$emit('documents-add-folder');
+    },
     openDrawer() {
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer'));
     },
