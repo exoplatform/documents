@@ -1,7 +1,7 @@
 <template>
   <div
     class="clickable ma-auto pt-1 mx-2"
-    @click="changeVisibility">
+    @click="changeVisibility()">
     <v-icon
       size="13"
       class="pe-1 iconStyle">

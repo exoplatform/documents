@@ -17,7 +17,7 @@
 <template>
   <div
     class="clickable pt-1 mx-2"
-    @click="moveDocument">
+    @click="moveDocument()">
     <v-icon
       size="13"
       class="pe-1 iconStyle">

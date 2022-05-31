@@ -5,7 +5,7 @@
     <template slot="content">
       <v-list dense>
         <v-list-item
-          @click="addFolder"
+          @click="addFolder()"
           class="px-2">
           <v-icon
             size="19"
@@ -15,7 +15,7 @@
           <span v-if="!isMobile" class="body-2 text-color">{{ $t('documents.button.addNewFolder') }}</span>
         </v-list-item>
         <v-list-item
-          @click="openDrawer"
+          @click="openDrawer()"
           class="px-2">
           <v-icon
             size="19"

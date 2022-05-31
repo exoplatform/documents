@@ -26,7 +26,7 @@
           <v-icon
             size="13"
             class="pe-1 text-sub-title"
-            @click="openDrawer">
+            @click="openDrawer()">
             fas fa-file-alt
           </v-icon>
         </div>
