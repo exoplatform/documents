@@ -4,7 +4,7 @@
       size="16"
       class="inputDocumentsFilter text-sub-title pa-1 my-auto mt-2"
       v-show="isMobile && !showMobileFilter"
-      @click="mobileFilter">
+      @click="mobileFilter()">
       fas fa-filter
     </v-icon>
     <v-text-field

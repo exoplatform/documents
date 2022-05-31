@@ -5,7 +5,7 @@
         v-if="!isFolderView"
         :id="isMobile ? 'addItemMenuMobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
-        @click="openDrawer">
+        @click="openDrawer()">
         <v-icon
           id="addBtn"
           dark>
@@ -18,7 +18,7 @@
         :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
         :key="postKey"
-        @click="openAddItemMenu">
+        @click="openAddItemMenu()">
         <v-icon
           size="13"
           id="addBtn"
@@ -36,7 +36,7 @@
         offset-y
         down>
         <v-list-item
-          @click="addFolder"
+          @click="addFolder()"
           class="px-2 add-menu-list-item">
           <v-icon
             size="13"
@@ -46,7 +46,7 @@
           <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.button.addNewFolder') }}</span>
         </v-list-item>
         <v-list-item
-          @click="openDrawer"
+          @click="openDrawer()"
           class="px-2 add-menu-list-item">
           <v-icon
             size="13"

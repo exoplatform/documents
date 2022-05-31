@@ -1,7 +1,7 @@
 <template>
   <div
     class="clickable pt-1 mx-2"
-    @click="duplicate">
+    @click="duplicate()">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
