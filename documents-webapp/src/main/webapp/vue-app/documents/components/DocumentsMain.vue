@@ -153,6 +153,7 @@ export default {
     this.$root.$on('document-search', this.search);
     this.$root.$on('save-visibility', this.saveVisibility);
     this.$root.$on('documents-sort', this.sort);
+    this.$root.$on('documents-open-attachments-drawer', this.openDrawer);
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
       this.refreshFiles(this.primaryFilter);
