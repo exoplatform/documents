@@ -63,7 +63,7 @@ export default {
       this.$root.$emit('documents-add-folder');
     },
     openDrawer() {
-      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer'));
+      this.$root.$emit('documents-open-attachments-drawer');
     },
   }
 };
