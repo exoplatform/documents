@@ -130,6 +130,11 @@ export default {
     },
   },
   created() {
+    // Ensure that localStorage doesn't contain a deleted document
+    window.setTimeout(() => {
+      localStorage.removeItem('deletedDocument');
+    }, 10000);
+
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
 
     window.addEventListener('popstate', e => {this.onBrowserNavChange(e);});
