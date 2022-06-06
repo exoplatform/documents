@@ -205,8 +205,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public AbstractNode duplicateDocument(long ownerId, String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileStorage.duplicateDocument(ownerId, fileId, getAclUserIdentity(authenticatedUserId));
+  public AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.duplicateDocument(ownerId, fileId, prefixClone, getAclUserIdentity(authenticatedUserId));
   }
 
   @Override
