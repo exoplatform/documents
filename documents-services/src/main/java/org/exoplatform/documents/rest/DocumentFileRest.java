@@ -288,6 +288,9 @@ public class DocumentFileRest implements ResourceContainer {
                                 @ApiParam(value = "File technical identifier", required = false)
                                 @QueryParam("fileId")
                                         String fileId,
+                                @ApiParam(value = "File prefix Clone", required = false)
+                                @QueryParam("prefixClone")
+                                        String prefixClone,
                                 @ApiParam(value = "File properties to expand.", required = false)
                                 @QueryParam("expand")
                                          String expand) {
@@ -297,7 +300,7 @@ public class DocumentFileRest implements ResourceContainer {
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-      AbstractNode abstractNode = documentFileService.duplicateDocument(ownerId, fileId, userIdentityId);
+      AbstractNode abstractNode = documentFileService.duplicateDocument(ownerId, fileId, prefixClone, userIdentityId);
       AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
               identityManager,
               spaceService,

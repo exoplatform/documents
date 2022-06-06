@@ -64,7 +64,6 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                  COLLABORATION     = "collaboration";
-  public final String                          PREFIX_CLONE      = "Copy of ";
   private final SpaceService                   spaceService;
   private final RepositoryService              repositoryService;
   private final IdentityManager                identityManager;
@@ -582,7 +581,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public AbstractNode duplicateDocument(long ownerId, String fileId, Identity aclIdentity) throws IllegalAccessException,
+  public AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, Identity aclIdentity) throws IllegalAccessException,
                                                                                            ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
@@ -602,7 +601,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node parentNode = oldNode.getParent();
 
       if (oldNode != null) {
-          duplicateItem(oldNode, parentNode, parentNode);
+          duplicateItem(oldNode, parentNode, parentNode ,prefixClone);
         parentNode.save();
       }
 
@@ -648,7 +647,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   }
 
-  private void duplicateItem(Node oldNode, Node destinationNode, Node parentNode) throws Exception{
+  private void duplicateItem(Node oldNode, Node destinationNode, Node parentNode, String prefixClone) throws Exception{
     if (oldNode.isNodeType(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
       return;
     }
@@ -656,8 +655,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String name = oldNode.getName();
     String title = oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString();
     if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())){
-      name = PREFIX_CLONE + name;
-      title = PREFIX_CLONE + title;
+      name = prefixClone.concat(" ").concat(name);
+      title = prefixClone.concat(" ").concat(title);
       String newName = name;
       int i =0;
       while((destinationNode.hasNode(newName))){
@@ -676,51 +675,52 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       NodeIterator nodeIterator = oldNode.getNodes();
       while (nodeIterator.hasNext()) {
         Node node = nodeIterator.nextNode();
-        duplicateItem(node, newNode, parentNode);
+        duplicateItem(node, newNode, parentNode, prefixClone);
       }
     } else {
       newNode = destinationNode.addNode(name, oldNode.getPrimaryNodeType().getName());
-
-      if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
-        newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
-
-      if (oldNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE))
-        newNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
-
-      if (oldNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE))
-        newNode.addMixin(NodeTypeConstants.MIX_COMMENTABLE);
-
-      if (oldNode.isNodeType(NodeTypeConstants.MIX_VOTABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VOTABLE))
-        newNode.addMixin(NodeTypeConstants.MIX_VOTABLE);
-
-      if (oldNode.isNodeType(NodeTypeConstants.MIX_I18N) && !newNode.isNodeType(NodeTypeConstants.MIX_I18N))
-        newNode.addMixin(NodeTypeConstants.MIX_I18N);
-
-      newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
-      if(oldNode.hasNode(NodeTypeConstants.JCR_CONTENT)){
-        Node resourceNode = newNode.addNode(NodeTypeConstants.JCR_CONTENT, NodeTypeConstants.NT_RESOURCE);
-
-        Calendar now = Calendar.getInstance();
-        resourceNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, now);
-        resourceNode.setProperty(NodeTypeConstants.JCR_DATA,
-                oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
-                        .getProperty(NodeTypeConstants.JCR_DATA)
-                        .getStream());
-        resourceNode.setProperty(NodeTypeConstants.JCR_MIME_TYPE,
-                oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
-                        .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
-                        .getString());
-        resourceNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
-      }
-
-      if(oldNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
-        newNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, oldNode.getSession().getWorkspace().getName());
-        newNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, oldNode.getPrimaryNodeType().getName());
-        newNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, oldNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
-      }
+      addProperties(oldNode,newNode,title);
     }
   }
+  private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {
+    if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
+      newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
 
+    if (oldNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE))
+      newNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
+
+    if (oldNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_COMMENTABLE))
+      newNode.addMixin(NodeTypeConstants.MIX_COMMENTABLE);
+
+    if (oldNode.isNodeType(NodeTypeConstants.MIX_VOTABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VOTABLE))
+      newNode.addMixin(NodeTypeConstants.MIX_VOTABLE);
+
+    if (oldNode.isNodeType(NodeTypeConstants.MIX_I18N) && !newNode.isNodeType(NodeTypeConstants.MIX_I18N))
+      newNode.addMixin(NodeTypeConstants.MIX_I18N);
+
+    newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
+    if(oldNode.hasNode(NodeTypeConstants.JCR_CONTENT)){
+      Node resourceNode = newNode.addNode(NodeTypeConstants.JCR_CONTENT, NodeTypeConstants.NT_RESOURCE);
+
+      Calendar now = Calendar.getInstance();
+      resourceNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, now);
+      resourceNode.setProperty(NodeTypeConstants.JCR_DATA,
+              oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
+                      .getProperty(NodeTypeConstants.JCR_DATA)
+                      .getStream());
+      resourceNode.setProperty(NodeTypeConstants.JCR_MIME_TYPE,
+              oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
+                      .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
+                      .getString());
+      resourceNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+    }
+
+    if(oldNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+      newNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, oldNode.getSession().getWorkspace().getName());
+      newNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, oldNode.getPrimaryNodeType().getName());
+      newNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, oldNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+    }
+  }
   private String getTimeLineQueryStatement(String rootPath, String nodeType, String sortField, String sortDirection) {
     return new StringBuilder().append("SELECT * FROM ")
                               .append(nodeType)
