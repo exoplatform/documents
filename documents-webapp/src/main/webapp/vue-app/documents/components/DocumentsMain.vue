@@ -125,6 +125,9 @@ export default {
     searchResult(){
       return ((this.query && this.query.length) || this.isFavorites) && !this.files.length;
     },
+    prefixClone(){
+      return this.$t('documents.label.prefix.clone');
+    },
   },
   created() {
     // Ensure that localStorage doesn't contain a deleted document
@@ -222,7 +225,7 @@ export default {
     duplicateDocument(documents){
       this.parentFolderId = documents.id;
       return this.$documentFileService
-        .duplicateDocument(this.parentFolderId,this.ownerId)
+        .duplicateDocument(this.parentFolderId,this.ownerId,this.prefixClone)
         .then( () => {
           this.parentFolderId=null;
           this.getFolderPath(this.folderPath);
