@@ -20,4 +20,13 @@
     </component-plugin>
   </external-component-plugins>
 
+  <external-component-plugins>
+    <target-component>org.exoplatform.services.listener.ListenerService</target-component>
+    <component-plugin>
+      <name>rename_file_event</name>
+      <set-method>addListener</set-method>
+      <type>org.exoplatform.documents.listener.AttachementsActivityCacheUpdater</type>
+    </component-plugin>
+  </external-component-plugins>
+
 </configuration>

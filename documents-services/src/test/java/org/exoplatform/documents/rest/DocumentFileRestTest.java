@@ -26,6 +26,7 @@ import static org.powermock.api.mockito.PowerMockito.doThrow;
 
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.services.listener.ListenerService;
 import org.junit.runner.RunWith;
 
 import java.util.ArrayList;
@@ -83,6 +84,8 @@ public class DocumentFileRestTest {
 
   private JCRDeleteFileStorage jcrDeleteFileStorage;
 
+  private ListenerService listenerService;
+
   @Before
   public void setUp() {
     spaceService = mock(SpaceService.class);
@@ -92,12 +95,14 @@ public class DocumentFileRestTest {
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
+    listenerService = mock(ListenerService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
                                                       spaceService,
                                                       identityManager,
-                                                      identityRegistry);
+                                                      identityRegistry,
+                                                      listenerService);
     documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
   }
 
