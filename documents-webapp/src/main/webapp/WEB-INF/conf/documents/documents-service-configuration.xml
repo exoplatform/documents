@@ -25,7 +25,7 @@
     <component-plugin>
       <name>rename_file_event</name>
       <set-method>addListener</set-method>
-      <type>org.exoplatform.documents.listener.AttachementsActivityCacheUpdater</type>
+      <type>org.exoplatform.documents.listener.AttachmentsActivityCacheUpdater</type>
     </component-plugin>
   </external-component-plugins>
 

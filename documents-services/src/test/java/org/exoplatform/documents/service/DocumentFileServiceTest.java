@@ -20,65 +20,47 @@ import static org.junit.Assert.*;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.exoplatform.commons.cache.future.FutureExoCache;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.container.ExoContainer;
-import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.constant.FileListingType;
-import org.exoplatform.documents.listener.AttachementsActivityCacheUpdater;
+import org.exoplatform.documents.listener.AttachmentsActivityCacheUpdater;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 
-import org.exoplatform.services.cache.*;
-import org.exoplatform.services.cache.concurrent.ConcurrentFIFOExoCache;
-import org.exoplatform.services.cache.impl.CacheServiceImpl;
-import org.exoplatform.services.cache.impl.infinispan.distributed.DistributedExoCache;
-import org.exoplatform.services.ispn.DistributedCacheManager;
-import org.exoplatform.services.jcr.impl.core.query.ispn.IndexerCacheStore;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
 
-import org.exoplatform.social.core.activity.model.ExoSocialActivity;
-import org.exoplatform.social.core.activity.model.ExoSocialActivityImpl;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
-import org.exoplatform.social.core.jpa.storage.RDBMSActivityStorageImpl;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.core.storage.api.ActivityStorage;
 import org.exoplatform.social.core.storage.cache.CachedActivityStorage;
-import org.exoplatform.social.core.storage.cache.SocialStorageCacheService;
-import org.exoplatform.social.core.storage.cache.model.data.ActivityData;
-import org.exoplatform.social.core.storage.cache.model.key.ActivityKey;
-import org.exoplatform.social.core.storage.cache.selector.ActivityAttachmentCacheSelector;
-import org.jgroups.blocks.Cache;
 import org.junit.Before;
 import org.junit.Test;
 
 public class DocumentFileServiceTest {
 
-  private DocumentFileStorage documentFileStorage;
+  private DocumentFileStorage     documentFileStorage;
 
-  private IdentityManager identityManager;
+  private IdentityManager         identityManager;
 
-  private SpaceService spaceService;
+  private SpaceService            spaceService;
 
-  private IdentityRegistry identityRegistry;
+  private IdentityRegistry        identityRegistry;
 
-  private Authenticator authenticator;
+  private Authenticator           authenticator;
 
   private DocumentFileServiceImpl documentFileService;
 
@@ -89,6 +71,12 @@ public class DocumentFileServiceTest {
   private ListenerService         listenerService;
 
   private CachedActivityStorage   cachedActivityStorage;
+
+  private Identity                currentIdentity;
+
+  String                          userName       = "testuser";
+
+  long                            currentOwnerId = 2;
 
   @Before
   public void setUp() {
@@ -101,37 +89,42 @@ public class DocumentFileServiceTest {
     listenerService = mock(ListenerService.class);
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     cachedActivityStorage = mock(CachedActivityStorage.class);
-    documentFileService =
-        new DocumentFileServiceImpl(documentFileStorage,
-                                    jcrDeleteFileStorage,
-                                    authenticator,
-                                    spaceService,
-                                    identityManager,
-                                    identityRegistry,
-                                    listenerService);
+    documentFileService = new DocumentFileServiceImpl(documentFileStorage,
+                                                      jcrDeleteFileStorage,
+                                                      authenticator,
+                                                      spaceService,
+                                                      identityManager,
+                                                      identityRegistry,
+                                                      listenerService);
+
+    currentIdentity = new Identity(OrganizationIdentityProvider.NAME, userName);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(userName);
+    when(identityRegistry.getIdentity(userName)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(userName))).thenReturn(currentIdentity);
   }
 
   @Test
-  public void NotClearCacheActivityWhenNotcachedActivityStorage() throws Exception {
+  public void testClearActivityCacheWhenFileRenamed() throws Exception {
+
     String documentID = "2";
-    Event<String, String> renameFileEvent = mock(Event.class);
+    Event<String, String> renameFileEvent = new Event<>("rename_file_event", null, documentID);
+    lenient().doNothing().when(documentFileStorage).renameDocument(anyLong(), anyString(), anyString(), any());
+    documentFileService.renameDocument(1, documentID, "newName", currentOwnerId);
     cachedActivityStorage = mock(CachedActivityStorage.class);
-    AttachementsActivityCacheUpdater attachementsActivityCacheUpdater = new AttachementsActivityCacheUpdater(activityStorage);
-    attachementsActivityCacheUpdater.onEvent(renameFileEvent);
-    verify(cachedActivityStorage, times(0)).clearActivityCachedByAttachmentId(documentID);
+    AttachmentsActivityCacheUpdater attachmentsActivityCacheUpdater = new AttachmentsActivityCacheUpdater(cachedActivityStorage);
+    attachmentsActivityCacheUpdater.onEvent(renameFileEvent);
+    verify(cachedActivityStorage, times(1)).clearActivityCachedByAttachmentId(documentID);
   }
 
   @Test
   public void testGetDocumentItems() throws Exception {
-    String username = "testuser";
-    long currentOwnerId = 2;
-    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
-    currentIdentity.setId(String.valueOf(currentOwnerId));
     Profile currentProfile = new Profile();
-    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentProfile.setProperty(Profile.FULL_NAME, userName);
     currentIdentity.setProfile(currentProfile);
 
-    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(userName);
     DocumentTimelineFilter filter = null;
     Exception exception = assertThrows(IllegalArgumentException.class, () -> {
       documentFileService.getDocumentItems(FileListingType.TIMELINE, null, 0, 0, Long.valueOf(currentIdentity.getId()));
@@ -169,10 +162,9 @@ public class DocumentFileServiceTest {
     });
     assertEquals(exception.getMessage(), "ParentFolderId or OwnerId is mandatory");
 
-    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityRegistry.getIdentity(userName)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-                                             eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(userName))).thenReturn(currentIdentity);
 
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
@@ -180,7 +172,7 @@ public class DocumentFileServiceTest {
     org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
-    when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
+    when(spaceService.hasAccessPermission(space, userName)).thenReturn(true);
 
     List<FileNode> files = new ArrayList<>();
 
@@ -196,7 +188,7 @@ public class DocumentFileServiceTest {
 
     when(documentFileStorage.getFilesTimeline(filter, spaceID, 0, 0)).thenReturn(files);
     List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.valueOf(currentIdentity.getId()));
+    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.parseLong(currentIdentity.getId()));
     assertEquals(files_.size(), 4);
   }
 
@@ -216,8 +208,7 @@ public class DocumentFileServiceTest {
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-                                             eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L);
     DocumentTimelineFilter finalFilter1 = filter_;
@@ -268,8 +259,7 @@ public class DocumentFileServiceTest {
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-                                             eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L);
     DocumentTimelineFilter finalFilter1 = filter_;
@@ -325,13 +315,11 @@ public class DocumentFileServiceTest {
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-                                             eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     when(identityRegistry.getIdentity(user2name)).thenReturn(user2ID);
     when(identityManager.getIdentity(eq(String.valueOf(user2Id)))).thenReturn(user2Identity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-                                             eq(user2name))).thenReturn(user2Identity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(user2name))).thenReturn(user2Identity);
 
     DocumentFolderFilter filter_ = new DocumentFolderFilter(null, null, 0L);
     DocumentFolderFilter finalFilter1 = filter_;
@@ -373,9 +361,9 @@ public class DocumentFileServiceTest {
     exception = assertThrows(IllegalAccessException.class, () -> {
       documentFileService.getFolderChildNodes(finalFilter2, 0, 0, Long.valueOf(user2Identity.getId()));
     });
-    assertEquals(exception.getMessage(), "User " + user2name
-        + " attempts to access documents of space " + space.getDisplayName()
-        + "while it's not a member");
+    assertEquals(exception.getMessage(),
+                 "User " + user2name + " attempts to access documents of space " + space.getDisplayName()
+                     + "while it's not a member");
 
     when(documentFileStorage.getFolderChildNodes(finalFilter2, userID, 0, 0)).thenReturn(files);
     List<AbstractNode> files_ = new ArrayList<>();

@@ -5,11 +5,11 @@ import org.exoplatform.services.listener.Listener;
 import org.exoplatform.social.core.storage.api.ActivityStorage;
 import org.exoplatform.social.core.storage.cache.CachedActivityStorage;
 
-public class AttachementsActivityCacheUpdater extends Listener<String, String> {
+public class AttachmentsActivityCacheUpdater extends Listener<String, String> {
 
   private CachedActivityStorage cachedActivityStorage;
 
-  public AttachementsActivityCacheUpdater(ActivityStorage activityStorage) {
+  public AttachmentsActivityCacheUpdater(ActivityStorage activityStorage) {
     if (activityStorage instanceof CachedActivityStorage) {
       this.cachedActivityStorage = (CachedActivityStorage) activityStorage;
     }
