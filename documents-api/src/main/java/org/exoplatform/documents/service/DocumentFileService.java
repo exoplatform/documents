@@ -141,7 +141,7 @@ public interface DocumentFileService {
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
-  AbstractNode duplicateDocument(long ownerId,String fileId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+  AbstractNode duplicateDocument(long ownerId,String fileId,String prefixClone, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
    * Move the given node.
