@@ -27,16 +27,23 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
 import javax.jcr.RepositoryException;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
+
+  private static final Log    LOG     = ExoLogger.getLogger(DocumentFileServiceImpl.class);
+
+  public static String RENAME_FILE_EVENT = "rename_file_event";
 
   private DocumentFileStorage documentFileStorage;
 
@@ -50,18 +57,22 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private JCRDeleteFileStorage       jcrDeleteFileStorage;
 
+  private ListenerService listenerService;
+
   public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage,
                                  JCRDeleteFileStorage jcrDeleteFileStorage,
                                  Authenticator authenticator,
                                  SpaceService spaceService,
                                  IdentityManager identityManager,
-                                 IdentityRegistry identityRegistry) {
+                                 IdentityRegistry identityRegistry,
+                                 ListenerService listenerService) {
     this.documentFileStorage = documentFileStorage;
     this.jcrDeleteFileStorage = jcrDeleteFileStorage;
     this.spaceService = spaceService;
     this.identityManager = identityManager;
     this.identityRegistry = identityRegistry;
     this.authenticator = authenticator;
+    this.listenerService = listenerService;
   }
 
   @Override
@@ -227,6 +238,12 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
     documentFileStorage.renameDocument(ownerId, documentID, name, getAclUserIdentity(authenticatedUserId));
+    try {
+      listenerService.broadcast(RENAME_FILE_EVENT,this,documentID);
+    }
+    catch (Exception e){
+      LOG.error("cnnot broadcast rename_file_event");
+    }
   }
 
   @Override

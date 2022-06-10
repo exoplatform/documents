@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see<http://www.gnu.org/licenses/>.
-*/
+ */
 package org.exoplatform.documents.service;
 
 import static org.junit.Assert.*;
@@ -27,12 +27,17 @@ import java.util.Map;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.listener.AttachmentsActivityCacheUpdater;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+
+import org.exoplatform.services.listener.Event;
+import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
+
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -40,24 +45,38 @@ import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.core.storage.api.ActivityStorage;
+import org.exoplatform.social.core.storage.cache.CachedActivityStorage;
 import org.junit.Before;
 import org.junit.Test;
 
 public class DocumentFileServiceTest {
 
-  private DocumentFileStorage documentFileStorage;
+  private DocumentFileStorage     documentFileStorage;
 
-  private IdentityManager     identityManager;
+  private IdentityManager         identityManager;
 
-  private SpaceService        spaceService;
+  private SpaceService            spaceService;
 
-  private IdentityRegistry identityRegistry;
+  private IdentityRegistry        identityRegistry;
 
-  private Authenticator authenticator;
+  private Authenticator           authenticator;
 
   private DocumentFileServiceImpl documentFileService;
 
-  private JCRDeleteFileStorage jcrDeleteFileStorage;
+  private JCRDeleteFileStorage    jcrDeleteFileStorage;
+
+  private ActivityStorage         activityStorage;
+
+  private ListenerService         listenerService;
+
+  private CachedActivityStorage   cachedActivityStorage;
+
+  private Identity                currentIdentity;
+
+  String                          userName       = "testuser";
+
+  long                            currentOwnerId = 2;
 
   @Before
   public void setUp() {
@@ -66,62 +85,86 @@ public class DocumentFileServiceTest {
     identityRegistry = mock(IdentityRegistry.class);
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
-    documentFileService = new DocumentFileServiceImpl(documentFileStorage, jcrDeleteFileStorage, authenticator, spaceService, identityManager, identityRegistry);
+    activityStorage = mock(ActivityStorage.class);
+    listenerService = mock(ListenerService.class);
+    jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
+    cachedActivityStorage = mock(CachedActivityStorage.class);
+    documentFileService = new DocumentFileServiceImpl(documentFileStorage,
+                                                      jcrDeleteFileStorage,
+                                                      authenticator,
+                                                      spaceService,
+                                                      identityManager,
+                                                      identityRegistry,
+                                                      listenerService);
+
+    currentIdentity = new Identity(OrganizationIdentityProvider.NAME, userName);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(userName);
+    when(identityRegistry.getIdentity(userName)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(userName))).thenReturn(currentIdentity);
+  }
+
+  @Test
+  public void testClearActivityCacheWhenFileRenamed() throws Exception {
+
+    String documentID = "2";
+    Event<String, String> renameFileEvent = new Event<>("rename_file_event", null, documentID);
+    lenient().doNothing().when(documentFileStorage).renameDocument(anyLong(), anyString(), anyString(), any());
+    documentFileService.renameDocument(1, documentID, "newName", currentOwnerId);
+    cachedActivityStorage = mock(CachedActivityStorage.class);
+    AttachmentsActivityCacheUpdater attachmentsActivityCacheUpdater = new AttachmentsActivityCacheUpdater(cachedActivityStorage);
+    attachmentsActivityCacheUpdater.onEvent(renameFileEvent);
+    verify(cachedActivityStorage, times(1)).clearActivityCachedByAttachmentId(documentID);
   }
 
   @Test
   public void testGetDocumentItems() throws Exception {
-    String username = "testuser";
-    long currentOwnerId = 2;
-    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
-    currentIdentity.setId(String.valueOf(currentOwnerId));
     Profile currentProfile = new Profile();
-    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentProfile.setProperty(Profile.FULL_NAME, userName);
     currentIdentity.setProfile(currentProfile);
 
-    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(userName);
     DocumentTimelineFilter filter = null;
     Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE,null,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, null, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"File filter is mandatory");
+    assertEquals(exception.getMessage(), "File filter is mandatory");
 
     filter = new DocumentTimelineFilter(0L);
     DocumentTimelineFilter finalFilter1 = filter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"OwnerId is mandatory");
+    assertEquals(exception.getMessage(), "OwnerId is mandatory");
 
     filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
     DocumentTimelineFilter finalFilter = filter;
     exception = assertThrows(IllegalAccessException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter,    0,    0,  0);
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter, 0, 0, 0);
     });
-    assertEquals(exception.getMessage(),"User Identity is mandatory");
+    assertEquals(exception.getMessage(), "User Identity is mandatory");
 
-    DocumentFolderFilter docFilter = new DocumentFolderFilter("","",0L);
+    DocumentFolderFilter docFilter = new DocumentFolderFilter("", "", 0L);
     DocumentFolderFilter finalDocFilter = docFilter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"filter must be an instance of DocumentTimelineFilter");
-
+    assertEquals(exception.getMessage(), "filter must be an instance of DocumentTimelineFilter");
 
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.FOLDER, finalFilter,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.FOLDER, finalFilter, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"filter must be an instance of DocumentFolderFilter");
+    assertEquals(exception.getMessage(), "filter must be an instance of DocumentFolderFilter");
 
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.FOLDER, finalDocFilter,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.FOLDER, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"ParentFolderId or OwnerId is mandatory");
+    assertEquals(exception.getMessage(), "ParentFolderId or OwnerId is mandatory");
 
-    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityRegistry.getIdentity(userName)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-            eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(userName))).thenReturn(currentIdentity);
 
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
@@ -129,7 +172,7 @@ public class DocumentFileServiceTest {
     org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
-    when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
+    when(spaceService.hasAccessPermission(space, userName)).thenReturn(true);
 
     List<FileNode> files = new ArrayList<>();
 
@@ -143,10 +186,10 @@ public class DocumentFileServiceTest {
     files.add(file3);
     files.add(file4);
 
-    when(documentFileStorage.getFilesTimeline(filter, spaceID,    0, 0)).thenReturn(files);
+    when(documentFileStorage.getFilesTimeline(filter, spaceID, 0, 0)).thenReturn(files);
     List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,filter,    0,    0,  Long.valueOf(currentIdentity.getId()));
-    assertEquals(files_.size(),4);
+    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.parseLong(currentIdentity.getId()));
+    assertEquals(files_.size(), 4);
   }
 
   @Test
@@ -165,16 +208,14 @@ public class DocumentFileServiceTest {
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-            eq(username))).thenReturn(currentIdentity);
-
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L);
     DocumentTimelineFilter finalFilter1 = filter_;
     Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
-      documentFileService.getFilesTimeline(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getFilesTimeline(finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
+    assertEquals(exception.getMessage(), "Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
 
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
@@ -196,10 +237,10 @@ public class DocumentFileServiceTest {
     files.add(file3);
     files.add(file4);
 
-    when(documentFileStorage.getFilesTimeline(filter, spaceID,    0, 0)).thenReturn(files);
+    when(documentFileStorage.getFilesTimeline(filter, spaceID, 0, 0)).thenReturn(files);
     List<FileNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getFilesTimeline(filter,    0,    0,  Long.valueOf(currentIdentity.getId()));
-    assertEquals(files_.size(),4);
+    files_ = documentFileService.getFilesTimeline(filter, 0, 0, Long.valueOf(currentIdentity.getId()));
+    assertEquals(files_.size(), 4);
   }
 
   @Test
@@ -218,16 +259,14 @@ public class DocumentFileServiceTest {
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-            eq(username))).thenReturn(currentIdentity);
-
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     DocumentTimelineFilter filter_ = new DocumentTimelineFilter(0L);
     DocumentTimelineFilter finalFilter1 = filter_;
     Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
-      documentFileService.getFilesTimeline(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getFilesTimeline(finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
+    assertEquals(exception.getMessage(), "Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
 
     String spacePrettyName = "spacetest";
     currentIdentity.setRemoteId(spacePrettyName);
@@ -236,7 +275,6 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
     when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
     when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
-
 
     DocumentGroupsSize documentGroupsSize = new DocumentGroupsSize();
     documentGroupsSize.setThisDay(4);
@@ -273,26 +311,22 @@ public class DocumentFileServiceTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     org.exoplatform.services.security.Identity user2ID = new org.exoplatform.services.security.Identity(user2name);
-    DocumentFolderFilter filter = new DocumentFolderFilter(null,null,Long.valueOf(currentIdentity.getId()));
+    DocumentFolderFilter filter = new DocumentFolderFilter(null, null, Long.valueOf(currentIdentity.getId()));
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-            eq(username))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     when(identityRegistry.getIdentity(user2name)).thenReturn(user2ID);
     when(identityManager.getIdentity(eq(String.valueOf(user2Id)))).thenReturn(user2Identity);
-    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME),
-            eq(user2name))).thenReturn(user2Identity);
+    when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(user2name))).thenReturn(user2Identity);
 
-
-
-    DocumentFolderFilter filter_ = new DocumentFolderFilter(null,null,0L);
+    DocumentFolderFilter filter_ = new DocumentFolderFilter(null, null, 0L);
     DocumentFolderFilter finalFilter1 = filter_;
     Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
-      documentFileService.getFolderChildNodes(finalFilter1,    0,    0,  Long.valueOf(currentIdentity.getId()));
+      documentFileService.getFolderChildNodes(finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()));
     });
-    assertEquals(exception.getMessage(),"Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
+    assertEquals(exception.getMessage(), "Owner Identity with id : " + finalFilter1.getOwnerId() + " isn't found");
 
     String spacePrettyName = "spacetest";
 
@@ -310,7 +344,7 @@ public class DocumentFileServiceTest {
     when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
     when(spaceService.hasAccessPermission(space, user2name)).thenReturn(false);
 
-    filter_ = new DocumentFolderFilter(null,null,Long.valueOf(spaceIdentity.getId()));
+    filter_ = new DocumentFolderFilter(null, null, Long.valueOf(spaceIdentity.getId()));
     DocumentFolderFilter finalFilter2 = filter_;
     List<AbstractNode> files = new ArrayList<>();
 
@@ -325,17 +359,18 @@ public class DocumentFileServiceTest {
     files.add(file4);
 
     exception = assertThrows(IllegalAccessException.class, () -> {
-      documentFileService.getFolderChildNodes(finalFilter2,    0,    0,  Long.valueOf(user2Identity.getId()));
+      documentFileService.getFolderChildNodes(finalFilter2, 0, 0, Long.valueOf(user2Identity.getId()));
     });
-    assertEquals(exception.getMessage(),"User " + user2name
-            + " attempts to access documents of space " + space.getDisplayName()
-            + "while it's not a member");
+    assertEquals(exception.getMessage(),
+                 "User " + user2name + " attempts to access documents of space " + space.getDisplayName()
+                     + "while it's not a member");
 
-    when(documentFileStorage.getFolderChildNodes(finalFilter2, userID,    0, 0)).thenReturn(files);
+    when(documentFileStorage.getFolderChildNodes(finalFilter2, userID, 0, 0)).thenReturn(files);
     List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getFolderChildNodes(finalFilter2,    0,    0,  Long.valueOf(currentIdentity.getId()));
-    assertEquals(files_.size(),4);
+    files_ = documentFileService.getFolderChildNodes(finalFilter2, 0, 0, Long.valueOf(currentIdentity.getId()));
+    assertEquals(files_.size(), 4);
   }
+
   @Test
   public void testGetBreadCrumbs() throws Exception { // NOSONAR
     String username = "testuser";
@@ -353,8 +388,8 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1","");
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2","");
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "");
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "");
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
@@ -368,23 +403,20 @@ public class DocumentFileServiceTest {
     breadCrumbItems.add(breadCrumbItem3);
     breadCrumbItems.add(breadCrumbItem4);
 
-
     List<BreadCrumbItem> breadCrumbItems_ = new ArrayList<>();
 
-
-    when(documentFileStorage.getBreadcrumb(2,"Folder1","",userID)).thenReturn(breadCrumbItems);
+    when(documentFileStorage.getBreadcrumb(2, "Folder1", "", userID)).thenReturn(breadCrumbItems);
 
     Exception exception = assertThrows(IllegalAccessException.class, () -> {
-      documentFileService.getBreadcrumb(0,"","",0);
+      documentFileService.getBreadcrumb(0, "", "", 0);
     });
-   assertEquals(exception.getMessage(),"Can't find user identity with id 0");
-
+    assertEquals(exception.getMessage(), "Can't find user identity with id 0");
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    breadCrumbItems_ = documentFileService.getBreadcrumb(Long.valueOf(2),"Folder1","", 2);
+    breadCrumbItems_ = documentFileService.getBreadcrumb(Long.valueOf(2), "Folder1", "", 2);
     assertEquals(breadCrumbItems_.size(), 4);
-    assertEquals(breadCrumbItems_.get(0).getId(),"1");
-    assertEquals(breadCrumbItems_.get(0).getName(),"Folder1");
+    assertEquals(breadCrumbItems_.get(0).getId(), "1");
+    assertEquals(breadCrumbItems_.get(0).getName(), "Folder1");
   }
 
   @Test
@@ -394,7 +426,7 @@ public class DocumentFileServiceTest {
     toShare.put(1L, "read");
     nodePermission.setToShare(toShare);
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
-    Identity socialIdentity =  mock(Identity.class);
+    Identity socialIdentity = mock(Identity.class);
     when(identityRegistry.getIdentity("username")).thenReturn(identity);
     when(socialIdentity.getRemoteId()).thenReturn("username");
     when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
@@ -404,7 +436,7 @@ public class DocumentFileServiceTest {
   }
 
   @Test
-  public void getAclUserIdentity () throws Exception {
+  public void getAclUserIdentity() throws Exception {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     when(identityRegistry.getIdentity("user")).thenReturn(null);
     when(authenticator.createIdentity("user")).thenReturn(identity);
