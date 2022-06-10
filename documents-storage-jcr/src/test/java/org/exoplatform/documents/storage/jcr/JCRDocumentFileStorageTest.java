@@ -1,6 +1,5 @@
 package org.exoplatform.documents.storage.jcr;
 
-import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.DocumentFolderFilter;
@@ -32,7 +31,6 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.jcr.*;
 import javax.jcr.nodetype.NodeType;
-import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 
@@ -126,6 +124,49 @@ public class JCRDocumentFileStorageTest {
     jcrDocumentFileStorage.shareDocument("1", 1L);
     PowerMockito.verifyStatic(Utils.class, times(1));
     Utils.broadcast(listenerService, "share_document_event", identity, linkNode);
+    verify(sessionProvider, times(1)).close();
+  }
+
+  @Test
+  public void duplicateDocument() throws Exception {
+    Session systemSession = mock(Session.class);
+    Identity identity = mock(Identity.class);
+    Node rootNode = mock(Node.class);
+    NodeImpl currentNode = mock(NodeImpl.class);
+
+    ExtendedNode linkNode = mock(ExtendedNode.class);
+    Property property = mock(Property.class);
+    NodeType nodeType =  mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+            manageableRepository)).thenReturn(systemSession);
+    when(identityManager.getIdentity("1")).thenReturn(identity);
+    when(JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(currentNode);
+    when(JCRDocumentsUtil.getIdentityRootNode(spaceService, nodeHierarchyCreator,identity, systemSession)).thenReturn(rootNode);
+    when(identity.getProviderId()).thenReturn("USER");
+    when(rootNode.getNode("Documents")).thenReturn(rootNode);
+    when(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(false);
+    when(currentNode.getName()).thenReturn("test");
+    when(currentNode.hasProperty("exo:title")).thenReturn(true);
+    when(currentNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("test");
+    when(JCRDocumentsUtil.getMimeType(currentNode)).thenReturn("testMimeType");
+    when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn("nt:file");
+    when(currentNode.getUUID()).thenReturn("123");
+    when(currentNode.getParent()).thenReturn(currentNode);
+    when(currentNode.getIdentifier()).thenReturn("1");
+    when(currentNode.addNode("copy of test","nt:file")).thenReturn(currentNode);
+    when(identity.getRemoteId()).thenReturn("username");
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    jcrDocumentFileStorage.duplicateDocument(1L,"1","copy of",userID);
     verify(sessionProvider, times(1)).close();
   }
   
