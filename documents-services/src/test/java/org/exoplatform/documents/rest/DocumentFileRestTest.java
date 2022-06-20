@@ -596,19 +596,19 @@ public class DocumentFileRestTest {
     file2.setMimeType(":file");
     file2.setSize(50);
 
-    when(documentFileStorage.duplicateDocument(2,"oldFile",userID)).thenReturn(file2);
+    when(documentFileStorage.duplicateDocument(2,"oldFile", "copy of",userID)).thenReturn(file2);
 
 
     Response response1 = documentFileRest.duplicateDocument(null,
-            null,"");
+            null,"copy of","");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile","");
+    Response response2 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile", "copy of","");
 
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    Response response3 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile","");
+    Response response3 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile", "copy of","");
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
     AbstractNodeEntity fileNode = (AbstractNodeEntity) response3.getEntity();
     assertEquals(fileNode.getName(), "Copy of oldFile");

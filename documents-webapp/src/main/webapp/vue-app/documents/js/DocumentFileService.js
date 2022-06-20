@@ -78,7 +78,7 @@ export function getFullTreeData(ownerId, folderId) {
   });
 }
 
-export function duplicateDocument(fileId,ownerId) {
+export function duplicateDocument(fileId,ownerId,prefixClone) {
   const formData = new FormData();
 
   if (fileId) {
@@ -86,6 +86,9 @@ export function duplicateDocument(fileId,ownerId) {
   }
   if (ownerId) {
     formData.append('ownerId', ownerId);
+  }
+  if (prefixClone) {
+    formData.append('prefixClone', prefixClone);
   }
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/duplicate?${params}`, {
