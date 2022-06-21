@@ -313,10 +313,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         folderId = ((NodeImpl) node).getIdentifier();
       } else {
         node = getNodeByIdentifier(session, folderId);
-        if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
-          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-          node = getNodeByIdentifier(session, sourceNodeId);
-        }
       }
       if (StringUtils.isNotBlank(folderPath)) {
         node = getNodeByPath(node, folderPath, sessionProvider);
