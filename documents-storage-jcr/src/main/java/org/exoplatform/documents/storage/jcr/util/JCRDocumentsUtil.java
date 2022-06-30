@@ -534,7 +534,7 @@ public class JCRDocumentsUtil {
     int i = 0;
     while (i < strLength) {
       char c = cleanedStr.charAt(i);
-      if (c == '/' || c == ':' || c == '[' || c == ']' || c == '*' || c == '\'' || c == '"' || c == '|' || c == 'ʿ' || c == 'ˇ') {
+      if (c == '/' || c == ':' || c == '[' || c == ']' || c == '*' || c == '\'' || c == '"' || c == '|' || c == 'ʿ' || c == 'ˇ' || c == '.') {
         cleanedStr.deleteCharAt(i);
         cleanedStr.insert(i, '_');
       } else if (!(Character.isLetterOrDigit(c) || Character.isWhitespace(c) || c == '.' || c == '-' || c == '_')) {
