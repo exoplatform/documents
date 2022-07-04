@@ -547,7 +547,7 @@ public class JCRDocumentsUtil {
     while (org.apache.commons.lang.StringUtils.isNotEmpty(cleanedStr.toString()) && !Character.isLetterOrDigit(cleanedStr.charAt(0))) {
       cleanedStr.deleteCharAt(0);
     }
-    String clean = cleanedStr.toString().toLowerCase();
+    String clean = cleanedStr.toString();
     if (clean.endsWith("-")) {
       clean = clean.substring(0, clean.length()-1);
     }
