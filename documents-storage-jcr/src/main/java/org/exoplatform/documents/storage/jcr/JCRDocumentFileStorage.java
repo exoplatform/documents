@@ -529,7 +529,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String name = Text.escapeIllegalJcrChars(cleanString(title));
       //clean node name
-      name = cleanString(name);
 
       name = URLDecoder.decode(name,"UTF-8");
 
