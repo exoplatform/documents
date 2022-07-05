@@ -534,10 +534,10 @@ public class JCRDocumentsUtil {
     int i = 0;
     while (i < strLength) {
       char c = cleanedStr.charAt(i);
-      if (c == '/' || c == ':' || c == '[' || c == ']' || c == '*' || c == '\'' || c == '"' || c == '|' || c == 'ʿ' || c == 'ˇ') {
+      if (c == '/' || c == ':' || c == '[' || c == ']' || c == '*' || c == '\'' || c == '"' || c == '|' || c == 'ʿ' || c == 'ˇ' || c == '.') {
         cleanedStr.deleteCharAt(i);
         cleanedStr.insert(i, '_');
-      } else if (!(Character.isLetterOrDigit(c) || Character.isWhitespace(c) || c == '.' || c == '-' || c == '_')) {
+      } else if (!(Character.isLetterOrDigit(c) || Character.isWhitespace(c) || c == '-' || c == '_')) {
         cleanedStr.deleteCharAt(i);
         strLength = cleanedStr.length();
         continue;
@@ -547,7 +547,7 @@ public class JCRDocumentsUtil {
     while (org.apache.commons.lang.StringUtils.isNotEmpty(cleanedStr.toString()) && !Character.isLetterOrDigit(cleanedStr.charAt(0))) {
       cleanedStr.deleteCharAt(0);
     }
-    String clean = cleanedStr.toString().toLowerCase();
+    String clean = cleanedStr.toString();
     if (clean.endsWith("-")) {
       clean = clean.substring(0, clean.length()-1);
     }
