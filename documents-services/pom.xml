@@ -8,6 +8,10 @@
   <artifactId>documents-services</artifactId>
   <name>eXo Documents - Services</name>
   <properties>
+    <rest.api.doc.title>Documents Rest Api</rest.api.doc.title>
+    <rest.api.doc.version>1.0</rest.api.doc.version>
+    <rest.api.doc.description>Documents addon rest endpoints</rest.api.doc.description>
+
     <exo.test.coverage.ratio>0.60</exo.test.coverage.ratio>
   </properties>
   <dependencies>
@@ -141,5 +145,28 @@
   </dependencies>
   <build>
     <finalName>documents-services</finalName>
+    <plugins>
+      <plugin>
+        <groupId>io.openapitools.swagger</groupId>
+        <artifactId>swagger-maven-plugin</artifactId>
+        <configuration>
+          <useResourcePackagesChildren>true</useResourcePackagesChildren>
+          <resourcePackages>
+            <locations>org.exoplatform.documents.rest</locations>
+          </resourcePackages>
+          <swaggerConfig>
+            <info>
+              <title>${rest.api.doc.title}</title>
+              <version>${rest.api.doc.version}</version>
+              <description>${rest.api.doc.description}</description>
+              <license>
+                <url>https://www.gnu.org/licenses/agpl-3.0.en.html</url>
+                <name>AGPL</name>
+              </license>
+            </info>
+          </swaggerConfig>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 </project>
