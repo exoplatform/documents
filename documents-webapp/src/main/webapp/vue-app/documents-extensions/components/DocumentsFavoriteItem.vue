@@ -88,14 +88,10 @@ export default {
       this.displayAlert(this.$t('Favorite.tooltip.ErrorDeletingFavorite', {0: this.$t('file.label')}), 'error');
     },
     displayAlert(message, type) {
-      document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
-        detail: {
-          messageObject: {
-            message: message,
-            type: type || 'success',
-          }
-        }
-      }));
+      document.dispatchEvent(new CustomEvent('notification-alert', {detail: {
+        message,
+        type: type || 'success',
+      }}));
     },
   }
 
