@@ -257,7 +257,7 @@ export default {
                 title: decodeURI(attachment.title),
                 downloadUrl: attachment.downloadUrl,
                 openUrl: attachment.openUrl,
-                breadCrumb: attachment.previewBreadcrumb,
+                breadCrumb: this.$utilsDocument.getFolderpreviewPathFrombreadCrumb(Object.assign({}, attachment.previewBreadcrumb)),
                 fileInfo: this.fileInfo(),
                 size: attachment.size,
               },

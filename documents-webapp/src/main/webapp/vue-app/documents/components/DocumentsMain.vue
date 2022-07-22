@@ -610,7 +610,7 @@ export default {
               path: attachment.path,
               title: attachment.title,
               openUrl: attachment.openUrl,
-              breadCrumb: attachment.previewBreadcrumb,
+              breadCrumb: this.$utilsDocument.getFolderpreviewPathFrombreadCrumb(Object.assign({}, attachment.previewBreadcrumb)),
               size: attachment.size,
               downloadUrl: attachment.downloadUrl,
             },

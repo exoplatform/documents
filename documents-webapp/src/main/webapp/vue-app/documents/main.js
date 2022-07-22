@@ -2,9 +2,16 @@ import './initComponents.js';
 import './extensions.js';
 
 import * as documentFileService from './js/DocumentFileService.js';
+import * as utils from './js/Utils.js';
 if (!Vue.prototype.$documentFileService) {
   window.Object.defineProperty(Vue.prototype, '$documentFileService', {
     value: documentFileService,
+  });
+}
+
+if (!Vue.prototype.$utilsDocument) {
+  window.Object.defineProperty(Vue.prototype, '$utilsDocument', {
+    value: utils,
   });
 }
 
