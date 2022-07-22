@@ -1,16 +1,16 @@
 /*
  * Copyright (C) 2021 eXo Platform SAS
- *  
+ *
  *  This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
@@ -103,6 +103,7 @@ public class JCRDocumentsUtil {
                                            Identity aclIdentity,
                                            Session session,
                                            SpaceService spaceService,
+                                           boolean includeHiddenFiles,
                                            int offset,
                                            int limit) {
     List<FileNode> fileNodes = new ArrayList<>();
@@ -118,19 +119,24 @@ public class JCRDocumentsUtil {
       Node node = nodeIterator.nextNode();
 
       try {
-        if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+        Node sourceNode = null;
+        if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-          Node sourceNode = getNodeByIdentifier(session, sourceID);
-          if(sourceNode==null || sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
+          sourceNode = getNodeByIdentifier(session, sourceID);
+          if (sourceNode == null || sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER)
+              || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) {
             break;
           }
           sourceMimeType = getMimeType(sourceNode);
         }
+        if (sourceNode != null && sourceNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) && !includeHiddenFiles) {
+          break;
+        }
       } catch (RepositoryException repositoryException) {
         LOG.warn("Cannot check if the current node is a symlink");
       }
-      FileNode fileNode = toFileNode(identityManager, aclIdentity, node,sourceID, spaceService);
-      if(StringUtils.isNotBlank(sourceMimeType)){
+      FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+      if (StringUtils.isNotBlank(sourceMimeType)) {
         fileNode.setMimeType(sourceMimeType);
       }
       fileNodes.add(fileNode);
@@ -146,34 +152,39 @@ public class JCRDocumentsUtil {
                                            Session session,
                                            NodeIterator nodeIterator,
                                            Identity aclIdentity,
-                                           SpaceService spaceService) {
+                                           SpaceService spaceService,
+                                           boolean includeHiddenFiles) {
     List<AbstractNode> fileNodes = new ArrayList<>();
     while (nodeIterator.hasNext()) {
       Node node = nodeIterator.nextNode();
       String sourceID = "";
       Node sourceNode = null;
       try {
-        if(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+        if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           sourceNode = getNodeByIdentifier(session, sourceID);
-          if(sourceNode==null){
+          if (sourceNode == null) {
             break;
           }
-          if(sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
-            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID,spaceService);
+          if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
+              && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
+            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
             fileNodes.add(folderNode);
           }
-          if(sourceNode.isNodeType(NodeTypeConstants.NT_FILE)) {
+          if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE)) && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
+              || includeHiddenFiles))) {
             FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
             fileNode.setMimeType(getMimeType(sourceNode));
             fileNodes.add(fileNode);
           }
-        } else{
-          if(node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)){
-            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID,spaceService);
+        } else {
+          if ((node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) && (!(
+              node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
+            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
             fileNodes.add(folderNode);
           }
-          if(node.isNodeType(NodeTypeConstants.NT_FILE)) {
+          if ((node.isNodeType(NodeTypeConstants.NT_FILE)) && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
+              || includeHiddenFiles))) {
             FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
             fileNodes.add(fileNode);
           }

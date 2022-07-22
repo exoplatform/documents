@@ -188,14 +188,14 @@ public class JCRDocumentFileStorageTest {
     when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
     when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
     when(sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
-            manageableRepository)).thenReturn(userSession);
-
+                                    manageableRepository)).thenReturn(userSession);
 
     when(JCRDocumentsUtil.getNodeByIdentifier(userSession, filter.getParentFolderId())).thenReturn(parentNode);
     when(parentNode.getName()).thenReturn("documents");
     when(parentNode.getNode(filter.getFolderPath())).thenReturn(parentNode);
     filter.setSortField(DocumentSortField.MODIFIED_DATE);
     filter.setAscending(true);
+    filter.setIncludeHiddenFiles(false);
     when(parentNode.getPath()).thenReturn("/documents/path");
 
     // mock the query creation and execution
@@ -227,7 +227,8 @@ public class JCRDocumentFileStorageTest {
                             userSession,
                             nodeIterator,
                             identity,
-                            spaceService);
+                            spaceService,
+                            false);
     when(JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
     when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode, "", spaceService)).thenReturn(folder);
 
@@ -251,12 +252,13 @@ public class JCRDocumentFileStorageTest {
     when(nodeIterator1.hasNext()).thenReturn(true, true, false);
     when(nodeIterator1.nextNode()).thenReturn(fileNode, folderNode);
     doCallRealMethod().when(JCRDocumentsUtil.class,
-            "toNodes",
-            identityManager,
-            userSession,
-            nodeIterator1,
-            identity,
-            spaceService);
+                            "toNodes",
+                            identityManager,
+                            userSession,
+                            nodeIterator1,
+                            identity,
+                            spaceService,
+                            false);
     List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
     assertEquals(2, nodes1.size());
 
@@ -271,5 +273,4 @@ public class JCRDocumentFileStorageTest {
            times(1)).appSearch(identity, "collaboration", "/documents/path", filter, 0, 0, "lastUpdatedDate", "ASC");
 
   }
-
 }
