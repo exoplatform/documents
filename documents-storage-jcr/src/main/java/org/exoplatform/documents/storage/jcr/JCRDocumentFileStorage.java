@@ -530,14 +530,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String name = Text.escapeIllegalJcrChars(cleanString(title));
       //clean node name
-      name = cleanString(name);
 
       name = URLDecoder.decode(name,"UTF-8");
 
       String oldName = node.getName();
       if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
         String ext = oldName.substring(oldName.lastIndexOf('.'));
-        title = title.concat(ext);
+        title = name.concat(ext);
         name = name.concat(ext);
       }
 
