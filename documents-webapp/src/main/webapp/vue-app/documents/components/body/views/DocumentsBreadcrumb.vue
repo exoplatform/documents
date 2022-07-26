@@ -16,6 +16,7 @@
         :class="documentsBreadcrumbToDisplay.length === 1 && 'single-path-element' || ''"
         class="documents-tree-item d-flex text-truncate">
         <v-tooltip max-width="300" bottom>
+          <h1> {{documents}} aaaaaaaaaaaaaaaaaaaaaa</h1>
           <template #activator="{ on, attrs }">
             <v-btn
               height="20px"
@@ -32,7 +33,8 @@
                 :class="index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name) }}</a>
             </v-btn>
           </template>
-          <span class="caption breadcrumbName">{{ getName(documents.name) }}</span>
+          <h1> {{documents}} aaaaaaaaaaaaaaaaaaaaaa</h1>
+          <span class="caption breadcrumbName">{{ getName(documents.title) }}</span>
         </v-tooltip>
         <v-icon
           v-if="index < documentsBreadcrumbToDisplay.length-1"
@@ -93,7 +95,7 @@ export default {
   },
   methods: {
     setBreadcrumb(folder) {
-      this.folderPath = '';
+      this.folderPath = this.currentFolderPath;
       if (folder) {
         this.actualFolderId = folder.id;
         this.getBreadCrumbs(); 

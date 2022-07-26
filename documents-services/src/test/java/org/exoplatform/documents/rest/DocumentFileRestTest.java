@@ -526,8 +526,8 @@ public class DocumentFileRestTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1","");
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2","");
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1","Folder1","");
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2","Folder2","");
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
@@ -630,7 +630,7 @@ public class DocumentFileRestTest {
     currentIdentity.setProfile(currentProfile);
 
     List<FullTreeItem> children = new ArrayList<>();
-    FullTreeItem fullTreeItem = new FullTreeItem("11111222","test","path",null);
+    FullTreeItem fullTreeItem = new FullTreeItem("11111222","test","test","path",null);
     children.add(fullTreeItem);
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);

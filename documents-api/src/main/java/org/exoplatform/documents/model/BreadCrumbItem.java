@@ -26,5 +26,6 @@ import lombok.NoArgsConstructor;
 public class BreadCrumbItem {
   private String                                id;
   private String                                name;
+  private String                                title;
   private String                                path;
 }

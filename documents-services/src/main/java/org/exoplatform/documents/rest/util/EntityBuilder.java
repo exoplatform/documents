@@ -151,14 +151,14 @@ public class EntityBuilder {
 
   public static List<BreadCrumbItemEntity> toBreadCrumbItemEntities(List<BreadCrumbItem> folders) {
     List<BreadCrumbItemEntity>  brList = new ArrayList<BreadCrumbItemEntity>();
-    brList = folders.stream().map(document -> new BreadCrumbItemEntity(document.getId(), document.getName(), document.getPath())).collect(Collectors.toList());
+    brList = folders.stream().map(document -> new BreadCrumbItemEntity(document.getId(), document.getName(), document.getTitle(), document.getPath())).collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;
   }
 
   public static List<FullTreeItemEntity> toFullTreeItemEntities(List<FullTreeItem> folders) {
     List<FullTreeItemEntity>  brList = new ArrayList<>();
-    brList = folders.stream().map(document -> new FullTreeItemEntity(document.getId(), document.getName(), document.getPath(),document.getChildren())).collect(Collectors.toList());
+    brList = folders.stream().map(document -> new FullTreeItemEntity(document.getId(), document.getName(), document.getTitle(), document.getPath(),document.getChildren())).collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;
   }

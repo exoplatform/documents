@@ -319,8 +319,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String homePath = "";
       if (node != null) {
-        String nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+        String nodeTitle = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), nodeTitle, node.getPath()));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -338,15 +338,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             if(node.getName().equals(USER_PUBLIC_ROOT_NODE)){
               node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
               if (node != null) {
-                nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+                nodeTitle= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), nodeTitle, node.getPath()));
               }
               break;
             } else{
               node = node.getParent();
               if (node != null) {
-                nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+                nodeTitle = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), node.getName(), nodeTitle, node.getPath()));
               }
             }
           } catch (RepositoryException repositoryException) {
@@ -384,11 +384,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node = getNodeByIdentifier(session, folderId);
       }
       if (node != null) {
-        String nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+        String nodeTitle= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
         List<FullTreeItem> children = new ArrayList<>();
         children = getAllFolderInNode(node);
 
-        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(),children));
+        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(),node.getName(), nodeTitle, node.getPath(),children));
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving tree folder'" + folderId, e);
@@ -407,12 +407,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node childNode = nodeIter.nextNode();
       if (!childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
           && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER))) {
-        String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
+        String nodeTitle = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
                                                                                         .getString()
                                                                              : childNode.getName();
         List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode);
         folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
-                                             nodeName,
+                                             node.getName(),
+                                             nodeTitle,
                                              childNode.getPath(),
                                              folderChildListNodes));
       }

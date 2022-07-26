@@ -29,6 +29,7 @@ import java.util.List;
 public class FullTreeItemEntity {
   private String                                id;
   private String                                name;
+  private String                                title;
   private String                                path;
   private List<FullTreeItem>               children;
 
