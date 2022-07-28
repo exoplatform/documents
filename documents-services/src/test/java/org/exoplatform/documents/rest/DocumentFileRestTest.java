@@ -178,10 +178,11 @@ public class DocumentFileRestTest {
                                                            null,
                                                            false,
                                                            0,
-                                                           0);
+                                                           0,
+                                                           false);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null,null, null, null,null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null,null, null, null,null, false, "", null, false, 0, 0,false);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
@@ -195,12 +196,13 @@ public class DocumentFileRestTest {
                                                            null,
                                                            false,
                                                            0,
-                                                           0);
+                                                           0,
+                                                           false);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.valueOf(currentIdentity.getId()));
+    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     nodeEntity.setLinkedFileId("1");
@@ -240,7 +242,8 @@ public class DocumentFileRestTest {
                                                            null,
                                                            false,
                                                            0,
-                                                           0);
+                                                           0,
+                                                           false);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
     List<FileNodeEntity> filesNodeEntity = new ArrayList<>();
     filesNodeEntity = (List<FileNodeEntity>) response4.getEntity();
@@ -467,10 +470,11 @@ public class DocumentFileRestTest {
                                                            null,
                                                            false,
                                                            0,
-                                                           0);
+                                                           0,
+                                                           false);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0,false);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
@@ -484,7 +488,8 @@ public class DocumentFileRestTest {
                                                            null,
                                                            false,
                                                            0,
-                                                           0);
+                                                           0,
+                                                           false);
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
 
     List<FolderNodeEntity> foldersNodeEntity = new ArrayList<>();
