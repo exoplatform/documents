@@ -127,38 +127,38 @@ public class DocumentFileServiceTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(userName);
     DocumentTimelineFilter filter = null;
     Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, null, 0, 0, Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, null, 0, 0, Long.valueOf(currentIdentity.getId()),false);
     });
     assertEquals(exception.getMessage(), "File filter is mandatory");
 
     filter = new DocumentTimelineFilter(0L);
     DocumentTimelineFilter finalFilter1 = filter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()),false);
     });
     assertEquals(exception.getMessage(), "OwnerId is mandatory");
 
     filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
     DocumentTimelineFilter finalFilter = filter;
     exception = assertThrows(IllegalAccessException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter, 0, 0, 0);
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter, 0, 0, 0,false);
     });
     assertEquals(exception.getMessage(), "User Identity is mandatory");
 
     DocumentFolderFilter docFilter = new DocumentFolderFilter("", "", 0L);
     DocumentFolderFilter finalDocFilter = docFilter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
     });
     assertEquals(exception.getMessage(), "filter must be an instance of DocumentTimelineFilter");
 
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.FOLDER, finalFilter, 0, 0, Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.FOLDER, finalFilter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
     });
     assertEquals(exception.getMessage(), "filter must be an instance of DocumentFolderFilter");
 
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.FOLDER, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()));
+      documentFileService.getDocumentItems(FileListingType.FOLDER, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
     });
     assertEquals(exception.getMessage(), "ParentFolderId or OwnerId is mandatory");
 
@@ -188,7 +188,7 @@ public class DocumentFileServiceTest {
 
     when(documentFileStorage.getFilesTimeline(filter, spaceID, 0, 0)).thenReturn(files);
     List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.parseLong(currentIdentity.getId()));
+    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.parseLong(currentIdentity.getId()),false);
     assertEquals(files_.size(), 4);
   }
 

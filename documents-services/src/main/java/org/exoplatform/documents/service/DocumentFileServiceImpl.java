@@ -80,7 +80,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                              DocumentNodeFilter filter,
                                              int offset,
                                              int limit,
-                                             long userIdentityId) throws IllegalAccessException,
+                                             long userIdentityId,
+                                             boolean showHiddenFiles) throws IllegalAccessException,
                                                                   ObjectNotFoundException {
     if (filter == null) {
       throw new IllegalArgumentException("File filter is mandatory");
@@ -95,6 +96,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
           throw new IllegalArgumentException("filter must be an instance of DocumentTimelineFilter");
         }
         DocumentTimelineFilter timelinefilter = (DocumentTimelineFilter) filter;
+        timelinefilter.setIncludeHiddenFiles(showHiddenFiles);
         if (timelinefilter.getOwnerId() == null || timelinefilter.getOwnerId() <= 0) {
           throw new IllegalArgumentException("OwnerId is mandatory");
         }
@@ -105,6 +107,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
           throw new IllegalArgumentException("filter must be an instance of DocumentFolderFilter");
         }
         DocumentFolderFilter folderFilter = (DocumentFolderFilter) filter;
+        folderFilter.setIncludeHiddenFiles(showHiddenFiles);
         if (StringUtils.isBlank(folderFilter.getParentFolderId())&&(folderFilter.getOwnerId() == null || folderFilter.getOwnerId() <= 0)) {
           throw new IllegalArgumentException("ParentFolderId or OwnerId is mandatory");
         }
