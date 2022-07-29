@@ -141,7 +141,7 @@ export default {
 
     this.refreshViewExtensions();
 
-    this.$root.$on('documents-refresh-files', this.refreshFilesEvent);
+    this.$root.$on('documents-refresh-files', this.refreshFiles);
     this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
 
     this.$root.$on('document-load-more', this.loadMore);
@@ -329,9 +329,6 @@ export default {
       } else {
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
-    },
-    refreshFilesEvent() {
-      this.refreshFiles();
     },
     refreshFiles(filterPrimary, deleted, documentId) {
       if (!this.selectedViewExtension) {
@@ -524,7 +521,7 @@ export default {
     extractDefaultFolder(targetPath) {
       const path = decodeURI(targetPath);
       const folderName = path && path.substring(path.lastIndexOf('/'));
-      return folderName && path.replace(folderName, `/${this.currentFolder.name}`);
+      return folderName && path.replace(folderName, `/${this.currentFolder.path.split('/').pop()}`);
     },
     setCurrentFolder(folder) {
       this.currentFolder = folder;
