@@ -46,7 +46,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   labelKey: 'documents.label.lastUpdated',
   align: 'center',
   sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
+  cssClass: 'font-weight-bold text-no-wrap last-updated-tooltip-marker',
   width: '190px',
   rank: 40,
   componentOptions: {
