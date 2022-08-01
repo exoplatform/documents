@@ -99,6 +99,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     List<FileNode> files = null;
     String username = aclIdentity.getUserId();
     Long ownerId = filter.getOwnerId();
+    boolean showHiddenFiles = filter.isIncludeHiddenFiles();
     org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
@@ -122,13 +123,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         QueryResult queryResult = jcrQuery.execute();
         NodeIterator nodeIterator = queryResult.getNodes();
-        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, offset, limit);
+        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService,showHiddenFiles, offset, limit);
 
         statement = getTimeLineQueryStatement(rootPath, NodeTypeConstants.EXO_SYMLINK, sortField, sortDirection);
         jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         queryResult = jcrQuery.execute();
         nodeIterator = queryResult.getNodes();
-        files.addAll(toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, offset, limit));
+        files.addAll(toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, showHiddenFiles, offset, limit));
         return files;
       } else {
         String workspace = session.getWorkspace().getName();
@@ -230,6 +231,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String username = aclIdentity.getUserId();
     String parentFolderId = filter.getParentFolderId();
     String folderPath = filter.getFolderPath();
+    boolean includeHiddenFiles = filter.isIncludeHiddenFiles();
     SessionProvider sessionProvider = null;
     try {
       Node parent = null;
@@ -263,7 +265,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           ((QueryImpl)jcrQuery).setLimit(limit);
           QueryResult queryResult = jcrQuery.execute();
           NodeIterator nodeIterator = queryResult.getNodes();
-          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService);
+          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService,includeHiddenFiles);
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
