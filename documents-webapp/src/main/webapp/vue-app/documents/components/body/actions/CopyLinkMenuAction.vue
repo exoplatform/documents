@@ -32,7 +32,7 @@ export default {
       if (this.file.folder){
         path = `${path}?folderId=${this.file.id}`;
       } else {
-        path = `${path}?documentPreviewId=${this.file.id}`;
+        path = `${path}?documentPreviewId=${this.file.sourceID ? this.file.sourceID:this.file.id}`;
       }
       $('body').append(inputTemp);
       inputTemp.val(path).select();
