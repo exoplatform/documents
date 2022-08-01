@@ -47,7 +47,8 @@ public interface DocumentFileService {
                                       DocumentNodeFilter filter,
                                       int offset,
                                       int limit,
-                                      long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+                                      long userIdentityId,
+                                      boolean showHiddenFiles) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the

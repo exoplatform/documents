@@ -35,4 +35,6 @@ public abstract class DocumentNodeFilter {
 
   private String           userId;
 
+  private boolean          includeHiddenFiles;
+
 }
