@@ -653,10 +653,9 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("Folder Name should not be empty", response.getEntity());
 
-    response = documentFileRest.createFolder("11111111",null,null,"222");
-    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    assertEquals("Folder Name should not be number", response.getEntity());
-
+    doNothing().when(documentFileStorage).createFolder(2L, "11111111", null, "222", userID);
+    response = documentFileRest.createFolder("11111111",null,2L,"222");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     doNothing().when(documentFileStorage).createFolder(2L, "11111111", null, "test", userID);
     response = documentFileRest.createFolder("11111111",null,2L,"test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
