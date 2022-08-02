@@ -41,11 +41,14 @@
           :file-type="fileType"
           :is-mobile="isMobile"
           :edit-name-mode="editNameMode" />
-        <date-format
-          v-if="isMobile && !editNameMode"
-          :value="lastUpdated"
-          :format="fullDateFormat"
-          class="document-time text-light-color text-no-wrap" />
+        <div v-if="isMobile" class="d-flex">
+          <date-format
+            v-if="!editNameMode"
+            :value="lastUpdated"
+            :format="fullDateFormat"
+            class="document-time text-light-color text-no-wrap" />
+          <documents-visibility-cell :file="file" />
+        </div>
       </div>
     </a>
     <v-spacer />
