@@ -16,6 +16,7 @@ import DocumentsFolderView from './components/body/views/DocumentsFolderView.vue
 import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimelineGroupHeader.vue';
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
 import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
+import DocumentsVisibilityCell from './components/body/table/cells/DocumentsVisibilityCell.vue';
 import DocumentsFileSizeCell from './components/body/table/cells/DocumentsFileSizeCell.vue';
 import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
 import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
@@ -65,6 +66,7 @@ const components = {
   'documents-timeline-group-header': DocumentsTimelineGroupHeader,
   'documents-table-cell': DocumentsTableCell,
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
+  'documents-visibility-cell': DocumentsVisibilityCell,
   'documents-file-size-cell': DocumentsFileSizeCell,
   'documents-last-activity-cell': DocumentsLastActivityCell,
   'documents-favorite-cell': DocumentsFavoriteCell,

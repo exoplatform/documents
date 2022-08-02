@@ -100,16 +100,16 @@
             </div>
           </v-list-item-content>
           <exo-identity-suggester
-              ref="invitedCollaborators"
-              :labels="suggesterLabels"
-              v-model="collaborators"
-              :search-options="searchOptions"
-              :ignore-items="ignoreItems"
-              name="collaborator"
-              type-of-relations="user_to_invite"
-              height="40"
-              include-users
-              include-spaces />
+            ref="invitedCollaborators"
+            :labels="suggesterLabels"
+            v-model="collaborators"
+            :search-options="searchOptions"
+            :ignore-items="ignoreItems"
+            name="collaborator"
+            type-of-relations="user_to_invite"
+            height="40"
+            include-users
+            include-spaces />
         </v-list-item>
         <div v-if="users.length">
           <documents-visibility-collaborators
