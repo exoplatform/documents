@@ -367,10 +367,6 @@ public class DocumentFileRest implements ResourceContainer {
     if (StringUtils.isEmpty(name)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Folder Name should not be empty").build();
     }
-    if (NumberUtils.isNumber(name)) {
-      LOG.warn("Folder Name should not be number");
-      return Response.status(Response.Status.BAD_REQUEST).entity("Folder Name should not be number").build();
-    }
     try {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
         documentFileService.createFolder(ownerId, parentid, folderPath, name, userIdentityId);
