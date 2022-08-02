@@ -212,9 +212,8 @@ export default {
         path = window.location.pathname;
       }
       if (eXo.env.portal.spaceName){
-        const index = path.indexOf('/Documents/');
-        if (index !== -1) {
-          this.folderPath = path.substring(index + '/Documents/'.length);
+        if (path.includes('/documents/')){
+          this.folderPath = path.substring(path.indexOf('/documents/') + '/documents/'.length);
           this.selectedView = 'folder';
         }
       } else if (path.includes('Private/')) {
