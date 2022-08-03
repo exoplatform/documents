@@ -28,7 +28,7 @@ export default {
     mobileOnlyExtensions: ['favorite','details'],
     desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
-    fileOnlyExtension: ['download','favorite','visibility'],
+    fileOnlyExtension: ['download','favorite'],
     sharedDocumentSuspended: true,
     downloadDocumentSuspended: true,
     supportedDocuments: null
