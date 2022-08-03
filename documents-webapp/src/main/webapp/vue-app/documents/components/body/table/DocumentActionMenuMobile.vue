@@ -31,7 +31,7 @@ export default {
     mobileOnlyExtensions: ['favorite'],
     desktopOnlyExtensions: ['edit'],
     editExtensions: 'edit',
-    fileOnlyExtension: ['download','favorite','visibility']
+    fileOnlyExtension: ['download','favorite']
   }),
   computed: {
     params() {
