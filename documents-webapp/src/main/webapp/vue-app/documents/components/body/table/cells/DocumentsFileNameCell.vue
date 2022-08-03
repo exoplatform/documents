@@ -243,10 +243,7 @@ export default {
       if (this.file && this.file.folder){
         this.$root.$emit('document-open-folder', this.file);
       } else {
-        let id = this.file.id;
-        if (this.file.sourceID){
-          id = this.file.sourceID;
-        }
+        let id = this.file.sourceID ? this.file.sourceID :this.file.id;
         this.$attachmentService.getAttachmentById(id)
           .then(attachment => {
             documentPreview.init({
@@ -271,7 +268,7 @@ export default {
           })
           .catch(e => console.error(e))
           .finally(() => {
-            window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.id}`);
+            window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.sourceID ? this.file.sourceID : this.file.id}`);
             this.loading = false;
           });
       }
