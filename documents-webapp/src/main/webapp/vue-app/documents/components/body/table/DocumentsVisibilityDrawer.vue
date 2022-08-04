@@ -152,7 +152,14 @@
 <script>
 export default {
   data: () => ({
-    ownerIdentity: [],
+    ownerIdentity: {
+      id: 'system',
+      providerId: 'system',
+      remoteId: 'system',
+      name: 'system',
+      fullname: 'System',
+      avatar: '/portal/rest/v1/social/users/default-image/avatar',
+    },
     file: { 'acl': {
       'visibilityChoice': 'ALL_MEMBERS'
     }},
@@ -271,9 +278,11 @@ export default {
     },
     open(file) {
       this.file = file;
-      this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
-        this.ownerIdentity = user;
-      });
+      if (this.file?.creatorIdentity?.remoteId){
+        this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
+          this.ownerIdentity = user;
+        });
+      }
       this.users = [];
       for (const collaborator of file.acl.collaborators){
         const user = collaborator.identity;
