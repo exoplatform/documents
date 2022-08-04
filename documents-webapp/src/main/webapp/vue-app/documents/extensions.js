@@ -33,7 +33,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   labelKey: 'documents.label.name',
   align: 'left',
   sortable: true,
-  cssClass: 'font-weight-bold',
+  cssClass: 'font-weight-bold tooltip-marker',
   width: 'auto',
   rank: 20,
   componentOptions: {
@@ -46,7 +46,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   labelKey: 'documents.label.lastUpdated',
   align: 'center',
   sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap last-updated-tooltip-marker',
+  cssClass: 'font-weight-bold text-no-wrap tooltip-marker',
   width: '190px',
   rank: 40,
   componentOptions: {
@@ -59,7 +59,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   labelKey: 'documents.label.extension.visibility',
   align: 'center',
   sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
+  cssClass: 'font-weight-bold text-no-wrap tooltip-marker',
   width: '190px',
   rank: 60,
   componentOptions: {
@@ -244,7 +244,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   labelKey: 'documents.label.favorite',
   align: 'center',
   sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
+  cssClass: 'font-weight-bold text-no-wrap tooltip-marker',
   width: '120px',
   rank: 60,
   componentOptions: {
