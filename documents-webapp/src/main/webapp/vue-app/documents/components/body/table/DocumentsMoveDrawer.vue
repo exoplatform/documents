@@ -27,6 +27,7 @@
             <documents-breadcrumb
               :show-icon="false"
               :documents-breadcrumb="documentsBreadcrumbSource"
+              :disabled-icon-tree="true"
               move />
           </div>
         </v-list-item>
@@ -36,6 +37,7 @@
             <documents-breadcrumb
               :show-icon="false"
               :documents-breadcrumb="documentsBreadcrumbDestination"
+              :disabled-icon-tree="true"
               move />
           </div>
         </v-list-item>
