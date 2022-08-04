@@ -34,7 +34,6 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
-import org.exoplatform.documents.rest.model.IdentityEntity;
 import org.exoplatform.documents.rest.model.NodePermissionEntity;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
@@ -486,12 +485,13 @@ public class DocumentFileRest implements ResourceContainer {
     documentFileService.undoDeleteDocument(documentId, userIdentityId);
     return Response.noContent().build();
   }
+  
   @Path("permissions")
   @POST
   @RolesAllowed("users")
   @ApiOperation(value = "Undo deleting document if not yet effectively deleted.", httpMethod = "POST", response = Response.class)
   @ApiResponses(value = {@ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-                         @ApiResponse(code = HTTPStatus.FORBIDDEN, message = "Forbidden operation"), })
+                         @ApiResponse(code = HTTPStatus.FORBIDDEN, message = "Forbidden operation"), })  
   public Response updatePermissions( @ApiParam(value = "Permission object", required = true)
                                              FileNodeEntity nodeEntity) {
 
@@ -511,6 +511,30 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     }
     return Response.noContent().build();
+  }
+  
+  @PUT
+  @Path("/description")
+  @RolesAllowed("users")
+  @ApiOperation(value = "update or create a document's description", httpMethod = "PUT", response = Response.class, notes = "This creates or updates a given document's description.")
+  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
+          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
+          @ApiResponse(code = 404, message = "Resource not found")})
+  public Response updateDocumentDescription (@ApiParam(value = "owner id", required = true)
+  											 @QueryParam("ownerId") long ownerId,
+											 @ApiParam(value = "document id", required = true)
+   											 @QueryParam("documentId") String documentId,
+											 @ApiParam(value = "document id", required = true)
+  											 @QueryParam("description") String description) {
+	  try {
+	      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+	      documentFileService.updateDocumentDescription(ownerId, documentId, description, userIdentityId);
+	      return Response.noContent().build();
+	      } catch (Exception ex) {
+	    	LOG.warn("Failed to update document description", ex);
+	        return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+	    }
+	  
   }
 }
 

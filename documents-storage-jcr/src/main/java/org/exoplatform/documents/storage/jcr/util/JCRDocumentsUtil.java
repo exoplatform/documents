@@ -40,6 +40,7 @@ import org.exoplatform.services.security.*;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.infinispan.commons.util.FastCopyHashMap.Values;
 
 public class JCRDocumentsUtil {
   private static final Log                              LOG                           =
@@ -345,7 +346,11 @@ public class JCRDocumentsUtil {
       documentNode.setModifierId(documentNode.getCreatorId());
     }
     if (node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)) {
-      documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());
+    	try {
+    		documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());	
+    	} catch(ValueFormatException e) {
+    		documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());	
+    	}
     }
     if (node.isNodeType(NodeTypeConstants.DC_DESCRIPTION)) {
       documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());

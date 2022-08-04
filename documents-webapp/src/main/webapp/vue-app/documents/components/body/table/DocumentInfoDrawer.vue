@@ -22,9 +22,12 @@
           </a>
         </v-list-item-content>
       </v-list-item>
-
+      <exo-description
+        @applyDescription="updateDescription"
+        :description="file.description"
+        :description-length="1300">
+      </exo-description>
       <v-divider dark />
-
       <template>
         <v-list-item>
           <v-list-item-content class="mt-4 mx-4">
@@ -135,6 +138,11 @@ export default {
     this.$root.$on('close-info-drawer', this.close);
   },
   methods: {
+    updateDescription(e){
+      this.file.description = e;
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.updateDescription(ownerId,this.file.id,e);
+    },
     open(file, fileName, fileType, icon) {
       this.file = file;
       this.fileName = fileName;
@@ -143,7 +151,9 @@ export default {
       this.$refs.documentInfoDrawer.open();
     },
     close() {
+      this.file = null;
       this.$refs.documentInfoDrawer.close();
+
     },
   }
 };
