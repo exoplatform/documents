@@ -54,6 +54,19 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   },
 });
 
+extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
+  id: 'visibility',
+  labelKey: 'documents.label.extension.visibility',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 60,
+  componentOptions: {
+    vueComponent: Vue.options.components['documents-visibility-cell'],
+  },
+});
+
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'favorite',
   labelKey: 'documents.label.favorite',
