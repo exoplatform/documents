@@ -5,6 +5,7 @@
         icon
         small
         class="me-2"
+        :disabled="disabledIconTree"
         @click="openTreeFolderDrawer()">
         <v-icon class="text-sub-title" size="16">
           fas fa-sitemap
@@ -25,6 +26,7 @@
               text
               v-bind="attrs"
               v-on="on"
+              :disabled="disabledIconTree"
               @click="openFolder(documents)">
               <a
                 class="caption text-truncate"
@@ -56,6 +58,10 @@ export default {
       default: true,
     },
     move: {
+      type: Boolean,
+      default: false,
+    },
+    disabledIconTree: {
       type: Boolean,
       default: false,
     },
