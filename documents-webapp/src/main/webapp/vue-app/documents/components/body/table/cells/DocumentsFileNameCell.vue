@@ -8,10 +8,11 @@
           v-if="loading"
           indeterminate
           size="16" />
-        <v-icon
+        <i
           v-else
-          :size="isMobile && 32 || 22"
-          :color="icon.color">{{ icon.class }}</v-icon>
+          class="fas fa-folder driveFolderIcon">
+          <i class="fa-hdd driveFolderContentIcon"></i>
+        </i>
       </div>
       <div class="width-full">
         <div
@@ -19,9 +20,8 @@
           @click="openPreview()"
           class="document-title clickable hover-underline d-inline-flex"
           :title="title">
-          <div
-            v-sanitized-html="title"
-            class="document-name text-truncate ms-4">
+          <div class="document-name text-truncate ms-4">
+          <span> {{ title }} </span>
           </div>
           <div
             v-sanitized-html="fileType"
