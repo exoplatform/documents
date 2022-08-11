@@ -998,6 +998,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (sessionProvider != null) {
       sessionProvider.close();
     	}
-  	}  
+     }  
   }
 }
