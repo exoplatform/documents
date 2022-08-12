@@ -20,8 +20,9 @@
           @click="openPreview()"
           class="document-title clickable hover-underline d-inline-flex"
           :title="title">
-          <div class="document-name text-truncate ms-4">
-          <span> {{ title }} </span>
+          <div
+            v-sanitized-html="title"
+            class="document-name text-truncate ms-4">
           </div>
           <div
             v-sanitized-html="fileType"
