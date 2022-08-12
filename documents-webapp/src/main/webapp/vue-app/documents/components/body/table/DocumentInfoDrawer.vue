@@ -37,7 +37,20 @@
                   :format="fullDateFormat"
                   class="document-date not-clickable text-no-wrap mx-1" />
                 {{ $t('documents.drawer.details.by') }}
-                <p class="text-decoration-underline text-truncate font-weight-bold mx-1" v-sanitized-html="profileLinkUpdated"></p>
+                <exo-user-avatar
+                  v-if="identityModifier && !isCurrentUserModifier"
+                  :identity="identityModifier"
+                  avatar-class="me-2"
+                  size="42"
+                  fullname
+                  popover
+                  bold-title
+                  link-style
+                  class="text-decoration-underline text-truncate font-weight-bold mx-1"
+                  username-class />
+                <p v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
+                  {{ infoDrawerModifierLabel }}
+                </p>
               </a>
             </v-list-item-title>
           </v-list-item-content>
@@ -55,7 +68,22 @@
                   :format="fullDateFormat"
                   class="document-date not-clickable text-no-wrap mx-1" />
                 {{ $t('documents.drawer.details.by') }}
-                <p class="text-decoration-underline text-truncate font-weight-bold mx-1" v-sanitized-html="profileLinkCreated"></p>
+
+                <exo-user-avatar
+                  v-if="identityCreated && !isCurrentUserCreator"
+                  :identity="identityCreated"
+                  avatar-class="me-2"
+                  size="42"
+                  fullname
+                  popover
+                  bold-title
+                  link-style
+                  extra-class="text-decoration-underline"
+                  class="text-decoration-underline text-truncate font-weight-bold mx-1"
+                  username-class />
+                <p v-else class="text-decoration-underline not-clickable primary--text font-weight-bold mx-1">
+                  {{ infoDrawerCreatorLabel }}
+                </p>
               </a>
             </v-list-item-title>
           </v-list-item-content>
@@ -106,25 +134,27 @@ export default {
     fileCreated() {
       return this.file && this.file.createdDate || '';
     },
-    urlUpdated() {
-      return this.file && this.file.modifierIdentity && this.file.modifierIdentity.remoteId ? `${eXo.env.portal.context}/${eXo.env.portal.portalName}/profile/${this.file.modifierIdentity.remoteId}` : '#';
+    infoDrawerCreatorLabel() {
+      return this.currentUser === this.file?.creatorIdentity?.remoteId ?
+        this.$t('documents.drawer.details.me') :
+        this.$t('documents.drawer.details.system');
     },
-    urlCreated() {
-      return this.file && this.file.creatorIdentity && this.file.creatorIdentity.remoteId ? `${eXo.env.portal.context}/${eXo.env.portal.portalName}/profile/${this.file.creatorIdentity.remoteId}` : '#';
+    infoDrawerModifierLabel() {
+      return this.currentUser === this.file?.modifierIdentity?.remoteId ?
+        this.$t('documents.drawer.details.me') :
+        this.$t('documents.drawer.details.system');
     },
-    profileLinkUpdated() {
-      return `<a href="${this.urlUpdated}"><strong>${this.identityModifier}</strong></a>`;
+    isCurrentUserModifier() {
+      return this.currentUser === this.file?.modifierIdentity?.remoteId;
     },
-    profileLinkCreated() {
-      return `<a href="${this.urlCreated}"><strong>${this.identityCreated}</strong></a>`;
+    isCurrentUserCreator() {
+      return this.currentUser === this.file?.creatorIdentity?.remoteId;
     },
     identityModifier(){
-      if (!(this.file && this.file.modifierIdentity)) {return '';}
-      return this.currentUser === this.file.modifierIdentity.remoteId ? this.$t('documents.drawer.details.me') : this.file.modifierIdentity.name;
+      return this.file?.modifierIdentity;
     },
     identityCreated(){
-      if (!(this.file && this.file.creatorIdentity)) {return '';}
-      return this.currentUser === this.file.creatorIdentity.remoteId ? this.$t('documents.drawer.details.me') : this.file.creatorIdentity.name;
+      return this.file?.creatorIdentity;
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
