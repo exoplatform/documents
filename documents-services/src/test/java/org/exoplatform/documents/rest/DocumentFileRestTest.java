@@ -356,9 +356,10 @@ public class DocumentFileRestTest {
     filter.setFavorites(false);
     filter.setSortField(DocumentSortField.NAME);
     IdentityEntity identity1 = new IdentityEntity();
-    IdentityEntity identity2 = new IdentityEntity("3", "userb", null, "organization", "spacetest");
+    IdentityEntity identity2 = new IdentityEntity("3", "userb", "userb", null, "organization", "spacetest");
     identity1.setId("2");
     identity1.setName("usera");
+    identity1.setFullname("usera");
     identity1.setAvatar(null);
     identity1.setProviderId("organization");
     identity1.setRemoteId("spacetest");
