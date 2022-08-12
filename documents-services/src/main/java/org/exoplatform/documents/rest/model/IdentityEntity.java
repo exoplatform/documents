@@ -27,6 +27,8 @@ public class IdentityEntity {
 
   private String name;
 
+  private String fullname;
+
   private String remoteId;
 
   private String providerId;
