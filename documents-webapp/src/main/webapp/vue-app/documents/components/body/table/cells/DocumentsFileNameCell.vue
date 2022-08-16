@@ -11,7 +11,8 @@
         <i
           v-else
           class="fas fa-folder driveFolderIcon">
-          <i class="fa-hdd driveFolderContentIcon"></i>
+          <i 
+            :class="checkIfEmailInFolderTitle(title) ? 'fa-hdd driveFolderContentIcon' : ''"></i>
         </i>
       </div>
       <div class="width-full">
@@ -288,6 +289,10 @@ export default {
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
     },
-  },
+    checkIfEmailInFolderTitle(text) { 
+      const re = /(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/;
+      return re.test(text);
+    }
+  }
 };
 </script>
