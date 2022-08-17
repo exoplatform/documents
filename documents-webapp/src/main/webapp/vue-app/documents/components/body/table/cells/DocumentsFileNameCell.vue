@@ -11,7 +11,8 @@
         <i
           v-else
           class="fas fa-folder driveFolderIcon">
-          <i class="fa-hdd driveFolderContentIcon"></i>
+          <i 
+            :class="file.cloudDriveFolder ? 'fa-hdd driveFolderContentIcon' : ''"></i>
         </i>
       </div>
       <div class="width-full">
@@ -287,7 +288,7 @@ export default {
         this.menuDisplayed = true;
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
-    },
-  },
+    }
+  }
 };
 </script>
