@@ -182,6 +182,7 @@ public class EntityBuilder {
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
       nodeEntity.setSourceID(node.getSourceID());
+      nodeEntity.setIsCloudDrive(node.getIsCloudDrive());
 
       if ((node instanceof FolderNode)) {
         ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());

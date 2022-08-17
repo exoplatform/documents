@@ -64,4 +64,6 @@ public class AbstractNodeEntity {
 
   private String                                sourceID;
 
+  private Boolean                               isCloudDrive;
+
 }
