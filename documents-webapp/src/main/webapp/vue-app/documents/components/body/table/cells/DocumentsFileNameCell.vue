@@ -12,7 +12,7 @@
           v-else
           class="fas fa-folder driveFolderIcon">
           <i 
-            :class="file.isCloudDrive ? 'fa-hdd driveFolderContentIcon' : ''"></i>
+            :class="file.cloudDriveFolder ? 'fa-hdd driveFolderContentIcon' : ''"></i>
         </i>
       </div>
       <div class="width-full">
