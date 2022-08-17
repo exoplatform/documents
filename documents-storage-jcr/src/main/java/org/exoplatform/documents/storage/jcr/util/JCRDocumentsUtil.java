@@ -212,7 +212,7 @@ public class JCRDocumentsUtil {
       }
       folderNode.setDatasource(JCR_DATASOURCE_NAME);
       folderNode.setPath(node.getPath());
-      folderNode.setIsCloudDrive(node.hasProperty("ecd:connected"));
+      folderNode.setCloudDrive(node.hasProperty("ecd:connected"));
 
       retrieveFileProperties(identityManager, node, aclIdentity, folderNode, spaceService);
 

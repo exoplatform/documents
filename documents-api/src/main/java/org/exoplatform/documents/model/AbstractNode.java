@@ -49,7 +49,7 @@ public abstract class AbstractNode {
 
   private String         sourceID;
 
-  private Boolean        isCloudDrive;
+  private boolean        isCloudDrive;
 
   public  boolean isFolder(){
     return this instanceof FolderNode;
