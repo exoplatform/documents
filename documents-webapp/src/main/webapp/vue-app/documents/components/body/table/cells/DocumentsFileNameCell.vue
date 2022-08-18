@@ -8,10 +8,12 @@
           v-if="loading"
           indeterminate
           size="16" />
-        <v-icon
+        <i
           v-else
-          :size="isMobile && 32 || 22"
-          :color="icon.color">{{ icon.class }}</v-icon>
+          class="fas fa-folder driveFolderIcon">
+          <i 
+            :class="file.cloudDriveFolder ? 'fa-hdd driveFolderContentIcon' : ''"></i>
+        </i>
       </div>
       <div class="width-full">
         <div
@@ -286,7 +288,7 @@ export default {
         this.menuDisplayed = true;
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
-    },
-  },
+    }
+  }
 };
 </script>
