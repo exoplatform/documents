@@ -34,7 +34,6 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
-import org.exoplatform.documents.rest.model.IdentityEntity;
 import org.exoplatform.documents.rest.model.NodePermissionEntity;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
@@ -45,11 +44,15 @@ import org.exoplatform.services.rest.resource.ResourceContainer;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.MetadataService;
-
-import io.swagger.annotations.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 @Path("/v1/documents")
-@Api(value = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
+@Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
 public class DocumentFileRest implements ResourceContainer {
 
   private static final Log          LOG = ExoLogger.getLogger(DocumentFileRest.class);
@@ -75,49 +78,49 @@ public class DocumentFileRest implements ResourceContainer {
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @ApiOperation(value = "Retrieves the list of document items (folders and files) for an authenticated user switch filter.", httpMethod = "GET", response = Response.class, produces = "application/json")
-  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-      @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
-      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
-  public Response getDocumentItems(@ApiParam(value = "Identity technical identifier", required = false)
+  @Operation(summary = "Retrieves the list of document items (folders and files) for an authenticated user switch filter", method = "GET", description = "Retrieves the list of document items (folders and files) for an authenticated user switch filter.")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "404", description = "Not found"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getDocumentItems(@Parameter(description = "Identity technical identifier")
   @QueryParam("ownerId")
   Long ownerId,
-                                   @ApiParam(value = "Parent folder technical identifier", required = false)
+                                   @Parameter(description = "Parent folder technical identifier")
                                    @QueryParam("parentFolderId")
                                    String parentFolderId,
-                                   @ApiParam(value = "Parent folder path", required = false)
+                                   @Parameter(description = "Parent folder path")
                                    @QueryParam("folderPath")
                                    String folderPath,
-                                   @ApiParam(value = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.", required = false)
+                                   @Parameter(description = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.")
                                    @QueryParam("listingType")
                                    FileListingType listingType,
-                                   @ApiParam(value = "Search query entered by the user", required = false)
+                                   @Parameter(description = "Search query entered by the user")
                                    @QueryParam("query")
                                    String query,
-                                   @ApiParam(value = "userId", required = false)
+                                   @Parameter(description = "userId")
                                    @QueryParam("userId")
                                    String userId,
-                                   @ApiParam(value = "favorites", required = false, defaultValue = "false")
+                                   @Parameter(description = "favorites") @Schema(defaultValue = "false")
                                    @QueryParam("favorites")
                                    boolean favorites,
-                                   @ApiParam(value = "File properties to expand.", required = false)
+                                   @Parameter(description = "File properties to expand.")
                                    @QueryParam("expand")
                                    String expand,
-                                   @ApiParam(value = "Document items sort field", required = false)
+                                   @Parameter(description = "Document items sort field")
                                    @QueryParam("sortField")
                                    String sortField,
-                                   @ApiParam(value = "Sort ascending or descending", required = false)
+                                   @Parameter(description = "Sort ascending or descending")
                                    @QueryParam("ascending")
                                    boolean ascending,
-                                   @ApiParam(value = "Offset of results to return", required = false, defaultValue = "10")
+                                   @Parameter(description = "Offset of results to return") @Schema(defaultValue = "10")
                                    @QueryParam("offset")
                                    int offset,
-                                   @ApiParam(value = "Limit of results to return", required = false, defaultValue = "10")
+                                   @Parameter(description = "Limit of results to return") @Schema(defaultValue = "10")
                                    @QueryParam("limit")
                                    int limit,
-                                   @ApiParam(value = "showHiddenFiles of results to return", required = false, defaultValue = "false")
+                                   @Parameter(description = "showHiddenFiles of results to return") @Schema(defaultValue = "false")
                                    @QueryParam("showHiddenFiles")
                                    boolean showHiddenFiles) {
 
@@ -162,20 +165,20 @@ public class DocumentFileRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/group/count")
-  @ApiOperation(value = "Get documents groups sizes.", httpMethod = "GET", response = Response.class, produces = "application/json")
-  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-      @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
-      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
-  public Response getDocumentGroupsCount(@ApiParam(value = "Identity technical identifier", required = false)
+  @Operation(summary = "Get documents groups sizes", method = "GET", description = "Get documents groups sizes")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "404", description = "Not found"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getDocumentGroupsCount(@Parameter(description = "Identity technical identifier")
   @QueryParam("ownerId")
   Long ownerId, @QueryParam("parentFolderId")
   String parentFolderId,
-                                         @ApiParam(value = "Search query entered by the user", required = false)
+                                         @Parameter(description = "Search query entered by the user")
                                          @QueryParam("query")
                                          String query,
-                                         @ApiParam(value = "favorites", required = false, defaultValue = "false")
+                                         @Parameter(description = "favorites") @Schema(defaultValue = "false")
                                          @QueryParam("favorites")
                                          boolean favorites) {
 
@@ -207,19 +210,19 @@ public class DocumentFileRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/breadcrumb")
-  @ApiOperation(value = "Get breadcrumb of given .", httpMethod = "GET", response = Response.class, produces = "application/json")
-  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-      @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
-      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
-  public Response getBreadcrumb(@ApiParam(value = "Identity technical identifier", required = false)
+  @Operation(summary = "Get breadcrumb of given", method = "GET", description = "Get breadcrumb of given")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "404", description = "Not found"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getBreadcrumb(@Parameter(description = "Identity technical identifier", required = false)
   @QueryParam("ownerId")
   Long ownerId,
-                                @ApiParam(value = "Folder technical identifier", required = false)
+                                @Parameter(description = "Folder technical identifier")
                                 @QueryParam("folderId")
                                 String folderId,
-                                @ApiParam(value = "Folder path", required = false)
+                                @Parameter(description = "Folder path")
                                 @QueryParam("folderPath")
                                 String folderPath) {
 
@@ -244,16 +247,16 @@ public class DocumentFileRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/fullTree")
-  @ApiOperation(value = "Get Full Tree of given .", httpMethod = "GET", response = Response.class, produces = "application/json")
-  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-          @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
-          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
-  public Response getFullTreeData(@ApiParam(value = "Identity technical identifier", required = false)
+  @Operation(summary = "Get Full Tree of given folder", method = "GET", description = "Get Full Tree of given folder")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "404", description = "Not found"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getFullTreeData(@Parameter(description = "Identity technical identifier")
                                 @QueryParam("ownerId")
                                         Long ownerId,
-                                @ApiParam(value = "Folder technical identifier", required = false)
+                                @Parameter(description = "Folder technical identifier")
                                 @QueryParam("folderId")
                                         String folderId) {
 
@@ -278,22 +281,22 @@ public class DocumentFileRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/duplicate")
-  @ApiOperation(value = "POST DUPLICATE of given .", httpMethod = "POST", response = Response.class, produces = "application/json")
-  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-          @ApiResponse(code = HTTPStatus.NOT_FOUND, message = "Not found"),
-          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
-  public Response duplicateDocument(@ApiParam(value = "Identity technical identifier", required = false)
+  @Operation(summary = "POST DUPLICATE of given document", method = "POST", description = "POST DUPLICATE of given document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "404", description = "Not found"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response duplicateDocument(@Parameter(description = "Identity technical identifier")
                                 @QueryParam("ownerId")
                                         Long ownerId,
-                                @ApiParam(value = "File technical identifier", required = false)
+                                @Parameter(description = "File technical identifier")
                                 @QueryParam("fileId")
                                         String fileId,
-                                @ApiParam(value = "File prefix Clone", required = false)
+                                @Parameter(description = "File prefix Clone")
                                 @QueryParam("prefixClone")
                                         String prefixClone,
-                                @ApiParam(value = "File properties to expand.", required = false)
+                                @Parameter(description = "File properties to expand.")
                                 @QueryParam("expand")
                                          String expand) {
 
@@ -325,13 +328,14 @@ public class DocumentFileRest implements ResourceContainer {
   @PUT
   @Path("/move")
   @RolesAllowed("users")
-  @ApiOperation(value = "Move documents", httpMethod = "POST", response = Response.class, notes = "This rename a giving document.")
-  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
-          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
-          @ApiResponse(code = 404, message = "Resource not found")})
-  public Response moveDocument (@ApiParam(value = "documentID", required = false) @QueryParam("documentID") String documentID,
-                                  @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
-                                  @ApiParam(value = "new path", required = false) @QueryParam("destPath") String destPath) {
+  @Operation(summary = "Move documents", method = "POST", description = "This rename a giving document.")
+  @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Resource not found")})
+  public Response moveDocument (@Parameter(description = "document id") @QueryParam("documentID") String documentID,
+                                  @Parameter(description = "ownerId") @QueryParam("ownerId") Long ownerId,
+                                  @Parameter(description = "new path") @QueryParam("destPath") String destPath) {
 
     if (ownerId == null && StringUtils.isBlank(documentID)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
@@ -352,14 +356,15 @@ public class DocumentFileRest implements ResourceContainer {
   @POST
   @Path("/folder")
   @RolesAllowed("users")
-  @ApiOperation(value = "Add a new Folder", httpMethod = "POST", response = Response.class, notes = "This adds a new Folder under givin Folder.")
-  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
-          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
-          @ApiResponse(code = 404, message = "Resource not found")})
-  public Response createFolder (@ApiParam(value = "parentid", required = false) @QueryParam("parentid") String parentid,
-                                @ApiParam(value = "folderPath", required = false) @QueryParam("folderPath") String folderPath,
-                                @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
-                                @ApiParam(value = "folder name", required = false) @QueryParam("name") String name) {
+  @Operation(summary = "Add a new Folder", method = "POST", description = "This adds a new Folder under givin Folder.")
+  @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Resource not found")})
+  public Response createFolder (@Parameter(description = "parent id") @QueryParam("parentid") String parentid,
+                                @Parameter(description = "folder Path") @QueryParam("folderPath") String folderPath,
+                                @Parameter(description = "owner id") @QueryParam("ownerId") Long ownerId,
+                                @Parameter(description = "folder name") @QueryParam("name") String name) {
 
     if (ownerId == null && StringUtils.isBlank(parentid)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_parentid_is_mandatory").build();
@@ -381,14 +386,18 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("/newname")
   @Produces(MediaType.TEXT_PLAIN)
   @RolesAllowed("users")
-  @ApiOperation(value = "propose a new name for Folder is there is already a folder with the provided name", httpMethod = "GET", response = Response.class, notes = "propse a new name for Folder is there is already a folder with the provided name")
-  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
-          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
-          @ApiResponse(code = 404, message = "Resource not found")})
-  public Response getNewName (@ApiParam(value = "parentid", required = false) @QueryParam("parentid") String parentid,
-                                @ApiParam(value = "folderPath", required = false) @QueryParam("folderPath") String folderPath,
-                                @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
-                                @ApiParam(value = "folder name", required = false) @QueryParam("name") String name) {
+    @Operation(
+            summary = "propose a new name for Folder is there is already a folder with the provided name",
+            method = "GET",
+            description = "propose a new name for Folder is there is already a folder with the provided name")
+  @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Resource not found")})
+    public Response getNewName (@Parameter(description = "parent id") @QueryParam("parentid") String parentid,
+                                @Parameter(description = "folder Path") @QueryParam("folderPath") String folderPath,
+                                @Parameter(description = "ownerId") @QueryParam("ownerId") Long ownerId,
+                                @Parameter(description = "folder name") @QueryParam("name") String name) {
 
     if (ownerId == null && StringUtils.isBlank(parentid)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_parentid_is_mandatory").build();
@@ -411,13 +420,14 @@ public class DocumentFileRest implements ResourceContainer {
   @PUT
   @Path("/rename")
   @RolesAllowed("users")
-  @ApiOperation(value = "Rename documents", httpMethod = "POST", response = Response.class, notes = "This rename a giving document.")
-  @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
-          @ApiResponse(code = 400, message = "Invalid query input"), @ApiResponse(code = 403, message = "Unauthorized operation"),
-          @ApiResponse(code = 404, message = "Resource not found")})
-  public Response renameDocument (@ApiParam(value = "documentID", required = false) @QueryParam("documentID") String documentID,
-                                @ApiParam(value = "ownerId", required = false) @QueryParam("ownerId") Long ownerId,
-                                @ApiParam(value = "new name", required = false) @QueryParam("newName") String newName) {
+  @Operation(summary = "Rename documents", method = "POST", description = "This rename a giving document.")
+  @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Resource not found")})
+  public Response renameDocument (@Parameter(description = "document id") @QueryParam("documentID") String documentID,
+                                @Parameter(description = "ownerId") @QueryParam("ownerId") Long ownerId,
+                                @Parameter(description = "new name") @QueryParam("newName") String newName) {
 
     if (ownerId == null && StringUtils.isBlank(documentID)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
@@ -439,18 +449,18 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("{documentId}")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @ApiOperation(value = "Delete document", httpMethod = "DELETE", response = Response.class, notes = "This deletes document", consumes = "application/json")
-  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Document deleted"),
-          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "User not authorized to delete the document"),
-          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
-  public Response deleteDocument(@ApiParam(value = "Document id", required = true)
+  @Operation(summary = "Delete document", method = "DELETE", description = "This deletes document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "401", description = "User not authorized to delete the document"),
+          @ApiResponse(responseCode = "500", description = "Internal server error") })
+  public Response deleteDocument(@Parameter(description = "Document id", required = true)
                                  @PathParam("documentId") String documentId,
-                                 @ApiParam(value = "folder path", required = true)
-                                 @QueryParam("documentPath") String documentPath,
-                                 @ApiParam(value = "Is favorite document", required = false)
+                                 @Parameter(description = "folder path", required = true)
+                                 @QueryParam("document path") String documentPath,
+                                 @Parameter(description = "Is favorite document", required = false)
                                  @QueryParam("favorite") boolean favorite,
-                                 @ApiParam(value = "Time to effectively delete document", required = false)
+                                 @Parameter(description = "Time to effectively delete document", required = false)
                                  @QueryParam("delay") long delay) {
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Status.BAD_REQUEST).entity("document_id_is_mandatory").build();
@@ -474,10 +484,10 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("{documentId}/undoDelete")
   @POST
   @RolesAllowed("users")
-  @ApiOperation(value = "Undo deleting document if not yet effectively deleted.", httpMethod = "POST", response = Response.class)
-  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-                         @ApiResponse(code = HTTPStatus.FORBIDDEN, message = "Forbidden operation"), })
-  public Response undoDeleteDocument(@ApiParam(value = "Document identifier", required = true)
+  @Operation(summary = "Undo deleting document if not yet effectively deleted", method = "POST", description = "Undo deleting document if not yet effectively deleted")
+  @ApiResponses(value = {@ApiResponse(responseCode = "400", description = "Invalid query input"),
+                         @ApiResponse(responseCode = "403", description = "Forbidden operation"), })
+  public Response undoDeleteDocument(@Parameter(description = "Document identifier", required = true)
                                      @PathParam("documentId") String documentId) {
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("document_id_is_mandatory").build();
@@ -489,10 +499,10 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("permissions")
   @POST
   @RolesAllowed("users")
-  @ApiOperation(value = "Undo deleting document if not yet effectively deleted.", httpMethod = "POST", response = Response.class)
-  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-                         @ApiResponse(code = HTTPStatus.FORBIDDEN, message = "Forbidden operation"), })
-  public Response updatePermissions( @ApiParam(value = "Permission object", required = true)
+  @Operation(summary = "Undo deleting document if not yet effectively deleted", method = "POST", description = "Undo deleting document if not yet effectively deleted")
+  @ApiResponses(value = {@ApiResponse(responseCode = "400", description = "Invalid query input"),
+                         @ApiResponse(responseCode = "403", description = "Forbidden operation"), })
+  public Response updatePermissions( @Parameter(description = "Permission object", required = true)
                                              FileNodeEntity nodeEntity) {
 
     if (nodeEntity == null) {
