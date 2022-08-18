@@ -49,6 +49,8 @@ public abstract class AbstractNode {
 
   private String         sourceID;
 
+  private boolean        cloudDriveFolder;
+
   public  boolean isFolder(){
     return this instanceof FolderNode;
   }
