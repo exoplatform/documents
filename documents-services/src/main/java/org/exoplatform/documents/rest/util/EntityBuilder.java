@@ -398,6 +398,7 @@ public class EntityBuilder {
     identityEntity.setRemoteId(identity.getRemoteId());
     if (identity.isUser()) {
       identityEntity.setName(identity.getProfile().getFullName());
+      identityEntity.setFullname(identity.getProfile().getFullName());
       identityEntity.setAvatar(identity.getProfile().getAvatarUrl());
     } else if (identity.isSpace()) {
       Space space = spaceService.getSpaceByPrettyName(identity.getRemoteId());
