@@ -9,11 +9,15 @@
           indeterminate
           size="16" />
         <i
-          v-else
+          v-else-if="file.cloudDriveFolder "
           class="fas fa-folder driveFolderIcon">
           <i 
-            :class="file.cloudDriveFolder ? 'fa-hdd driveFolderContentIcon' : ''"></i>
+            class="fa-hdd driveFolderContentIcon"></i>
         </i>
+        <v-icon
+          v-else
+          :size="isMobile && 32 || 22"
+          :color="icon.color">{{ icon.class }}</v-icon>
       </div>
       <div class="width-full">
         <div
