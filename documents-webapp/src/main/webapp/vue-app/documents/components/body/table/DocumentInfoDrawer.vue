@@ -38,7 +38,7 @@
                   class="document-date not-clickable text-no-wrap mx-1" />
                 {{ $t('documents.drawer.details.by') }}
                 <exo-user-avatar
-                  v-if="identityModifier && !isCurrentUserModifier"
+                  v-if="identityModifier"
                   :identity="identityModifier"
                   avatar-class="me-2"
                   size="42"
@@ -49,7 +49,7 @@
                   class="text-decoration-underline text-truncate font-weight-bold mx-1"
                   username-class />
                 <p v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
-                  {{ infoDrawerModifierLabel }}
+                  {{ systemLabel }}
                 </p>
               </a>
             </v-list-item-title>
@@ -70,7 +70,7 @@
                 {{ $t('documents.drawer.details.by') }}
 
                 <exo-user-avatar
-                  v-if="identityCreated && !isCurrentUserCreator"
+                  v-if="identityCreated"
                   :identity="identityCreated"
                   avatar-class="me-2"
                   size="42"
@@ -82,7 +82,7 @@
                   class="text-decoration-underline text-truncate font-weight-bold mx-1"
                   username-class />
                 <p v-else class="text-decoration-underline not-clickable primary--text font-weight-bold mx-1">
-                  {{ infoDrawerCreatorLabel }}
+                  {{ systemLabel }}
                 </p>
               </a>
             </v-list-item-title>
@@ -134,21 +134,8 @@ export default {
     fileCreated() {
       return this.file && this.file.createdDate || '';
     },
-    infoDrawerCreatorLabel() {
-      return this.currentUser === this.file?.creatorIdentity?.remoteId ?
-        this.$t('documents.drawer.details.me') :
-        this.$t('documents.drawer.details.system');
-    },
-    infoDrawerModifierLabel() {
-      return this.currentUser === this.file?.modifierIdentity?.remoteId ?
-        this.$t('documents.drawer.details.me') :
-        this.$t('documents.drawer.details.system');
-    },
-    isCurrentUserModifier() {
-      return this.currentUser === this.file?.modifierIdentity?.remoteId;
-    },
-    isCurrentUserCreator() {
-      return this.currentUser === this.file?.creatorIdentity?.remoteId;
+    systemLabel() {
+      return this.$t('documents.drawer.details.system');
     },
     identityModifier(){
       return this.file?.modifierIdentity;
