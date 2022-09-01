@@ -63,6 +63,7 @@ export default {
             breadCrumb: file.previewBreadcrumb,
             fileInfo: fileInfo,
             size: file.size,
+            isCloudDrive: file.cloudDrive
           },
           author: file.updater,
           version: {
