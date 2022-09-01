@@ -609,6 +609,7 @@ export default {
               breadCrumb: attachment.previewBreadcrumb,
               size: attachment.size,
               downloadUrl: attachment.downloadUrl,
+              isCloudDrive: attachment.cloudDrive
             },
             author: attachment.updater,
             version: {

@@ -269,6 +269,7 @@ export default {
                 breadCrumb: attachment.previewBreadcrumb,
                 fileInfo: this.fileInfo(),
                 size: attachment.size,
+                isCloudDrive: attachment.cloudDrive
               },
               author: attachment.updater,
               version: {
