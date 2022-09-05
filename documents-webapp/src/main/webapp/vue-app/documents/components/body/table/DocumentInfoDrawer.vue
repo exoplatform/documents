@@ -22,9 +22,42 @@
           </a>
         </v-list-item-content>
       </v-list-item>
-
+      <div v-if="showNoDescription" class="d-flex flex-column justify-center text-center pa-8">
+        <v-icon size="40" class="descriptionIcon"> mdi-message-text-outline </v-icon>
+        <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
+        <a class="align-center" @click="openEditor">
+          <span>{{ $t('documents.message.addYourDescription') }}</span>
+        </a>
+      </div>
+      <div
+        v-show="showDescription"
+        :data-text="placeholder"
+        :title="$t('tooltip.clickToEdit')"
+        contentEditable="true"
+        class="py-4 px-8"
+        @click="openEditor"
+        v-sanitized-html="file.description">
+        {{ placeholder }}
+      </div>
+      <div v-show="displayEditor" class="py-4 px-8">
+        <exo-activity-rich-editor
+          ref="activityShareMessage"
+          v-model="file.description"
+          max-length="1300"
+          :placeholder="$t('documents.alert.descriptionLimit')"
+          class="flex" />
+        <v-btn
+          id="saveDescriptionButton"
+          :loading="savingDescription"
+          :disabled="saveDescriptionButtonDisabled"
+          depressed
+          outlined
+          class="btn mt-2 ml-auto d-flex px-2 btn-primary v-btn v-btn--contained theme--light v-size--default"
+          @click="updateDescription">
+          {{ $t('documents.label.apply') }}
+        </v-btn>
+      </div>
       <v-divider dark />
-
       <template>
         <v-list-item>
           <v-list-item-content class="mt-4 mx-4">
@@ -120,6 +153,9 @@ export default {
     fileName: null,
     fileType: null,
     icon: null,
+    displayEditor: false,
+    showNoDescription: false,
+    showDescription: false,
   }),
   computed: {
     iconColor(){
@@ -165,15 +201,48 @@ export default {
     this.$root.$on('close-info-drawer', this.close);
   },
   methods: {
+    updateDescription(){
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      this.$documentFileService.updateDescription(ownerId,this.file)
+        .then(() => {
+          this.displayAlert(this.$t('documents.alert.success.description.updated'));
+          this.showDescription = true;
+          this.displayEditor=false;
+        });
+    },
     open(file, fileName, fileType, icon) {
       this.file = file;
       this.fileName = fileName;
       this.fileType = fileType;
       this.icon = icon;
+      this.displayEditor = false;
+      this.showNoDescription = this.file.description==null && !this.displayEditor;
+      this.showDescription = this.file.description!=null && !this.displayEditor;
       this.$refs.documentInfoDrawer.open();
     },
+    openEditor(){
+      this.showNoDescription = false;
+      this.showDescription = false;
+      this.displayEditor=true;
+    },
     close() {
+      this.file = null;
+      this.displayEditor = false;
+      this.showNoDescription = false;
+      this.showDescription = true;
+      this.displayEditor=true;
       this.$refs.documentInfoDrawer.close();
+
+    },
+    displayAlert(message, type) {
+      document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
+        detail: {
+          messageObject: {
+            message: message,
+            type: type || 'success',
+          }
+        }
+      }));
     },
   }
 };
