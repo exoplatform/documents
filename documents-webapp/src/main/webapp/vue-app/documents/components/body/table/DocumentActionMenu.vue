@@ -52,9 +52,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
-    fileCanEdit(){
+    fileCanEdit() {
       const type = this.file && this.file.mimeType || '';
-      return this.supportedDocuments && this.supportedDocuments.filter(doc => doc.edit && doc.mimeType === type).length > 0;
+      return this.supportedDocuments && this.supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
     }
   },
   methods: {
