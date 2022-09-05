@@ -990,7 +990,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
-      //node.save();
       if (node.canAddMixin(NodeTypeConstants.DC_ELEMENT_SET) && !node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)) {
         node.addMixin(NodeTypeConstants.DC_ELEMENT_SET);
       }

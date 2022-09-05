@@ -40,8 +40,6 @@ import org.exoplatform.services.security.*;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.infinispan.commons.util.FastCopyHashMap.Values;
-
 public class JCRDocumentsUtil {
   private static final Log                              LOG                           =
                                                             ExoLogger.getLogger(JCRDocumentsUtil.class);
