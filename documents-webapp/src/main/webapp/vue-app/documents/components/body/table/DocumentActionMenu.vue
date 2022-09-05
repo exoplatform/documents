@@ -78,6 +78,9 @@ export default {
       if (!this.fileCanEdit) {
         extensions = extensions.filter(extension => extension.id !== this.editExtensions);
       }
+      if (this.file.cloudDriveFolder) {
+        extensions = extensions.filter(extension => extension.id === 'copyLink');
+      }
       extensions = extensions.filter(extension => this.checkTransferRules(extension)
                                                      && extension.enabled(this.file.acl, this.isSymlink()));
       let changed = false;

@@ -256,6 +256,7 @@ public class JCRDocumentsUtil {
     if(StringUtils.isNotBlank(sourceID)){
       fileNode.setSourceID(sourceID);
     }
+
     toFileNode(identityManager, aclIdentity, node, fileNode , spaceService);
     return fileNode;
   }
