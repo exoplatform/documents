@@ -51,6 +51,8 @@ public abstract class AbstractNode {
 
   private boolean        cloudDriveFolder;
 
+  private boolean        cloudDriveFile;
+
   public  boolean isFolder(){
     return this instanceof FolderNode;
   }
