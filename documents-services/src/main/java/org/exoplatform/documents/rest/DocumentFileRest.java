@@ -522,5 +522,33 @@ public class DocumentFileRest implements ResourceContainer {
     }
     return Response.noContent().build();
   }
+
+  @PUT
+  @Path("/description")
+  @RolesAllowed("users")
+  @Operation(summary = "update or create a document's description", method = "PUT", description = "This creates or updates a given document's description.")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "404", description = "Resource not found") })
+  public Response updateDocumentDescription(@Parameter(description = "owner id", required = true)
+  @QueryParam("ownerId")
+  long ownerId,
+                                            @Parameter(description = "document id", required = true)
+                                            @QueryParam("documentId")
+                                            String documentId,
+                                            @Parameter(description = "document id", required = true)
+                                            @QueryParam("description")
+                                            String description) {
+    try {
+      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+      documentFileService.updateDocumentDescription(ownerId, documentId, description, userIdentityId);
+      return Response.noContent().build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to update document description", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
+
+  }
 }
 
