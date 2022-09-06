@@ -228,6 +228,7 @@ export function getNewName(ownerId,parentid,folderPath,name) {
     }
   });
 }
+
 export function deleteDocument(documentPath, documentId, favorite, delay) {
   if (delay > 0) {
     localStorage.setItem('deletedDocument', documentId);
@@ -267,5 +268,29 @@ export function undoDeleteDocument(documentId) {
     } else {
       throw new Error('Error when undoing deleting document');
     }
+  });
+}
+
+export function updateDescription(ownerId,document) {
+  const formData = new FormData();
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  if (document.id) {
+    formData.append('documentId', document.id);
+  }
+  if (document.description) {
+    formData.append('description', document.description);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/description?${params}`, {
+    credentials: 'include',
+    method: 'PUT',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.ok;
+    }
+  }).catch(e => {
+    throw new Error(`Error renaming document ${e}`);
   });
 }
