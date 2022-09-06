@@ -268,6 +268,7 @@ public class JCRDocumentsUtil {
                                 SpaceService spaceService) {
     try {
       fileNode.setDatasource(JCR_DATASOURCE_NAME);
+      fileNode.setCloudDriveFile(node.hasProperty("ecd:driveUUID"));
       retrieveFileProperties(identityManager, node, aclIdentity, fileNode, spaceService);
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
