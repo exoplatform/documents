@@ -49,7 +49,7 @@
         <v-btn
           id="saveDescriptionButton"
           :loading="savingDescription"
-          :disabled="saveDescriptionButtonDisabled"
+          :disabled="disableButton"
           depressed
           outlined
           class="btn mt-2 ml-auto d-flex px-2 btn-primary v-btn v-btn--contained theme--light v-size--default"
@@ -194,6 +194,9 @@ export default {
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
+    disableButton() {
+      return !this.file || !this.file.description || this.file.description.replace( /(<([^>]+)>)/ig, '').length>1300;
     },
   },
   created() {
