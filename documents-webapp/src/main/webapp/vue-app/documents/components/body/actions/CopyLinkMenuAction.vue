@@ -8,7 +8,7 @@
       mdi-link-variant
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.copy.link') }}</span>
-    <v-divider
+    <v-divider v-if="!file.cloudDriveFolder"
       class="mt-1 dividerStyle" />
   </div>
 </template>

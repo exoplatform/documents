@@ -212,6 +212,8 @@ public class JCRDocumentsUtil {
       }
       folderNode.setDatasource(JCR_DATASOURCE_NAME);
       folderNode.setPath(node.getPath());
+      folderNode.setCloudDriveFolder(node.hasProperty("ecd:connected"));
+
       retrieveFileProperties(identityManager, node, aclIdentity, folderNode, spaceService);
 
       return folderNode;
@@ -254,6 +256,7 @@ public class JCRDocumentsUtil {
     if(StringUtils.isNotBlank(sourceID)){
       fileNode.setSourceID(sourceID);
     }
+
     toFileNode(identityManager, aclIdentity, node, fileNode , spaceService);
     return fileNode;
   }
@@ -265,6 +268,7 @@ public class JCRDocumentsUtil {
                                 SpaceService spaceService) {
     try {
       fileNode.setDatasource(JCR_DATASOURCE_NAME);
+      fileNode.setCloudDriveFile(node.hasProperty("ecd:driveUUID"));
       retrieveFileProperties(identityManager, node, aclIdentity, fileNode, spaceService);
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);

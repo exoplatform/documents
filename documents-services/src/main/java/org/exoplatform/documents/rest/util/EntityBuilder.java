@@ -182,6 +182,8 @@ public class EntityBuilder {
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
       nodeEntity.setSourceID(node.getSourceID());
+      nodeEntity.setCloudDriveFolder(node.isCloudDriveFolder());
+      nodeEntity.setCloudDriveFile(node.isCloudDriveFile());
 
       if ((node instanceof FolderNode)) {
         ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());
@@ -397,6 +399,7 @@ public class EntityBuilder {
     identityEntity.setRemoteId(identity.getRemoteId());
     if (identity.isUser()) {
       identityEntity.setName(identity.getProfile().getFullName());
+      identityEntity.setFullname(identity.getProfile().getFullName());
       identityEntity.setAvatar(identity.getProfile().getAvatarUrl());
     } else if (identity.isSpace()) {
       Space space = spaceService.getSpaceByPrettyName(identity.getRemoteId());

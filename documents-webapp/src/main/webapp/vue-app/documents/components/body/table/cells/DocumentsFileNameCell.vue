@@ -8,6 +8,12 @@
           v-if="loading"
           indeterminate
           size="16" />
+        <i
+          v-else-if="file.cloudDriveFolder "
+          class="fas fa-folder driveFolderIcon">
+          <i 
+            class="fa-hdd driveFolderContentIcon"></i>
+        </i>
         <v-icon
           v-else
           :size="isMobile && 32 || 22"
@@ -260,6 +266,7 @@ export default {
                 breadCrumb: attachment.previewBreadcrumb,
                 fileInfo: this.fileInfo(),
                 size: attachment.size,
+                isCloudDrive: attachment.cloudDrive
               },
               author: attachment.updater,
               version: {
@@ -283,7 +290,7 @@ export default {
         this.menuDisplayed = true;
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
-    },
-  },
+    }
+  }
 };
 </script>

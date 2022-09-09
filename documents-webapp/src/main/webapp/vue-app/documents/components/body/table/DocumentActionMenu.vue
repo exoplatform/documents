@@ -52,9 +52,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
-    fileCanEdit(){
+    fileCanEdit() {
       const type = this.file && this.file.mimeType || '';
-      return this.supportedDocuments && this.supportedDocuments.filter(doc => doc.edit && doc.mimeType === type).length > 0;
+      return this.supportedDocuments && this.supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
     }
   },
   methods: {
@@ -77,6 +77,9 @@ export default {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
       if (!this.fileCanEdit) {
         extensions = extensions.filter(extension => extension.id !== this.editExtensions);
+      }
+      if (this.file.cloudDriveFolder) {
+        extensions = extensions.filter(extension => extension.id === 'copyLink');
       }
       extensions = extensions.filter(extension => this.checkTransferRules(extension)
                                                      && extension.enabled(this.file.acl, this.isSymlink()));
