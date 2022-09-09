@@ -291,6 +291,6 @@ export function updateDescription(ownerId,document) {
       return resp.ok;
     }
   }).catch(e => {
-    throw new Error(`Error renaming document ${e}`);
+    throw new Error(`Error when trying to update document description ${e}`);
   });
 }

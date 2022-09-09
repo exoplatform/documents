@@ -197,7 +197,10 @@ public interface DocumentFileService {
 
   org.exoplatform.services.security.Identity getAclUserIdentity(String userName) throws IllegalAccessException;
   
-  default void updateDocumentDescription(long ownerId, String documentID, String description, long aclIdentity) throws IllegalStateException, IllegalAccessException{
-	  throw new IllegalStateException("updateDocumentDescription method not implemented in the target class");
+  default void updateDocumentDescription(long ownerId,
+                                         String documentID,
+                                         String description,
+                                         long aclIdentity) throws IllegalStateException, IllegalAccessException {
+    throw new IllegalStateException("updateDocumentDescription method not implemented in the target class");
   }
 }

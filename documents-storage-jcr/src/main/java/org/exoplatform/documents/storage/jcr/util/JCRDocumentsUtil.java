@@ -348,11 +348,11 @@ public class JCRDocumentsUtil {
       documentNode.setModifierId(documentNode.getCreatorId());
     }
     if (node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)) {
-    	try {
-    		documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());	
-    	} catch(ValueFormatException e) {
-    		documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());	
-    	}
+      try {
+        documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());
+      } catch (ValueFormatException e) {
+        documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());
+      }
     }
     if (node.isNodeType(NodeTypeConstants.DC_DESCRIPTION)) {
       documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());

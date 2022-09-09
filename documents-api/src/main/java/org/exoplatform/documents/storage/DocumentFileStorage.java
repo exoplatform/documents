@@ -150,7 +150,10 @@ public interface DocumentFileStorage {
 
   boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException;
   
-  default void updateDocumentDescription(long ownerId, String documentID, String description, Identity aclIdentity) throws IllegalStateException{
-	  throw new IllegalStateException("updateDocumentDescription not implemented in the target classs");
+  default void updateDocumentDescription(long ownerId,
+                                         String documentID,
+                                         String description,
+                                         Identity aclIdentity) throws IllegalStateException {
+    throw new IllegalStateException("updateDocumentDescription not implemented in the target classs");
   }
 }
