@@ -29,6 +29,7 @@ import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.ValueFormatException;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 
@@ -61,7 +62,6 @@ import org.exoplatform.services.security.MembershipEntry;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                  COLLABORATION     = "collaboration";
@@ -973,4 +973,41 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  @Override
+  public void updateDocumentDescription(long ownerId, String documentId, String description, Identity aclIdentity) {
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      node = getNodeByIdentifier(session, documentId);
+      if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
+        node.addMixin(NodeTypeConstants.EXO_MODIFY);
+      }
+      Calendar now = Calendar.getInstance();
+      node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+      if (node.canAddMixin(NodeTypeConstants.DC_ELEMENT_SET) && !node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)) {
+        node.addMixin(NodeTypeConstants.DC_ELEMENT_SET);
+      }
+      try {
+        node.setProperty(NodeTypeConstants.DC_DESCRIPTION, description);
+      } catch (ValueFormatException e) {
+        node.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
+      }
+      Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+      content.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
+      content.getSession().save();
+      node.getSession().save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error renaming document'" + documentId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
 }
