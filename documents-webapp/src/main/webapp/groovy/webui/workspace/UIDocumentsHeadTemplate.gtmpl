@@ -1,0 +1,10 @@
+<%
+  import org.exoplatform.commons.api.settings.ExoFeatureService;
+  import org.exoplatform.portal.application.PortalRequestContext;
+  def rcontext = _ctx.getRequestContext();
+  ExoFeatureService featureService = uicomponent.getApplicationComponent(ExoFeatureService.class);
+  def userName = rcontext.getRemoteUser();
+%>
+<script type="text/javascript" id="documentsHeadScripts">
+     eXo.env.portal.addShortcutActionEnabled = <%=featureService.isFeatureActiveForUser("AddShortcutAction", userName)%>;
+</script>

@@ -159,21 +159,23 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
-extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-  id: 'shortcut',
-  labelKey: 'documents.label.shortcut',
-  align: 'center',
-  sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
-  width: '190px',
-  rank: 40,
-  enabled: (acl) => {
-    return acl.canEdit;
-  },
-  componentOptions: {
-    vueComponent: Vue.options.components['shortcut-menu-action'],
-  },
-});
+if (eXo.env.portal.addShortcutActionEnabled) {
+  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+    id: 'shortcut',
+    labelKey: 'documents.label.shortcut',
+    align: 'center',
+    sortable: true,
+    cssClass: 'font-weight-bold text-no-wrap',
+    width: '190px',
+    rank: 40,
+    enabled: (acl) => {
+      return acl.canEdit;
+    },
+    componentOptions: {
+      vueComponent: Vue.options.components['shortcut-menu-action'],
+    },
+  });
+}
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'visibility',
