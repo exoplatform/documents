@@ -45,6 +45,7 @@ import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue
 import FolderTreeViewDrawer from './components/body/views/FolderTreeViewDrawer.vue';
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
 import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
+import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
 
@@ -92,6 +93,7 @@ const components = {
   'copy-link-menu-action': CopyLinkMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
   'delete-menu-action': DeleteMenuAction,
+  'shortcut-menu-action': ShortcutMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
   'folder-treeview-drawer': FolderTreeViewDrawer,
   'details-menu-action': DetailsMenuAction,
