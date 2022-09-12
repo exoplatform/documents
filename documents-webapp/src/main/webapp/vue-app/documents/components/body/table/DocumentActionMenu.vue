@@ -31,11 +31,14 @@ export default {
     fileOnlyExtension: ['download','favorite'],
     sharedDocumentSuspended: true,
     downloadDocumentSuspended: true,
-    supportedDocuments: null
+    supportedDocuments: null,
+    enableShortcutAction: false
   }),
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
     document.addEventListener('documents-supported-document-types-updated', this.refreshSupportedDocumentExtensions);
+    // feature flag
+    this.$documentFileService.isFeatureEnabled('AddShortcutAction').then(enabled => this.enableShortcutAction = enabled);
     this.$transferRulesService.getDocumentsTransferRules().then(rules => {
       this.sharedDocumentSuspended = rules.sharedDocumentStatus === 'true';
       this.downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
@@ -80,6 +83,9 @@ export default {
       }
       if (this.file.cloudDriveFolder) {
         extensions = extensions.filter(extension => extension.id === 'copyLink');
+      }
+      if (!this.enableShortcutAction) {
+        extensions = extensions.filter(extension => extension.id !== 'shortcut');
       }
       extensions = extensions.filter(extension => this.checkTransferRules(extension)
                                                      && extension.enabled(this.file.acl, this.isSymlink()));

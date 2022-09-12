@@ -28,6 +28,18 @@
         </init-params>
     </component>
 
+    <component>
+        <key>AddShortcutActionFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>AddShortcutActionFeatureProperties</name>
+                <description>Add Shortcut Action enablement flag</description>
+                <property name="exo.feature.poll.enabled" value="${exo.feature.AddShortcutAction.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
+
     <external-component-plugins>
         <target-component>org.exoplatform.commons.api.settings.ExoFeatureService</target-component>
         <component-plugin>
