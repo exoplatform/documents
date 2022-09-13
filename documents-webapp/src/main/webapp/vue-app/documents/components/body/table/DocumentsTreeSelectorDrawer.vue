@@ -1,8 +1,8 @@
 <template>
   <exo-drawer
     v-model="drawer"
-    ref="documentsPositionDrawer"
-    class="documentsPositionDrawer"
+    ref="documentsTreeSelectorDrawer"
+    class="documentsTreeSelectorDrawer"
     @closed="close"
     right>
     <template slot="title">
@@ -82,7 +82,7 @@
         </v-btn>
         <v-btn
           :disabled="disableButton"
-          @click="changePositionDocument()"
+          @click="changeLocationDocument()"
           class="btn btn-primary ml-2">
           {{ submitButton }}
         </v-btn>
@@ -134,7 +134,7 @@ export default {
       }];
       this.retrieveNoteTree(ownerId);
     });
-    this.$root.$on('open-document-position-drawer', (file, actionType) => {
+    this.$root.$on('open-document-tree-selector-drawer', (file, actionType) => {
       this.actionType = actionType;
       if (file) {
         this.open(file);
@@ -158,10 +158,10 @@ export default {
       const nodePath = startIndex >= 0 ? this.currentFolderPath.substring(startIndex + parentDriveFolder.length) : '';
       this.getDestination(null, nodePath)
         .then(breadcrumb => this.documentsBreadcrumbSource = breadcrumb.slice());
-      this.$refs.documentsPositionDrawer.open();
+      this.$refs.documentsTreeSelectorDrawer.open();
     },
     close() {
-      this.$refs.documentsPositionDrawer.close();
+      this.$refs.documentsTreeSelectorDrawer.close();
     },
     getDestination(folder, path) {
       this.folder = folder;
@@ -184,7 +184,7 @@ export default {
           }
         });
     },
-    changePositionDocument() {
+    changeLocationDocument() {
       const destinationPath = this.folder && this.folder.path ? this.folder.path:`/Groups${this.groupId}/Documents`;
       if (this.actionType === 'move') {
         this.$root.$emit('documents-move', this.ownerId, this.file.id, destinationPath);

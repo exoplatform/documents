@@ -41,7 +41,7 @@ export default {
   },
   methods: {
     addShortcut() {
-      this.$root.$emit('open-document-position-drawer', this.file, 'shortcut');
+      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'shortcut');
       if ( this.isMobile ) {
         this.$root.$emit('close-file-action-menu');
       }
