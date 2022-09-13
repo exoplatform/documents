@@ -1,12 +1,12 @@
 <template>
   <exo-drawer
     v-model="drawer"
-    ref="documentsMoveDrawer"
-    class="documentsMoveDrawer"
+    ref="documentsPositionDrawer"
+    class="documentsPositionDrawer"
     @closed="close"
     right>
     <template slot="title">
-      <span :title="moveTitle" class="text-truncate">{{ moveTitle }}</span>
+      <span :title="drawerTitle" class="text-truncate">{{ drawerTitle }}</span>
     </template>
     <template v-if="file && drawer" slot="content">
       <v-layout column class="mt-2">
@@ -82,9 +82,9 @@
         </v-btn>
         <v-btn
           :disabled="disableButton"
-          @click="moveDocument()"
+          @click="changePositionDocument()"
           class="btn btn-primary ml-2">
-          {{ $t('documents.move.drawer.button.move') }}
+          {{ submitButton }}
         </v-btn>
       </div>
     </template>
@@ -106,7 +106,8 @@ export default {
     userName: eXo.env.portal.userName,
     groupId: '',
     space: [],
-    file: {}
+    file: {},
+    actionType: ''
   }),
   computed: {
     openLevel() {
@@ -115,9 +116,12 @@ export default {
     disableButton() {
       return !this.space || this.space.displayName === this.spaceDisplayName && this.destinationFolderPath && this.destinationFolderPath === this.currentFolderPath;
     },
-    moveTitle(){
-      return this.$t('documents.move.drawer.title', {0: this.file?.name});
+    drawerTitle() {
+      return this.actionType === 'move' ? this.$t('documents.move.drawer.title', {0: this.file?.name}) : this.$t('documents.shortcut.drawer.title');
     },
+    submitButton() {
+      return this.actionType === 'move' ? this.$t('documents.move.drawer.button.move') : this.$t('documents.shortcut.drawer.button.create');
+    }
   },
   created() {
     this.$root.$on('current-space',data => {
@@ -130,7 +134,8 @@ export default {
       }];
       this.retrieveNoteTree(ownerId);
     });
-    this.$root.$on('open-move-drawer', file => {
+    this.$root.$on('open-document-position-drawer', (file, actionType) => {
+      this.actionType = actionType;
       if (file) {
         this.open(file);
       }
@@ -153,10 +158,10 @@ export default {
       const nodePath = startIndex >= 0 ? this.currentFolderPath.substring(startIndex + parentDriveFolder.length) : '';
       this.getDestination(null, nodePath)
         .then(breadcrumb => this.documentsBreadcrumbSource = breadcrumb.slice());
-      this.$refs.documentsMoveDrawer.open();
+      this.$refs.documentsPositionDrawer.open();
     },
     close() {
-      this.$refs.documentsMoveDrawer.close();
+      this.$refs.documentsPositionDrawer.close();
     },
     getDestination(folder, path) {
       this.folder = folder;
@@ -179,9 +184,11 @@ export default {
           }
         });
     },
-    moveDocument(){
+    changePositionDocument() {
       const destinationPath = this.folder && this.folder.path ? this.folder.path:`/Groups${this.groupId}/Documents`;
-      this.$root.$emit('documents-move', this.ownerId, this.file.id, destinationPath);
+      if (this.actionType === 'move') {
+        this.$root.$emit('documents-move', this.ownerId, this.file.id, destinationPath);
+      }
       this.close();
     },
   }
