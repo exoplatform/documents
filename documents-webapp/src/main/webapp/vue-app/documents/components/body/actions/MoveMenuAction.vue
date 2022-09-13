@@ -41,7 +41,7 @@ export default {
   },
   methods: {
     moveDocument(){
-      this.$root.$emit('open-move-drawer', this.file);
+      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'move');
       if ( this.isMobile ) {
         this.$root.$emit('close-file-action-menu');
       }
