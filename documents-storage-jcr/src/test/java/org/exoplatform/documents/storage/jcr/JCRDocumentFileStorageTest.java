@@ -25,6 +25,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -85,7 +86,7 @@ public class JCRDocumentFileStorageTest {
     Identity identity = mock(Identity.class);
     Node rootNode = mock(Node.class);
     Node sharedNode = mock(Node.class);
-    Node currentNode = mock(Node.class);
+    Node currentNode = Mockito.mock(ExtendedNode.class);
     ExtendedNode linkNode = mock(ExtendedNode.class);
     Property property = mock(Property.class);
     NodeType nodeType =  mock(NodeType.class);
@@ -118,7 +119,7 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.getMimeType(currentNode)).thenReturn("testMimeType");
     when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
     when(nodeType.getName()).thenReturn("nt:file");
-    when(currentNode.getUUID()).thenReturn("123");
+    when(((ExtendedNode) currentNode).getIdentifier()).thenReturn("123");
     when(identity.getRemoteId()).thenReturn("username");
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
     jcrDocumentFileStorage.shareDocument("1", 1L);
