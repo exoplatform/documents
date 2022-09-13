@@ -47,7 +47,8 @@
           <v-list-item-content class="my-1">
             <div class="my-4">
               <v-label for="choice">
-                <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
+                <span v-if="!file.folder" class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
+                <span v-else class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.folders.visibility.choice') + ' :' }}</span>
               </v-label>
               <v-select
                 v-model="file.acl.visibilityChoice"
@@ -95,7 +96,9 @@
                     fa-info-circle
                   </v-icon>
                 </template>
-                <span class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
+                <span v-if="!file.folder" class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
+                <span v-else class="center lotfi">{{ $t('documents.label.folders.visibility.collaborator.info') }}</span>
+
               </v-tooltip>
             </div>
           </v-list-item-content>
@@ -191,7 +194,11 @@ export default {
     infoMessage(){
       switch (this.file.acl.visibilityChoice) {
       case 'SPECIFIC_COLLABORATOR':
-        return this.$t('documents.label.visibility.user.info');
+        if (!this.file.folder) {
+          return this.$t('documents.label.visibility.user.info');
+        } else {
+          return this.$t('documents.label.folders.visibility.user.info');
+        }
       case 'ALL_MEMBERS':
         return this.file.acl.allMembersCanEdit ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
       default:
