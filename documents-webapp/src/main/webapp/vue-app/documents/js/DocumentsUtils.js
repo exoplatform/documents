@@ -1,4 +1,6 @@
-export function injectSortTooltip(tooltipName){
-  const el = document.getElementsByClassName('last-updated-tooltip-marker').item(0).getElementsByTagName('i').item(0);
-  el.title = tooltipName;
+export function injectSortTooltip(tooltipName,markerClass){
+  document.getElementsByClassName(markerClass).forEach(element => {
+    element.getElementsByTagName('i').item(0);
+    element.title = tooltipName; 
+  });
 }
