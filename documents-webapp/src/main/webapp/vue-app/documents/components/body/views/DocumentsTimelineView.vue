@@ -214,6 +214,9 @@ export default {
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
   },
+  mounted(){
+    this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
+  },
   methods: {
     updateFilter(filter) {
       this.primaryFilter = filter;
