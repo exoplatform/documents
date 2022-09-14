@@ -1014,7 +1014,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
     Node rootNode = null;
-    Node shared = null;
     SessionProvider sessionProvider = null;
     try {
       sessionProvider = SessionProvider.createSystemProvider();
@@ -1022,17 +1021,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node currentNode = getNodeByIdentifier(systemSession, documentId);
       //add symlink to destination user
-      //org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(3L));
       rootNode = (Node) systemSession.getItem(destPath);
-      //getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
-      /*if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
-        rootNode = rootNode.getNode("Documents");
-      }
-      if(!rootNode.hasNode(SHARED_FOLDER_NAME)) {
-        shared = rootNode.addNode(SHARED_FOLDER_NAME);
-      }else{
-        shared = rootNode.getNode(SHARED_FOLDER_NAME);
-      }*/
       if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
@@ -1058,18 +1047,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       linkNode.setProperty(NodeTypeConstants.EXO_FILE_TYPE, nodeMimeType);
       rootNode.save();
 
-      /*Map<String, String[]> permissions = new HashMap<>();
-      if (destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
-        Space space = spaceService.getSpaceByPrettyName(destIdentity.getRemoteId());
-        String groupId = space.getGroupId();
-        permissions.put("*:" + groupId, PermissionType.ALL);
-      } else {
-        permissions.put(destIdentity.getRemoteId(), PermissionType.ALL);
-      }*/
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
-      //((ExtendedNode) linkNode).setPermissions(permissions);
+      Map<String, String[]> perMap = new HashMap<>();
+      List<String> permsList = new ArrayList<>();
+      List<String> idList = new ArrayList<>();
+      for(AccessControlEntry accessEntry : ((ExtendedNode) rootNode).getACL().getPermissionEntries()) {
+        if(!idList.contains(accessEntry.getIdentity())) {
+          idList.add(accessEntry.getIdentity());
+          permsList = ((ExtendedNode) rootNode).getACL().getPermissions(accessEntry.getIdentity());
+          perMap.put(accessEntry.getIdentity(), permsList.toArray(new String[permsList.size()]));
+        }
+      }
+      ((ExtendedNode) linkNode).setPermissions(perMap);
+
       systemSession.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error while creating a shortcut for document'" + documentId + " to identity the path" + destPath, e);

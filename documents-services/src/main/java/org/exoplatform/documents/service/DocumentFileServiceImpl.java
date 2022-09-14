@@ -324,6 +324,5 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
     documentFileStorage.createShortcut(documentId, destPath);
-
   }
 }

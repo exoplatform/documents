@@ -632,7 +632,6 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-
   },
 };
 </script>
