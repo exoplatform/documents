@@ -1010,4 +1010,73 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
+
+  @Override
+  public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
+    Node rootNode = null;
+    Node shared = null;
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node currentNode = getNodeByIdentifier(systemSession, documentId);
+      //add symlink to destination user
+      //org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(3L));
+      rootNode = (Node) systemSession.getItem(destPath);
+      //getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
+      /*if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
+        rootNode = rootNode.getNode("Documents");
+      }
+      if(!rootNode.hasNode(SHARED_FOLDER_NAME)) {
+        shared = rootNode.addNode(SHARED_FOLDER_NAME);
+      }else{
+        shared = rootNode.getNode(SHARED_FOLDER_NAME);
+      }*/
+      if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
+      }
+      Node linkNode = null;
+      if (rootNode.hasNode(currentNode.getName())) {
+        linkNode = rootNode.getNode(currentNode.getName());
+      } else {
+        linkNode = rootNode.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
+      }
+      linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
+      linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
+      linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, ((ExtendedNode) currentNode).getIdentifier());
+      if(linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
+        linkNode.addMixin("exo:sortable");
+      }
+      if (currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+        linkNode.setProperty(NodeTypeConstants.EXO_TITLE,currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString());
+      }
+      linkNode.setProperty(NodeTypeConstants.EXO_NAME, currentNode.getName());
+      String nodeMimeType = getMimeType(currentNode);
+      linkNode.addMixin(NodeTypeConstants.MIX_FILE_TYPE);
+      linkNode.setProperty(NodeTypeConstants.EXO_FILE_TYPE, nodeMimeType);
+      rootNode.save();
+
+      /*Map<String, String[]> permissions = new HashMap<>();
+      if (destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
+        Space space = spaceService.getSpaceByPrettyName(destIdentity.getRemoteId());
+        String groupId = space.getGroupId();
+        permissions.put("*:" + groupId, PermissionType.ALL);
+      } else {
+        permissions.put(destIdentity.getRemoteId(), PermissionType.ALL);
+      }*/
+      if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+      }
+      //((ExtendedNode) linkNode).setPermissions(permissions);
+      systemSession.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error while creating a shortcut for document'" + documentId + " to identity the path" + destPath, e);
+    }finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
 }

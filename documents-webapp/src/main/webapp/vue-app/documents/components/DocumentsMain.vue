@@ -185,6 +185,7 @@ export default {
             this.$root.$applicationLoaded();
           });
       });
+    this.$root.$on('create-shortcut', this.createShortcut);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
@@ -474,6 +475,14 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
+    createShortcut(fileId,destPath) {
+      this.$documentFileService.createShortcut(fileId,destPath)
+        .then(() => {
+          this.refreshFiles();
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
     saveVisibility(file){
       this.$documentFileService.saveVisibility(file)
         .then(() => this.refreshFiles())
@@ -623,6 +632,7 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
+
   },
 };
 </script>
