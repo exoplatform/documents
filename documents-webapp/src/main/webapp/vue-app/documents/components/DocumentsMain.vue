@@ -475,10 +475,10 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-    createShortcut(fileId,destPath) {
+    createShortcut(fileId,destPath, destFolder) {
       this.$documentFileService.createShortcut(fileId,destPath)
         .then(() => {
-          this.refreshFiles();
+          this.openFolder(destFolder);
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
