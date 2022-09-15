@@ -546,7 +546,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       String oldName = node.getName();
       if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
         String ext = oldName.substring(oldName.lastIndexOf('.'));
-        title = name.concat(ext);
+        title = title.concat(ext);
         name = name.concat(ext);
       }
 
