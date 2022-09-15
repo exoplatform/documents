@@ -27,7 +27,7 @@ import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
-import DocumentsMoveDrawer from './components/body/table/DocumentsMoveDrawer.vue';
+import DocumentsTreeSelectorDrawer from './components/body/table/DocumentsTreeSelectorDrawer.vue';
 import DocumentsMoveSpaces from './components/body/table/DocumentsMoveSpaces.vue';
 import DocumentsVisibilityDrawer from './components/body/table/DocumentsVisibilityDrawer.vue';
 import DocumentsAllUsersVisibilityDrawer from './components/body/table/DocumentsAllUsersVisibilityDrawer.vue';
@@ -45,6 +45,7 @@ import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue
 import FolderTreeViewDrawer from './components/body/views/FolderTreeViewDrawer.vue';
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
 import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
+import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
 
@@ -77,7 +78,7 @@ const components = {
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-info-drawer': DocumentInfoDrawer,
-  'documents-move-drawer': DocumentsMoveDrawer,
+  'document-tree-selector-drawer': DocumentsTreeSelectorDrawer,
   'documents-move-spaces': DocumentsMoveSpaces,
   'documents-visibility-drawer': DocumentsVisibilityDrawer,
   'documents-visibility-all-users-drawer': DocumentsAllUsersVisibilityDrawer,
@@ -92,6 +93,7 @@ const components = {
   'copy-link-menu-action': CopyLinkMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
   'delete-menu-action': DeleteMenuAction,
+  'shortcut-menu-action': ShortcutMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
   'folder-treeview-drawer': FolderTreeViewDrawer,
   'details-menu-action': DetailsMenuAction,

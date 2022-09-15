@@ -16,14 +16,14 @@
 -->
 <template>
   <div
-    class="clickable pt-1 mx-2"
-    @click="moveDocument()">
+    class="clickable mx-2"
+    @click="addShortcut()">
     <v-icon
       size="13"
       class="pe-1 iconStyle">
-      fa-arrows-alt
+      fas fa-share-square
     </v-icon>
-    <span class="ps-1">{{ $t('document.label.move') }}</span>
+    <span class="ps-1">{{ $t('documents.label.shortcut') }}</span>
   </div>
 </template>
 <script>
@@ -40,8 +40,8 @@ export default {
     },
   },
   methods: {
-    moveDocument(){
-      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'move');
+    addShortcut() {
+      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'shortcut');
       if ( this.isMobile ) {
         this.$root.$emit('close-file-action-menu');
       }

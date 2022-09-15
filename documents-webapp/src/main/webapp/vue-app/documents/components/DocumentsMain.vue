@@ -53,7 +53,7 @@
       </div>
     </div>
     <documents-visibility-drawer />
-    <documents-move-drawer />
+    <document-tree-selector-drawer />
     <documents-info-drawer />
     <v-alert
       v-model="alert"
