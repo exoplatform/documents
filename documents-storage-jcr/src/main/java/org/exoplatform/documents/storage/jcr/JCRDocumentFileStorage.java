@@ -908,7 +908,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
       linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
-      linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, currentNode.getUUID());
+      linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, ((ExtendedNode) currentNode).getIdentifier());
       if(linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         linkNode.addMixin("exo:sortable");
       }
