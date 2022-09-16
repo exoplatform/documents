@@ -35,7 +35,7 @@
             <properties-param>
                 <name>AddShortcutActionFeatureProperties</name>
                 <description>Add Shortcut Action enablement flag</description>
-                <property name="exo.feature.poll.enabled" value="${exo.feature.AddShortcutAction.enabled:false}" />
+                <property name="exo.feature.AddShortcutAction.enabled" value="${exo.feature.AddShortcutAction.enabled:false}" />
             </properties-param>
         </init-params>
     </component>
