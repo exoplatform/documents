@@ -320,4 +320,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                         long aclIdentity) throws IllegalStateException, IllegalAccessException {
     documentFileStorage.updateDocumentDescription(ownerId, documentID, description, getAclUserIdentity(aclIdentity));
   }
+
+  @Override
+  public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
+    documentFileStorage.createShortcut(documentId, destPath);
+  }
 }
