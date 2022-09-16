@@ -111,8 +111,11 @@
             name="collaborator"
             type-of-relations="user_to_invite"
             height="40"
+            :group-member="userGroup"
+            :group-type="groupType"
             include-users
-            include-spaces />
+            include-spaces
+            include-groups />
         </v-list-item>
         <div v-if="users.length">
           <documents-visibility-collaborators
@@ -155,6 +158,8 @@
 <script>
 export default {
   data: () => ({
+    userGroup: '/platform/users',
+    groupType: 'GROUP',
     ownerIdentity: {
       id: 'system',
       providerId: 'system',
