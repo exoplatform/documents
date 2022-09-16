@@ -1050,17 +1050,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
-      Map<String, String[]> perMap = new HashMap<>();
-      List<String> permsList = new ArrayList<>();
-      List<String> idList = new ArrayList<>();
-      for(AccessControlEntry accessEntry : ((ExtendedNode) rootNode).getACL().getPermissionEntries()) {
-        if(!idList.contains(accessEntry.getIdentity())) {
-          idList.add(accessEntry.getIdentity());
-          permsList = ((ExtendedNode) rootNode).getACL().getPermissions(accessEntry.getIdentity());
-          perMap.put(accessEntry.getIdentity(), permsList.toArray(new String[permsList.size()]));
+      if(((ExtendedNode) rootNode).getACL() != null) {
+        Map<String, String[]> perMap = new HashMap<>();
+        List<String> permsList = new ArrayList<>();
+        List<String> idList = new ArrayList<>();
+        for(AccessControlEntry accessEntry : ((ExtendedNode) rootNode).getACL().getPermissionEntries()) {
+          if(!idList.contains(accessEntry.getIdentity())) {
+            idList.add(accessEntry.getIdentity());
+            permsList = ((ExtendedNode) rootNode).getACL().getPermissions(accessEntry.getIdentity());
+            perMap.put(accessEntry.getIdentity(), permsList.toArray(new String[permsList.size()]));
+          }
         }
+        ((ExtendedNode) linkNode).setPermissions(perMap);
       }
-      ((ExtendedNode) linkNode).setPermissions(perMap);
 
       systemSession.save();
     } catch (Exception e) {

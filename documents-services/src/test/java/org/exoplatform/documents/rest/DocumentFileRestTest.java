@@ -777,4 +777,21 @@ public class DocumentFileRestTest {
     Response response3 = documentFileRest1.updatePermissions(nodeEntity);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
   }
+
+  @Test
+  public void testCreateShortcut() throws Exception {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
+
+    Response response = documentFileRest1.createShortcut(null,null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("Document's id should not be empty", response.getEntity());
+    response = documentFileRest1.createShortcut("11111111",null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("Document destination path should not be empty", response.getEntity());
+
+    doNothing().when(documentFileStorage).createShortcut("11111111", "/Groups/spaces/test/Documents/test");
+    response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
 }

@@ -572,7 +572,7 @@ public class DocumentFileRest implements ResourceContainer {
       documentFileService.createShortcut(documentID, destPath);
       return Response.ok().build();
     } catch (Exception ex) {
-      LOG.warn("Failed to rename Document", ex);
+      LOG.warn("Failed to create document shortcut", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
   }
