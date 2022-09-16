@@ -1020,7 +1020,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository repository = repositoryService.getCurrentRepository();
       Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node currentNode = getNodeByIdentifier(systemSession, documentId);
-      //add symlink to destination user
+      //add symlink to destination document
       rootNode = (Node) systemSession.getItem(destPath);
       if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
@@ -1066,7 +1066,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       systemSession.save();
     } catch (Exception e) {
-      throw new IllegalStateException("Error while creating a shortcut for document'" + documentId + " to identity the path" + destPath, e);
+      throw new IllegalStateException("Error while creating a shortcut for document's id " + documentId + " to destination path" + destPath, e);
     }finally {
       if (sessionProvider != null) {
         sessionProvider.close();
