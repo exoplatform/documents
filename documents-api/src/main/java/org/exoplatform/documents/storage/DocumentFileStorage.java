@@ -156,4 +156,13 @@ public interface DocumentFileStorage {
                                          Identity aclIdentity) throws IllegalStateException {
     throw new IllegalStateException("updateDocumentDescription not implemented in the target classs");
   }
+
+  /**
+   * Creates a shortcut for a document
+   *
+   * @param documentId document id
+   * @param destPath destination path
+   * @throws IllegalAccessException
+   */
+  void createShortcut(String documentId, String destPath) throws IllegalAccessException;
 }
