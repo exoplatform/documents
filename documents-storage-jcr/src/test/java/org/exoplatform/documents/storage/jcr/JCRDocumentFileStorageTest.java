@@ -38,6 +38,7 @@ import javax.jcr.query.QueryResult;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -273,5 +274,45 @@ public class JCRDocumentFileStorageTest {
     verify(documentSearchServiceConnector,
            times(1)).appSearch(identity, "collaboration", "/documents/path", filter, 0, 0, "lastUpdatedDate", "ASC");
 
+  }
+
+  @Test
+  public void createShortcut() throws Exception {
+    Session systemSession = mock(Session.class);
+    ExtendedNode rootNode = mock(ExtendedNode.class);
+    Node currentNode = Mockito.mock(ExtendedNode.class);
+    ExtendedNode linkNode = mock(ExtendedNode.class);
+    Property property = mock(Property.class);
+    NodeType nodeType =  mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+            manageableRepository)).thenReturn(systemSession);
+
+    when(JCRDocumentsUtil.getNodeByIdentifier(systemSession, "11111111")).thenReturn(currentNode);
+    when((Node) systemSession.getItem("/Groups/spaces/test/Documents/test")).thenReturn(rootNode);
+
+    when(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(false);
+    when(currentNode.getName()).thenReturn("test");
+    when(rootNode.hasNode("test")).thenReturn(false);
+    when(rootNode.addNode("test", NodeTypeConstants.EXO_SYMLINK)).thenReturn(linkNode);
+    when(rootNode.getNode("test")).thenReturn(linkNode);
+    when(linkNode.canAddMixin("exo:sortable")).thenReturn(true);
+    when(currentNode.hasProperty("exo:title")).thenReturn(true);
+    when(currentNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("test");
+    when(JCRDocumentsUtil.getMimeType(currentNode)).thenReturn("testMimeType");
+    when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn("nt:file");
+    when(((ExtendedNode) currentNode).getIdentifier()).thenReturn("123");
+    when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
+
+    jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
+    verify(sessionProvider, times(1)).close();
   }
 }

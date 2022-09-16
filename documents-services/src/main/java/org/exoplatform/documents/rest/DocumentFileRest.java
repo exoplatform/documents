@@ -550,5 +550,31 @@ public class DocumentFileRest implements ResourceContainer {
     }
 
   }
+
+  @POST
+  @Path("/shortcut")
+  @RolesAllowed("users")
+  @Operation(summary = "document shortcut", method = "POST", description = "Creates a document shortcut.")
+  @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Resource not found")})
+  public Response createShortcut (@Parameter(description = "document id") @QueryParam("documentID") String documentID,
+                                @Parameter(description = "new path") @QueryParam("destPath") String destPath) {
+
+    if (StringUtils.isEmpty(documentID)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document's id should not be empty").build();
+    }
+    if (StringUtils.isEmpty(destPath)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document destination path should not be empty").build();
+    }
+    try {
+      documentFileService.createShortcut(documentID, destPath);
+      return Response.ok().build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to create document shortcut", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
+  }
 }
 
