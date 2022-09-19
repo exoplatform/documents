@@ -40,6 +40,18 @@
         </init-params>
     </component>
 
+    <component>
+        <key>VersionHistoryActionFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>VersionHistoryActionFeatureProperties</name>
+                <description>Version history Feature enablement flag</description>
+                <property name="exo.feature.VersionHistoryAction.enabled" value="${exo.feature.VersionHistoryAction.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
+
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
         <component-plugin>

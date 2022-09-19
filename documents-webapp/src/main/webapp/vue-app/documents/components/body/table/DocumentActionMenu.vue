@@ -27,7 +27,7 @@ export default {
     menuExtensions: {},
     mobileOnlyExtensions: ['favorite','details'],
     desktopOnlyExtensions: ['edit'],
-    editExtensions: 'edit',
+    editExtensions: ['edit', 'versionHistory'],
     fileOnlyExtension: ['download','favorite'],
     sharedDocumentSuspended: true,
     downloadDocumentSuspended: true,
@@ -76,7 +76,7 @@ export default {
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
       if (!this.fileCanEdit) {
-        extensions = extensions.filter(extension => extension.id !== this.editExtensions);
+        extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
       }
       if (this.file.path.includes('News Attachments')) {
         extensions = extensions.filter(extension => extension.id !== 'visibility');

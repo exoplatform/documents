@@ -7,4 +7,5 @@
 %>
 <script type="text/javascript" id="documentsHeadScripts">
      eXo.env.portal.addShortcutActionEnabled = <%=featureService.isFeatureActiveForUser("AddShortcutAction", userName)%>;
+     eXo.env.portal.versionHistoryEnabled = <%=featureService.isFeatureActiveForUser("VersionHistoryAction", userName)%>;
 </script>
