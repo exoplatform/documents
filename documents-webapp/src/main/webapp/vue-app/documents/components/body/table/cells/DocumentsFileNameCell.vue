@@ -127,7 +127,7 @@ export default {
   }),
   computed: {
     title() {
-      return decodeURI(this.fileName);
+     return  this.file && this.file.folder && this.fileName === 'task' ? this.$t('documents.task.folder.name') : decodeURI(this.fileName);
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
