@@ -8,10 +8,6 @@
       fas fa-download
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.download') }}</span>
-    <v-divider
-      v-if="isMobile"
-      class="mt-2 dividerStyle"
-      dark />
   </div>
 </template>
 <script>
