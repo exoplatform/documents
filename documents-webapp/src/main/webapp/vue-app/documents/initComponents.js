@@ -49,6 +49,7 @@ import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
 import UploadOverlay from './components/body/UploadOverlay.vue';
+import VersionHistoryMenuAction from './components/body/actions/VersionHistoryMenuAction.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -102,6 +103,7 @@ const components = {
   'switch-new-document': SwitchNewDocument,
   'documents-app-reminder': DocumentsAppReminder,
   'upload-overlay': UploadOverlay,
+  'versionHistory-menu-action': VersionHistoryMenuAction
 };
 
 for (const key in components) {
