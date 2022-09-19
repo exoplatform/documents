@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.rest.model;
 
+import java.util.List;
 import java.util.Map;
 
 import lombok.*;
@@ -25,7 +26,7 @@ import lombok.*;
 @AllArgsConstructor
 public class FileVersionsEntity {
 
-  private Map<Long, FileNodeEntity> versions;
+  private List<FileVersionEntity> versions;
 
   private long                  size;
 
