@@ -88,7 +88,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 1,
   enabled: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['copy-link-menu-action'],
@@ -102,7 +102,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 2,
   enabled: (acl) => {
     return acl.canEdit;
   },
@@ -118,7 +118,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 3,
   enabled: (acl) => {
     return acl.canEdit;
   },
@@ -134,7 +134,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 4,
   enabled: (acl) => {
     return acl.canEdit;
   },
@@ -150,7 +150,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 5,
   enabled: (acl) => {
     return acl.canEdit;
   },
@@ -167,7 +167,7 @@ if (eXo.env.portal.addShortcutActionEnabled) {
     sortable: true,
     cssClass: 'font-weight-bold text-no-wrap',
     width: '190px',
-    rank: 40,
+    rank: 6,
     enabled: (acl) => {
       return acl.canEdit;
     },
@@ -184,7 +184,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 7,
   enabled: (acl, isSymlink) => {
     return acl.canEdit && !isSymlink;
   },
@@ -193,6 +193,22 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+if (eXo.env.portal.versionHistoryEnabled) {
+  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+    id: 'versionHistory',
+    labelKey: 'documents.label.showVersionHistory',
+    align: 'center',
+    sortable: true,
+    cssClass: 'font-weight-bold text-no-wrap',
+    width: '190px',
+    rank: 8,
+    enabled: () => true,
+    componentOptions: {
+      vueComponent: Vue.options.components['versionHistory-menu-action'],
+    },
+  });
+}
+
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'download',
   labelKey: 'documents.label.download',
@@ -200,7 +216,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 9,
   enabled: (acl) => {
     return acl.canEdit;
   },
@@ -230,7 +246,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 10,
   enabled: (acl) => {
     return acl.canEdit;
   },
