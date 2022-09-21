@@ -4,7 +4,11 @@
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
-    <div class="pa-3 white">
+    <div
+      class="pa-3 white"
+      @dragover.prevent
+      @drop.prevent
+      @dragstart.prevent>
       <div v-if="searchResult">
         <documents-header
           :files-size="files.length" 
@@ -13,7 +17,10 @@
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else-if="!filesLoad && !loading && selectedView == 'folder' ">
+      <div
+        v-else-if="!filesLoad && !loading && selectedView == 'folder' "
+        @drop="dragFile"
+        @dragover="startDrag">
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
@@ -29,7 +36,10 @@
         <documents-no-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else>
+      <div
+        v-else
+        @drop="dragFile"
+        @dragover="startDrag">
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
@@ -526,7 +536,7 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-    openDrawer() {
+    openDrawer(files) {
 
       let attachmentAppConfiguration = {
         'sourceApp': 'NEW.APP'
@@ -560,6 +570,9 @@ export default {
             }
           };
         }
+      }
+      if (files){
+        attachmentAppConfiguration.files=files;
       }
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
@@ -668,6 +681,13 @@ export default {
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
+    },
+    dragFile(e){     
+      this.openDrawer(e.dataTransfer.files);
+      this.$root.$emit('hide-upload-overlay');
+    },
+    startDrag(){
+      this.$root.$emit('show-upload-overlay');
     },
   },
 };

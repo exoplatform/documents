@@ -1,54 +1,57 @@
 <template>
-  <v-data-table
-    ref="dataTable"
-    :headers="headers"
-    :items="items"
-    :items-per-page="pageSize"
-    :loading="loading"
-    :options.sync="options"
-    :locale="lang"
-    :group-by="groupBy"
-    :group-desc="groupDesc"
-    :disable-sort="isMobile"
-    :loading-text="loadingLabel"
-    :class="loadingClass"
-    hide-default-footer
-    disable-pagination
-    disable-filtering
-    class="documents-table border-box-sizing">
-    <template
-      v-for="header in extendedCells"
-      #[`item.${header.value}`]="{item}">
-      <documents-table-cell
-        :key="header.value"
-        :extension="header.cellExtension"
-        :file="item"
-        :class="header.value === 'name' && 'ms-8'" />
-    </template>
-    <template
-      v-if="grouping"
-      #[`group.header`]="{group, items, isOpen, toggle}">
-      <documents-timeline-group-header
-        :group="group"
-        :headers="headers"
-        :files="items"
-        :open="isOpen"
-        :toggle-function="toggle"
-        :query="querySearch"
-        :primary-filter="primaryFilterFavorite" />
-    </template>
-    <template v-if="hasMore" slot="footer">
-      <v-flex class="d-flex py-2 border-box-sizing mb-1">
-        <v-btn
-          :loading="loading"
-          :disabled="loading"
-          class="white mx-auto no-border primary--text no-box-shadow"
-          @click="$root.$emit('document-load-more')">
-          {{ $t('documents.loadMore') }}
-        </v-btn>
-      </v-flex>
-    </template>
-  </v-data-table>
+  <div>
+    <upload-overlay />
+    <v-data-table
+      ref="dataTable"
+      :headers="headers"
+      :items="items"
+      :items-per-page="pageSize"
+      :loading="loading"
+      :options.sync="options"
+      :locale="lang"
+      :group-by="groupBy"
+      :group-desc="groupDesc"
+      :disable-sort="isMobile"
+      :loading-text="loadingLabel"
+      :class="loadingClass"
+      hide-default-footer
+      disable-pagination
+      disable-filtering
+      class="documents-table border-box-sizing">
+      <template
+        v-for="header in extendedCells"
+        #[`item.${header.value}`]="{item}">
+        <documents-table-cell
+          :key="header.value"
+          :extension="header.cellExtension"
+          :file="item"
+          :class="header.value === 'name' && 'ms-8'" />
+      </template>
+      <template
+        v-if="grouping"
+        #[`group.header`]="{group, items, isOpen, toggle}">
+        <documents-timeline-group-header
+          :group="group"
+          :headers="headers"
+          :files="items"
+          :open="isOpen"
+          :toggle-function="toggle"
+          :query="querySearch"
+          :primary-filter="primaryFilterFavorite" />
+      </template>
+      <template v-if="hasMore" slot="footer">
+        <v-flex class="d-flex py-2 border-box-sizing mb-1">
+          <v-btn
+            :loading="loading"
+            :disabled="loading"
+            class="white mx-auto no-border primary--text no-box-shadow"
+            @click="$root.$emit('document-load-more')">
+            {{ $t('documents.loadMore') }}
+          </v-btn>
+        </v-flex>
+      </template>
+    </v-data-table>
+  </div>
 </template>
 
 <script>
