@@ -76,11 +76,15 @@
     <documents-app-reminder />
     <documents-actions-menu-mobile />
     <version-history-drawer
+      :can-manage="canManageVersions"
+      :enable-edit-description="true"
+      :disable-restore-version="true"
       :versions="versions"
       :is-loading="isLoadingVersions"
       :show-load-more="showLoadMoreVersions"
       @drawer-closed="versionsDrawerClosed"
       @open-version="openVersionPreview"
+      @version-update-description="updateVersionSummary"
       @load-more="loadMoreVersions"
       ref="documentVersionHistory" />
   </v-app>
@@ -93,6 +97,7 @@ export default {
     allVersions: [],
     versionsPageSize: Math.round((window.innerHeight-79)/60),
     isLoadingVersions: false,
+    canManageVersions: false,
     extensionApp: 'Documents',
     extensionType: 'views',
     query: null,
@@ -217,6 +222,15 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    updateVersionSummary(version, summary) {
+      return this.$documentFileService.updateVersionSummary(version.originId, version.id, summary).then(version => {
+        this.$root.$emit('version-description-updated', version);
+        this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.summary.added.success')});
+      }).catch(() => {
+        this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.summary.added.error')});
+        this.$root.$emit('version-description-update-error', version);
+      });
+    },
     versionsDrawerClosed() {
       this.versions = [];
       this.allVersions = [];
@@ -225,18 +239,19 @@ export default {
       this.versionsPageSize+=10;
       this.versions = this.allVersions.slice(0, this.versionsPageSize);
     },
-    showVersionHistory(fileId) {
+    showVersionHistory(file) {
       this.isLoadingVersions = true;
+      this.canManageVersions = file.acl.canEdit;
       this.versionsPageSize = Math.round((window.innerHeight-79)/60);
       this.$refs.documentVersionHistory.open();
-      this.$documentFileService.getFileVersions(fileId).then(versions => {
+      this.$documentFileService.getFileVersions(file.id).then(versions => {
         this.allVersions = versions.versions;
         this.versions = this.allVersions.slice(0, this.versionsPageSize);
         this.isLoadingVersions = false;
       });
     },
     openVersionPreview(version) {
-      this.showPreview(version.id);
+      this.showPreview(version.frozenId);
     },
     folderTreeDrawer(){
       if (this.$refs.folderTreeDrawer){

@@ -13,6 +13,10 @@ public class FileVersionEntity {
 
   private String  id;
 
+  private String  frozenId;
+
+  private String  originId;
+
   private int     versionNumber;
 
   private String  title;

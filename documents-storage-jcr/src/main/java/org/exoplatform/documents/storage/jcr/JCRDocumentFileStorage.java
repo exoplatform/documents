@@ -25,11 +25,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
-import javax.jcr.ValueFormatException;
+import javax.jcr.*;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
@@ -66,6 +62,7 @@ import org.exoplatform.services.security.MembershipEntry;
 import org.exoplatform.social.core.activity.model.ExoSocialActivity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
+import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -73,34 +70,59 @@ import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
 
+
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
-  private static final String                  COLLABORATION     = "collaboration";
+  private static final String                  COLLABORATION              = "collaboration";
+
   private final SpaceService                   spaceService;
+
   private final RepositoryService              repositoryService;
+
   private final IdentityManager                identityManager;
+
   private final NodeHierarchyCreator           nodeHierarchyCreator;
+
   private final DocumentSearchServiceConnector documentSearchServiceConnector;
+
   private final ListenerService                listenerService;
-  private final String                         DATE_FORMAT       = "yyyy-MM-dd";
-  private final String                         SPACE_PATH_PREFIX = "/Groups/spaces/";
-  private final SimpleDateFormat               formatter         = new SimpleDateFormat(DATE_FORMAT);
-  private static final String                  GROUP_ADMINISTRATORS = "*:/platform/administrators";
-  private static final String                  SPACE_PROVIDER_ID = "space";
-  private static final String                  SHARED_FOLDER_NAME = "Shared";
+
+  private final IdentityRegistry               identityRegistry;
+
+  private final ActivityManager                activityManager;
+
+  private final String                         DATE_FORMAT                = "yyyy-MM-dd";
+
+  private final String                         SPACE_PATH_PREFIX          = "/Groups/spaces/";
+
+  private final SimpleDateFormat               formatter                  = new SimpleDateFormat(DATE_FORMAT);
+
+  private static final String                  GROUP_ADMINISTRATORS       = "*:/platform/administrators";
+
+  private static final String                  SPACE_PROVIDER_ID          = "space";
+
+  private static final String                  SHARED_FOLDER_NAME         = "Shared";
+
+  private static final String                  EOO_COMMENT_ID             = "eoo:commentId";
+
+
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
                                 DocumentSearchServiceConnector documentSearchServiceConnector,
                                 IdentityManager identityManager,
                                 SpaceService spaceService,
-                                ListenerService listenerService) {
+                                ListenerService listenerService,
+                                IdentityRegistry identityRegistry,
+                                ActivityManager activityManager) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.repositoryService = repositoryService;
     this.nodeHierarchyCreator = nodeHierarchyCreator;
     this.documentSearchServiceConnector = documentSearchServiceConnector;
     this.listenerService = listenerService;
+    this.identityRegistry = identityRegistry;
+    this.activityManager = activityManager;
   }
 
   @Override
@@ -1129,13 +1151,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
-   *
    * {@inheritDoc}
    */
   @Override
   public List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity) {
     List<FileVersion> fileVersions = new ArrayList<>();
-    IdentityRegistry identityRegistry = CommonsUtils.getService(IdentityRegistry.class);
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
@@ -1154,10 +1174,17 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         versionFileNode.setTitle(node.getProperty(NodeTypeConstants.EXO_TITLE).getValue().getString());
         String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
         Profile profile = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName).getProfile();
-        versionFileNode.setId(frozen.getUUID());
+        String[] summary = node.getVersionHistory().getVersionLabels(version);
+        if (summary.length > 0) {
+          versionFileNode.setSummary(summary[0]);
+        }
+        versionFileNode.setId(version.getUUID());
+        versionFileNode.setFrozenId(frozen.getUUID());
+        versionFileNode.setOriginId(node.getUUID());
         versionFileNode.setAuthor(userName);
         versionFileNode.setAuthorFullName(profile.getFullName());
         versionFileNode.setCreatedDate(version.getCreated().getTime());
+        versionFileNode.setVersionNumber(Integer.parseInt(version.getName()));
         fileVersions.add(versionFileNode);
       }
     } catch (RepositoryException e) {
@@ -1166,7 +1193,45 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     fileVersions.sort(Collections.reverseOrder());
     if (!fileVersions.isEmpty())
       fileVersions.get(0).setCurrent(true);
-    fileVersions.forEach(v -> v.setVersionNumber(fileVersions.size() - fileVersions.indexOf(v)));
     return fileVersions;
+  }
+
+  private static String addVersionLabel(Node node, String label, Version version) throws RepositoryException {
+    String[] olLabels = node.getVersionHistory().getVersionLabels(version);
+    for (String oldLabel : olLabels) {
+      node.getVersionHistory().removeVersionLabel(oldLabel);
+    }
+    node.getVersionHistory().addVersionLabel(version.getName(), label, false);
+    return label;
+  }
+
+  @Override
+  public FileVersion updateVersionSummary(String originFileId, String versionId, String summary, String aclIdentity) {
+    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    FileVersion versionFileNode = new FileVersion();
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      Node node = session.getNodeByUUID(originFileId);
+      Version version = (Version) session.getNodeByUUID(versionId);
+      versionFileNode.setId(versionId);
+      Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+      if (frozen.hasProperty(EOO_COMMENT_ID)) {
+        String commentId = frozen.getProperty(EOO_COMMENT_ID).getString();
+        if (StringUtils.isNotBlank(commentId)) {
+          ExoSocialActivity activity = activityManager.getActivity(commentId);
+          if (activity != null) {
+            activity.setTitle(summary);
+            activityManager.updateActivity(activity);
+          }
+        } 
+      } 
+      addVersionLabel(node, summary, version);
+      versionFileNode.setSummary(summary);
+      session.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error while adding or updating version summary", e);
+    }
+    return versionFileNode;
   }
 }

@@ -19,9 +19,11 @@ import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.IdentityRegistry;
+import org.exoplatform.social.core.activity.model.ExoSocialActivity;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
+import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.junit.Before;
@@ -46,7 +48,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.powermock.api.mockito.PowerMockito.*;
@@ -73,6 +75,12 @@ public class JCRDocumentFileStorageTest {
   @Mock
   private ListenerService                listenerService;
 
+  @Mock
+  private IdentityRegistry               identityRegistry;
+
+  @Mock
+  private ActivityManager                activityManager;
+
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
   @Before
@@ -82,7 +90,9 @@ public class JCRDocumentFileStorageTest {
                                                              documentSearchServiceConnector,
                                                              identityManager,
                                                              spaceService,
-                                                             listenerService);
+                                                             listenerService,
+                                                             identityRegistry,
+                                                             activityManager);
     PowerMockito.mockStatic(Utils.class);
     PowerMockito.mockStatic(SessionProvider.class);
     PowerMockito.mockStatic(JCRDocumentsUtil.class);
@@ -329,8 +339,6 @@ public class JCRDocumentFileStorageTest {
 
   @Test
   public void getFileVersions() throws RepositoryException {
-    IdentityRegistry identityRegistry = mock(IdentityRegistry.class);
-    when(CommonsUtils.getService(IdentityRegistry.class)).thenReturn(identityRegistry);
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     when(identityRegistry.getIdentity("user")).thenReturn(identity);
     ManageableRepository manageableRepository = mock(ManageableRepository.class);
@@ -340,6 +348,7 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
     when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
     Node node = mock(Node.class);
+    when(node.getUUID()).thenReturn("123");
     when(session.getNodeByUUID("123")).thenReturn(node);
     VersionHistory versionHistory = mock(VersionHistory.class);
     when(node.getVersionHistory()).thenReturn(versionHistory);
@@ -349,6 +358,9 @@ public class JCRDocumentFileStorageTest {
     when(versionHistory.getAllVersions()).thenReturn(versionIterator);
     when(versionIterator.hasNext()).thenReturn(true,false);
     Version version = mock(Version.class);
+    when(versionHistory.getVersionLabels(version)).thenReturn(new String[]{"1@label"});
+    when(version.getName()).thenReturn("1");
+    when(version.getUUID()).thenReturn("111");
     when(versionIterator.nextVersion()).thenReturn(version);
     when(rootVersion.getUUID()).thenReturn("333");
     when(version.getUUID()).thenReturn("222");
@@ -381,5 +393,44 @@ public class JCRDocumentFileStorageTest {
     List<FileVersion> versions = jcrDocumentFileStorage.getFileVersions("123", "user");
     assertNotNull(versions);
     assertEquals(1, versions.size());
+  }
+
+  @Test
+  public void updateVersionSummary() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+
+    Node node = mock(Node.class);
+    when(node.getUUID()).thenReturn("123");
+    when(session.getNodeByUUID("123")).thenReturn(node);
+    Version version = mock(Version.class);
+    when(session.getNodeByUUID("333")).thenReturn(version);
+    Node frozen = mock(Node.class);
+    when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozen);
+    when(frozen.hasProperty("eoo:commentId")).thenReturn(true);
+    Property property = mock(Property.class);
+    when(frozen.getProperty("eoo:commentId")).thenReturn(property);
+    when(property.getString()).thenReturn("comment1");
+
+    ExoSocialActivity activity = mock(ExoSocialActivity.class);
+    when(activityManager.getActivity("comment1")).thenReturn(activity);
+    doNothing().when(activityManager).updateActivity(activity);
+
+    String[] oldLabels = {"1@test", "1:test2"};
+    when(version.getName()).thenReturn("1");
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    PowerMockito.doNothing().when(versionHistory).removeVersionLabel(anyString());
+    PowerMockito.doNothing().when(versionHistory).addVersionLabel(anyString(),anyString(),anyBoolean());
+    when(versionHistory.getVersionLabels(version)).thenReturn(oldLabels);
+    jcrDocumentFileStorage.updateVersionSummary("123", "333", "summary", "user");
+    verify(session, times(1)).save();
+
   }
 }
