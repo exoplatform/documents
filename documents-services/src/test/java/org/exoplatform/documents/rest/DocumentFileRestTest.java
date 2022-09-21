@@ -711,10 +711,6 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("document_id_is_mandatory", response.getEntity());
 
-    response = documentFileRest.deleteDocument("1",null,false, 6);
-    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    assertEquals("document_path_is_mandatory", response.getEntity());
-
     doNothing().when(jcrDeleteFileStorage).deleteDocument("1","/document/oldFile",false, true, 6, root, currentOwnerId);
     response = documentFileRest.deleteDocument("1","/document/oldFile",false, 6);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());

@@ -115,17 +115,21 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
       Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+      if (folderPath == null){
+        folderPath = JCRDocumentsUtil.getNodeByIdentifier(session, documentId).getPath();
+      }
       if (delay > 0) {
         documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
+        String finalFolderPath = folderPath;
         scheduledExecutor.schedule(() -> {
           if (documentsToDeleteQueue.containsKey(documentId)) {
             ExoContainerContext.setCurrentContainer(container);
             RequestLifeCycle.begin(container);
             try {
               documentsToDeleteQueue.remove(documentId);
-              moveToTrash(folderPath, session, userIdentityId, favorite, checkToMoveToTrash);
+              moveToTrash(finalFolderPath, session, userIdentityId, favorite, checkToMoveToTrash);
             } catch (Exception e) {
-              LOG.error("Error when deleting the document with path" + folderPath, e);
+              LOG.error("Error when deleting the document with path" + finalFolderPath, e);
             } finally {
               RequestLifeCycle.end();
             }
