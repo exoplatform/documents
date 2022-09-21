@@ -338,4 +338,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
     documentFileStorage.createShortcut(documentId, destPath);
   }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity) {
+    if (fileNodeId == null) {
+      throw new IllegalArgumentException("file node id is mandatory");
+    }
+    return documentFileStorage.getFileVersions(fileNodeId, aclIdentity);
+  }
 }

@@ -167,4 +167,13 @@ public interface DocumentFileStorage {
    * @throws IllegalAccessException
    */
   void createShortcut(String documentId, String destPath) throws IllegalAccessException;
+
+  /**
+   * Retrieves versions of specific file
+   *
+   * @param fileNodeId target file node id
+   * @param aclIdentity user identity id
+   * @return {@link List} of {@link FileVersion}
+   */
+  List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity);
 }
