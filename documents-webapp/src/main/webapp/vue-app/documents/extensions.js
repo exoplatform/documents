@@ -186,7 +186,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 7,
   enabled: (acl, isSymlink) => {
-    return acl.canEdit && !isSymlink;
+    return acl.canEdit ;
   },
   componentOptions: {
     vueComponent: Vue.options.components['visibility-menu-action'],
@@ -217,8 +217,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 9,
-  enabled: (acl) => {
-    return acl.canEdit;
+  enabled: (acl, isSymlink) => {
+    return acl.canEdit || isSymlink;
   },
   componentOptions: {
     vueComponent: Vue.options.components['download-menu-action'],
