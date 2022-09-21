@@ -130,4 +130,6 @@ public class NodeTypeConstants {
 
   public static final String EXO_PRIMARY_TYPE        = "exo:primaryType";
 
+  public static final String JCR_FROZEN_NODE         = "jcr:frozenNode";
+
 }

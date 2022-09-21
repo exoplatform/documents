@@ -576,5 +576,35 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
   }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/versions")
+  @Operation(summary = "Get versions list of a a given document", method = "GET", description = "Get versions list of a a given document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "404", description = "Not found"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getFileVersions(@Parameter(description = "Identity technical identifier") @QueryParam("fileId") String fileId) {
+
+    if (StringUtils.isBlank(fileId)) {
+      return Response.status(Status.BAD_REQUEST).entity("file id is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      return Response.ok(EntityBuilder.toVersionEntities(documentFileService.getFileVersions(fileId, RestUtils.getCurrentUser())))
+              .build();
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving breadcrumb", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
 }
 

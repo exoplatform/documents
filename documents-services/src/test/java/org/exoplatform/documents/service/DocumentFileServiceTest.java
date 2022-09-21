@@ -454,4 +454,15 @@ public class DocumentFileServiceTest {
     documentFileService.createShortcut(docId, "/Groups/spaces/test/Documents/test");
     verify(documentFileStorage, times(1)).createShortcut(docId, docPath);
   }
+
+  @Test
+  public void getFileVersions() {
+    Throwable exception =
+                        assertThrows(IllegalArgumentException.class, () -> this.documentFileService.getFileVersions(null, null));
+    assertEquals("file node id is mandatory", exception.getMessage());
+    verify(documentFileStorage, times(0)).getFileVersions(anyString(), anyString());
+    this.documentFileService.getFileVersions("5456456456", "user");
+    verify(documentFileStorage, times(1)).getFileVersions("5456456456", "user");
+
+  }
 }
