@@ -1016,7 +1016,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
-  
+
   @Override
   public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
     Node rootNode = null;
