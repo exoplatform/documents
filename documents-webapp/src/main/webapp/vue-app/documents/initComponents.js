@@ -48,6 +48,7 @@ import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
+import UploadOverlay from './components/body/UploadOverlay.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -99,7 +100,8 @@ const components = {
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
   'switch-new-document': SwitchNewDocument,
-  'documents-app-reminder': DocumentsAppReminder
+  'documents-app-reminder': DocumentsAppReminder,
+  'upload-overlay': UploadOverlay,
 };
 
 for (const key in components) {
