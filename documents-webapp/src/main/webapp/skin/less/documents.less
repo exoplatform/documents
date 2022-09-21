@@ -15,6 +15,31 @@
         flex: 1 1 auto;
       }
     }
+    .tableOverlayed{
+      opacity: 0.33;
+    }
+    .uploadOverlay{
+      position: absolute;
+      width: -webkit-fill-available;
+      height: -webkit-fill-available;
+      background: #7070701A 0% 0% no-repeat padding-box;
+      border: 2px dashed #5F708A80;
+      border-radius: 5px;
+      opacity: 1;
+      z-index: 200;
+      margin-right: 12px;
+      margin-bottom: 12px;
+      .documents-upload-body {
+        height: 500px;
+        .uploadText {
+          font-size: 24px;
+          color: #5F708A;
+        }
+        .uploadIcon {
+          color: #5F708A;
+        }
+      }
+    }
     .driveFolderIcon {
       color: @primaryColorDefault;
       font-size:22px;
