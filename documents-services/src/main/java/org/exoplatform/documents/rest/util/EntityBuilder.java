@@ -38,6 +38,7 @@ import javax.jcr.RepositoryException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class EntityBuilder {
@@ -124,12 +125,29 @@ public class EntityBuilder {
     fileEntity.setMimeType(file.getMimeType());
     fileEntity.setSize(file.getSize());
     if (expandProperties.contains("versions")) {
-      // TODO (documentFileService.getFileVersions) think of using limit of file
-      // versions to retrieve
+      fileEntity.setVersions(toVersionEntities(documentFileService.getFileVersions(file.getId(), RestUtils.getCurrentUser())));
     }
     return fileEntity;
   }
 
+  public static FileVersionsEntity toVersionEntities(List<FileVersion> versions) {
+    List<FileVersionEntity> versionEntities = versions.stream().map(EntityBuilder::toVersionEntity).collect(Collectors.toList());
+    return new FileVersionsEntity(versionEntities, versionEntities.size(), 0L, 0L);
+  }
+  
+  public static FileVersionEntity toVersionEntity(FileVersion fileVersion) {
+    FileVersionEntity fileVersionEntity = new FileVersionEntity();
+    fileVersionEntity.setId(fileVersion.getId());
+    fileVersionEntity.setVersionNumber(fileVersion.getVersionNumber());
+    fileVersionEntity.setTitle(fileVersion.getTitle());
+    fileVersionEntity.setCreatedDate(fileVersion.getCreatedDate());
+    fileVersionEntity.setSize(fileVersion.getSize());
+    fileVersionEntity.setAuthor(fileVersion.getAuthor());
+    fileVersionEntity.setAuthorFullName(fileVersion.getAuthorFullName());
+    fileVersionEntity.setSummary(fileVersion.getSummary());
+    fileVersionEntity.setCurrent(fileVersion.isCurrent());
+    return  fileVersionEntity;
+  }
   public static FolderNodeEntity toFolderEntity(DocumentFileService documentFileService,
                                                 IdentityManager identityManager,
                                                 SpaceService spaceService,
