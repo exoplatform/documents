@@ -10,6 +10,7 @@ import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
@@ -38,7 +39,6 @@ import javax.jcr.query.QueryResult;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -284,6 +284,8 @@ public class JCRDocumentFileStorageTest {
     ExtendedNode linkNode = mock(ExtendedNode.class);
     Property property = mock(Property.class);
     NodeType nodeType =  mock(NodeType.class);
+    AccessControlList acl = new AccessControlList();
+    acl.setOwner("test_root");
     SessionProvider sessionProvider = mock(SessionProvider.class);
     when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
     ManageableRepository manageableRepository = mock(ManageableRepository.class);
@@ -302,6 +304,7 @@ public class JCRDocumentFileStorageTest {
     when(rootNode.hasNode("test")).thenReturn(false);
     when(rootNode.addNode("test", NodeTypeConstants.EXO_SYMLINK)).thenReturn(linkNode);
     when(rootNode.getNode("test")).thenReturn(linkNode);
+    when(rootNode.getACL()).thenReturn(acl);
     when(linkNode.canAddMixin("exo:sortable")).thenReturn(true);
     when(currentNode.hasProperty("exo:title")).thenReturn(true);
     when(currentNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
