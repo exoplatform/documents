@@ -21,6 +21,8 @@ export default {
     }
   },
   data: () => ({
+    viewTab: 'RECENT',
+    spaceId: eXo.env.portal.spaceId,
   }),
   computed: {
     isMobile() {
@@ -30,10 +32,26 @@ export default {
   methods: {
     changeVisibility(){
       this.$root.$emit('open-visibility-drawer', this.file);
+      this.getDocumentView();
+      document.dispatchEvent(new CustomEvent('manage-access', {
+        detail: {
+          'category': this.file.folder ? 'Folder' : 'Document',
+          'spaceId': this.spaceId,
+          'view': this.viewTab
+        }
+      }));
       if (this.isMobile) {
         this.$root.$emit('close-file-action-menu');
       }
+    },
+    getDocumentView() {
+      const currentUrlSearchParams = window.location.search;
+      const queryParams = new URLSearchParams(currentUrlSearchParams);
+      if (queryParams.has('view')) {
+        const view = queryParams.get('view');
+        this.viewTab = view.toLowerCase() === 'folder' ? 'Folder' : 'RECENT';
+      }
     }
-  },
+  }
 };
 </script>
