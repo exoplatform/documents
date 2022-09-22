@@ -446,4 +446,12 @@ public class DocumentFileServiceTest {
     org.exoplatform.services.security.Identity aclIdentity1 = documentFileService.getAclUserIdentity("user");
     assertNotNull(aclIdentity1);
   }
+
+  @Test
+  public void testCreateShortcut() throws Exception {
+    String docId = "11111111";
+    String docPath = "/Groups/spaces/test/Documents/test";
+    documentFileService.createShortcut(docId, "/Groups/spaces/test/Documents/test");
+    verify(documentFileStorage, times(1)).createShortcut(docId, docPath);
+  }
 }

@@ -92,15 +92,6 @@ export default {
     };
   },
   watch: {
-    spaceModel () {
-      if (this.$refs?.select?.isMenuActive) {
-        window.setTimeout(() => {
-          if (this.$refs?.select?.isMenuActive) {
-            this.$refs.select.isMenuActive = false;
-          }
-        }, 50);
-      }
-    },
     spacesSize (){
       if (this.loadingSpaces && this.spacesSize >= this.limit){
         this.limit += this.spacesSize;

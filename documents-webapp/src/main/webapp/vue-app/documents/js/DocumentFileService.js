@@ -294,3 +294,24 @@ export function updateDescription(ownerId,document) {
     throw new Error(`Error when trying to update document description ${e}`);
   });
 }
+
+export function createShortcut(documentID,destPath) {
+  const formData = new FormData();
+  if (documentID) {
+    formData.append('documentID', documentID);
+  }
+  if (destPath) {
+    formData.append('destPath', destPath);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/shortcut?${params}`, {
+    credentials: 'include',
+    method: 'POST',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.ok;
+    }
+  }).catch(e => {
+    throw new Error(`Error renaming document ${e}`);
+  });
+}
