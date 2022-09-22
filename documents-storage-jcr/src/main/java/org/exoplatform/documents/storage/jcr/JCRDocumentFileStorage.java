@@ -1016,7 +1016,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
-  
+
   @Override
   public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
     Node rootNode = null;
@@ -1059,10 +1059,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Map<String, String[]> perMap = new HashMap<>();
         List<String> permsList = new ArrayList<>();
         List<String> idList = new ArrayList<>();
-      for(AccessControlEntry accessEntry : ((ExtendedNode) rootNode).getACL().getPermissionEntries()) {
+      for(AccessControlEntry accessEntry : ((ExtendedNode) currentNode).getACL().getPermissionEntries()) {
         if(!idList.contains(accessEntry.getIdentity())) {
           idList.add(accessEntry.getIdentity());
-          permsList = ((ExtendedNode) rootNode).getACL().getPermissions(accessEntry.getIdentity());
+          permsList = ((ExtendedNode) currentNode).getACL().getPermissions(accessEntry.getIdentity());
           perMap.put(accessEntry.getIdentity(), permsList.toArray(new String[permsList.size()]));
         }
       }
