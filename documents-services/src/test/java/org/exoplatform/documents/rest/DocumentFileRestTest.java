@@ -665,6 +665,10 @@ public class DocumentFileRestTest {
     response = documentFileRest.createFolder("11111111",null,2L,"test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
 
+    response = documentFileRest.renameDocument(null,null,"");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("either_ownerId_or_documentID_is_mandatory", response.getEntity());
+
     doNothing().when(documentFileStorage).renameDocument(2L, "11111111", "renameTest", userID);
     Response response1 = documentFileRest.renameDocument("11111111",2L,"renameTest");
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
