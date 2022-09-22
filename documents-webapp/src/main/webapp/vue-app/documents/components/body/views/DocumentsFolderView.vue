@@ -119,6 +119,7 @@ export default {
       return this.primaryFilter === 'favorites';
     },
     items() {
+      console.log(this.files)
       return this.files && this.files.slice() || [];
     },
     sortedHeaderExtensions() {

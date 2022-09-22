@@ -576,6 +576,42 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
 
+      String statement = new StringBuilder().append("SELECT * FROM ")
+              .append(NodeTypeConstants.EXO_SYMLINK)
+              /*.append(" WHERE jcr:path LIKE '")
+              .append("/Groups/spaces/space_2/Documents/shortcuts/doc111")
+              .append("/%' ORDER BY ")
+              .append(sortField)
+              .append(" ")
+              .append(sortDirection)*/
+              .toString();
+      //65c9a8ab7f000101793c01ee0120e17b
+
+      Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+      QueryResult queryResult = jcrQuery.execute();
+      NodeIterator nodeIterator = queryResult.getNodes();
+      List<Node> nodes = new ArrayList<>();
+      while (nodeIterator.hasNext()) {
+        Node node1 = nodeIterator.nextNode();
+        if(node1.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString().equals(documentID)) {
+          nodes.add(node1);
+        }
+      }
+
+      for(Node result : nodes) {
+        if (result.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
+          result.addMixin(NodeTypeConstants.EXO_MODIFY);
+        }
+        result.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+        result.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+        result.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+        result.save();
+      }
+
+      //String sourceID = nodeIterator.nextNode().getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+      //Node sourceNode = getNodeByIdentifier(session, sourceID);
+      //List<FileNode> files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService,false, 0, 0);
+
       Node parent = node.getParent();
       String srcPath = node.getPath();
       String destPath = (parent.getPath().equals("/") ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat("/").concat(name);
@@ -653,6 +689,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+
+      node.save();
 
       String srcPath = node.getPath();
       node.getSession().getWorkspace().move(srcPath, destPath.concat("/").concat(node.getName()));

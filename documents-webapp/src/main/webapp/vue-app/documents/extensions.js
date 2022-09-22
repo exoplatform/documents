@@ -186,7 +186,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 7,
   enabled: (acl, isSymlink) => {
-    return acl.canEdit ;
+    return acl.canEdit && !isSymlink;
   },
   componentOptions: {
     vueComponent: Vue.options.components['visibility-menu-action'],
