@@ -576,8 +576,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
 
-      //changeSymlinkModificationDate(documentID, session, now, username);
-
       Node parent = node.getParent();
       String srcPath = node.getPath();
       String destPath = (parent.getPath().equals("/") ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat("/").concat(name);
@@ -657,8 +655,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
 
       node.save();
-
-      //changeSymlinkModificationDate(fileId, session, now, username);
 
       String srcPath = node.getPath();
       node.getSession().getWorkspace().move(srcPath, destPath.concat("/").concat(node.getName()));
@@ -963,28 +959,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
-
-  /*private void changeSymlinkModificationDate(String documentID, Session session, Calendar now, String username) throws RepositoryException {
-    String statement = "SELECT * FROM " +
-            NodeTypeConstants.EXO_SYMLINK +
-            " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID + " LIKE '" +
-            documentID +
-            "'";
-
-    Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
-    QueryResult queryResult = jcrQuery.execute();
-    NodeIterator nodeIterator = queryResult.getNodes();
-    while (nodeIterator.hasNext()) {
-      Node linkedNode = nodeIterator.nextNode();
-      if (linkedNode.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
-        linkedNode.addMixin(NodeTypeConstants.EXO_MODIFY);
-      }
-      linkedNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
-      linkedNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
-      linkedNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
-      linkedNode.save();
-    }
-  }*/
 
   public boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException {
     SessionProvider sessionProvider = null;

@@ -338,7 +338,7 @@ public class JCRDocumentsUtil {
       documentNode.setCreatorId(getUserIdentityId(identityManager, owner));
     }
     if (node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)) {
-      Node nodeToModify = null;
+      Node nodeToModify = node;
       if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         RepositoryService repositoryService = CommonsUtils.getService(RepositoryService.class);
         SessionProvider sessionProvider = SessionProvider.createSystemProvider();
@@ -346,40 +346,17 @@ public class JCRDocumentsUtil {
         Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
         String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         Node sourceNode = getNodeByIdentifier(systemSession, sourceNodeId);
+        assert sourceNode != null;
         if (sourceNode.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().compareTo(node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate()) > 0) {
-          //nodeToModify = sourceNode;
-          long modifiedDate = sourceNode.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
-                  .getDate()
-                  .getTimeInMillis();
-          documentNode.setModifiedDate(modifiedDate);
-          String modifier = sourceNode.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
-
-          documentNode.setModifierId(getUserIdentityId(identityManager, modifier));
-        }
-        else {
-          //nodeToModify = node;
-          long modifiedDate = node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
-                  .getDate()
-                  .getTimeInMillis();
-          documentNode.setModifiedDate(modifiedDate);
-          String modifier = node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
-          documentNode.setModifierId(getUserIdentityId(identityManager, modifier));
+          nodeToModify = sourceNode;
         }
       }
-      else {
-        long modifiedDate = node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
-                .getDate()
-                .getTimeInMillis();
-        documentNode.setModifiedDate(modifiedDate);
-        String modifier = node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
-        documentNode.setModifierId(getUserIdentityId(identityManager, modifier));
-      }
-      /*long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
-                              .getDate()
-                              .getTimeInMillis();
+      long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
+              .getDate()
+              .getTimeInMillis();
       documentNode.setModifiedDate(modifiedDate);
       String modifier = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
-      documentNode.setModifierId(getUserIdentityId(identityManager, modifier));*/
+      documentNode.setModifierId(getUserIdentityId(identityManager, modifier));
     } else {
       documentNode.setModifiedDate(documentNode.getCreatedDate());
       documentNode.setModifierId(documentNode.getCreatorId());
