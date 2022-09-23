@@ -576,26 +576,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
 
-      String statement = new StringBuilder().append("SELECT * FROM ")
-              .append(NodeTypeConstants.EXO_SYMLINK)
-              .append(" WHERE "+NodeTypeConstants.EXO_SYMLINK_UUID+" LIKE '")
-              .append(documentID)
-              .append("'")
-              .toString();
-
-      Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
-      QueryResult queryResult = jcrQuery.execute();
-      NodeIterator nodeIterator = queryResult.getNodes();
-      while (nodeIterator.hasNext()) {
-        Node linkedNode = nodeIterator.nextNode();
-        if (linkedNode.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
-          linkedNode.addMixin(NodeTypeConstants.EXO_MODIFY);
-        }
-        linkedNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
-        linkedNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
-        linkedNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
-        linkedNode.save();
-      }
+      changeSymlinkModificationDate(documentID, session, now, username);
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
@@ -677,12 +658,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       node.save();
 
+      changeSymlinkModificationDate(fileId, session, now, username);
+
       String srcPath = node.getPath();
       node.getSession().getWorkspace().move(srcPath, destPath.concat("/").concat(node.getName()));
 
       node.save();
     } catch (Exception e) {
-      throw new IllegalStateException("Error moving document'" + fileId, e);
+      throw new IllegalStateException("Error moving document's id " + fileId, e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
@@ -978,6 +961,28 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
+    }
+  }
+
+  private void changeSymlinkModificationDate(String documentID, Session session, Calendar now, String username) throws RepositoryException {
+    String statement = "SELECT * FROM " +
+            NodeTypeConstants.EXO_SYMLINK +
+            " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID + " LIKE '" +
+            documentID +
+            "'";
+
+    Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+    QueryResult queryResult = jcrQuery.execute();
+    NodeIterator nodeIterator = queryResult.getNodes();
+    while (nodeIterator.hasNext()) {
+      Node linkedNode = nodeIterator.nextNode();
+      if (linkedNode.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
+        linkedNode.addMixin(NodeTypeConstants.EXO_MODIFY);
+      }
+      linkedNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      linkedNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+      linkedNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+      linkedNode.save();
     }
   }
 
