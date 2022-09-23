@@ -284,8 +284,8 @@ public class JCRDocumentFileStorageTest {
     assertEquals("Error while creating a shortcut for document's id " + null + " to destination path" + null, exception.getMessage());
 
     Session systemSession = mock(Session.class);
-    ExtendedNode rootNode = mock(ExtendedNode.class);
-    Node currentNode = Mockito.mock(ExtendedNode.class);
+    Node rootNode = mock(Node.class);
+    ExtendedNode currentNode = Mockito.mock(ExtendedNode.class);
     ExtendedNode linkNode = mock(ExtendedNode.class);
     Property property = mock(Property.class);
     NodeType nodeType =  mock(NodeType.class);
@@ -309,13 +309,13 @@ public class JCRDocumentFileStorageTest {
     when(rootNode.hasNode("test")).thenReturn(false);
     when(rootNode.addNode("test", NodeTypeConstants.EXO_SYMLINK)).thenReturn(linkNode);
     when(rootNode.getNode("test")).thenReturn(linkNode);
-    when(rootNode.getACL()).thenReturn(acl);
     when(linkNode.canAddMixin("exo:sortable")).thenReturn(true);
     when(currentNode.hasProperty("exo:title")).thenReturn(true);
     when(currentNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
     when(property.getString()).thenReturn("test");
     when(JCRDocumentsUtil.getMimeType(currentNode)).thenReturn("testMimeType");
     when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(currentNode.getACL()).thenReturn(acl);
     when(nodeType.getName()).thenReturn("nt:file");
     when(((ExtendedNode) currentNode).getIdentifier()).thenReturn("123");
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
