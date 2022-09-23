@@ -20,11 +20,16 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.utils.ListAccess;
+import org.exoplatform.container.ExoContainer;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.organization.OrganizationService;
+import org.exoplatform.services.organization.User;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
@@ -294,23 +299,42 @@ public class EntityBuilder {
       List<PermissionEntryEntity> collaborators = nodePermissionEntity.getCollaborators();
       List<PermissionEntry> permissions = new ArrayList<>();
       Map<Long,String> toShare = new HashMap<>();
+      String invitedGroupId = null;
 
       for(PermissionEntryEntity permissionEntryEntity : collaborators){
         Identity ownerId = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
         if(ownerId != null && !ownerId.getId().equals(permissionEntryEntity.getIdentity().getId())) {
           if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
-            toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+            toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
+            permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
+          } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
+            try {
+              ExoContainer container = ExoContainerContext.getCurrentContainer();
+              OrganizationService orgService = container.getComponentInstanceOfType(OrganizationService.class);
+              invitedGroupId = permissionEntryEntity.getIdentity().getRemoteId();
+              ListAccess<User> listAccess = orgService.getUserHandler().findUsersByGroupId(invitedGroupId);
+              User[] users = listAccess.load(0, listAccess.getSize());
+              for(User u : users) {
+                if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(u.getUserName()))) {
+                  toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
+                }
+                PermissionEntryEntity permissionEntryEntity1 = new PermissionEntryEntity(toIdentityEntity(identityManager.getOrCreateUserIdentity(u.getUserName()), spaceService), permissionEntryEntity.getPermission());
+                permissions.add(toPermissionEntry(permissionEntryEntity1, identityManager));
+              }
+            } catch (Exception e) {
+              LOG.warn("Failed to invite users from group " + invitedGroupId, e);
+            }
           } else {
             try {
               if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()))) {
                 toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
               }
+              permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
             } catch (Exception exception) {
               LOG.warn("Cannot get user Identity");
             }
           }
         }
-        permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
       }
       if(nodePermissionEntity.getVisibilityChoice().equals(Visibility.ALL_MEMBERS.name())){
         permissions.add(new PermissionEntry(identity,"read", PermissionRole.ALL.name()));
