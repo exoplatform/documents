@@ -576,7 +576,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
 
-      changeSymlinkModificationDate(documentID, session, now, username);
+      //changeSymlinkModificationDate(documentID, session, now, username);
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
@@ -658,7 +658,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       node.save();
 
-      changeSymlinkModificationDate(fileId, session, now, username);
+      //changeSymlinkModificationDate(fileId, session, now, username);
 
       String srcPath = node.getPath();
       node.getSession().getWorkspace().move(srcPath, destPath.concat("/").concat(node.getName()));
@@ -964,7 +964,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private void changeSymlinkModificationDate(String documentID, Session session, Calendar now, String username) throws RepositoryException {
+  /*private void changeSymlinkModificationDate(String documentID, Session session, Calendar now, String username) throws RepositoryException {
     String statement = "SELECT * FROM " +
             NodeTypeConstants.EXO_SYMLINK +
             " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID + " LIKE '" +
@@ -984,7 +984,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       linkedNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
       linkedNode.save();
     }
-  }
+  }*/
 
   public boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException {
     SessionProvider sessionProvider = null;
