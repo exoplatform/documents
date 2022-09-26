@@ -24,6 +24,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 import static org.powermock.api.mockito.PowerMockito.doThrow;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.listener.ListenerService;
@@ -309,6 +310,12 @@ public class DocumentFileRestTest {
 
     assertEquals(((DocumentGroupsSize) response4.getEntity()).getThisDay(), 4);
 
+    when(documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false)).thenThrow(ObjectNotFoundException.class);
+    Response response =  documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    when(documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false)).thenThrow(RuntimeException.class);
+    response =  documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
   @Test
@@ -569,6 +576,12 @@ public class DocumentFileRestTest {
     assertEquals(breadCrumbItemEntities.get(0).getId(),"4");
     assertEquals(breadCrumbItemEntities.get(0).getName(),"Folder4");
 
+    when(documentFileRest.getBreadcrumb(1L, "123", "")).thenThrow(ObjectNotFoundException.class);
+    Response response =  documentFileRest.getBreadcrumb(1L, "123", "");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    when(documentFileRest.getBreadcrumb(1L, "123", "")).thenThrow(RuntimeException.class);
+    response =  documentFileRest.getBreadcrumb(1L, "123", "");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
   @Test
@@ -620,6 +633,13 @@ public class DocumentFileRestTest {
     assertEquals(fileNode.getName(), "Copy of oldFile");
     assertEquals(fileNode.getId(),"2");
 
+    when(documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "")).thenThrow(ObjectNotFoundException.class);
+    Response response =  documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    when(documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "")).thenThrow(RuntimeException.class);
+    response =  documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+
   }
 
 
@@ -661,9 +681,17 @@ public class DocumentFileRestTest {
     response = documentFileRest.createFolder("11111111",null,2L,"test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
 
+    when(documentFileRest.createFolder("11111111",null,2L,"test")).thenThrow(RuntimeException.class);
+    response =  documentFileRest.createFolder("11111111",null,2L,"test");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+
     response = documentFileRest.renameDocument(null,null,"");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("either_ownerId_or_documentID_is_mandatory", response.getEntity());
+
+    response = documentFileRest.renameDocument("11111111",2L,"");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("Document Name should not be empty", response.getEntity());
 
     doNothing().when(documentFileStorage).renameDocument(2L, "11111111", "renameTest", userID);
     Response response1 = documentFileRest.renameDocument("11111111",2L,"renameTest");
@@ -673,12 +701,21 @@ public class DocumentFileRestTest {
     Response response2 = documentFileRest.getFullTreeData(2L,"11111111");
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
-    Response response3 = documentFileRest.moveDocument("11111111",2L,null);
+    Response response3 = documentFileRest.moveDocument(null,null,"/Groups/spaces/test/Documents/test");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response3.getStatus());
+    assertEquals("either_ownerId_or_documentID_is_mandatory", response3.getEntity());
+
+    Response response4 = documentFileRest.moveDocument("11111111",2L,null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response4.getStatus());
 
     doNothing().when(documentFileStorage).moveDocument(2L, "11111111", "/Groups/spaces/test/Documents/test", userID);
-    Response response4 = documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test");
-    assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
+    Response response5 = documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test");
+    assertEquals(Response.Status.OK.getStatusCode(), response5.getStatus());
+
+    when(documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test")).thenThrow(RuntimeException.class);
+    response =  documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+
   }
 
   @Test

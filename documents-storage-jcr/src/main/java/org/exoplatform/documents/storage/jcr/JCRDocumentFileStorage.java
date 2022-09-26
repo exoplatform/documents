@@ -959,7 +959,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       for (AccessControlEntry accessControlEntry : permsList) {
         String nodeAclIdentity = accessControlEntry.getIdentity();
         MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
-        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
+        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry) && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
           canAccess = true;
         }
       }
