@@ -318,9 +318,8 @@ public class EntityBuilder {
                 if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(u.getUserName()))) {
                   toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
                 }
-                PermissionEntryEntity permissionEntryEntity1 = new PermissionEntryEntity(toIdentityEntity(identityManager.getOrCreateUserIdentity(u.getUserName()), spaceService), permissionEntryEntity.getPermission());
-                permissions.add(toPermissionEntry(permissionEntryEntity1, identityManager));
               }
+              permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
             } catch (Exception e) {
               LOG.warn("Failed to invite users from group " + invitedGroupId, e);
             }
@@ -374,6 +373,8 @@ public class EntityBuilder {
     Identity identity = null;
     if(permissionEntryEntity.getIdentity().getProviderId().equals("space")){
       identity = identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId());
+    } else if (permissionEntryEntity.getIdentity().getProviderId().equals("group")) {
+      identity = new Identity(permissionEntryEntity.getIdentity().getProviderId(), permissionEntryEntity.getIdentity().getRemoteId());
     } else {
       identity = identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId());
     }
