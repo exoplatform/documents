@@ -346,8 +346,7 @@ public class JCRDocumentsUtil {
         Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
         String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         Node sourceNode = getNodeByIdentifier(systemSession, sourceNodeId);
-        assert sourceNode != null;
-        if (sourceNode.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().compareTo(node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate()) > 0) {
+        if (sourceNode != null && sourceNode.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().compareTo(node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate()) > 0) {
           nodeToModify = sourceNode;
         }
       }
