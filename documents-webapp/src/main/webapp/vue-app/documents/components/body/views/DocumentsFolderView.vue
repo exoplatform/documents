@@ -1,43 +1,46 @@
 <template>
-  <v-data-table
-    ref="dataTable"
-    :headers="headers"
-    :items="items"
-    :items-per-page="pageSize"
-    :loading="loading"
-    :options.sync="options"
-    :locale="lang"
-    :groupable="grouping"
-    :group-by="groupBy"
-    :group-desc="groupDesc"
-    :loading-text="loadingLabel"
-    :class="loadingClass"
-    hide-default-footer
-    disable-pagination
-    disable-filtering
-    class="documents-folder-table border-box-sizing">
-    <template slot="group.header"><span></span></template>
-    <template
-      v-for="header in extendedCells"
-      #[`item.${header.value}`]="{item}">
-      <documents-table-cell
-        :key="header.value"
-        :extension="header.cellExtension"
-        :file="item"
-        :class="header.value === 'name' && 'ms-8'" />
-    </template>
-    <template v-if="hasMore" slot="footer">
-      <v-flex class="d-flex py-2 border-box-sizing mb-1">
-        <v-btn
-          :loading="loading"
-          :disabled="loading"
-          class="white mx-auto no-border primary--text no-box-shadow"
-          @click="$root.$emit('document-load-more')">
-          {{ $t('documents.loadMore') }}
-        </v-btn>
-      </v-flex>
-    </template>
-  </v-data-table>
+  <div>
+    <upload-overlay />
+    <v-data-table
+      ref="dataTable"
+      :headers="headers"
+      :items="items"
+      :items-per-page="pageSize"
+      :loading="loading"
+      :options.sync="options"
+      :locale="lang"
+      :groupable="grouping"
+      :group-by="groupBy"
+      :group-desc="groupDesc"
+      :loading-text="loadingLabel"
+      :class="loadingClass"
+      hide-default-footer
+      disable-pagination
+      disable-filtering
+      class="documents-folder-table border-box-sizing">
+      <template slot="group.header"><span></span></template>
+      <template
+        v-for="header in extendedCells"
+        #[`item.${header.value}`]="{item}">
+        <documents-table-cell
+          :key="header.value"
+          :extension="header.cellExtension"
+          :file="item"
+          :class="header.value === 'name' && 'ms-8'" />
+      </template>
+      <template v-if="hasMore" slot="footer">
+        <v-flex class="d-flex py-2 border-box-sizing mb-1">
+          <v-btn
+            :loading="loading"
+            :disabled="loading"
+            class="white mx-auto no-border primary--text no-box-shadow"
+            @click="$root.$emit('document-load-more')">
+            {{ $t('documents.loadMore') }}
+          </v-btn>
+        </v-flex>
+      </template>
+    </v-data-table>
+  </div>
 </template>
 
 <script>
