@@ -455,9 +455,13 @@ public class DocumentFileRest implements ResourceContainer {
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Status.BAD_REQUEST).entity("document_id_is_mandatory").build();
     }
+    if (StringUtils.isBlank(documentPath)) {
+      return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
+    }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    String originPath = documentPath.replace(":", "/");
     try {
-      documentFileService.deleteDocument(documentPath,documentId,  favorite, delay, userIdentityId);
+      documentFileService.deleteDocument(originPath,documentId,  favorite, delay, userIdentityId);
       return Response.ok().build();
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
