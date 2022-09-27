@@ -317,7 +317,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void updateDocumentDescription(long ownerId,
                                         String documentID,
                                         String description,
-                                        long aclIdentity) throws IllegalStateException, IllegalAccessException {
+                                        long aclIdentity) throws IllegalStateException, IllegalAccessException, RepositoryException {
     documentFileStorage.updateDocumentDescription(ownerId, documentID, description, getAclUserIdentity(aclIdentity));
   }
 

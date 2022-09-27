@@ -200,7 +200,7 @@ public interface DocumentFileService {
   default void updateDocumentDescription(long ownerId,
                                          String documentID,
                                          String description,
-                                         long aclIdentity) throws IllegalStateException, IllegalAccessException {
+                                         long aclIdentity) throws IllegalStateException, IllegalAccessException, RepositoryException {
     throw new IllegalStateException("updateDocumentDescription method not implemented in the target class");
   }
 
