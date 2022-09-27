@@ -431,7 +431,7 @@ public class DocumentFileRestTest {
     permissionEntries.add(permissionEntry4);
     permissionEntries.add(permissionEntry5);
     permissionEntries.add(permissionEntry6);
-    NodePermission nodePermission = new NodePermission(true,true,true,permissionEntries,null);
+    NodePermission nodePermission = new NodePermission(true,true,true,permissionEntries,null, null);
     folder1.setAcl(nodePermission);
 
 
@@ -830,5 +830,10 @@ public class DocumentFileRestTest {
     doNothing().when(documentFileStorage).createShortcut("11111111", "/Groups/spaces/test/Documents/test");
     response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+
+
+    when(documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test")).thenThrow(RuntimeException.class);
+    response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 }

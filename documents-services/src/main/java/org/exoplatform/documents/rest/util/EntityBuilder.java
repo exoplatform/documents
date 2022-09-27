@@ -281,6 +281,7 @@ public class EntityBuilder {
       List<PermissionEntryEntity> collaborators = nodePermissionEntity.getCollaborators();
       List<PermissionEntry> permissions = new ArrayList<>();
       Map<Long,String> toShare = new HashMap<>();
+      Map<Long,String> toNotify = new HashMap<>();
       String invitedGroupId = null;
 
       for(PermissionEntryEntity permissionEntryEntity : collaborators){
@@ -299,6 +300,8 @@ public class EntityBuilder {
               for(User u : users) {
                 if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(u.getUserName()))) {
                   toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
+                } else {
+                  toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
                 }
               }
               permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
@@ -309,6 +312,8 @@ public class EntityBuilder {
             try {
               if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()))) {
                 toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+              } else {
+                toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
               }
               permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
             } catch (Exception exception) {
@@ -325,12 +330,12 @@ public class EntityBuilder {
           permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS.name()));
         }
       }
-      return new NodePermission(nodePermissionEntity.isCanAccess(),nodePermissionEntity.isCanEdit(),nodePermissionEntity.isCanDelete(),permissions,toShare);
+      return new NodePermission(nodePermissionEntity.isCanAccess(),nodePermissionEntity.isCanEdit(),nodePermissionEntity.isCanDelete(),permissions,toShare, toNotify);
     }
     return null;
   }
 
-  static Identity getOwnerIdentityFromNodePath(String path, IdentityManager identityManager, SpaceService spaceService){
+  public static Identity getOwnerIdentityFromNodePath(String path, IdentityManager identityManager, SpaceService spaceService){
     Identity identity = null;
     if (path.contains(SPACE_PATH_PREFIX)) {
       String[] pathParts = path.split(SPACE_PATH_PREFIX)[1].split("/");

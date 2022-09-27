@@ -2,6 +2,8 @@ package org.exoplatform.documents.notification.utils;
 
 
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.documents.rest.util.EntityBuilder;
+import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -13,6 +15,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -29,7 +32,7 @@ import static org.mockito.Mockito.when;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore({ "javax.management.*" })
-@PrepareForTest({ CommonsUtils.class, LinkProvider.class })
+@PrepareForTest({ CommonsUtils.class, LinkProvider.class, EntityBuilder.class })
 public class NotificationUtilsTest {
 
   @Mock
@@ -46,6 +49,25 @@ public class NotificationUtilsTest {
     when(CommonsUtils.getCurrentPortalOwner()).thenReturn("dw");
     when(CommonsUtils.getCurrentDomain()).thenReturn("http://domain");
     when(LinkProvider.getPortalName(null)).thenReturn("portal");
+  }
+
+  @Test
+  public void getDocumentLink() throws RepositoryException {
+    Identity identity = mock(Identity.class);
+    Space space = new Space();
+    space.setGroupId("/spaces/spacex");
+    space.setPrettyName("spacex");
+    when(identity.getRemoteId()).thenReturn("spacex");
+    Node node = Mockito.mock(ExtendedNode.class);
+    when(((ExtendedNode)node).getIdentifier()).thenReturn("123");
+    when(node.hasNode("jcr:content")).thenReturn(true);
+    when(node.getPath()).thenReturn("/Groups/spaces/spacex/Documents/new folder 32");
+    when(spaceService.getSpaceByGroupId("/spaces/spacex")).thenReturn(space);
+    when(spaceService.getSpaceByPrettyName("spacex")).thenReturn(space);
+    when( identityManager.getOrCreateSpaceIdentity("spacex")).thenReturn(identity);
+
+    String link = NotificationUtils.getDocumentLink(node, spaceService,identityManager);
+    assertEquals("http://domain/portal/g/:spaces:spacex/spacex/documents?documentPreviewId=123", link);
   }
   @Test
   public void getSharedDocumentLink() {
