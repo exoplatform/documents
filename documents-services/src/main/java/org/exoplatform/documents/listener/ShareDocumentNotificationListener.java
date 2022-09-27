@@ -27,6 +27,7 @@ import org.exoplatform.services.listener.Listener;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
+import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
 import javax.jcr.Node;
@@ -37,8 +38,11 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
 
   private SpaceService        spaceService;
 
-  public ShareDocumentNotificationListener(SpaceService spaceService) {
+  private IdentityManager     identityManager;
+
+  public ShareDocumentNotificationListener(SpaceService spaceService, IdentityManager identityManager) {
     this.spaceService = spaceService;
+    this.identityManager = identityManager;
   }
 
   @Override
@@ -47,8 +51,12 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
     Identity targetIdentity = event.getSource();
     String currentUser = ConversationState.getCurrent().getIdentity().getUserId();
     NotificationContext ctx = NotificationContextImpl.cloneInstance();
-    String documentLink =
-                        NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(), null, null);
+    String documentLink = null;
+    if (targetNode.hasProperty(EXO_SYMLINK_UUID)) {
+      documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(), null, null);
+    } else {
+      documentLink = NotificationUtils.getDocumentLink(targetNode, spaceService, identityManager);
+    }
     if (targetIdentity.getProviderId().equals(SpaceIdentityProvider.NAME)) {
       documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(),
                                                              spaceService,

@@ -960,6 +960,24 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  public void notifyMember(String documentId, long destId) {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
+      Node currentNode = getNodeByIdentifier(systemSession, documentId);
+      Utils.broadcast(listenerService, "share_document_event", destIdentity, currentNode);
+    } catch (Exception e) {
+      throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
+    }finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
   public boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException {
     SessionProvider sessionProvider = null;
     boolean canAccess = false;
