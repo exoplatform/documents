@@ -155,7 +155,7 @@ public interface DocumentFileStorage {
   default void updateDocumentDescription(long ownerId,
                                          String documentID,
                                          String description,
-                                         Identity aclIdentity) throws IllegalStateException {
+                                         Identity aclIdentity) throws IllegalStateException, RepositoryException {
     throw new IllegalStateException("updateDocumentDescription not implemented in the target classs");
   }
 

@@ -66,6 +66,10 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
+import org.exoplatform.social.metadata.tag.TagService;
+import org.exoplatform.social.metadata.tag.model.TagName;
+import org.exoplatform.social.metadata.tag.model.TagObject;
+
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                  COLLABORATION              = "collaboration";
@@ -1031,7 +1035,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void updateDocumentDescription(long ownerId, String documentId, String description, Identity aclIdentity) {
+  public void updateDocumentDescription(long ownerId, String documentId, String description, Identity aclIdentity) throws RepositoryException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {
@@ -1059,6 +1063,22 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       content.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
       content.getSession().save();
       node.getSession().save();
+      // Create tags if the description contains
+      TagService tagService = CommonsUtils.getService(TagService.class);
+      Set<TagName> tagNames = tagService.detectTagNames(description);
+      if(tagNames.size()>0){
+        org.exoplatform.social.core.identity.model.Identity audienceIdentity = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
+        long spaceId = 0;
+        if(audienceIdentity.getProviderId().equals("space")){
+          Space space = spaceService.getSpaceByPrettyName(audienceIdentity.getRemoteId());
+          spaceId = Long.parseLong(space.getId());
+        }
+        tagService.saveTags(new TagObject("file", ((ExtendedNode) node).getIdentifier(), null, spaceId),
+                tagNames,
+                Long.parseLong(audienceIdentity.getId()),
+                Long.parseLong(identityManager.getOrCreateUserIdentity(username).getId()));
+      }
+
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentId, e);
     } finally {
