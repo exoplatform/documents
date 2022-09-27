@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import javax.jcr.RepositoryException;
 import javax.ws.rs.core.Response;
 
 import org.exoplatform.documents.rest.util.EntityBuilder;
@@ -893,7 +894,7 @@ public class DocumentFileRestTest {
 
   @Test
   @PrepareForTest({ RestUtils.class })
-  public void updateDocumentDescription() throws IllegalAccessException {
+  public void updateDocumentDescription() throws IllegalAccessException, RepositoryException {
     PowerMockito.mockStatic(RestUtils.class);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
