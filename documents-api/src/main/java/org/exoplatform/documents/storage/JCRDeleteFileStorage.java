@@ -18,7 +18,11 @@ package org.exoplatform.documents.storage;
 
 import org.exoplatform.services.security.Identity;
 
+import java.util.Map;
+
 public interface JCRDeleteFileStorage {
+
+  Map<String, String> getDocumentsToDelete();
 
   /**
    * Delete document (Move to trash)
