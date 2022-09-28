@@ -331,3 +331,26 @@ export function getFileVersions(fileId) {
     }
   });
 }
+
+export function updateVersionSummary(originFileId, versionId, summary) {
+  const formData = new FormData();
+  formData.append('versionId', versionId);
+  formData.append('originFileId', originFileId);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/versions?${params}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      value: summary,
+    }),
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Error while updating version summary');
+    } else {
+      return resp.json();
+    }
+  });
+}

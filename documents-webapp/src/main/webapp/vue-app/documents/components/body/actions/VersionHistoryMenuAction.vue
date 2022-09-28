@@ -39,7 +39,7 @@ export default {
   },
   methods: {
     showVersionHistory() {
-      this.$root.$emit('show-version-history', this.file?.id);
+      this.$root.$emit('show-version-history', this.file);
     }
   }
 };

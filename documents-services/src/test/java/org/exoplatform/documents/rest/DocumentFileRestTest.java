@@ -35,6 +35,7 @@ import org.junit.runner.RunWith;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.*;
 
 import javax.ws.rs.core.Response;
 
@@ -919,6 +920,60 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(RuntimeException.class);
     response =  documentFileRest1.getFullTreeData(1L, "123");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  @PrepareForTest({ RestUtils.class })
+  public void updateVersionSummary() {
+    PowerMockito.mockStatic(RestUtils.class);
+    when(RestUtils.getCurrentUser()).thenReturn("user");
+    Map<String, String> summary = new HashMap<>();
+    summary.put("value", "test");
+    FileVersion fileVersion = new FileVersion();
+    fileVersion.setCurrent(true);
+    fileVersion.setTitle("test.docx");
+    fileVersion.setVersionNumber(1);
+    fileVersion.setId("4ezadazd465az4d");
+    fileVersion.setCreatedDate(new Date());
+    fileVersion.setAuthorFullName("user user");
+    fileVersion.setAuthor("user");
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    Response response = documentFileRest1.updateVersionSummary(summary, null, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    response = documentFileRest1.updateVersionSummary(summary, "1225", null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    when(documentFileService1.updateVersionSummary(anyString(), anyString(), anyString(), anyString())).thenReturn(fileVersion);
+    response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    when(documentFileService1.updateVersionSummary(anyString(),
+                                                   anyString(),
+                                                   anyString(),
+                                                   anyString())).thenThrow(IllegalArgumentException.class);
+    response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  @PrepareForTest({ RestUtils.class })
+  public void shouldThrowServerErrorWhenUpdateSummary() {
+    PowerMockito.mockStatic(RestUtils.class);
+    when(RestUtils.getCurrentUser()).thenReturn("user");
+    Map<String, String> summary = new HashMap<>();
+    summary.put("value", "test");
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    when(documentFileService1.updateVersionSummary(anyString(),
+            anyString(),
+            anyString(),
+            anyString())).thenThrow(RuntimeException.class);
+    Response response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 }

@@ -143,6 +143,8 @@ public class EntityBuilder {
   public static FileVersionEntity toVersionEntity(FileVersion fileVersion) {
     FileVersionEntity fileVersionEntity = new FileVersionEntity();
     fileVersionEntity.setId(fileVersion.getId());
+    fileVersionEntity.setFrozenId(fileVersion.getFrozenId());
+    fileVersionEntity.setOriginId(fileVersion.getOriginId());
     fileVersionEntity.setVersionNumber(fileVersion.getVersionNumber());
     fileVersionEntity.setTitle(fileVersion.getTitle());
     fileVersionEntity.setCreatedDate(fileVersion.getCreatedDate());
