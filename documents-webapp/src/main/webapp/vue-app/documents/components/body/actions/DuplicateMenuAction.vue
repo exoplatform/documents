@@ -9,7 +9,7 @@
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.duplicate') }}</span>
     <v-divider
-      v-if="!isMobile && !file.folder"
+      v-if="!isMobile && !file.folder && !shortCutEnabled"
       class="mt-1 dividerStyle" />
   </div>
 </template>
@@ -28,6 +28,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    shortCutEnabled() {
+      return eXo.env.portal.addShortcutActionEnabled;
+    }
   },
   methods: {
     duplicate(){
