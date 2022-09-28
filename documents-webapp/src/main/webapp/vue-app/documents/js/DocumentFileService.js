@@ -354,3 +354,19 @@ export function updateVersionSummary(originFileId, versionId, summary) {
     }
   });
 }
+
+export function restoreVersion(versionId) {
+  const formData = new FormData();
+  formData.append('versionId', versionId);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/versions?${params}`, {
+    method: 'PUT',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Error while restoring version');
+    } else {
+      return resp.text();
+    }
+  });
+}

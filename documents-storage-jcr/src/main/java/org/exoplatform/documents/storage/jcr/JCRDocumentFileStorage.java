@@ -1161,6 +1161,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(fileNodeId);
+      String currentVersionName = node.getBaseVersion().getName();
       Version rootVersion = node.getVersionHistory().getRootVersion();
       VersionIterator versionIterator = node.getVersionHistory().getAllVersions();
       while (versionIterator.hasNext()) {
@@ -1186,13 +1187,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         versionFileNode.setCreatedDate(version.getCreated().getTime());
         versionFileNode.setVersionNumber(Integer.parseInt(version.getName()));
         fileVersions.add(versionFileNode);
+        if (version.getName().equals(currentVersionName)) {
+          versionFileNode.setCurrent(true);
+        }
       }
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error while getting file versions", e);
     }
     fileVersions.sort(Collections.reverseOrder());
-    if (!fileVersions.isEmpty())
-      fileVersions.get(0).setCurrent(true);
     return fileVersions;
   }
 
@@ -1233,5 +1235,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while adding or updating version summary", e);
     }
     return versionFileNode;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void restoreVersion(String versionId, String aclIdentity) {
+    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      Version version = (Version) session.getNodeByUUID(versionId);
+      Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+      Node node;
+      if (frozen != null) {
+        String frozenUuid = Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID);
+        node = session.getNodeByUUID(frozenUuid);
+        if (node != null) {
+          node.restore(version, false);
+        }
+      }
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error while restoring version", e);
+    }
   }
 }

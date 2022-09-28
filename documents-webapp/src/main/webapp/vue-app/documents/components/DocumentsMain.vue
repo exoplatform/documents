@@ -78,12 +78,12 @@
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
-      :disable-restore-version="true"
       :versions="versions"
       :is-loading="isLoadingVersions"
       :show-load-more="showLoadMoreVersions"
       @drawer-closed="versionsDrawerClosed"
       @open-version="openVersionPreview"
+      @restore-version="restoreVersion"
       @version-update-description="updateVersionSummary"
       @load-more="loadMoreVersions"
       ref="documentVersionHistory" />
@@ -222,6 +222,17 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    restoreVersion(version) {
+      return this.$documentFileService.restoreVersion(version.id).then(data => {
+        if (data === 'ok') {
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.restore.version.success')});
+          this.$root.$emit('version-restored', version);
+        }
+      }).catch(() => {
+        this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.restore.version.error')});
+        this.$root.$emit('version-restore-error');
+      });
+    },
     updateVersionSummary(version, summary) {
       return this.$documentFileService.updateVersionSummary(version.originId, version.id, summary).then(version => {
         this.$root.$emit('version-description-updated', version);
