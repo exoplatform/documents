@@ -24,6 +24,8 @@
       fas fa-share-square
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.shortcut') }}</span>
+    <v-divider
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
