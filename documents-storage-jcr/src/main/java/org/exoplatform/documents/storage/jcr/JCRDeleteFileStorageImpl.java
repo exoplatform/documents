@@ -107,7 +107,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       documentsToDeleteQueue.remove(documentId);
     }
   }
-
+  @Override
+  public Map<String, String> getDocumentsToDelete(){
+    return documentsToDeleteQueue;
+  }
   @Override
   public void deleteDocument(String folderPath, String documentId, boolean favorite, boolean checkToMoveToTrash, long delay, Identity identity, long userIdentityId) {
     SessionProvider sessionProvider = null;
