@@ -4,7 +4,11 @@
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
-    <div class="pa-3 white">
+    <div
+      class="pa-3 white"
+      @dragover.prevent
+      @drop.prevent
+      @dragstart.prevent>
       <div v-if="searchResult">
         <documents-header
           :files-size="files.length" 
@@ -13,7 +17,10 @@
         <documents-no-result-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else-if="!filesLoad && !loading && selectedView == 'folder' ">
+      <div
+        v-else-if="!filesLoad && !loading && selectedView == 'folder' "
+        @drop="dragFile"
+        @dragover="startDrag">
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
@@ -29,7 +36,10 @@
         <documents-no-body
           :is-mobile="isMobile" />
       </div>
-      <div v-else>
+      <div
+        v-else
+        @drop="dragFile"
+        @dragover="startDrag">
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
@@ -185,6 +195,7 @@ export default {
             this.$root.$applicationLoaded();
           });
       });
+    this.$root.$on('create-shortcut', this.createShortcut);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
@@ -474,13 +485,21 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
+    createShortcut(fileId,destPath, destFolder) {
+      this.$documentFileService.createShortcut(fileId,destPath)
+        .then(() => {
+          this.openFolder(destFolder);
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
+    },
     saveVisibility(file){
       this.$documentFileService.saveVisibility(file)
         .then(() => this.refreshFiles())
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-    openDrawer() {
+    openDrawer(files) {
 
       let attachmentAppConfiguration = {
         'sourceApp': 'NEW.APP'
@@ -514,6 +533,9 @@ export default {
             }
           };
         }
+      }
+      if (files){
+        attachmentAppConfiguration.files=files;
       }
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
@@ -622,6 +644,13 @@ export default {
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
+    },
+    dragFile(e){     
+      this.openDrawer(e.dataTransfer.files);
+      this.$root.$emit('hide-upload-overlay');
+    },
+    startDrag(){
+      this.$root.$emit('show-upload-overlay');
     },
   },
 };

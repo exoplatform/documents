@@ -24,6 +24,7 @@ import com.ibm.icu.text.Transliterator;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.api.search.data.SearchResult;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
@@ -337,11 +338,23 @@ public class JCRDocumentsUtil {
       documentNode.setCreatorId(getUserIdentityId(identityManager, owner));
     }
     if (node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)) {
-      long modifiedDate = node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
-                              .getDate()
-                              .getTimeInMillis();
+      Node nodeToModify = node;
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        RepositoryService repositoryService = CommonsUtils.getService(RepositoryService.class);
+        SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+        ManageableRepository repository = repositoryService.getCurrentRepository();
+        Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+        String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        Node sourceNode = getNodeByIdentifier(systemSession, sourceNodeId);
+        if (sourceNode != null && sourceNode.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().compareTo(node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate()) > 0) {
+          nodeToModify = sourceNode;
+        }
+      }
+      long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
+              .getDate()
+              .getTimeInMillis();
       documentNode.setModifiedDate(modifiedDate);
-      String modifier = node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
+      String modifier = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
       documentNode.setModifierId(getUserIdentityId(identityManager, modifier));
     } else {
       documentNode.setModifiedDate(documentNode.getCreatedDate());

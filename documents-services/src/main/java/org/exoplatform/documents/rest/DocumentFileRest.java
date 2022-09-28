@@ -465,13 +465,9 @@ public class DocumentFileRest implements ResourceContainer {
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Status.BAD_REQUEST).entity("document_id_is_mandatory").build();
     }
-    if (StringUtils.isBlank(documentPath)) {
-      return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
-    }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-    String originPath = documentPath.replace(":", "/");
     try {
-      documentFileService.deleteDocument(originPath,documentId,  favorite, delay, userIdentityId);
+      documentFileService.deleteDocument(documentPath,documentId,  favorite, delay, userIdentityId);
       return Response.ok().build();
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
@@ -549,6 +545,32 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
 
+  }
+
+  @POST
+  @Path("/shortcut")
+  @RolesAllowed("users")
+  @Operation(summary = "document shortcut", method = "POST", description = "Creates a document shortcut.")
+  @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Resource not found")})
+  public Response createShortcut (@Parameter(description = "document id") @QueryParam("documentID") String documentID,
+                                @Parameter(description = "new path") @QueryParam("destPath") String destPath) {
+
+    if (StringUtils.isEmpty(documentID)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document's id should not be empty").build();
+    }
+    if (StringUtils.isEmpty(destPath)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Document destination path should not be empty").build();
+    }
+    try {
+      documentFileService.createShortcut(documentID, destPath);
+      return Response.ok().build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to create document shortcut", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
   }
 }
 
