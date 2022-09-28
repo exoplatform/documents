@@ -17,6 +17,7 @@
 package org.exoplatform.documents.rest;
 
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.security.RolesAllowed;
 import javax.ws.rs.*;
@@ -40,6 +41,7 @@ import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.rest.http.PATCH;
 import org.exoplatform.services.rest.resource.ResourceContainer;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -583,7 +585,8 @@ public class DocumentFileRest implements ResourceContainer {
           @ApiResponse(responseCode = "404", description = "Not found"),
           @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
           @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response getFileVersions(@Parameter(description = "Identity technical identifier") @QueryParam("fileId") String fileId) {
+  public Response getFileVersions(@Parameter(description = "Identity technical identifier", required = true)
+                                  @QueryParam("fileId") String fileId) {
 
     if (StringUtils.isBlank(fileId)) {
       return Response.status(Status.BAD_REQUEST).entity("file id is mandatory").build();
@@ -598,7 +601,44 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (IllegalArgumentException e) {
       return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
     } catch (Exception e) {
-      LOG.warn("Error retrieving breadcrumb", e);
+      LOG.warn("Error retrieving versions list", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @PATCH
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/versions")
+  @Operation(summary = "Get versions list of a a given document", method = "GET", description = "Get versions list of a a given document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "404", description = "Not found"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response updateVersionSummary(@Parameter(description = "version summary to update", required = true) Map<String,String> summary,
+                                       @Parameter(description = "original file node identifier", required = true)
+                                       @QueryParam("originFileId") String originFileId,
+                                       @Parameter(description = "version file node identifier", required = true)
+                                       @QueryParam("versionId") String versionId) {
+
+    if (StringUtils.isBlank(versionId) || StringUtils.isBlank(originFileId)) {
+      return Response.status(Status.BAD_REQUEST).entity("version fil id and original file id are mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      return Response.ok(EntityBuilder.toVersionEntity(documentFileService.updateVersionSummary(originFileId,
+                                                                                                versionId,
+                                                                                                summary.get("value"),
+                                                                                                RestUtils.getCurrentUser())))
+                     .build();
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error while updating version summary", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }

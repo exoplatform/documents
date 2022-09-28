@@ -349,4 +349,18 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
     return documentFileStorage.getFileVersions(fileNodeId, aclIdentity);
   }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public FileVersion updateVersionSummary(String originFileId, String versionId, String summary, String aclIdentity) {
+    if (versionId == null) {
+      throw new IllegalArgumentException("version id is mandatory");
+    }
+    if (originFileId == null) {
+      throw new IllegalArgumentException("original file id is mandatory");
+    }
+    return documentFileStorage.updateVersionSummary(originFileId, versionId, summary, aclIdentity);
+  }
 }

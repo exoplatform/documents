@@ -223,4 +223,15 @@ public interface DocumentFileService {
    * @return {@link List} of {@link FileVersion}
    */
   List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity);
+
+  /**
+   * update or add a version summary
+   *
+   * @param originFileId original file id
+   * @param versionId version id
+   * @param summary new summary to be saved
+   * @param aclIdentity current user identity
+   * @return {@link FileVersion}
+   */
+  FileVersion updateVersionSummary(String originFileId, String versionId, String summary, String aclIdentity);
 }

@@ -20,10 +20,7 @@ import static org.junit.Assert.*;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
@@ -463,6 +460,19 @@ public class DocumentFileServiceTest {
     verify(documentFileStorage, times(0)).getFileVersions(anyString(), anyString());
     this.documentFileService.getFileVersions("5456456456", "user");
     verify(documentFileStorage, times(1)).getFileVersions("5456456456", "user");
+  }
 
+  @Test
+  public void updateVersionSummary() {
+    Throwable exception = assertThrows(IllegalArgumentException.class,
+                                       () -> this.documentFileService.updateVersionSummary("123", null, "test", "user"));
+    assertEquals("version id is mandatory", exception.getMessage());
+    verify(documentFileStorage, times(0)).updateVersionSummary(anyString(), anyString(), anyString(), anyString());
+    Throwable exception1 = assertThrows(IllegalArgumentException.class,
+                                        () -> this.documentFileService.updateVersionSummary(null, "333", "test", "user"));
+    assertEquals("original file id is mandatory", exception1.getMessage());
+    verify(documentFileStorage, times(0)).updateVersionSummary(anyString(), anyString(), anyString(), anyString());
+    this.documentFileService.updateVersionSummary("5456456456", "333erf", "new summary", "user");
+    verify(documentFileStorage, times(1)).updateVersionSummary(anyString(), anyString(), anyString(), anyString());
   }
 }

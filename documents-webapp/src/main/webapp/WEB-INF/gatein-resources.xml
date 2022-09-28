@@ -43,6 +43,9 @@
       <depends>
         <module>documentsSnackbarComponent</module>
       </depends>
+      <depends>
+        <module>versionHistoryDrawer</module>
+      </depends>
     </module>
   </portlet>
 
