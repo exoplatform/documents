@@ -270,13 +270,26 @@ public class DocumentFileServiceImpl implements DocumentFileService {
         throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
       }
     });
-
+    if (nodePermissionEntity.getToNotify() != null) {
+      nodePermissionEntity.getToNotify().keySet().forEach(destId -> {
+        try {
+          notifyMember(documentId, destId);
+        } catch (IllegalAccessException e) {
+          throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
+        }
+      });
+    }
   }
 
   @Override
   public void shareDocument(String documentId, long destId) throws IllegalAccessException {
 
     documentFileStorage.shareDocument(documentId, destId);
+  }
+
+  @Override
+  public void notifyMember(String documentId, long destId) throws IllegalAccessException {
+    documentFileStorage.notifyMember(documentId, destId);
   }
 
   @Override

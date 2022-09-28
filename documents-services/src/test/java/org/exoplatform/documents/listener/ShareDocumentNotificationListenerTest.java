@@ -9,11 +9,11 @@ import org.exoplatform.commons.notification.impl.NotificationContextImpl;
 import org.exoplatform.commons.notification.impl.setting.NotificationPluginContainer;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
-import org.exoplatform.documents.notification.utils.NotificationUtils;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
+import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -58,11 +58,15 @@ public class ShareDocumentNotificationListenerTest {
   private ChannelManager                    channelManager;
   @Mock
   private SpaceService                      spaceService;
+  
+  @Mock
+  private IdentityManager                   identityManager;
+
   private ShareDocumentNotificationListener shareDocumentNotificationListener;
 
   @Before
   public void setUp() throws Exception {
-    this.shareDocumentNotificationListener = new ShareDocumentNotificationListener(spaceService);
+    this.shareDocumentNotificationListener = new ShareDocumentNotificationListener(spaceService, identityManager);
     PowerMockito.mockStatic(ConversationState.class);
     PowerMockito.mockStatic(CommonsUtils.class);
     PowerMockito.mockStatic(LinkProvider.class);
@@ -103,6 +107,7 @@ public class ShareDocumentNotificationListenerTest {
     when(targetNode.hasProperty("exo:title")).thenReturn(true);
     when(targetNode.getProperty("exo:title")).thenReturn(propertyTitle);
     when(targetIdentity.getRemoteId()).thenReturn("user");
+    when(targetNode.hasProperty("exo:uuid")).thenReturn(true);
     shareDocumentNotificationListener.onEvent(event);
     verifyStatic(PluginKey.class, times(1));
     PluginKey.key(AddDocumentCollaboratorPlugin.ID);

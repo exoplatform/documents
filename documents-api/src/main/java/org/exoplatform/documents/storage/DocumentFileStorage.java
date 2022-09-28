@@ -148,6 +148,8 @@ public interface DocumentFileStorage {
    */
   void shareDocument(String documentId, long destId) throws IllegalAccessException;
 
+  void notifyMember(String documentId, long destId) throws IllegalAccessException;
+
   boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException;
   
   default void updateDocumentDescription(long ownerId,

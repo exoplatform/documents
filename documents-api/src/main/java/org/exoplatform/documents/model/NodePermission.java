@@ -36,4 +36,6 @@ public class NodePermission {
 
   private Map<Long,String> toShare;
 
+  private Map<Long,String> toNotify;
+
 }
