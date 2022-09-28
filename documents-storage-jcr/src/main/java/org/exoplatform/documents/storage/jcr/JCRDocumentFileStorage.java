@@ -639,12 +639,23 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, fileId);
       }
+
+      if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
+        node.addMixin(NodeTypeConstants.EXO_MODIFY);
+      }
+      Calendar now = Calendar.getInstance();
+      node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+
+      node.save();
+
       String srcPath = node.getPath();
       node.getSession().getWorkspace().move(srcPath, destPath.concat("/").concat(node.getName()));
 
       node.save();
     } catch (Exception e) {
-      throw new IllegalStateException("Error moving document'" + fileId, e);
+      throw new IllegalStateException("Error moving document's id " + fileId, e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
