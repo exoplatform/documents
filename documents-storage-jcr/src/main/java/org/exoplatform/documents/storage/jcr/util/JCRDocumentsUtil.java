@@ -24,6 +24,7 @@ import com.ibm.icu.text.Transliterator;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.api.search.data.SearchResult;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
