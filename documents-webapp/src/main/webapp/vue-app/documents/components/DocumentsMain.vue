@@ -78,12 +78,12 @@
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
-      :disable-restore-version="true"
       :versions="versions"
       :is-loading="isLoadingVersions"
       :show-load-more="showLoadMoreVersions"
       @drawer-closed="versionsDrawerClosed"
       @open-version="openVersionPreview"
+      @restore-version="restoreVersion"
       @version-update-description="updateVersionSummary"
       @load-more="loadMoreVersions"
       ref="documentVersionHistory" />
@@ -94,8 +94,9 @@
 export default {
   data: () => ({
     versions: [],
+    versionableFile: {},
     allVersions: [],
-    versionsPageSize: Math.round((window.innerHeight-79)/60),
+    versionsPageSize: Math.round((window.innerHeight-79)/95),
     isLoadingVersions: false,
     canManageVersions: false,
     extensionApp: 'Documents',
@@ -222,6 +223,18 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    restoreVersion(version) {
+      return this.$documentFileService.restoreVersion(version.id).then(data => {
+        if (data === 'ok') {
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.restore.version.success')});
+          this.$root.$emit('version-restored', version);
+          this.refreshVersions(this.versionableFile);
+        }
+      }).catch(() => {
+        this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.restore.version.error')});
+        this.$root.$emit('version-restore-error');
+      });
+    },
     updateVersionSummary(version, summary) {
       return this.$documentFileService.updateVersionSummary(version.originId, version.id, summary).then(version => {
         this.$root.$emit('version-description-updated', version);
@@ -239,10 +252,20 @@ export default {
       this.versionsPageSize+=10;
       this.versions = this.allVersions.slice(0, this.versionsPageSize);
     },
+    refreshVersions(file) {
+      this.versionsDrawerClosed();
+      this.versionsPageSize = Math.round((window.innerHeight-79)/95);
+      this.$documentFileService.getFileVersions(file.id).then(versions => {
+        this.allVersions = versions.versions;
+        this.versions = this.allVersions.slice(0, this.versionsPageSize);
+        this.isLoadingVersions = false;
+      });
+    },
     showVersionHistory(file) {
+      this.versionableFile = file;
       this.isLoadingVersions = true;
       this.canManageVersions = file.acl.canEdit;
-      this.versionsPageSize = Math.round((window.innerHeight-79)/60);
+      this.versionsPageSize = Math.round((window.innerHeight-79)/95);
       this.$refs.documentVersionHistory.open();
       this.$documentFileService.getFileVersions(file.id).then(versions => {
         this.allVersions = versions.versions;

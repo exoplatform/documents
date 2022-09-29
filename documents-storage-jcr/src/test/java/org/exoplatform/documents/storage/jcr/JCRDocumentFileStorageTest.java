@@ -1,6 +1,5 @@
 package org.exoplatform.documents.storage.jcr;
 
-import liquibase.pro.packaged.J;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
@@ -352,6 +351,9 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
     when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
     Node node = mock(Node.class);
+    Version baseVersion = mock(Version.class);
+    when(node.getBaseVersion()).thenReturn(baseVersion);
+    when(baseVersion.getName()).thenReturn("2");
     when(node.getUUID()).thenReturn("123");
     when(session.getNodeByUUID("123")).thenReturn(node);
     VersionHistory versionHistory = mock(VersionHistory.class);
@@ -435,6 +437,33 @@ public class JCRDocumentFileStorageTest {
     when(versionHistory.getVersionLabels(version)).thenReturn(oldLabels);
     jcrDocumentFileStorage.updateVersionSummary("123", "333", "summary", "user");
     verify(session, times(1)).save();
+  }
+
+  @Test
+  public void restoreVersion() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+
+    Version version = mock(Version.class);
+    Node frozen = mock(Node.class);
+    Node node = mock(Node.class);
+    when(session.getNodeByUUID("123")).thenReturn(version);
+    when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozen);
+    when(frozen.hasProperty(NodeTypeConstants.JCR_FROZEN_UUID)).thenReturn(true);
+    when(Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID)).thenReturn("111");
+    when(session.getNodeByUUID("111")).thenReturn(node);
+    when(node.isCheckedOut()).thenReturn(false);
+    PowerMockito.doNothing().when(node).checkout();
+    PowerMockito.doNothing().when(node).restore(version, true);
+    this.jcrDocumentFileStorage.restoreVersion("123", "user");
+    verify(node, times(1)).restore(version, true);
+    verify(node, times(1)).checkin();
 
   }
 }

@@ -976,4 +976,24 @@ public class DocumentFileRestTest {
     Response response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
+
+  @Test
+  @PrepareForTest({ RestUtils.class })
+  public void restoreVersion() {
+    PowerMockito.mockStatic(RestUtils.class);
+    when(RestUtils.getCurrentUser()).thenReturn("user");
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    Response response = documentFileRest1.restoreVersion(null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    response = documentFileRest1.restoreVersion("123");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    response = documentFileRest1.restoreVersion("123");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    doThrow(new RuntimeException()).when(documentFileService1).restoreVersion(anyString(),anyString());
+    response = documentFileRest1.restoreVersion("123");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
 }

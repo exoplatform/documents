@@ -187,4 +187,12 @@ public interface DocumentFileStorage {
    * @return {@link FileVersion}
    */
   FileVersion updateVersionSummary(String originFileId, String versionId, String summary, String aclIdentity);
+
+  /**
+   * restore document version
+   *
+   * @param versionId version id
+   * @param aclIdentity current user identity
+   */
+  void restoreVersion(String versionId, String aclIdentity);
 }

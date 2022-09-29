@@ -610,7 +610,10 @@ public class DocumentFileRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/versions")
-  @Operation(summary = "Get versions list of a a given document", method = "GET", description = "Get versions list of a a given document")
+  @Operation(
+          summary = "update version summary of a give document version",
+          method = "GET",
+          description = "update version summary of a give document version")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "404", description = "Not found"),
@@ -642,5 +645,40 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
+
+  @PUT
+  @Produces(MediaType.TEXT_PLAIN)
+  @RolesAllowed("users")
+  @Path("/versions")
+  @Operation(
+          summary = "Restore a document to a specific version",
+          method = "GET",
+          description = "Restore a document to a specific version")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "404", description = "Not found"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response restoreVersion(@Parameter(description = "version file node identifier", required = true)
+                                 @QueryParam("versionId") String versionId) {
+
+    if (StringUtils.isBlank(versionId)) {
+      return Response.status(Status.BAD_REQUEST).entity("version fil id is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      documentFileService.restoreVersion(versionId, RestUtils.getCurrentUser());
+      return Response.ok("ok").type(MediaType.TEXT_PLAIN).build();
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error while restoring version", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
 }
 
