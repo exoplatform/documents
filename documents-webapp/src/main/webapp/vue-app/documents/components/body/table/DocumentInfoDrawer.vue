@@ -17,6 +17,12 @@
               class="fileName font-weight-bold text-color ms-2 px-2">
               {{ file.name }}
             </span>
+            <span
+              v-if="file.versionNumber"
+              @click="showVersionHistory"
+              class="item-version text-caption border-radius primary pa-0 px-1 clickable">
+              V{{ file.versionNumber }}
+            </span>
             <documents-favorite-action v-if="!file.folder" :file="file" />
             <v-spacer />
           </a>
@@ -202,8 +208,16 @@ export default {
   created() {
     this.$root.$on('open-info-drawer', this.open);
     this.$root.$on('close-info-drawer', this.close);
+    this.$root.$on('version-number-updated', (fileId) => {
+      if (this.file.id === fileId) {
+        this.file.versionNumber++;
+      }
+    });
   },
   methods: {
+    showVersionHistory() {
+      this.$root.$emit('show-version-history', this.file);
+    },
     updateDescription(){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
