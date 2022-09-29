@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage.jcr.util;
 import java.util.*;
 
 import javax.jcr.*;
+import javax.jcr.version.Version;
 
 import com.ibm.icu.text.Transliterator;
 import org.apache.commons.lang3.StringUtils;
@@ -326,6 +327,13 @@ public class JCRDocumentsUtil {
       }
     } catch (RepositoryException repositoryException) {
       //Do noting, it means that the current user don't have access to the parent node
+    }
+
+    if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+      Version version = node.getBaseVersion();
+      if (version != null && StringUtils.isNumeric(version.getName())) {
+        documentNode.setVersionNumber(version.getName());
+      }
     }
 
     if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {

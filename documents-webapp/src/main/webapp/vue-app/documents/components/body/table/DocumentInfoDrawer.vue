@@ -17,6 +17,11 @@
               class="fileName font-weight-bold text-color ms-2 px-2">
               {{ file.name }}
             </span>
+            <span
+              v-if="file.versionNumber"
+              class="item-version text-caption border-radius primary pa-0 px-1 clickable">
+              V{{ file.versionNumber }}
+            </span>
             <documents-favorite-action v-if="!file.folder" :file="file" />
             <v-spacer />
           </a>

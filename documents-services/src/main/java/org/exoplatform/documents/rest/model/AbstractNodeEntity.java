@@ -64,6 +64,8 @@ public class AbstractNodeEntity {
 
   private String                                sourceID;
 
+  private String                                versionNumber;
+
   private boolean                               cloudDriveFolder;
 
   private boolean                               cloudDriveFile;
