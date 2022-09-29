@@ -20,6 +20,9 @@ import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
+import javax.jcr.Node;
+import javax.jcr.RepositoryException;
+
 public class Utils {
 
   private static final Log LOG = ExoLogger.getLogger(Utils.class);
@@ -30,5 +33,12 @@ public class Utils {
     } catch (Exception e) {
       LOG.error("Error while broadcasting event: {}", eventName, e);
     }
+  }
+
+  public static String getStringProperty(Node node, String propertyName) throws RepositoryException {
+    if (node.hasProperty(propertyName)) {
+      return node.getProperty(propertyName).getString();
+    }
+    return "";
   }
 }
