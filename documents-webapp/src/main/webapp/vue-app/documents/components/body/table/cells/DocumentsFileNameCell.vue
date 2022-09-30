@@ -27,13 +27,13 @@
             v-sanitized-html="fileType"
             class="document-type ms-0">
           </div>
-          <v-icon
-            v-if="file.sourceID"
-            size="10"
-            class="pe-1 iconStyle pb-1 ps-1">
-            mdi-link-variant
-          </v-icon>
         </div>
+        <v-icon
+          v-if="file.sourceID"
+          size="10"
+          class="pe-1 iconStyle pb-1">
+          mdi-link-variant
+        </v-icon>
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
