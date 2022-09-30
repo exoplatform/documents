@@ -27,6 +27,7 @@ import org.exoplatform.commons.api.search.data.SearchResult;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
@@ -105,8 +106,10 @@ public class JCRDocumentsUtil {
                                            SpaceService spaceService,
                                            boolean includeHiddenFiles,
                                            int offset,
-                                           int limit) {
+                                           int limit) throws RepositoryException {
     List<FileNode> fileNodes = new ArrayList<>();
+    JCRDeleteFileStorage jCRDeleteFileStorage =  CommonsUtils.getService(JCRDeleteFileStorage.class);
+    Map<String, String> documetsToDelete = jCRDeleteFileStorage.getDocumentsToDelete();
     int index = 0;
     int size = 0;
     while (nodeIterator.hasNext()) {
@@ -117,7 +120,8 @@ public class JCRDocumentsUtil {
       String sourceID = "";
       String sourceMimeType = "";
       Node node = nodeIterator.nextNode();
-
+      // Check if the node is in the queue of documents to be deleted
+      if(documetsToDelete.containsKey(((NodeImpl) node).getIdentifier())) continue;
       try {
         Node sourceNode = null;
         if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
