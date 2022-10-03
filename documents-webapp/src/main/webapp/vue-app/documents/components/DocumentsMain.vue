@@ -256,7 +256,8 @@ export default {
     refreshVersions(file) {
       this.versionsDrawerClosed();
       this.versionsPageSize = Math.round((window.innerHeight-79)/95);
-      this.$documentFileService.getFileVersions(file.id).then(versions => {
+      const nodeId = file.sourceID ? file.sourceID : file.id;
+      this.$documentFileService.getFileVersions(nodeId).then(versions => {
         this.allVersions = versions.versions;
         this.versions = this.allVersions.slice(0, this.versionsPageSize);
         this.isLoadingVersions = false;
@@ -274,7 +275,8 @@ export default {
       this.canManageVersions = file.acl.canEdit;
       this.versionsPageSize = Math.round((window.innerHeight-79)/95);
       this.$refs.documentVersionHistory.open();
-      this.$documentFileService.getFileVersions(file.id).then(versions => {
+      const nodeId = file.sourceID ? file.sourceID : file.id;
+      this.$documentFileService.getFileVersions(nodeId).then(versions => {
         this.allVersions = versions.versions;
         this.versions = this.allVersions.slice(0, this.versionsPageSize);
         this.isLoadingVersions = false;
