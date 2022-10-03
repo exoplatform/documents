@@ -335,6 +335,16 @@ public class JCRDocumentsUtil {
         documentNode.setVersionNumber(version.getName());
       }
     }
+    if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      Node sourceNode = node.getSession().getNodeByUUID(documentNode.getSourceID());
+      if (sourceNode != null && sourceNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)
+              && sourceNode.getBaseVersion() != null) {
+        Version version = sourceNode.getBaseVersion();
+        if (StringUtils.isNumeric(version.getName())) {
+          documentNode.setVersionNumber(version.getName());
+        }
+      }
+    }
 
     if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
       documentNode.setName(node.getProperty(NodeTypeConstants.EXO_TITLE).getString());
