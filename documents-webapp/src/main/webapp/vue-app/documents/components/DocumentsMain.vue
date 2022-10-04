@@ -82,7 +82,7 @@
       :is-loading="isLoadingVersions"
       :show-load-more="showLoadMoreVersions"
       @drawer-closed="versionsDrawerClosed"
-      @open-version="openVersionPreview"
+      @open-version="showVersionPreview"
       @restore-version="restoreVersion"
       @version-update-description="updateVersionSummary"
       @load-more="loadMoreVersions"
@@ -318,9 +318,6 @@ export default {
           timestamp: Date.now()
         }
       }));
-    },
-    openVersionPreview(version) {
-      this.showPreview(version.frozenId);
     },
     folderTreeDrawer(){
       if (this.$refs.folderTreeDrawer){
@@ -737,6 +734,34 @@ export default {
       this.fileName = nodePathParts.pop();
       this.folderPath = nodePathParts.join('/');
       return this.getFolderPath(this.folderPath);
+    },
+    showVersionPreview(version) {
+      return this.$attachmentService.getAttachmentById(version.originId)
+        .then(attachment => {
+          documentPreview.init({
+            doc: {
+              id: version.frozenId,
+              repository: 'repository',
+              workspace: 'collaboration',
+              path: attachment.path,
+              title: attachment.title,
+              openUrl: `${attachment.openUrl}?version=${version.versionNumber}`,
+              breadCrumb: null,
+              size: attachment.size,
+              downloadUrl: `${attachment.downloadUrl}?version=${version.versionNumber}`,
+              isCloudDrive: attachment.cloudDrive
+            },
+            author: attachment.updater,
+            version: {
+              number: attachment.version
+            },
+            showComments: false,
+            showOpenInFolderButton: false,
+          });
+          return attachment;
+        })
+        .catch(e => console.error(e))
+        .finally(() => this.loading = false);
     },
     showPreview(documentPreviewId) {
       return this.$attachmentService.getAttachmentById(documentPreviewId)
