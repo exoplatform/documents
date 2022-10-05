@@ -259,7 +259,13 @@ export default {
         this.allVersions = versions.versions;
         this.versions = this.allVersions.slice(0, this.versionsPageSize);
         this.isLoadingVersions = false;
+        this.$root.$emit('version-number-updated', file.id);
+        this.updateVersionNumber(file);
       });
+    },
+    updateVersionNumber(vFile) {
+      const index = this.files.findIndex(file => file.id === vFile.id);
+      this.files[index].versionNumber++;
     },
     showVersionHistory(file) {
       this.versionableFile = file;

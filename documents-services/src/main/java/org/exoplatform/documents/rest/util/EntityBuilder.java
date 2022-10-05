@@ -209,7 +209,7 @@ public class EntityBuilder {
       nodeEntity.setSourceID(node.getSourceID());
       nodeEntity.setCloudDriveFolder(node.isCloudDriveFolder());
       nodeEntity.setCloudDriveFile(node.isCloudDriveFile());
-
+      nodeEntity.setVersionNumber(node.getVersionNumber());
       if ((node instanceof FolderNode)) {
         ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());
       }

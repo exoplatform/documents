@@ -49,6 +49,8 @@ public abstract class AbstractNode {
 
   private String         sourceID;
 
+  private String         versionNumber;
+
   private boolean        cloudDriveFolder;
 
   private boolean        cloudDriveFile;
