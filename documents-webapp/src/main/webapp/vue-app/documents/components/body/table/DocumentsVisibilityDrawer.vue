@@ -98,7 +98,6 @@
                 </template>
                 <span v-if="!file.folder" class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
                 <span v-else class="center lotfi">{{ $t('documents.label.folders.visibility.collaborator.info') }}</span>
-
               </v-tooltip>
             </div>
           </v-list-item-content>
