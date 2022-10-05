@@ -1,10 +1,9 @@
 package org.exoplatform.documents.storage.jcr;
 
+import liquibase.pro.packaged.J;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
-import org.exoplatform.documents.model.AbstractNode;
-import org.exoplatform.documents.model.DocumentFolderFilter;
-import org.exoplatform.documents.model.FileNode;
-import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -19,7 +18,10 @@ import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.identity.model.Profile;
+import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.junit.Before;
@@ -35,18 +37,22 @@ import javax.jcr.*;
 import javax.jcr.nodetype.NodeType;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
+import javax.jcr.version.Version;
+import javax.jcr.version.VersionHistory;
+import javax.jcr.version.VersionIterator;
 
+import java.util.Calendar;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.powermock.api.mockito.PowerMockito.*;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({ Utils.class, SessionProvider.class, JCRDocumentsUtil.class})
+@PrepareForTest({ Utils.class, SessionProvider.class, JCRDocumentsUtil.class, CommonsUtils.class })
 public class JCRDocumentFileStorageTest {
 
   @Mock
@@ -80,6 +86,7 @@ public class JCRDocumentFileStorageTest {
     PowerMockito.mockStatic(Utils.class);
     PowerMockito.mockStatic(SessionProvider.class);
     PowerMockito.mockStatic(JCRDocumentsUtil.class);
+    PowerMockito.mockStatic(CommonsUtils.class);
   }
 
   @Test
@@ -322,5 +329,61 @@ public class JCRDocumentFileStorageTest {
 
     jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
     verify(sessionProvider, times(1)).close();
+  }
+
+  @Test
+  public void getFileVersions() throws RepositoryException {
+    IdentityRegistry identityRegistry = mock(IdentityRegistry.class);
+    when(CommonsUtils.getService(IdentityRegistry.class)).thenReturn(identityRegistry);
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node node = mock(Node.class);
+    when(session.getNodeByUUID("123")).thenReturn(node);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    Version rootVersion = mock(Version.class);
+    when(versionHistory.getRootVersion()).thenReturn(rootVersion);
+    VersionIterator versionIterator = mock(VersionIterator.class);
+    when(versionHistory.getAllVersions()).thenReturn(versionIterator);
+    when(versionIterator.hasNext()).thenReturn(true,false);
+    Version version = mock(Version.class);
+    when(versionIterator.nextVersion()).thenReturn(version);
+    when(rootVersion.getUUID()).thenReturn("333");
+    when(version.getUUID()).thenReturn("222");
+    Value titleValue = mock(Value.class);
+    Value ownerValue = mock(Value.class);
+    Property titleProperty = mock(Property.class);
+    Property ownerProperty = mock(Property.class);
+
+    when(node.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(titleProperty);
+    when(titleProperty.getValue()).thenReturn(titleValue);
+    when(titleValue.getString()).thenReturn("test.docx");
+
+    Node frozenNode = mock(Node.class);
+
+    when(frozenNode.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER)).thenReturn(ownerProperty);
+    when(ownerProperty.getValue()).thenReturn(ownerValue);
+    when(ownerValue.getString()).thenReturn("user");
+
+    Profile profile = new Profile();
+    profile.setProperty("firstName", "user");
+    profile.setProperty("lastName", "user");
+    Identity identity1 = mock(Identity.class);
+    when(identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, "user")).thenReturn(identity1);
+    when(identity1.getProfile()).thenReturn(profile);
+
+    when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozenNode);
+    when(frozenNode.getUUID()).thenReturn("666");
+    when(version.getCreated()).thenReturn(Calendar.getInstance());
+
+    List<FileVersion> versions = jcrDocumentFileStorage.getFileVersions("123", "user");
+    assertNotNull(versions);
+    assertEquals(1, versions.size());
   }
 }

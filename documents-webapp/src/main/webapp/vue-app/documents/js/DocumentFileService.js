@@ -315,3 +315,19 @@ export function createShortcut(documentID,destPath) {
     throw new Error(`Error renaming document ${e}`);
   });
 }
+
+export function getFileVersions(fileId) {
+  const formData = new FormData();
+  formData.append('fileId', fileId);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/versions?${params}`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error');
+    } else {
+      return resp.json();
+    }
+  });
+}

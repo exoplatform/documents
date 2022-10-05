@@ -25,7 +25,7 @@
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.showVersionHistory') }}</span>
     <v-divider
-        class="mt-1 dividerStyle" />
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 

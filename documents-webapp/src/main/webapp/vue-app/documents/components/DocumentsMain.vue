@@ -75,12 +75,24 @@
       ref="folderTreeDrawer" />
     <documents-app-reminder />
     <documents-actions-menu-mobile />
+    <version-history-drawer
+      :versions="versions"
+      :is-loading="isLoadingVersions"
+      :show-load-more="showLoadMoreVersions"
+      @drawer-closed="versionsDrawerClosed"
+      @open-version="openVersionPreview"
+      @load-more="loadMoreVersions"
+      ref="documentVersionHistory" />
   </v-app>
 </template>
 <script>
 
 export default {
   data: () => ({
+    versions: [],
+    allVersions: [],
+    versionsPageSize: Math.round((window.innerHeight-79)/60),
+    isLoadingVersions: false,
     extensionApp: 'Documents',
     extensionType: 'views',
     query: null,
@@ -117,6 +129,9 @@ export default {
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
   computed: {
+    showLoadMoreVersions() {
+      return this.versions.length < this.allVersions.length;
+    },
     filesLoad(){
       return this.files && this.files.length;
     },
@@ -196,11 +211,33 @@ export default {
           });
       });
     this.$root.$on('create-shortcut', this.createShortcut);
+    this.$root.$on('show-version-history', this.showVersionHistory);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    versionsDrawerClosed() {
+      this.versions = [];
+      this.allVersions = [];
+    },
+    loadMoreVersions() {
+      this.versionsPageSize+=10;
+      this.versions = this.allVersions.slice(0, this.versionsPageSize);
+    },
+    showVersionHistory(fileId) {
+      this.isLoadingVersions = true;
+      this.versionsPageSize = Math.round((window.innerHeight-79)/60);
+      this.$refs.documentVersionHistory.open();
+      this.$documentFileService.getFileVersions(fileId).then(versions => {
+        this.allVersions = versions.versions;
+        this.versions = this.allVersions.slice(0, this.versionsPageSize);
+        this.isLoadingVersions = false;
+      });
+    },
+    openVersionPreview(version) {
+      this.showPreview(version.id);
+    },
     folderTreeDrawer(){
       if (this.$refs.folderTreeDrawer){
         this.$refs.folderTreeDrawer.open();

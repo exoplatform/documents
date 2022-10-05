@@ -205,6 +205,7 @@ public interface DocumentFileService {
                                          long aclIdentity) throws IllegalStateException, IllegalAccessException {
     throw new IllegalStateException("updateDocumentDescription method not implemented in the target class");
   }
+
   /**
    * Creates a shortcut for a document
    *
@@ -213,4 +214,13 @@ public interface DocumentFileService {
    * @throws IllegalAccessException
    */
   void createShortcut(String documentId, String destPath) throws IllegalAccessException;
+
+  /**
+   * Retrieves versions of specific file
+   *
+   * @param fileNodeId  target file node id
+   * @param aclIdentity user identity id
+   * @return {@link List} of {@link FileVersion}
+   */
+  List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity);
 }

@@ -24,6 +24,8 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 import static org.powermock.api.mockito.PowerMockito.doThrow;
 
+
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
@@ -31,6 +33,7 @@ import org.exoplatform.services.listener.ListenerService;
 import org.junit.runner.RunWith;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import javax.ws.rs.core.Response;
@@ -834,6 +837,88 @@ public class DocumentFileRestTest {
 
     when(documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test")).thenThrow(RuntimeException.class);
     response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  @PrepareForTest(RestUtils.class)
+  public void getFileVersions() {
+    PowerMockito.mockStatic(RestUtils.class);
+    FileVersion fileVersion = new FileVersion();
+    fileVersion.setCurrent(true);
+    fileVersion.setTitle("test.docx");
+    fileVersion.setVersionNumber(1);
+    fileVersion.setId("4ezadazd465az4d");
+    fileVersion.setCreatedDate(new Date());
+    fileVersion.setAuthorFullName("user user");
+    fileVersion.setAuthor("user");
+    List<FileVersion> versions = new ArrayList<>();
+    versions.add(fileVersion);
+    Response response = documentFileRest.getFileVersions(null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    when(RestUtils.getCurrentUser()).thenReturn("user");
+    response = documentFileRest.getFileVersions("3654654651");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    when(documentFileService.getFileVersions("655645ezfefzef6z54", "user")).thenReturn(versions);
+    response = documentFileRest.getFileVersions("qsdqs54dq65sd");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    when(documentFileRest.getFileVersions("qsdqs54dq65sd")).thenThrow(IllegalArgumentException.class);
+    response = documentFileRest.getFileVersions("qsdqs54dq65sd");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    when(documentFileRest.getFileVersions("qsdqs54dq65sd")).thenThrow(RuntimeException.class);
+    response = documentFileRest.getFileVersions("qsdqs54dq65sd");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void getNewName() throws ObjectNotFoundException, ObjectAlreadyExistsException, IllegalAccessException {
+    Response response = documentFileRest.getNewName(null, "patg", 1L, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    response = documentFileRest.getNewName("123", "patg", 1L, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    response = documentFileRest.getNewName("123", "patg", 1L, "125");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    when(documentFileService.getNewName(1L,"123","path", "test")).thenReturn("new");
+    response = documentFileRest.getNewName("123", "path", 1L, "test");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    when(documentFileService.getNewName(1L,"123","path", "test")).thenThrow(RuntimeException.class);
+    response = documentFileRest.getNewName("123", "path", 1L, "test");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  @PrepareForTest({ RestUtils.class })
+  public void updateDocumentDescription() throws IllegalAccessException {
+    PowerMockito.mockStatic(RestUtils.class);
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    doNothing().when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
+    Response response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
+    assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+    doThrow(new RuntimeException()).when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
+    response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  @PrepareForTest({ RestUtils.class })
+  public void getFullTreeData() {
+    PowerMockito.mockStatic(RestUtils.class);
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    Response response =  documentFileRest1.getFullTreeData(null, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(IllegalAccessException.class);
+    response =  documentFileRest1.getFullTreeData(1L, "123");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(ObjectNotFoundException.class);
+    response =  documentFileRest1.getFullTreeData(1L, "123");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(RuntimeException.class);
+    response =  documentFileRest1.getFullTreeData(1L, "123");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 }

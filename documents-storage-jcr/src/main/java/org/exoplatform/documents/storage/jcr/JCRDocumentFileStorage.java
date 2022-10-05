@@ -32,6 +32,8 @@ import javax.jcr.Session;
 import javax.jcr.ValueFormatException;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
+import javax.jcr.version.Version;
+import javax.jcr.version.VersionIterator;
 
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.commons.lang.BooleanUtils;
@@ -40,6 +42,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.search.data.SearchResult;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -58,7 +61,10 @@ import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
+import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.security.MembershipEntry;
+import org.exoplatform.social.core.identity.model.Profile;
+import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -1039,7 +1045,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
-
+  
   @Override
   public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
     Node rootNode = null;
@@ -1051,7 +1057,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node currentNode = getNodeByIdentifier(systemSession, documentId);
       //add symlink to destination document
       rootNode = (Node) systemSession.getItem(destPath);
-      if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      if (currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
       }
@@ -1064,11 +1070,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
       linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
       linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, ((ExtendedNode) currentNode).getIdentifier());
-      if(linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
+      if (linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         linkNode.addMixin("exo:sortable");
       }
       if (currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-        linkNode.setProperty(NodeTypeConstants.EXO_TITLE,currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString());
+        linkNode.setProperty(NodeTypeConstants.EXO_TITLE, currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString());
       }
       linkNode.setProperty(NodeTypeConstants.EXO_NAME, currentNode.getName());
       String nodeMimeType = getMimeType(currentNode);
@@ -1094,10 +1100,52 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       systemSession.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error while creating a shortcut for document's id " + documentId + " to destination path" + destPath, e);
-    }finally {
+    } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
     }
+  }
+
+  /**
+   *
+   * {@inheritDoc}
+   */
+  @Override
+  public List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity) {
+    List<FileVersion> fileVersions = new ArrayList<>();
+    IdentityRegistry identityRegistry = CommonsUtils.getService(IdentityRegistry.class);
+    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      Node node = session.getNodeByUUID(fileNodeId);
+      Version rootVersion = node.getVersionHistory().getRootVersion();
+      VersionIterator versionIterator = node.getVersionHistory().getAllVersions();
+      while (versionIterator.hasNext()) {
+        Version version = versionIterator.nextVersion();
+        if (version.getUUID().equals(rootVersion.getUUID())) {
+          continue;
+        }
+        FileVersion versionFileNode = new FileVersion();
+        versionFileNode.setId(version.getUUID());
+        Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+        versionFileNode.setTitle(node.getProperty(NodeTypeConstants.EXO_TITLE).getValue().getString());
+        String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
+        Profile profile = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName).getProfile();
+        versionFileNode.setId(frozen.getUUID());
+        versionFileNode.setAuthor(userName);
+        versionFileNode.setAuthorFullName(profile.getFullName());
+        versionFileNode.setCreatedDate(version.getCreated().getTime());
+        fileVersions.add(versionFileNode);
+      }
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error while getting file versions", e);
+    }
+    fileVersions.sort(Collections.reverseOrder());
+    if (!fileVersions.isEmpty())
+      fileVersions.get(0).setCurrent(true);
+    fileVersions.forEach(v -> v.setVersionNumber(fileVersions.size() - fileVersions.indexOf(v)));
+    return fileVersions;
   }
 }
