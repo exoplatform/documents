@@ -475,4 +475,14 @@ public class DocumentFileServiceTest {
     this.documentFileService.updateVersionSummary("5456456456", "333erf", "new summary", "user");
     verify(documentFileStorage, times(1)).updateVersionSummary(anyString(), anyString(), anyString(), anyString());
   }
+
+  @Test
+  public void restoreVersion() {
+    Throwable exception =
+                        assertThrows(IllegalArgumentException.class, () -> this.documentFileService.restoreVersion(null, "user"));
+    assertEquals("version id is mandatory", exception.getMessage());
+    verify(documentFileStorage, times(0)).restoreVersion(anyString(), anyString());
+    documentFileService.restoreVersion("123", "user");
+    verify(documentFileStorage, times(1)).restoreVersion("123", "user");
+  }
 }
