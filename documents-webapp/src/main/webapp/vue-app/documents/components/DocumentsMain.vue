@@ -627,7 +627,7 @@ export default {
         if (pathparts.length>1){
           attachmentAppConfiguration= {
             'sourceApp': 'NEW.APP',
-            'defaultFolder': this.extractDefaultFolder(pathparts[1]),
+            'defaultFolder': this.extractDefaultFolder(),
             'defaultDrive': {
               isSelected: true,
               name: `.spaces.${eXo.env.portal.spaceGroup}`,
@@ -643,7 +643,7 @@ export default {
         if (pathparts.length>1){
           attachmentAppConfiguration= {
             'sourceApp': 'NEW.APP',
-            'defaultFolder': this.extractDefaultFolder(pathparts[1]),
+            'defaultFolder': this.extractDefaultFolder(),
             'defaultDrive': {
               isSelected: true,
               name: 'Personal Documents',
@@ -657,10 +657,9 @@ export default {
       }
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
-    extractDefaultFolder(targetPath) {
-      const path = decodeURI(targetPath);
-      const folderName = path && path.substring(path.lastIndexOf('/'));
-      return folderName && path.replace(folderName, `/${this.currentFolder.path.split('/').pop()}`);
+    extractDefaultFolder() {
+      const path = this.currentFolder.path;
+      return path.substring(path.indexOf('Documents')+ '/Documents'.length);
     },
     setCurrentFolder(folder) {
       this.currentFolder = folder;
