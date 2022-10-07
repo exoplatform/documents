@@ -31,6 +31,21 @@ export function getDocumentItems(itemsFilter, offset, limit, expand) {
 
 }
 
+export function canAddDocument(spaceId) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/canAddDocument?spaceId=${spaceId}`, {
+    headers: {
+      'Content-Type': 'text/plain'
+    },
+    method: 'GET'
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.json();
+    } else {
+      throw new Error('Server indicates an error while sending request');
+    }
+  });   
+}
+
 export function getBreadCrumbs(folderId,ownerId,folderPath) {
   const formData = new FormData();
 
@@ -101,7 +116,6 @@ export function duplicateDocument(fileId,ownerId,prefixClone) {
       return resp.json();
     }
   });
-
 }
 export function saveVisibility(file) {
   const abFile ={

@@ -374,4 +374,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
     this.documentFileStorage.restoreVersion(versionId, aclIdentity);
   }
+
+  @Override
+  public boolean canAddDocument(String spaceId, String currentUserName) {
+    Space space = spaceService.getSpaceById(spaceId);
+    boolean canAdd = false;
+    if (space != null) {
+      canAdd = !spaceService.hasRedactor(space) || spaceService.hasRedactor(space)
+          && (spaceService.isRedactor(space, currentUserName) || spaceService.isManager(space, currentUserName));
+    }
+    return canAdd;
+  }
 }
