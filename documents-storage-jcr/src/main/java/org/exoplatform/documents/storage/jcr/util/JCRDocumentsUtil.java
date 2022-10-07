@@ -575,39 +575,29 @@ public class JCRDocumentsUtil {
   /**
    * Clean string.
    *
-   * @param str the str
+   * @param oldName the str
    *
    * @return the string
    */
-  public static String cleanString(String str) {
-    Transliterator accentsconverter = Transliterator.getInstance("Latin; NFD; [:Nonspacing Mark:] Remove; NFC;");
-    str = accentsconverter.transliterate(str);
-    //the character ? seems to not be changed to d by the transliterate function
-    StringBuilder cleanedStr = new StringBuilder(str.trim());
-    // delete special character
-    int strLength = cleanedStr.length();
-    int i = 0;
-    while (i < strLength) {
-      char c = cleanedStr.charAt(i);
-      if (c == '/' || c == ':' || c == '[' || c == ']' || c == '*' || c == '\'' || c == '"' || c == '|' || c == 'ʿ' || c == 'ˇ' || c == '.') {
-        cleanedStr.deleteCharAt(i);
-        cleanedStr.insert(i, '_');
-      } else if (!(Character.isLetterOrDigit(c) || Character.isWhitespace(c) || c == '-' || c == '_')) {
-        cleanedStr.deleteCharAt(i);
-        strLength = cleanedStr.length();
-        continue;
+  public static String cleanName(String oldName) {
+    if (org.apache.commons.lang.StringUtils.isEmpty(oldName)) return oldName;
+    String extention ="" ;
+    if(oldName.lastIndexOf(".") > -1){
+      extention = oldName.substring(oldName.lastIndexOf("."));
+      oldName = oldName.substring(0,oldName.lastIndexOf(".")) ;
+    }
+    String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|";
+    StringBuilder ret = new StringBuilder();
+    for (int i = 0; i < oldName.length(); i++) {
+      char currentChar = oldName.charAt(i);
+      if (specialChar.indexOf(currentChar) > -1) {
+        ret.append('_');
+      } else {
+        ret.append(currentChar);
       }
-      i++;
     }
-    while (org.apache.commons.lang.StringUtils.isNotEmpty(cleanedStr.toString()) && !Character.isLetterOrDigit(cleanedStr.charAt(0))) {
-      cleanedStr.deleteCharAt(0);
-    }
-    String clean = cleanedStr.toString();
-    if (clean.endsWith("-")) {
-      clean = clean.substring(0, clean.length()-1);
-    }
-
-    return clean;
+    ret.append(extention);
+    return ret.toString();
   }
 
   public static String getMimeType(Node node) {
