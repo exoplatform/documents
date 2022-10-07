@@ -506,7 +506,7 @@ export default {
         if (pathparts.length>1){
           attachmentAppConfiguration= {
             'sourceApp': 'NEW.APP',
-            'defaultFolder': this.extractDefaultFolder(),
+            'defaultFolder': `Documents/${this.extractDefaultFolder()}`,
             'defaultDrive': {
               isSelected: true,
               name: 'Personal Documents',
