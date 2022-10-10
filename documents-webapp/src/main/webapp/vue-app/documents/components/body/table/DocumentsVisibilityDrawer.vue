@@ -112,6 +112,7 @@
             height="40"
             :group-member="userGroup"
             :group-type="groupType"
+            :all-groups-for-admin="allGroupsForAdmin"
             include-users
             include-spaces
             include-groups />
@@ -157,6 +158,7 @@
 <script>
 export default {
   data: () => ({
+    allGroupsForAdmin: true,
     userGroup: '/platform/users',
     groupType: 'GROUP',
     ownerIdentity: {
