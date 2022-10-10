@@ -13,6 +13,7 @@
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
+          :can-add="canAdd"
           class="py-2" />
         <documents-no-result-body
           :is-mobile="isMobile" />
@@ -24,6 +25,7 @@
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
+          :can-add="canAdd"
           class="py-2" />
         <documents-no-body-folder
           :is-mobile="isMobile" />
@@ -32,6 +34,7 @@
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
+          :can-add="canAdd"
           class="py-2" />
         <documents-no-body
           :is-mobile="isMobile" />
@@ -43,6 +46,7 @@
         <documents-header
           :files-size="files.length" 
           :selected-view="selectedView"
+          :can-add="canAdd"
           class="py-2" />
         <documents-body
           v-if="optionsLoaded"
@@ -93,6 +97,7 @@
 
 export default {
   data: () => ({
+    canAdd: false,
     versions: [],
     versionableFile: {},
     allVersions: [],
@@ -171,6 +176,7 @@ export default {
     window.addEventListener('popstate', e => {this.onBrowserNavChange(e);});
 
     this.refreshViewExtensions();
+    this.canAddDocument();
 
     this.$root.$on('documents-refresh-files', this.refreshFiles);
     this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
@@ -515,6 +521,9 @@ export default {
               this.showPreview(result[0].id);
             }
           }
+          this.files.forEach(file => {
+            file.canAdd = this.canAdd;
+          });
         })
         .finally(() => this.loading = false);
     },
@@ -791,12 +800,23 @@ export default {
         .finally(() => this.loading = false);
     },
     dragFile(e){     
-      this.openDrawer(e.dataTransfer.files);
-      this.$root.$emit('hide-upload-overlay');
+      if (this.canAdd){
+        this.openDrawer(e.dataTransfer.files);
+        this.$root.$emit('hide-upload-overlay');
+      }
     },
     startDrag(){
-      this.$root.$emit('show-upload-overlay');
+      if (this.canAdd){
+        this.$root.$emit('show-upload-overlay');
+      }
     },
+    canAddDocument(){
+      const spaceId= eXo.env.portal.spaceId;
+      this.$documentFileService.canAddDocument(spaceId)
+        .then(canAdd => {
+          this.canAdd = canAdd;
+        });
+    }
   },
 };
 </script>

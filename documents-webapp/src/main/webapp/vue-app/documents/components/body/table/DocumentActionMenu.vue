@@ -29,6 +29,7 @@ export default {
     desktopOnlyExtensions: ['edit'],
     editExtensions: ['edit', 'versionHistory'],
     fileOnlyExtension: ['download','favorite'],
+    redactorExtension: ['download', 'versionHistory','details', 'copyLink'],
     sharedDocumentSuspended: true,
     downloadDocumentSuspended: true,
     supportedDocuments: null
@@ -75,17 +76,21 @@ export default {
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
-      if (!this.fileCanEdit) {
-        extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
-      }
-      if (this.file.path.includes('News Attachments')) {
-        extensions = extensions.filter(extension => extension.id !== 'visibility');
-      }
-      if (this.file.cloudDriveFolder) {
-        extensions = extensions.filter(extension => extension.id === 'copyLink');
-      }
-      extensions = extensions.filter(extension => this.checkTransferRules(extension)
+      if (this.file.canAdd){
+        if (!this.fileCanEdit) {
+          extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
+        }
+        if (this.file.path.includes('News Attachments')) {
+          extensions = extensions.filter(extension => extension.id !== 'visibility');
+        }
+        if (this.file.cloudDriveFolder) {
+          extensions = extensions.filter(extension => extension.id === 'copyLink');
+        }
+        extensions = extensions.filter(extension => this.checkTransferRules(extension)
                                                      && extension.enabled(this.file.acl, this.isSymlink()));
+      } else {
+        extensions = extensions.filter(extension => this.redactorExtension.includes(extension.id));    }
+
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.menuExtensions[extension.id] || this.menuExtensions[extension.id] !== extension)) {

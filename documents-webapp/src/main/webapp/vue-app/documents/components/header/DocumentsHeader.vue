@@ -1,7 +1,9 @@
 <template>
   <div>
     <div class="d-flex flex-row">
-      <documents-header-left :selected-view="selectedView" />
+      <documents-header-left
+        v-if="canAdd"
+        :selected-view="selectedView" />
       <v-spacer v-show="!canShowMobileFilter" />
       <documents-header-center v-show="!canShowMobileFilter" :selected-view="selectedView" />
       <v-spacer v-show="!canShowMobileFilter" />
@@ -14,6 +16,10 @@
 <script>
 export default {
   props: {
+    canAdd: {
+      type: Boolean,
+      default: false
+    },
     filesSize: {
       type: Number,
       default: 0
