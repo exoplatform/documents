@@ -243,4 +243,12 @@ public interface DocumentFileService {
    */
   void restoreVersion(String versionId, String aclIdentity);
 
+  /**
+   * verify if current user can add document
+   *
+   * @param spaceId space id
+   * @param currentUserName current user name
+   */
+  boolean canAddDocument(String spaceId, String currentUserName);
+
 }
