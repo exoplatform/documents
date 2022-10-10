@@ -515,6 +515,9 @@ export default {
               this.showPreview(result[0].id);
             }
           }
+          if (filter.query){
+            this.$root.$emit('filer-query',filter.query);
+          }
         })
         .finally(() => this.loading = false);
     },
