@@ -527,6 +527,9 @@ export default {
           this.files.forEach(file => {
             file.canAdd = this.canAdd;
           });
+          if (filter.query){
+            this.$root.$emit('filer-query',filter.query);
+          }
         })
         .finally(() => this.loading = false);
     },
