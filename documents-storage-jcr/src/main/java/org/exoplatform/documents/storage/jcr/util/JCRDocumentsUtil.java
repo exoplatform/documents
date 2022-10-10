@@ -336,7 +336,8 @@ public class JCRDocumentsUtil {
       }
     }
     if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-      Node sourceNode = node.getSession().getNodeByUUID(documentNode.getSourceID());
+      Node sourceNode = null;
+      sourceNode = getNodeByIdentifier(node.getSession(), documentNode.getSourceID());
       if (sourceNode != null && sourceNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)
               && sourceNode.getBaseVersion() != null) {
         Version version = sourceNode.getBaseVersion();
