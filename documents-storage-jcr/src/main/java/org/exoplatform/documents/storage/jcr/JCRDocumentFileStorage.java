@@ -1067,10 +1067,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       // Create tags if the description contains
       TagService tagService = CommonsUtils.getService(TagService.class);
       Set<TagName> tagNames = tagService.detectTagNames(description);
-      if(tagNames.size()>0){
+      if(!tagNames.isEmpty()){
         org.exoplatform.social.core.identity.model.Identity audienceIdentity = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
         long spaceId = 0;
-        if(audienceIdentity.getProviderId().equals("space")){
+        if(audienceIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
           Space space = spaceService.getSpaceByPrettyName(audienceIdentity.getRemoteId());
           spaceId = Long.parseLong(space.getId());
         }
