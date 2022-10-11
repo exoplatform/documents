@@ -812,10 +812,15 @@ export default {
     },
     canAddDocument(){
       const spaceId= eXo.env.portal.spaceId;
-      this.$documentFileService.canAddDocument(spaceId)
-        .then(canAdd => {
-          this.canAdd = canAdd;
-        });
+      if (!spaceId){
+        this.canAdd = true;
+      } else {
+        this.$documentFileService.canAddDocument(spaceId)
+          .then(canAdd => {
+            this.canAdd = canAdd;
+          });
+      }
+      
     }
   },
 };
