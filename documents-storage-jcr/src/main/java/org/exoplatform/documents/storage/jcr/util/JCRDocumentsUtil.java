@@ -59,6 +59,8 @@ public class JCRDocumentsUtil {
 
   public static final String                           USER_PUBLIC_ROOT_NODE           = "Public";
 
+  private static final String                          SPACE_PATH_PREFIX = "/Groups/spaces/";
+
   protected static final Map<DocumentSortField, String> SORT_FIELDS_ES_CORRESPONDING  = new EnumMap<>(DocumentSortField.class);
 
   protected static final Map<DocumentSortField, String> SORT_FIELDS_JCR_CORRESPONDING = new EnumMap<>(DocumentSortField.class);
@@ -611,6 +613,28 @@ public class JCRDocumentsUtil {
     }
     return "";
   }
+
+  public static org.exoplatform.social.core.identity.model.Identity getOwnerIdentityFromNodePath(String path, IdentityManager identityManager, SpaceService spaceService){
+    org.exoplatform.social.core.identity.model.Identity identity = null;
+    if (path.contains(SPACE_PATH_PREFIX)) {
+      String[] pathParts = path.split(SPACE_PATH_PREFIX)[1].split("/");
+      String groupId = "/spaces/" + pathParts[0];
+      Space space = spaceService.getSpaceByGroupId(groupId);
+      if(space != null){
+        identity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+      }
+    } else if(path.contains(USER_PRIVATE_ROOT_NODE)) {
+      String[] pathParts = path.split(USER_PRIVATE_ROOT_NODE)[0].split("/");
+      String userName = pathParts[pathParts.length-1];
+      identity = identityManager.getOrCreateUserIdentity(userName);
+    } else if(path.contains(USER_PUBLIC_ROOT_NODE)) {
+      String[] pathParts = path.split(USER_PUBLIC_ROOT_NODE)[0].split("/");
+      String userName = pathParts[pathParts.length-1];
+      identity = identityManager.getOrCreateUserIdentity(userName);
+    }
+    return identity;
+  }
+
 
 
 }
