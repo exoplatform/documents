@@ -76,20 +76,21 @@ export default {
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
-      if (this.file.canAdd){
-        if (!this.fileCanEdit) {
-          extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
-        }
-        if (this.file.path.includes('News Attachments')) {
-          extensions = extensions.filter(extension => extension.id !== 'visibility');
-        }
-        if (this.file.cloudDriveFolder) {
-          extensions = extensions.filter(extension => extension.id === 'copyLink');
-        }
-        extensions = extensions.filter(extension => this.checkTransferRules(extension)
-                                                     && extension.enabled(this.file.acl, this.isSymlink()));
-      } else {
+      if (!this.file.canAdd){
         extensions = extensions.filter(extension => this.redactorExtension.includes(extension.id));    }
+
+      if (!this.fileCanEdit) {
+        extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
+      }
+      if (this.file.path.includes('News Attachments')) {
+        extensions = extensions.filter(extension => extension.id !== 'visibility');
+      }
+      if (this.file.cloudDriveFolder) {
+        extensions = extensions.filter(extension => extension.id === 'copyLink');
+      }
+      extensions = extensions.filter(extension => this.checkTransferRules(extension)
+                                                     && extension.enabled(this.file.acl, this.isSymlink()));
+     
 
       let changed = false;
       extensions.forEach(extension => {
