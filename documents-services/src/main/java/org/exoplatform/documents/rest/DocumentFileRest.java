@@ -76,7 +76,24 @@ public class DocumentFileRest implements ResourceContainer {
     this.spaceService = spaceService;
     this.metadataService = metadataService;
   }
-
+  
+  @GET
+  @Produces(MediaType.TEXT_PLAIN)
+  @RolesAllowed("users")
+  @Path("/canAddDocument")
+  @Operation(summary = "check if the current user can add document", method = "GET", description = "This checks if the current user can add document.")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"), })
+  public Response canAddDocument(@Parameter(description = "Space technical identifier")
+  @QueryParam("spaceId")
+  String spaceId) {
+    if (StringUtils.isBlank(spaceId)) {
+      return Response.status(Status.BAD_REQUEST).entity("spaceId_is_mandatory").build();
+    }
+    String currentUserName = RestUtils.getCurrentUser();
+    boolean canAdd = documentFileService.canAddDocument(spaceId, currentUserName);
+    return Response.ok(String.valueOf(canAdd)).build();
+  }
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")

@@ -29,6 +29,7 @@ export default {
     desktopOnlyExtensions: ['edit'],
     editExtensions: ['edit', 'versionHistory'],
     fileOnlyExtension: ['download','favorite'],
+    redactorExtension: ['download', 'versionHistory','details', 'copyLink'],
     sharedDocumentSuspended: true,
     downloadDocumentSuspended: true,
     supportedDocuments: null
@@ -75,6 +76,9 @@ export default {
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
+      if (!this.file.canAdd){
+        extensions = extensions.filter(extension => this.redactorExtension.includes(extension.id));    }
+
       if (!this.fileCanEdit) {
         extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
       }
@@ -86,6 +90,8 @@ export default {
       }
       extensions = extensions.filter(extension => this.checkTransferRules(extension)
                                                      && extension.enabled(this.file.acl, this.isSymlink()));
+     
+
       let changed = false;
       extensions.forEach(extension => {
         if (extension.id && (!this.menuExtensions[extension.id] || this.menuExtensions[extension.id] !== extension)) {
