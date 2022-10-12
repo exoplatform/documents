@@ -29,4 +29,13 @@
     </component-plugin>
   </external-component-plugins>
 
+  <external-component-plugins>
+    <target-component>org.exoplatform.services.listener.ListenerService</target-component>
+    <component-plugin>
+      <name>add_tag_document</name>
+      <set-method>addListener</set-method>
+      <type>org.exoplatform.documents.listener.AnalyticsAddTagListener</type>
+    </component-plugin>
+  </external-component-plugins>
+
 </configuration>

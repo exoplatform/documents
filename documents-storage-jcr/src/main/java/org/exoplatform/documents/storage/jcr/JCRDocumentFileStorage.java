@@ -105,6 +105,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                  EOO_COMMENT_ID             = "eoo:commentId";
 
+  private static final String                  ADD_TAG_DOCUMENT             = "add_tag_document";
+
+
+
 
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
@@ -1060,9 +1064,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } catch (ValueFormatException e) {
         node.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
       }
-      Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
-      content.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
-      content.getSession().save();
       node.getSession().save();
       // Create tags if the description contains
       TagService tagService = CommonsUtils.getService(TagService.class);
@@ -1078,6 +1079,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 tagNames,
                 Long.parseLong(audienceIdentity.getId()),
                 Long.parseLong(identityManager.getOrCreateUserIdentity(username).getId()));
+        listenerService.broadcast(ADD_TAG_DOCUMENT, new TagObject("Document", ((ExtendedNode) node).getIdentifier(), null, spaceId), tagNames);
       }
 
     } catch (Exception e) {
