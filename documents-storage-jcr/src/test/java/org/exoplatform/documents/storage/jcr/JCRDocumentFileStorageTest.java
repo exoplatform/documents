@@ -196,7 +196,7 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     Identity ownerIdentity = mock(Identity.class);
     when(identity.getUserId()).thenReturn("user");
-    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "documents/path", 1L);
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "documents/path", 1L, "");
 
     // mock session
     SessionProvider sessionProvider = mock(SessionProvider.class);

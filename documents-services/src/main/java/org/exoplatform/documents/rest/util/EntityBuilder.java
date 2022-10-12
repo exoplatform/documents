@@ -176,7 +176,12 @@ public class EntityBuilder {
 
   public static List<BreadCrumbItemEntity> toBreadCrumbItemEntities(List<BreadCrumbItem> folders) {
     List<BreadCrumbItemEntity>  brList = new ArrayList<BreadCrumbItemEntity>();
-    brList = folders.stream().map(document -> new BreadCrumbItemEntity(document.getId(), document.getName(), document.getPath())).collect(Collectors.toList());
+    brList = folders.stream()
+                    .map(document -> new BreadCrumbItemEntity(document.getId(),
+                                                              document.getName(),
+                                                              document.getPath(),
+                                                              document.isSymlink()))
+                    .collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;
   }

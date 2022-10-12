@@ -105,6 +105,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                  EOO_COMMENT_ID             = "eoo:commentId";
 
+  private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
+
 
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
@@ -285,9 +287,30 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parentFolderId = ((NodeImpl) parent).getIdentifier();
       } else {
         parent = getNodeByIdentifier(session, parentFolderId);
+        if (parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          parent = getNodeByIdentifier(session, sourceNodeId);
+        }
+        if (filter.getSymlinkId() != null && !filter.getSymlinkId().isEmpty()) {
+          List<SymlinkNavigation> history = symlinksNavHistory.get(filter.getOwnerId());
+          SymlinkNavigation newEntry = new SymlinkNavigation(filter.getSymlinkId(), parentFolderId);
+          if (history == null) {
+            history = new ArrayList<SymlinkNavigation>();
+            history.add(newEntry);
+          } else {
+            if (!history.contains(newEntry)) {
+              history.add(newEntry);
+            }
+          }
+          symlinksNavHistory.put(filter.getOwnerId(), history);
+        }
       }
       if (StringUtils.isNotBlank(folderPath)) {
         parent = getNodeByPath(parent, folderPath, sessionProvider);
+        if (parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          parent = getNodeByIdentifier(session, sourceNodeId);
+        }
       }
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
@@ -349,6 +372,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         folderId = ((NodeImpl) node).getIdentifier();
       } else {
         node = getNodeByIdentifier(session, folderId);
+        node = checkSymlinkHistory(node, session, ownerId);
       }
       if (StringUtils.isNotBlank(folderPath)) {
         node = getNodeByPath(node, folderPath, sessionProvider);
@@ -356,7 +380,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       String homePath = "";
       if (node != null) {
         String nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+        parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
+                                       nodeName,
+                                       node.getPath(),
+                                       node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -375,14 +402,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
               node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
               if (node != null) {
                 nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
+                                               nodeName,
+                                               node.getPath(),
+                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
               }
               break;
             } else{
               node = node.getParent();
+              node = checkSymlinkHistory(node, session, ownerId);
               if (node != null) {
                 nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath()));
+                parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
+                                               nodeName,
+                                               node.getPath(),
+                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
               }
             }
           } catch (RepositoryException repositoryException) {
@@ -400,6 +434,17 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
+  Node checkSymlinkHistory(Node node, Session session, Long ownerId) throws RepositoryException {
+    List<SymlinkNavigation> history = symlinksNavHistory.get(ownerId);
+    if (node != null && history != null && !history.isEmpty()) {
+      String id = ((NodeImpl) node).getIdentifier();
+      SymlinkNavigation symlink = history.stream().filter(item -> id.equals(item.getSourceId())).findAny().orElse(null);
+      if (symlink != null) {
+        node = getNodeByIdentifier(session, symlink.getSymlinkId());
+      }
+    }
+    return node;
+  }
   @Override
   public List<FullTreeItem> getFullTreeData(long ownerId,
                                             String folderId,

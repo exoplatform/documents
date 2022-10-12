@@ -109,6 +109,9 @@ public class DocumentFileRest implements ResourceContainer {
                                    @Parameter(description = "Parent folder technical identifier")
                                    @QueryParam("parentFolderId")
                                    String parentFolderId,
+                                   @Parameter(description = "Symlink technical identifier")
+                                   @QueryParam("symlinkFolderId")
+                                   String symlinkFolderId,
                                    @Parameter(description = "Parent folder path")
                                    @QueryParam("folderPath")
                                    String folderPath,
@@ -154,7 +157,8 @@ public class DocumentFileRest implements ResourceContainer {
       DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId)
                                                                           : new DocumentFolderFilter(parentFolderId,
                                                                                                      folderPath,
-                                                                                                     ownerId);
+                                                                                                     ownerId,
+                                                                                                     symlinkFolderId);
       filter.setQuery(query);
       filter.setFavorites(favorites);
       filter.setUserId(userId);
