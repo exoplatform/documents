@@ -94,7 +94,7 @@ export default {
     renameFile(newTitle){
       this.$root.$emit('cancel-edit-mode', this.file);
       this.file.name = this.fileName.concat(this.fileType);
-      this.$root.$emit('documents-rename', this.file,newTitle);
+      this.$root.$emit('documents-rename', this.file,newTitle.concat(this.fileType));
     }
   },
 };

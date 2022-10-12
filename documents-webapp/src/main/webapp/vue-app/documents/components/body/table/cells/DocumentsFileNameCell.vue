@@ -101,6 +101,7 @@
   </div>
 </template>
 <script>
+import jsonFileExtension from '../../../../../../../resources/locale/NtFileExtension.json';
 export default {
   props: {
     file: {
@@ -207,7 +208,7 @@ export default {
       return this.file.id===this.fileToEditId;
     },
     fileType() {
-      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')):'';
+      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')): jsonFileExtension[this.file.mimeType] ||'' ;
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
@@ -296,4 +297,4 @@ export default {
     }
   }
 };
-</script>
+</script>>
