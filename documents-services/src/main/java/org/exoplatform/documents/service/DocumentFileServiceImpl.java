@@ -330,7 +330,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void updateDocumentDescription(long ownerId,
                                         String documentID,
                                         String description,
-                                        long aclIdentity) throws IllegalStateException, IllegalAccessException {
+                                        long aclIdentity) throws IllegalStateException, IllegalAccessException, RepositoryException {
     documentFileStorage.updateDocumentDescription(ownerId, documentID, description, getAclUserIdentity(aclIdentity));
   }
 
@@ -373,5 +373,16 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       throw new IllegalArgumentException("version id is mandatory");
     }
     this.documentFileStorage.restoreVersion(versionId, aclIdentity);
+  }
+
+  @Override
+  public boolean canAddDocument(String spaceId, String currentUserName) {
+    Space space = spaceService.getSpaceById(spaceId);
+    boolean canAdd = false;
+    if (space != null) {
+      canAdd = !spaceService.hasRedactor(space) || spaceService.hasRedactor(space)
+          && (spaceService.isRedactor(space, currentUserName) || spaceService.isManager(space, currentUserName));
+    }
+    return canAdd;
   }
 }

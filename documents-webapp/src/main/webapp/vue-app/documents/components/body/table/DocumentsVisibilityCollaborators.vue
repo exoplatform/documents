@@ -19,7 +19,12 @@
     <div class="profile-popover user-wrapper pl-4 pt-2 pb-1">
       <a
         class="d-flex not-clickable flex-nowrap flex-grow-1 text-truncate container--fluid align-center">
+        <v-icon
+          v-if="user.providerId ==='group'"
+          size="19"
+          class="fas fa-users" />
         <v-avatar
+          v-else
           size="32"
           class="ma-0">
           <img

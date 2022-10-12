@@ -38,6 +38,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.search.data.SearchResult;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -65,6 +66,10 @@ import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+
+import org.exoplatform.social.metadata.tag.TagService;
+import org.exoplatform.social.metadata.tag.model.TagName;
+import org.exoplatform.social.metadata.tag.model.TagObject;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
@@ -1030,7 +1035,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void updateDocumentDescription(long ownerId, String documentId, String description, Identity aclIdentity) {
+  public void updateDocumentDescription(long ownerId, String documentId, String description, Identity aclIdentity) throws RepositoryException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {
@@ -1058,6 +1063,22 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       content.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
       content.getSession().save();
       node.getSession().save();
+      // Create tags if the description contains
+      TagService tagService = CommonsUtils.getService(TagService.class);
+      Set<TagName> tagNames = tagService.detectTagNames(description);
+      if(!tagNames.isEmpty()){
+        org.exoplatform.social.core.identity.model.Identity audienceIdentity = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
+        long spaceId = 0;
+        if(audienceIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
+          Space space = spaceService.getSpaceByPrettyName(audienceIdentity.getRemoteId());
+          spaceId = Long.parseLong(space.getId());
+        }
+        tagService.saveTags(new TagObject("file", ((ExtendedNode) node).getIdentifier(), null, spaceId),
+                tagNames,
+                Long.parseLong(audienceIdentity.getId()),
+                Long.parseLong(identityManager.getOrCreateUserIdentity(username).getId()));
+      }
+
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentId, e);
     } finally {
