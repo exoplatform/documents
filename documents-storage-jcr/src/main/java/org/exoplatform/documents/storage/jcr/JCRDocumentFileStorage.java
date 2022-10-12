@@ -295,7 +295,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           List<SymlinkNavigation> history = symlinksNavHistory.get(filter.getOwnerId());
           SymlinkNavigation newEntry = new SymlinkNavigation(filter.getSymlinkId(), parentFolderId);
           if (history == null) {
-            history = new ArrayList<SymlinkNavigation>();
+            history = new ArrayList<>();
             history.add(newEntry);
           } else {
             if (!history.contains(newEntry)) {
@@ -307,7 +307,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         parent = getNodeByPath(parent, folderPath, sessionProvider);
-        if (parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        if (parent != null && parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           parent = getNodeByIdentifier(session, sourceNodeId);
         }
