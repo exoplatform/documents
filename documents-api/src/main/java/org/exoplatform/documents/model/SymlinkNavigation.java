@@ -16,15 +16,17 @@
  */
 package org.exoplatform.documents.model;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(callSuper = true)
-public class DocumentFolderFilter extends DocumentNodeFilter {
+public class SymlinkNavigation {
 
-  private String parentFolderId;
-  private String folderPath;
-  private Long ownerId;
   private String symlinkId;
+
+  private String sourceId;
+
 }
