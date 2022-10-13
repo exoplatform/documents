@@ -45,7 +45,7 @@ export default {
   },
   methods: {
     open() {
-      this.retrieveNoteTree();
+      this.retrieveDocumentTree();
       this.$refs.folderBreadcrumb?.open();
     },
     close() {
@@ -54,7 +54,7 @@ export default {
     openFolder(folder){
       this.$root.$emit('open-folder', folder);
     },
-    retrieveNoteTree(){
+    retrieveDocumentTree(){
       this.items = [];
       this.$refs.folderBreadcrumb?.startLoading();
       this.$documentFileService.getFullTreeData(this.ownerId)

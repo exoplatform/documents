@@ -132,7 +132,7 @@ export default {
       this.documentsBreadcrumbDestination = [{
         name: 'Documents'
       }];
-      this.retrieveNoteTree(ownerId);
+      this.retrieveDocumentTree(ownerId);
     });
     this.$root.$on('open-document-tree-selector-drawer', (file, actionType) => {
       this.actionType = actionType;
@@ -145,7 +145,7 @@ export default {
     open(file) {
       this.file = file;
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.retrieveNoteTree(ownerId);
+      this.retrieveDocumentTree(ownerId);
       this.space = {
         displayName: this.spaceDisplayName ? this.spaceDisplayName : this.userName ,
         avatarUrl: this.spaceDisplayName ? `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/spaces/${this.spaceName}/avatar` :
@@ -175,7 +175,7 @@ export default {
         })
         .finally(() => this.loading = false);
     },
-    retrieveNoteTree(ownerId){
+    retrieveDocumentTree(ownerId){
       this.$documentFileService
         .getFullTreeData(ownerId).then(data => {
           if (data) {
