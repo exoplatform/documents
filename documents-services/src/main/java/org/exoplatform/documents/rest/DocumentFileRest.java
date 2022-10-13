@@ -664,7 +664,7 @@ public class DocumentFileRest implements ResourceContainer {
   }
 
   @PUT
-  @Produces(MediaType.TEXT_PLAIN)
+  @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/versions")
   @Operation(
@@ -687,8 +687,8 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Response.Status.UNAUTHORIZED).build();
     }
     try {
-      documentFileService.restoreVersion(versionId, RestUtils.getCurrentUser());
-      return Response.ok("ok").type(MediaType.TEXT_PLAIN).build();
+      return Response.ok(EntityBuilder.toVersionEntity(documentFileService.restoreVersion(versionId, RestUtils.getCurrentUser())))
+                     .build();
     } catch (IllegalArgumentException e) {
       return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
     } catch (Exception e) {

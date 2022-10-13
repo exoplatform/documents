@@ -983,6 +983,14 @@ public class DocumentFileRestTest {
   public void restoreVersion() {
     PowerMockito.mockStatic(RestUtils.class);
     when(RestUtils.getCurrentUser()).thenReturn("user");
+    FileVersion fileVersion = new FileVersion();
+    fileVersion.setCurrent(true);
+    fileVersion.setTitle("test.docx");
+    fileVersion.setVersionNumber(1);
+    fileVersion.setId("4ezadazd465az4d");
+    fileVersion.setCreatedDate(new Date());
+    fileVersion.setAuthorFullName("user user");
+    fileVersion.setAuthor("user");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
     Response response = documentFileRest1.restoreVersion(null);
@@ -991,6 +999,7 @@ public class DocumentFileRestTest {
     response = documentFileRest1.restoreVersion("123");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    when(documentFileService1.restoreVersion(anyString(), anyString())).thenReturn(fileVersion);
     response = documentFileRest1.restoreVersion("123");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     doThrow(new RuntimeException()).when(documentFileService1).restoreVersion(anyString(),anyString());

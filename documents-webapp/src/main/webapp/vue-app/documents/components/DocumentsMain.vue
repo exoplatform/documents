@@ -230,11 +230,11 @@ export default {
   },
   methods: {
     restoreVersion(version) {
-      return this.$documentFileService.restoreVersion(version.id).then(data => {
-        if (data === 'ok') {
+      return this.$documentFileService.restoreVersion(version.id).then(newVersion => {
+        if (newVersion) {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.restore.version.success')});
-          this.$root.$emit('version-restored', version);
-          this.refreshVersions(this.versionableFile);
+          this.$root.$emit('version-restored', newVersion);
+          this.refreshVersions(this.versionableFile, newVersion);
           this.addRestoreVersionStatistics(this.versionableFile);
         }
       }).catch(() => {
@@ -243,6 +243,11 @@ export default {
       });
     },
     updateVersionSummary(version, summary) {
+      if (!summary) {
+        this.$root.$emit('show-alert', {type: 'warning', message: this.$t('document.summary.add.empty.error')});
+        this.$root.$emit('version-description-update-error', version);
+        return;
+      }
       return this.$documentFileService.updateVersionSummary(version.originId, version.id, summary).then(version => {
         this.$root.$emit('version-description-updated', version);
         this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.summary.added.success')});
@@ -256,20 +261,13 @@ export default {
       this.allVersions = [];
     },
     loadMoreVersions() {
-      this.versionsPageSize+=10;
+      this.versionsPageSize += 10;
       this.versions = this.allVersions.slice(0, this.versionsPageSize);
     },
-    refreshVersions(file) {
-      this.versionsDrawerClosed();
-      this.versionsPageSize = Math.round((window.innerHeight-79)/95);
-      const nodeId = file.sourceID ? file.sourceID : file.id;
-      this.$documentFileService.getFileVersions(nodeId).then(versions => {
-        this.allVersions = versions.versions;
-        this.versions = this.allVersions.slice(0, this.versionsPageSize);
-        this.isLoadingVersions = false;
-        this.$root.$emit('version-number-updated', file.id);
-        this.updateVersionNumber(file);
-      });
+    refreshVersions(file, newVersion) {
+      this.versions.unshift(newVersion);
+      this.$root.$emit('version-number-updated', file.id);
+      this.updateVersionNumber(file);
     },
     updateVersionNumber(vFile) {
       const index = this.files.findIndex(file => file.id === vFile.id);
@@ -652,7 +650,7 @@ export default {
         if (pathparts.length>1){
           attachmentAppConfiguration= {
             'sourceApp': 'NEW.APP',
-            'defaultFolder': `Documents/${this.extractDefaultFolder()}`,
+            'defaultFolder': `${this.extractDefaultFolder(true)}`,
             'defaultDrive': {
               isSelected: true,
               name: 'Personal Documents',
@@ -666,9 +664,12 @@ export default {
       }
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
-    extractDefaultFolder() {
+    extractDefaultFolder(isPersonalDrive) {
       const path = this.currentFolder.path;
-      return path.substring(path.indexOf('Documents')+ '/Documents'.length);
+      if (isPersonalDrive) {
+        return path.substring(path.indexOf('Private') + '/Private'.length);
+      }
+      return path.substring(path.indexOf('Documents') + '/Documents'.length);
     },
     setCurrentFolder(folder) {
       this.currentFolder = folder;
