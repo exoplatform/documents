@@ -33,4 +33,6 @@ public class BreadCrumbItemEntity {
   private String                                id;
   private String                                name;
   private String                                path;
+
+  private boolean isSymlink;
 }
