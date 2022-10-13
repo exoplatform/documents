@@ -23,6 +23,7 @@ import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.ActivityTypeUtils;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
@@ -45,6 +46,8 @@ import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
 
 public class TrashStorageImpl implements TrashStorage {
 
@@ -278,20 +281,17 @@ public class TrashStorageImpl implements TrashStorage {
   public List<Node> getAllLinks(Node targetNode, String linkType, SessionProvider sessionProvider) {
     try {
       List<Node> result = new ArrayList<>();
-      ManageableRepository repository  = repositoryService.getCurrentRepository();
-      String[] workspaces = repository.getWorkspaceNames();
-      String queryString = new StringBuilder().append("SELECT * FROM ").
-              append(linkType).
-              append(" WHERE exo:uuid='").
-              append(targetNode.getUUID()).append("'").
-              append(" AND exo:workspace='").
-              append(targetNode.getSession().getWorkspace().getName()).
-              append("'").toString();
-
-      for (String workspace : workspaces) {
+      if(sessionProvider!=null) {
+        ManageableRepository repository = repositoryService.getCurrentRepository();
+        String workspace = targetNode.getSession().getWorkspace().getName();
         Session session = sessionProvider.getSession(workspace, repository);
-        //Continue In the case cannot access to a workspace
-        if(session == null) continue;
+        String queryString = new StringBuilder().append("SELECT * FROM ").
+                append(linkType).
+                append(" WHERE exo:uuid='").
+                append(((ExtendedNode) targetNode).getIdentifier()).append("'").
+                append(" AND exo:workspace='").
+                append(workspace).
+                append("'").toString();
         QueryManager queryManager = session.getWorkspace().getQueryManager();
         Query query = queryManager.createQuery(queryString, Query.SQL);
         QueryResult queryResult = query.execute();
@@ -300,7 +300,6 @@ public class TrashStorageImpl implements TrashStorage {
           result.add(iter.nextNode());
         }
       }
-
       return result;
     } catch (RepositoryException e) {
       // return empty node list if there are errors in execution or user has no right to access nodes
