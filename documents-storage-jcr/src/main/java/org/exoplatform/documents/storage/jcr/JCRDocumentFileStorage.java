@@ -552,6 +552,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       Node addedNode = node.addNode(name, NodeTypeConstants.NT_FOLDER);
       addedNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
+      if (addedNode.canAddMixin("mix:referenceable")) {
+        addedNode.addMixin("mix:referenceable");
+      }
       node.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
