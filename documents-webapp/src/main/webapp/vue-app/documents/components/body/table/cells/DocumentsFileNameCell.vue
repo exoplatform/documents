@@ -208,6 +208,7 @@ export default {
       return this.file.id===this.fileToEditId;
     },
     fileType() {
+      //get extension from the filetypeextension if file name haven't extention 
       return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')): jsonFileExtension[this.file.mimeType] ||'' ;
     },
     menuActionTooltip() {
@@ -264,7 +265,8 @@ export default {
                 id: id,
                 repository: 'repository',
                 workspace: 'collaboration',
-                title: decodeURI(attachment.title),
+                //concat the file type if attachement title haven't extension on preview mode
+                title: decodeURI(attachment.title).lastIndexOf('.') >-1 ?decodeURI(attachment.title):decodeURI(attachment.title).concat(this.fileType),
                 downloadUrl: attachment.downloadUrl,
                 openUrl: attachment.openUrl,
                 breadCrumb: attachment.previewBreadcrumb,
