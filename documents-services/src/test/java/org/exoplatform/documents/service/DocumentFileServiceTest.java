@@ -142,7 +142,7 @@ public class DocumentFileServiceTest {
     });
     assertEquals(exception.getMessage(), "User Identity is mandatory");
 
-    DocumentFolderFilter docFilter = new DocumentFolderFilter("", "", 0L);
+    DocumentFolderFilter docFilter = new DocumentFolderFilter("", "", 0L, "");
     DocumentFolderFilter finalDocFilter = docFilter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
       documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
@@ -308,7 +308,7 @@ public class DocumentFileServiceTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     org.exoplatform.services.security.Identity user2ID = new org.exoplatform.services.security.Identity(user2name);
-    DocumentFolderFilter filter = new DocumentFolderFilter(null, null, Long.valueOf(currentIdentity.getId()));
+    DocumentFolderFilter filter = new DocumentFolderFilter(null, null, Long.valueOf(currentIdentity.getId()), "");
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -318,7 +318,7 @@ public class DocumentFileServiceTest {
     when(identityManager.getIdentity(eq(String.valueOf(user2Id)))).thenReturn(user2Identity);
     when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(user2name))).thenReturn(user2Identity);
 
-    DocumentFolderFilter filter_ = new DocumentFolderFilter(null, null, 0L);
+    DocumentFolderFilter filter_ = new DocumentFolderFilter(null, null, 0L, "");
     DocumentFolderFilter finalFilter1 = filter_;
     Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
       documentFileService.getFolderChildNodes(finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()));
@@ -341,7 +341,7 @@ public class DocumentFileServiceTest {
     when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
     when(spaceService.hasAccessPermission(space, user2name)).thenReturn(false);
 
-    filter_ = new DocumentFolderFilter(null, null, Long.valueOf(spaceIdentity.getId()));
+    filter_ = new DocumentFolderFilter(null, null, Long.valueOf(spaceIdentity.getId()), "");
     DocumentFolderFilter finalFilter2 = filter_;
     List<AbstractNode> files = new ArrayList<>();
 
@@ -385,8 +385,8 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "");
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "");
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "", false);
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "", false);
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
