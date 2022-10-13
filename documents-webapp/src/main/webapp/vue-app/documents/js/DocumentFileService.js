@@ -380,7 +380,7 @@ export function restoreVersion(versionId) {
     if (!resp || !resp.ok) {
       throw new Error('Error while restoring version');
     } else {
-      return resp.text();
+      return resp.json();
     }
   });
 }

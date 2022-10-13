@@ -42,6 +42,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -60,8 +61,6 @@ import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.security.MembershipEntry;
 import org.exoplatform.social.core.activity.model.ExoSocialActivity;
-import org.exoplatform.social.core.identity.model.Profile;
-import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
@@ -1215,7 +1214,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(fileNodeId);
-      String currentVersionName = node.getBaseVersion().getName();
       Version rootVersion = node.getVersionHistory().getRootVersion();
       VersionIterator versionIterator = node.getVersionHistory().getAllVersions();
       while (versionIterator.hasNext()) {
@@ -1223,27 +1221,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (version.getUUID().equals(rootVersion.getUUID())) {
           continue;
         }
-        FileVersion versionFileNode = new FileVersion();
-        versionFileNode.setId(version.getUUID());
-        Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
-        versionFileNode.setTitle(node.getProperty(NodeTypeConstants.EXO_TITLE).getValue().getString());
-        String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
-        Profile profile = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName).getProfile();
-        String[] summary = node.getVersionHistory().getVersionLabels(version);
-        if (summary.length > 0) {
-          versionFileNode.setSummary(summary[0]);
-        }
-        versionFileNode.setId(version.getUUID());
-        versionFileNode.setFrozenId(frozen.getUUID());
-        versionFileNode.setOriginId(node.getUUID());
-        versionFileNode.setAuthor(userName);
-        versionFileNode.setAuthorFullName(profile.getFullName());
-        versionFileNode.setCreatedDate(version.getCreated().getTime());
-        versionFileNode.setVersionNumber(Integer.parseInt(version.getName()));
-        fileVersions.add(versionFileNode);
-        if (version.getName().equals(currentVersionName)) {
-          versionFileNode.setCurrent(true);
-        }
+        fileVersions.add(JCRDocumentsUtil.toFileVersion(version, node, identityManager));
       }
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error while getting file versions", e);
@@ -1255,6 +1233,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static String addVersionLabel(Node node, String label, Version version) throws RepositoryException {
     String[] olLabels = node.getVersionHistory().getVersionLabels(version);
     for (String oldLabel : olLabels) {
+      if (label.equals(oldLabel)) {
+        continue;
+      }
       node.getVersionHistory().removeVersionLabel(oldLabel);
     }
     node.getVersionHistory().addVersionLabel(version.getName(), label, false);
@@ -1293,10 +1274,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   /**
    * {@inheritDoc}
+   *
+   * @return
    */
   @Override
-  public void restoreVersion(String versionId, String aclIdentity) {
+  public FileVersion restoreVersion(String versionId, String aclIdentity) {
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    FileVersion versionFileNode = new FileVersion();
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
@@ -1311,7 +1295,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           if (!node.isCheckedOut()) {
             node.checkout();
           }
-          node.checkin();
+          Version newVersion = node.checkin();
+          versionFileNode = JCRDocumentsUtil.toFileVersion(newVersion, node, identityManager);
           node.checkout();
         }
       }
@@ -1319,5 +1304,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error while restoring version", e);
     }
+    return versionFileNode;
   }
 }

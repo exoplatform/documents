@@ -209,7 +209,7 @@ export default {
     this.$root.$on('open-info-drawer', this.open);
     this.$root.$on('close-info-drawer', this.close);
     this.$root.$on('version-number-updated', (fileId) => {
-      if (this.file.id === fileId) {
+      if (this.file && this.file.id === fileId) {
         this.file.versionNumber++;
       }
     });
