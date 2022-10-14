@@ -68,7 +68,8 @@
     </div>
     <documents-visibility-drawer />
     <document-tree-selector-drawer />
-    <documents-info-drawer />
+    <documents-info-drawer
+      :selected-view="selectedView"/>
     <v-alert
       v-model="alert"
       :type="alertType"
