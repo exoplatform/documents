@@ -176,6 +176,7 @@ public class DocumentFileRestTest {
     Response response1 = documentFileRest.getDocumentItems(null,
                                                            null,
                                                            null,
+                                                           null,
                                                            FileListingType.TIMELINE,
                                                            null,
                                                            null,
@@ -188,10 +189,24 @@ public class DocumentFileRestTest {
                                                            false);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, null,null, null, null,null, false, "", null, false, 0, 0,false);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           false,
+                                                           0,
+                                                           0,
+                                                           false);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
                                                            null,
                                                            null,
                                                            FileListingType.TIMELINE,
@@ -238,6 +253,7 @@ public class DocumentFileRestTest {
     metadataItems.add(metadataItem);
     when(metadataService.getMetadataItemsByObject(any())).thenReturn(metadataItems);
     Response response4 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
                                                            null,
                                                            null,
                                                            FileListingType.TIMELINE,
@@ -364,7 +380,7 @@ public class DocumentFileRestTest {
 
 
     DocumentFolderFilter filter = null;
-    filter = new DocumentFolderFilter(null,null,currentOwnerId);
+    filter = new DocumentFolderFilter(null, null, currentOwnerId, null);
     filter.setFavorites(false);
     filter.setSortField(DocumentSortField.NAME);
     IdentityEntity identity1 = new IdentityEntity();
@@ -475,6 +491,7 @@ public class DocumentFileRestTest {
     Response response1 = documentFileRest.getDocumentItems(null,
                                                            null,
                                                            null,
+                                                           null,
                                                            FileListingType.FOLDER,
                                                            null,
                                                            null,
@@ -487,10 +504,24 @@ public class DocumentFileRestTest {
                                                            false);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getDocumentItems(currentOwnerId, "2", null, FileListingType.FOLDER, null,null, false, "", null, false, 0, 0,false);
+    Response response2 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           "2",
+                                                           null,
+                                                           null,
+                                                           FileListingType.FOLDER,
+                                                           null,
+                                                           null,
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           false,
+                                                           0,
+                                                           0,
+                                                           false);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
+                                                           null,
                                                            null,
                                                            null,
                                                            FileListingType.FOLDER,
@@ -544,8 +575,8 @@ public class DocumentFileRestTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1","Folder1","");
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2","Folder2","");
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "", false);
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "", false);
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");

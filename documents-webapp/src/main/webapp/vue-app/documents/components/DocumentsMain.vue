@@ -389,11 +389,13 @@ export default {
       this.folderPath='';
       this.fileName=null;
       this.parentFolderId = parentFolder.id;
+      let symlinkId = null;
       if (parentFolder.sourceID){
+        symlinkId = parentFolder.id;
         this.parentFolderId = parentFolder.sourceID; 
       }
       this.files = [];
-      this.refreshFiles();
+      this.refreshFiles(null, null, null, symlinkId);
       this.$root.$emit('set-breadcrumb', parentFolder);
       let folderPath ='';
       if (eXo.env.portal.spaceName) {
@@ -462,7 +464,7 @@ export default {
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
     },
-    refreshFiles(filterPrimary, deleted, documentId) {
+    refreshFiles(filterPrimary, deleted, documentId, symlinkId) {
       if (!this.selectedViewExtension) {
         return Promise.resolve(null);
       }
@@ -495,6 +497,9 @@ export default {
       }
       if (filterPrimary && filterPrimary==='all') {
         this.isFavorites  =  false;
+      }
+      if (symlinkId) {
+        filter.symlinkFolderId  =  symlinkId;
       }
       filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
