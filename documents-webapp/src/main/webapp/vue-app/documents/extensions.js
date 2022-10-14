@@ -103,8 +103,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 2,
-  enabled: (acl) => {
-    return acl.canEdit;
+  enabled: (file) => {
+    return file && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['edit-menu-action'],
@@ -119,8 +119,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 3,
-  enabled: (acl) => {
-    return acl.canEdit;
+  enabled: (file) => {
+    return file && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['rename-menu-action'],
@@ -135,8 +135,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 4,
-  enabled: (acl) => {
-    return acl.canEdit;
+  enabled: (file) => {
+    return file && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['move-menu-action'],
@@ -151,8 +151,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 5,
-  enabled: (acl) => {
-    return acl.canEdit;
+  enabled: (file) => {
+    return file && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['duplicate-menu-action'],
@@ -168,8 +168,8 @@ if (eXo.env.portal.addShortcutActionEnabled) {
     cssClass: 'font-weight-bold text-no-wrap',
     width: '190px',
     rank: 6,
-    enabled: (acl) => {
-      return acl.canEdit;
+    enabled: (file) => {
+      return file && file.acl.canEdit;
     },
     componentOptions: {
       vueComponent: Vue.options.components['shortcut-menu-action'],
@@ -185,8 +185,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 7,
-  enabled: (acl, isSymlink) => {
-    return acl.canEdit && !isSymlink;
+  enabled: (file) => {
+    return file && file.acl.canEdit && !file.sourceID;
   },
   componentOptions: {
     vueComponent: Vue.options.components['visibility-menu-action'],
@@ -202,7 +202,9 @@ if (eXo.env.portal.versionHistoryEnabled) {
     cssClass: 'font-weight-bold text-no-wrap',
     width: '190px',
     rank: 8,
-    enabled: () => true,
+    enabled: (file) => {
+      return file && file.versionable;
+    },
     componentOptions: {
       vueComponent: Vue.options.components['versionHistory-menu-action'],
     },
@@ -217,8 +219,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 9,
-  enabled: (acl, isSymlink) => {
-    return acl.canEdit || isSymlink;
+  enabled: (file) => {
+    return file && file.acl.canEdit || file.sourceID;
   },
   componentOptions: {
     vueComponent: Vue.options.components['download-menu-action'],
@@ -247,8 +249,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 10,
-  enabled: (acl) => {
-    return acl.canEdit;
+  enabled: (file) => {
+    return file && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['delete-menu-action'],

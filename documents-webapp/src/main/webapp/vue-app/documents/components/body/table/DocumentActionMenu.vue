@@ -27,7 +27,7 @@ export default {
     menuExtensions: {},
     mobileOnlyExtensions: ['favorite','details'],
     desktopOnlyExtensions: ['edit'],
-    editExtensions: ['edit', 'versionHistory'],
+    editExtensions: ['edit'],
     fileOnlyExtension: ['download','favorite'],
     redactorExtension: ['download', 'versionHistory','details', 'copyLink'],
     sharedDocumentSuspended: true,
@@ -59,9 +59,6 @@ export default {
     }
   },
   methods: {
-    isSymlink() {
-      return this.file && this.file.sourceID;
-    },
     checkTransferRules(extension) {
       if (extension.id === 'download') {
         return !this.downloadDocumentSuspended;
@@ -89,7 +86,7 @@ export default {
         extensions = extensions.filter(extension => extension.id === 'copyLink');
       }
       extensions = extensions.filter(extension => this.checkTransferRules(extension)
-                                                     && extension.enabled(this.file.acl, this.isSymlink()));
+                                                     && extension.enabled(this.file));
      
 
       let changed = false;

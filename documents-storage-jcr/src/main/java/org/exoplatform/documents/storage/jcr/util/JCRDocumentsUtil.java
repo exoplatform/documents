@@ -332,16 +332,18 @@ public class JCRDocumentsUtil {
     }
 
     if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+      documentNode.setVersionable(true);
       Version version = node.getBaseVersion();
       if (version != null && StringUtils.isNumeric(version.getName())) {
         documentNode.setVersionNumber(version.getName());
       }
     }
     if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-      Node sourceNode = null;
+      Node sourceNode;
       sourceNode = getNodeByIdentifier(node.getSession(), documentNode.getSourceID());
       if (sourceNode != null && sourceNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)
               && sourceNode.getBaseVersion() != null) {
+        documentNode.setVersionable(true);
         Version version = sourceNode.getBaseVersion();
         if (StringUtils.isNumeric(version.getName())) {
           documentNode.setVersionNumber(version.getName());
@@ -641,7 +643,11 @@ public class JCRDocumentsUtil {
     FileVersion versionFileNode = new FileVersion();
     String currentVersionName = node.getBaseVersion().getName();
     Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
-    versionFileNode.setTitle(node.getProperty(NodeTypeConstants.EXO_TITLE).getValue().getString());
+    if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+      versionFileNode.setTitle(Utils.getStringProperty(node, NodeTypeConstants.EXO_TITLE));
+    } else {
+      versionFileNode.setTitle(node.getName());
+    }
     String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
     Profile profile = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName).getProfile();
     String[] summary = node.getVersionHistory().getVersionLabels(version);
