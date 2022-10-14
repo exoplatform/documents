@@ -491,6 +491,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK))) {
         if(childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
           childNode=getNodeByIdentifier(session, childNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+          if(!childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) && !childNode.isNodeType(NodeTypeConstants.NT_FOLDER)){
+            continue;
+          }
         }
         if(childNode != null){
           String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
