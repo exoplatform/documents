@@ -40,6 +40,8 @@ import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.*;
+import org.exoplatform.social.core.identity.model.Profile;
+import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -635,6 +637,29 @@ public class JCRDocumentsUtil {
     return identity;
   }
 
+  public static FileVersion toFileVersion(Version version, Node node, IdentityManager identityManager) throws RepositoryException {
+    FileVersion versionFileNode = new FileVersion();
+    String currentVersionName = node.getBaseVersion().getName();
+    Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    versionFileNode.setTitle(node.getProperty(NodeTypeConstants.EXO_TITLE).getValue().getString());
+    String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
+    Profile profile = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName).getProfile();
+    String[] summary = node.getVersionHistory().getVersionLabels(version);
+    if (summary.length > 0) {
+      versionFileNode.setSummary(summary[0]);
+    }
+    versionFileNode.setId(version.getUUID());
+    versionFileNode.setFrozenId(frozen.getUUID());
+    versionFileNode.setOriginId(node.getUUID());
+    versionFileNode.setAuthor(userName);
+    versionFileNode.setAuthorFullName(profile.getFullName());
+    versionFileNode.setCreatedDate(version.getCreated().getTime());
+    versionFileNode.setVersionNumber(Integer.parseInt(version.getName()));
+    if (version.getName().equals(currentVersionName)) {
+      versionFileNode.setCurrent(true);
+    }
+    return versionFileNode;
+  }
 
 
 }

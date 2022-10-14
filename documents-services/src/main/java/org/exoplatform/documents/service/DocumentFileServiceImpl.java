@@ -366,13 +366,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   /**
    * {@inheritDoc}
+   *
+   * @return
    */
   @Override
-  public void restoreVersion(String versionId, String aclIdentity) {
+  public FileVersion restoreVersion(String versionId, String aclIdentity) {
     if (versionId == null) {
       throw new IllegalArgumentException("version id is mandatory");
     }
-    this.documentFileStorage.restoreVersion(versionId, aclIdentity);
+    return documentFileStorage.restoreVersion(versionId, aclIdentity);
   }
 
   @Override
