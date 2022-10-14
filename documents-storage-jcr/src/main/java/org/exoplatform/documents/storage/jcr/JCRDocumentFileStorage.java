@@ -422,7 +422,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (node != null) {
         String nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
         List<FullTreeItem> children = new ArrayList<>();
-        children = getAllFolderInNode(node);
+        children = getAllFolderInNode(node,session);
 
         parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(),children));
       }
@@ -436,21 +436,30 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
-  private List<FullTreeItem> getAllFolderInNode(Node node) throws RepositoryException {
+  private List<FullTreeItem> getAllFolderInNode(Node node, Session session) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
     while (nodeIter.hasNext()) {
       Node childNode = nodeIter.nextNode();
       if (!childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
-          && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER))) {
-        String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
-                                                                                        .getString()
-                                                                             : childNode.getName();
-        List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode);
-        folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
-                                             nodeName,
-                                             childNode.getPath(),
-                                             folderChildListNodes));
+          && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK))) {
+        if(childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+          childNode=getNodeByIdentifier(session, childNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+          if(!childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) && !childNode.isNodeType(NodeTypeConstants.NT_FOLDER)){
+            continue;
+          }
+        }
+        if(childNode != null){
+          String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
+                  .getString()
+                  : childNode.getName();
+          List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode,session);
+          folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
+                  nodeName,
+                  childNode.getPath(),
+                  folderChildListNodes));
+        }
+
       }
     }
     return folderListNodes.stream().sorted( new Comparator<FullTreeItem>() {
