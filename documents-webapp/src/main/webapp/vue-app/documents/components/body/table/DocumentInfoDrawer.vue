@@ -228,6 +228,8 @@ export default {
     updateDescription(){
       if (this.firstCreateDescription){
         this.addDescriptionStatistics(this.file);
+      } else {
+        this.updateDescriptionStatistics(this.file);
       }
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
@@ -281,6 +283,25 @@ export default {
           userName: eXo.env.portal.userName,
           name: 'actionCreateDescription',
           operation: 'createDescription',
+          parameters: {
+            documentName: file.name,
+            category: this.file.folder ? 'folderCategory' : 'documentCategory',
+            spaceId: eXo.env.portal.spaceId,
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
+    updateDescriptionStatistics(file) {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionUpdateDescription',
+          operation: 'updateDescription',
           parameters: {
             documentName: file.name,
             category: this.file.folder ? 'folderCategory' : 'documentCategory',
