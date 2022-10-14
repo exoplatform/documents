@@ -146,6 +146,12 @@
 <script>
 
 export default {
+  props: {
+    selectedView: {
+      type: String,
+      default: '',
+    }
+  },
   data: () => ({
     fullDateFormat: {
       year: 'numeric',
@@ -162,6 +168,7 @@ export default {
     displayEditor: false,
     showNoDescription: false,
     showDescription: false,
+    firstCreateDescription: false,
   }),
   computed: {
     iconColor(){
@@ -220,6 +227,9 @@ export default {
       this.$root.$emit('show-version-history', this.file);
     },
     updateDescription(){
+      if (this.firstCreateDescription){
+        this.addDescriptionStatistics(this.file);
+      }
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
@@ -239,6 +249,7 @@ export default {
       this.$refs.documentInfoDrawer.open();
     },
     openEditor(){
+      this.firstCreateDescription = this.showNoDescription;
       this.showNoDescription = false;
       this.showDescription = false;
       this.displayEditor=true;
@@ -259,6 +270,25 @@ export default {
             message: message,
             type: type || 'success',
           }
+        }
+      }));
+    },
+    addDescriptionStatistics(file) {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionCreateDescription',
+          operation: 'createDescription',
+          parameters: {
+            documentName: file.name,
+            category: this.file.folder ? 'folderCategory' : 'documentCategory',
+            spaceId: eXo.env.portal.spaceId,
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
         }
       }));
     },
