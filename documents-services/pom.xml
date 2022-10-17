@@ -16,11 +16,6 @@
   </properties>
   <dependencies>
     <dependency>
-      <groupId>org.exoplatform.addons.analytics</groupId>
-      <artifactId>analytics-api</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>documents-api</artifactId>
       <scope>provided</scope>
