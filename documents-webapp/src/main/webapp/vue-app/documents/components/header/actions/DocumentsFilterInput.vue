@@ -52,8 +52,16 @@ export default {
   },
   created() {
     this.$root.$on('resetSearch', this.resetSearch);
+    this.$root.$on('filer-query', this.filterQuery);
   },
   methods: {
+    filterQuery(query){
+      if (this.query === query){
+        return;
+      }
+      this.query = query;
+      this.$root.$emit('document-search', this.query);
+    },
     mobileFilter(){
       this.showMobileFilter = !this.showMobileFilter;
       this.$root.$emit('show-mobile-filter', this.showMobileFilter);
