@@ -586,7 +586,7 @@ public class JCRDocumentsUtil {
    */
   public static String cleanName(String oldName) {
     if (org.apache.commons.lang.StringUtils.isEmpty(oldName)) return oldName;
-    String extension ="" ;
+    String extension = "" ;
     if(oldName.lastIndexOf(".") > -1){
       extension = oldName.substring(oldName.lastIndexOf("."));
       oldName = oldName.substring(0,oldName.lastIndexOf(".")) ;
