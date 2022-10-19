@@ -181,6 +181,9 @@ export default {
           if (data) {
             this.items = [];
             this.items = data;
+            if (this.items.length>0){
+              this.folder = this.items[0];
+            }
           }
         });
     },
