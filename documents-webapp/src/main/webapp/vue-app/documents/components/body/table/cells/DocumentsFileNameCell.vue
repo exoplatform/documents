@@ -101,7 +101,7 @@
   </div>
 </template>
 <script>
-import jsonFileExtension from '../../../../../../../resources/locale/NtFileExtension.json';
+import jsonFileExtension from '../../../../json/NtFileExtension.json';
 export default {
   props: {
     file: {
@@ -209,7 +209,7 @@ export default {
     },
     fileType() {
       //get extension from the filetypeextension if file name haven't extention 
-      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')): jsonFileExtension[this.file.mimeType] ||'' ;
+      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : jsonFileExtension[this.file.mimeType] || '' ;
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
@@ -266,7 +266,7 @@ export default {
                 repository: 'repository',
                 workspace: 'collaboration',
                 //concat the file type if attachement title haven't extension on preview mode
-                title: decodeURI(attachment.title).lastIndexOf('.') >-1 ?decodeURI(attachment.title):decodeURI(attachment.title).concat(this.fileType),
+                title: decodeURI(attachment.title).lastIndexOf('.') >= 0 ? decodeURI(attachment.title) : decodeURI(attachment.title).concat(this.fileType),
                 downloadUrl: attachment.downloadUrl,
                 openUrl: attachment.openUrl,
                 breadCrumb: attachment.previewBreadcrumb,
@@ -299,4 +299,4 @@ export default {
     }
   }
 };
-</script>>
+</script>
