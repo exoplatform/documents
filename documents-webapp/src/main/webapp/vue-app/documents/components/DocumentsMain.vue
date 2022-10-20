@@ -616,13 +616,34 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-    createShortcut(fileId,destPath, destFolder) {
-      this.$documentFileService.createShortcut(fileId,destPath)
+    createShortcut(file,destPath, destFolder) {
+      this.$documentFileService.createShortcut(file.id,destPath)
         .then(() => {
+          this.createShortcutStatistics(file);
           this.openFolder(destFolder);
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
+    },
+    createShortcutStatistics(file) {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionFileCreated',
+          operation: 'fileCreated',
+          parameters: {
+            documentName: file.name,
+            documentType: 'exo:symlink',
+            category: this.file.folder ? 'folderCategory' : 'documentCategory',
+            spaceId: eXo.env.portal.spaceId,
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
     },
     saveVisibility(file){
       this.$documentFileService.saveVisibility(file)
