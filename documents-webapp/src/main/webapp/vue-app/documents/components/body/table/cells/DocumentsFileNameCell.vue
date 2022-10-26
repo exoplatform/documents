@@ -92,6 +92,7 @@
   </div>
 </template>
 <script>
+import ntFileExtension from '../../../../json/NtFileExtension.json';
 export default {
   props: {
     file: {
@@ -198,7 +199,8 @@ export default {
       return this.file.id===this.fileToEditId;
     },
     fileType() {
-      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')):'';
+      //get extension from the filetypeextension if file name haven't extention 
+      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
@@ -254,7 +256,8 @@ export default {
                 id: id,
                 repository: 'repository',
                 workspace: 'collaboration',
-                title: decodeURI(attachment.title),
+                //concat the file type if attachement title haven't extension on preview mode
+                title: decodeURI(attachment.title).lastIndexOf('.') >= 0 ? decodeURI(attachment.title) : decodeURI(attachment.title).concat(this.fileType),
                 downloadUrl: attachment.downloadUrl,
                 openUrl: attachment.openUrl,
                 breadCrumb: attachment.previewBreadcrumb,
