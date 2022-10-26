@@ -536,16 +536,14 @@ public class JCRDocumentsUtil {
   /**
    * Clean string.
    *
-   * @param str the str
+   * @param oldName the str
    *
    * @return the string
    */
   public static String cleanName(String oldName) {
     if (org.apache.commons.lang.StringUtils.isEmpty(oldName)) return oldName;
-    String extention ="" ;
     String extension = "" ;
     if(oldName.lastIndexOf(".") > -1){
-      extention = oldName.substring(oldName.lastIndexOf("."));
       extension = oldName.substring(oldName.lastIndexOf("."));
       oldName = oldName.substring(0,oldName.lastIndexOf(".")) ;
     }
@@ -559,7 +557,6 @@ public class JCRDocumentsUtil {
         ret.append(currentChar);
       }
     }
-    ret.append(extention);
     ret.append(extension);
     return ret.toString();
   }
