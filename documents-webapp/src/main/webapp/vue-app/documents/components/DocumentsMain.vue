@@ -619,13 +619,13 @@ export default {
     createShortcut(file,destPath, destFolder,space) {
       this.$documentFileService.createShortcut(file.id,destPath)
         .then(() => {
-          this.createShortcutStatistics(file,destFolder,space);
+          this.createShortcutStatistics(file,space);
           this.openFolder(destFolder);
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-    createShortcutStatistics(file,destFolder,space) {
+    createShortcutStatistics(file,space) {
       document.dispatchEvent(new CustomEvent('exo-statistic-message', {
         detail: {
           module: 'Drive',
@@ -640,7 +640,6 @@ export default {
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
-            folderName: destFolder.name,
           },
           timestamp: Date.now()
         }
