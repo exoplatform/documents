@@ -8,9 +8,6 @@
       fas fa-eye
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.visibility') }}</span>
-    <v-divider
-      v-if="!versionHistoryEnabled"
-      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
@@ -28,9 +25,6 @@ export default {
   computed: {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
-    versionHistoryEnabled() {
-      return eXo.env.portal.versionHistoryEnabled;
     }
   },
   methods: {
