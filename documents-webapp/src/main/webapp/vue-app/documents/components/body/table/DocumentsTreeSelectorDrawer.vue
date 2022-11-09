@@ -193,7 +193,7 @@ export default {
         this.$root.$emit('documents-move', this.ownerId, this.file.id, destinationPath);
       }
       if (this.actionType === 'shortcut') {
-        this.$root.$emit('create-shortcut', this.file.id, destinationPath, this.folder);
+        this.$root.$emit('create-shortcut', this.file, destinationPath, this.folder,this.space);
       }
       this.close();
     },
