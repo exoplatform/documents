@@ -168,7 +168,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 6,
   enabled: (file) => {
-      return file && file.acl.canEdit && !file.sourceID;
+    return file && file.acl.canEdit && !file.sourceID;
   },
   componentOptions: {
     vueComponent: Vue.options.components['shortcut-menu-action'],
