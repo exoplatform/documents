@@ -52,8 +52,6 @@ public interface DocumentFileStorage {
    * @param filter {@link DocumentFolderFilter} that contains filtering criteria
    * @param aclIdentity {@link Identity} of the user acessing files
    * @return {@link DocumentGroupsSize}
-   * @throws IllegalAccessException when the user isn't allowed to access
-   *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when parentFolderId doesn't exisits
    */
 
