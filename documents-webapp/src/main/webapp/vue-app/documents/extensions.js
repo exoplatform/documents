@@ -159,23 +159,22 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
-if (eXo.env.portal.addShortcutActionEnabled) {
-  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-    id: 'shortcut',
-    labelKey: 'documents.label.shortcut',
-    align: 'center',
-    sortable: true,
-    cssClass: 'font-weight-bold text-no-wrap',
-    width: '190px',
-    rank: 6,
-    enabled: (file) => {
-      return file && file.acl.canEdit && !file.sourceID;
-    },
-    componentOptions: {
-      vueComponent: Vue.options.components['shortcut-menu-action'],
-    },
-  });
-}
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'shortcut',
+  labelKey: 'documents.label.shortcut',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 6,
+  enabled: (file) => {
+    return file && file.acl.canEdit && !file.sourceID;
+  },
+  componentOptions: {
+    vueComponent: Vue.options.components['shortcut-menu-action'],
+  },
+});
+
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'visibility',
@@ -193,23 +192,22 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
-if (eXo.env.portal.versionHistoryEnabled) {
-  extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-    id: 'versionHistory',
-    labelKey: 'documents.label.showVersionHistory',
-    align: 'center',
-    sortable: true,
-    cssClass: 'font-weight-bold text-no-wrap',
-    width: '190px',
-    rank: 8,
-    enabled: (file) => {
-      return file && file.versionable;
-    },
-    componentOptions: {
-      vueComponent: Vue.options.components['versionHistory-menu-action'],
-    },
-  });
-}
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'versionHistory',
+  labelKey: 'documents.label.showVersionHistory',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 8,
+  enabled: (file) => {
+    return file && file.versionable;
+  },
+  componentOptions: {
+    vueComponent: Vue.options.components['versionHistory-menu-action'],
+  },
+});
+
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'download',
