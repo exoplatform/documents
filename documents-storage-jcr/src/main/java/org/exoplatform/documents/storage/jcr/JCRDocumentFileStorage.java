@@ -320,7 +320,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String statement = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection);
           Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
           ((QueryImpl)jcrQuery).setOffset(offset);
-          ((QueryImpl)jcrQuery).setLimit(limit);
+          ((QueryImpl)jcrQuery).setLimit(limit*2);
           QueryResult queryResult = jcrQuery.execute();
           NodeIterator nodeIterator = queryResult.getNodes();
           return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService,includeHiddenFiles);
