@@ -220,6 +220,7 @@ export default {
         this.file.versionNumber++;
       }
     });
+    document.addEventListener('search-metadata-tag', this.close);
   },
   methods: {
     showVersionHistory() {
