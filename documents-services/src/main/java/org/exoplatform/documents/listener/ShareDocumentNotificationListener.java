@@ -22,6 +22,7 @@ import org.exoplatform.commons.notification.impl.NotificationContextImpl;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
 import org.exoplatform.documents.notification.utils.NotificationConstants;
 import org.exoplatform.documents.notification.utils.NotificationUtils;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.Listener;
 import org.exoplatform.services.security.ConversationState;
@@ -53,7 +54,7 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
     NotificationContext ctx = NotificationContextImpl.cloneInstance();
     String documentLink = null;
     if (targetNode.hasProperty(EXO_SYMLINK_UUID)) {
-      documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(), null, null);
+      documentLink = NotificationUtils.getSharedDocumentLink(((NodeImpl) targetNode).getIdentifier(), null, null);
     } else {
       documentLink = NotificationUtils.getDocumentLink(targetNode, spaceService, identityManager);
     }
