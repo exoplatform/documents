@@ -22,6 +22,7 @@ import org.exoplatform.commons.notification.impl.NotificationContextImpl;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
 import org.exoplatform.documents.notification.utils.NotificationConstants;
 import org.exoplatform.documents.notification.utils.NotificationUtils;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.Listener;
 import org.exoplatform.services.security.ConversationState;
@@ -48,9 +49,9 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
     String currentUser = ConversationState.getCurrent().getIdentity().getUserId();
     NotificationContext ctx = NotificationContextImpl.cloneInstance();
     String documentLink =
-                        NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(), null, null);
+                        NotificationUtils.getSharedDocumentLink(((NodeImpl) targetNode).getIdentifier(), null, null);
     if (targetIdentity.getProviderId().equals(SpaceIdentityProvider.NAME)) {
-      documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(),
+      documentLink = NotificationUtils.getSharedDocumentLink(((NodeImpl) targetNode).getIdentifier(),
                                                              spaceService,
                                                              targetIdentity.getRemoteId());
     }

@@ -245,10 +245,7 @@ export default {
       if (this.file && this.file.folder){
         this.$root.$emit('document-open-folder', this.file);
       } else {
-        let id = this.file.id;
-        if (this.file.sourceID){
-          id = this.file.sourceID;
-        }
+        const id = this.file.id;
         this.$attachmentService.getAttachmentById(id)
           .then(attachment => {
             documentPreview.init({
