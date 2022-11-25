@@ -10,6 +10,7 @@ import org.exoplatform.commons.notification.impl.setting.NotificationPluginConta
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
 import org.exoplatform.documents.notification.utils.NotificationUtils;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -58,6 +59,13 @@ public class ShareDocumentNotificationListenerTest {
   private ChannelManager                    channelManager;
   @Mock
   private SpaceService                      spaceService;
+  
+  @Mock
+  private IdentityManager                   identityManager;
+
+  @Mock
+  private NodeImpl                   nodeImpl;
+
   private ShareDocumentNotificationListener shareDocumentNotificationListener;
 
   @Before
@@ -77,6 +85,7 @@ public class ShareDocumentNotificationListenerTest {
     when(CommonsUtils.getService(NotificationPluginContainer.class)).thenReturn(notificationPluginContainer);
     when(CommonsUtils.getService(PluginSettingService.class)).thenReturn(pluginSettingService);
     when(CommonsUtils.getService(ChannelManager.class)).thenReturn(channelManager);
+    when(CommonsUtils.getService(NodeImpl.class)).thenReturn(nodeImpl);
     when(CommonsUtils.getCurrentPortalOwner()).thenReturn("dw");
     when(CommonsUtils.getCurrentDomain()).thenReturn("http://domain/");
     when(LinkProvider.getPortalName(null)).thenReturn("portal");
@@ -89,13 +98,13 @@ public class ShareDocumentNotificationListenerTest {
     Space space = new Space();
     space.setGroupId("/spaces/spacename");
     when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
-    Node targetNode = mock(Node.class);
+    Node targetNode = mock(NodeImpl.class);
     Identity targetIdentity = mock(Identity.class);
     Event<Identity, Node> event = new Event<>("share_document_event", targetIdentity, targetNode);
     when(targetIdentity.getProviderId()).thenReturn("USER");
     Property property = mock(Property.class);
     when(targetNode.getProperty("exo:uuid")).thenReturn(property);
-    when(property.getString()).thenReturn("313445hegefezd");
+    when(((NodeImpl) targetNode).getIdentifier()).thenReturn("313445hegefezd");
     Property propertyTitle = mock(Property.class);
     Value value = mock(Value.class);
     when(propertyTitle.getValue()).thenReturn(value);

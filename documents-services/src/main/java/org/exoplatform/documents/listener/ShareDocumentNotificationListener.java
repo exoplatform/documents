@@ -22,6 +22,7 @@ import org.exoplatform.commons.notification.impl.NotificationContextImpl;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
 import org.exoplatform.documents.notification.utils.NotificationConstants;
 import org.exoplatform.documents.notification.utils.NotificationUtils;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.Listener;
 import org.exoplatform.services.security.ConversationState;
@@ -47,8 +48,17 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
     Identity targetIdentity = event.getSource();
     String currentUser = ConversationState.getCurrent().getIdentity().getUserId();
     NotificationContext ctx = NotificationContextImpl.cloneInstance();
+<<<<<<< HEAD
     String documentLink =
                         NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(), null, null);
+=======
+    String documentLink = null;
+    if (targetNode.hasProperty(EXO_SYMLINK_UUID)) {
+      documentLink = NotificationUtils.getSharedDocumentLink(((NodeImpl) targetNode).getIdentifier(), null, null);
+    } else {
+      documentLink = NotificationUtils.getDocumentLink(targetNode, spaceService, identityManager);
+    }
+>>>>>>> b3b65079 (fix: Fix personal drive shared document preview issues (breadcrumb, wrong folder displayed) - EXO-60838 (#605))
     if (targetIdentity.getProviderId().equals(SpaceIdentityProvider.NAME)) {
       documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(),
                                                              spaceService,
