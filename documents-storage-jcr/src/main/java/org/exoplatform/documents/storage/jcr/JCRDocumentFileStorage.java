@@ -156,17 +156,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
-        String statement = getTimeLineQueryStatement(rootPath, NodeTypeConstants.NT_FILE, sortField, sortDirection);
+        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection);
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+        ((QueryImpl)jcrQuery).setOffset(offset);
+        ((QueryImpl)jcrQuery).setLimit(limit);
         QueryResult queryResult = jcrQuery.execute();
         NodeIterator nodeIterator = queryResult.getNodes();
-        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService,showHiddenFiles, offset, limit);
-
-        statement = getTimeLineQueryStatement(rootPath, NodeTypeConstants.EXO_SYMLINK, sortField, sortDirection);
-        jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
-        queryResult = jcrQuery.execute();
-        nodeIterator = queryResult.getNodes();
-        files.addAll(toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, showHiddenFiles, offset, limit));
+        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService,showHiddenFiles);
         return files;
       } else {
         String workspace = session.getWorkspace().getName();
@@ -317,13 +313,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
-          String statement = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection);
+          String statement = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, includeHiddenFiles);
           Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
           ((QueryImpl)jcrQuery).setOffset(offset);
-          ((QueryImpl)jcrQuery).setLimit(limit*2);
+          ((QueryImpl)jcrQuery).setLimit(limit);
           QueryResult queryResult = jcrQuery.execute();
           NodeIterator nodeIterator = queryResult.getNodes();
-          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService,includeHiddenFiles);
+          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, includeHiddenFiles);
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -829,26 +825,32 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       newNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, oldNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
     }
   }
-  private String getTimeLineQueryStatement(String rootPath, String nodeType, String sortField, String sortDirection) {
+
+  private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {
     return new StringBuilder().append("SELECT * FROM ")
-                              .append(nodeType)
+                              .append("nt:base")
                               .append(" WHERE jcr:path LIKE '")
                               .append(rootPath)
-                              .append("/%' ORDER BY ")
+                              .append("/%' ")
+                              .append(" AND ( jcr:primaryType='exo:symlink' OR jcr:primaryType='nt:file') AND NOT jcr:mixinTypes LIKE 'exo:hiddenable' ")
+                              .append(" ORDER BY ")
                               .append(sortField)
                               .append(" ")
                               .append(sortDirection)
                               .toString();
   }
 
-  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection) {
+  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection, boolean includeHiddenFiles) {
+    String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable' ";
     return new StringBuilder().append("SELECT * FROM nt:base")
             .append(" WHERE jcr:path LIKE '")
             .append(folderPath)
             .append("/%'")
             .append(" AND NOT jcr:path LIKE '")
             .append(folderPath)
-            .append("/%/%' ORDER BY ")
+            .append("/%/%' ")
+            .append(hiddenableQuery)
+            .append(" ORDER BY ")
             .append(sortField)
             .append(" ")
             .append(sortDirection)

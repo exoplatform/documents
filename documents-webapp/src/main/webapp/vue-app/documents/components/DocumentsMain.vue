@@ -431,8 +431,7 @@ export default {
       }
     },
     loadMore() {
-      this.limit += this.pageSize;
-      this.refreshFiles(this.primaryFilter);
+      this.refreshFiles(this.primaryFilter,null, null, null , true);
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
@@ -465,7 +464,7 @@ export default {
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
     },
-    refreshFiles(filterPrimary, deleted, documentId, symlinkId) {
+    refreshFiles(filterPrimary, deleted, documentId, symlinkId, append) {
       if (!this.selectedViewExtension) {
         return Promise.resolve(null);
       }
@@ -504,11 +503,12 @@ export default {
       }
       filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
-      this.limit = this.limit || this.pageSize;
+      this.offset = append ? this.offset + this.pageSize : 0 ;
+      this.limit = append ? this.limit + this.pageSize : this.pageSize ;
       this.loading = true;
       return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
-          this.files = this.sortField === 'favorite' ? files && files.slice(this.offset, this.limit).sort((file1, file2) => {
+          files = this.sortField === 'favorite' ? files && files.sort((file1, file2) => {
             if (file1.favorite === false && file2.favorite === true) {
               return this.ascending ? 1 : -1;
             }
@@ -516,9 +516,10 @@ export default {
               return this.ascending ? -1 : 1;
             }
             return 0;
-          }) || [] : files && files.slice(this.offset, this.limit) || [];
+          }) || files : files;
+          this.files = append ? this.files.concat(files) : files ;
           this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
-          this.hasMore = files && files.length > this.limit;
+          this.hasMore = files && files.length >= this.limit;
           if (this.fileName) {
             const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
             if (result.length > 0) {
