@@ -232,14 +232,18 @@ public class JCRDocumentFileStorageTest {
     // mock toNodes method
     FileNode file = new FileNode();
     file.setName("file1");
-    FolderNode folder = new FolderNode();
-    folder.setName("folder1");
+    FolderNode folder1 = new FolderNode();
+    folder1.setName("folder1");
+    FolderNode folder2 = new FolderNode();
+    folder2.setName("folder2");
     when(nodeIterator.hasNext()).thenReturn(true, true, false);
     Node fileNode = mock(Node.class);
-    Node folderNode = mock(Node.class);
+    Node folderNode1 = mock(Node.class);
+    Node folderNode2 = mock(Node.class);
     when(fileNode.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
-    when(folderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
-    when(nodeIterator.nextNode()).thenReturn(fileNode, folderNode);
+    when(folderNode1.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode2.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(nodeIterator.nextNode()).thenReturn(fileNode, folderNode1);
     doCallRealMethod().when(JCRDocumentsUtil.class,
                             "toNodes",
                             identityManager,
@@ -249,10 +253,15 @@ public class JCRDocumentFileStorageTest {
                             spaceService,
                             false);
     when(JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
-    when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode, "", spaceService)).thenReturn(folder);
+    when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode1, "", spaceService)).thenReturn(folder1);
+    when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode2, "", spaceService)).thenReturn(folder2);
 
-    List<AbstractNode> nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
+    List<AbstractNode> nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
     assertEquals(2, nodes.size());
+    when(nodeIterator.hasNext()).thenReturn(true, false);
+    when(nodeIterator.nextNode()).thenReturn(folderNode2);
+    nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
+    assertEquals(1, nodes.size());
 
     // case of folderNodeId empty
     filter.setParentFolderId(null);
@@ -269,7 +278,7 @@ public class JCRDocumentFileStorageTest {
     NodeIterator nodeIterator1 = mock(NodeIterator.class);
     when(queryResult.getNodes()).thenReturn(nodeIterator1);
     when(nodeIterator1.hasNext()).thenReturn(true, true, false);
-    when(nodeIterator1.nextNode()).thenReturn(fileNode, folderNode);
+    when(nodeIterator1.nextNode()).thenReturn(fileNode, folderNode1);
     doCallRealMethod().when(JCRDocumentsUtil.class,
                             "toNodes",
                             identityManager,
@@ -278,8 +287,12 @@ public class JCRDocumentFileStorageTest {
                             identity,
                             spaceService,
                             false);
-    List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
+    List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
     assertEquals(2, nodes1.size());
+    when(nodeIterator1.hasNext()).thenReturn(true, false);
+    when(nodeIterator1.nextNode()).thenReturn(folderNode2);
+    nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
+    assertEquals(1, nodes1.size());
 
     // case filter with query
     filter.setQuery("docum");
