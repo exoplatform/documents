@@ -109,19 +109,11 @@ public class JCRDocumentsUtil {
                                            Identity aclIdentity,
                                            Session session,
                                            SpaceService spaceService,
-                                           boolean includeHiddenFiles,
-                                           int offset,
-                                           int limit) throws RepositoryException {
+                                           boolean includeHiddenFiles) throws RepositoryException {
     List<FileNode> fileNodes = new ArrayList<>();
     JCRDeleteFileStorage jCRDeleteFileStorage =  CommonsUtils.getService(JCRDeleteFileStorage.class);
     Map<String, String> documetsToDelete = jCRDeleteFileStorage.getDocumentsToDelete();
-    int index = 0;
-    int size = 0;
     while (nodeIterator.hasNext()) {
-      if (index < offset) {
-        index++;
-        continue;
-      }
       String sourceID = "";
       String sourceMimeType = "";
       Node node = nodeIterator.nextNode();
@@ -149,10 +141,6 @@ public class JCRDocumentsUtil {
         fileNode.setMimeType(sourceMimeType);
       }
       fileNodes.add(fileNode);
-      size++;
-      if (size >= limit) {
-        return fileNodes;
-      }
     }
     return fileNodes;
   }
@@ -167,7 +155,7 @@ public class JCRDocumentsUtil {
     while (nodeIterator.hasNext()) {
       Node node = nodeIterator.nextNode();
       String sourceID = "";
-      Node sourceNode = null;
+      Node sourceNode = node;
       try {
         if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
@@ -175,28 +163,17 @@ public class JCRDocumentsUtil {
           if (sourceNode == null) {
             break;
           }
-          if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
-              && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
-            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
-            fileNodes.add(folderNode);
-          }
-          if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE)) && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
-              || includeHiddenFiles))) {
-            FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
-            fileNode.setMimeType(getMimeType(sourceNode));
-            fileNodes.add(fileNode);
-          }
-        } else {
-          if ((node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) && (!(
-              node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
-            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
-            fileNodes.add(folderNode);
-          }
-          if ((node.isNodeType(NodeTypeConstants.NT_FILE)) && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
-              || includeHiddenFiles))) {
-            FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
-            fileNodes.add(fileNode);
-          }
+        }
+        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
+            && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
+          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
+          fileNodes.add(folderNode);
+        }
+        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE))
+            && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
+          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+          fileNode.setMimeType(getMimeType(sourceNode));
+          fileNodes.add(fileNode);
         }
       } catch (RepositoryException e) {
         LOG.warn("Error getting Folder Node for search result with path {}", node, e);
