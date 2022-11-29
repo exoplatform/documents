@@ -69,7 +69,7 @@
     <documents-visibility-drawer />
     <document-tree-selector-drawer />
     <documents-info-drawer
-      :selected-view="selectedView"/>
+      :selected-view="selectedView" />
     <v-alert
       v-model="alert"
       :type="alertType"
@@ -570,7 +570,7 @@ export default {
           // Quit preview mode
           self.previewMode = false;
           self.fileName = null;
-          window.history.pushState('', '', eXo.env.server.portalBaseURL);
+          window.history.pushState('', '', window.location.pathname);
         } else if (documentPreviewContainer && !self.previewMode) {
           // Enter preview mode
           self.previewMode = true;
