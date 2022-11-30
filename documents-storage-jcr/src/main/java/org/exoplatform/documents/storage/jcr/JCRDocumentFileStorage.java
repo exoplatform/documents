@@ -31,8 +31,8 @@ import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
 
-import org.apache.commons.lang.math.NumberUtils;
 import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -66,7 +66,6 @@ import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-
 import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
@@ -169,7 +168,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String workspace = session.getWorkspace().getName();
         String sortField = getSortField(filter, false);
         String sortDirection = getSortDirection(filter);
-        Collection<SearchResult> filesSearchList = documentSearchServiceConnector.appSearch(aclIdentity,
+
+        Collection<SearchResult> filesSearchList =
+                                                 documentSearchServiceConnector.search(aclIdentity,
                                                                                             workspace,
                                                                                             rootPath,
                                                                                             filter,
@@ -325,7 +326,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
           String sortDirection = getSortDirection(filter);
-          Collection<SearchResult> filesSearchList = documentSearchServiceConnector.appSearch(aclIdentity,
+          Collection<SearchResult> filesSearchList =
+                                                   documentSearchServiceConnector.search(aclIdentity,
                                                                                               workspace,
                                                                                               parent.getPath(),
                                                                                               filter,
