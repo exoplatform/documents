@@ -55,7 +55,7 @@ public class DocumentSearchServiceConnector {
   public static final String           SEARCH_QUERY_TERM            = "\"must\":{"
           + "    \"query_string\":{"
           + "    \"fields\": [\"title\"],"
-          + "    \"default_operator\":\"OR\","
+          + "    \"default_operator\":\"AND\","
           + "    \"query\": \"*@term@*\""
           + "  }"
           + "},";
