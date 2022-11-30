@@ -56,16 +56,12 @@ public class ShareDocumentNotificationListenerTest {
   private PluginSettingService              pluginSettingService;
 
   @Mock
+  private NodeImpl                   nodeImpl;
+
+  @Mock
   private ChannelManager                    channelManager;
   @Mock
   private SpaceService                      spaceService;
-  
-  @Mock
-  private IdentityManager                   identityManager;
-
-  @Mock
-  private NodeImpl                   nodeImpl;
-
   private ShareDocumentNotificationListener shareDocumentNotificationListener;
 
   @Before
