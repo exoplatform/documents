@@ -1,0 +1,97 @@
+{
+  "from": @offset@,
+  "size": @limit@,
+  "track_scores": true,
+  "sort": [
+    {
+      "_score": {
+        "order": "DESC"
+      }
+    }
+  ],
+  "_source": [
+    "name",
+    "workspace",
+    "path"
+  ],
+  "query": {
+    "bool": {
+      @term_query@
+      "filter": [
+        @favorite_query@
+        {
+          "bool": {
+            "must": [
+              {
+                "bool": {
+                  "should": [
+                    @permissions@
+                  ]
+                }
+              },
+              {
+                "bool": {
+                  "should": {
+                    "bool": {
+                      "must_not": {
+                        "exists": {
+                          "field": "sites"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "should": [
+                  ]
+                }
+              },
+              {
+                "bool": {
+                  "should": [
+                    {
+                      "term": {
+                        "workspace": "@workspace@"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "bool": {
+                  "should": [
+                    {
+                      "prefix": {
+                        "path": {
+                          "value": "@path@"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "highlight": {
+    "pre_tags": [
+      "<span class='searchMatchExcerpt'>"
+    ],
+    "post_tags": [
+      "</span>"
+    ],
+    "fields": {
+      "title": {
+        "type": "unified",
+        "fragment_size": 100,
+        "no_match_size": 0,
+        "number_of_fragments": 3
+      }
+    }
+  }
+}
