@@ -57,7 +57,11 @@
       <groupId>org.exoplatform</groupId>
       <artifactId>exo-jcr-services</artifactId>
     </dependency>
-
+    <dependency>
+      <groupId>org.exoplatform.ecms</groupId>
+      <artifactId>ecms-core-services</artifactId>
+      <scope>provided</scope>
+    </dependency>
     <!-- Test -->
     <dependency>
       <groupId>junit</groupId>
