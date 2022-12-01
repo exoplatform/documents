@@ -61,7 +61,6 @@ import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.security.MembershipEntry;
-import org.exoplatform.services.wcm.utils.WCMCoreUtils;
 import org.exoplatform.social.core.activity.model.ExoSocialActivity;
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -700,8 +699,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         newNode = duplicateItem(oldNode, parentNode, parentNode, prefixClone);
         parentNode.save();
       }
-      AutoVersionService autoVersionService = WCMCoreUtils.getService(AutoVersionService.class);
-      if(autoVersionService != null) {
+      AutoVersionService autoVersionService = CommonsUtils.getService(AutoVersionService.class);
+      if (autoVersionService != null) {
         autoVersionService.autoVersion(newNode);
       }
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
