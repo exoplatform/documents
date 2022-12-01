@@ -190,7 +190,6 @@ public class JCRDocumentFileStorageTest {
     when(identity.getRemoteId()).thenReturn("username");
     when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
     when(CommonsUtils.getService(AutoVersionService.class)).thenReturn(autoVersionService);
-    when(autoVersionService.autoVersion(any(Node.class))).thenReturn(null);
     jcrDocumentFileStorage.duplicateDocument(1L,"1","copy of",userID);
     verify(sessionProvider, times(1)).close();
     verify(autoVersionService, times(1)).autoVersion(any(Node.class));
