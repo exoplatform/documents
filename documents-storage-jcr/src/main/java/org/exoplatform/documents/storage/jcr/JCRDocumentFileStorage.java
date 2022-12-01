@@ -45,6 +45,7 @@ import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnect
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
+import org.exoplatform.services.cms.documents.AutoVersionService;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -60,6 +61,7 @@ import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.security.MembershipEntry;
+import org.exoplatform.services.wcm.utils.WCMCoreUtils;
 import org.exoplatform.social.core.activity.model.ExoSocialActivity;
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -692,12 +694,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         oldNode = getNodeByIdentifier(session, fileId);
       }
       Node parentNode = oldNode.getParent();
+      Node newNode = null;
 
       if (oldNode != null) {
-          duplicateItem(oldNode, parentNode, parentNode ,prefixClone);
+        newNode = duplicateItem(oldNode, parentNode, parentNode, prefixClone);
         parentNode.save();
       }
-
+      AutoVersionService autoVersionService = WCMCoreUtils.getService(AutoVersionService.class);
+      if(autoVersionService != null) {
+        autoVersionService.autoVersion(newNode);
+      }
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
@@ -751,9 +757,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   }
 
-  private void duplicateItem(Node oldNode, Node destinationNode, Node parentNode, String prefixClone) throws Exception{
+  private Node duplicateItem(Node oldNode, Node destinationNode, Node parentNode, String prefixClone) throws Exception{
     if (oldNode.isNodeType(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
-      return;
+      return null;
     }
     Node newNode = null;
     String name = oldNode.getName();
@@ -785,6 +791,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       newNode = destinationNode.addNode(name, oldNode.getPrimaryNodeType().getName());
       addProperties(oldNode,newNode,title);
     }
+    return newNode;
   }
   private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {
     if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))

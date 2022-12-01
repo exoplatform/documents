@@ -31,6 +31,7 @@
     <org.exoplatform.platform-ui.version>6.4.x-maintenance-SNAPSHOT</org.exoplatform.platform-ui.version>
     <addon.exo.jcr.version>6.4.x-maintenance-SNAPSHOT</addon.exo.jcr.version>
     <addon.exo.analytics.version>1.3.x-maintenance-SNAPSHOT</addon.exo.analytics.version>
+    <org.exoplatform.ecms.version>6.4.x-maintenance-SNAPSHOT</org.exoplatform.ecms.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
   </properties>
@@ -67,7 +68,13 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
-
+      <dependency>
+        <groupId>org.exoplatform.ecms</groupId>
+        <artifactId>ecms-core-publication</artifactId>
+        <version>${org.exoplatform.ecms.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
       <!-- Current project artifacts -->
       <dependency>
         <groupId>${project.groupId}</groupId>
