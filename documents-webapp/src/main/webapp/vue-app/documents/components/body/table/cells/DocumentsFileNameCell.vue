@@ -271,7 +271,7 @@ export default {
           })
           .catch(e => console.error(e))
           .finally(() => {
-            window.history.pushState('', '', `${eXo.env.server.portalBaseURL}?documentPreviewId=${this.file.id}`);
+            window.history.pushState('', '', `${window.location.pathname}?documentPreviewId=${this.file.id}`);
             this.loading = false;
           });
       }
