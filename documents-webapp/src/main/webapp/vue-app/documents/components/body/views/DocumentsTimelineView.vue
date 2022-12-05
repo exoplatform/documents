@@ -25,6 +25,7 @@
           :key="header.value"
           :extension="header.cellExtension"
           :file="item"
+          :query="query"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template
