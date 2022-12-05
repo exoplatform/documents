@@ -11,6 +11,10 @@ export default {
       type: Object,
       default: null,
     },
+    query: {
+      type: String,
+      default: null,
+    },
     extension: {
       type: Object,
       default: null,
@@ -20,6 +24,7 @@ export default {
     params() {
       return {
         file: this.file,
+        query: this.query,
         extension: this.extension,
       };
     },
