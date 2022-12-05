@@ -1,10 +1,10 @@
 <template>
   <div>
     <common-search-input
-    ref="commonInput"
+      ref="commonInput"
       :query="query"
       @filterQuery="filterQuery"
-      @cancelSearch="cancelSearch"/>
+      @cancelSearch="cancelSearch" />
   </div>
 </template>
 <script>

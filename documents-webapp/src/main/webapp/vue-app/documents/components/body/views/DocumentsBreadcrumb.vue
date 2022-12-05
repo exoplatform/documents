@@ -32,22 +32,22 @@
                 class="caption text-truncate"
                 :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
                 :class="index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name) }}</a>
-                <v-icon 
-                  v-if="documents.symlink"
-                  size="10"
-                  class="pe-1 iconStyle pb-1">
-                  mdi-link-variant
-                </v-icon>
+              <v-icon 
+                v-if="documents.symlink"
+                size="10"
+                class="pe-1 iconStyle pb-1">
+                mdi-link-variant
+              </v-icon>
             </v-btn>
           </template>
           <span class="caption breadcrumbName">
             {{ getName(documents.name) }} 
-                  <v-icon 
-                  v-if="documents.symlink"
-                  size="10"
-                  class="pe-1 iconStyle pb-1">
-                  mdi-link-variant
-                </v-icon>
+            <v-icon 
+              v-if="documents.symlink"
+              size="10"
+              class="pe-1 iconStyle pb-1">
+              mdi-link-variant
+            </v-icon>
           </span>
         </v-tooltip>
         <v-icon
