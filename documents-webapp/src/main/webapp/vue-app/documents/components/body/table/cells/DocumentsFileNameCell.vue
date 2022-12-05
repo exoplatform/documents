@@ -108,6 +108,10 @@ export default {
       type: Object,
       default: null,
     },
+    query: {
+      type: String,
+      default: null,
+    },
     extension: {
       type: Object,
       default: null,
@@ -128,7 +132,11 @@ export default {
   }),
   computed: {
     title() {
-      return decodeURI(this.fileName);
+      let title = decodeURI(this.fileName);
+      if (this.query){
+        title = this.highlightSearchResult(title,this.query);      
+      }
+      return title;
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
@@ -232,6 +240,12 @@ export default {
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
+    highlightSearchResult(words, query){
+      const iQuery = new RegExp(query, 'ig');
+      return words.toString().replace(iQuery, function(matchedTxt){
+        return ( `<b>${matchedTxt}</b>`);
+      });
+    },
     editFileName(file) {
       if (this.file.id === file.id){
         this.fileToEditId = file.id;
