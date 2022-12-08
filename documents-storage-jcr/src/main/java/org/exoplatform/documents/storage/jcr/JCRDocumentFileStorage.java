@@ -17,6 +17,7 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -29,6 +30,7 @@ import javax.jcr.*;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
+import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
 import org.apache.commons.lang.math.NumberUtils;
@@ -45,7 +47,6 @@ import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnect
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
-import org.exoplatform.services.cms.documents.AutoVersionService;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -109,6 +110,35 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
 
+
+  public static final String WEB_CONTENT      = "exo:webContent";
+
+  public static  final String MIX_DISPLAY_VERSION_NAME = "mix:versionDisplayName";
+
+  public static  final String MAX_VERSION_PROPERTY = "exo:maxVersion";
+
+  public static  final String VERSION_SEPARATOR = ":";
+
+  public static  final String LIST_VERSION_PROPERTY = "exo:versionList";
+  private static int maxAllowVersion;
+  private static long maxLiveTime;
+  private static String maxAllowVersionProp   = "jcr.documents.versions.max";
+  private static String expirationTimeProp    = "jcr.documents.versions.expiration";
+  private static final int DOCUMENT_AUTO_DEFAULT_VERSION_MAX = 0;
+  private static final int DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED = 0;
+  static {
+    try {
+      maxAllowVersion = Integer.parseInt(System.getProperty(maxAllowVersionProp));
+      maxLiveTime = Integer.parseInt(System.getProperty(expirationTimeProp));
+      //ignore invalid input config
+      if(maxAllowVersion < 0) maxAllowVersion = DOCUMENT_AUTO_DEFAULT_VERSION_MAX;
+      if(maxLiveTime < 0) maxLiveTime = DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED;
+    }catch(NumberFormatException nex){
+      maxAllowVersion = DOCUMENT_AUTO_DEFAULT_VERSION_MAX;
+      maxLiveTime = DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED;
+    }
+    maxLiveTime = maxLiveTime * 24 * 60 * 60 * 1000;
+  }
 
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
@@ -699,10 +729,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         newNode = duplicateItem(oldNode, parentNode, parentNode, prefixClone);
         parentNode.save();
       }
-      AutoVersionService autoVersionService = CommonsUtils.getService(AutoVersionService.class);
-      if (autoVersionService != null) {
-        autoVersionService.autoVersion(newNode);
-      }
+      autoVersion(newNode);
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
@@ -1316,5 +1343,104 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while restoring version", e);
     }
     return versionFileNode;
+  }
+
+  private Version autoVersion(Node nodeVersioning) throws Exception {
+    if (!nodeVersioning.isNodeType(NT_FILE) && !nodeVersioning.isNodeType(WEB_CONTENT)) {
+      return null;
+    }
+    if (!nodeVersioning.isNodeType(MIX_VERSIONABLE)) {
+      if (nodeVersioning.canAddMixin(MIX_VERSIONABLE)) {
+        nodeVersioning.addMixin(MIX_VERSIONABLE);
+        nodeVersioning.save();
+      }
+      return null;
+    }
+    Version version = null;
+    if (!nodeVersioning.isCheckedOut()) {
+      nodeVersioning.checkout();
+      version = nodeVersioning.getBaseVersion();
+    } else {
+      version = nodeVersioning.checkin();
+      nodeVersioning.checkout();
+    }
+
+    // check if mixin mix:versionDisplayName is added then,
+    // update max version after add new version (increment by 1)
+    if (version != null && nodeVersioning.isNodeType(MIX_DISPLAY_VERSION_NAME)) {
+      int maxVersion = 0;
+      if (nodeVersioning.hasProperty(MAX_VERSION_PROPERTY)) {
+        // Get old max version ID
+        maxVersion = (int) nodeVersioning.getProperty(MAX_VERSION_PROPERTY).getLong();
+        // Update max version IX (maxVersion+1)
+        nodeVersioning.setProperty(MAX_VERSION_PROPERTY, maxVersion + 1);
+      }
+      // add a new entry to store the display version for the new added version
+      // (jcrID, maxVersion)
+      String newRef = version.getName() + VERSION_SEPARATOR + maxVersion;
+      List<Value> newValues = new ArrayList<Value>();
+      Value[] values;
+      if (nodeVersioning.hasProperty(LIST_VERSION_PROPERTY)) {
+        values = nodeVersioning.getProperty(LIST_VERSION_PROPERTY).getValues();
+        newValues.addAll(Arrays.<Value> asList(values));
+      }
+      Value value2add = nodeVersioning.getSession().getValueFactory().createValue(newRef);
+      newValues.add(value2add);
+      // Update the list version entries
+      nodeVersioning.setProperty(LIST_VERSION_PROPERTY, newValues.toArray(new Value[newValues.size()]));
+      nodeVersioning.save();
+    }
+
+    if (maxAllowVersion != DOCUMENT_AUTO_DEFAULT_VERSION_MAX || maxLiveTime != DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED) {
+      removeRedundant(nodeVersioning);
+    }
+    nodeVersioning.save();
+
+    VersionHistory versionHistory = nodeVersioning.getVersionHistory();
+    String[] oldVersionLabels = versionHistory.getVersionLabels(versionHistory.getRootVersion());
+    if (oldVersionLabels != null) {
+      for (String oldVersionLabel : oldVersionLabels) {
+        versionHistory.addVersionLabel(version.getName(), oldVersionLabel, true);
+        nodeVersioning.save();
+      }
+    }
+    return version;
+  }
+
+  /**
+   * Remove redundant version - Remove versions has been expired - Remove versions
+   * over max allow
+   * 
+   * @param nodeVersioning
+   * @throws Exception
+   */
+  private static void removeRedundant(Node nodeVersioning) throws Exception {
+    VersionHistory versionHistory = nodeVersioning.getVersionHistory();
+    String baseVersion = nodeVersioning.getBaseVersion().getName();
+    String rootVersion = nodeVersioning.getVersionHistory().getRootVersion().getName();
+    VersionIterator versions = versionHistory.getAllVersions();
+    Date currentDate = new Date();
+    Map<String, String> lstVersions = new HashMap<String, String>();
+    List<String> lstVersionTime = new ArrayList<String>();
+    while (versions.hasNext()) {
+      Version version = versions.nextVersion();
+      if (rootVersion.equals(version.getName()) || baseVersion.equals(version.getName()))
+        continue;
+
+      if (maxLiveTime != DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED
+          && currentDate.getTime() - version.getCreated().getTime().getTime() > maxLiveTime) {
+        versionHistory.removeVersion(version.getName());
+      } else {
+        lstVersions.put(String.valueOf(version.getCreated().getTimeInMillis()), version.getName());
+        lstVersionTime.add(String.valueOf(version.getCreated().getTimeInMillis()));
+      }
+    }
+    if (maxAllowVersion <= lstVersionTime.size() && maxAllowVersion != DOCUMENT_AUTO_DEFAULT_VERSION_MAX) {
+      Collections.sort(lstVersionTime);
+      String[] lsts = lstVersionTime.toArray(new String[lstVersionTime.size()]);
+      for (int j = 0; j <= lsts.length - maxAllowVersion; j++) {
+        versionHistory.removeVersion(lstVersions.get(lsts[j]));
+      }
+    }
   }
 }

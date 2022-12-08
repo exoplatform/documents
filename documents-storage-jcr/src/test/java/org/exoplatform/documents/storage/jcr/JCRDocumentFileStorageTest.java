@@ -7,7 +7,6 @@ import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnect
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
-import org.exoplatform.services.cms.documents.AutoVersionService;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
@@ -81,8 +80,6 @@ public class JCRDocumentFileStorageTest {
   @Mock
   private ActivityManager                activityManager;
 
-  @Mock
-  private AutoVersionService             autoVersionService;
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
@@ -189,10 +186,8 @@ public class JCRDocumentFileStorageTest {
     when(currentNode.addNode("copy of test","nt:file")).thenReturn(currentNode);
     when(identity.getRemoteId()).thenReturn("username");
     when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
-    when(CommonsUtils.getService(AutoVersionService.class)).thenReturn(autoVersionService);
     jcrDocumentFileStorage.duplicateDocument(1L,"1","copy of",userID);
     verify(sessionProvider, times(1)).close();
-    verify(autoVersionService, times(1)).autoVersion(any(Node.class));
   }
   
   @Test
