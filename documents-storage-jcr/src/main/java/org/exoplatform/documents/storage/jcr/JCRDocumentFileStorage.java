@@ -1368,17 +1368,17 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     // check if mixin mix:versionDisplayName is added then,
     // update max version after add new version (increment by 1)
     if (version != null && nodeVersioning.isNodeType(MIX_DISPLAY_VERSION_NAME)) {
-      int maxVersion = 0;
+      long maxVersion = 0;
       if (nodeVersioning.hasProperty(MAX_VERSION_PROPERTY)) {
         // Get old max version ID
-        maxVersion = (int) nodeVersioning.getProperty(MAX_VERSION_PROPERTY).getLong();
+        maxVersion = nodeVersioning.getProperty(MAX_VERSION_PROPERTY).getLong();
         // Update max version IX (maxVersion+1)
         nodeVersioning.setProperty(MAX_VERSION_PROPERTY, maxVersion + 1);
       }
       // add a new entry to store the display version for the new added version
       // (jcrID, maxVersion)
       String newRef = version.getName() + VERSION_SEPARATOR + maxVersion;
-      List<Value> newValues = new ArrayList<Value>();
+      List<Value> newValues = new ArrayList<>();
       Value[] values;
       if (nodeVersioning.hasProperty(LIST_VERSION_PROPERTY)) {
         values = nodeVersioning.getProperty(LIST_VERSION_PROPERTY).getValues();
@@ -1398,7 +1398,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
     VersionHistory versionHistory = nodeVersioning.getVersionHistory();
     String[] oldVersionLabels = versionHistory.getVersionLabels(versionHistory.getRootVersion());
-    if (oldVersionLabels != null) {
+    if (oldVersionLabels != null && version != null) {
       for (String oldVersionLabel : oldVersionLabels) {
         versionHistory.addVersionLabel(version.getName(), oldVersionLabel, true);
         nodeVersioning.save();
@@ -1414,14 +1414,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @param nodeVersioning
    * @throws Exception
    */
-  private static void removeRedundant(Node nodeVersioning) throws Exception {
+  private static void removeRedundant(Node nodeVersioning) throws RepositoryException {
     VersionHistory versionHistory = nodeVersioning.getVersionHistory();
     String baseVersion = nodeVersioning.getBaseVersion().getName();
     String rootVersion = nodeVersioning.getVersionHistory().getRootVersion().getName();
     VersionIterator versions = versionHistory.getAllVersions();
     Date currentDate = new Date();
-    Map<String, String> lstVersions = new HashMap<String, String>();
-    List<String> lstVersionTime = new ArrayList<String>();
+    Map<String, String> lstVersions = new HashMap<>();
+    List<String> lstVersionTime = new ArrayList<>();
     while (versions.hasNext()) {
       Version version = versions.nextVersion();
       if (rootVersion.equals(version.getName()) || baseVersion.equals(version.getName()))
