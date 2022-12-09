@@ -54,6 +54,7 @@ import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.jcr.util.Text;
@@ -729,7 +730,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         newNode = duplicateItem(oldNode, parentNode, parentNode, prefixClone);
         parentNode.save();
       }
-      autoVersion(newNode);
+      VersionHistoryUtils.createVersion(newNode);
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
@@ -1343,104 +1344,5 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while restoring version", e);
     }
     return versionFileNode;
-  }
-
-  private Version autoVersion(Node nodeVersioning) throws Exception {
-    if (!nodeVersioning.isNodeType(NT_FILE) && !nodeVersioning.isNodeType(WEB_CONTENT)) {
-      return null;
-    }
-    if (!nodeVersioning.isNodeType(MIX_VERSIONABLE)) {
-      if (nodeVersioning.canAddMixin(MIX_VERSIONABLE)) {
-        nodeVersioning.addMixin(MIX_VERSIONABLE);
-        nodeVersioning.save();
-      }
-      return null;
-    }
-    Version version = null;
-    if (!nodeVersioning.isCheckedOut()) {
-      nodeVersioning.checkout();
-      version = nodeVersioning.getBaseVersion();
-    } else {
-      version = nodeVersioning.checkin();
-      nodeVersioning.checkout();
-    }
-
-    // check if mixin mix:versionDisplayName is added then,
-    // update max version after add new version (increment by 1)
-    if (version != null && nodeVersioning.isNodeType(MIX_DISPLAY_VERSION_NAME)) {
-      long maxVersion = 0;
-      if (nodeVersioning.hasProperty(MAX_VERSION_PROPERTY)) {
-        // Get old max version ID
-        maxVersion = nodeVersioning.getProperty(MAX_VERSION_PROPERTY).getLong();
-        // Update max version IX (maxVersion+1)
-        nodeVersioning.setProperty(MAX_VERSION_PROPERTY, maxVersion + 1);
-      }
-      // add a new entry to store the display version for the new added version
-      // (jcrID, maxVersion)
-      String newRef = version.getName() + VERSION_SEPARATOR + maxVersion;
-      List<Value> newValues = new ArrayList<>();
-      Value[] values;
-      if (nodeVersioning.hasProperty(LIST_VERSION_PROPERTY)) {
-        values = nodeVersioning.getProperty(LIST_VERSION_PROPERTY).getValues();
-        newValues.addAll(Arrays.<Value> asList(values));
-      }
-      Value value2add = nodeVersioning.getSession().getValueFactory().createValue(newRef);
-      newValues.add(value2add);
-      // Update the list version entries
-      nodeVersioning.setProperty(LIST_VERSION_PROPERTY, newValues.toArray(new Value[newValues.size()]));
-      nodeVersioning.save();
-    }
-
-    if (maxAllowVersion != DOCUMENT_AUTO_DEFAULT_VERSION_MAX || maxLiveTime != DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED) {
-      removeRedundant(nodeVersioning);
-    }
-    nodeVersioning.save();
-
-    VersionHistory versionHistory = nodeVersioning.getVersionHistory();
-    String[] oldVersionLabels = versionHistory.getVersionLabels(versionHistory.getRootVersion());
-    if (oldVersionLabels != null && version != null) {
-      for (String oldVersionLabel : oldVersionLabels) {
-        versionHistory.addVersionLabel(version.getName(), oldVersionLabel, true);
-        nodeVersioning.save();
-      }
-    }
-    return version;
-  }
-
-  /**
-   * Remove redundant version - Remove versions has been expired - Remove versions
-   * over max allow
-   * 
-   * @param nodeVersioning
-   * @throws Exception
-   */
-  private static void removeRedundant(Node nodeVersioning) throws RepositoryException {
-    VersionHistory versionHistory = nodeVersioning.getVersionHistory();
-    String baseVersion = nodeVersioning.getBaseVersion().getName();
-    String rootVersion = nodeVersioning.getVersionHistory().getRootVersion().getName();
-    VersionIterator versions = versionHistory.getAllVersions();
-    Date currentDate = new Date();
-    Map<String, String> lstVersions = new HashMap<>();
-    List<String> lstVersionTime = new ArrayList<>();
-    while (versions.hasNext()) {
-      Version version = versions.nextVersion();
-      if (rootVersion.equals(version.getName()) || baseVersion.equals(version.getName()))
-        continue;
-
-      if (maxLiveTime != DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED
-          && currentDate.getTime() - version.getCreated().getTime().getTime() > maxLiveTime) {
-        versionHistory.removeVersion(version.getName());
-      } else {
-        lstVersions.put(String.valueOf(version.getCreated().getTimeInMillis()), version.getName());
-        lstVersionTime.add(String.valueOf(version.getCreated().getTimeInMillis()));
-      }
-    }
-    if (maxAllowVersion <= lstVersionTime.size() && maxAllowVersion != DOCUMENT_AUTO_DEFAULT_VERSION_MAX) {
-      Collections.sort(lstVersionTime);
-      String[] lsts = lstVersionTime.toArray(new String[lstVersionTime.size()]);
-      for (int j = 0; j <= lsts.length - maxAllowVersion; j++) {
-        versionHistory.removeVersion(lstVersions.get(lsts[j]));
-      }
-    }
   }
 }
