@@ -7,7 +7,6 @@ import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnect
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
-import org.exoplatform.services.cms.documents.AutoVersionService;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
@@ -15,6 +14,7 @@ import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.listener.ListenerService;
@@ -54,7 +54,7 @@ import static org.mockito.Mockito.verify;
 import static org.powermock.api.mockito.PowerMockito.*;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({ Utils.class, SessionProvider.class, JCRDocumentsUtil.class, CommonsUtils.class })
+@PrepareForTest({ Utils.class, SessionProvider.class, JCRDocumentsUtil.class, CommonsUtils.class , VersionHistoryUtils.class })
 public class JCRDocumentFileStorageTest {
 
   @Mock
@@ -81,8 +81,6 @@ public class JCRDocumentFileStorageTest {
   @Mock
   private ActivityManager                activityManager;
 
-  @Mock
-  private AutoVersionService             autoVersionService;
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
@@ -100,6 +98,7 @@ public class JCRDocumentFileStorageTest {
     PowerMockito.mockStatic(SessionProvider.class);
     PowerMockito.mockStatic(JCRDocumentsUtil.class);
     PowerMockito.mockStatic(CommonsUtils.class);
+    PowerMockito.mockStatic(VersionHistoryUtils.class);
   }
 
   @Test
@@ -189,10 +188,10 @@ public class JCRDocumentFileStorageTest {
     when(currentNode.addNode("copy of test","nt:file")).thenReturn(currentNode);
     when(identity.getRemoteId()).thenReturn("username");
     when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
-    when(CommonsUtils.getService(AutoVersionService.class)).thenReturn(autoVersionService);
     jcrDocumentFileStorage.duplicateDocument(1L,"1","copy of",userID);
     verify(sessionProvider, times(1)).close();
-    verify(autoVersionService, times(1)).autoVersion(any(Node.class));
+    PowerMockito.verifyStatic(VersionHistoryUtils.class, Mockito.times(1));
+    VersionHistoryUtils.createVersion(any(Node.class));
   }
   
   @Test
