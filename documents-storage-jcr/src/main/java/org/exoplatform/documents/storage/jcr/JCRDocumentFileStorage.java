@@ -45,7 +45,6 @@ import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnect
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
-import org.exoplatform.services.cms.documents.AutoVersionService;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -53,6 +52,7 @@ import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.jcr.util.Text;
@@ -108,8 +108,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final String                  ADD_TAG_DOCUMENT             = "add_tag_document";
 
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
-
-
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -699,10 +697,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         newNode = duplicateItem(oldNode, parentNode, parentNode, prefixClone);
         parentNode.save();
       }
-      AutoVersionService autoVersionService = CommonsUtils.getService(AutoVersionService.class);
-      if (autoVersionService != null) {
-        autoVersionService.autoVersion(newNode);
-      }
+      VersionHistoryUtils.createVersion(newNode);
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
