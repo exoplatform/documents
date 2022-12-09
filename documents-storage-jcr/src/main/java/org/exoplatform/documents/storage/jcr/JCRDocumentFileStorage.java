@@ -17,7 +17,6 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -30,7 +29,6 @@ import javax.jcr.*;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
-import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
 import org.apache.commons.lang.math.NumberUtils;
@@ -110,37 +108,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final String                  ADD_TAG_DOCUMENT             = "add_tag_document";
 
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
-
-
-  public static final String WEB_CONTENT      = "exo:webContent";
-
-  public static  final String MIX_DISPLAY_VERSION_NAME = "mix:versionDisplayName";
-
-  public static  final String MAX_VERSION_PROPERTY = "exo:maxVersion";
-
-  public static  final String VERSION_SEPARATOR = ":";
-
-  public static  final String LIST_VERSION_PROPERTY = "exo:versionList";
-  private static int maxAllowVersion;
-  private static long maxLiveTime;
-  private static String maxAllowVersionProp   = "jcr.documents.versions.max";
-  private static String expirationTimeProp    = "jcr.documents.versions.expiration";
-  private static final int DOCUMENT_AUTO_DEFAULT_VERSION_MAX = 0;
-  private static final int DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED = 0;
-  static {
-    try {
-      maxAllowVersion = Integer.parseInt(System.getProperty(maxAllowVersionProp));
-      maxLiveTime = Integer.parseInt(System.getProperty(expirationTimeProp));
-      //ignore invalid input config
-      if(maxAllowVersion < 0) maxAllowVersion = DOCUMENT_AUTO_DEFAULT_VERSION_MAX;
-      if(maxLiveTime < 0) maxLiveTime = DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED;
-    }catch(NumberFormatException nex){
-      maxAllowVersion = DOCUMENT_AUTO_DEFAULT_VERSION_MAX;
-      maxLiveTime = DOCUMENT_AUTO_DEFAULT_VERSION_EXPIRED;
-    }
-    maxLiveTime = maxLiveTime * 24 * 60 * 60 * 1000;
-  }
-
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
