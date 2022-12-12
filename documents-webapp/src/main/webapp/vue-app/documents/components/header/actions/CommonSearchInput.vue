@@ -1,44 +1,44 @@
-/*
- * Copyright (C) 2022 eXo Platform SAS.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License
- * as published by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <gnu.org/licenses>.
- */
-
 <template>
   <div>
-    <v-icon
-      size="16"
-      class="inputDocumentsFilter text-sub-title pa-1 my-auto mt-2"
-      v-show="isMobile && !showMobileFilter"
-      @click="mobileFilter()">
-      fas fa-filter
-    </v-icon>
-    <v-text-field
-      v-model="query"
-      ref="inputQuery"
-      :placeholder="$t('documents.label.filterDocuments')"
-      v-show="isMobile && showMobileFilter || !isMobile"
-      :append-icon="appendIcon"
-      prepend-inner-icon="fa-filter"
-      class="inputDocumentsFilter pa-1 my-auto width-full"
-      @click:append="cancelSearch" />
+    <div>
+      <v-icon
+        size="16"
+        class="inputDocumentsFilter text-sub-title pa-1 my-auto mt-2"
+        v-show="isMobile && !showMobileFilter"
+        @click="mobileFilter()">
+        fas fa-filter
+      </v-icon>
+      <v-text-field
+        v-model="query"
+        ref="inputQuery"
+        :placeholder="$t('documents.label.filterDocuments')"
+        v-show="isMobile && showMobileFilter || !isMobile"
+        :append-icon="appendIcon"
+        prepend-inner-icon="fa-filter"
+        class="inputDocumentsFilter pa-1 my-auto width-full"
+        @click:append="cancelSearch" />
+    </div>
+    <div
+      class="extendFilterButton"
+      v-show="showExtend"
+      @click="extendFilter()">
+      <v-icon
+        size="24"
+        class="extendIcon">
+        mdi-file-search
+      </v-icon>
+      <span> {{ extendFilterMessage }}</span>
+    </div>
   </div>
 </template>
 <script>
 export default {
   props: {
     query: {
+      type: String,
+      default: null,
+    },
+    extendFilterMessage: {
       type: String,
       default: null,
     },
@@ -49,6 +49,7 @@ export default {
     startTypingKeywordTimeout: 0,
     loading: false,
     showMobileFilter: false,
+    showExtend: false,
   }),
   computed: {
     isMobile() {
@@ -62,8 +63,11 @@ export default {
     query() {
       if (!this.query) {
         this.loading = false;
+        this.showExtend = false;
         this.$emit('filterQuery', this.query);
         return;
+      } else {
+        this.showExtend = true;
       }
       this.startTypingKeywordTimeout = Date.now();
       if (!this.loading) {
@@ -79,6 +83,13 @@ export default {
       }
       this.query = query;
       this.$emit('filterQuery', this.query);
+      if (this.query) {
+        this.showExtend = true;
+      }
+    },
+    extendFilter(){
+      this.$emit('extendFilter', this.query);
+      this.showExtend = false;
     },
     mobileFilter(){
       this.showMobileFilter = !this.showMobileFilter;
@@ -97,6 +108,9 @@ export default {
         if (Date.now() - this.startTypingKeywordTimeout > this.startSearchAfterInMilliseconds) {
           this.loading = false;
           this.$emit('filterQuery', this.query);
+          if (this.query) {
+            this.showExtend = true;
+          }
         } else {
           this.waitForEndTyping();
         }
