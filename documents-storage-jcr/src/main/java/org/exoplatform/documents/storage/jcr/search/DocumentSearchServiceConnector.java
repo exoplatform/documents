@@ -19,6 +19,8 @@ package org.exoplatform.documents.storage.jcr.search;
 import java.io.InputStream;
 import java.text.Normalizer;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.commons.collections.CollectionUtils;
@@ -55,7 +57,6 @@ public class DocumentSearchServiceConnector {
   public static final String           SEARCH_QUERY_TERM            = "\"must\":{"
           + "    \"query_string\":{"
           + "    \"fields\": [\"title\"],"
-          + "    \"default_operator\":\"AND\","
           + "    \"query\": \"*@term@*\""
           + "  }"
           + "},";
@@ -302,12 +303,19 @@ public class DocumentSearchServiceConnector {
     return (String) hitSource.get("title");
   }
 
+  protected String escapeReservedCharacters(String query) {
+    return StringUtils.isNotEmpty(query) ? query.replaceAll("[" + Pattern.quote("+-=&|><!(){}\\[\\]^\"*?:\\/") + "]",
+                                                            Matcher.quoteReplacement("\\\\") + "$0")
+                                         : query;
+  }
   private String buildSimpleTermQueryStatement(String term) {
     if (StringUtils.isBlank(term)) {
       return term;
     }
-    term = removeSpecialCharacters(term);
-    return SEARCH_QUERY_TERM.replace("@term@", term);
+    term = escapeReservedCharacters(term);
+    List<String> queryParts = Arrays.asList(term.split(" "));
+    String escapedQueryWithAndOperator = StringUtils.join(queryParts, "* AND *");
+    return SEARCH_QUERY_TERM.replace("@term@", escapedQueryWithAndOperator);
   }
 
   private String retrieveSearchQuery() {
@@ -320,12 +328,6 @@ public class DocumentSearchServiceConnector {
       }
     }
     return this.searchQuery;
-  }
-
-  private String removeSpecialCharacters(String string) {
-    string = Normalizer.normalize(string, Normalizer.Form.NFD);
-    string = string.replaceAll("[\\p{InCombiningDiacriticalMarks}]", "").replaceAll("'", " ");
-    return string;
   }
 
   private String buildFavoriteQueryStatement(List<String> values) {
