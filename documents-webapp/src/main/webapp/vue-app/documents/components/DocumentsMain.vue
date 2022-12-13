@@ -541,6 +541,7 @@ export default {
           });
           if (filter.query){
             this.$root.$emit('filer-query',filter.query);
+            this.simpleSearchStatistics();
           }
         })
         .finally(() => this.loading = false);
@@ -658,6 +659,24 @@ export default {
             documentType: 'exo:symlink',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
+
+    simpleSearchStatistics() {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionSimpleSearch',
+          operation: 'simpleSearch',
+          parameters: {
+            spaceId: eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
           },
           timestamp: Date.now()
