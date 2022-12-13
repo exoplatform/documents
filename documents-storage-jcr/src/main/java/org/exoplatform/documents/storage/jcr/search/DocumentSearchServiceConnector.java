@@ -17,7 +17,6 @@
 package org.exoplatform.documents.storage.jcr.search;
 
 import java.io.InputStream;
-import java.text.Normalizer;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,6 +59,12 @@ public class DocumentSearchServiceConnector {
           + "    \"query\": \"*@term@*\""
           + "  }"
           + "},";
+
+  public static final String           EXTENDED_SEARCH_QUERY_TERM   = "\"must\":{"
+          + "    \"query_string\":{"
+          + "    \"fields\": [\"title\",\"attachment.content\",\"dc:description\"],"
+          + "    \"query\": \"*@term@*\""
+          + "  }" + "},";
 
   private final ConfigurationManager   configurationManager;
 
@@ -135,7 +140,7 @@ public class DocumentSearchServiceConnector {
                                               buildMetadatasFilter(filter,
                                                                    identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME,
                                                                                                        userIdentity.getUserId()));
-    String termQuery = buildSimpleTermQueryStatement(filter.getQuery());
+    String termQuery = buildTermQueryStatement(filter.getQuery(), filter.isExtendedSearch());
     String favoriteQuery = buildFavoriteQueryStatement(metadataFilters.get(FavoriteService.METADATA_TYPE.getName()));
     if (StringUtils.isNotEmpty(path) && !path.endsWith("/")) {
       path += "/";
@@ -308,14 +313,18 @@ public class DocumentSearchServiceConnector {
                                                             Matcher.quoteReplacement("\\\\") + "$0")
                                          : query;
   }
-  private String buildSimpleTermQueryStatement(String term) {
+
+  private String buildTermQueryStatement(String term, boolean extendedSearch) {
     if (StringUtils.isBlank(term)) {
       return term;
     }
     term = escapeReservedCharacters(term);
     List<String> queryParts = Arrays.asList(term.split(" "));
     String escapedQueryWithAndOperator = StringUtils.join(queryParts, "* AND *");
-    return SEARCH_QUERY_TERM.replace("@term@", escapedQueryWithAndOperator);
+    if (!extendedSearch) {
+      return SEARCH_QUERY_TERM.replace("@term@", escapedQueryWithAndOperator);
+    }
+    return EXTENDED_SEARCH_QUERY_TERM.replace("@term@", escapedQueryWithAndOperator);
   }
 
   private String retrieveSearchQuery() {

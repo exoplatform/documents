@@ -27,6 +27,7 @@
           :extension="header.cellExtension"
           :file="item"
           :query="query"
+          :extendedSearch="extendedSearch"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template
@@ -82,6 +83,10 @@ export default {
     query: {
       type: String,
       default: null
+    },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
     },
     initialized: {
       type: Boolean,

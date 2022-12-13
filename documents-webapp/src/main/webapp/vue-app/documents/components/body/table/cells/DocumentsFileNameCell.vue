@@ -112,6 +112,10 @@ export default {
       type: String,
       default: null,
     },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
+    },
     extension: {
       type: Object,
       default: null,
@@ -133,7 +137,7 @@ export default {
   computed: {
     title() {
       let title = decodeURI(this.fileName);
-      if (this.query){
+      if (this.query && !this.extendedSearch){
         title = this.highlightSearchResult(title,this.query);      
       }
       return title;

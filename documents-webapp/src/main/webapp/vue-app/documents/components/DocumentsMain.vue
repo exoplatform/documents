@@ -62,6 +62,7 @@
           :initialized="initialized"
           :loading="loading"
           :query="query"
+          :extendedSearch="extendedSearch"
           :primary-filter="primaryFilter" />
         <exo-document-notification-alerts />
       </div>
@@ -113,6 +114,7 @@ export default {
     extensionApp: 'Documents',
     extensionType: 'views',
     query: null,
+    extendedSearch: false,
     fileName: null,
     userId: null,
     sortField: 'lastUpdated',
@@ -202,6 +204,7 @@ export default {
     this.$root.$on('set-current-folder', this.setCurrentFolder);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
+    this.$root.$on('document-extended-search', this.extendSearch);
     this.$root.$on('save-visibility', this.saveVisibility);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-open-attachments-drawer', this.openDrawer);
@@ -342,8 +345,12 @@ export default {
       this.refreshFiles();
     },
     search(query) {
+      this.extendedSearch = false;
       this.query = query;
-
+      this.refreshFiles();
+    },
+    extendSearch() {
+      this.extendedSearch = true;
       this.refreshFiles();
     },
     getFolderPath(path){
@@ -485,6 +492,9 @@ export default {
       }
       if (this.query) {
         filter.query = this.query;
+      }
+      if (this.extendedSearch) {
+        filter.extendedSearch = this.extendedSearch;
       }
       if (this.sortField) {
         filter.sortField = this.sortField;

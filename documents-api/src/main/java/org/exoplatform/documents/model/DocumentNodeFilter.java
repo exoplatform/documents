@@ -27,6 +27,8 @@ public abstract class DocumentNodeFilter {
 
   private String            query;
 
+  private boolean            extendedSearch;
+
   private DocumentSortField sortField;
 
   private boolean           ascending;
