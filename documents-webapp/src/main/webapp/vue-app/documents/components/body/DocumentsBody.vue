@@ -55,6 +55,10 @@ export default {
       type: String,
       default: null,
     },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
+    },
     primaryFilter: {
       type: String,
       default: null,
@@ -73,6 +77,7 @@ export default {
         offset: this.offset,
         limit: this.limit,
         query: this.query,
+        extendedSearch: this.extendedSearch,
       };
     },
   },
