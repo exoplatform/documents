@@ -676,7 +676,6 @@ export default {
           parameters: {
             documentName: file.name,
             documentType: 'exo:symlink',
-            origin: 'Portlet document',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
