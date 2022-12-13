@@ -546,7 +546,11 @@ export default {
           });
           if (filter.query){
             this.$root.$emit('filer-query',filter.query);
-            this.simpleSearchStatistics();
+            if (filter.extendedSearch){
+              this.extendedSearchStatistics();
+            } else {
+              this.simpleSearchStatistics();
+            } 
           }
         })
         .finally(() => this.loading = false);
@@ -683,6 +687,23 @@ export default {
           userName: eXo.env.portal.userName,
           name: 'actionSimpleSearch',
           operation: 'simpleSearch',
+          parameters: {
+            spaceId: eXo.env.portal.spaceId,
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
+    extendedSearchStatistics() {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionExtendedSearch',
+          operation: 'extendedSearch',
           parameters: {
             spaceId: eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
