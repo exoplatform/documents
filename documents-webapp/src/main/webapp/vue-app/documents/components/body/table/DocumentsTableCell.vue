@@ -15,6 +15,10 @@ export default {
       type: String,
       default: null,
     },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
+    },
     extension: {
       type: Object,
       default: null,
@@ -25,6 +29,7 @@ export default {
       return {
         file: this.file,
         query: this.query,
+        extendedSearch: this.extendedSearch,
         extension: this.extension,
       };
     },
