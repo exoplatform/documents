@@ -27,7 +27,8 @@
           :title="title">
           <div
             v-sanitized-html="title"
-            class="document-name text-truncate ms-4">
+            class="document-name ms-4"
+            :class="title.includes('</b>') ? '' : 'text-truncate'">
           </div>
           <div
             v-sanitized-html="fileType"
@@ -103,6 +104,7 @@
 <script>
 import ntFileExtension from '../../../../json/NtFileExtension.json';
 export default {
+
   props: {
     file: {
       type: Object,
@@ -119,7 +121,7 @@ export default {
     extension: {
       type: Object,
       default: null,
-    },
+    }
   },
   data: () => ({
     loading: false,
@@ -133,6 +135,16 @@ export default {
       hour: '2-digit',
       minute: '2-digit',
     },
+    accentMap: {
+      ae: '(ae|æ|ǽ|ǣ)',
+      a: '(a|á|ă|ắ|ặ|ằ|ẳ|ẵ|ǎ|â|ấ|ậ|ầ|ẩ|ẫ|ä|ǟ|ȧ|ǡ|ạ|ȁ|à|ả|ȃ|ā|ą|ᶏ|ẚ|å|ǻ|ḁ|ⱥ|ã)',
+      c: '(c|ć|č|ç|ḉ|ĉ|ɕ|ċ|ƈ|ȼ)',
+      e: '(e|é|ĕ|ě|ȩ|ḝ|ê|ế|ệ|ề|ể|ễ|ḙ|ë|ė|ẹ|ȅ|è|ẻ|ȇ|ē|ḗ|ḕ|ⱸ|ę|ᶒ|ɇ|ẽ|ḛ)',
+      i: '(i|í|ĭ|ǐ|î|ï|ḯ|ị|ȉ|ì|ỉ|ȋ|ī|į|ᶖ|ɨ|ĩ|ḭ)',
+      n: '(n|ń|ň|ņ|ṋ|ȵ|ṅ|ṇ|ǹ|ɲ|ṉ|ƞ|ᵰ|ᶇ|ɳ|ñ)',
+      o: '(o|ó|ŏ|ǒ|ô|ố|ộ|ồ|ổ|ỗ|ö|ȫ|ȯ|ȱ|ọ|ő|ȍ|ò|ỏ|ơ|ớ|ợ|ờ|ở|ỡ|ȏ|ō|ṓ|ṑ|ǫ|ǭ|ø|ǿ|õ|ṍ|ṏ|ȭ)',
+      u: '(u|ú|ŭ|ǔ|û|ṷ|ü|ǘ|ǚ|ǜ|ǖ|ṳ|ụ|ű|ȕ|ù|ủ|ư|ứ|ự|ừ|ử|ữ|ȗ|ū|ṻ|ų|ᶙ|ů|ũ|ṹ|ṵ)'
+    }
   }),
   computed: {
     title() {
@@ -244,12 +256,6 @@ export default {
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
-    highlightSearchResult(words, query){
-      const iQuery = new RegExp(query, 'ig');
-      return words.toString().replace(iQuery, function(matchedTxt){
-        return ( `<b>${matchedTxt}</b>`);
-      });
-    },
     editFileName(file) {
       if (this.file.id === file.id){
         this.fileToEditId = file.id;
@@ -311,7 +317,22 @@ export default {
         this.menuDisplayed = true;
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
-    }
+    },
+    escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    },
+    highlightSearchResult(str, queries) {
+      queries = queries.split(' ');
+      const accentRegex = new RegExp(Object.keys(this.accentMap).join('|'), 'g');
+      const queryRegex = new RegExp(queries.map(q => {
+        return this.escapeRegExp(q).toLowerCase().replace(accentRegex, m => {
+          return this.accentMap[m] || m;
+        });
+      }).join('|'), 'gi');
+      return str.toString().replace(queryRegex, function(matchedTxt){
+        return ( `<b>${matchedTxt}</b>`);
+      });
+    },
   }
 };
 </script>
