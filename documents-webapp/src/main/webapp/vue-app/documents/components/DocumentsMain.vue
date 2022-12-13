@@ -570,7 +570,7 @@ export default {
             file.canAdd = this.canAdd;
           });
           if (filter.query){
-            this.$root.$emit('filer-query',filter.query); 
+            this.$root.$emit('filer-query',filter.query);
           }
         })
         .finally(() => this.loading = false);
