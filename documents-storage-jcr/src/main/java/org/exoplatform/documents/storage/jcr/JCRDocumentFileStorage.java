@@ -1124,6 +1124,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } catch (ValueFormatException e) {
         node.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
       }
+      if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+        Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+        try {
+          content.setProperty(NodeTypeConstants.DC_DESCRIPTION, description);
+        } catch (ValueFormatException e) {
+          content.setProperty(NodeTypeConstants.DC_DESCRIPTION, new String[] { description });
+        }
+      }
       node.getSession().save();
       // Create tags if the description contains
       TagService tagService = CommonsUtils.getService(TagService.class);
