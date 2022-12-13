@@ -367,7 +367,7 @@ export default {
           this.canSendSearchStat = true;
         }, 2000);
       }
-      
+
     },
     extendSearch() {
       this.extendedSearch = true;
@@ -545,7 +545,7 @@ export default {
       this.limit = append ? this.limit + this.pageSize : this.pageSize ;
       this.loading = true;
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
-      
+
       return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
           files = this.sortField === 'favorite' ? files && files.sort((file1, file2) => {
@@ -570,7 +570,7 @@ export default {
             file.canAdd = this.canAdd;
           });
           if (filter.query){
-            this.$root.$emit('filer-query',filter.query); 
+            this.$root.$emit('filer-query',filter.query);
           }
         })
         .finally(() => this.loading = false);
@@ -689,7 +689,6 @@ export default {
           parameters: {
             documentName: file.name,
             documentType: 'exo:symlink',
-            origin: 'Portlet document',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
