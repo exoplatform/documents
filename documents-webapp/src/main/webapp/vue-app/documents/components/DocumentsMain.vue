@@ -676,7 +676,6 @@ export default {
           parameters: {
             documentName: file.name,
             documentType: 'exo:symlink',
-            origin: 'Portlet document',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
@@ -693,7 +692,7 @@ export default {
           subModule: 'Documents',
           userId: eXo.env.portal.userIdentityId,
           userName: eXo.env.portal.userName,
-          name: 'simpleSearch',
+          name: 'actionSimpleSearch',
           operation: 'simpleSearch',
           parameters: {
             spaceId: eXo.env.portal.spaceId,
