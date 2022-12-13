@@ -117,10 +117,13 @@ public class DocumentFileRest implements ResourceContainer {
                                    String folderPath,
                                    @Parameter(description = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.")
                                    @QueryParam("listingType")
-                                   FileListingType listingType,
+                                     FileListingType listingType,
                                    @Parameter(description = "Search query entered by the user")
-                                   @QueryParam("query")
-                                   String query,
+                                     @QueryParam("query")
+                                     String query,
+                                   @Parameter(description = "extendedSearch")
+                                     @QueryParam("extendedSearch")
+                                     boolean extendedSearch,
                                    @Parameter(description = "userId")
                                    @QueryParam("userId")
                                    String userId,
@@ -160,6 +163,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                                      ownerId,
                                                                                                      symlinkFolderId);
       filter.setQuery(query);
+      filter.setExtendedSearch(extendedSearch);
       filter.setFavorites(favorites);
       filter.setUserId(userId);
       filter.setAscending(ascending);
