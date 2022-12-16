@@ -124,6 +124,7 @@ export default {
     initialized: false,
     loading: false,
     hasMore: false,
+    canSendSearchStat: true,
     viewExtensions: {},
     currentFolderPath: '',
     currentFolder: null,
@@ -544,7 +545,13 @@ export default {
             if (filter.extendedSearch){
               this.extendedSearchStatistics();
             } else {
-              this.simpleSearchStatistics();
+              if (this.canSendSearchStat) {
+                this.canSendSearchStat = false;
+                window.setTimeout(() => {
+                  this.simpleSearchStatistics();
+                  this.canSendSearchStat = true;
+                }, 2000);
+              }             
             } 
           }
         })
@@ -661,6 +668,7 @@ export default {
           parameters: {
             documentName: file.name,
             documentType: 'exo:symlink',
+            origin: 'Portlet document',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
@@ -677,10 +685,11 @@ export default {
           subModule: 'Documents',
           userId: eXo.env.portal.userIdentityId,
           userName: eXo.env.portal.userName,
-          name: 'actionSimpleSearch',
+          name: 'simpleSearch',
           operation: 'simpleSearch',
           parameters: {
             spaceId: eXo.env.portal.spaceId,
+            origin: 'Portlet document',
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
           },
           timestamp: Date.now()
