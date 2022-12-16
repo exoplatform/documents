@@ -715,6 +715,7 @@ export default {
           operation: 'extendedSearch',
           parameters: {
             spaceId: eXo.env.portal.spaceId,
+            origin: 'Portlet document',
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
           },
           timestamp: Date.now()
