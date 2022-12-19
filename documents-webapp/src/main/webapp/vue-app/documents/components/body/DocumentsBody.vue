@@ -5,6 +5,17 @@
       :component="viewExtension"
       :params="params"
       :element="div" />
+    <div
+      class="extendFilterButton"
+      v-show="showExtend && extendedSearchEnabled"
+      @click="extendFilter()">
+      <v-icon
+        size="24"
+        class="extendIcon">
+        mdi-file-search
+      </v-icon>
+      <span> {{ $t('documents.message.extendedSearch') }}</span>
+    </div>
   </div>
 </template>
 
@@ -64,6 +75,9 @@ export default {
       default: null,
     },
   },
+  data: () => ({
+    showExtend: false,
+  }),
   computed: {
     params() {
       return {
@@ -80,6 +94,25 @@ export default {
         extendedSearch: this.extendedSearch,
       };
     },
+    extendedSearchEnabled() {
+      return eXo.env.portal.extendedSearchEnabled;
+    }
   },
+  created() {
+    this.$root.$on('enable-extend-filter', this.enableExtendFilter);
+    this.$root.$on('disable-extend-filter', this.disableExtendFilter);
+  },
+  methods: {
+    enableExtendFilter(){
+      this.showExtend = true;
+    },
+    disableExtendFilter(){
+      this.showExtend = false;
+    },
+    extendFilter(){
+      this.$root.$emit('document-extended-search');
+      this.showExtend = false;
+    },
+  }
 };
 </script>

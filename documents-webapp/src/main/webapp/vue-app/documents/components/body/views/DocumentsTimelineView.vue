@@ -26,7 +26,7 @@
           :extension="header.cellExtension"
           :file="item"
           :query="query"
-          :extendedSearch="extendedSearch"
+          :extended-search="extendedSearch"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template

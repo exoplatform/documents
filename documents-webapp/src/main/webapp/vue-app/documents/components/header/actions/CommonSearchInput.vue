@@ -18,17 +18,6 @@
         class="inputDocumentsFilter pa-1 my-auto width-full"
         @click:append="cancelSearch" />
     </div>
-    <div
-      class="extendFilterButton"
-      v-show="showExtend"
-      @click="extendFilter()">
-      <v-icon
-        size="24"
-        class="extendIcon">
-        mdi-file-search
-      </v-icon>
-      <span> {{ extendFilterMessage }}</span>
-    </div>
   </div>
 </template>
 <script>
@@ -37,11 +26,7 @@ export default {
     query: {
       type: String,
       default: null,
-    },
-    extendFilterMessage: {
-      type: String,
-      default: null,
-    },
+    }
   },
   data: () => ({
     startSearchAfterInMilliseconds: 600,
@@ -49,7 +34,6 @@ export default {
     startTypingKeywordTimeout: 0,
     loading: false,
     showMobileFilter: false,
-    showExtend: false,
   }),
   computed: {
     isMobile() {
@@ -66,8 +50,6 @@ export default {
         this.showExtend = false;
         this.$emit('filterQuery', this.query);
         return;
-      } else {
-        this.showExtend = true;
       }
       this.startTypingKeywordTimeout = Date.now();
       if (!this.loading) {
@@ -83,13 +65,6 @@ export default {
       }
       this.query = query;
       this.$emit('filterQuery', this.query);
-      if (this.query) {
-        this.showExtend = true;
-      }
-    },
-    extendFilter(){
-      this.$emit('extendFilter', this.query);
-      this.showExtend = false;
     },
     mobileFilter(){
       this.showMobileFilter = !this.showMobileFilter;

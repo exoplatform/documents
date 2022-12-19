@@ -3,9 +3,7 @@
     <common-search-input
       ref="commonInput"
       :query="query"
-      :extend-filter-message="$t('documents.message.extendedSearch')"
       @filterQuery="filterQuery"
-      @extendFilter="extendFilter"
       @cancelSearch="cancelSearch" />
   </div>
 </template>
@@ -26,9 +24,6 @@ export default {
       }
       this.query = query;
       this.$root.$emit('document-search', this.query);
-    },
-    extendFilter(){
-      this.$root.$emit('document-extended-search', this.query);
     },
     cancelSearch(){
       this.query = null;
