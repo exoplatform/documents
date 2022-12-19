@@ -6,5 +6,5 @@
   def userName = rcontext.getRemoteUser();
 %>
 <script type="text/javascript" id="documentsHeadScripts">
-
+    eXo.env.portal.extendedSearchEnabled = <%=featureService.isFeatureActiveForUser("ExtendedSearch", userName)%>;
 </script>
