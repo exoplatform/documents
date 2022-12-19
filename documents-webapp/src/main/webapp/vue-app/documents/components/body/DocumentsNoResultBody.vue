@@ -21,6 +21,17 @@
         </p>
       </div>
     </div>
+    <div
+      class="extendFilterButton"
+      v-show="showExtend && extendedSearchEnabled"
+      @click="extendFilter()">
+      <v-icon
+        size="24"
+        class="extendIcon">
+        mdi-file-search
+      </v-icon>
+      <span> {{ $t('documents.message.extendedSearch') }}</span>
+    </div>
   </div>
 </template>
 
@@ -34,6 +45,28 @@ export default {
   },
   data: () => ({
     emptyDocs: '/documents-portlet/images/docs.png',
+    showExtend: false,
   }),
+  created() {
+    this.$root.$on('enable-extend-filter', this.enableExtendFilter);
+    this.$root.$on('disable-extend-filter', this.disableExtendFilter);
+  },
+  computed: {
+    extendedSearchEnabled() {
+      return eXo.env.portal.extendedSearchEnabled;
+    }
+  },
+  methods: {
+    enableExtendFilter(){
+      this.showExtend = true;
+    },
+    disableExtendFilter(){
+      this.showExtend = false;
+    },
+    extendFilter(){
+      this.$root.$emit('document-extended-search');
+      this.showExtend = false;
+    },
+  }
 };
 </script>
