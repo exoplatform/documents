@@ -62,7 +62,7 @@
           :initialized="initialized"
           :loading="loading"
           :query="query"
-          :extendedSearch="extendedSearch"
+          :extended-search="extendedSearch"
           :primary-filter="primaryFilter" />
         <exo-document-notification-alerts />
       </div>
@@ -349,6 +349,13 @@ export default {
       this.extendedSearch = false;
       this.query = query;
       this.refreshFiles();
+      if (query && query.length>0){
+        this.$root.$emit('enable-extend-filter');
+      } else {
+        this.$root.$emit('disable-extend-filter');
+      }
+      
+
     },
     extendSearch() {
       this.extendedSearch = true;
