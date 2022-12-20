@@ -624,7 +624,12 @@ export default {
       this.$documentFileService.createShortcut(file.id,destPath)
         .then(() => {
           this.createShortcutStatistics(file,space);
-          this.openFolder(destFolder);
+          if (space && space.groupId) {
+            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
+            window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+          } else {
+            this.openFolder(destFolder);
+          }
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
