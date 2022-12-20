@@ -35,7 +35,7 @@
                 <v-icon 
                   v-if="documents.symlink"
                   size="10"
-                  class="pe-1 iconStyle pb-1">
+                  class="pe-1 iconStyle">
                   mdi-link-variant
                 </v-icon>
             </v-btn>
@@ -45,7 +45,7 @@
                   <v-icon 
                   v-if="documents.symlink"
                   size="10"
-                  class="pe-1 iconStyle pb-1">
+                  class="pe-1 iconStyle">
                   mdi-link-variant
                 </v-icon>
           </span>
