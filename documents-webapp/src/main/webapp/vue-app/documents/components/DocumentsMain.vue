@@ -209,6 +209,7 @@ export default {
     this.$root.$on('save-visibility', this.saveVisibility);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-open-attachments-drawer', this.openDrawer);
+    this.$root.$on('set-loading', this.setLoading);
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
       this.refreshFiles(this.primaryFilter);
@@ -265,6 +266,9 @@ export default {
         this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.summary.added.error')});
         this.$root.$emit('version-description-update-error', version);
       });
+    },
+    setLoading(loading) {
+      this.loading = loading;
     },
     versionsDrawerClosed() {
       this.versions = [];
@@ -346,6 +350,7 @@ export default {
       this.refreshFiles();
     },
     search(query) {
+      const oldQuery = this.query;
       this.extendedSearch = false;
       this.query = query;
       this.refreshFiles();
@@ -354,12 +359,19 @@ export default {
       } else {
         this.$root.$emit('disable-extend-filter');
       }
+      if (this.canSendSearchStat && oldQuery !== query) {
+        this.canSendSearchStat = false;
+        window.setTimeout(() => {
+          this.simpleSearchStatistics();
+          this.canSendSearchStat = true;
+        }, 2000);
+      }
       
-
     },
     extendSearch() {
       this.extendedSearch = true;
       this.refreshFiles();
+      this.extendedSearchStatistics();
     },
     getFolderPath(path){
       if (!path){
@@ -553,18 +565,7 @@ export default {
             file.canAdd = this.canAdd;
           });
           if (filter.query){
-            this.$root.$emit('filer-query',filter.query);
-            if (filter.extendedSearch){
-              this.extendedSearchStatistics();
-            } else {
-              if (this.canSendSearchStat) {
-                this.canSendSearchStat = false;
-                window.setTimeout(() => {
-                  this.simpleSearchStatistics();
-                  this.canSendSearchStat = true;
-                }, 2000);
-              }             
-            } 
+            this.$root.$emit('filer-query',filter.query); 
           }
         })
         .finally(() => this.loading = false);
