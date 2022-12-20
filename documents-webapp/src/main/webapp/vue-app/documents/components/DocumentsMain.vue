@@ -430,10 +430,6 @@ export default {
         }
       }
     },
-    openCreatedSpaceShortcut(parentFolder, space){
-      const folderPath = parentFolder?.path.split('/Documents/')[1];
-      window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
-    },
     loadMore() {
       this.refreshFiles(this.primaryFilter,null, null, null , true);
     },
@@ -629,7 +625,8 @@ export default {
         .then(() => {
           this.createShortcutStatistics(file,space);
           if (space && space.groupId) {
-            this.openCreatedSpaceShortcut(destFolder, space);
+            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
+            window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
           } else {
             this.openFolder(destFolder);
           }
