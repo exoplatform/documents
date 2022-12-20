@@ -42,6 +42,9 @@ export function init() {
   if ( !document.getElementById('UIJcrExplorerContainer').classList.contains('VuetifyApp') ){
     document.getElementById('UIJcrExplorerContainer').classList.add('VuetifyApp');
   }
+  if (document.getElementById('UIJCRExplorerPortlet')) {
+    document.getElementById('UIJCRExplorerPortlet').style = 'padding: 20px 0px !important';
+  }
 }
 
 export function initSwitchApp() {
