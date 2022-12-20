@@ -7,7 +7,6 @@ import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
 import DocumentsHeaderCenter from './components/header/DocumentsHeaderCenter.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
 import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
-import CommonSearchInput from './components/header/actions/CommonSearchInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
 import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
 import DocumentsNoBodyFolder from './components/body/DocumentsNoBodyFolder.vue';
@@ -60,7 +59,6 @@ const components = {
   'documents-header-center': DocumentsHeaderCenter,
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-filter-input': DocumentsFilterInput,
-  'common-search-input': CommonSearchInput,
   'documents-filter': DocumentsFilter,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
