@@ -22,7 +22,7 @@
 export default {
   data: () => ({
     query: null,
-    startSearchAfterInMilliseconds: 700,
+    startSearchAfterInMilliseconds: 300,
     showMobileFilter: false,
     timeout: null,
   }),
