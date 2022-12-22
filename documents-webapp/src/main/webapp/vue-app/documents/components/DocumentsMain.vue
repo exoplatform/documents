@@ -86,6 +86,7 @@
       ref="folderTreeDrawer" />
     <documents-app-reminder />
     <documents-actions-menu-mobile />
+    <documents-filter-menu-mobile :primaryFilter="this.primaryFilter"/>
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
@@ -512,6 +513,8 @@ export default {
       }
       if (this.query) {
         filter.query = this.query;
+      } else {
+        this.extendedSearch = false;
       }
       if (this.extendedSearch) {
         filter.extendedSearch = this.extendedSearch;
@@ -541,6 +544,8 @@ export default {
       this.offset = append ? this.offset + this.pageSize : 0 ;
       this.limit = append ? this.limit + this.pageSize : this.pageSize ;
       this.loading = true;
+      this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
+      
       return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
           files = this.sortField === 'favorite' ? files && files.sort((file1, file2) => {
