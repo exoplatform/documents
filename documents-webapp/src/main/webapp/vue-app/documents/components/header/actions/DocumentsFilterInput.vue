@@ -16,6 +16,7 @@
       prepend-inner-icon="fa-filter"
       class="inputDocumentsFilter pa-1 my-auto width-full"
       @click:append="cancelSearch" />
+      
   </div>
 </template>
 <script>
