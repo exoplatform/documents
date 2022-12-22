@@ -95,8 +95,11 @@ export default {
       };
     },
     extendedSearchEnabled() {
-      return eXo.env.portal.extendedSearchEnabled;
-    }
+      return eXo.env.portal.extendedSearchEnabled && !this.isMobile;
+    },
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
   },
   created() {
     this.$root.$on('enable-extend-filter', this.enableExtendFilter);
