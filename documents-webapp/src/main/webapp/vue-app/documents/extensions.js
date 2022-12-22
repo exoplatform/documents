@@ -297,3 +297,59 @@ extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
   rank: 20,
 });
 
+extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilterMenu', {
+  id: 'extendSearchToContent',
+  labelKey: 'documents.label.extendSearchToContent',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  menuType: 'searchType',
+  componentOptions: {
+    vueComponent: Vue.options.components['extend-filter-action'],
+  },
+});
+extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilterMenu', {
+  id: 'quickFilter',
+  labelKey: 'documents.label.quickFilter',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  menuType: 'searchType',
+  componentOptions: {
+    vueComponent: Vue.options.components['quick-filter-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilterMenu', {
+  id: 'all',
+  labelKey: 'documents.label.all',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  menuType: 'filterOptions',
+  componentOptions: {
+    vueComponent: Vue.options.components['all-filter-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilterMenu', {
+  id: 'favorites',
+  labelKey: 'documents.label.favorites',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 40,
+  menuType: 'filterOptions',
+  componentOptions: {
+    vueComponent: Vue.options.components['favorite-filter-action'],
+  },
+});
+
+
