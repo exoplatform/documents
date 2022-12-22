@@ -710,8 +710,9 @@ export default {
           operation: 'simpleSearch',
           parameters: {
             spaceId: eXo.env.portal.spaceId,
-            origin: 'Portlet document',
+            origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            query: this.query,
           },
           timestamp: Date.now()
         }
@@ -728,8 +729,9 @@ export default {
           operation: 'extendedSearch',
           parameters: {
             spaceId: eXo.env.portal.spaceId,
-            origin: 'Portlet document',
+            origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            query: this.query,
           },
           timestamp: Date.now()
         }
