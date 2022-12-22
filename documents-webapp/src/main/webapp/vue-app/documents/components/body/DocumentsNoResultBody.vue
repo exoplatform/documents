@@ -53,8 +53,8 @@ export default {
   },
   computed: {
     extendedSearchEnabled() {
-      return eXo.env.portal.extendedSearchEnabled;
-    }
+      return eXo.env.portal.extendedSearchEnabled && !this.isMobile;
+    },
   },
   methods: {
     enableExtendFilter(){

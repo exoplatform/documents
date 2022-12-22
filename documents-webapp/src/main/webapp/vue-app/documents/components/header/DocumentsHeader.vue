@@ -5,7 +5,7 @@
         v-if="canAdd"
         :selected-view="selectedView" />
       <v-spacer v-show="!canShowMobileFilter" />
-      <documents-header-center v-show="!canShowMobileFilter" :selected-view="selectedView" />
+      <documents-header-center v-if="!canShowMobileFilter" :selected-view="selectedView" />
       <v-spacer v-show="!canShowMobileFilter" />
       <documents-header-right />
     </div>
