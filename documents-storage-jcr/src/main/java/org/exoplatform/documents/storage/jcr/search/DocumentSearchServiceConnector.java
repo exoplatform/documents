@@ -316,10 +316,7 @@ public class DocumentSearchServiceConnector {
 
   private String buildTermQueryStatement(String term, boolean extendedSearch) {
     if (StringUtils.isBlank(term)) {
-      return "" +
-              "" +
-              "" +
-              "";
+      return "";
     }
     term = escapeReservedCharacters(term);
     List<String> queryParts = Arrays.asList(term.split(" "));
