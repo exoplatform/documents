@@ -12,7 +12,7 @@
         :open.sync="openLevel"
         :items="items"
         class="treeView-item my-2"
-        item-key="name"
+        item-key="id"
         hoverable
         activatable
         open-on-click
@@ -22,7 +22,9 @@
             <v-icon size="24" class="primary--text">
               {{ 'fas fa-folder' }}
             </v-icon>
-            <v-list-item-title class="body-2 mx-2 mt-1">
+            <v-list-item-title 
+              class="body-2 mx-2 mt-1"
+              :class="idItemActive === item.id ? 'primary--text font-weight-bold' : ''">
               {{ item.name }}
             </v-list-item-title>
           </div>
@@ -37,11 +39,22 @@ export default {
   data: () => ({
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     items: [],
+    currentFolderPathTab: [],
   }),
   computed: {
     openLevel() {
-      return this.items && this.items.length && [this.items[0].name] || [];
+      return this.items && this.items.length ? this.currentFolderPathTab : [];
     },
+    idItemActive() {
+      return this.currentFolderPathTab && this.currentFolderPathTab.length ? this.currentFolderPathTab[this.currentFolderPathTab.length-1] : [];
+    }
+  },
+  created() {
+    this.$root.$on('documentsBreadcrumb',documentsBreadcrumb => {
+      const tab = [];
+      documentsBreadcrumb.forEach(element => tab.push(element.id));
+      this.currentFolderPathTab = tab;
+    });
   },
   methods: {
     open() {

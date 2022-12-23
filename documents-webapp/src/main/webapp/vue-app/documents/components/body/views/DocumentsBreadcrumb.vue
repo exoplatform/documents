@@ -89,6 +89,7 @@ export default {
   }),
   computed: {
     documentsBreadcrumbToDisplay() {
+      this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
       if (!this.documentsBreadcrumb || this.documentsBreadcrumb.length <= 4) {
         return this.documentsBreadcrumb || [];
       } else {
@@ -133,6 +134,7 @@ export default {
       }
     },
     openTreeFolderDrawer(){
+      this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
       this.$root.$emit('openTreeFolderDrawer');
     },
     getName(name){
