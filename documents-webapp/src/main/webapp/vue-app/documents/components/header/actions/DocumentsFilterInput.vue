@@ -16,13 +16,17 @@
       prepend-inner-icon="fa-filter"
       class="inputDocumentsFilter pa-1 my-auto width-full"
       @click:append="cancelSearch" />
-      
   </div>
 </template>
 <script>
 export default {
+  props: {
+    query: {
+      type: String,
+      default: '',
+    },
+  },
   data: () => ({
-    query: null,
     startSearchAfterInMilliseconds: 300,
     showMobileFilter: false,
     timeout: null,
