@@ -74,10 +74,11 @@ export default {
       type: String,
       default: null,
     },
+    showExtendFilter: {
+      type: Boolean,
+      default: false
+    },
   },
-  data: () => ({
-    showExtend: false,
-  }),
   computed: {
     params() {
       return {
@@ -94,6 +95,9 @@ export default {
         extendedSearch: this.extendedSearch,
       };
     },
+    showExtend(){
+      return this.showExtendFilter;
+    },
     extendedSearchEnabled() {
       return eXo.env.portal.extendedSearchEnabled && !this.isMobile;
     },
@@ -101,20 +105,9 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
-  created() {
-    this.$root.$on('enable-extend-filter', this.enableExtendFilter);
-    this.$root.$on('disable-extend-filter', this.disableExtendFilter);
-  },
   methods: {
-    enableExtendFilter(){
-      this.showExtend = true;
-    },
-    disableExtendFilter(){
-      this.showExtend = false;
-    },
     extendFilter(){
       this.$root.$emit('document-extended-search');
-      this.showExtend = false;
     },
   }
 };
