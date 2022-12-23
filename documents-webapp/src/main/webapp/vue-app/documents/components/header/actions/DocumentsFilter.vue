@@ -15,13 +15,13 @@
       </option>
     </select>
     <button
-        v-if="canShowMobileFilter"
-        :class="btnClass"
-        class="px-3 py-3"
-        @click="openDrawer()">
-        <v-icon size="16" class="filterIcon"> fa-sliders-h </v-icon>
-        <span v-if="filterNumber>0">({{filterNumber}})</span>    
-      </button>
+      v-if="canShowMobileFilter"
+      :class="btnClass"
+      class="px-3 py-3"
+      @click="openDrawer()">
+      <v-icon size="16" class="filterIcon"> fa-sliders-h </v-icon>
+      <span v-if="filterNumber>0">({{ filterNumber }})</span>    
+    </button>
   </v-scale-transition>
 </template>
 <script>
