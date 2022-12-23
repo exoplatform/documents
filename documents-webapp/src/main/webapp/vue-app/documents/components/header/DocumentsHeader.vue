@@ -7,7 +7,7 @@
       <v-spacer v-show="!canShowMobileFilter" />
       <documents-header-center v-if="!canShowMobileFilter" :selected-view="selectedView" />
       <v-spacer v-show="!canShowMobileFilter" />
-      <documents-header-right />
+      <documents-header-right :query="query" />
     </div>
     <documents-breadcrumb v-if="selectedView === 'folder'" class="py-4 px-1" />
   </div>
@@ -25,6 +25,10 @@ export default {
       default: 0
     },
     selectedView: {
+      type: String,
+      default: '',
+    },
+    query: {
       type: String,
       default: '',
     },
