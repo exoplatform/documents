@@ -59,7 +59,7 @@ export default {
       if (!this.activated){
         this.filterOption = 'All';
         this.$root.$emit('documents-filter', 'all');
-        this.$root.$emit('set-documents-filter', 'all');
+        this.$root.$emit('set-documents-filter', 'All');
       }
       this.$root.$emit('close-mobile-filter-menu',false);
     },
