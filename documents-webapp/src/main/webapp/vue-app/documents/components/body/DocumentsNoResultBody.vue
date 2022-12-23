@@ -41,31 +41,35 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    showExtendFilter: {
+      type: Boolean,
+      default: false
+    },
+    query: {
+      type: String,
+      default: null,
     }
+  },
+  params() {
+    return {
+      query: this.query,
+    };
   },
   data: () => ({
     emptyDocs: '/documents-portlet/images/docs.png',
-    showExtend: false,
   }),
-  created() {
-    this.$root.$on('enable-extend-filter', this.enableExtendFilter);
-    this.$root.$on('disable-extend-filter', this.disableExtendFilter);
-  },
   computed: {
     extendedSearchEnabled() {
       return eXo.env.portal.extendedSearchEnabled && !this.isMobile;
     },
+    showExtend(){
+      return this.showExtendFilter;
+    }
   },
   methods: {
-    enableExtendFilter(){
-      this.showExtend = true;
-    },
-    disableExtendFilter(){
-      this.showExtend = false;
-    },
     extendFilter(){
       this.$root.$emit('document-extended-search');
-      this.showExtend = false;
     },
   }
 };

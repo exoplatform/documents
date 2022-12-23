@@ -18,8 +18,7 @@
 <template>
   <div
     class="clickable pt-1 mx-2"
-    @click="extendSearch()"
-    >
+    @click="extendSearch()">
     <v-icon
       size="21"
       class="pe-1 iconStyle">

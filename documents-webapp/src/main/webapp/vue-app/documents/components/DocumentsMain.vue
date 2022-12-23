@@ -9,45 +9,34 @@
       @dragover.prevent
       @drop.prevent
       @dragstart.prevent>
-      <div v-if="searchResult">
-        <documents-header
-          :files-size="files.length" 
+      <documents-header
+          :files-size="files.length"
           :selected-view="selectedView"
           :can-add="canAdd"
           class="py-2" />
+      <div v-if="searchResult && !loading">
         <documents-no-result-body
-          :is-mobile="isMobile" />
+          :is-mobile="isMobile"
+          :show-extend-filter="showExtendFilter"
+          :query="query" />
       </div>
       <div
         v-else-if="!filesLoad && !loading && selectedView == 'folder' "
         @drop="dragFile"
         @dragover="startDrag">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-no-body-folder
+          :query="query"
           :is-mobile="isMobile" />
       </div>
       <div v-else-if="!filesLoad && !loading">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-no-body
+          :query="query"
           :is-mobile="isMobile" />
       </div>
       <div
         v-else
         @drop="dragFile"
         @dragover="startDrag">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-body
           v-if="optionsLoaded"
           :view-extension="selectedViewExtension"
@@ -63,6 +52,7 @@
           :loading="loading"
           :query="query"
           :extended-search="extendedSearch"
+          :show-extend-filter="showExtendFilter"
           :primary-filter="primaryFilter" />
         <exo-document-notification-alerts />
       </div>
@@ -81,7 +71,7 @@
       ref="folderTreeDrawer" />
     <documents-app-reminder />
     <documents-actions-menu-mobile />
-    <documents-filter-menu-mobile :primaryFilter="this.primaryFilter"/>
+    <documents-filter-menu-mobile :primary-filter="this.primaryFilter" />
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
@@ -116,6 +106,7 @@ export default {
     sortField: 'lastUpdated',
     isFavorites: false,
     ascending: false,
+    showExtendFilter: false,
     parentFolderId: null,
     pageSize: 50,
     files: [],
@@ -352,8 +343,10 @@ export default {
       this.refreshFiles();
       if (query && query.length>0){
         this.$root.$emit('enable-extend-filter');
+        this.showExtendFilter=true;
       } else {
         this.$root.$emit('disable-extend-filter');
+        this.showExtendFilter=false;
       }
       if (this.canSendSearchStat && oldQuery !== query) {
         this.canSendSearchStat = false;
@@ -366,6 +359,7 @@ export default {
     },
     extendSearch() {
       this.extendedSearch = true;
+      this.showExtendFilter = false;
       this.refreshFiles();
       this.extendedSearchStatistics();
     },
@@ -564,9 +558,6 @@ export default {
           this.files.forEach(file => {
             file.canAdd = this.canAdd;
           });
-          if (filter.query){
-            this.$root.$emit('filer-query',filter.query);
-          }
         })
         .finally(() => this.loading = false);
     },

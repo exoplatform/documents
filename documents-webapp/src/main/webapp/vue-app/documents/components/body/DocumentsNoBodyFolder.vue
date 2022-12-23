@@ -43,6 +43,10 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    query: {
+      type: String,
+      default: null,
     }
   },
   data: () => ({
