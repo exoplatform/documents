@@ -460,7 +460,10 @@ export default {
     createFolder(name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name)
-        .then(() => this.refreshFiles())
+        .then(createdFolder => {
+          this.files.shift();
+          this.files.unshift(createdFolder);
+        })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },

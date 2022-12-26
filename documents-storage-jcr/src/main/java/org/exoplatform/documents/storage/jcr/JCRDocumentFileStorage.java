@@ -428,7 +428,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }).collect(Collectors.toList());
   }
   @Override
-  public void createFolder(long ownerId,
+  public AbstractNode createFolder(long ownerId,
                            String folderId,
                            String folderPath,
                            String title,
@@ -463,6 +463,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node addedNode = node.addNode(name, NodeTypeConstants.NT_FOLDER);
       addedNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.save();
+      return toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
     } finally {

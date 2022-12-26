@@ -187,7 +187,7 @@ public interface DocumentFileService {
    */
   void shareDocument(String documentId, long destId) throws IllegalAccessException;
 
-  void createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
+  AbstractNode createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
   String getNewName(long ownerId, String folderId, String folderPath, String name) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
