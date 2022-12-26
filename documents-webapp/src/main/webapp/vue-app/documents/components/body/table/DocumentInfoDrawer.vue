@@ -39,8 +39,7 @@
         v-show="showDescription"
         :data-text="placeholder"
         :title="$t('tooltip.clickToEdit')"
-        contentEditable="true"
-        class="py-4 px-8"
+        class="py-4 px-8 cursor-text"
         @click="openEditor"
         v-sanitized-html="file.description">
         {{ placeholder }}
@@ -169,6 +168,7 @@ export default {
     showNoDescription: false,
     showDescription: false,
     firstCreateDescription: false,
+    fileInitialDescription: '',
   }),
   computed: {
     iconColor(){
@@ -209,7 +209,9 @@ export default {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     disableButton() {
-      return !this.file || !this.file.description || this.file.description.replace( /(<([^>]+)>)/ig, '').length>1300;
+      return this.file.description && this.file.description.replace( /(<([^>]+)>)/ig, '').length>1300
+      || this.file.description === this.fileInitialDescription 
+      || (!this.file.description && !this.fileInitialDescription);
     },
   },
   created() {
@@ -236,8 +238,10 @@ export default {
       this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
           this.displayAlert(this.$t('documents.alert.success.description.updated'));
-          this.showDescription = true;
+          this.showDescription = this.file.description && this.file.description.length;
+          this.showNoDescription = !this.showDescription;
           this.displayEditor=false;
+          this.fileInitialDescription = this.file.description;
         });
     },
     open(file, fileName, fileType, icon) {
@@ -246,8 +250,9 @@ export default {
       this.fileType = fileType;
       this.icon = icon;
       this.displayEditor = false;
-      this.showNoDescription = this.file.description==null && !this.displayEditor;
-      this.showDescription = this.file.description!=null && !this.displayEditor;
+      this.showNoDescription = !this.file.description && !this.displayEditor;
+      this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
+      this.fileInitialDescription = this.file.description;      
       this.$refs.documentInfoDrawer.open();
     },
     openEditor(){
@@ -255,6 +260,7 @@ export default {
       this.showNoDescription = false;
       this.showDescription = false;
       this.displayEditor=true;
+      this.originDescription = this.file.description;
     },
     close() {
       this.file = null;
