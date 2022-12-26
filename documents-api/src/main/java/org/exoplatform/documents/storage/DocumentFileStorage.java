@@ -123,7 +123,7 @@ public interface DocumentFileStorage {
    */
   void moveDocument(long ownerId, String fileId, String destPath, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
-  void createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
+  AbstractNode createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
                                                                                ObjectNotFoundException;
 
   String getNewName(long ownerId,

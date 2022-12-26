@@ -210,7 +210,7 @@ export function createFolder(ownerId,parentid,folderPath,name) {
     method: 'POST',
   }).then((resp) => {
     if (resp && resp.ok) {
-      return resp.ok;
+      return resp.json();
     }
   }).catch(e => {
     throw new Error(`Error creating folder ${e}`);
