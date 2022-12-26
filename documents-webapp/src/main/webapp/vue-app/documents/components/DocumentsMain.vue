@@ -13,6 +13,7 @@
           :files-size="files.length"
           :selected-view="selectedView"
           :can-add="canAdd"
+          :query="query"
           class="py-2" />
       <div v-if="searchResult && !loading">
         <documents-no-result-body

@@ -9,7 +9,7 @@
       <v-spacer v-show="!canShowMobileFilter" />
       <documents-header-right :query="query" />
     </div>
-    <documents-breadcrumb v-if="selectedView === 'folder'" class="py-4 px-1" />
+    <documents-breadcrumb v-show="showBreadcrumb" v-if="selectedView === 'folder'" class="py-4 px-1" />
   </div>
 </template>
 
@@ -43,6 +43,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    showBreadcrumb(){
+      return !this.query;
+    }
   },
   created() {
     this.$root.$on('show-mobile-filter', data => {
