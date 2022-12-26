@@ -351,6 +351,7 @@ public class DocumentFileRest implements ResourceContainer {
 
   @POST
   @Path("/folder")
+  @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(value = "Add a new Folder", httpMethod = "POST", response = Response.class, notes = "This adds a new Folder under givin Folder.")
   @ApiResponses(value = {@ApiResponse(code = 200, message = "Request fulfilled"),
@@ -369,8 +370,15 @@ public class DocumentFileRest implements ResourceContainer {
     }
     try {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-        documentFileService.createFolder(ownerId, parentid, folderPath, name, userIdentityId);
-        return Response.ok().build();
+      AbstractNode createdFolder = documentFileService.createFolder(ownerId, parentid, folderPath, name, userIdentityId);
+      AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
+              identityManager,
+              spaceService,
+              metadataService,
+              createdFolder,
+              null,
+              userIdentityId);
+      return Response.ok(abstractNodeEntity).build();
       } catch (Exception ex) {
         LOG.warn("Failed to create Folder", ex);
         return Response.status(HTTPStatus.INTERNAL_ERROR).build();
