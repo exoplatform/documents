@@ -370,7 +370,10 @@ public class JCRDocumentsUtil {
       try {
         documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());
       } catch (ValueFormatException e) {
-        documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());
+        Value[] descriptionValues = node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues();
+        if(descriptionValues != null && descriptionValues.length > 0) {
+          documentNode.setDescription(descriptionValues[0].getString());
+        }
       }
     }
     if (node.isNodeType(NodeTypeConstants.DC_DESCRIPTION)) {
