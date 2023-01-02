@@ -124,9 +124,14 @@ public class JCRDocumentsUtil {
         if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           sourceNode = getNodeByIdentifier(session, sourceID);
-          if (sourceNode == null || sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER)
-              || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) {
+          if (sourceNode == null) {
             break;
+          }
+          if (sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) {
+            List<FileNode> files = toFileNodes(identityManager, sourceNode.getNodes(), aclIdentity, session, spaceService,includeHiddenFiles);
+            if (!files.isEmpty()) {
+              fileNodes.addAll(files);
+            }
           }
           sourceMimeType = getMimeType(sourceNode);
         }
@@ -140,7 +145,9 @@ public class JCRDocumentsUtil {
       if (StringUtils.isNotBlank(sourceMimeType)) {
         fileNode.setMimeType(sourceMimeType);
       }
-      fileNodes.add(fileNode);
+      if (StringUtils.isNotBlank(fileNode.getMimeType())) {
+        fileNodes.add(fileNode);
+      }
     }
     return fileNodes;
   }
