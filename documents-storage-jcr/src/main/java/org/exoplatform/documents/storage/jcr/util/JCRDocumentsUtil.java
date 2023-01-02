@@ -308,23 +308,18 @@ public class JCRDocumentsUtil {
       //Do noting, it means that the current user don't have access to the parent node
     }
 
-    if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
-      documentNode.setVersionable(true);
-      Version version = node.getBaseVersion();
-      if (version != null && StringUtils.isNumeric(version.getName())) {
-        documentNode.setVersionNumber(version.getName());
+    Node versionNode = node;
+    if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      Node sourceNode = getNodeByIdentifier(node.getSession(), documentNode.getSourceID());
+      if (sourceNode != null) {
+        versionNode = sourceNode;
       }
     }
-    if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-      Node sourceNode;
-      sourceNode = getNodeByIdentifier(node.getSession(), documentNode.getSourceID());
-      if (sourceNode != null && sourceNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)
-              && sourceNode.getBaseVersion() != null) {
-        documentNode.setVersionable(true);
-        Version version = sourceNode.getBaseVersion();
-        if (StringUtils.isNumeric(version.getName())) {
-          documentNode.setVersionNumber(version.getName());
-        }
+    if (versionNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && versionNode.getBaseVersion() != null) {
+      documentNode.setVersionable(true);
+      Version version = versionNode.getBaseVersion();
+      if (StringUtils.isNumeric(version.getName())) {
+        documentNode.setVersionNumber(version.getName());
       }
     }
 

@@ -27,8 +27,10 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 import org.junit.Test;
 
 import javax.jcr.*;
+import javax.jcr.version.Version;
 
 import java.io.IOException;
+import java.util.Calendar;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -51,6 +53,21 @@ public class JCRDocumentsUtilTest {
     when(node.getName()).thenReturn("NodeName.pdf");
     Property property = mock(Property.class);
     when(((ExtendedNode) node).getACL()).thenReturn(new AccessControlList());
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    Version baseVersion = mock(Version.class);
+    when(baseVersion.getName()).thenReturn("1");
+    when(node.getBaseVersion()).thenReturn(baseVersion);
+    when(node.hasProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(true);
+    Property createdDateProperty = mock(Property.class);
+    when(createdDateProperty.getDate()).thenReturn(Calendar.getInstance());
+    Property modifiedDateProperty = mock(Property.class);
+    when(modifiedDateProperty.getDate()).thenReturn(Calendar.getInstance());
+    when(node.getProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(createdDateProperty);
+    when(node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(modifiedDateProperty);
+    Property lasdtModifierProperty = mock(Property.class);
+    when(lasdtModifierProperty.getString()).thenReturn("root");
+    when(node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER)).thenReturn(lasdtModifierProperty);
 
     when(aclIdentity.getUserId()).thenReturn("root");
 
