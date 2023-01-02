@@ -220,20 +220,14 @@ public class EntityBuilder {
         ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());
       }
 
-      if (expandProperties.contains("creator")) {
-        if(node.getCreatorId() > 0) {
-          nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
-        }
+      if (expandProperties.contains("creator") && node.getCreatorId() > 0) {
+        nodeEntity.setCreatorIdentity(toIdentityEntity(identityManager, spaceService, node.getCreatorId()));
       }
-      if (expandProperties.contains("modifier")) {
-        if(node.getModifierId() > 0) {
-          nodeEntity.setModifierIdentity(toIdentityEntity(identityManager, spaceService, node.getModifierId()));
-        }
+      if (expandProperties.contains("modifier") && node.getModifierId() > 0) {
+        nodeEntity.setModifierIdentity(toIdentityEntity(identityManager, spaceService, node.getModifierId()));
       }
-      if (expandProperties.contains("owner")) {
-        if(node.getOwnerId() > 0) {
-          nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
-        }
+      if (expandProperties.contains("owner") && node.getOwnerId() > 0) {
+        nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
       }
       if (expandProperties.contains("auditTrails")) {
         // TODO (documentFileService.getNodeAuditTrails) think of using limit of
