@@ -14,6 +14,7 @@
       :disable-sort="isMobile"
       :loading-text="loadingLabel"
       :class="loadingClass"
+      :custom-sort="customSort"
       hide-default-footer
       disable-pagination
       disable-filtering
@@ -227,6 +228,17 @@ export default {
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
   },
   methods: {
+    customSort: function (items, sortBy, isDesc) {
+      if (sortBy[0] === 'name') {
+        const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
+        const sorted = items.sort((a, b) => collator.compare(a.name, b.name));
+        if (isDesc[0]) {
+          return sorted.reverse();
+        }
+        return sorted;
+      }
+      return items;
+    },
     updateFilter(filter) {
       this.primaryFilter = filter;
     },
