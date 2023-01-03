@@ -2,7 +2,7 @@
   <div
     class="d-flex flex-nowrap">
     <a
-      class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-full">
+      class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-document-title">
       <div>
         <v-progress-circular
           v-if="loading"
@@ -19,7 +19,7 @@
           :size="isMobile && 32 || 22"
           :color="icon.color">{{ icon.class }}</v-icon>
       </div>
-      <div class="width-full">
+      <div class=" width-document-title">
         <div
           v-if="!editNameMode"
           @click="openPreview()"
