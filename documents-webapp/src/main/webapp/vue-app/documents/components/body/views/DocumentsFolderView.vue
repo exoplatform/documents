@@ -14,6 +14,7 @@
       :group-desc="groupDesc"
       :loading-text="loadingLabel"
       :class="loadingClass"
+      :custom-sort="customSort"
       hide-default-footer
       disable-pagination
       disable-filtering
@@ -183,6 +184,17 @@ export default {
     this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    customSort: function (items, sortBy, isDesc) {
+      if (sortBy[1] === 'name') {
+        const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
+        const sorted = items.sort((a, b) => collator.compare(a.name, b.name));
+        if (isDesc[1]) {
+          return sorted.reverse();
+        }
+        return sorted;
+      }
+      return items;
+    },
     updateFilter(filter) {
       this.primaryFilter = filter;
     },
