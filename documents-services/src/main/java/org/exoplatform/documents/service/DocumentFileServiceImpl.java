@@ -245,7 +245,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       listenerService.broadcast(RENAME_FILE_EVENT,this,documentID);
     }
     catch (Exception e){
-      LOG.error("cnnot broadcast rename_file_event");
+      LOG.error("cannot broadcast rename_file_event");
     }
   }
 
