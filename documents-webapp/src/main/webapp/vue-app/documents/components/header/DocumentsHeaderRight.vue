@@ -20,12 +20,17 @@ export default {
       type: String,
       default: 'all',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   computed: {
     params() {
       return {
         query: this.query,
         primaryFilter: this.primaryFilter,
+        isMobile: this.isMobile,
       };
     }
   },

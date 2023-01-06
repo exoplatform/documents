@@ -23,6 +23,10 @@ export default {
       type: Object,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   computed: {
     params() {
@@ -31,6 +35,7 @@ export default {
         query: this.query,
         extendedSearch: this.extendedSearch,
         extension: this.extension,
+        isMobile: this.isMobile,
       };
     },
   },

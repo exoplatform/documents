@@ -13,6 +13,10 @@ export default {
       type: Object,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
     extension: {
       type: Object,
       default: null,
@@ -30,9 +34,6 @@ export default {
   computed: {
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
 };
