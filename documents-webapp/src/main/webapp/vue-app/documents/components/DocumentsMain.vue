@@ -14,6 +14,7 @@
           :selected-view="selectedView"
           :can-add="canAdd"
           :query="query"
+          :primary-filter="primaryFilter"
           class="py-2" />
       <div v-if="searchResult && !loading">
         <documents-no-result-body
@@ -466,11 +467,14 @@ export default {
       const url = new URL(window.location.href.substring(0, realPageUrlIndex));
       url.searchParams.set('view', view);
       window.history.replaceState('documents', 'Documents', url.toString());
-
       this.selectedView = view;
       this.parentFolderId = null;
       this.folderPath = null;
       this.files = [];
+      this.$root.$emit('resetSearch');
+      this.primaryFilter='all';
+      this.query=null;
+      this.extendedSearch=false;
       this.checkDefaultViewOptions();
       this.refreshFiles(this.primaryFilter)
         .finally(() => {
@@ -704,7 +708,6 @@ export default {
             spaceId: eXo.env.portal.spaceId,
             origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
-            query: this.query,
           },
           timestamp: Date.now()
         }
@@ -723,7 +726,6 @@ export default {
             spaceId: eXo.env.portal.spaceId,
             origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
-            query: this.query,
           },
           timestamp: Date.now()
         }

@@ -16,12 +16,16 @@ export default {
       type: String,
       default: '',
     },
+    primaryFilter: {
+      type: String,
+      default: 'all',
+    },
   },
   computed: {
     params() {
       return {
         query: this.query,
-        quickFilterValue: this.primaryFilter,
+        primaryFilter: this.primaryFilter,
       };
     }
   },
