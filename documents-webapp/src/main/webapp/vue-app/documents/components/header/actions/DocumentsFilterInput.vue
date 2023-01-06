@@ -1,11 +1,11 @@
 <template>
   <div>
     <v-icon
-      size="16"
+      size="24"
       class="inputDocumentsFilter text-sub-title pa-1 my-auto mt-2"
       v-show="isMobile && !showMobileFilter"
       @click="mobileFilter()">
-      fas fa-filter
+      {{filterIcon}}
     </v-icon>
     <v-text-field
       v-model="query"
@@ -23,7 +23,11 @@ export default {
   props: {
     query: {
       type: String,
-      default: '',
+      default: null,
+    },
+    primaryFilter: {
+      type: String,
+      default: 'all',
     },
   },
   data: () => ({
@@ -38,6 +42,9 @@ export default {
     appendIcon() {
       return this.query && 'mdi-close primary--text' || null;
     },
+    filterIcon() {
+      return this.query==null  && this.primaryFilter !== 'all'  ? 'mdi-filter' : 'mdi-filter-outline';
+    }
   },
   watch: {
     query() {  
@@ -58,6 +65,7 @@ export default {
   created() {
     this.$root.$on('resetSearch', this.resetSearch);
     this.$root.$on('filer-query', this.filterQuery);
+    this.$root.$on('mobile-filter', this.mobileFilter);
   },
   methods: {
     filterQuery(query){
