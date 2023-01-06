@@ -63,7 +63,7 @@
         size="20"
         class="inputDocumentsFilter text-sub-title pa-1 my-auto "
         v-show="isMobile && showMobileFilter"
-        @click="$root.$emit('resetSearch')">
+        @click="$root.$emit('mobile-filter')">
         fas fa-arrow-left
       </v-icon>
     </div>
