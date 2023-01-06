@@ -187,7 +187,9 @@ export default {
     customSort: function (items, sortBy, isDesc) {
       if (sortBy[1] === 'name') {
         const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
-        const sorted = items.sort((a, b) => collator.compare(a.name, b.name));
+        const sorted = items.sort((a, b) => {
+          return (b.folder - a.folder) || collator.compare(a.name, b.name);
+        });
         if (isDesc[1]) {
           return sorted.reverse();
         }
