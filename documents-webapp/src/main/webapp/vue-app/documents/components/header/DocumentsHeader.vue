@@ -7,7 +7,7 @@
       <v-spacer v-show="!canShowMobileFilter" />
       <documents-header-center v-if="!canShowMobileFilter" :selected-view="selectedView" />
       <v-spacer v-show="!canShowMobileFilter" />
-      <documents-header-right :query="query" />
+      <documents-header-right :query="query" :primary-filter="primaryFilter"/>
     </div>
     <documents-breadcrumb v-show="showBreadcrumb" v-if="selectedView === 'folder'" class="py-4 px-1" />
   </div>
@@ -31,6 +31,10 @@ export default {
     query: {
       type: String,
       default: '',
+    },
+    primaryFilter: {
+      type: String,
+      default: 'all',
     },
   },
   data: () => ({
