@@ -46,6 +46,7 @@ import javax.jcr.version.VersionIterator;
 import java.util.Calendar;
 import java.util.List;
 
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -483,5 +484,40 @@ public class JCRDocumentFileStorageTest {
     verify(node, times(1)).restore(version, true);
     verify(node, times(1)).checkin();
 
+  }
+
+  @Test
+  public void renameDocument() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Throwable exception = assertThrows(IllegalArgumentException.class,
+                                       () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "test:<*?", identity));
+    assertEquals("document title is not valid", exception.getMessage());
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node node = mock(Node.class);
+    when(getNodeByIdentifier(session, "123")).thenReturn(node);
+    when(identity.getUserId()).thenReturn("user");
+    doCallRealMethod().when(JCRDocumentsUtil.class, "isValidDocumentTitle", anyString());
+    doCallRealMethod().when(JCRDocumentsUtil.class, "cleanName", anyString());
+    when(node.getName()).thenReturn("oldName");
+    when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
+    when(node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    Node parentNode = mock(Node.class);
+    when(node.getParent()).thenReturn(parentNode);
+    when(node.getPath()).thenReturn("nodePath");
+    when(parentNode.getPath()).thenReturn("parentNodePath");
+    when(node.getSession()).thenReturn(session);
+    Workspace workspace = mock(Workspace.class);
+    when(session.getWorkspace()).thenReturn(workspace);
+    doNothing().when(workspace).move(anyString(), anyString());
+    this.jcrDocumentFileStorage.renameDocument(1L, "123", "test.docx", identity);
+    verify(node, times(2)).save();
+    verify(sessionProvider, times(1)).close();
   }
 }

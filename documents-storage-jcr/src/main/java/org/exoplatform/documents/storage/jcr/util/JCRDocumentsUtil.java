@@ -17,11 +17,12 @@
 package org.exoplatform.documents.storage.jcr.util;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.jcr.*;
 import javax.jcr.version.Version;
 
-import com.ibm.icu.text.Transliterator;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.api.search.data.SearchResult;
@@ -45,6 +46,7 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+
 public class JCRDocumentsUtil {
   private static final Log                              LOG                           =
                                                             ExoLogger.getLogger(JCRDocumentsUtil.class);
@@ -585,6 +587,12 @@ public class JCRDocumentsUtil {
     }
     ret.append(extension);
     return ret.toString();
+  }
+
+  public static boolean isValidDocumentTitle(String name) {
+    Pattern regex = Pattern.compile("[<\\\\>:\"/|?*]");
+    Matcher matcher = regex.matcher(name);
+    return !matcher.find();
   }
 
   public static String getMimeType(Node node) {

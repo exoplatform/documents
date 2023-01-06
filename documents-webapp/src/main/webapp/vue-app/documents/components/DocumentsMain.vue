@@ -72,8 +72,13 @@
       :selected-view="selectedView" />
     <v-alert
       v-model="alert"
-      :type="alertType"
-      dismissible>
+      :icon="false"
+      :colored-border="isMobile"
+      :border="isMobile? 'top' : ''"
+      :color="alertType"
+      :type="!isMobile? alertType: ''"
+      :class="isMobile? 'documents-alert-mobile': ''"
+      :dismissible="!isMobile">
       {{ message }}
     </v-alert>
     <folder-treeview-drawer
