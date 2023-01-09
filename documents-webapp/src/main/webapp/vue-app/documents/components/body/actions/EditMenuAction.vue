@@ -17,14 +17,15 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   computed: {
     fileId() {
       return this.file && this.file.sourceID || this.file.id;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   methods: {

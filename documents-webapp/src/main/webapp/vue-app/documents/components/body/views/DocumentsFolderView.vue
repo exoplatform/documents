@@ -29,6 +29,7 @@
           :file="item"
           :query="query"
           :extended-search="extendedSearch"
+          :is-mobile="isMobile" 
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template v-if="hasMore" slot="footer">
@@ -96,6 +97,10 @@ export default {
     primaryFilter: {
       type: String,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
@@ -147,9 +152,6 @@ export default {
         });
       });
       return headers;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     loadingLabel() {
       return `${this.$t('documents.label.loading')}...`;

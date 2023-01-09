@@ -54,6 +54,7 @@ export default {
   params() {
     return {
       query: this.query,
+      isMobile: this.isMobile,
     };
   },
   data: () => ({

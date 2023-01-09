@@ -46,6 +46,10 @@ export default {
       type: String,
       default: 'all',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   data: () => ({
     quickFilter: false,
@@ -58,10 +62,8 @@ export default {
       return {
         quickFilter: this.quickFilter,
         quickFilterValue: this.primaryFilter,
+        isMobile: this.isMobile,
       };
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     }
   },
   created() {
@@ -80,7 +82,6 @@ export default {
     },
     setFilterType() {
       this.quickFilter = true;
-      //this.primaryFilter = type;
       this.refreshMenuExtensions();
     },
     refreshMenuExtensions() {

@@ -16,16 +16,15 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
     workspace: 'collaboration',
   }),
-  computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    }
-  },
   methods: {
     duplicate(){
       this.$root.$emit('duplicate-document',this.file);

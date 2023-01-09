@@ -67,7 +67,7 @@
         fas fa-arrow-left
       </v-icon>
     </div>
-    <documents-add-new-menu-mobile ref="documentAddItemMenu" />
+    <documents-add-new-menu-mobile ref="documentAddItemMenu"  :is-mobile="isMobile"/>
   </div>
 </template>
 <script>
@@ -77,6 +77,10 @@ export default {
       type: String,
       default: '',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     showMobileFilter: false,
@@ -84,9 +88,6 @@ export default {
     waitTimeUntilCloseMenu: 200,
   }),
   computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     isFolderView() {
       return this.selectedView === 'folder';
     },

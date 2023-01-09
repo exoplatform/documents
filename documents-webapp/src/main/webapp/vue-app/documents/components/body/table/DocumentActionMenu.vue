@@ -19,6 +19,10 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
@@ -47,11 +51,9 @@ export default {
   computed: {
     params() {
       return {
-        file: this.file
+        file: this.file,
+        isMobile: this.isMobile
       };
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     fileCanEdit() {
       const type = this.file && this.file.mimeType || '';
