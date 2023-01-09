@@ -16,7 +16,7 @@
               <span class="font-weight-bold text-color text-no-wrap">{{ $t('documents.move.drawer.space') }}</span>
               <div class="flex-grow-1">
                 <documents-move-spaces
-                  :space="space" />
+                  :space="space" :is-mobile="isMobile" />
               </div>
             </div>
           </div>
@@ -28,6 +28,7 @@
               :show-icon="false"
               :documents-breadcrumb="documentsBreadcrumbSource"
               :disabled-icon-tree="true"
+              :is-mobile="isMobile" 
               move />
           </div>
         </v-list-item>
@@ -38,6 +39,7 @@
               :show-icon="false"
               :documents-breadcrumb="documentsBreadcrumbDestination"
               :disabled-icon-tree="true"
+              :is-mobile="isMobile" 
               move />
           </div>
         </v-list-item>
@@ -93,6 +95,12 @@
 <script>
 
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
+  },
   data: () => ({
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     drawer: false,

@@ -26,6 +26,12 @@
 </template>
 <script>
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+  },
   data: () => ({
     filterDocumentsSelected: 'All',
     filterDocuments: [{name: 'All'},{name: 'Favorites'}],
@@ -48,9 +54,6 @@ export default {
   computed: {
     canShowMobileFilter() {
       return this.isMobile && this.showMobileFilter;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     filterNumber(){
       let fNum = 0;

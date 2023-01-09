@@ -23,7 +23,7 @@
               class="item-version text-caption border-radius primary pa-0 px-1 clickable">
               V{{ file.versionNumber }}
             </span>
-            <documents-favorite-action v-if="!file.folder" :file="file" />
+            <documents-favorite-action v-if="!file.folder" :file="file" :is-mobile="isMobile" />
             <v-spacer />
           </a>
         </v-list-item-content>
@@ -133,7 +133,7 @@
               <a
                 class="fileDetails not-clickable text-color d-flex">
                 <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
-                <documents-file-size-cell class="mx-1 text-color" :file="file" />
+                <documents-file-size-cell class="mx-1 text-color" :file="file" :is-mobile="isMobile" />
               </a>
             </v-list-item-title>
           </v-list-item-content>
@@ -149,6 +149,10 @@ export default {
     selectedView: {
       type: String,
       default: '',
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
@@ -204,9 +208,6 @@ export default {
     },
     identityCreated(){
       return this.file?.creatorIdentity;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     disableButton() {
       return this.file.description && this.file.description.replace( /(<([^>]+)>)/ig, '').length>1300

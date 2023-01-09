@@ -34,12 +34,11 @@ export default {
     file: {
       type: Object,
       default: null,
-    }
-  },
-  computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   methods: {
     addShortcut() {

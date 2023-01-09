@@ -3,7 +3,7 @@
     v-show="isFavorite && !file.folder"
     :id="`favorite-cell-file-${fileId}`">
     <div v-if="!isMobile">
-      <documents-favorite-action :file="file" />
+      <documents-favorite-action :file="file"  :is-mobile="isMobile" />
     </div>
   </div>
 </template>
@@ -19,6 +19,10 @@ export default {
       type: Object,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   computed: {
     fileId() {
@@ -26,9 +30,6 @@ export default {
     },
     spaceId() {
       return eXo.env.portal.spaceId || 0;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     isFavorite() {
       return this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;

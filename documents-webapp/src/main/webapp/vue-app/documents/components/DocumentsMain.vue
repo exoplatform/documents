@@ -15,6 +15,7 @@
           :can-add="canAdd"
           :query="query"
           :primary-filter="primaryFilter"
+          :is-mobile="isMobile" 
           class="py-2" />
       <div v-if="searchResult && !loading">
         <documents-no-result-body
@@ -55,14 +56,15 @@
           :query="query"
           :extended-search="extendedSearch"
           :show-extend-filter="showExtendFilter"
-          :primary-filter="primaryFilter" />
+          :primary-filter="primaryFilter"
+          :is-mobile="isMobile"  />
         <exo-document-notification-alerts />
       </div>
     </div>
-    <documents-visibility-drawer />
-    <document-tree-selector-drawer />
+    <documents-visibility-drawer :is-mobile="isMobile" />
+    <document-tree-selector-drawer :is-mobile="isMobile" />
     <documents-info-drawer
-      :selected-view="selectedView" />
+      :selected-view="selectedView" :is-mobile="isMobile" />
     <v-alert
       v-model="alert"
       :icon="false"
@@ -75,16 +77,17 @@
       {{ message }}
     </v-alert>
     <folder-treeview-drawer
-      ref="folderTreeDrawer" />
-    <documents-app-reminder />
-    <documents-actions-menu-mobile />
-    <documents-filter-menu-mobile :primary-filter="this.primaryFilter" />
+      ref="folderTreeDrawer" :is-mobile="isMobile" />
+    <documents-app-reminder :is-mobile="isMobile" />
+    <documents-actions-menu-mobile :is-mobile="isMobile" />
+    <documents-filter-menu-mobile :primary-filter="this.primaryFilter" :is-mobile="isMobile" />
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
       :versions="versions"
       :is-loading="isLoadingVersions"
       :show-load-more="showLoadMoreVersions"
+      :is-mobile="isMobile" 
       @drawer-closed="versionsDrawerClosed"
       @open-version="showVersionPreview"
       @restore-version="restoreVersion"
@@ -159,7 +162,7 @@ export default {
       return null;
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+      return this.$vuetify.breakpoint.width < 960;
     },
     searchResult(){
       return ((this.query && this.query.length) || this.isFavorites) && !this.files.length;

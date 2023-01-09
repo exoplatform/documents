@@ -78,6 +78,10 @@ export default {
       type: Boolean,
       default: false
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   computed: {
     params() {
@@ -93,6 +97,7 @@ export default {
         limit: this.limit,
         query: this.query,
         extendedSearch: this.extendedSearch,
+        isMobile: this.isMobile,
       };
     },
     showExtend(){
@@ -100,10 +105,7 @@ export default {
     },
     extendedSearchEnabled() {
       return eXo.env.portal.extendedSearchEnabled && !this.isMobile;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
+    }
   },
   methods: {
     extendFilter(){

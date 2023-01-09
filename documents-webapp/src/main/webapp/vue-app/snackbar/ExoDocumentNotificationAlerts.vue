@@ -18,15 +18,18 @@
 <script>
 
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+  },
   data: () => ({
     alerts: [],
   }),
   computed: {
     displayAlerts() {
       return this.alerts && this.alerts.length;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   created() {
