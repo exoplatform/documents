@@ -54,7 +54,7 @@
             :value="lastUpdated"
             :format="fullDateFormat"
             class="document-time text-light-color text-no-wrap" />
-          <documents-visibility-cell :file="file" />
+          <documents-visibility-cell :file="file"  :is-mobile="isMobile" />
         </div>
       </div>
     </a>
@@ -62,6 +62,7 @@
     <documents-info-details-cell
       v-if="!isMobile"
       :file="file"
+      :is-mobile="isMobile" 
       :class="editNameMode ? '' : 'button-info-details'" />
     <div
       :id="`document-action-menu-cel-${file.id}`">
@@ -91,7 +92,7 @@
             close-on-click
             absolute>
             <documents-actions-menu
-              :file="file" />
+              :file="file"  :is-mobile="isMobile" />
           </v-menu>
         </template>
         <span>
@@ -117,6 +118,10 @@ export default {
     extension: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
@@ -152,9 +157,6 @@ export default {
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     icon() {
       if (this.file && this.file.folder){

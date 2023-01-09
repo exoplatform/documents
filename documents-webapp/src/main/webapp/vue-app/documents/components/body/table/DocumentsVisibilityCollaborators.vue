@@ -61,7 +61,7 @@
         fas fa-eye
       </v-icon>
       <documents-visibility-menu
-        @visibility-user="visibilityUser" />
+        @visibility-user="visibilityUser" :is-mobile="isMobile" />
       <v-divider vertical />
       <v-icon
         :title="$t('documents.label.visibility.remove')"
@@ -83,6 +83,10 @@ export default {
       type: Object,
       default: () => ({}),
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data() {
     return {
