@@ -28,6 +28,10 @@ export default {
       type: Object,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     isFavorite: false,
@@ -39,9 +43,6 @@ export default {
     },
     spaceId() {
       return eXo.env.portal.spaceId || 0;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     favoriteLabel() {
       return this.isFavorite ? this.$t('documents.label.remove.favorite') : this.$t('documents.label.add.favorite');

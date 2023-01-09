@@ -15,11 +15,16 @@ export default {
       type: String,
       default: '',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   computed: {
     params() {
       return {
         selectedView: this.selectedView,
+        isMobile: this.isMobile,
       };
     },
   },

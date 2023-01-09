@@ -19,16 +19,15 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
     editName: false
   }),
-  computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
-  },
   methods: {
     editNameMode(){
       this.$root.$emit('update-file-name', this.file);

@@ -32,6 +32,12 @@
 <script>
 
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+  },
 
   methods: {
     open() {

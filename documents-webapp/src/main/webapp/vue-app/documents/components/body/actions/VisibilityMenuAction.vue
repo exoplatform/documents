@@ -16,17 +16,16 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
     viewTab: 'RECENT',
     spaceId: eXo.env.portal.spaceId,
   }),
-  computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    }
-  },
   methods: {
     changeVisibility(){
       this.$root.$emit('open-visibility-drawer', this.file);

@@ -38,6 +38,7 @@
           v-for="user in users"
           :key="user"
           :user="user"
+          :is-mobile="isMobile" 
           @remove-user="removeUser"
           @set-visibility="setUserVisibility" />
       </div>
@@ -67,6 +68,10 @@ export default {
       type: Array,
       default: () => [],
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     ownerIdentity: [],
@@ -77,9 +82,6 @@ export default {
   computed: {
     specificCollaborators(){
       return this.$t('documents.label.visibility.specificCollaborator');
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
   },
   methods: {

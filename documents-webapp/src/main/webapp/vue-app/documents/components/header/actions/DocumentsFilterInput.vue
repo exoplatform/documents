@@ -29,6 +29,10 @@ export default {
       type: String,
       default: 'all',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   data: () => ({
     startSearchAfterInMilliseconds: 300,
@@ -36,9 +40,6 @@ export default {
     timeout: null,
   }),
   computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     appendIcon() {
       return this.query && 'mdi-close primary--text' || null;
     },
