@@ -478,6 +478,8 @@ export default {
       this.primaryFilter='all';
       this.query=null;
       this.extendedSearch=false;
+      this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
+      this.$root.$emit('set-documents-filter', 'All');
       this.checkDefaultViewOptions();
       this.refreshFiles(this.primaryFilter)
         .finally(() => {

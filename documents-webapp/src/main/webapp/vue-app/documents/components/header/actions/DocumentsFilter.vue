@@ -60,7 +60,7 @@ export default {
       if (this.filterDocumentsSelected.toLowerCase()!=='all') {
         fNum++;
       }
-      if (this.extended && this.query) {
+      if (this.query) {
         fNum++;
       }
       return fNum;
