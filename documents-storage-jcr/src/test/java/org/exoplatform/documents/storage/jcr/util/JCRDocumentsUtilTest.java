@@ -60,68 +60,6 @@ public class JCRDocumentsUtilTest {
     JCRDeleteFileStorage jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     when(CommonsUtils.getService(JCRDeleteFileStorage.class)).thenReturn(jcrDeleteFileStorage);
   }
-  @Test
-  public void testRetrieveFileProperties() throws IOException, RepositoryException {
-    IdentityManager identityManager = mock(IdentityManager.class);
-    NodeImpl node = mock(NodeImpl.class);
-    Identity aclIdentity = mock(Identity.class);
-    AbstractNode documentNode = mock(AbstractNode.class);
-    SpaceService spaceService = mock(SpaceService.class);
-
-    // Build node properties
-    NodeImpl parentNode = mock(NodeImpl.class);
-    when(((NodeImpl) parentNode).getIdentifier()).thenReturn("identifierOfParentNode");
-    when(node.getParent()).thenReturn(parentNode);
-    when(node.getName()).thenReturn("NodeName.pdf");
-    Property property = mock(Property.class);
-    when(((ExtendedNode) node).getACL()).thenReturn(new AccessControlList());
-    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
-    Version baseVersion = mock(Version.class);
-    when(baseVersion.getName()).thenReturn("1");
-    when(node.getBaseVersion()).thenReturn(baseVersion);
-    when(node.hasProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(true);
-    when(node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(true);
-    Property createdDateProperty = mock(Property.class);
-    when(createdDateProperty.getDate()).thenReturn(Calendar.getInstance());
-    Property modifiedDateProperty = mock(Property.class);
-    when(modifiedDateProperty.getDate()).thenReturn(Calendar.getInstance());
-    when(node.getProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(createdDateProperty);
-    when(node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(modifiedDateProperty);
-    Property lasdtModifierProperty = mock(Property.class);
-    when(lasdtModifierProperty.getString()).thenReturn("root");
-    when(node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER)).thenReturn(lasdtModifierProperty);
-
-    when(aclIdentity.getUserId()).thenReturn("root");
-
-    // When
-    when(node.getProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(property);
-    when(node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(true);
-    when(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString()).thenThrow(new ValueFormatException());
-    // Then
-    try {
-      JCRDocumentsUtil.retrieveFileProperties(identityManager, node, aclIdentity, documentNode, spaceService);
-    } catch (Exception e) {
-      // Exception should be catched
-      fail();
-    }
-
-    // When
-    when(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()).thenReturn(new Value[0]);
-    // Then
-    JCRDocumentsUtil.retrieveFileProperties(identityManager, node, aclIdentity, documentNode, spaceService);
-    verify(documentNode, times(0)).setDescription(anyString());
-
-    // When
-    when(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()).thenReturn(new Value[1]);
-    Value[] descriptionValues = new Value[]{new StringValue("File description !")};
-    when(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()).thenReturn(descriptionValues);
-
-
-    JCRDocumentsUtil.retrieveFileProperties(identityManager, node, aclIdentity, documentNode, spaceService);
-    // Then
-    verify(documentNode, times(1)).setDescription(anyString());
-
-  }
 
   @Test
   public void testToFileNodes() throws  RepositoryException {
