@@ -15,6 +15,7 @@
       :loading-text="loadingLabel"
       :class="loadingClass"
       :custom-sort="customSort"
+      mobile-breakpoint="960"
       hide-default-footer
       disable-pagination
       disable-filtering

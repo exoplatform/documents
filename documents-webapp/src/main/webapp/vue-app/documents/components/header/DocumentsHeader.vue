@@ -5,9 +5,9 @@
         v-if="canAdd"
         :selected-view="selectedView" 
         :is-mobile="isMobile"/>
-      <v-spacer v-show="!canShowMobileFilter" />
+      <v-spacer/>
       <documents-header-center v-if="!canShowMobileFilter" :selected-view="selectedView"  :is-mobile="isMobile"/>
-      <v-spacer v-show="!canShowMobileFilter" />
+      <v-spacer/>
       <documents-header-right :query="query" :primary-filter="primaryFilter" :is-mobile="isMobile"/>
     </div>
     <documents-breadcrumb v-show="showBreadcrumb" v-if="selectedView === 'folder'" class="py-4 px-1"  :is-mobile="isMobile"/>
