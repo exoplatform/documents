@@ -44,7 +44,7 @@ export default {
       return this.query && 'mdi-close primary--text' || null;
     },
     filterIcon() {
-      return this.query==null  && this.primaryFilter !== 'all'  ? 'mdi-filter' : 'mdi-filter-outline';
+      return (this.query!=null && this.query.length > 0)  || this.primaryFilter !== 'all'  ? 'mdi-filter' : 'mdi-filter-outline';
     }
   },
   watch: {
@@ -64,7 +64,7 @@ export default {
     },
   },
   created() {
-    this.$root.$on('resetSearch', this.resetSearch);
+    this.$root.$on('resetSearch', this.cancelSearch);
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('mobile-filter', this.mobileFilter);
   },
@@ -83,10 +83,6 @@ export default {
     cancelSearch(){
       this.query = null;
       this.$refs.inputQuery.blur();
-    },
-    resetSearch(){
-      this.cancelSearch();
-      this.mobileFilter();
     },
     waitForEndTyping() {
       this.timeout = window.setTimeout(() => {        
