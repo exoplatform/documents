@@ -609,8 +609,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws IllegalAccessException, ObjectAlreadyExistsException,
-          ObjectNotFoundException {
+  public void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) {
+    if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
+      throw new IllegalArgumentException("document title is not valid");
+    }
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {

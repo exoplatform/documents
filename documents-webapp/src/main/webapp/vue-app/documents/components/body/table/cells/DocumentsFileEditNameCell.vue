@@ -63,9 +63,10 @@ export default {
     nameRules: [],
     workspace: 'collaboration',
     oldPath: '',
+    nameRegex: /[<\\>:"/|?*]/
   }),
   created() {
-    this.nameRules = [v => !v || (v.split('.')[0].length > 1)];
+    this.nameRules = [v => !!v, v => v.length > 1, v => !this.nameRegex.test(v)];
   },
   methods: {
     editTitle(){
@@ -92,6 +93,10 @@ export default {
       }
     },
     renameFile(newTitle){
+      if (this.nameRegex.test(newTitle)) {
+        this.$root.$emit('show-alert', {type: 'warning', message: this.$t('document.valid.name.error.message')});
+        return;
+      }
       this.$root.$emit('cancel-edit-mode', this.file);
       this.file.name = this.fileName.concat(this.fileType);
       //concat the file type to the new tilte when renaming file
