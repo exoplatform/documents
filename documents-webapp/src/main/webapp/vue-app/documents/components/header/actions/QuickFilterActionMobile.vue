@@ -21,8 +21,8 @@
     @click="quickFilter()">
     <v-icon
       size="21"
-      class="pe-1 iconStyle">
-      fa-filter
+      class="pe-1 pb-1 iconStyle">
+      mdi-filter
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.quickFilter') }}</span>
   </div>

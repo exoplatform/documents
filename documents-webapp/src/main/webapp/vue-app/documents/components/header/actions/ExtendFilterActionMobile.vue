@@ -17,22 +17,35 @@
 
 <template>
   <div
+    v-if="query"
     class="clickable pt-1 mx-2"
     @click="extendSearch()">
     <v-icon
       size="21"
-      class="pe-1 iconStyle">
-      mdi-file-search
+      class="pe-1 pb-1 iconStyle">
+      {{ icon }}
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.extendSearch') }}</span>
   </div>
 </template>
 <script>
 export default {
-  data: () => ({
-    viewTab: 'RECENT',
-    spaceId: eXo.env.portal.spaceId,
-  }),
+  props: {
+    query: {
+      type: String,
+      default: null,
+    },
+    extendedSearch: {
+      type: Boolean,
+      default: false
+    },
+  },
+
+  computed: {
+    icon() {
+      return this.extendedSearch && 'mdi-check-bold' || 'mdi-file-search';
+    }
+  },
 
   methods: {
     extendSearch() {

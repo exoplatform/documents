@@ -22,8 +22,8 @@
     <v-icon
       size="21"
       v-if="activated"
-      class="pe-1 iconStyle">
-      fa-check
+      class="pe-1 pb-1 iconStyle">
+      mdi-check-bold
     </v-icon>
     <span :class="activated?'ps-1':'ps-8'">{{ $t('documents.filter.all') }}</span>
   </div>
