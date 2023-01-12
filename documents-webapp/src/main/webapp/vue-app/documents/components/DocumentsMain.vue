@@ -216,7 +216,9 @@ export default {
       .finally(() => {
         this.checkDefaultViewOptions();
         this.optionsLoaded = true;
-        this.refreshFiles()
+        const queryParams = new URLSearchParams(window.location.search);
+        const disablePreview = queryParams.has('path');
+        this.refreshFiles(null, null, null, null, null, disablePreview)
           .then(() => {
             this.watchDocumentPreview();
             if (this.selectedView === 'folder') {
@@ -469,7 +471,7 @@ export default {
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
     },
-    refreshFiles(filterPrimary, deleted, documentId, symlinkId, append) {
+    refreshFiles(filterPrimary, deleted, documentId, symlinkId, append, disablePreview) {
       if (!this.selectedViewExtension) {
         return Promise.resolve(null);
       }
@@ -525,7 +527,7 @@ export default {
           this.files = append ? this.files.concat(files) : files ;
           this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
           this.hasMore = files && files.length >= this.limit;
-          if (this.fileName) {
+          if (this.fileName && !disablePreview) {
             const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
             if (result.length > 0) {
               this.showPreview(result[0].id);
