@@ -50,6 +50,14 @@ export default {
       type: Boolean,
       default: false
     },
+    query: {
+      type: String,
+      default: null,
+    },
+    extendedSearch: {
+      type: Boolean,
+      default: false
+    },
   },
   data: () => ({
     quickFilter: false,
@@ -63,7 +71,16 @@ export default {
         quickFilter: this.quickFilter,
         quickFilterValue: this.primaryFilter,
         isMobile: this.isMobile,
+        query: this.query,
+        extendedSearch: this.extendedSearch,
       };
+    }
+  },
+  watch: {
+    isMobile() {
+      if (!this.isMobile){
+        this.close();
+      }
     }
   },
   created() {

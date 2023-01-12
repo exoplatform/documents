@@ -80,7 +80,7 @@
       ref="folderTreeDrawer" :is-mobile="isMobile" />
     <documents-app-reminder :is-mobile="isMobile" />
     <documents-actions-menu-mobile :is-mobile="isMobile" />
-    <documents-filter-menu-mobile :primary-filter="this.primaryFilter" :is-mobile="isMobile" />
+    <documents-filter-menu-mobile :primary-filter="primaryFilter" :query="query" :extendedSearch="extendedSearch" :is-mobile="isMobile" />
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
