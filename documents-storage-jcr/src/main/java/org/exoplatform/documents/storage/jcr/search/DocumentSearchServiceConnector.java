@@ -80,7 +80,6 @@ public class DocumentSearchServiceConnector {
 
   public DocumentSearchServiceConnector(ConfigurationManager configurationManager,
                                         IdentityManager identityManager,
-                                        ActivityStorage activityStorage,
                                         ElasticSearchingClient client,
                                         InitParams initParams) {
     this.configurationManager = configurationManager;
