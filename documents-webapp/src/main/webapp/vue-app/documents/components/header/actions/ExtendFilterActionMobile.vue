@@ -49,8 +49,10 @@ export default {
 
   methods: {
     extendSearch() {
-      this.$root.$emit('document-extended-search');
-      this.$root.$emit('close-mobile-filter-menu',false);
+      if (!this.extendedSearch) {
+        this.$root.$emit('document-extended-search');
+        this.$root.$emit('close-mobile-filter-menu',false);
+      }
     }
   }
 
