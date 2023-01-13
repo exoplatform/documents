@@ -209,7 +209,7 @@ export default {
     this.$root.$on('set-loading', this.setLoading);
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
-      this.refreshFiles(this.primaryFilter);
+      this.refreshFiles({'primaryFilter': this.primaryFilter});
     });
     this.$root.$on('show-alert', message => {
       this.displayMessage(message);
@@ -218,7 +218,9 @@ export default {
       .finally(() => {
         this.checkDefaultViewOptions();
         this.optionsLoaded = true;
-        this.refreshFiles()
+        const queryParams = new URLSearchParams(window.location.search);
+        const disablePreview = queryParams.has('path');
+        this.refreshFiles({'disablePreview': disablePreview})
           .then(() => {
             this.watchDocumentPreview();
             if (this.selectedView === 'folder') {
@@ -408,7 +410,7 @@ export default {
       setTimeout(() => {
         const deletedDocument = localStorage.getItem('deletedDocument');
         if (deletedDocument != null) {
-          this.refreshFiles(null, true, file.id);
+          this.refreshFiles({'deleted': true,'documentId': file.id });
         }
       }, redirectionTime);
     },
@@ -428,7 +430,8 @@ export default {
         this.parentFolderId = parentFolder.sourceID; 
       }
       this.files = [];
-      this.refreshFiles(null, null, null, symlinkId);
+      this.refreshFiles({'symlinkId': symlinkId});
+
       this.$root.$emit('set-breadcrumb', parentFolder);
       let folderPath ='';
       if (eXo.env.portal.spaceName) {
@@ -463,7 +466,7 @@ export default {
       }
     },
     loadMore() {
-      this.refreshFiles(this.primaryFilter,null, null, null , true);
+      this.refreshFiles({'primaryFilter': this.primaryFilter, 'append': true});
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
@@ -481,7 +484,7 @@ export default {
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
       this.$root.$emit('set-documents-filter', 'All');
       this.checkDefaultViewOptions();
-      this.refreshFiles(this.primaryFilter)
+      this.refreshFiles({'primaryFilter': this.primaryFilter})
         .finally(() => {
           if (this.selectedView === 'folder') {
             this.$nextTick().then(() => this.$root.$emit('update-breadcrumb'));
@@ -492,7 +495,7 @@ export default {
       this.parentFolderId=null;  
       this.folderPath='';
       this.fileName=null;
-      this.refreshFiles(this.primaryFilter);
+      this.refreshFiles({'primaryFilter': this.primaryFilter});
       if (window.location.pathname.includes('/Private')){
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname.split('/Private')[0]}?view=${this.selectedView}`);
       } else if (window.location.pathname.includes('/Public')){
@@ -501,7 +504,7 @@ export default {
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
     },
-    refreshFiles(filterPrimary, deleted, documentId, symlinkId, append) {
+    refreshFiles(options) {
       if (!this.selectedViewExtension) {
         return Promise.resolve(null);
       }
@@ -534,19 +537,19 @@ export default {
       } else {
         filter.ascending = this.ascending;
       }
-      if (filterPrimary && filterPrimary==='favorites') {
+      if (options?.filterPrimary==='favorites') {
         this.isFavorites = true;
       }
-      if (filterPrimary && filterPrimary==='all') {
+      if (options?.filterPrimary==='all') {
         this.isFavorites  =  false;
       }
-      if (symlinkId) {
-        filter.symlinkFolderId  =  symlinkId;
+      if (options?.symlinkId) {
+        filter.symlinkFolderId  =  options.symlinkId;
       }
       filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
-      this.offset = append ? this.offset + this.pageSize : 0 ;
-      this.limit = append ? this.limit + this.pageSize : this.pageSize ;
+      this.offset = options?.append ? this.offset + this.pageSize : 0 ;
+      this.limit = options?.append ? this.limit + this.pageSize : this.pageSize ;
       this.loading = true;
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
 
@@ -561,10 +564,10 @@ export default {
             }
             return 0;
           }) || files : files;
-          this.files = append ? this.files.concat(files) : files ;
-          this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
+          this.files = options?.append ? this.files.concat(files) : files ;
+          this.files = options?.deleted ? this.files.filter(doc => doc.id !== options?.documentId) : this.files;
           this.hasMore = files && files.length >= this.limit;
-          if (this.fileName) {
+          if (this.fileName && !options?.disablePreview) {
             const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
             if (result.length > 0) {
               this.showPreview(result[0].id);
