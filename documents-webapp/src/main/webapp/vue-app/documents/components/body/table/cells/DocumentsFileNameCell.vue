@@ -27,7 +27,8 @@
           :title="title">
           <div
             v-sanitized-html="title"
-            class="document-name text-truncate ms-4">
+            class="document-name ms-4"
+            :class="title.includes('</b>') ? '' : 'text-truncate'">
           </div>
           <div
             v-sanitized-html="fileType"
@@ -53,7 +54,7 @@
             :value="lastUpdated"
             :format="fullDateFormat"
             class="document-time text-light-color text-no-wrap" />
-          <documents-visibility-cell :file="file" />
+          <documents-visibility-cell :file="file"  :is-mobile="isMobile" />
         </div>
       </div>
     </a>
@@ -61,6 +62,7 @@
     <documents-info-details-cell
       v-if="!isMobile"
       :file="file"
+      :is-mobile="isMobile" 
       :class="editNameMode ? '' : 'button-info-details'" />
     <div
       :id="`document-action-menu-cel-${file.id}`">
@@ -90,7 +92,7 @@
             close-on-click
             absolute>
             <documents-actions-menu
-              :file="file" />
+              :file="file"  :is-mobile="isMobile" />
           </v-menu>
         </template>
         <span>
@@ -103,15 +105,24 @@
 <script>
 import ntFileExtension from '../../../../json/NtFileExtension.json';
 export default {
+
   props: {
     file: {
       type: Object,
+      default: null,
+    },
+    query: {
+      type: String,
       default: null,
     },
     extension: {
       type: Object,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     loading: false,
@@ -125,16 +136,27 @@ export default {
       hour: '2-digit',
       minute: '2-digit',
     },
+    accentMap: {
+      ae: '(ae|æ|ǽ|ǣ)',
+      a: '(a|á|ă|ắ|ặ|ằ|ẳ|ẵ|ǎ|â|ấ|ậ|ầ|ẩ|ẫ|ä|ǟ|ȧ|ǡ|ạ|ȁ|à|ả|ȃ|ā|ą|ᶏ|ẚ|å|ǻ|ḁ|ⱥ|ã)',
+      c: '(c|ć|č|ç|ḉ|ĉ|ɕ|ċ|ƈ|ȼ)',
+      e: '(e|é|ĕ|ě|ȩ|ḝ|ê|ế|ệ|ề|ể|ễ|ḙ|ë|ė|ẹ|ȅ|è|ẻ|ȇ|ē|ḗ|ḕ|ⱸ|ę|ᶒ|ɇ|ẽ|ḛ)',
+      i: '(i|í|ĭ|ǐ|î|ï|ḯ|ị|ȉ|ì|ỉ|ȋ|ī|į|ᶖ|ɨ|ĩ|ḭ)',
+      n: '(n|ń|ň|ņ|ṋ|ȵ|ṅ|ṇ|ǹ|ɲ|ṉ|ƞ|ᵰ|ᶇ|ɳ|ñ)',
+      o: '(o|ó|ŏ|ǒ|ô|ố|ộ|ồ|ổ|ỗ|ö|ȫ|ȯ|ȱ|ọ|ő|ȍ|ò|ỏ|ơ|ớ|ợ|ờ|ở|ỡ|ȏ|ō|ṓ|ṑ|ǫ|ǭ|ø|ǿ|õ|ṍ|ṏ|ȭ)',
+      u: '(u|ú|ŭ|ǔ|û|ṷ|ü|ǘ|ǚ|ǜ|ǖ|ṳ|ụ|ű|ȕ|ù|ủ|ư|ứ|ự|ừ|ử|ữ|ȗ|ū|ṻ|ų|ᶙ|ů|ũ|ṹ|ṵ)'
+    }
   }),
   computed: {
     title() {
-      return decodeURI(this.fileName);
+      let title = decodeURI(this.fileName);
+      if (this.query){
+        title = this.highlightSearchResult(title,this.query);      
+      }
+      return title;
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     icon() {
       if (this.file && this.file.folder){
@@ -209,7 +231,11 @@ export default {
     },
     fileType() {
       //get extension from the filetypeextension if file name haven't extention 
-      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
+      let fileType = this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
+      if (this.query && !this.extendedSearch){
+        fileType = this.highlightSearchResult(fileType,this.query);      
+      }
+      return fileType;
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
@@ -293,7 +319,22 @@ export default {
         this.menuDisplayed = true;
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
-    }
+    },
+    escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    },
+    highlightSearchResult(str, queries) {
+      queries = queries.split(' ');
+      const accentRegex = new RegExp(Object.keys(this.accentMap).join('|'), 'g');
+      const queryRegex = new RegExp(queries.map(q => {
+        return this.escapeRegExp(q).toLowerCase().replace(accentRegex, m => {
+          return this.accentMap[m] || m;
+        });
+      }).join('|'), 'gi');
+      return str.toString().replace(queryRegex, function(matchedTxt){
+        return ( `<b>${matchedTxt}</b>`);
+      });
+    },
   }
 };
 </script>

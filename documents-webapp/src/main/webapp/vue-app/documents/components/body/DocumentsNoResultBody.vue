@@ -21,6 +21,17 @@
         </p>
       </div>
     </div>
+    <div
+      class="extendFilterButton"
+      v-show="showExtend && extendedSearchEnabled"
+      @click="extendFilter()">
+      <v-icon
+        size="24"
+        class="extendIcon">
+        mdi-file-search
+      </v-icon>
+      <span> {{ $t('documents.message.extendedSearch') }}</span>
+    </div>
   </div>
 </template>
 
@@ -30,10 +41,37 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    showExtendFilter: {
+      type: Boolean,
+      default: false
+    },
+    query: {
+      type: String,
+      default: null,
     }
+  },
+  params() {
+    return {
+      query: this.query,
+      isMobile: this.isMobile,
+    };
   },
   data: () => ({
     emptyDocs: '/documents-portlet/images/docs.png',
   }),
+  computed: {
+    extendedSearchEnabled() {
+      return eXo.env.portal.extendedSearchEnabled && !this.isMobile;
+    },
+    showExtend(){
+      return this.showExtendFilter;
+    }
+  },
+  methods: {
+    extendFilter(){
+      this.$root.$emit('document-extended-search');
+    },
+  }
 };
 </script>

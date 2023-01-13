@@ -15,6 +15,7 @@
       :loading-text="loadingLabel"
       :class="loadingClass"
       :custom-sort="customSort"
+      mobile-breakpoint="960"
       hide-default-footer
       disable-pagination
       disable-filtering
@@ -26,6 +27,9 @@
           :key="header.value"
           :extension="header.cellExtension"
           :file="item"
+          :query="query"
+          :extended-search="extendedSearch"
+          :is-mobile="isMobile"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template
@@ -38,6 +42,7 @@
           :open="isOpen"
           :toggle-function="toggle"
           :query="querySearch"
+          :is-mobile="isMobile"
           :primary-filter="primaryFilterFavorite" />
       </template>
       <template v-if="hasMore" slot="footer">
@@ -82,6 +87,10 @@ export default {
       type: String,
       default: null
     },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
+    },
     initialized: {
       type: Boolean,
       default: false
@@ -102,6 +111,10 @@ export default {
       type: String,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     lang: eXo.env.portal.language,
@@ -181,9 +194,6 @@ export default {
         });
       });
       return headers;
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     loadingLabel() {
       return `${this.$t('documents.label.loading')}...`;

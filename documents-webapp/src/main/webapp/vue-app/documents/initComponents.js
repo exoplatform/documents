@@ -7,7 +7,6 @@ import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
 import DocumentsHeaderCenter from './components/header/DocumentsHeaderCenter.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
 import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
-import CommonSearchInput from './components/header/actions/CommonSearchInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
 import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
 import DocumentsNoBodyFolder from './components/body/DocumentsNoBodyFolder.vue';
@@ -49,6 +48,11 @@ import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
+import DocumentFilterMenuMobile from './components/header/actions/DocumentFilterMenuMobile.vue';
+import FavoriteFilterActionMobile from './components/header/actions/FavoriteFilterActionMobile.vue';
+import AllFilterActionMobile from './components/header/actions/AllFilterActionMobile.vue';
+import QuickFilterActionMobile from './components/header/actions/QuickFilterActionMobile.vue';
+import ExtendFilterActionMobile from './components/header/actions/ExtendFilterActionMobile.vue';
 import UploadOverlay from './components/body/UploadOverlay.vue';
 import VersionHistoryMenuAction from './components/body/actions/VersionHistoryMenuAction.vue';
 
@@ -60,7 +64,6 @@ const components = {
   'documents-header-center': DocumentsHeaderCenter,
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-filter-input': DocumentsFilterInput,
-  'common-search-input': CommonSearchInput,
   'documents-filter': DocumentsFilter,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
@@ -81,6 +84,7 @@ const components = {
   'documents-actions-menu': DocumentActionMenu,
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
+  'documents-filter-menu-mobile': DocumentFilterMenuMobile,
   'documents-info-drawer': DocumentInfoDrawer,
   'document-tree-selector-drawer': DocumentsTreeSelectorDrawer,
   'documents-move-spaces': DocumentsMoveSpaces,
@@ -105,7 +109,11 @@ const components = {
   'switch-new-document': SwitchNewDocument,
   'documents-app-reminder': DocumentsAppReminder,
   'upload-overlay': UploadOverlay,
-  'versionHistory-menu-action': VersionHistoryMenuAction
+  'versionHistory-menu-action': VersionHistoryMenuAction,
+  'favorite-filter-action': FavoriteFilterActionMobile,
+  'all-filter-action': AllFilterActionMobile,
+  'quick-filter-action': QuickFilterActionMobile,
+  'extend-filter-action': ExtendFilterActionMobile,
 };
 
 for (const key in components) {

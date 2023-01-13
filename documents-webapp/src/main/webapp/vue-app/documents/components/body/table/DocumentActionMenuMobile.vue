@@ -1,6 +1,7 @@
 <template>
   <exo-drawer 
     ref="documentActionsMobileMenu"
+    class="mobileDrawer"
     :bottom="true">
     <template slot="content">
       <v-list dense>
@@ -23,6 +24,12 @@
 <script>
 
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
+  },
   data: () => ({
     file: null,
     menuExtensionApp: 'DocumentMenu',
@@ -36,11 +43,9 @@ export default {
   computed: {
     params() {
       return {
-        file: this.file
+        file: this.file,
+        isMobile: this.isMobile
       };
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     fileCanEdit(){
       const type = this.file && this.file.mimeType || '';

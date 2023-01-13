@@ -9,45 +9,37 @@
       @dragover.prevent
       @drop.prevent
       @dragstart.prevent>
-      <div v-if="searchResult">
-        <documents-header
-          :files-size="files.length" 
+      <documents-header
+          :files-size="files.length"
           :selected-view="selectedView"
           :can-add="canAdd"
+          :query="query"
+          :primary-filter="primaryFilter"
+          :is-mobile="isMobile" 
           class="py-2" />
+      <div v-if="searchResult && !loading">
         <documents-no-result-body
-          :is-mobile="isMobile" />
+          :is-mobile="isMobile"
+          :show-extend-filter="showExtendFilter"
+          :query="query" />
       </div>
       <div
         v-else-if="!filesLoad && !loading && selectedView == 'folder' "
         @drop="dragFile"
         @dragover="startDrag">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-no-body-folder
+          :query="query"
           :is-mobile="isMobile" />
       </div>
       <div v-else-if="!filesLoad && !loading">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-no-body
+          :query="query"
           :is-mobile="isMobile" />
       </div>
       <div
         v-else
         @drop="dragFile"
         @dragover="startDrag">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-body
           v-if="optionsLoaded"
           :view-extension="selectedViewExtension"
@@ -62,14 +54,17 @@
           :initialized="initialized"
           :loading="loading"
           :query="query"
-          :primary-filter="primaryFilter" />
+          :extended-search="extendedSearch"
+          :show-extend-filter="showExtendFilter"
+          :primary-filter="primaryFilter"
+          :is-mobile="isMobile"  />
         <exo-document-notification-alerts />
       </div>
     </div>
-    <documents-visibility-drawer />
-    <document-tree-selector-drawer />
+    <documents-visibility-drawer :is-mobile="isMobile" />
+    <document-tree-selector-drawer :is-mobile="isMobile" />
     <documents-info-drawer
-      :selected-view="selectedView" />
+      :selected-view="selectedView" :is-mobile="isMobile" />
     <v-alert
       v-model="alert"
       :icon="false"
@@ -82,15 +77,17 @@
       {{ message }}
     </v-alert>
     <folder-treeview-drawer
-      ref="folderTreeDrawer" />
-    <documents-app-reminder />
-    <documents-actions-menu-mobile />
+      ref="folderTreeDrawer" :is-mobile="isMobile" />
+    <documents-app-reminder :is-mobile="isMobile" />
+    <documents-actions-menu-mobile :is-mobile="isMobile" />
+    <documents-filter-menu-mobile :primary-filter="primaryFilter" :query="query" :extendedSearch="extendedSearch" :is-mobile="isMobile" />
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
       :versions="versions"
       :is-loading="isLoadingVersions"
       :show-load-more="showLoadMoreVersions"
+      :is-mobile="isMobile" 
       @drawer-closed="versionsDrawerClosed"
       @open-version="showVersionPreview"
       @restore-version="restoreVersion"
@@ -113,11 +110,13 @@ export default {
     extensionApp: 'Documents',
     extensionType: 'views',
     query: null,
+    extendedSearch: false,
     fileName: null,
     userId: null,
     sortField: 'lastUpdated',
     isFavorites: false,
     ascending: false,
+    showExtendFilter: false,
     parentFolderId: null,
     pageSize: 50,
     files: [],
@@ -127,6 +126,7 @@ export default {
     initialized: false,
     loading: false,
     hasMore: false,
+    canSendSearchStat: true,
     viewExtensions: {},
     currentFolderPath: '',
     currentFolder: null,
@@ -162,7 +162,7 @@ export default {
       return null;
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+      return this.$vuetify.breakpoint.width < 960;
     },
     searchResult(){
       return ((this.query && this.query.length) || this.isFavorites) && !this.files.length;
@@ -202,9 +202,11 @@ export default {
     this.$root.$on('set-current-folder', this.setCurrentFolder);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
+    this.$root.$on('document-extended-search', this.extendSearch);
     this.$root.$on('save-visibility', this.saveVisibility);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-open-attachments-drawer', this.openDrawer);
+    this.$root.$on('set-loading', this.setLoading);
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
       this.refreshFiles(this.primaryFilter);
@@ -261,6 +263,9 @@ export default {
         this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.summary.added.error')});
         this.$root.$emit('version-description-update-error', version);
       });
+    },
+    setLoading(loading) {
+      this.loading = loading;
     },
     versionsDrawerClosed() {
       this.versions = [];
@@ -342,9 +347,31 @@ export default {
       this.refreshFiles();
     },
     search(query) {
+      const oldQuery = this.query;
+      this.extendedSearch = false;
       this.query = query;
-
       this.refreshFiles();
+      if (query && query.length>0){
+        this.$root.$emit('enable-extend-filter');
+        this.showExtendFilter=true;
+      } else {
+        this.$root.$emit('disable-extend-filter');
+        this.showExtendFilter=false;
+      }
+      if (this.canSendSearchStat && oldQuery !== query) {
+        this.canSendSearchStat = false;
+        window.setTimeout(() => {
+          this.simpleSearchStatistics();
+          this.canSendSearchStat = true;
+        }, 2000);
+      }
+
+    },
+    extendSearch() {
+      this.extendedSearch = true;
+      this.showExtendFilter = false;
+      this.refreshFiles();
+      this.extendedSearchStatistics();
     },
     getFolderPath(path){
       if (!path){
@@ -443,11 +470,16 @@ export default {
       const url = new URL(window.location.href.substring(0, realPageUrlIndex));
       url.searchParams.set('view', view);
       window.history.replaceState('documents', 'Documents', url.toString());
-
       this.selectedView = view;
       this.parentFolderId = null;
       this.folderPath = null;
       this.files = [];
+      this.$root.$emit('resetSearch');
+      this.primaryFilter='all';
+      this.query=null;
+      this.extendedSearch=false;
+      this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
+      this.$root.$emit('set-documents-filter', 'All');
       this.checkDefaultViewOptions();
       this.refreshFiles(this.primaryFilter)
         .finally(() => {
@@ -485,6 +517,11 @@ export default {
       }
       if (this.query) {
         filter.query = this.query;
+      } else {
+        this.extendedSearch = false;
+      }
+      if (this.extendedSearch) {
+        filter.extendedSearch = this.extendedSearch;
       }
       if (this.sortField) {
         filter.sortField = this.sortField;
@@ -511,6 +548,8 @@ export default {
       this.offset = append ? this.offset + this.pageSize : 0 ;
       this.limit = append ? this.limit + this.pageSize : this.pageSize ;
       this.loading = true;
+      this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
+
       return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
           files = this.sortField === 'favorite' ? files && files.sort((file1, file2) => {
@@ -534,9 +573,6 @@ export default {
           this.files.forEach(file => {
             file.canAdd = this.canAdd;
           });
-          if (filter.query){
-            this.$root.$emit('filer-query',filter.query);
-          }
         })
         .finally(() => this.loading = false);
     },
@@ -654,8 +690,46 @@ export default {
           parameters: {
             documentName: file.name,
             documentType: 'exo:symlink',
+            origin: 'Portlet document',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
+
+    simpleSearchStatistics() {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionSimpleSearch',
+          operation: 'simpleSearch',
+          parameters: {
+            spaceId: eXo.env.portal.spaceId,
+            origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
+    extendedSearchStatistics() {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionExtendedSearch',
+          operation: 'extendedSearch',
+          parameters: {
+            spaceId: eXo.env.portal.spaceId,
+            origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
           },
           timestamp: Date.now()

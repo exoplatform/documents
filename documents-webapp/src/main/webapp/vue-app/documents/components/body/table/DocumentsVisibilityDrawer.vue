@@ -122,6 +122,7 @@
             v-for="user in usersToDisplay"
             :key="user"
             :user="user"
+            :is-mobile="isMobile" 
             @remove-user="removeUser"
             @set-visibility="setUserVisibility" />
           <div class="seeMoreUsers">
@@ -152,11 +153,17 @@
     </exo-drawer>
     <documents-visibility-all-users-drawer
       ref="documentAllUsersVisibilityDrawer"
-      :users="users" />
+      :users="users"  :is-mobile="isMobile" />
   </div>
 </template>
 <script>
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
+  },
   data: () => ({
     allGroupsForAdmin: true,
     userGroup: '/platform/users',
@@ -220,9 +227,6 @@ export default {
         placeholder: this.$t('documents.label.visibility.placeholder'),
         noDataLabel: this.$t('documents.label.visibility.noDataLabel'),
       };
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
     },
     maxUsersToShow(){
       return this.$vuetify.breakpoint.width < 1600 ? 2 : 4;
