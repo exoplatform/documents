@@ -70,13 +70,9 @@ public class DocumentSearchServiceConnector {
 
   private final IdentityManager        identityManager;
 
-  private final ActivityStorage        activityStorage;
-
   private final ElasticSearchingClient client;
 
   private final String                 index;
-
-  private final String                 searchType;
 
   private String                       searchQueryFilePath;
 
@@ -89,12 +85,10 @@ public class DocumentSearchServiceConnector {
                                         InitParams initParams) {
     this.configurationManager = configurationManager;
     this.identityManager = identityManager;
-    this.activityStorage = activityStorage;
     this.client = client;
 
     PropertiesParam param = initParams.getPropertiesParam("constructor.params");
     this.index = param.getProperty("index");
-    this.searchType = param.getProperty("searchType");
     if (initParams.containsKey(SEARCH_QUERY_FILE_PATH_PARAM)) {
       searchQueryFilePath = initParams.getValueParam(SEARCH_QUERY_FILE_PATH_PARAM).getValue();
       try {
@@ -246,7 +240,6 @@ public class DocumentSearchServiceConnector {
     if (lastUpdatedDate == null)
       lastUpdatedDate = new Date().getTime();
     Double score = (Double) jsonHit.get("_score");
-    String detail = buildDetail(jsonHit);
     // Get the excerpt
     JSONObject hitHighlight = (JSONObject) jsonHit.get("highlight");
     Map<String, List<String>> excerpts = new HashMap<>();
@@ -272,7 +265,7 @@ public class DocumentSearchServiceConnector {
                                                  title,
                                                  excerpts,
                                                  excerpt.toString(),
-                                                 detail,
+                                                 null,
                                                  null,
                                                  lastUpdatedDate,
                                                  score.longValue());
@@ -280,10 +273,6 @@ public class DocumentSearchServiceConnector {
     String workspace = (String) hitSource.get("workspace");
     String nodePath = (String) hitSource.get("path");
     return new DocumentFileSearchResult(searchResult, id, workspace, nodePath);
-  }
-
-  protected String buildDetail(JSONObject jsonHit) {
-    return null;
   }
 
   protected Long getUpdatedDateFromResult(JSONObject hitSource) {
