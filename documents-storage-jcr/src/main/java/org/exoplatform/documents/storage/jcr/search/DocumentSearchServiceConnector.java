@@ -45,7 +45,6 @@ import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.MembershipEntry;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
-import org.exoplatform.social.core.storage.api.ActivityStorage;
 import org.exoplatform.social.metadata.favorite.FavoriteService;
 
 public class DocumentSearchServiceConnector {
