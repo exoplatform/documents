@@ -2,6 +2,7 @@ import './initComponents.js';
 import './extensions.js';
 
 import * as documentFileService from './js/DocumentFileService.js';
+
 if (!Vue.prototype.$documentFileService) {
   window.Object.defineProperty(Vue.prototype, '$documentFileService', {
     value: documentFileService,
