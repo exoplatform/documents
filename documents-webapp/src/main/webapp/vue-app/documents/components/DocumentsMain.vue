@@ -630,7 +630,7 @@ export default {
     addFolder(){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       const i18nName = this.$t('Folder.label.newfolder');
-      this.$documentFileService.getNewName(ownerId,this.parentFolderId,this.folderPath, i18nName)
+      this.$documentFileService.getNewName(ownerId, this.parentFolderId, this.folderPath, i18nName)
         .then( newName => {
           const newFolder = {
             'id': -1,
