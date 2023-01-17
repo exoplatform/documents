@@ -3,7 +3,7 @@
     class="d-flex flex-nowrap">
     <a
       class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-document-title">
-      <div>
+      <div class="mt-auto mb-auto">
         <v-progress-circular
           v-if="loading"
           indeterminate
@@ -19,7 +19,7 @@
           :size="isMobile && 32 || 22"
           :color="icon.color">{{ icon.class }}</v-icon>
       </div>
-      <div class=" width-document-title">
+      <div class="mt-auto mb-auto width-document-title">
         <div
           v-if="!editNameMode"
           @click="openPreview()"
@@ -34,13 +34,13 @@
             v-sanitized-html="fileType"
             class="document-type ms-0">
           </div>
+          <v-icon
+              v-if="file.sourceID"
+              size="13"
+              class="pe-1 iconStyle ms-1">
+            mdi-link-variant
+          </v-icon>
         </div>
-        <v-icon
-          v-if="file.sourceID"
-          size="10"
-          class="pe-1 iconStyle pb-1">
-          mdi-link-variant
-        </v-icon>
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
@@ -68,6 +68,7 @@
       :is-mobile="isMobile" 
       :class="editNameMode ? '' : 'button-info-details'" />
     <div
+      class="ma-auto"
       :id="`document-action-menu-cel-${file.id}`">
       <v-tooltip bottom>
         <template #activator="{ on, attrs }">
