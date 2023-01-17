@@ -490,37 +490,31 @@ export default {
     },
     openDrawer() {
 
-      let attachmentAppConfiguration = {
+      const attachmentAppConfiguration = {
         'sourceApp': 'NEW.APP'
       };
-      if (eXo.env.portal.spaceName){
+      if (eXo.env.portal.spaceName) {
+        attachmentAppConfiguration.defaultDrive = {
+          isSelected: true,
+          name: `.spaces.${eXo.env.portal.spaceGroup}`,
+          title: eXo.env.portal.spaceDisplayName,
+        };
         const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-        if (pathparts.length>1){
-          attachmentAppConfiguration= {
-            'sourceApp': 'NEW.APP',
-            'defaultFolder': this.extractDefaultFolder(),
-            'defaultDrive': {
-              isSelected: true,
-              name: `.spaces.${eXo.env.portal.spaceGroup}`,
-              title: eXo.env.portal.spaceDisplayName,
-            }
-          };
+        if (pathparts.length > 1) {
+          attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
         }
       } else {
+        attachmentAppConfiguration.defaultDrive = {
+          isSelected: true,
+          name: 'Personal Documents',
+          title: 'Personal Documents'
+        };
         let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
-        if (pathparts.length>1 && pathparts[1].startsWith('Private/')){
+        if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
           pathparts = pathparts[1].split('Private/');
         }
         if (pathparts.length>1){
-          attachmentAppConfiguration= {
-            'sourceApp': 'NEW.APP',
-            'defaultFolder': `Documents/${this.extractDefaultFolder()}`,
-            'defaultDrive': {
-              isSelected: true,
-              name: 'Personal Documents',
-              title: 'Personal Documents'
-            }
-          };
+          attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
         }
       }
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
