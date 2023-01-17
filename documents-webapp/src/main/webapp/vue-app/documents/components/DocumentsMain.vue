@@ -671,6 +671,7 @@ export default {
     createShortcut(file,destPath, destFolder,space) {
       this.$documentFileService.createShortcut(file.id,destPath)
         .then(() => {
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t('document.shortcut.creationSuccess')});
           this.createShortcutStatistics(file,space);
           if (space && space.groupId) {
             const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
@@ -679,7 +680,9 @@ export default {
             this.openFolder(destFolder);
           }
         })
-        .catch(e => console.error(e))
+        .catch(() => {
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.shortcut.creationError')});
+        })
         .finally(() => this.loading = false);
     },
     createShortcutStatistics(file,space) {
