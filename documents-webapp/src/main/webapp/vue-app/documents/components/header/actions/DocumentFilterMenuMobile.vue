@@ -31,7 +31,7 @@
             :component="extension"
             :params="params"
             class="width-full"
-            :element="div" />
+            element="div" />
         </v-list-item>
       </v-list>
       <exo-drawer />
