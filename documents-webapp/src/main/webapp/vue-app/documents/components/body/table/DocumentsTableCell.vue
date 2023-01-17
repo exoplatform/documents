@@ -27,6 +27,10 @@ export default {
       type: Boolean,
       default: false
     },
+    selectedView: {
+      type: String,
+      default: null
+    },
   },
   computed: {
     params() {
@@ -36,6 +40,7 @@ export default {
         extendedSearch: this.extendedSearch,
         extension: this.extension,
         isMobile: this.isMobile,
+        selectedView: this.selectedView
       };
     },
   },

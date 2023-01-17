@@ -10,13 +10,13 @@
       @drop.prevent
       @dragstart.prevent>
       <documents-header
-          :files-size="files.length"
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          :query="query"
-          :primary-filter="primaryFilter"
-          :is-mobile="isMobile" 
-          class="py-2" />
+        :files-size="files.length"
+        :selected-view="selectedView"
+        :can-add="canAdd"
+        :query="query"
+        :primary-filter="primaryFilter"
+        :is-mobile="isMobile" 
+        class="py-2" />
       <div v-if="searchResult && !loading">
         <documents-no-result-body
           :is-mobile="isMobile"
@@ -57,14 +57,16 @@
           :extended-search="extendedSearch"
           :show-extend-filter="showExtendFilter"
           :primary-filter="primaryFilter"
-          :is-mobile="isMobile"  />
+          :selected-view="selectedView"
+          :is-mobile="isMobile" />
         <exo-document-notification-alerts />
       </div>
     </div>
     <documents-visibility-drawer :is-mobile="isMobile" />
     <document-tree-selector-drawer :is-mobile="isMobile" />
     <documents-info-drawer
-      :selected-view="selectedView" :is-mobile="isMobile" />
+      :selected-view="selectedView"
+      :is-mobile="isMobile" />
     <v-alert
       v-model="alert"
       :icon="false"
@@ -77,10 +79,15 @@
       {{ message }}
     </v-alert>
     <folder-treeview-drawer
-      ref="folderTreeDrawer" :is-mobile="isMobile" />
+      ref="folderTreeDrawer"
+      :is-mobile="isMobile" />
     <documents-app-reminder :is-mobile="isMobile" />
     <documents-actions-menu-mobile :is-mobile="isMobile" />
-    <documents-filter-menu-mobile :primary-filter="primaryFilter" :query="query" :extendedSearch="extendedSearch" :is-mobile="isMobile" />
+    <documents-filter-menu-mobile
+      :primary-filter="primaryFilter"
+      :query="query"
+      :extended-search="extendedSearch"
+      :is-mobile="isMobile" />
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"

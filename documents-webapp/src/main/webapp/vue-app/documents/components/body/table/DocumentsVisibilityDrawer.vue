@@ -153,7 +153,8 @@
     </exo-drawer>
     <documents-visibility-all-users-drawer
       ref="documentAllUsersVisibilityDrawer"
-      :users="users"  :is-mobile="isMobile" />
+      :users="users"
+      :is-mobile="isMobile" />
   </div>
 </template>
 <script>
