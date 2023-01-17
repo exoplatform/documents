@@ -324,9 +324,9 @@ export function createShortcut(documentID,destPath) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
+    } else  {
+      throw new Error('Error creating document shortcut');
     }
-  }).catch(e => {
-    throw new Error(`Error renaming document ${e}`);
   });
 }
 
