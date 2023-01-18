@@ -61,7 +61,8 @@
         fas fa-eye
       </v-icon>
       <documents-visibility-menu
-        @visibility-user="visibilityUser" :is-mobile="isMobile" />
+        :is-mobile="isMobile"
+        @visibility-user="visibilityUser" />
       <v-divider vertical />
       <v-icon
         :title="$t('documents.label.visibility.remove')"

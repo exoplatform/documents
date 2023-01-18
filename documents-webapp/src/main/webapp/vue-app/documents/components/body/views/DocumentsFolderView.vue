@@ -30,7 +30,8 @@
           :file="item"
           :query="query"
           :extended-search="extendedSearch"
-          :is-mobile="isMobile" 
+          :is-mobile="isMobile"
+          :selected-view="selectedView"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template v-if="hasMore" slot="footer">
@@ -102,6 +103,10 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    selectedView: {
+      type: String,
+      default: null
     }
   },
   data: () => ({

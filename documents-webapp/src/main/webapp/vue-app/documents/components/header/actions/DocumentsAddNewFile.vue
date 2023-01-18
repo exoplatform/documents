@@ -68,7 +68,9 @@
         fas fa-arrow-left
       </v-icon>
     </div>
-    <documents-add-new-menu-mobile ref="documentAddItemMenu"  :is-mobile="isMobile"/>
+    <documents-add-new-menu-mobile
+      ref="documentAddItemMenu"
+      :is-mobile="isMobile" />
   </div>
 </template>
 <script>
