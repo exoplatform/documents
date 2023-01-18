@@ -28,18 +28,6 @@
         </init-params>
     </component>
 
-    <component>
-        <key>ExtendedSearchFeatureProperties</key>
-        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
-        <init-params>
-            <properties-param>
-                <name>ExtendedSearchFeatureProperties</name>
-                <description>Add Extended Search enablement flag</description>
-                <property name="exo.feature.ExtendedSearch.enabled" value="${exo.feature.ExtendedSearch.enabled:false}" />
-            </properties-param>
-        </init-params>
-    </component>
-
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
         <component-plugin>
