@@ -656,8 +656,14 @@ export default {
         .then(createdFolder => {
           this.files.shift();
           this.files.unshift(createdFolder);
+        }).catch(e => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: this.$t('document.folder.conflict.error.message')
+            });
+          }
         })
-        .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
     renameDocument(file,name){

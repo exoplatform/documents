@@ -211,9 +211,9 @@ export function createFolder(ownerId,parentid,folderPath,name) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.json();
+    } else {
+      throw resp;
     }
-  }).catch(e => {
-    throw new Error(`Error creating folder ${e}`);
   });
 }
 export function getNewName(ownerId,parentid,folderPath,name) {
