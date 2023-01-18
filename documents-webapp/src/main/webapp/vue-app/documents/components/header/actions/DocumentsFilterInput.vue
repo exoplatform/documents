@@ -5,7 +5,7 @@
       class="inputDocumentsFilter text-sub-title pa-1 my-auto mt-2"
       v-show="isMobile && !showMobileFilter"
       @click="mobileFilter()">
-      {{filterIcon}}
+      {{ filterIcon }}
     </v-icon>
     <v-text-field
       v-model="query"

@@ -82,6 +82,10 @@ export default {
       type: Boolean,
       default: false
     },
+    selectedView: {
+      type: String,
+      default: null
+    }
   },
   computed: {
     params() {
@@ -98,6 +102,7 @@ export default {
         query: this.query,
         extendedSearch: this.extendedSearch,
         isMobile: this.isMobile,
+        selectedView: this.selectedView
       };
     },
     showExtend(){

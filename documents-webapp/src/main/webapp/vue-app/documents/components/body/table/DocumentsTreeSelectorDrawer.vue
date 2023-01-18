@@ -16,7 +16,8 @@
               <span class="font-weight-bold text-color text-no-wrap">{{ $t('documents.move.drawer.space') }}</span>
               <div class="flex-grow-1">
                 <documents-move-spaces
-                  :space="space" :is-mobile="isMobile" />
+                  :space="space"
+                  :is-mobile="isMobile" />
               </div>
             </div>
           </div>
