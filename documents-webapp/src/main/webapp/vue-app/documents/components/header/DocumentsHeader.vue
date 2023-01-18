@@ -4,13 +4,23 @@
       <documents-header-left
         v-if="canAdd"
         :selected-view="selectedView" 
-        :is-mobile="isMobile"/>
-      <v-spacer/>
-      <documents-header-center v-if="!canShowMobileFilter" :selected-view="selectedView"  :is-mobile="isMobile"/>
-      <v-spacer/>
-      <documents-header-right :query="query" :primary-filter="primaryFilter" :is-mobile="isMobile"/>
+        :is-mobile="isMobile" />
+      <v-spacer />
+      <documents-header-center
+        v-if="!canShowMobileFilter"
+        :selected-view="selectedView"
+        :is-mobile="isMobile" />
+      <v-spacer />
+      <documents-header-right
+        :query="query"
+        :primary-filter="primaryFilter"
+        :is-mobile="isMobile" />
     </div>
-    <documents-breadcrumb v-show="showBreadcrumb" v-if="selectedView === 'folder'" class="py-4 px-1"  :is-mobile="isMobile"/>
+    <documents-breadcrumb
+      v-if="selectedView === 'folder'"
+      v-show="showBreadcrumb"
+      :is-mobile="isMobile"
+      class="py-4 px-1" />
   </div>
 </template>
 

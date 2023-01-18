@@ -54,7 +54,10 @@
             :value="lastUpdated"
             :format="fullDateFormat"
             class="document-time text-light-color text-no-wrap" />
-          <documents-visibility-cell :file="file"  :is-mobile="isMobile" />
+          <documents-visibility-cell
+            :file="file"
+            :is-mobile="isMobile"
+            :selected-view="selectedView" />
         </div>
       </div>
     </a>
@@ -92,7 +95,8 @@
             close-on-click
             absolute>
             <documents-actions-menu
-              :file="file"  :is-mobile="isMobile" />
+              :file="file"
+              :is-mobile="isMobile" />
           </v-menu>
         </template>
         <span>
@@ -122,6 +126,10 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    selectedView: {
+      type: String,
+      default: null
     }
   },
   data: () => ({

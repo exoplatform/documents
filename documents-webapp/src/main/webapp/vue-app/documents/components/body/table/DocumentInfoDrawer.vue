@@ -23,7 +23,10 @@
               class="item-version text-caption border-radius primary pa-0 px-1 clickable">
               V{{ file.versionNumber }}
             </span>
-            <documents-favorite-action v-if="!file.folder" :file="file" :is-mobile="isMobile" />
+            <documents-favorite-action
+              v-if="!file.folder"
+              :file="file"
+              :is-mobile="isMobile" />
             <v-spacer />
           </a>
         </v-list-item-content>
@@ -133,7 +136,10 @@
               <a
                 class="fileDetails not-clickable text-color d-flex">
                 <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
-                <documents-file-size-cell class="mx-1 text-color" :file="file" :is-mobile="isMobile" />
+                <documents-file-size-cell
+                  class="mx-1 text-color"
+                  :file="file"
+                  :is-mobile="isMobile" />
               </a>
             </v-list-item-title>
           </v-list-item-content>
