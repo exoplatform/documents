@@ -521,9 +521,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                            String folderId,
                            String folderPath,
                            String title,
-                           Identity aclIdentity) throws IllegalAccessException,
-                                                 ObjectAlreadyExistsException,
-                                                 ObjectNotFoundException {
+                           Identity aclIdentity) throws ObjectAlreadyExistsException {
+    if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
+      throw new IllegalArgumentException("folder title is not valid");
+    }
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {
@@ -538,7 +539,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, folderId);
       }
-      if(StringUtils.isNotBlank(folderPath)){
+      if (StringUtils.isNotBlank(folderPath)) {
         try {
           node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
         } catch (RepositoryException repositoryException) {
@@ -556,6 +557,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
       return toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService);
+    } catch (ObjectAlreadyExistsException e) {
+      throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
     } finally {

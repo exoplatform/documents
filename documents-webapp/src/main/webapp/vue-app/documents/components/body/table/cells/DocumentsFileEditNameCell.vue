@@ -66,7 +66,7 @@ export default {
     nameRegex: /[<\\>:"/|?*]/
   }),
   created() {
-    this.nameRules = [v => !!v, v => v.length > 1, v => !this.nameRegex.test(v)];
+    this.nameRules = [v => !!v, v => !this.nameRegex.test(v)];
   },
   methods: {
     editTitle(){
@@ -82,7 +82,11 @@ export default {
     },
     checkInput: function(e,newTitle) {
       if (e.keyCode === 13 || e === 13) {
-        if (this.file.folder && this.file.id === -1){
+        if (this.file.folder && this.file.id === -1) {
+          if (this.nameRegex.test(newTitle)) {
+            this.$root.$emit('show-alert', {type: 'warning', message: this.$t('document.valid.name.error.message')});
+            return;
+          }
           this.$root.$emit('documents-create-folder', newTitle);
         } else {
           this.renameFile(newTitle);

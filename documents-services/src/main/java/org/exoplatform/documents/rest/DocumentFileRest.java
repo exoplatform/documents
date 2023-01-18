@@ -29,6 +29,7 @@ import org.apache.commons.lang.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.common.http.HTTPStatus;
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
@@ -404,18 +405,21 @@ public class DocumentFileRest implements ResourceContainer {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
       AbstractNode createdFolder = documentFileService.createFolder(ownerId, parentid, folderPath, name, userIdentityId);
       AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
-              identityManager,
-              spaceService,
-              metadataService,
-              createdFolder,
-              null,
-              userIdentityId);
+                                                                                 identityManager,
+                                                                                 spaceService,
+                                                                                 metadataService,
+                                                                                 createdFolder,
+                                                                                 null,
+                                                                                 userIdentityId);
       return Response.ok(abstractNodeEntity).build();
-      } catch (Exception ex) {
-        LOG.warn("Failed to create Folder", ex);
-        return Response.status(HTTPStatus.INTERNAL_ERROR).build();
-      }
+    } catch (ObjectAlreadyExistsException e) {
+      LOG.warn("Folder with same name already exists", e);
+      return Response.status(HTTPStatus.CONFLICT).build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to create Folder", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
+  }
 
   @GET
   @Path("/newname")
