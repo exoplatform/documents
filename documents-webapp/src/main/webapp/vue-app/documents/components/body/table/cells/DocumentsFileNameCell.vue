@@ -154,7 +154,8 @@ export default {
       n: '(n|ń|ň|ņ|ṋ|ȵ|ṅ|ṇ|ǹ|ɲ|ṉ|ƞ|ᵰ|ᶇ|ɳ|ñ)',
       o: '(o|ó|ŏ|ǒ|ô|ố|ộ|ồ|ổ|ỗ|ö|ȫ|ȯ|ȱ|ọ|ő|ȍ|ò|ỏ|ơ|ớ|ợ|ờ|ở|ỡ|ȏ|ō|ṓ|ṑ|ǫ|ǭ|ø|ǿ|õ|ṍ|ṏ|ȭ)',
       u: '(u|ú|ŭ|ǔ|û|ṷ|ü|ǘ|ǚ|ǜ|ǖ|ṳ|ụ|ű|ȕ|ù|ủ|ư|ứ|ự|ừ|ử|ữ|ȗ|ū|ṻ|ų|ᶙ|ů|ũ|ṹ|ṵ)'
-    }
+    },
+    icon: null
   }),
   computed: {
     title() {
@@ -166,71 +167,6 @@ export default {
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
-    },
-    icon() {
-      if (this.file && this.file.folder){
-        return {
-          class: 'fas fa-folder',
-          color: '#476A9C',
-        };
-      }
-      const type = this.file && this.file.mimeType || '';
-      if (type.includes('pdf')) {
-        return {
-          class: 'fas fa-file-pdf',
-          color: '#FF0000',
-        };
-      } else if (type.includes('presentation') || type.includes('powerpoint')) {
-        return {
-          class: 'fas fa-file-powerpoint',
-          color: '#CB4B32',
-        };
-      } else if (type.includes('sheet') || type.includes('excel') || type.includes('csv')) {
-        return {
-          class: 'fas fa-file-excel',
-          color: '#217345',
-        };
-      } else if (type.includes('word') || type.includes('opendocument') || type.includes('rtf') ) {
-        return {
-          class: 'fas fa-file-word',
-          color: '#2A5699',
-        };
-      } else if (type.includes('plain')) {
-        return {
-          class: 'fas fa-file-alt',
-          color: '#385989',
-        };
-      } else if (type.includes('image')) {
-        return {
-          class: 'fas fa-file-image',
-          color: '#999999',
-        };
-      } else if (type.includes('video') || type.includes('octet-stream') || type.includes('ogg')) {
-        return {
-          class: 'fas fa-file-video',
-          color: '#79577A',
-        };
-      } else if (type.includes('zip') || type.includes('war') || type.includes('rar')) {
-        return {
-          class: 'fas fa-file-archive',
-          color: '#717272',
-        };
-      } else if (type.includes('illustrator') || type.includes('eps')) {
-        return {
-          class: 'fas fa-file-contract',
-          color: '#E79E24',
-        };
-      } else if (type.includes('html') || type.includes('xml') || type.includes('css')) {
-        return {
-          class: 'fas fa-file-code',
-          color: '#6cf500',
-        };
-      } else {
-        return {
-          class: 'fas fa-file',
-          color: '#476A9C',
-        };
-      }
     },
     fileName() {
       return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(0,this.file.name.lastIndexOf('.')):this.file.name;
@@ -261,12 +197,25 @@ export default {
     });
     this.$root.$on('update-file-name', this.editFileName);
     this.$root.$on('cancel-edit-mode', this.cancelEditMode);
+    this.getFileIcon();
   },
   beforeDestroy() {
     this.$root.$off('update-file-name', this.editFileName);
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
+    getFileIcon() {
+      const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+      if (this.file?.folder) {
+        this.icon = extensions[0].get('folder');
+      } else {
+        let extension = extensions[0].get(this.file?.mimeType);
+        if (!extension) {
+          extension = extensions[0].get('file');
+        }
+        this.icon = extension;
+      }
+    },
     editFileName(file) {
       if (this.file.id === file.id){
         this.fileToEditId = file.id;
