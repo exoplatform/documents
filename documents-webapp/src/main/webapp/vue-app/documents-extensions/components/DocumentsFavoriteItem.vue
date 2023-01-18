@@ -1,7 +1,11 @@
 <template>
   <v-list-item class="clickable" @click="openPreview()">
     <v-list-item-icon class="me-3 my-auto">
-      <v-icon size="22" class="icon-default-color"> fas fa-folder-open </v-icon>
+      <v-icon
+        size="25"
+        :color="iconColor">
+        {{ iconClass }}
+      </v-icon>
     </v-list-item-icon>
 
     <v-list-item-content>
@@ -41,12 +45,15 @@ export default {
       minute: 'numeric',
       second: 'numeric',
     },
+    iconColor: '#476A9C',
+    iconClass: 'fas fa-file',
     isFavorite: true,
   }),
   created() {
     this.$attachmentService.getAttachmentById(this.id)
       .then(file => { 
         this.file = file;
+        this.getFileIcon(this.file?.mimetype);
         this.documentTitle = decodeURI(decodeURI(file.title)) ;
         const updaterFullName = file && file.updater && file.updater.profile && file.updater.profile.fullname || '';
         const updateDate = new Date(file.updated);
@@ -75,6 +82,15 @@ export default {
       });
   },
   methods: {
+    getFileIcon(mimeType) {
+      const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+      let extension = extensions[0].get(mimeType);
+      if (!extension) {
+        extension = extensions[0].get('file');
+      }
+      this.iconColor = extension.color;
+      this.iconClass = extension.class;
+    },
     openPreview() {
       documentPreview.init(this.documentPreviewInit);
       this.$root.$emit('close-favorite-drawer');
