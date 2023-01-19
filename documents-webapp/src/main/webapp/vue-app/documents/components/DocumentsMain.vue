@@ -669,9 +669,22 @@ export default {
     renameDocument(file,name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.renameDocument(ownerId,file.id,name)
-        .then(() => this.refreshFiles())
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
+        .then(() => {
+          this.refreshFiles();
+          this.$root.$emit('document-renamed', file);
+        })
+        .catch(e => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: file.folder ? this.$t('document.folder.conflict.error.message')
+                : this.$t('document.file.conflict.error.message')
+            });
+          }
+        })
+        .finally(() => {
+          this.loading = false;
+        });
     },
     moveDocument(ownerId,fileId,destPath){
       this.$documentFileService.moveDocument(ownerId,fileId,destPath)

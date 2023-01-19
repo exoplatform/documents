@@ -67,6 +67,12 @@ export default {
   }),
   created() {
     this.nameRules = [v => !!v, v => !this.nameRegex.test(v)];
+    this.$root.$on('document-renamed', (file) => {
+      if (file.id === this.file.id) {
+        this.file.name = this.fileName.concat(this.fileType);
+        this.$root.$emit('cancel-edit-mode', this.file);
+      }
+    });
   },
   methods: {
     editTitle(){
@@ -101,8 +107,6 @@ export default {
         this.$root.$emit('show-alert', {type: 'warning', message: this.$t('document.valid.name.error.message')});
         return;
       }
-      this.$root.$emit('cancel-edit-mode', this.file);
-      this.file.name = this.fileName.concat(this.fileType);
       //concat the file type to the new tilte when renaming file
       this.$root.$emit('documents-rename', this.file, newTitle.concat(this.fileType));
     }
