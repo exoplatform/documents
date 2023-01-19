@@ -614,7 +614,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) {
+  public void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws ObjectAlreadyExistsException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
       throw new IllegalArgumentException("document title is not valid");
     }
@@ -634,7 +634,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String name = Text.escapeIllegalJcrChars(cleanName(title));
       //clean node name
-      name = URLDecoder.decode(name,"UTF-8");
+      name = URLDecoder.decode(name, "UTF-8");
       if (name.indexOf('.') == -1) {
         String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE) && node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
         if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
@@ -644,9 +644,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
 
-      if (node.getName().equals(title)) {
-        throw new ObjectAlreadyExistsException("Document'" + title + "' already exist") ;
+      if (node != null && node.getParent() != null && node.getParent().hasNode(title)) {
+        Node existNode = node.getParent().getNode(title);
+        String primaryType = existNode.getPrimaryNodeType().getName();
+        if (node != existNode && node.getPrimaryNodeType().getName().equals(primaryType)) {
+          throw new ObjectAlreadyExistsException("Document with same name already exist");
+        }
       }
+      
       if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
         node.addMixin(NodeTypeConstants.EXO_MODIFY);
       }
@@ -671,6 +676,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.setProperty(NodeTypeConstants.EXO_NAME, name);
       node.save();
+    } catch (ObjectAlreadyExistsException e) {
+      throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentID, e);
     } finally {

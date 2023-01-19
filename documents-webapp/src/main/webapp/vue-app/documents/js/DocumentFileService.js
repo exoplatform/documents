@@ -160,9 +160,9 @@ export function renameDocument(ownerId,documentID,newName) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
+    } else {
+      throw resp;
     }
-  }).catch(e => {
-    throw new Error(`Error renaming document ${e}`);
   });
 }
 

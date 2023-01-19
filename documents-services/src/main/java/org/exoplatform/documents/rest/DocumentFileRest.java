@@ -478,6 +478,9 @@ public class DocumentFileRest implements ResourceContainer {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
       documentFileService.renameDocument(ownerId, documentID, newName, userIdentityId);
       return Response.ok().build();
+    } catch (ObjectAlreadyExistsException ex) {
+      LOG.warn("Document with same name already exists", ex);
+      return Response.status(HTTPStatus.CONFLICT).build();
     } catch (Exception ex) {
       LOG.warn("Failed to rename Document", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
