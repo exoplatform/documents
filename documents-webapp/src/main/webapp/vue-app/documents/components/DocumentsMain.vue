@@ -686,12 +686,20 @@ export default {
           this.loading = false;
         });
     },
-    moveDocument(ownerId,fileId,destPath){
-      this.$documentFileService.moveDocument(ownerId,fileId,destPath)
-        .then( () => {
-          this.refreshFiles();
+    moveDocument(ownerId, file, destPath, destFolder, space) {
+      this.$documentFileService.moveDocument(ownerId,file.id,destPath)
+        .then(() => {
+          if (space && space.groupId) {
+            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
+            window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+          } else {
+            this.openFolder(destFolder);
+          }
+          this.$root.$emit('show-alert', {type: 'success', message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')});
         })
-        .catch(e => console.error(e))
+        .catch(() => {
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
+        })
         .finally(() => this.loading = false);
     },
     createShortcut(file,destPath, destFolder,space) {
