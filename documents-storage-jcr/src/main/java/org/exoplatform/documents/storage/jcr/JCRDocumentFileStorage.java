@@ -114,9 +114,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
-      if (ownerIdentity.isUser()) {
-        rootPath = rootPath.split("/" + USER_PRIVATE_ROOT_NODE)[0];
-      }
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
