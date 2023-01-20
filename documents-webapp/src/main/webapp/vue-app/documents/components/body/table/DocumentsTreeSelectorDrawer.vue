@@ -228,10 +228,10 @@ export default {
       this.isLoading = true;
       const destinationPath = this.folder && this.folder.path ? this.folder.path : `/Groups${this.groupId}/Documents`;
       if (this.actionType === 'move') {
-        this.$root.$emit('documents-move', this.ownerId, this.file, destinationPath);
+        this.$root.$emit('documents-move', this.ownerId, this.file, destinationPath, this.folder, this.space);
       }
       if (this.actionType === 'shortcut') {
-        this.$root.$emit('create-shortcut', this.file, destinationPath, this.folder,this.space);
+        this.$root.$emit('create-shortcut', this.file, destinationPath, this.folder, this.space);
       }
     },
   }
