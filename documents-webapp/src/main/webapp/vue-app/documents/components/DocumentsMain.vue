@@ -509,19 +509,22 @@ export default {
           name: 'Personal Documents',
           title: 'Personal Documents'
         };
-        let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
-        if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
-          pathparts = pathparts[1].split('Private/');
+        let pathParts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
+        if (pathParts.length > 1 && pathParts[1].startsWith('Private/')){
+          pathParts = pathParts[1].split('Private/');
         }
-        if (pathparts.length>1){
+        if (pathParts.length > 1){
           attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
         }
       }
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
-    extractDefaultFolder() {
+    extractDefaultFolder(isPersonalDrive) {
       const path = this.currentFolder.path;
-      return path.substring(path.indexOf('Documents')+ '/Documents'.length);
+      if (isPersonalDrive) {
+        return path.substring(path.indexOf('Private') + '/Private'.length);
+      }
+      return path.substring(path.indexOf('Documents') + '/Documents'.length);
     },
     setCurrentFolder(folder) {
       this.currentFolder = folder;
