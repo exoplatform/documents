@@ -36,6 +36,12 @@ export default {
   }),
   computed: {
     icon() {
+      if (this.file.folder && this.file.id < 0) {
+        return {
+          icon: 'fas fa-layer-group',
+          title: this.$t('documents.label.visibility.all'),
+        };
+      }
       switch (this.file.acl.visibilityChoice) {
       case 'SPECIFIC_COLLABORATOR':
         return {
