@@ -80,12 +80,23 @@
       <v-btn
         v-for="action in alertActions"
         :key="action.event"
+        :loading="isAlertActionRunning"
         plain
         text
         color="primary"
         @click="emitAlertAction(action)">
         {{ $t(`document.conflicts.action.${action.event}`) }}
       </v-btn>
+      <template #close="{ toggle }">
+        <v-btn
+          v-if="!isMobile"
+          icon
+          @click="handleAlertClose(toggle)">
+          <v-icon>
+            mdi-close-circle
+          </v-icon>
+        </v-btn>
+      </template>
     </v-alert>
     <folder-treeview-drawer
       ref="folderTreeDrawer"
@@ -160,7 +171,8 @@ export default {
     alertType: '',
     message: '',
     alertActions: [],
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
+    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+    isAlertActionRunning: false
   }),
   computed: {
     showLoadMoreVersions() {
@@ -258,11 +270,16 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    handleAlertClose() {
+      this.$root.$emit('cancel-action');
+      this.alert = false;
+    },
     handleCancelAlertActions() {
       this.alert = false;
       this.alertActions = [];
     },
     handleConflicts(fn) {
+      this.isAlertActionRunning = true;
       if (fn.name === 'createShortcut') {
         this.createShortcut(...fn.params, 'keepBoth');
       }
@@ -727,6 +744,7 @@ export default {
             type: 'success',
             message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
           });
+          this.isAlertActionRunning = false;
         })
         .catch(e => {
           if (e.status === 409) {
@@ -755,6 +773,7 @@ export default {
             this.openFolder(destFolder);
           }
           this.$root.$emit('shortcut-created');
+          this.isAlertActionRunning = false;
         })
         .catch((e) => {
           if (e.status === 409) {
