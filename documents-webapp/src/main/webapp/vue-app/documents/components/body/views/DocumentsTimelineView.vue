@@ -30,6 +30,7 @@
           :query="query"
           :extended-search="extendedSearch"
           :is-mobile="isMobile"
+          :selected-view="selectedView"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template
@@ -114,6 +115,10 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    selectedView: {
+      type: String,
+      default: null
     }
   },
   data: () => ({

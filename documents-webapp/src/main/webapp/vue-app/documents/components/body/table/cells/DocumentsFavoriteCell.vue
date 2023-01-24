@@ -3,7 +3,9 @@
     v-show="isFavorite && !file.folder"
     :id="`favorite-cell-file-${fileId}`">
     <div v-if="!isMobile">
-      <documents-favorite-action :file="file"  :is-mobile="isMobile" />
+      <documents-favorite-action
+        :file="file"
+        :is-mobile="isMobile" />
     </div>
   </div>
 </template>
