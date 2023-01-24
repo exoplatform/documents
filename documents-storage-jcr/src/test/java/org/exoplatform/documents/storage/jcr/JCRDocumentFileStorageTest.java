@@ -315,11 +315,18 @@ public class JCRDocumentFileStorageTest {
 
   @Test
   public void createShortcut() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session userSession = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(userSession);
     Throwable exception =
-            assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.createShortcut(null, null));
+            assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.createShortcut(null, null, "user", null));
     assertEquals("Error while creating a shortcut for document's id " + null + " to destination path" + null, exception.getMessage());
 
-    Session systemSession = mock(Session.class);
     Node rootNode = mock(Node.class);
     ExtendedNode currentNode = Mockito.mock(ExtendedNode.class);
     ExtendedNode linkNode = mock(ExtendedNode.class);
@@ -327,18 +334,9 @@ public class JCRDocumentFileStorageTest {
     NodeType nodeType =  mock(NodeType.class);
     AccessControlList acl = new AccessControlList();
     acl.setOwner("test_root");
-    SessionProvider sessionProvider = mock(SessionProvider.class);
-    when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
-    ManageableRepository manageableRepository = mock(ManageableRepository.class);
-    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
-    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
-    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
-    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
-    when(sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
-            manageableRepository)).thenReturn(systemSession);
 
-    when(JCRDocumentsUtil.getNodeByIdentifier(systemSession, "11111111")).thenReturn(currentNode);
-    when((Node) systemSession.getItem("/Groups/spaces/test/Documents/test")).thenReturn(rootNode);
+    when(JCRDocumentsUtil.getNodeByIdentifier(userSession, "11111111")).thenReturn(currentNode);
+    when((Node) userSession.getItem("/Groups/spaces/test/Documents/test")).thenReturn(rootNode);
 
     when(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(false);
     when(currentNode.getName()).thenReturn("test");
@@ -356,8 +354,13 @@ public class JCRDocumentFileStorageTest {
     when(((ExtendedNode) currentNode).getIdentifier()).thenReturn("123");
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
 
-    jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
-    verify(sessionProvider, times(1)).close();
+    jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test", "user", null);
+    verify(sessionProvider, times(2)).close();
+    when(rootNode.hasNode("test")).thenReturn(true);
+    when(rootNode.addNode("test", NodeTypeConstants.EXO_SYMLINK)).thenReturn(currentNode);
+    when(currentNode.getPath()).thenReturn("/Groups/spaces/test/Documents/test[1]");
+    jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test", "user", "keepBoth");
+
   }
 
   @Test

@@ -3,7 +3,7 @@
     v-model="drawer"
     ref="documentsTreeSelectorDrawer"
     class="documentsTreeSelectorDrawer"
-    @closed="close"
+    @closed="cancel"
     right>
     <template slot="title">
       <span :title="drawerTitle" class="text-truncate">{{ drawerTitle }}</span>
@@ -24,23 +24,27 @@
         </v-list-item>
         <v-list-item>
           <div class="py-2 width-full">
-            <span class="font-weight-bold text-color text-no-wrap pb-2">{{ $t('documents.move.drawer.currentPosition') }}</span>
+            <span class="font-weight-bold text-color text-no-wrap pb-2">{{
+              $t('documents.move.drawer.currentPosition')
+            }}</span>
             <documents-breadcrumb
               :show-icon="false"
               :documents-breadcrumb="documentsBreadcrumbSource"
               :disabled-icon-tree="true"
-              :is-mobile="isMobile" 
+              :is-mobile="isMobile"
               move />
           </div>
         </v-list-item>
         <v-list-item>
           <div class="py-2  width-full">
-            <span class="font-weight-bold text-color text-no-wrap pb-2">{{ $t('documents.move.drawer.destination') }}</span>
+            <span class="font-weight-bold text-color text-no-wrap pb-2">{{
+              $t('documents.move.drawer.destination')
+            }}</span>
             <documents-breadcrumb
               :show-icon="false"
               :documents-breadcrumb="documentsBreadcrumbDestination"
               :disabled-icon-tree="true"
-              :is-mobile="isMobile" 
+              :is-mobile="isMobile"
               move />
           </div>
         </v-list-item>
@@ -79,13 +83,14 @@
       <div class="d-flex">
         <v-spacer />
         <v-btn
-          @click="close()"
+          @click="cancel()"
           class="btn ml-2">
           {{ $t('documents.move.drawer.button.cancel') }}
         </v-btn>
         <v-btn
           :disabled="disableButton"
           @click="changeLocationDocument()"
+          :loading="isLoading"
           class="btn btn-primary ml-2">
           {{ submitButton }}
         </v-btn>
@@ -116,7 +121,8 @@ export default {
     groupId: '',
     space: [],
     file: {},
-    actionType: ''
+    actionType: '',
+    isLoading: false,
   }),
   computed: {
     openLevel() {
@@ -133,7 +139,7 @@ export default {
     }
   },
   created() {
-    this.$root.$on('current-space',data => {
+    this.$root.$on('current-space', data => {
       const ownerId = data ? data.identity.id : null;
       this.items = [];
       this.space = data;
@@ -149,6 +155,24 @@ export default {
         this.open(file);
       }
     });
+    this.$root.$on('document-moved', () => {
+      this.close();
+    });
+    this.$root.$on('shortcut-created', () => {
+      this.close();
+    });
+    this.$root.$on('cancel-action', () => {
+      this.cancel();
+    });
+  },
+  watch: {
+    isLoading() {
+      if (this.isLoading) {
+        this.$refs.documentsTreeSelectorDrawer.startLoading();
+      } else {
+        this.$refs.documentsTreeSelectorDrawer.endLoading();
+      }
+    },
   },
   methods: {
     open(file) {
@@ -156,7 +180,7 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.retrieveDocumentTree(ownerId);
       this.space = {
-        displayName: this.spaceDisplayName ? this.spaceDisplayName : this.userName ,
+        displayName: this.spaceDisplayName ? this.spaceDisplayName : this.userName,
         avatarUrl: this.spaceDisplayName ? `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/spaces/${this.spaceName}/avatar` :
           `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/users/${this.userName}/avatar`,
       };
@@ -169,7 +193,12 @@ export default {
         .then(breadcrumb => this.documentsBreadcrumbSource = breadcrumb.slice());
       this.$refs.documentsTreeSelectorDrawer.open();
     },
+    cancel() {
+      this.close();
+      this.$root.$emit('cancel-alert-actions');
+    },
     close() {
+      this.isLoading = false;
       this.$refs.documentsTreeSelectorDrawer.close();
     },
     getDestination(folder, path) {
@@ -181,30 +210,29 @@ export default {
           this.destinationFolderId = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].id;
           this.destinationFolderPath = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].path;
           return breadCrumbs;
-        })
-        .finally(() => this.loading = false);
+        });
     },
-    retrieveDocumentTree(ownerId){
+    retrieveDocumentTree(ownerId) {
       this.$documentFileService
         .getFullTreeData(ownerId).then(data => {
           if (data) {
             this.items = [];
             this.items = data;
-            if (this.items.length>0){
+            if (this.items.length > 0) {
               this.folder = this.items[0];
             }
           }
         });
     },
     changeLocationDocument() {
-      const destinationPath = this.folder && this.folder.path ? this.folder.path:`/Groups${this.groupId}/Documents`;
+      this.isLoading = true;
+      const destinationPath = this.folder && this.folder.path ? this.folder.path : `/Groups${this.groupId}/Documents`;
       if (this.actionType === 'move') {
-        this.$root.$emit('documents-move', this.ownerId, this.file.id, destinationPath);
+        this.$root.$emit('documents-move', this.ownerId, this.file, destinationPath);
       }
       if (this.actionType === 'shortcut') {
         this.$root.$emit('create-shortcut', this.file, destinationPath, this.folder,this.space);
       }
-      this.close();
     },
   }
 };
