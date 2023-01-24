@@ -23,7 +23,7 @@
     </div>
     <div
       class="extendFilterButton"
-      v-show="showExtend && extendedSearchEnabled"
+      v-show="showExtend && !this.isMobile"
       @click="extendFilter()">
       <v-icon
         size="24"
@@ -61,9 +61,6 @@ export default {
     emptyDocs: '/documents-portlet/images/docs.png',
   }),
   computed: {
-    extendedSearchEnabled() {
-      return eXo.env.portal.extendedSearchEnabled && !this.isMobile;
-    },
     showExtend(){
       return this.showExtendFilter;
     }
