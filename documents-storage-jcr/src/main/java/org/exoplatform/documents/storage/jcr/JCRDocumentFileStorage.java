@@ -106,6 +106,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                  ADD_TAG_DOCUMENT             = "add_tag_document";
 
+  private static final String                  KEEP_BOTH                    = "keepBoth";
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
@@ -643,14 +644,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           name = name.concat(ext);
         }
       }
-
-      if (node != null && node.getParent() != null && node.getParent().hasNode(title)) {
-        Node existNode = node.getParent().getNode(title);
-        String primaryType = existNode.getPrimaryNodeType().getName();
-        if (node != existNode && node.getPrimaryNodeType().getName().equals(primaryType)) {
-          throw new ObjectAlreadyExistsException("Document with same name already exist");
-        }
-      }
+      
+      checkNodeExistence(session, node, title);
       
       if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
         node.addMixin(NodeTypeConstants.EXO_MODIFY);
@@ -687,6 +682,27 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  private void checkNodeExistence(Session session, Node node, String title) throws RepositoryException,
+                                                                            ObjectAlreadyExistsException {
+    Node current = node;
+    if (current != null && current.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      current = getNodeByIdentifier(session, current.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+    }
+    if (current != null && node.getParent() != null && node.getParent().hasNode(title)) {
+      Node existNode = node.getParent().getNode(title);
+      Node existCurrent = existNode;
+      if (existCurrent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        existCurrent = getNodeByIdentifier(session, existCurrent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+      }
+      if (existCurrent != null) {
+        String primaryType = existCurrent.getPrimaryNodeType().getName();
+        if (node != existNode && current.getPrimaryNodeType().getName().equals(primaryType)) {
+          throw new ObjectAlreadyExistsException("Document with same name already exist");
+        }
+      }
+    }
+  }
+  
   @Override
   public AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, Identity aclIdentity) throws IllegalAccessException,
                                                                                            ObjectNotFoundException {
@@ -725,15 +741,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void moveDocument(long ownerId, String fileId, String destPath, Identity aclIdentity) throws IllegalAccessException,
-          ObjectNotFoundException {
+  public void moveDocument(long ownerId,
+                           String fileId,
+                           String destPath,
+                           Identity aclIdentity,
+                           String conflictAction) throws ObjectAlreadyExistsException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
+    Session session;
+    Node node;
     try {
-      Node node = null;
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
-      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       if (StringUtils.isBlank(fileId) && ownerId > 0) {
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
         node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
@@ -753,9 +773,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.save();
 
       String srcPath = node.getPath();
-      node.getSession().getWorkspace().move(srcPath, destPath.concat("/").concat(node.getName()));
-
+      if (session.itemExists(destPath + "/" + node.getName())) {
+        handleMoveDocConflict(session, node, srcPath, destPath, conflictAction);
+      } else {
+        node.getSession().getWorkspace().move(srcPath, destPath);
+      }
       node.save();
+    } catch (ItemExistsException e) {
+      throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
       throw new IllegalStateException("Error moving document's id " + fileId, e);
     } finally {
@@ -764,6 +789,30 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
 
+  }
+
+  private void handleMoveDocConflict(Session session,
+                                     Node node,
+                                     String srcPath,
+                                     String destPath,
+                                     String conflictAction) throws RepositoryException {
+    int count = 0;
+    String originName = node.getName();
+    String name = originName;
+    if (Objects.equals(conflictAction, KEEP_BOTH)) {
+      while (session.itemExists(destPath + "/" + name)) {
+        name = increaseNameIndex(originName, ++count);
+      }
+      destPath = destPath + "/" + name;
+      node.getSession().getWorkspace().move(srcPath, destPath);
+      Node destNode = (Node) session.getItem(destPath);
+      if (destNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+        destNode.setProperty(NodeTypeConstants.EXO_TITLE, name);
+      }
+      destNode.getSession().save();
+    } else {
+      throw new ItemExistsException();
+    }
   }
 
   private Node duplicateItem(Node oldNode, Node destinationNode, Node parentNode, String prefixClone) throws Exception{
@@ -1172,33 +1221,34 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
   
   @Override
-  public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
-    Node rootNode = null;
+  public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
+    Node rootNode;
     SessionProvider sessionProvider = null;
+    Identity identity = identityRegistry.getIdentity(aclIdentity);
     try {
-      sessionProvider = SessionProvider.createSystemProvider();
+      sessionProvider = getUserSessionProvider(repositoryService, identity);
       ManageableRepository repository = repositoryService.getCurrentRepository();
-      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      Node currentNode = getNodeByIdentifier(systemSession, documentId);
+      Session session = sessionProvider.getSession(COLLABORATION, repository);
+      Node currentNode = getNodeByIdentifier(session, documentId);
       //add symlink to destination document
-      rootNode = (Node) systemSession.getItem(destPath);
-      if (currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      rootNode = (Node) session.getItem(destPath);
+      if (currentNode != null && currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-        currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
+        currentNode = getNodeByIdentifier(session, sourceNodeId);
       }
-      Node linkNode = null;
-      if (rootNode.hasNode(currentNode.getName())) {
-        linkNode = rootNode.getNode(currentNode.getName());
+      Node linkNode;
+      if (currentNode != null && rootNode.hasNode(currentNode.getName())) {
+        linkNode = handleShortcutDocConflict(rootNode, currentNode, conflictAction);
       } else {
         linkNode = rootNode.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
       }
-      linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
+      linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, COLLABORATION);
       linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
       linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, ((ExtendedNode) currentNode).getIdentifier());
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         linkNode.addMixin("exo:sortable");
       }
-      if (currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+      if (currentNode.hasProperty(NodeTypeConstants.EXO_TITLE) && StringUtils.isBlank(conflictAction)) {
         linkNode.setProperty(NodeTypeConstants.EXO_TITLE, currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString());
       }
       linkNode.setProperty(NodeTypeConstants.EXO_NAME, currentNode.getName());
@@ -1210,19 +1260,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
-        Map<String, String[]> perMap = new HashMap<>();
-        List<String> permsList = new ArrayList<>();
-        List<String> idList = new ArrayList<>();
-      for(AccessControlEntry accessEntry : ((ExtendedNode) currentNode).getACL().getPermissionEntries()) {
-        if(!idList.contains(accessEntry.getIdentity())) {
+      Map<String, String[]> perMap = new HashMap<>();
+      List<String> permsList;
+      List<String> idList = new ArrayList<>();
+      for (AccessControlEntry accessEntry : ((ExtendedNode) currentNode).getACL().getPermissionEntries()) {
+        if (!idList.contains(accessEntry.getIdentity())) {
           idList.add(accessEntry.getIdentity());
           permsList = ((ExtendedNode) currentNode).getACL().getPermissions(accessEntry.getIdentity());
-          perMap.put(accessEntry.getIdentity(), permsList.toArray(new String[permsList.size()]));
+          perMap.put(accessEntry.getIdentity(), permsList.toArray(new String[0]));
         }
       }
       ((ExtendedNode) linkNode).setPermissions(perMap);
 
-      systemSession.save();
+      session.save();
+    } catch (ObjectAlreadyExistsException e) {
+      throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
       throw new IllegalStateException("Error while creating a shortcut for document's id " + documentId + " to destination path" + destPath, e);
     } finally {
@@ -1232,6 +1284,43 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  private Node handleShortcutDocConflict(Node rootNode, Node currentNode, String conflictAction) throws ObjectAlreadyExistsException,
+                                                                                         RepositoryException {
+    Node linkNode = null;
+    boolean created = false;
+    int count = 0;
+    String originName = currentNode.getName();
+    String name = originName;
+    boolean doIndexName = rootNode.hasNode(originName);
+    if (Objects.equals(conflictAction, KEEP_BOTH)) {
+      do {
+        try {
+          linkNode = rootNode.addNode(name, NodeTypeConstants.EXO_SYMLINK);
+          created = true;
+        } catch (ItemExistsException e) {
+          name = increaseNameIndex(originName, ++count);
+          doIndexName = false;
+        }
+      } while (!created);
+
+      if (doIndexName) {
+        String path = currentNode.getPath();
+        String index = path.substring(StringUtils.indexOf(path, originName) + name.length());
+        if (StringUtils.isNotBlank(index)) {
+          int indexSuffix = Integer.parseInt(index.substring(1, index.lastIndexOf("]")));
+          String suffix = "(" + (indexSuffix - 1) + ")";
+          name = getNewIndexedName(originName, suffix);
+        }
+      }
+      if (linkNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+        linkNode.setProperty(NodeTypeConstants.EXO_TITLE, name);
+      }
+    } else {
+      throw new ObjectAlreadyExistsException("Document with same name already exists");
+    }
+    return linkNode;
+  }
+  
   /**
    * {@inheritDoc}
    */
