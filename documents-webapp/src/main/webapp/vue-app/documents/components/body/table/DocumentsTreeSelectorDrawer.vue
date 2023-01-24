@@ -90,7 +90,7 @@
         <v-btn
           :disabled="disableButton"
           @click="changeLocationDocument()"
-          :loading="loading"
+          :loading="isLoading"
           class="btn btn-primary ml-2">
           {{ submitButton }}
         </v-btn>
@@ -122,7 +122,7 @@ export default {
     space: [],
     file: {},
     actionType: '',
-    loading: false,
+    isLoading: false,
   }),
   computed: {
     openLevel() {
@@ -161,6 +161,18 @@ export default {
     this.$root.$on('shortcut-created', () => {
       this.close();
     });
+    this.$root.$on('cancel-action', () => {
+      this.cancel();
+    });
+  },
+  watch: {
+    isLoading() {
+      if (this.isLoading) {
+        this.$refs.documentsTreeSelectorDrawer.startLoading();
+      } else {
+        this.$refs.documentsTreeSelectorDrawer.endLoading();
+      }
+    },
   },
   methods: {
     open(file) {
@@ -186,7 +198,7 @@ export default {
       this.$root.$emit('cancel-alert-actions');
     },
     close() {
-      this.loading = false;
+      this.isLoading = false;
       this.$refs.documentsTreeSelectorDrawer.close();
     },
     getDestination(folder, path) {
@@ -198,8 +210,7 @@ export default {
           this.destinationFolderId = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].id;
           this.destinationFolderPath = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].path;
           return breadCrumbs;
-        })
-        .finally(() => this.loading = false);
+        });
     },
     retrieveDocumentTree(ownerId) {
       this.$documentFileService
@@ -214,7 +225,7 @@ export default {
         });
     },
     changeLocationDocument() {
-      this.loading = true;
+      this.isLoading = true;
       const destinationPath = this.folder && this.folder.path ? this.folder.path : `/Groups${this.groupId}/Documents`;
       if (this.actionType === 'move') {
         this.$root.$emit('documents-move', this.ownerId, this.file, destinationPath, this.folder, this.space);
