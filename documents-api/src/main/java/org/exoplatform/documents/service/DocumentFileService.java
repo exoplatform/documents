@@ -148,12 +148,15 @@ public interface DocumentFileService {
    * Move the given node.
    *
    * @param fileId Id of the given file
-   * @param authenticatedUserId of the user acessing files
+   * @param authenticatedUserId of the user accessing files
+   * @param conflictAction conflict action
    * @throws IllegalAccessException when the user isn't allowed to access
    *           documents of the designated parentFolderId
-   * @throws ObjectNotFoundException when folderId doesn't exisits
+   * @throws ObjectNotFoundException when folderId doesn't exist
+   * @throws ObjectAlreadyExistsException when file with same name already exists
+   *           in the target path
    */
-  void moveDocument(long ownerId,String fileId, String destPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+  void moveDocument(long ownerId, String fileId, String destPath, long authenticatedUserId, String conflictAction) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException;
 
   /**
    * Delete a document.
@@ -209,11 +212,14 @@ public interface DocumentFileService {
   /**
    * Creates a shortcut for a document
    *
-   * @param documentId document id
-   * @param destPath destination path
+   * @param documentId     document id
+   * @param destPath       destination path
+   * @param aclIdentity    user identity id
+   * @param conflictAction conflictAction
    * @throws IllegalAccessException
+   * @throws ObjectAlreadyExistsException
    */
-  void createShortcut(String documentId, String destPath) throws IllegalAccessException;
+  void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException;
 
   /**
    * Retrieves versions of specific file

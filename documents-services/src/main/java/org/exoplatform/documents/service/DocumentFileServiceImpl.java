@@ -224,8 +224,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public void moveDocument(long ownerId, String fileId, String destPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
-     documentFileStorage.moveDocument(ownerId, fileId, destPath, getAclUserIdentity(authenticatedUserId));
+  public void moveDocument(long ownerId, String fileId, String destPath, long authenticatedUserId, String conflictAction) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException {
+     documentFileStorage.moveDocument(ownerId, fileId, destPath, getAclUserIdentity(authenticatedUserId), conflictAction);
   }
 
   @Override
@@ -335,8 +335,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public void createShortcut(String documentId, String destPath) throws IllegalAccessException {
-    documentFileStorage.createShortcut(documentId, destPath);
+  public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
+    documentFileStorage.createShortcut(documentId, destPath, aclIdentity, conflictAction);
   }
 
   /**

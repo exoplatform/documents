@@ -77,6 +77,15 @@
       :class="isMobile? 'documents-alert-mobile': ''"
       :dismissible="!isMobile">
       {{ message }}
+      <v-btn
+        v-for="action in alertActions"
+        :key="action.event"
+        plain
+        text
+        color="primary"
+        @click="emitAlertAction(action)">
+        {{ $t(`document.conflicts.action.${action.event}`) }}
+      </v-btn>
     </v-alert>
     <folder-treeview-drawer
       ref="folderTreeDrawer"
@@ -150,6 +159,7 @@ export default {
     alert: false,
     alertType: '',
     message: '',
+    alertActions: [],
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
   computed: {
@@ -241,11 +251,28 @@ export default {
       });
     this.$root.$on('create-shortcut', this.createShortcut);
     this.$root.$on('show-version-history', this.showVersionHistory);
+    this.$on('keepBoth', this.handleConflicts);
+    this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    handleCancelAlertActions() {
+      this.alert = false;
+      this.alertActions = [];
+    },
+    handleConflicts(fn) {
+      if (fn.name === 'createShortcut') {
+        this.createShortcut(...fn.params, 'keepBoth');
+      }
+      if (fn.name === 'moveDocument') {
+        this.moveDocument(...fn.params, 'keepBoth');
+      }
+    },
+    emitAlertAction(action) {
+      this.$emit(action.event, action.function);
+    },
     restoreVersion(version) {
       return this.$documentFileService.restoreVersion(version.id).then(newVersion => {
         if (newVersion) {
@@ -686,24 +713,38 @@ export default {
           this.loading = false;
         });
     },
-    moveDocument(ownerId, file, destPath, destFolder, space) {
-      this.$documentFileService.moveDocument(ownerId,file.id,destPath)
-        .then(() => {
+    moveDocument(ownerId, file, destPath, destFolder, space, conflictAction) {
+      this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
+        .then( () => {
           if (space && space.groupId) {
             const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
             window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
           } else {
             this.openFolder(destFolder);
           }
-          this.$root.$emit('show-alert', {type: 'success', message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')});
+          this.$root.$emit('document-moved');
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
+          });
         })
-        .catch(() => {
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
+        .catch(e => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: this.$t('document.file.conflict.error.message.action'),
+              actions: [{
+                event: 'keepBoth',
+                function: {name: 'moveDocument', params: [ownerId, file, destPath, destFolder, space]}}],
+            });
+          } else {
+            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
+          }
         })
         .finally(() => this.loading = false);
     },
-    createShortcut(file,destPath, destFolder,space) {
-      this.$documentFileService.createShortcut(file.id,destPath)
+    createShortcut(file,destPath, destFolder,space, conflictAction) {
+      this.$documentFileService.createShortcut(file.id,destPath, conflictAction)
         .then(() => {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('document.shortcut.creationSuccess')});
           this.createShortcutStatistics(file,space);
@@ -713,9 +754,22 @@ export default {
           } else {
             this.openFolder(destFolder);
           }
+          this.$root.$emit('shortcut-created');
         })
-        .catch(() => {
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.shortcut.creationError')});
+        .catch((e) => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: file.folder ? this.$t('document.folder.conflict.error.message.action')
+                : this.$t('document.file.conflict.error.message.action'),
+              actions: [{
+                event: 'keepBoth',
+                function: {name: 'createShortcut', params: [file, destPath, destFolder, space]}
+              }],
+            });
+          } else {
+            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.shortcut.creationError')});
+          }
         })
         .finally(() => this.loading = false);
     },
@@ -884,8 +938,13 @@ export default {
     displayMessage(message) {
       this.message = message.message;
       this.alertType = message.type;
+      this.alertActions = message.actions;
       this.alert = true;
-      window.setTimeout(() => this.alert = false, 5000);
+      setTimeout(() => {
+        if (!this.alertActions?.length) {
+          this.alert = false;
+        }
+      }, 5000);
     },
     selectFile(path) {
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
