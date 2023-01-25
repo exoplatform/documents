@@ -892,9 +892,17 @@ export default {
     },
     saveVisibility(file){
       this.$documentFileService.saveVisibility(file)
-        .then(() => this.refreshFiles())
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
+        .then(() => {
+          this.refreshFiles();
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
+        })
+        .catch(() => {
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.label.saveVisibility.error')});
+        })
+        .finally(() => {
+          this.loading = false;
+        }
+        );
     },
     openDrawer(files) {
 
