@@ -356,6 +356,11 @@ public class JCRDocumentFileStorageTest {
 
     jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test", "user", null);
     verify(sessionProvider, times(2)).close();
+    when(rootNode.hasNode("test")).thenReturn(true);
+    when(rootNode.addNode("test", NodeTypeConstants.EXO_SYMLINK)).thenReturn(currentNode);
+    when(currentNode.getPath()).thenReturn("/Groups/spaces/test/Documents/test[1]");
+    jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test", "user", "keepBoth");
+
   }
 
   @Test

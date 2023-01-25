@@ -1060,4 +1060,16 @@ public class DocumentFileRestTest {
     Response response = documentFileRest1.renameDocument("123", 1L, "test");
     assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
   }
+
+  @Test
+  @PrepareForTest({ RestUtils.class })
+  public void  testMoveWithExistTitle() throws Exception {
+    PowerMockito.mockStatic(RestUtils.class);
+    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).moveDocument(1L, "123", "test", 2L, "");
+    Response response = documentFileRest1.moveDocument("123",1L, "test", "");
+    assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
+  }
 }

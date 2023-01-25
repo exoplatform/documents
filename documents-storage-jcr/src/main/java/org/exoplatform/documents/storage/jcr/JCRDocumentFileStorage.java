@@ -491,7 +491,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK))) {
         if(childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
           childNode=getNodeByIdentifier(session, childNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
-          if(!childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) && !childNode.isNodeType(NodeTypeConstants.NT_FOLDER)){
+          if (childNode != null && !childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
+              && !childNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
             continue;
           }
         }
@@ -781,7 +782,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node.getSession().getWorkspace().move(srcPath, destPath + "/" + node.getName());
         node.save();
       }
-    } catch (ItemExistsException e) {
+    } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
       throw new IllegalStateException("Error moving document's id " + fileId, e);
@@ -797,7 +798,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                      Node node,
                                      String srcPath,
                                      String destPath,
-                                     String conflictAction) throws RepositoryException {
+                                     String conflictAction) throws RepositoryException, ObjectAlreadyExistsException {
     int count = 0;
     String originName = node.getName();
     String name = originName;
@@ -835,7 +836,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         destNode.getSession().save();
       }
     } else {
-      throw new ItemExistsException();
+      Node destNode = (Node) session.getItem(destPath + "/" + name);
+      Map<String, Boolean> map = new HashMap<>();
+      map.put("versionable", destNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE));
+      throw new ObjectAlreadyExistsException(map);
     }
   }
 
@@ -1329,7 +1333,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       if (doIndexName) {
         String path = linkNode.getPath();
-        String index = path.substring(StringUtils.indexOf(path, originName) + name.length());
+        String index = path.substring(StringUtils.lastIndexOf(path, name) + name.length());
         if (StringUtils.isNotBlank(index)) {
           int indexSuffix = Integer.parseInt(index.substring(1, index.lastIndexOf("]")));
           String suffix = "(" + (indexSuffix - 1) + ")";
