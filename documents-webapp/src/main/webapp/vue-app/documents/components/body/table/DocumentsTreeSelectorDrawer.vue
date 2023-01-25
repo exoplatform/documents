@@ -3,7 +3,7 @@
     v-model="drawer"
     ref="documentsTreeSelectorDrawer"
     class="documentsTreeSelectorDrawer"
-    @closed="close"
+    @closed="cancel"
     right>
     <template slot="title">
       <span :title="drawerTitle" class="text-truncate">{{ drawerTitle }}</span>

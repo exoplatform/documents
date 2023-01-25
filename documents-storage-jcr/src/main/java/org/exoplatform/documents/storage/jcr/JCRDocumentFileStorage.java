@@ -107,6 +107,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final String                  ADD_TAG_DOCUMENT             = "add_tag_document";
 
   private static final String                  KEEP_BOTH                    = "keepBoth";
+
+  private static final String                 CREATE_NEW_VERSION            = "createNewVersion";
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
@@ -776,9 +778,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (session.itemExists(destPath + "/" + node.getName())) {
         handleMoveDocConflict(session, node, srcPath, destPath, conflictAction);
       } else {
-        node.getSession().getWorkspace().move(srcPath, destPath);
+        node.getSession().getWorkspace().move(srcPath, destPath + "/" + node.getName());
+        node.save();
       }
-      node.save();
     } catch (ItemExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
@@ -810,6 +812,28 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         destNode.setProperty(NodeTypeConstants.EXO_TITLE, name);
       }
       destNode.getSession().save();
+    } else if (Objects.equals(conflictAction, CREATE_NEW_VERSION)) {
+      Node destNode = (Node) session.getItem(destPath + "/" + name);
+      Node scrNode = (Node) session.getItem(srcPath);
+      if (destNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+        Node destContentNode = destNode.getNode(NodeTypeConstants.JCR_CONTENT);
+        Node scrContentNode = scrNode.getNode(NodeTypeConstants.JCR_CONTENT);
+        destContentNode.setProperty(NodeTypeConstants.JCR_DATA,
+                                    scrContentNode.getProperty(NodeTypeConstants.JCR_DATA).getStream());
+        destContentNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, Calendar.getInstance());
+        if (destNode.isNodeType(NodeTypeConstants.EXO_MODIFY)) {
+          destNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
+          destNode.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
+        }
+        destNode.save();
+        scrNode.remove();
+        if (!destNode.isCheckedOut()) {
+          destNode.checkout();
+        }
+        destNode.checkin();
+        destNode.checkout();
+        destNode.getSession().save();
+      }
     } else {
       throw new ItemExistsException();
     }
@@ -1304,7 +1328,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } while (!created);
 
       if (doIndexName) {
-        String path = currentNode.getPath();
+        String path = linkNode.getPath();
         String index = path.substring(StringUtils.indexOf(path, originName) + name.length());
         if (StringUtils.isNotBlank(index)) {
           int indexSuffix = Integer.parseInt(index.substring(1, index.lastIndexOf("]")));

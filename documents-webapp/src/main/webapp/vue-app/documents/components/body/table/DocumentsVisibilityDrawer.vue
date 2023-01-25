@@ -57,8 +57,7 @@
                 item-value="value"
                 dense
                 class="caption"
-                outlined
-                 />
+                outlined />
             </div>
             <div v-if="showSwitch" class="d-flex flex-row my-4">
               <v-label for="visibility">
