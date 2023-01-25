@@ -355,6 +355,7 @@ public class DocumentFileRest implements ResourceContainer {
 
   @PUT
   @Path("/move")
+  @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Operation(summary = "Move documents", method = "POST", description = "This rename a giving document.")
   @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
@@ -378,7 +379,9 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.ok().build();
     } catch (ObjectAlreadyExistsException e) {
       LOG.warn("Document with same name already exist", e);
-      return Response.status(HTTPStatus.CONFLICT).build();
+      return Response.status(HTTPStatus.CONFLICT).entity(e.getExistingObject())
+                                                 .type(MediaType.APPLICATION_JSON)
+                                                 .build();
     } catch (Exception ex) {
       LOG.warn("Failed to rename Document", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();

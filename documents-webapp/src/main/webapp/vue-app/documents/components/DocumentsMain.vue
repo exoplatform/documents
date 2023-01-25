@@ -757,12 +757,12 @@ export default {
         return this.$t('document.file.conflict.error.message.action');
       }
     },
-    getConflictActions(file, fn) {
+    getConflictActions(object, fn) {
       const actions = [{
         event: 'keepBoth',
         function: fn
       }];
-      if (!file.folder && file.versionable) {
+      if (object.versionable) {
         actions.push({event: 'createNewVersion', function: fn});
         return actions;
       } else {
@@ -787,13 +787,15 @@ export default {
         })
         .catch(e => {
           if (e.status === 409) {
-            this.$root.$emit('show-alert', {
-              type: 'warning',
-              message: this.getConflictMessage(file),
-              actions: this.getConflictActions(file, {
-                name: 'moveDocument',
-                params: [ownerId, file, destPath, destFolder, space]
-              })
+            e.json().then(response => {
+              this.$root.$emit('show-alert', {
+                type: 'warning',
+                message: this.getConflictMessage(file),
+                actions: this.getConflictActions(response.existingObject, {
+                  name: 'moveDocument',
+                  params: [ownerId, file, destPath, destFolder, space]
+                })
+              });
             });
           } else {
             this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
