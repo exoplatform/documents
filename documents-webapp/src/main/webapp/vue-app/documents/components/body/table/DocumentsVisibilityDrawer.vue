@@ -58,14 +58,14 @@
                 dense
                 class="caption"
                 outlined
-                :hint="infoMessage"
-                persistent-hint />
+                 />
             </div>
-            <div v-if="showSwitch" class="d-flex flex-row align-center my-4">
+            <div v-if="showSwitch" class="d-flex flex-row my-4">
               <v-label for="visibility">
-                <span class="text-color body-2">
+                <span class="text-color body-2 mr-6">
                   {{ $t('documents.label.visibility.allowEveryone') }}
                 </span>
+                <p class="caption"> {{ infoMessage }} </p>
               </v-label>
               <v-spacer />
               <v-switch
