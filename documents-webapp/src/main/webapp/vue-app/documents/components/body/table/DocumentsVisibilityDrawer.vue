@@ -144,6 +144,7 @@
           </v-btn>
           <v-btn
             class="btn btn-primary"
+            :loading="loading"
             @click="saveVisibility()">
             {{ $t('documents.label.visibility.save') }}
           </v-btn>
@@ -165,6 +166,7 @@ export default {
     }
   },
   data: () => ({
+    loading: false,
     allGroupsForAdmin: true,
     userGroup: '/platform/users',
     groupType: 'GROUP',
@@ -315,6 +317,8 @@ export default {
       this.$refs.documentAllUsersVisibilityDrawer.open();
     },
     saveVisibility(){
+      this.loading = true;
+      this.$refs.documentVisibilityDrawer.startLoading();
       const collaborators = [];
       for (const user of  this.users) {
         const  collaborator= {
@@ -336,6 +340,8 @@ export default {
         this.file.acl.allMembersCanEdit=false;
       }
       this.$root.$emit('save-visibility',this.file);
+      this.loading = false;
+      this.$refs.documentVisibilityDrawer.endLoading();
       this.close();
     },
     removeUser(user) {
