@@ -71,16 +71,23 @@
       v-model="alert"
       :icon="false"
       :colored-border="isMobile"
-      :border="isMobile? 'top' : ''"
+      :border="isMobile && !isAlertActionRunning? 'top' : ''"
       :color="alertType"
       :type="!isMobile? alertType: ''"
       :class="isMobile? 'documents-alert-mobile': ''"
       :dismissible="!isMobile">
+      <v-progress-linear
+        v-if="isAlertActionRunning"
+        :active="isAlertActionRunning"
+        :height="isMobile? '8px': '4px'"
+        :indeterminate="true"
+        :class="progressAlertClassMobile"
+        :color="progressAlertColor" />
       {{ message }}
       <v-btn
         v-for="action in alertActions"
         :key="action.event"
-        :loading="isAlertActionRunning"
+        :disabled="isAlertActionRunning"
         plain
         text
         color="primary"
@@ -175,6 +182,12 @@ export default {
     isAlertActionRunning: false
   }),
   computed: {
+    progressAlertColor() {
+      return this.alertType === 'warning' ? 'amber' : this.alertType === 'error' ? 'red' : 'primary';
+    },
+    progressAlertClassMobile() {
+      return this.isMobile && 'position-relative document-mobile-alert-progress' || '';
+    },
     showLoadMoreVersions() {
       return this.versions.length < this.allVersions.length;
     },
@@ -264,6 +277,7 @@ export default {
     this.$root.$on('create-shortcut', this.createShortcut);
     this.$root.$on('show-version-history', this.showVersionHistory);
     this.$on('keepBoth', this.handleConflicts);
+    this.$on('createNewVersion', this.handleConflicts);
     this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
   },
   destroyed() {
@@ -275,20 +289,22 @@ export default {
       this.alert = false;
     },
     handleCancelAlertActions() {
-      this.alert = false;
-      this.alertActions = [];
-    },
-    handleConflicts(fn) {
-      this.isAlertActionRunning = true;
-      if (fn.name === 'createShortcut') {
-        this.createShortcut(...fn.params, 'keepBoth');
+      if (this.alertActions?.length) {
+        this.alert = false;
+        this.alertActions = [];
       }
-      if (fn.name === 'moveDocument') {
-        this.moveDocument(...fn.params, 'keepBoth');
+    },
+    handleConflicts(action) {
+      this.isAlertActionRunning = true;
+      if (action.function.name === 'createShortcut') {
+        this.createShortcut(...action.function.params, action.event);
+      }
+      if (action.function.name === 'moveDocument') {
+        this.moveDocument(...action.function.params, action.event);
       }
     },
     emitAlertAction(action) {
-      this.$emit(action.event, action.function);
+      this.$emit(action.event, action);
     },
     restoreVersion(version) {
       return this.$documentFileService.restoreVersion(version.id).then(newVersion => {
@@ -730,6 +746,29 @@ export default {
           this.loading = false;
         });
     },
+    getConflictMessage(file) {
+      if (file.folder && !this.isMobile) {
+        return this.$t('document.folder.conflict.error.message.action');
+      } else if (file.folder && this.isMobile) {
+        return this.$t('document.folder.conflict.error.message');
+      } else if (!file.folder && this.isMobile) {
+        return this.$t('document.file.conflict.error.message');
+      } else {
+        return this.$t('document.file.conflict.error.message.action');
+      }
+    },
+    getConflictActions(file, fn) {
+      const actions = [{
+        event: 'keepBoth',
+        function: fn
+      }];
+      if (!file.folder && file.versionable) {
+        actions.push({event: 'createNewVersion', function: fn});
+        return actions;
+      } else {
+        return actions;
+      }
+    },
     moveDocument(ownerId, file, destPath, destFolder, space, conflictAction) {
       this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
         .then( () => {
@@ -750,10 +789,11 @@ export default {
           if (e.status === 409) {
             this.$root.$emit('show-alert', {
               type: 'warning',
-              message: this.$t('document.file.conflict.error.message.action'),
-              actions: [{
-                event: 'keepBoth',
-                function: {name: 'moveDocument', params: [ownerId, file, destPath, destFolder, space]}}],
+              message: this.getConflictMessage(file),
+              actions: this.getConflictActions(file, {
+                name: 'moveDocument',
+                params: [ownerId, file, destPath, destFolder, space]
+              })
             });
           } else {
             this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
@@ -779,8 +819,7 @@ export default {
           if (e.status === 409) {
             this.$root.$emit('show-alert', {
               type: 'warning',
-              message: file.folder ? this.$t('document.folder.conflict.error.message.action')
-                : this.$t('document.file.conflict.error.message.action'),
+              message: this.getConflictMessage(file),
               actions: [{
                 event: 'keepBoth',
                 function: {name: 'createShortcut', params: [file, destPath, destFolder, space]}
