@@ -47,6 +47,7 @@ import javax.jcr.version.VersionIterator;
 import java.util.Calendar;
 import java.util.List;
 
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.*;
@@ -534,5 +535,126 @@ public class JCRDocumentFileStorageTest {
     when(node.getPrimaryNodeType()).thenReturn(nodeType);
     assertThrows(ObjectAlreadyExistsException.class,
             () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "exist", identity));
+  }
+
+  @Test
+  public void testGetFullTreeData() throws Exception {
+    String userName = "Adham";
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn(userName);
+
+    long ownerId = 1L;
+    Identity ownerIdentity = mock(Identity.class);
+    String folderId = "uniqueFolderIdentifier";
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    when(identityManager.getIdentity(String.valueOf(ownerId))).thenReturn(ownerIdentity);
+
+    List<FullTreeItem> fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity);
+    assertTrue("When node is null, return empty list", fullTreeItemList.isEmpty());
+
+    Node folderNode = mock(NodeImpl.class);
+    when(folderNode.getName()).thenReturn("myFolder");
+    when(folderNode.getPath()).thenReturn("/root/folder");
+
+    NodeIterator nodeIterator = mock(NodeIterator.class);
+    when(nodeIterator.hasNext()).thenReturn(false);
+    when(folderNode.getNodes()).thenReturn(nodeIterator);
+
+    when(getNodeByIdentifier(session, folderId)).thenReturn(folderNode);
+
+    // return list with just the parent folder when the node has no child nodes
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity);
+    assertEquals(1, fullTreeItemList.size());
+
+    // when current folder is hidden
+    Node hiddenFolder = mock(NodeImpl.class);
+    when(hiddenFolder.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)).thenReturn(true);
+    NodeIterator nodeIteratorFolder = mock(NodeIterator.class);
+    Node childFolder = mock(NodeImpl.class);
+    when(nodeIteratorFolder.hasNext()).thenReturn(true, false);
+    when(nodeIteratorFolder.nextNode()).thenReturn(childFolder);
+    when(hiddenFolder.getNodes()).thenReturn(nodeIteratorFolder);
+
+    when(nodeIterator.hasNext()).thenReturn(true, false);
+    when(nodeIterator.nextNode()).thenReturn(hiddenFolder);
+    when(folderNode.getNodes()).thenReturn(nodeIterator);
+
+
+    // return list with just the parent folder when it contains just a hidden folder
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity);
+    assertEquals(1, fullTreeItemList.size());
+
+    Node folderNTFolder = mock(NodeImpl.class);
+    when(folderNTFolder.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNTFolder.getName()).thenReturn("ntFolderName");
+    when(folderNTFolder.getPath()).thenReturn("/root/folder/ntFolderName");
+    when(((NodeImpl)folderNTFolder).getIdentifier()).thenReturn("ntFolderIdentifier");
+    when(folderNTFolder.getNodes()).thenReturn(nodeIteratorFolder);
+
+    Node folderNTUnstructured = mock(NodeImpl.class);
+    when(folderNTUnstructured.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)).thenReturn(true);
+    when(folderNTUnstructured.getName()).thenReturn("ntUnstructuredFolderName");
+    when(folderNTUnstructured.getPath()).thenReturn("/root/folder/ntUnstructuredFolderName");
+    when(((NodeImpl)folderNTUnstructured).getIdentifier()).thenReturn("ntUnstructuredFolderIdentifier");
+    when(folderNTUnstructured.getNodes()).thenReturn(nodeIteratorFolder);
+
+    Node symlinkFolder = mock(NodeImpl.class);
+    when(symlinkFolder.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(symlinkFolder.getPath()).thenReturn("/root/folder/symlinkFolderName.lnk");
+    when(symlinkFolder.getName()).thenReturn("symlinkFolderName.lnk");
+    Node sourceFolder = mock(NodeImpl.class);
+    when(sourceFolder.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)).thenReturn(true);
+    when(sourceFolder.getName()).thenReturn("sourceFolderName");
+    when(sourceFolder.getPath()).thenReturn("/root/anotherFolder/sourceFolderName");
+    String sourceFolderIdentifier = "sourceFolderIdentifier";
+    when(((NodeImpl)sourceFolder).getIdentifier()).thenReturn(sourceFolderIdentifier);
+    when(sourceFolder.getNodes()).thenReturn(nodeIteratorFolder);
+    Property symlinkUUID = mock(Property.class);
+    when(symlinkUUID.getString()).thenReturn(sourceFolderIdentifier);
+    when(symlinkFolder.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUID);
+    when(getNodeByIdentifier(session, sourceFolderIdentifier)).thenReturn(sourceFolder);
+    when(symlinkFolder.getNodes()).thenReturn(nodeIteratorFolder);
+
+    when(nodeIterator.hasNext()).thenReturn(true, true, true, false);
+    when(nodeIterator.nextNode()).thenReturn(folderNTFolder, folderNTUnstructured, symlinkFolder);
+    when(folderNode.getNodes()).thenReturn(nodeIterator);
+
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity);
+    assertEquals(1, fullTreeItemList.size());
+    assertEquals(3, fullTreeItemList.get(0).getChildren().size());
+
+    // when folder ID is null, we return user Home folder
+    Node userHome = mock(NodeImpl.class);
+    when(((NodeImpl)userHome).getIdentifier()).thenReturn("userHomeFolderIdentifier");
+    when(userHome.getPath()).thenReturn("/Users/adham");
+    when(userHome.getName()).thenReturn("Home folder of Adham");
+    when(nodeIterator.hasNext()).thenReturn(true, true, false);
+    when(nodeIterator.nextNode()).thenReturn(folderNTFolder, folderNTUnstructured);
+    when(userHome.getNodes()).thenReturn(nodeIterator);
+    when(getIdentityRootNode(spaceService, nodeHierarchyCreator, userName, ownerIdentity, sessionProvider)).thenReturn(userHome);
+
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, null, identity);
+
+    assertEquals(1, fullTreeItemList.size());
+    assertEquals(2, fullTreeItemList.get(0).getChildren().size());
+
+
+    // When symlink is a link of one of its parents, then we do not check its sub-folders
+    when(symlinkUUID.getString()).thenReturn(folderId);
+    when(symlinkFolder.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUID);
+    when(nodeIterator.hasNext()).thenReturn(true, false);
+    when(nodeIterator.nextNode()).thenReturn(symlinkFolder);
+    when(folderNode.getNodes()).thenReturn(nodeIterator);
+
+
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity);
+    assertEquals(1, fullTreeItemList.size());
+    assertTrue(fullTreeItemList.get(0).getChildren().isEmpty());
+
   }
 }
