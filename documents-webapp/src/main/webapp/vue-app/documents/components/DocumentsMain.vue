@@ -762,7 +762,10 @@ export default {
         .then(() => {
           if (space && space.groupId) {
             const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
-            window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+            this.$root.$emit('set-breadcrumb', destFolder);
+            window.history.pushState(destFolder.name, destFolder.title, `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}?view=folder`);
+            this.parentFolderId = destFolder.id;
+            this.refreshFiles();
           } else {
             this.openFolder(destFolder);
           }
