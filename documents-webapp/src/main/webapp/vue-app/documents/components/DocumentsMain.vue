@@ -312,6 +312,7 @@ export default {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.restore.version.success')});
           this.$root.$emit('version-restored', newVersion);
           this.refreshVersions(this.versionableFile, newVersion);
+          this.refreshFiles();
           this.addRestoreVersionStatistics(this.versionableFile);
         }
       }).catch(() => {
