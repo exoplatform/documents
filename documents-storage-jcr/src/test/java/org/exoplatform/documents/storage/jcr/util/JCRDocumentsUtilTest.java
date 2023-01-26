@@ -127,49 +127,93 @@ public class JCRDocumentsUtilTest {
   public void testToFileNodes() throws  RepositoryException {
     IdentityManager identityManager = mock(IdentityManager.class);
     Identity aclIdentity = mock(Identity.class);
-    NodeIterator nodeIterator = mock(NodeIterator.class);
-    ExtendedSession session = mock(ExtendedSession.class);
-    SessionImpl sessionImpl = mock(SessionImpl.class);
     SpaceService spaceService = mock(SpaceService.class);
-    JCRDeleteFileStorage jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
-    NodeImpl node = mock(NodeImpl.class);
-    Property property = mock(Property.class);
-    Property property1 = mock(Property.class);
-    List<FileNode> fileNodes;
-    FileNode fileNode = new FileNode();
-    fileNode.setLinkedFileId("test");
-    fileNode.setVersionnedFileId("test");
-    fileNode.setMimeType(NodeTypeConstants.NT_FILE);
-    fileNode.setSize(20);
-    node.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID,"test");
-    Map<String, String> documentsToDelete = new HashMap<>(1,1);
-    documentsToDelete.put("identifier","identifier");
-    when(nodeIterator.nextNode()).thenReturn(node);
-    when(nodeIterator.hasNext()).thenReturn(true,true,false);
-    when(node.getIdentifier()).thenReturn("identifier");
-    when(jcrDeleteFileStorage.getDocumentsToDelete()).thenReturn(documentsToDelete);
-    when(node.getACL()).thenReturn(new AccessControlList());
-    when(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true,false);
-    when(node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(property);
-    when(node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString()).thenReturn("1");
-    when(property1.getString()).thenReturn("application/pdf");
-    when(node.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(property1);
-    when(JCRDocumentsUtil.getNodeByIdentifier(sessionImpl, "1")).thenReturn(node);
-    when(node.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true,false);
-    when(node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)).thenReturn(false);
-    when(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)).thenReturn(false);
-    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
-    when(node.getPath()).thenReturn("test");
-    when(node.getNodes()).thenReturn(nodeIterator);
-    when(node.getSession()).thenReturn(sessionImpl);
-    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(node);
-    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
-    NodeType nodeType = mock(NodeType.class);
-    when(nodeType.getName()).thenReturn("nt:file");
-    when(node.getPrimaryNodeType()).thenReturn(nodeType);
-    when(JCRDocumentsUtil.getMimeType(node)).thenReturn("application/pdf");
-    when(((ExtendedSession) session).getNodeByIdentifier("1")).thenReturn(node);
-    fileNodes = JCRDocumentsUtil.toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService,false);
-    assertEquals(1, fileNodes.size());
+
+    // Initiating files
+
+    // This file will be converted and returned
+    NodeImpl file = mock(NodeImpl.class);
+    NodeImpl fileContent = mock(NodeImpl.class);
+    when(file.getName()).thenReturn("document-test.pdf");
+    when(file.getIdentifier()).thenReturn("fileIdentifier");
+    when(file.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(file.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(fileContent);
+    when(fileContent.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
+    when(fileContent.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    Property mimeTypeProperty = mock(Property.class);
+    when(mimeTypeProperty.getString()).thenReturn("application/pdf");
+    when(fileContent.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    when(file.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(false);
+    when(file.getACL()).thenReturn(new AccessControlList());
+
+    // This file inside a folder's symlink will be converted and returned
+    NodeImpl fileInFolderSymlink = mock(NodeImpl.class);
+    NodeImpl fileContentSymlink = mock(NodeImpl.class);
+    when(fileInFolderSymlink.getName()).thenReturn("second-document-test.pdf");
+    when(fileInFolderSymlink.getIdentifier()).thenReturn("fileIdentifierInsideSymlink");
+    when(fileInFolderSymlink.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(fileInFolderSymlink.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(fileContent);
+    when(fileContentSymlink.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
+    when(fileContentSymlink.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    when(fileContentSymlink.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    when(fileInFolderSymlink.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(false);
+    when(fileInFolderSymlink.getACL()).thenReturn(new AccessControlList());
+
+    // Folder where we search files
+    NodeImpl folderNode = mock(NodeImpl.class);
+    when(folderNode.getIdentifier()).thenReturn("folderIdentifier");
+    when(folderNode.getPath()).thenReturn("/path/folderNode");
+    when(folderNode.isNodeType("nt:folder")).thenReturn(true);
+
+    // folder which symlink is inside FolderNode
+    NodeImpl anotherFolderNode = mock(NodeImpl.class);
+    when(anotherFolderNode.getIdentifier()).thenReturn("anotherFolderIdentifier");
+    when(anotherFolderNode.getPath()).thenReturn("/path/antherFolder/anotherFolderNode");
+    when(anotherFolderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    NodeType anotherFolderPrimaryNT = mock(NodeType.class);
+    when(anotherFolderPrimaryNT.getName()).thenReturn("nt:folder");
+    when(anotherFolderNode.getPrimaryNodeType()).thenReturn(anotherFolderPrimaryNT);
+
+    // Files iterator of anotherFolderNode
+    NodeIterator anotherFolderNodeIterator = mock(NodeIterator.class);
+    when(anotherFolderNodeIterator.hasNext()).thenReturn(true,false);
+    when(anotherFolderNodeIterator.nextNode()).thenReturn(fileInFolderSymlink);
+    when(anotherFolderNode.getNodes()).thenReturn(anotherFolderNodeIterator);
+
+    NodeImpl anotherFolderLink = mock(NodeImpl.class);
+    when(anotherFolderLink.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property anotherFolderSymlinkUUID = mock(Property.class);
+    when(anotherFolderSymlinkUUID.getString()).thenReturn("anotherFolderIdentifier");
+    when(anotherFolderLink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(anotherFolderSymlinkUUID);
+    when(anotherFolderLink.getPath()).thenReturn("/path/folderNode/anotherFolderLink.lnk");
+    when(anotherFolderLink.getACL()).thenReturn(new AccessControlList());
+
+
+    // this folder will be ignored since it is inside its source folder
+    NodeImpl folderLink = mock(NodeImpl.class);
+    folderLink.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID,"test");
+    when(folderLink.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property symlinkUUID = mock(Property.class);
+    when(symlinkUUID.getString()).thenReturn("folderIdentifier");
+    when(folderLink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUID);
+    when(folderLink.getPath()).thenReturn("/path/folderNode/folderLink.lnk");
+    when(folderLink.getACL()).thenReturn(new AccessControlList());
+
+    NodeImpl fileToDelete = mock(NodeImpl.class);
+    when(fileToDelete.getIdentifier()).thenReturn("fileToDeleteIdentifier");
+
+    // Files iterator of folderNode
+    NodeIterator folderNodeIterator = mock(NodeIterator.class);
+    when(folderNodeIterator.hasNext()).thenReturn(true,true, true, false);
+    when(folderNodeIterator.nextNode()).thenReturn(file, folderLink, anotherFolderLink);
+
+    ExtendedSession session = mock(ExtendedSession.class);
+    when(session.getNodeByIdentifier("folderIdentifier")).thenReturn(folderNode);
+    when(session.getNodeByIdentifier("anotherFolderIdentifier")).thenReturn(anotherFolderNode);
+
+    List <FileNode> fileNodes = JCRDocumentsUtil.toFileNodes(identityManager, folderNodeIterator, aclIdentity, session, spaceService,false);
+    assertEquals(2, fileNodes.size());
+    assertEquals("document-test.pdf", fileNodes.get(0).getName());
+    assertEquals("second-document-test.pdf", fileNodes.get(1).getName());
   }
 }

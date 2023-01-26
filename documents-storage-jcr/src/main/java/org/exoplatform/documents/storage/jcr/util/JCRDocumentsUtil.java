@@ -127,28 +127,41 @@ public class JCRDocumentsUtil {
           sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           sourceNode = getNodeByIdentifier(session, sourceID);
           if (sourceNode == null) {
-            break;
+            continue;
           }
           if (sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) {
-            List<FileNode> files = toFileNodes(identityManager, sourceNode.getNodes(), aclIdentity, session, spaceService,includeHiddenFiles);
+            //if the link is inside its source folder, we ignore its content
+            if(node.getPath().contains(sourceNode.getPath())) {
+              continue;
+            }
+            List<FileNode> files = toFileNodes(identityManager, sourceNode.getNodes(), aclIdentity, session, spaceService, includeHiddenFiles);
             if (!files.isEmpty()) {
               fileNodes.addAll(files);
             }
+          } else {
+            if (sourceNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) && !includeHiddenFiles) {
+              continue;
+            }
+            sourceMimeType = getMimeType(sourceNode);
+            FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+            if (StringUtils.isNotBlank(sourceMimeType)) {
+              fileNode.setMimeType(sourceMimeType);
+            }
+            if (StringUtils.isNotBlank(fileNode.getMimeType())) {
+              fileNodes.add(fileNode);
+            }
           }
-          sourceMimeType = getMimeType(sourceNode);
-        }
-        if (sourceNode != null && sourceNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) && !includeHiddenFiles) {
-          break;
+        } else {
+          if (node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) && !includeHiddenFiles) {
+            continue;
+          }
+          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+          if (StringUtils.isNotBlank(fileNode.getMimeType())) {
+            fileNodes.add(fileNode);
+          }
         }
       } catch (RepositoryException repositoryException) {
         LOG.warn("Cannot check if the current node is a symlink");
-      }
-      FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
-      if (StringUtils.isNotBlank(sourceMimeType)) {
-        fileNode.setMimeType(sourceMimeType);
-      }
-      if (StringUtils.isNotBlank(fileNode.getMimeType())) {
-        fileNodes.add(fileNode);
       }
     }
     return fileNodes;
