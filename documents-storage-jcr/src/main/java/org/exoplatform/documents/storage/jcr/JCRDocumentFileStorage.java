@@ -810,7 +810,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.getSession().getWorkspace().move(srcPath, destPath);
       Node destNode = (Node) session.getItem(destPath);
       if (destNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-        destNode.setProperty(NodeTypeConstants.EXO_TITLE, name);
+        String exoTitle = getNewIndexedName(destNode.getProperty(NodeTypeConstants.EXO_TITLE).getString(), "(" + (count) + ")");
+        destNode.setProperty(NodeTypeConstants.EXO_TITLE, exoTitle);
       }
       destNode.getSession().save();
     } else if (Objects.equals(conflictAction, CREATE_NEW_VERSION)) {
@@ -866,7 +867,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     name = URLDecoder.decode(name,"UTF-8");
     if (oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
-      newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
+      newNode = destinationNode.addNode(name.toLowerCase(), NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
       NodeIterator nodeIterator = oldNode.getNodes();
       while (nodeIterator.hasNext()) {
@@ -1339,13 +1340,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String path = linkNode.getPath();
         String index = path.substring(StringUtils.lastIndexOf(path, name) + name.length());
         if (StringUtils.isNotBlank(index)) {
-          int indexSuffix = Integer.parseInt(index.substring(1, index.lastIndexOf("]")));
-          String suffix = "(" + (indexSuffix - 1) + ")";
-          name = getNewIndexedName(originName, suffix);
+          count = Integer.parseInt(index.substring(1, index.lastIndexOf("]"))) - 1;
         }
       }
       if (linkNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-        linkNode.setProperty(NodeTypeConstants.EXO_TITLE, name);
+        String exoTitle = getNewIndexedName(currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString(), "(" + (count) + ")");
+        linkNode.setProperty(NodeTypeConstants.EXO_TITLE, exoTitle);
       }
     } else {
       throw new ObjectAlreadyExistsException("Document with same name already exists");
