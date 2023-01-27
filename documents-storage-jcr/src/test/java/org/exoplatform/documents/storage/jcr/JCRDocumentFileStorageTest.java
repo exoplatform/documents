@@ -1,5 +1,6 @@
 package org.exoplatform.documents.storage.jcr;
 
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
@@ -519,5 +520,16 @@ public class JCRDocumentFileStorageTest {
     this.jcrDocumentFileStorage.renameDocument(1L, "123", "test.docx", identity);
     verify(node, times(2)).save();
     verify(sessionProvider, times(1)).close();
+    Node parent = mock(Node.class);
+    Node existNode = mock(Node.class);
+    when(node.getParent()).thenReturn(parent);
+    when(parent.hasNode("exist")).thenReturn(true);
+    when(parent.getNode("exist")).thenReturn(existNode);
+    NodeType nodeType = mock(NodeType.class);
+    when(nodeType.getName()).thenReturn("nt:file");
+    when(existNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    assertThrows(ObjectAlreadyExistsException.class,
+            () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "exist", identity));
   }
 }
