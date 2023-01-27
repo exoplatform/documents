@@ -895,6 +895,7 @@ export default {
         .then(() => {
           this.refreshFiles();
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
+          this.$root.$emit('visibility-saved');
         })
         .catch(() => {
           this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.label.saveVisibility.error')});
