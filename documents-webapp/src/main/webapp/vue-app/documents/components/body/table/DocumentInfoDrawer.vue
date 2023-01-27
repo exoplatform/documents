@@ -41,8 +41,9 @@
       <div
         v-show="showDescription"
         :data-text="placeholder"
+        contentEditable="true"
         :title="$t('tooltip.clickToEdit')"
-        class="py-4 px-8 cursor-text"
+        class="py-4 px-8 infoDescriptionToShow"
         @click="openEditor"
         v-sanitized-html="file.description">
         {{ placeholder }}
@@ -54,16 +55,6 @@
           max-length="1300"
           :placeholder="$t('documents.alert.descriptionLimit')"
           class="flex" />
-        <v-btn
-          id="saveDescriptionButton"
-          :loading="savingDescription"
-          :disabled="disableButton"
-          depressed
-          outlined
-          class="btn mt-2 ml-auto d-flex px-2 btn-primary v-btn v-btn--contained theme--light v-size--default"
-          @click="updateDescription">
-          {{ $t('documents.label.apply') }}
-        </v-btn>
       </div>
       <v-divider dark />
       <template>
@@ -145,7 +136,21 @@
           </v-list-item-content>
         </v-list-item>
       </template>
-    </template>
+    </template>   
+      <template slot="footer">
+        <div class="d-flex">
+          <v-spacer />
+          <v-btn
+          id="saveDescriptionButton"
+          :loading="savingDescription"
+          :disabled="disableButton"
+          depressed
+          class="primary btn no-box-shadow ms-auto"
+          @click="updateDescription">
+          {{ $t('documents.label.apply') }}
+          </v-btn>
+        </div>
+      </template>  
   </exo-drawer>
 </template>
 <script>
@@ -244,7 +249,10 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
-          this.displayAlert(this.$t('documents.alert.success.description.updated'));
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: this.$t('documents.alert.success.description.updated')
+          });
           this.showDescription = this.file.description && this.file.description.length;
           this.showNoDescription = !this.showDescription;
           this.displayEditor=false;
