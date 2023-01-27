@@ -266,6 +266,11 @@ export default {
     this.$root.$on('open-visibility-drawer', file => {
       this.open(file);
     });
+    this.$root.$on('visibility-saved', () => {
+      this.loading = false;
+      this.$refs.documentVisibilityDrawer.endLoading();
+      this.close();
+    });
   },
   methods: {
     mapCollaborator(collaborator) {
@@ -312,6 +317,7 @@ export default {
     },
     close() {
       this.$refs.documentVisibilityDrawer.close();
+
     },
     displayAllListUsers(){
       this.$refs.documentAllUsersVisibilityDrawer.open();
@@ -340,9 +346,6 @@ export default {
         this.file.acl.allMembersCanEdit=false;
       }
       this.$root.$emit('save-visibility',this.file);
-      this.loading = false;
-      this.$refs.documentVisibilityDrawer.endLoading();
-      this.close();
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {
