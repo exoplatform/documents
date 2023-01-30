@@ -136,7 +136,7 @@ export function saveVisibility(file) {
     if (!resp || !resp.ok) {
       throw new Error('Response code indicates a server error', resp);
     } else {
-      return resp.json();
+      return resp.ok;
     }
   });
 
