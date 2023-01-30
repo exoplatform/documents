@@ -1,6 +1,6 @@
 <template>
   <v-app
-    class="documents-application singlePageApplication border-box-sizing"
+    class="documents-application border-box-sizing"
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
