@@ -667,7 +667,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
-      String destPath = (parent.getPath().equals("/") ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat("/").concat(name);
+      String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat(SLASH).concat(name);
       node.getSession().getWorkspace().move(srcPath, destPath);
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.setProperty(NodeTypeConstants.EXO_NAME, name);
@@ -774,10 +774,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.save();
 
       String srcPath = node.getPath();
-      if (session.itemExists(destPath + "/" + node.getName())) {
+      if (session.itemExists(destPath + SLASH + node.getName())) {
         handleMoveDocConflict(session, node, srcPath, destPath, conflictAction);
       } else {
-        node.getSession().getWorkspace().move(srcPath, destPath + "/" + node.getName());
+        node.getSession().getWorkspace().move(srcPath, destPath + SLASH + node.getName());
         node.save();
       }
     } catch (ObjectAlreadyExistsException e) {
@@ -801,10 +801,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String originName = node.getName();
     String name = originName;
     if (Objects.equals(conflictAction, KEEP_BOTH)) {
-      while (session.itemExists(destPath + "/" + name)) {
+      while (session.itemExists(destPath + SLASH + name)) {
         name = increaseNameIndex(originName, ++count);
       }
-      destPath = destPath + "/" + name;
+      destPath = destPath + SLASH + name;
       node.getSession().getWorkspace().move(srcPath, destPath);
       Node destNode = (Node) session.getItem(destPath);
       if (destNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
@@ -813,7 +813,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       destNode.getSession().save();
     } else if (Objects.equals(conflictAction, CREATE_NEW_VERSION)) {
-      Node destNode = (Node) session.getItem(destPath + "/" + name);
+      Node destNode = (Node) session.getItem(destPath + SLASH + name);
       Node scrNode = (Node) session.getItem(srcPath);
       if (destNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
         Node destContentNode = destNode.getNode(NodeTypeConstants.JCR_CONTENT);
@@ -835,7 +835,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         destNode.getSession().save();
       }
     } else {
-      Node destNode = (Node) session.getItem(destPath + "/" + name);
+      Node destNode = (Node) session.getItem(destPath + SLASH + name);
       Map<String, Boolean> map = new HashMap<>();
       map.put("versionable", destNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE));
       throw new ObjectAlreadyExistsException(map);
@@ -995,8 +995,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       if ((node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
-        if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE + "/" + USER_PUBLIC_ROOT_NODE)) {
-          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + "/" + USER_PUBLIC_ROOT_NODE + SLASH)[1];
+        if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE)) {
+          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE + SLASH)[1];
           return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
         }
         if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
