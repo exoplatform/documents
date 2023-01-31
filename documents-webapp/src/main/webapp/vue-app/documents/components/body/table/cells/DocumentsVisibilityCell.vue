@@ -2,6 +2,7 @@
   <v-tooltip bottom>
     <template #activator="{ on, attrs }">
       <v-btn
+        class="ms-2 visibility-btn"
         icon
         @click="changeVisibility">
         <v-icon
