@@ -71,12 +71,39 @@
       v-model="alert"
       :icon="false"
       :colored-border="isMobile"
-      :border="isMobile? 'top' : ''"
+      :border="isMobile && !isAlertActionRunning? 'top' : ''"
       :color="alertType"
       :type="!isMobile? alertType: ''"
       :class="isMobile? 'documents-alert-mobile': ''"
       :dismissible="!isMobile">
+      <v-progress-linear
+        v-if="isAlertActionRunning"
+        :active="isAlertActionRunning"
+        :height="isMobile? '8px': '4px'"
+        :indeterminate="true"
+        :class="progressAlertClassMobile"
+        :color="progressAlertColor" />
       {{ message }}
+      <v-btn
+        v-for="action in alertActions"
+        :key="action.event"
+        :disabled="isAlertActionRunning"
+        plain
+        text
+        color="primary"
+        @click="emitAlertAction(action)">
+        {{ $t(`document.conflicts.action.${action.event}`) }}
+      </v-btn>
+      <template #close="{ toggle }">
+        <v-btn
+          v-if="!isMobile"
+          icon
+          @click="handleAlertClose(toggle)">
+          <v-icon>
+            mdi-close-circle
+          </v-icon>
+        </v-btn>
+      </template>
     </v-alert>
     <folder-treeview-drawer
       ref="folderTreeDrawer"
@@ -150,10 +177,18 @@ export default {
     alert: false,
     alertType: '',
     message: '',
+    alertActions: [],
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+    isAlertActionRunning: false,
     documentsToBeDeleted: [],
   }),
   computed: {
+    progressAlertColor() {
+      return this.alertType === 'warning' ? 'amber' : this.alertType === 'error' ? 'red' : 'primary';
+    },
+    progressAlertClassMobile() {
+      return this.isMobile && 'position-relative document-mobile-alert-progress' || '';
+    },
     showLoadMoreVersions() {
       return this.versions.length < this.allVersions.length;
     },
@@ -242,11 +277,36 @@ export default {
       });
     this.$root.$on('create-shortcut', this.createShortcut);
     this.$root.$on('show-version-history', this.showVersionHistory);
+    this.$on('keepBoth', this.handleConflicts);
+    this.$on('createNewVersion', this.handleConflicts);
+    this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    handleAlertClose() {
+      this.$root.$emit('cancel-action');
+      this.alert = false;
+    },
+    handleCancelAlertActions() {
+      if (this.alertActions?.length) {
+        this.alert = false;
+        this.alertActions = [];
+      }
+    },
+    handleConflicts(action) {
+      this.isAlertActionRunning = true;
+      if (action.function.name === 'createShortcut') {
+        this.createShortcut(...action.function.params, action.event);
+      }
+      if (action.function.name === 'moveDocument') {
+        this.moveDocument(...action.function.params, action.event);
+      }
+    },
+    emitAlertAction(action) {
+      this.$emit(action.event, action);
+    },
     restoreVersion(version) {
       return this.$documentFileService.restoreVersion(version.id).then(newVersion => {
         if (newVersion) {
@@ -693,16 +753,61 @@ export default {
           this.loading = false;
         });
     },
-    moveDocument(ownerId,fileId,destPath){
-      this.$documentFileService.moveDocument(ownerId,fileId,destPath)
+    getConflictMessage(file) {
+      if (file.folder && !this.isMobile) {
+        return this.$t('document.folder.conflict.error.message.action');
+      } else if (file.folder && this.isMobile) {
+        return this.$t('document.folder.conflict.error.message');
+      } else if (!file.folder && this.isMobile) {
+        return this.$t('document.file.conflict.error.message');
+      } else {
+        return this.$t('document.file.conflict.error.message.action');
+      }
+    },
+    getConflictActions(object, fn) {
+      const actions = [{
+        event: 'keepBoth',
+        function: fn
+      }];
+      if (object.versionable) {
+        actions.push({event: 'createNewVersion', function: fn});
+        return actions;
+      } else {
+        return actions;
+      }
+    },
+    moveDocument(ownerId, file, destPath, conflictAction) {
+      this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
         .then( () => {
           this.refreshFiles();
+          this.$root.$emit('document-moved');
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
+          });
+          this.isAlertActionRunning = false;
+        })
+        .catch(e => {
+          if (e.status === 409) {
+            e.json().then(response => {
+              this.$root.$emit('show-alert', {
+                type: 'warning',
+                message: this.getConflictMessage(file),
+                actions: this.getConflictActions(response.existingObject, {
+                  name: 'moveDocument',
+                  params: [ownerId, file, destPath] // moveDocument function arguments
+                })
+              });
+            });
+          } else {
+            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
+          }
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-    createShortcut(file,destPath, destFolder,space) {
-      this.$documentFileService.createShortcut(file.id,destPath)
+    createShortcut(file,destPath, destFolder,space, conflictAction) {
+      this.$documentFileService.createShortcut(file.id,destPath, conflictAction)
         .then(() => {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('document.shortcut.creationSuccess')});
           this.createShortcutStatistics(file,space);
@@ -712,9 +817,25 @@ export default {
           } else {
             this.openFolder(destFolder);
           }
+          this.$root.$emit('shortcut-created');
+          this.isAlertActionRunning = false;
         })
-        .catch(() => {
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.shortcut.creationError')});
+        .catch((e) => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: this.getConflictMessage(file),
+              actions: [{
+                event: 'keepBoth',
+                function: {
+                  name: 'createShortcut',
+                  params: [file, destPath, destFolder, space] // createShortcut function arguments
+                }
+              }],
+            });
+          } else {
+            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.shortcut.creationError')});
+          }
         })
         .finally(() => this.loading = false);
     },
@@ -778,9 +899,18 @@ export default {
     },
     saveVisibility(file){
       this.$documentFileService.saveVisibility(file)
-        .then(() => this.refreshFiles())
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
+        .then(() => {
+          this.refreshFiles();
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
+          this.$root.$emit('visibility-saved');
+        })
+        .catch(() => {
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.label.saveVisibility.error')});
+        })
+        .finally(() => {
+          this.loading = false;
+        }
+        );
     },
     openDrawer(files) {
 
@@ -883,8 +1013,13 @@ export default {
     displayMessage(message) {
       this.message = message.message;
       this.alertType = message.type;
+      this.alertActions = message.actions;
       this.alert = true;
-      window.setTimeout(() => this.alert = false, 5000);
+      setTimeout(() => {
+        if (!this.alertActions?.length) {
+          this.alert = false;
+        }
+      }, 5000);
     },
     selectFile(path) {
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';

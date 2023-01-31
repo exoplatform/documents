@@ -670,5 +670,20 @@ public class JCRDocumentsUtil {
     return versionFileNode;
   }
 
+  public static String increaseNameIndex(String origin, int count) {
+    int index = origin.indexOf('.');
+    if (index == -1) {
+      return origin + "(" + count + ")";
+    }
+    return origin.substring(0, index) + "(" + count + ")" + origin.substring(index);
+  }
+
+  public static String getNewIndexedName(String exoTitle, String newNameSuffix) {
+    int pointIndex = exoTitle.lastIndexOf(".");
+    String extension = pointIndex != -1 ? exoTitle.substring(pointIndex) : "";
+    exoTitle = pointIndex != -1 ? exoTitle.substring(0, pointIndex).concat(newNameSuffix).concat(extension)
+                                : exoTitle.concat(newNameSuffix);
+    return exoTitle;
+  }
 
 }

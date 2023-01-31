@@ -57,8 +57,7 @@
                 item-value="value"
                 dense
                 class="caption"
-                outlined
-                 />
+                outlined />
             </div>
             <div v-if="showSwitch" class="d-flex flex-row my-4">
               <v-label for="visibility">
@@ -145,6 +144,7 @@
           </v-btn>
           <v-btn
             class="btn btn-primary"
+            :loading="loading"
             @click="saveVisibility()">
             {{ $t('documents.label.visibility.save') }}
           </v-btn>
@@ -166,6 +166,7 @@ export default {
     }
   },
   data: () => ({
+    loading: false,
     allGroupsForAdmin: true,
     userGroup: '/platform/users',
     groupType: 'GROUP',
@@ -265,6 +266,11 @@ export default {
     this.$root.$on('open-visibility-drawer', file => {
       this.open(file);
     });
+    this.$root.$on('visibility-saved', () => {
+      this.loading = false;
+      this.$refs.documentVisibilityDrawer.endLoading();
+      this.close();
+    });
   },
   methods: {
     mapCollaborator(collaborator) {
@@ -311,11 +317,14 @@ export default {
     },
     close() {
       this.$refs.documentVisibilityDrawer.close();
+
     },
     displayAllListUsers(){
       this.$refs.documentAllUsersVisibilityDrawer.open();
     },
     saveVisibility(){
+      this.loading = true;
+      this.$refs.documentVisibilityDrawer.startLoading();
       const collaborators = [];
       for (const user of  this.users) {
         const  collaborator= {
@@ -337,7 +346,6 @@ export default {
         this.file.acl.allMembersCanEdit=false;
       }
       this.$root.$emit('save-visibility',this.file);
-      this.close();
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {
