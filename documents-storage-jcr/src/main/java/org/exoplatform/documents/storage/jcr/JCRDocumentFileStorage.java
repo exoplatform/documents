@@ -487,6 +487,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node childNode = nodeIter.nextNode();
       if (!childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
           && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK))) {
+        String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
+                                                                                        .getString()
+                                                                             : childNode.getName();
         if(childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
           childNode=getNodeByIdentifier(session, childNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
           if (childNode != null && !childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
@@ -495,9 +498,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           }
         }
         if(childNode != null){
-          String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
-                  .getString()
-                  : childNode.getName();
           List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode,session);
           folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
                   nodeName,
