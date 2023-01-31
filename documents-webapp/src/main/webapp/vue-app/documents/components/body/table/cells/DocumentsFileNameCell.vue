@@ -159,11 +159,17 @@ export default {
   }),
   computed: {
     title() {
-      let title = decodeURI(this.fileName);
-      if (this.query){
-        title = this.highlightSearchResult(title,this.query);      
+      let docTitle = this.fileName;
+      try {
+        docTitle = decodeURI(this.fileName);
+      } catch (error) {
+        // Nothing to do, title contains % character but it represent not an encoded character
+        // No need to decode the title
       }
-      return title;
+      if (this.query){
+        docTitle = this.highlightSearchResult(docTitle,this.query);
+      }
+      return docTitle;
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
