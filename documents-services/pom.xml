@@ -159,6 +159,12 @@
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <systemProperties>
+            <property>
+              <name>exo.files.storage.dir</name>
+              <value>target/exo-files</value>
+            </property>
+          </systemProperties>
           <argLine>@{argLine} --add-opens java.base/java.util.concurrent=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.xml/jdk.xml.internal=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED</argLine>
         </configuration>
       </plugin>

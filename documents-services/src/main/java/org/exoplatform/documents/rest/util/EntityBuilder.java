@@ -204,7 +204,15 @@ public class EntityBuilder {
     try {
       nodeEntity.setId(node.getId());
       nodeEntity.setPath(node.getPath());
-      nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
+      String nodeName = node.getName();
+      if(StringUtils.isNotBlank(nodeName)) {
+        try {
+          nodeName = URLDecoder.decode(node.getName(), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException iae) {
+          // nothing to do
+        }
+        nodeEntity.setName(nodeName);
+      }
       nodeEntity.setDatasource(node.getDatasource());
       nodeEntity.setDescription(node.getDescription());
       nodeEntity.setAcl(toNodePermissionEntity(node,identityManager, spaceService));

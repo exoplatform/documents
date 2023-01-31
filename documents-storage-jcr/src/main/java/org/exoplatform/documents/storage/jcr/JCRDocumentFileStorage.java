@@ -17,6 +17,7 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
+import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -542,7 +543,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (StringUtils.isNotBlank(folderPath)) {
         try {
-          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
         } catch (RepositoryException repositoryException) {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
@@ -590,7 +591,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if(StringUtils.isNotBlank(folderPath)){
         try {
-          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
         } catch (RepositoryException repositoryException) {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
@@ -976,15 +977,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       if ((node.getName().equals(USER_PRIVATE_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE)) {
-          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + "/")[1];
-          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
+          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH)[1];
+          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
         }
         if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
           SessionProvider systemSessionProvides = SessionProvider.createSystemProvider();
           Session systemSession = systemSessionProvides.getSession(sessionProvider.getCurrentWorkspace(),
                                                                    sessionProvider.getCurrentRepository());
           Node parent = getNodeByIdentifier(systemSession, ((NodeImpl) node).getIdentifier()).getParent();
-          node = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name()));
+          node = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
           Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(),
                                                        sessionProvider.getCurrentRepository());
           if (session.itemExists(node.getPath())) {
@@ -995,19 +996,17 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if ((node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE + "/" + USER_PUBLIC_ROOT_NODE)) {
-          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + "/" + USER_PUBLIC_ROOT_NODE + "/")[1];
-          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
+          folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + "/" + USER_PUBLIC_ROOT_NODE + SLASH)[1];
+          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
         }
         if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
-          folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE + "/")[1];
-          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
+          folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE + SLASH)[1];
+          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
         }
       }
-      return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8.name())));
+      return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
     } catch (RepositoryException repositoryException) {
       throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
-    } catch (UnsupportedEncodingException e) {
-      throw new IllegalStateException("Error retrieving folder'" + folderPath, e);
     }
   }
 
