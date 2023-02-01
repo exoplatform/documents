@@ -312,7 +312,7 @@ export default {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.restore.version.success')});
           this.$root.$emit('version-restored', newVersion);
           this.refreshVersions(this.versionableFile, newVersion);
-          this.addRestoreVersionStatistics(this.versionableFile);
+          this.refreshFiles();
         }
       }).catch(() => {
         this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.restore.version.error')});
@@ -366,25 +366,6 @@ export default {
         this.isLoadingVersions = false;
       });
       this.addVersionHistoryStatistics();
-    },
-    addRestoreVersionStatistics(file) {
-      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
-        detail: {
-          module: 'Drive',
-          subModule: 'Documents',
-          userId: eXo.env.portal.userIdentityId,
-          userName: eXo.env.portal.userName,
-          operation: 'fileUpdated',
-          parameters: {
-            fileSize: file.size,
-            documentType: 'nt:file',
-            fileMimeType: file.mimeType,
-            documentName: file.name,
-            uuid: file.id
-          },
-          timestamp: Date.now()
-        }
-      }));
     },
     addVersionHistoryStatistics() {
       document.dispatchEvent(new CustomEvent('exo-statistic-message', {

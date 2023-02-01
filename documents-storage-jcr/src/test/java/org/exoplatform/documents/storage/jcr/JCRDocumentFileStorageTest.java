@@ -360,7 +360,7 @@ public class JCRDocumentFileStorageTest {
     when(rootNode.addNode("test", NodeTypeConstants.EXO_SYMLINK)).thenReturn(currentNode);
     when(currentNode.getPath()).thenReturn("/Groups/spaces/test/Documents/test[1]");
     jcrDocumentFileStorage.createShortcut("11111111", "/Groups/spaces/test/Documents/test", "user", "keepBoth");
-
+    verify(sessionProvider, times(3)).close();
   }
 
   @Test
@@ -484,10 +484,10 @@ public class JCRDocumentFileStorageTest {
     when(node.isCheckedOut()).thenReturn(false);
     PowerMockito.doNothing().when(node).checkout();
     PowerMockito.doNothing().when(node).restore(version, true);
+    when(node.isNodeType(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
     this.jcrDocumentFileStorage.restoreVersion("123", "user");
     verify(node, times(1)).restore(version, true);
     verify(node, times(1)).checkin();
-
   }
 
   @Test
