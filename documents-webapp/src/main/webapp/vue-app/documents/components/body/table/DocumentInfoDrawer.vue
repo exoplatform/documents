@@ -31,18 +31,23 @@
           </a>
         </v-list-item-content>
       </v-list-item>
-      <div v-if="showNoDescription" class="d-flex flex-column justify-center text-center pa-8">
-        <v-icon size="40" class="descriptionIcon"> mdi-message-text-outline </v-icon>
-        <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
-        <a class="align-center" @click="openEditor">
-          <span>{{ $t('documents.message.addYourDescription') }}</span>
-        </a>
+      <div v-if="showNoDescription">
+        <div class="d-flex flex-row justify-center text-center pt-8">
+          <v-icon size="40" class="descriptionIcon"> mdi-message-text-outline </v-icon>
+        </div>
+        <div class="d-flex flex-column justify-center text-center pb-8">
+          <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
+          <a class="align-center" @click="openEditor">
+            <span>{{ $t('documents.message.addYourDescription') }}</span>
+          </a>
+        </div>
       </div>
       <div
         v-show="showDescription"
         :data-text="placeholder"
+        contentEditable="true"
         :title="$t('tooltip.clickToEdit')"
-        class="py-4 px-8 cursor-text"
+        class="py-4 px-8 infoDescriptionToShow"
         @click="openEditor"
         v-sanitized-html="file.description">
         {{ placeholder }}
@@ -54,16 +59,6 @@
           max-length="1300"
           :placeholder="$t('documents.alert.descriptionLimit')"
           class="flex" />
-        <v-btn
-          id="saveDescriptionButton"
-          :loading="savingDescription"
-          :disabled="disableButton"
-          depressed
-          outlined
-          class="btn mt-2 ml-auto d-flex px-2 btn-primary v-btn v-btn--contained theme--light v-size--default"
-          @click="updateDescription">
-          {{ $t('documents.label.apply') }}
-        </v-btn>
       </div>
       <v-divider dark />
       <template>
@@ -145,6 +140,20 @@
           </v-list-item-content>
         </v-list-item>
       </template>
+    </template>   
+    <template slot="footer">
+      <div class="d-flex">
+        <v-spacer />
+        <v-btn
+          id="saveDescriptionButton"
+          :loading="savingDescription"
+          :disabled="disableButton"
+          depressed
+          class="primary btn no-box-shadow ms-auto"
+          @click="updateDescription">
+          {{ $t('documents.label.apply') }}
+        </v-btn>
+      </div>
     </template>
   </exo-drawer>
 </template>
@@ -244,9 +253,12 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
-          this.displayAlert(this.$t('documents.alert.success.description.updated'));
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: this.$t('documents.alert.success.description.updated')
+          });
           this.showDescription = this.file.description && this.file.description.length;
-          this.showNoDescription = !this.showDescription;
+          this.showNoDescription = !this.file.description;
           this.displayEditor=false;
           this.fileInitialDescription = this.file.description;
         });
@@ -270,7 +282,7 @@ export default {
       this.originDescription = this.file.description;
     },
     close() {
-      this.file = null;
+      this.file.description = this.fileInitialDescription;
       this.displayEditor = false;
       this.showNoDescription = false;
       this.showDescription = true;
