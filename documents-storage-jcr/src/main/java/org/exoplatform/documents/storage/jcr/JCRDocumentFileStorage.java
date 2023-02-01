@@ -490,19 +490,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
                                                                                         .getString()
                                                                              : childNode.getName();
-        if(childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
-          childNode=getNodeByIdentifier(session, childNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
-          if (childNode != null && !childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
-              && !childNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
+        if (childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          Node parentNode = getNodeByIdentifier(session, childNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+          if (parentNode != null && (!parentNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
+              && !parentNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.getPath().contains(parentNode.getPath()))) {
             continue;
+          } else {
+            childNode = parentNode;
           }
         }
-        if(childNode != null){
-          List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode,session);
+        if (childNode != null) {
+          List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode, session);
           folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
-                  nodeName,
-                  childNode.getPath(),
-                  folderChildListNodes));
+                                               nodeName,
+                                               childNode.getPath(),
+                                               folderChildListNodes));
         }
 
       }
