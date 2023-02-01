@@ -753,20 +753,19 @@ export default {
     moveDocument(ownerId, file, destPath, destFolder, space, conflictAction) {
       this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
         .then( () => {
-          if (space && space.groupId) {
-            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
-            this.$root.$emit('set-breadcrumb', destFolder);
-            window.history.pushState(destFolder.name, destFolder.title, `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}?view=folder`);
-            this.parentFolderId = destFolder.id;
-            this.refreshFiles();
-          } else {
-            this.openFolder(destFolder);
-          }
-          this.$root.$emit('document-moved');
           this.$root.$emit('show-alert', {
             type: 'success',
             message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
           });
+          if (space && space.groupId) {
+            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
+            window.setTimeout(() => {
+              window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+            }, 1000);
+          } else {
+            this.openFolder(destFolder);
+          }
+          this.$root.$emit('document-moved');
           this.isAlertActionRunning = false;
         })
         .catch(e => {
