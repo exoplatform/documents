@@ -488,8 +488,8 @@ export default {
       }
     },
     openFolder(parentFolder) {
-      this.folderPath='';
-      this.fileName=null;
+      this.folderPath = '';
+      this.fileName = null;
       this.parentFolderId = parentFolder.id;
       let symlinkId = null;
       if (parentFolder.sourceID){
@@ -517,7 +517,7 @@ export default {
         const userPublicPathPrefix = `${userName}/Public`;
         if (parentFolder.path.includes(userPrivatePathPrefix)){
           const pathParts = parentFolder.path.split(userPrivatePathPrefix);
-          if (pathParts.length>1){
+          if (pathParts.length > 1){
             folderPath = pathParts[1];
           }
           
