@@ -94,9 +94,6 @@ public interface DocumentFileStorage {
    * @param folderId Id of the given folder
    * @param aclIdentity {@link Identity} of the user acessing files
    * @return {@link List} of {@link AbstractNode}
-   * @throws IllegalAccessException when the user isn't allowed to access
-   *           documents of the designated parentFolderId
-   * @throws ObjectNotFoundException when folderId doesn't exisits
    */
   List<FullTreeItem> getFullTreeData(long ownerId, String folderId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
