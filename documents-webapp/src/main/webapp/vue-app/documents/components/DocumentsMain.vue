@@ -179,7 +179,8 @@ export default {
     message: '',
     alertActions: [],
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-    isAlertActionRunning: false
+    isAlertActionRunning: false,
+    documentsToBeDeleted: [],
   }),
   computed: {
     progressAlertColor() {
@@ -594,6 +595,9 @@ export default {
       if (options?.symlinkId) {
         filter.symlinkFolderId  =  options.symlinkId;
       }
+      if (options?.deleted) {
+        this.documentsToBeDeleted.push(options?.documentId);
+      }
       filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
       this.offset = options?.append ? this.offset + this.pageSize : 0 ;
@@ -613,7 +617,7 @@ export default {
             return 0;
           }) || files : files;
           this.files = options?.append ? this.files.concat(files) : files ;
-          this.files = options?.deleted ? this.files.filter(doc => doc.id !== options?.documentId) : this.files;
+          this.files = options?.deleted ? this.files.filter(this.isDocumentsToBeDeleted) : this.files;
           this.hasMore = files && files.length >= this.limit;
           if (this.fileName && !options?.disablePreview) {
             const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
@@ -626,6 +630,9 @@ export default {
           });
         })
         .finally(() => this.loading = false);
+    },
+    isDocumentsToBeDeleted(doc) {
+      return this.documentsToBeDeleted.find(documentId => documentId === doc.id) ? false : true;
     },
     checkDefaultViewOptions() {
       if (this.selectedView === 'folder') {
