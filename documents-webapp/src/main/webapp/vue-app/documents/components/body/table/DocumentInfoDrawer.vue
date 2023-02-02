@@ -275,11 +275,14 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
-          this.close();
-          this.$root.$emit('show-alert', {
-            type: 'success',
-            message: this.$t('documents.alert.success.description.updated')
-          });
+          if (this.isMobile){
+            this.displayAlert(this.$t('documents.alert.success.description.updated'));
+          } else {
+            this.$root.$emit('show-alert', {
+              type: 'success',
+              message: this.$t('documents.alert.success.description.updated')
+            });
+          }
           this.showDescription = this.file.description && this.file.description.length;
           this.showNoDescription = !this.file.description;
           this.displayEditor=false;
