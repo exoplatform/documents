@@ -757,34 +757,27 @@ export default {
         return actions;
       }
     },
-    moveDocument(ownerId, file, destPath, conflictAction) {
+    moveDocument(ownerId, file, destPath, destFolder, space, conflictAction) {
       this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
         .then( () => {
-          this.refreshFiles();
-          this.$root.$emit('document-moved');
           this.$root.$emit('show-alert', {
             type: 'success',
             message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
           });
+          if (space && space.groupId) {
+            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
+            window.setTimeout(() => {
+              window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+            }, 1000);
+          } else {
+            this.openFolder(destFolder);
+          }
+          this.$root.$emit('document-moved');
           this.isAlertActionRunning = false;
         })
-        .catch(e => {
-          if (e.status === 409) {
-            e.json().then(response => {
-              this.$root.$emit('show-alert', {
-                type: 'warning',
-                message: this.getConflictMessage(file),
-                actions: this.getConflictActions(response.existingObject, {
-                  name: 'moveDocument',
-                  params: [ownerId, file, destPath] // moveDocument function arguments
-                })
-              });
-            });
-          } else {
-            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
-          }
+        .catch(() => {
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
         })
-        .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
     createShortcut(file,destPath, destFolder,space, conflictAction) {
