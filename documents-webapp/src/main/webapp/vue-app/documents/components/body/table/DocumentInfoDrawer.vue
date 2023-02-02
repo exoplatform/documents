@@ -49,7 +49,6 @@
               <div
                 v-show="showDescription"
                 :data-text="placeholder"
-                contentEditable="true"
                 class="infoDescriptionToShow"
                 :hover="hover"
                 v-sanitized-html="file.description">
@@ -60,7 +59,7 @@
               <v-tooltip :disabled="isMobile" bottom> 
                 <template #activator="{ on, attrs }">
                   <v-icon
-                    v-show="hover && showDescription"
+                    v-show="showDescription && (hover || isMobile)"
                     v-bind="attrs"
                     v-on="on"
                     class="primary--text"
@@ -276,6 +275,7 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
+          this.close();
           this.$root.$emit('show-alert', {
             type: 'success',
             message: this.$t('documents.alert.success.description.updated')
