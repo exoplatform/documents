@@ -42,16 +42,39 @@
           </a>
         </div>
       </div>
-      <div
-        v-show="showDescription"
-        :data-text="placeholder"
-        contentEditable="true"
-        :title="$t('tooltip.clickToEdit')"
-        class="py-4 px-8 infoDescriptionToShow"
-        @click="openEditor"
-        v-sanitized-html="file.description">
-        {{ placeholder }}
-      </div>
+      <v-hover>
+        <div slot-scope="{ hover }">
+          <v-row class="col-12 py-4 pl-8">
+            <v-col class="col-11 px-0 py-0">
+              <div
+                v-show="showDescription"
+                :data-text="placeholder"
+                contentEditable="true"
+                class="infoDescriptionToShow"
+                :hover="hover"
+                v-sanitized-html="file.description">
+                {{ placeholder }}
+              </div>
+            </v-col>
+            <v-col class="col-1 px-0 py-0">
+              <v-tooltip :disabled="isMobile" bottom> 
+                <template #activator="{ on, attrs }">
+                  <v-icon
+                    v-show="hover && showDescription"
+                    v-bind="attrs"
+                    v-on="on"
+                    class="primary--text"
+                    size="16"
+                    @click="openEditor">
+                    {{ 'fa fa-edit' }}
+                  </v-icon>
+                </template>
+                <span> {{ $t('documents.drawer.details.description.edit') }} </span>
+              </v-tooltip>
+            </v-col>
+          </v-row>
+        </div>
+      </v-hover>
       <div v-show="displayEditor" class="py-4 px-8">
         <exo-activity-rich-editor
           ref="activityShareMessage"
