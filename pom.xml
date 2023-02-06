@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <artifactId>maven-parent-pom</artifactId>
@@ -8,7 +9,7 @@
   </parent>
   <groupId>org.exoplatform.documents</groupId>
   <artifactId>documents-parent</artifactId>
-  <version>1.1.0-20230202</version>
+  <version>1.1.x-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>eXo Documents - Parent POM</name>
   <modules>
@@ -22,14 +23,14 @@
     <connection>scm:git:git://github.com/exoplatform/documents.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/exoplatform/documents.git</developerConnection>
     <url>https://github.com/exoplatform/documents</url>
-    <tag>1.1.0-20230202</tag>
+    <tag>HEAD</tag>
   </scm>
   <properties>
     <!-- 3rd party libraries versions -->
-    <org.exoplatform.social.version>6.4.0-exo-20230202</org.exoplatform.social.version>
-    <org.exoplatform.platform-ui.version>6.4.0-exo-20230202</org.exoplatform.platform-ui.version>
-    <addon.exo.jcr.version>6.4.0-20230202</addon.exo.jcr.version>
-    <addon.exo.analytics.version>1.3.0-exo-20230202</addon.exo.analytics.version>
+    <org.exoplatform.social.version>6.4.x-exo-SNAPSHOT</org.exoplatform.social.version>
+    <org.exoplatform.platform-ui.version>6.4.x-exo-SNAPSHOT</org.exoplatform.platform-ui.version>
+    <addon.exo.jcr.version>6.4.x-SNAPSHOT</addon.exo.jcr.version>
+    <addon.exo.analytics.version>1.3.x-exo-SNAPSHOT</addon.exo.analytics.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
   </properties>
