@@ -702,6 +702,7 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name)
         .then(createdFolder => {
+          createdFolder.canAdd = this.canAdd;
           this.files.shift();
           this.files.unshift(createdFolder);
         }).catch(e => {
