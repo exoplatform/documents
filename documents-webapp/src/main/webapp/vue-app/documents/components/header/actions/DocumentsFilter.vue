@@ -17,7 +17,7 @@
     <button
       v-if="canShowMobileFilter"
       :class="btnClass"
-      class="px-3 py-3"
+      class="px-3 width-max-content"
       @click="openDrawer()">
       <v-icon size="16" class="filterIcon"> fa-sliders-h </v-icon>
       <span v-if="filterNumber>0">({{ filterNumber }})</span>    
@@ -69,7 +69,7 @@ export default {
       if (this.filterNumber>0 || this.query){
         return 'mobile-filter-button';
       }
-      return 'btn';
+      return 'btn py-3';
     }
   },
   methods: {
