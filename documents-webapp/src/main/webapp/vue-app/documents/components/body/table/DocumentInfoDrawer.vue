@@ -17,16 +17,18 @@
               class="fileName font-weight-bold text-color ms-2 px-2">
               {{ file.name }}
             </span>
-            <span
-              v-if="file.versionNumber"
-              @click="showVersionHistory"
-              class="item-version text-caption border-radius primary pa-0 px-1 clickable">
-              V{{ file.versionNumber }}
-            </span>
-            <documents-favorite-action
-              v-if="!file.folder"
-              :file="file"
-              :is-mobile="isMobile" />
+            <div class="d-flex align-center pb-1">
+              <span
+                v-if="file.versionNumber"
+                @click="showVersionHistory"
+                class="item-version text-caption border-radius primary pa-0 px-1 clickable">
+                V{{ file.versionNumber }}
+              </span>
+              <documents-favorite-action
+                v-if="!file.folder"
+                :file="file"
+                :is-mobile="isMobile" />
+            </div>
             <v-spacer />
           </a>
         </v-list-item-content>
@@ -87,7 +89,7 @@
         <v-list-item>
           <v-list-item-content class="mt-4 mx-4">
             <v-list-item-title>
-              <a
+              <span
                 class="fileDetails text-color d-flex">
                 <span class="text-center not-clickable font-weight-bold">{{ $t('documents.drawer.details.modified') }}:</span>
                 <date-format
@@ -109,7 +111,7 @@
                 <p v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
                   {{ infoDrawerModifierLabel }}
                 </p>
-              </a>
+              </span>
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
@@ -117,7 +119,7 @@
         <v-list-item>
           <v-list-item-content class="mx-4">
             <v-list-item-title>
-              <a
+              <span
                 class="fileDetails text-color d-flex ">
                 <span class="text-center not-clickable font-weight-bold">
                   {{ $t('documents.drawer.details.created') }}:</span>
@@ -142,7 +144,7 @@
                 <p v-else class="text-decoration-underline not-clickable primary--text font-weight-bold mx-1">
                   {{ infoDrawerCreatorLabel }}
                 </p>
-              </a>
+              </span>
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
@@ -150,14 +152,14 @@
         <v-list-item>
           <v-list-item-content class="mx-4">
             <v-list-item-title>
-              <a
+              <span
                 class="fileDetails not-clickable text-color d-flex">
                 <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
                 <documents-file-size-cell
                   class="mx-1 text-color"
                   :file="file"
                   :is-mobile="isMobile" />
-              </a>
+              </span>
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
