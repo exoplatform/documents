@@ -23,7 +23,7 @@
                 @click="showVersionHistory"
                 class="item-version text-caption border-radius primary pa-0 px-1 clickable">
                 V{{ file.versionNumber }}
-            </span>
+              </span>
               <documents-favorite-action
                 v-if="!file.folder"
                 :file="file"
