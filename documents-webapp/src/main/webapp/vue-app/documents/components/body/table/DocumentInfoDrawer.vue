@@ -167,6 +167,7 @@
       <div class="d-flex">
         <v-spacer />
         <v-btn
+          v-show="displayEditor"
           id="saveDescriptionButton"
           :loading="savingDescription"
           :disabled="disableButton"
