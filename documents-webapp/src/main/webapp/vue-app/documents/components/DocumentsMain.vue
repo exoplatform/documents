@@ -776,8 +776,21 @@ export default {
           this.$root.$emit('document-moved');
           this.isAlertActionRunning = false;
         })
-        .catch(() => {
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
+        .catch(e => {
+          if (e.status === 409) {
+            e.json().then(response => {
+              this.$root.$emit('show-alert', {
+                type: 'warning',
+                message: this.getConflictMessage(file),
+                actions: this.getConflictActions(response.existingObject, {
+                  name: 'moveDocument',
+                  params: [ownerId, file, destPath, destFolder, space] // moveDocument function arguments
+                })
+              });
+            });
+          } else {
+            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
+          }
         })
         .finally(() => this.loading = false);
     },
