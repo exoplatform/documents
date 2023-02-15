@@ -301,7 +301,9 @@ export default {
       this.showNoDescription = !this.file.description && !this.displayEditor;
       this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
       this.fileInitialDescription = this.file.description;      
-      this.$refs.documentInfoDrawer.open();
+      this.$nextTick(()=>{
+        this.$refs.documentInfoDrawer.open();
+      });
     },
     openEditor(){
       this.firstCreateDescription = this.showNoDescription;
