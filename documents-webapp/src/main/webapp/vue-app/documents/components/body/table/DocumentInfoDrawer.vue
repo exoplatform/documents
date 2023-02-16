@@ -317,7 +317,6 @@ export default {
       this.displayEditor = false;
       this.showNoDescription = false;
       this.showDescription = true;
-      this.displayEditor=true;
       this.$refs.documentInfoDrawer.close();
 
     },
