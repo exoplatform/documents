@@ -50,7 +50,7 @@ export default {
           title: this.$t('documents.label.visibility.specific.collaborator'),
         };
       case 'ALL_MEMBERS':
-        return this.file.acl.allMembersCanEdit ?
+        return this.file.acl.canEdit ?
           {
             icon: 'fas fa-layer-group',
             title: this.$t('documents.label.visibility.all'),
