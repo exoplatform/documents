@@ -70,6 +70,9 @@ export default {
   },
   methods: {
     changeVisibility() {
+      if (!this.file.acl.canEdit) {
+        return;
+      }
       this.$root.$emit('open-visibility-drawer', this.file);
       document.dispatchEvent(new CustomEvent('manage-access', {
         detail: {
