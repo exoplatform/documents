@@ -1076,13 +1076,18 @@ export default {
         .finally(() => this.loading = false);
     },
     dragFile(e){     
-      if (this.canAdd){
+      const item = e.dataTransfer.items[0];
+      const isFile = item && item.type !== '';
+      if (this.canAdd && isFile){
         this.openDrawer(e.dataTransfer.files);
         this.$root.$emit('hide-upload-overlay');
       }
     },
-    startDrag(){
-      if (this.canAdd){
+    startDrag(e){
+      const item = e.dataTransfer.items[0];
+      //folder haven't type
+      const isFile = item && item.type !== '';
+      if (this.canAdd && isFile){
         this.$root.$emit('show-upload-overlay');
       }
     },
