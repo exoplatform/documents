@@ -586,10 +586,10 @@ export default {
       } else {
         filter.ascending = this.ascending;
       }
-      if (options?.filterPrimary==='favorites') {
+      if (options?.primaryFilter==='favorites') {
         this.isFavorites = true;
       }
-      if (options?.filterPrimary==='all') {
+      if (options?.primaryFilter==='all') {
         this.isFavorites  =  false;
       }
       if (options?.symlinkId) {
