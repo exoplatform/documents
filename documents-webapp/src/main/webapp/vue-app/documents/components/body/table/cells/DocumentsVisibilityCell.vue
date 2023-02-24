@@ -43,6 +43,19 @@ export default {
           title: this.$t('documents.label.visibility.all'),
         };
       }
+      if (this.isSharedWithCurrentSpace && !this.file.acl.canEdit) {
+        const collaborators = this.file.acl.collaborators.filter(e => e.identity.id === eXo.env.portal.spaceIdentityId );
+        return collaborators[0].permission === 'read'?
+          {
+            icon: 'fas fa-eye',
+            title: this.$t('documents.label.visibility.specific.manger'),
+          }
+          :
+          {
+            icon: 'fas fa-layer-group',
+            title: this.$t('documents.label.visibility.all'),
+          }; 
+      }
       switch (this.file.acl.visibilityChoice) {
       case 'SPECIFIC_COLLABORATOR':
         return {
@@ -67,6 +80,19 @@ export default {
         };
       }
     },
+    isSharedWithCurrentSpace(){
+      const spaceIdentityId = eXo.env.portal.spaceIdentityId;
+      const spaceName = eXo.env.portal.spaceName;
+      const collaborators = this.file.acl.collaborators;
+      if (spaceIdentityId && collaborators.length > 0){
+        for (let i = 0; i < collaborators.length; i++){
+          if (collaborators[i].identity.id === spaceIdentityId && collaborators[i].identity.name === spaceName) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
   },
   methods: {
     changeVisibility() {
