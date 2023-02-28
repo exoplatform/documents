@@ -167,6 +167,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String workspace = session.getWorkspace().getName();
         String sortField = getSortField(filter, false);
         String sortDirection = getSortDirection(filter);
+        if (rootPath.endsWith(username + "/Private")) {
+          rootPath = rootPath.substring(0, rootPath.lastIndexOf("/"));
+        }
 
         Collection<SearchResult> filesSearchList =
                                                  documentSearchServiceConnector.search(aclIdentity,
