@@ -1,10 +1,56 @@
 package org.exoplatform.documents.storage.jcr;
 
-import org.apache.commons.lang3.math.NumberUtils;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Calendar;
+import java.util.List;
+
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
+import javax.jcr.Value;
+import javax.jcr.Workspace;
+import javax.jcr.nodetype.NodeType;
+import javax.jcr.query.QueryManager;
+import javax.jcr.query.QueryResult;
+import javax.jcr.version.Version;
+import javax.jcr.version.VersionHistory;
+import javax.jcr.version.VersionIterator;
+
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
-import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.FileVersion;
+import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.model.FullTreeItem;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -28,37 +74,6 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Assert;
-
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
-
-import javax.jcr.*;
-import javax.jcr.nodetype.NodeType;
-import javax.jcr.query.QueryManager;
-import javax.jcr.query.QueryResult;
-import javax.jcr.version.Version;
-import javax.jcr.version.VersionHistory;
-import javax.jcr.version.VersionIterator;
-
-import java.util.Calendar;
-import java.util.List;
-
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentFileStorageTest {
@@ -336,14 +351,14 @@ public class JCRDocumentFileStorageTest {
     when(queryResult.getNodes()).thenReturn(nodeIterator2);
     when(nodeIterator2.hasNext()).thenReturn(true, true, true,false);
     when(nodeIterator2.nextNode()).thenReturn(folderNode3, folderNode4, folderNode5);
-    doCallRealMethod().when(JCRDocumentsUtil.class,
-                            "toNodes",
-                            identityManager,
-                            userSession,
-                            nodeIterator2,
-                            identity,
-                            spaceService,
-                            false);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(
+                                                           identityManager,
+                                                           userSession,
+                                                           nodeIterator2,
+                                                           identity,
+                                                           spaceService,
+                                                           false))
+                      .thenCallRealMethod();
 
     //assert NumberFormatException when try to parse specific folder name
     String folderName = folderWithSpecificName.getName();
