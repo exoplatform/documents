@@ -33,7 +33,7 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
 
 import org.apache.commons.lang.BooleanUtils;
-import org.apache.commons.lang.math.NumberUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -512,7 +512,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return folderListNodes.stream().sorted( new Comparator<FullTreeItem>() {
       public int compare(FullTreeItem o1, FullTreeItem o2) {
         //sorted the tree item when the name contains numbers
-        if(NumberUtils.isNumber(o1.getName())&&NumberUtils.isNumber(o2.getName())){
+        if(NumberUtils.isParsable(o1.getName()) && NumberUtils.isParsable(o2.getName())){
           return Integer.parseInt(o1.getName()) - Integer.parseInt(o2.getName());
         }
         // sorted the tree item when the name contains only characters
