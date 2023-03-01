@@ -1,5 +1,6 @@
 package org.exoplatform.documents.storage.jcr;
 
+import org.apache.commons.lang3.math.NumberUtils;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
@@ -27,6 +28,7 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -244,13 +246,25 @@ public class JCRDocumentFileStorageTest {
     folder1.setName("folder1");
     FolderNode folder2 = new FolderNode();
     folder2.setName("folder2");
+    FolderNode folderWithNumericName = new FolderNode();
+    folderWithNumericName.setName("15");
+    FolderNode folderWithSpecificName = new FolderNode();
+    folderWithSpecificName.setName("15f");
+    FolderNode folderWithSpecificName1 = new FolderNode();
+    folderWithSpecificName1.setName("16L");
     when(nodeIterator.hasNext()).thenReturn(true, true, false);
     Node fileNode = mock(Node.class);
     Node folderNode1 = mock(Node.class);
     Node folderNode2 = mock(Node.class);
+    Node folderNode3 = mock(Node.class);
+    Node folderNode4 = mock(Node.class);
+    Node folderNode5 = mock(Node.class);
     when(fileNode.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
     when(folderNode1.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
     when(folderNode2.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode3.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode4.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode5.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
     when(nodeIterator.nextNode()).thenReturn(fileNode, folderNode1);
     doCallRealMethod().when(JCRDocumentsUtil.class,
                             "toNodes",
@@ -263,6 +277,10 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
     when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode1, "", spaceService)).thenReturn(folder1);
     when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode2, "", spaceService)).thenReturn(folder2);
+    when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode3, "", spaceService)).thenReturn(folderWithNumericName);
+    when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode4, "", spaceService)).thenReturn(folderWithSpecificName);
+    when(JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode5, "", spaceService)).thenReturn(folderWithSpecificName1);
+
 
     List<AbstractNode> nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
     assertEquals(2, nodes.size());
@@ -301,6 +319,32 @@ public class JCRDocumentFileStorageTest {
     when(nodeIterator1.nextNode()).thenReturn(folderNode2);
     nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
     assertEquals(1, nodes1.size());
+
+    // case folder with specific name
+    NodeIterator nodeIterator2 = mock(NodeIterator.class);
+    when(queryResult.getNodes()).thenReturn(nodeIterator2);
+    when(nodeIterator2.hasNext()).thenReturn(true, true, true,false);
+    when(nodeIterator2.nextNode()).thenReturn(folderNode3, folderNode4, folderNode5);
+    doCallRealMethod().when(JCRDocumentsUtil.class,
+                            "toNodes",
+                            identityManager,
+                            userSession,
+                            nodeIterator2,
+                            identity,
+                            spaceService,
+                            false);
+
+    //assert NumberFormatException when try to parse specific folder name
+    String folderName = folderWithSpecificName.getName();
+    Assert.assertThrows(NumberFormatException.class, () -> Integer.parseInt(folderName));
+
+    List<AbstractNode> nodes2 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 3);
+
+    //assert that the method return the correct result and dosen't throw any exception
+    assertEquals(3, nodes2.size());
+    assertEquals("15", nodes2.get(0).getName());
+    assertEquals("15f", nodes2.get(1).getName());
+    assertEquals("16L", nodes2.get(2).getName());
 
     // case filter with query
     filter.setQuery("docum");
