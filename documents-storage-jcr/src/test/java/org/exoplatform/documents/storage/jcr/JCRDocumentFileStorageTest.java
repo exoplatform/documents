@@ -339,10 +339,10 @@ public class JCRDocumentFileStorageTest {
     List<AbstractNode> nodes2 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 3);
 
     //assert that the method return the correct result and dosen't throw any exception
-    assertEquals(nodes2.size(),3);
-    assertEquals(nodes2.get(0).getName(), "15");
-    assertEquals(nodes2.get(1).getName(), "15f");
-    assertEquals(nodes2.get(2).getName(), "16L");
+    assertEquals(3, nodes2.size());
+    assertEquals("15", nodes2.get(0).getName());
+    assertEquals("15f", nodes2.get(1).getName());
+    assertEquals("16L", nodes2.get(2).getName());
 
     // case filter with query
     filter.setQuery("docum");
