@@ -28,6 +28,7 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -334,15 +335,16 @@ public class JCRDocumentFileStorageTest {
                             false);
 
     //assert NumberFormatException when try to parse specific folder name
-    assertThrows(NumberFormatException.class,() -> Integer.parseInt(folderWithSpecificName.getName()));
+    String folderName = folderWithSpecificName.getName();
+    Assert.assertThrows(NumberFormatException.class, () -> Integer.parseInt(folderName));
 
     List<AbstractNode> nodes2 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 3);
 
     //assert that the method return the correct result and dosen't throw any exception
-    assertEquals(nodes2.size(),3);
-    assertEquals(nodes2.get(0).getName(), "15");
-    assertEquals(nodes2.get(1).getName(), "15f");
-    assertEquals(nodes2.get(2).getName(), "16L");
+    assertEquals(3, nodes2.size());
+    assertEquals("15", nodes2.get(0).getName());
+    assertEquals("15f", nodes2.get(1).getName());
+    assertEquals("16L", nodes2.get(2).getName());
 
     // case filter with query
     filter.setQuery("docum");
