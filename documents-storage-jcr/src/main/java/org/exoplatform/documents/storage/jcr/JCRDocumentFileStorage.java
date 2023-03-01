@@ -1126,7 +1126,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String groupId = space.getGroupId();
         List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
         List<String> accessControlEntryPermession = new ArrayList<>();
-        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:"+groupId)).collect(Collectors.toList())
+        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId)).toList()
            .forEach(accessControlEntry -> {
                       accessControlEntryPermession.add(accessControlEntry.getPermission());
                       permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));

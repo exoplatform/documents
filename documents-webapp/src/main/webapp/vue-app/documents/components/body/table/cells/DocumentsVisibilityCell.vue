@@ -85,8 +85,8 @@ export default {
       const spaceName = eXo.env.portal.spaceName;
       const collaborators = this.file.acl.collaborators;
       if (spaceIdentityId && collaborators.length > 0){
-        for (let i = 0; i < collaborators.length; i++){
-          if (collaborators[i].identity.id === spaceIdentityId && collaborators[i].identity.name === spaceName) {
+        for (const collaborator of collaborators) {
+          if (collaborator.identity.id === spaceIdentityId && collaborator.identity.name === spaceName) {
             return true;
           }
         }
