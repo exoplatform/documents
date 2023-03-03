@@ -1,5 +1,24 @@
 package org.exoplatform.documents.notification.utils;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
+
+import javax.jcr.Node;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+import javax.jcr.Value;
+
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.rest.util.EntityBuilder;
@@ -11,44 +30,34 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-import javax.jcr.Node;
-import javax.jcr.Property;
-import javax.jcr.RepositoryException;
-import javax.jcr.Value;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore({ "javax.management.*" })
-@PrepareForTest({ CommonsUtils.class, LinkProvider.class, EntityBuilder.class })
+@RunWith(MockitoJUnitRunner.class)
 public class NotificationUtilsTest {
 
-  @Mock
-  private IdentityManager identityManager;
+  private static final MockedStatic<CommonsUtils>  COMMONS_UTILS  = mockStatic(CommonsUtils.class);
+
+  private static final MockedStatic<LinkProvider>  LINK_PROVIDER  = mockStatic(LinkProvider.class);
+
+  private static final MockedStatic<EntityBuilder> ENTITY_BUILDER = mockStatic(EntityBuilder.class);
 
   @Mock
-  private SpaceService    spaceService;
+  private IdentityManager                          identityManager;
+
+  @Mock
+  private SpaceService                             spaceService;
+
+  @AfterClass
+  public static void afterRunBare() throws Exception { // NOSONAR
+    COMMONS_UTILS.close();
+    ENTITY_BUILDER.close();
+    LINK_PROVIDER.close();
+  }
 
   @Before
   public void setUp() throws Exception {
-    PowerMockito.mockStatic(CommonsUtils.class);
-    PowerMockito.mockStatic(LinkProvider.class);
-
-    when(CommonsUtils.getCurrentPortalOwner()).thenReturn("dw");
-    when(CommonsUtils.getCurrentDomain()).thenReturn("http://domain");
-    when(LinkProvider.getPortalName(null)).thenReturn("portal");
+    COMMONS_UTILS.when(() -> CommonsUtils.getCurrentPortalOwner()).thenReturn("dw");
+    COMMONS_UTILS.when(() -> CommonsUtils.getCurrentDomain()).thenReturn("http://domain");
+    LINK_PROVIDER.when(() -> LinkProvider.getPortalName(null)).thenReturn("portal");
   }
 
   @Test
@@ -59,24 +68,24 @@ public class NotificationUtilsTest {
     space.setPrettyName("spacex");
     when(identity.getRemoteId()).thenReturn("spacex");
     Node node = Mockito.mock(ExtendedNode.class);
-    when(((ExtendedNode)node).getIdentifier()).thenReturn("123");
+    when(((ExtendedNode) node).getIdentifier()).thenReturn("123");
     when(node.hasNode("jcr:content")).thenReturn(true);
     when(node.getPath()).thenReturn("/Groups/spaces/spacex/Documents/new folder 32");
-    when(spaceService.getSpaceByGroupId("/spaces/spacex")).thenReturn(space);
     when(spaceService.getSpaceByPrettyName("spacex")).thenReturn(space);
-    when( identityManager.getOrCreateSpaceIdentity("spacex")).thenReturn(identity);
+    ENTITY_BUILDER.when(() -> EntityBuilder.getOwnerIdentityFromNodePath(any(), any(), any())).thenReturn(identity);
 
-    String link = NotificationUtils.getDocumentLink(node, spaceService,identityManager);
+    String link = NotificationUtils.getDocumentLink(node, spaceService, identityManager);
     assertEquals("http://domain/portal/g/:spaces:spacex/spacex/documents?documentPreviewId=123", link);
   }
+
   @Test
   public void getSharedDocumentLink() {
     Space space = new Space();
     space.setGroupId("/spaces/spacename");
     when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
-    String link = NotificationUtils.getSharedDocumentLink("123", null,null);
+    String link = NotificationUtils.getSharedDocumentLink("123", null, null);
     assertEquals("http://domain/portal/dw/documents/Private/Documents/Shared?documentPreviewId=123", link);
-    String link1 = NotificationUtils.getSharedDocumentLink("123", spaceService,"space_name");
+    String link1 = NotificationUtils.getSharedDocumentLink("123", spaceService, "space_name");
     assertEquals("http://domain/portal/g/:spaces:spacename/space_name/documents/Shared?documentPreviewId=123", link1);
   }
 

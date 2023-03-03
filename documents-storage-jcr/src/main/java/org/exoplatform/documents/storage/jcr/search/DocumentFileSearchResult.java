@@ -1,6 +1,6 @@
 package org.exoplatform.documents.storage.jcr.search;
 
-import org.exoplatform.commons.api.search.data.SearchResult;
+import org.exoplatform.documents.legacy.search.data.SearchResult;
 
 public class DocumentFileSearchResult extends SearchResult {
 

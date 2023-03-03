@@ -1,6 +1,27 @@
 package org.exoplatform.documents.listener;
 
+import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
+
+import javax.jcr.Node;
+import javax.jcr.Property;
+import javax.jcr.Value;
+
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import org.exoplatform.commons.api.notification.NotificationContext;
 import org.exoplatform.commons.api.notification.channel.ChannelManager;
+import org.exoplatform.commons.api.notification.command.NotificationCommand;
+import org.exoplatform.commons.api.notification.command.NotificationExecutor;
 import org.exoplatform.commons.api.notification.model.PluginKey;
 import org.exoplatform.commons.api.notification.service.NotificationCompletionService;
 import org.exoplatform.commons.api.notification.service.setting.PluginSettingService;
@@ -18,79 +39,76 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-import javax.jcr.Node;
-import javax.jcr.Property;
-import javax.jcr.Value;
-
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.when;
-import static org.powermock.api.mockito.PowerMockito.mock;
-import static org.powermock.api.mockito.PowerMockito.verifyStatic;
-
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore({ "javax.management.*" })
-@PrepareForTest({CommonsUtils.class, ConversationState.class, NotificationContextImpl.class, PluginKey.class, LinkProvider.class})
+@RunWith(MockitoJUnitRunner.class)
 public class ShareDocumentNotificationListenerTest {
 
+  private static final MockedStatic<CommonsUtils>            COMMONS_UTILS             = mockStatic(CommonsUtils.class);
+
+  private static final MockedStatic<ConversationState>       CONVERSATION_STATE        = mockStatic(ConversationState.class);
+
+  private static final MockedStatic<NotificationContextImpl> NOTIFICATION_CONTEXT_IMPL =
+                                                                                       mockStatic(NotificationContextImpl.class);
+
+  private static final MockedStatic<PluginKey>               PLUGIN_KEY                = mockStatic(PluginKey.class);
+
+  private static final MockedStatic<LinkProvider>            LINK_PROVIDER             = mockStatic(LinkProvider.class);
 
   @Mock
-  private NotificationService               notificationService;
+  private NotificationService                                notificationService;
 
   @Mock
-  private NotificationCompletionService     notificationCompletionService;
+  private NotificationCompletionService                      notificationCompletionService;
 
   @Mock
-  private NotificationPluginContainer       notificationPluginContainer;
+  private NotificationPluginContainer                        notificationPluginContainer;
 
   @Mock
-  private PluginSettingService              pluginSettingService;
+  private PluginSettingService                               pluginSettingService;
 
   @Mock
-  private ChannelManager                    channelManager;
-  @Mock
-  private SpaceService                      spaceService;
-  
-  @Mock
-  private IdentityManager                   identityManager;
+  private ChannelManager                                     channelManager;
 
   @Mock
-  private NodeImpl                   nodeImpl;
+  private SpaceService                                       spaceService;
 
-  private ShareDocumentNotificationListener shareDocumentNotificationListener;
+  @Mock
+  private IdentityManager                                    identityManager;
+
+  @Mock
+  private NodeImpl                                           nodeImpl;
+
+  private ShareDocumentNotificationListener                  shareDocumentNotificationListener;
+
+  @AfterClass
+  public static void afterRunBare() throws Exception { // NOSONAR
+    COMMONS_UTILS.close();
+    CONVERSATION_STATE.close();
+    NOTIFICATION_CONTEXT_IMPL.close();
+    PLUGIN_KEY.close();
+    LINK_PROVIDER.close();
+  }
 
   @Before
   public void setUp() throws Exception {
     this.shareDocumentNotificationListener = new ShareDocumentNotificationListener(spaceService, identityManager);
-    PowerMockito.mockStatic(ConversationState.class);
-    PowerMockito.mockStatic(CommonsUtils.class);
-    PowerMockito.mockStatic(LinkProvider.class);
-    PowerMockito.mockStatic(PluginKey.class);
     ConversationState conversationState = mock(ConversationState.class);
-    when(ConversationState.getCurrent()).thenReturn(conversationState);
+    CONVERSATION_STATE.when(() -> ConversationState.getCurrent()).thenReturn(conversationState);
     org.exoplatform.services.security.Identity identity = Mockito.mock(org.exoplatform.services.security.Identity.class);
     when(conversationState.getIdentity()).thenReturn(identity);
     when(identity.getUserId()).thenReturn("username");
-    when(CommonsUtils.getService(NotificationService.class)).thenReturn(notificationService);
-    when(CommonsUtils.getService(NotificationCompletionService.class)).thenReturn(notificationCompletionService);
-    when(CommonsUtils.getService(NotificationPluginContainer.class)).thenReturn(notificationPluginContainer);
-    when(CommonsUtils.getService(PluginSettingService.class)).thenReturn(pluginSettingService);
-    when(CommonsUtils.getService(ChannelManager.class)).thenReturn(channelManager);
-    when(CommonsUtils.getService(NodeImpl.class)).thenReturn(nodeImpl);
-    when(CommonsUtils.getCurrentPortalOwner()).thenReturn("dw");
-    when(CommonsUtils.getCurrentDomain()).thenReturn("http://domain/");
-    when(LinkProvider.getPortalName(null)).thenReturn("portal");
+    COMMONS_UTILS.when(() -> CommonsUtils.getService(NotificationService.class)).thenReturn(notificationService);
+    COMMONS_UTILS.when(() -> CommonsUtils.getService(NotificationCompletionService.class))
+                 .thenReturn(notificationCompletionService);
+    COMMONS_UTILS.when(() -> CommonsUtils.getService(NotificationPluginContainer.class)).thenReturn(notificationPluginContainer);
+    COMMONS_UTILS.when(() -> CommonsUtils.getService(PluginSettingService.class)).thenReturn(pluginSettingService);
+    COMMONS_UTILS.when(() -> CommonsUtils.getService(ChannelManager.class)).thenReturn(channelManager);
+    COMMONS_UTILS.when(() -> CommonsUtils.getService(NodeImpl.class)).thenReturn(nodeImpl);
+    COMMONS_UTILS.when(() -> CommonsUtils.getCurrentPortalOwner()).thenReturn("dw");
+    COMMONS_UTILS.when(() -> CommonsUtils.getCurrentDomain()).thenReturn("http://domain/");
+    LINK_PROVIDER.when(() -> LinkProvider.getPortalName(null)).thenReturn("portal");
     PluginKey pluginKey = mock(PluginKey.class);
-    when(PluginKey.key(AddDocumentCollaboratorPlugin.ID)).thenReturn(pluginKey);
+    PLUGIN_KEY.when(() -> PluginKey.key(AddDocumentCollaboratorPlugin.ID)).thenReturn(pluginKey);
   }
 
   @Test
@@ -113,13 +131,20 @@ public class ShareDocumentNotificationListenerTest {
     when(targetNode.getProperty("exo:title")).thenReturn(propertyTitle);
     when(targetIdentity.getRemoteId()).thenReturn("user");
     when(targetNode.hasProperty("exo:uuid")).thenReturn(true);
+
+    NotificationContext notificationContext = mock(NotificationContext.class);
+    NotificationExecutor notificationExecutor = mock(NotificationExecutor.class);
+    NotificationCommand notificationCommand = mock(NotificationCommand.class);
+    when(notificationContext.getNotificationExecutor()).thenReturn(notificationExecutor);
+    when(notificationContext.makeCommand(any())).thenReturn(notificationCommand);
+    when(notificationExecutor.with(notificationCommand)).thenReturn(notificationExecutor);
+    NOTIFICATION_CONTEXT_IMPL.when(() -> NotificationContextImpl.cloneInstance()).thenReturn(notificationContext);
+
     shareDocumentNotificationListener.onEvent(event);
-    verifyStatic(PluginKey.class, times(1));
-    PluginKey.key(AddDocumentCollaboratorPlugin.ID);
+    verify(notificationExecutor, times(1)).execute(notificationContext);
     when(targetIdentity.getRemoteId()).thenReturn("space_name");
     when(targetIdentity.getProviderId()).thenReturn(SpaceIdentityProvider.NAME);
     shareDocumentNotificationListener.onEvent(event);
-    verifyStatic(PluginKey.class, times(2));
-    PluginKey.key(AddDocumentCollaboratorPlugin.ID);
+    verify(notificationExecutor, times(2)).execute(notificationContext);
   }
 }
