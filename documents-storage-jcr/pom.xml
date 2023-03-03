@@ -16,26 +16,7 @@
       <artifactId>documents-api</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-api</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.commons</groupId>
-      <artifactId>commons-api</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.commons</groupId>
-      <artifactId>commons-search</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.commons</groupId>
-      <artifactId>commons-component-common</artifactId>
-      <scope>provided</scope>
-    </dependency>
+
     <dependency>
       <groupId>org.exoplatform.social</groupId>
       <artifactId>social-component-core</artifactId>
@@ -57,30 +38,12 @@
       <groupId>org.exoplatform</groupId>
       <artifactId>exo-jcr-services</artifactId>
     </dependency>
+
     <!-- Test -->
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-core</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>xml-apis</groupId>
-      <artifactId>xml-apis</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.powermock</groupId>
-      <artifactId>powermock-api-mockito2</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.powermock</groupId>
-      <artifactId>powermock-module-junit4</artifactId>
+      <groupId>org.exoplatform.social</groupId>
+      <artifactId>social-component-core</artifactId>
+      <type>test-jar</type>
       <scope>test</scope>
     </dependency>
   </dependencies>

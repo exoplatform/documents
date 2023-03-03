@@ -1,25 +1,31 @@
 package org.exoplatform.documents.rest.util;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+
 import org.exoplatform.documents.model.NodePermission;
-import org.exoplatform.documents.rest.model.*;
+import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.IdentityEntity;
+import org.exoplatform.documents.rest.model.NodePermissionEntity;
+import org.exoplatform.documents.rest.model.PermissionEntryEntity;
+import org.exoplatform.documents.rest.model.Visibility;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.util.List;
-
-import static org.junit.Assert.*;
-import static org.powermock.api.mockito.PowerMockito.mock;
-import static org.powermock.api.mockito.PowerMockito.when;
-
-@RunWith(PowerMockRunner.class)
+@RunWith(MockitoJUnitRunner.Silent.class)
 public class EntityBuilderTest {
 
     @Mock
