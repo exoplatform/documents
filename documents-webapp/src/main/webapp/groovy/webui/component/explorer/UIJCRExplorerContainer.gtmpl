@@ -22,7 +22,7 @@
     _ctx.include("app:/groovy/webui/component/explorer/UIDocumentsFeatureSwitch.gtmpl");
   }
   %>
-  <div class="$uicomponent.id" id="$uicomponent.id">
+  <div class="$uicomponent.id singlePageApplication" id="$uicomponent.id">
     <%
   if (!isOldDocumentsEnabledForUser) {
    %>
