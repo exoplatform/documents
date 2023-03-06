@@ -582,7 +582,7 @@ export default {
         filter.userId = this.userId;
       }
       filter.ascending = this.ascending;
-      if (options?.filterPrimary==='favorites') {
+      if (options?.primaryFilter==='favorites') {
         this.isFavorites = true;
       }
       if (options?.primaryFilter==='all') {
