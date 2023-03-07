@@ -86,7 +86,7 @@ export default {
       const collaborators = this.file.acl.collaborators;
       if (spaceIdentityId && collaborators.length > 0){
         for (const collaborator of collaborators) {
-          if (collaborator.identity.id === spaceIdentityId && collaborator.identity.name === spaceName) {
+          if (collaborator.identity.id === spaceIdentityId && collaborator.identity.remoteId === spaceName) {
             return true;
           }
         }
