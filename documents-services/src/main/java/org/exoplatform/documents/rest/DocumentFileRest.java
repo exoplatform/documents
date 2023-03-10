@@ -30,6 +30,10 @@ import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.common.http.HTTPStatus;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.api.settings.SettingService;
+import org.exoplatform.commons.api.settings.SettingValue;
+import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
@@ -68,14 +72,18 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final IdentityManager     identityManager;
 
+  private final SettingService       settingService;
+
   public DocumentFileRest(DocumentFileService documentFileService,
                           SpaceService spaceService,
                           IdentityManager identityManager,
-                          MetadataService metadataService) {
+                          MetadataService metadataService,
+                          SettingService settingService) {
     this.documentFileService = documentFileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.metadataService = metadataService;
+    this.settingService = settingService;
   }
   
   @GET
@@ -557,6 +565,14 @@ public class DocumentFileRest implements ResourceContainer {
 
     if (nodePermissionEntity == null) {
       return Response.status(Response.Status.BAD_REQUEST).entity("permissions_object_is_mandatory").build();
+    }
+    SettingValue<?> sharedDocumentSettingValue = settingService.get(Context.GLOBAL.id("sharedDocumentStatus"),
+                                                                    Scope.APPLICATION.id("sharedDocumentStatus"),
+                                                                    "exo:sharedDocumentStatus");
+    boolean isSharedDocumentSuspended = sharedDocumentSettingValue != null && !sharedDocumentSettingValue.getValue().toString().isEmpty() ? Boolean.valueOf(sharedDocumentSettingValue.getValue().toString()) : false;
+    if (isSharedDocumentSuspended){
+      //return forbidden response status if the share documents forbidden by the administrators
+      return Response.status(Response.Status.FORBIDDEN).build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
 
