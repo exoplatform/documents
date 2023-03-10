@@ -30,6 +30,7 @@ import org.exoplatform.commons.notification.impl.NotificationContextImpl;
 import org.exoplatform.commons.notification.impl.setting.NotificationPluginContainer;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
+import org.exoplatform.documents.notification.utils.NotificationUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.security.ConversationState;
@@ -53,6 +54,8 @@ public class ShareDocumentNotificationListenerTest {
   private static final MockedStatic<PluginKey>               PLUGIN_KEY                = mockStatic(PluginKey.class);
 
   private static final MockedStatic<LinkProvider>            LINK_PROVIDER             = mockStatic(LinkProvider.class);
+
+  private static final MockedStatic<NotificationUtils>       NOTIFICATION_UTILS        = mockStatic(NotificationUtils.class);
 
   @Mock
   private NotificationService                                notificationService;
@@ -87,6 +90,7 @@ public class ShareDocumentNotificationListenerTest {
     NOTIFICATION_CONTEXT_IMPL.close();
     PLUGIN_KEY.close();
     LINK_PROVIDER.close();
+    NOTIFICATION_UTILS.close();
   }
 
   @Before
@@ -115,22 +119,22 @@ public class ShareDocumentNotificationListenerTest {
   public void onEvent() throws Exception {
     Space space = new Space();
     space.setGroupId("/spaces/spacename");
-    when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
+    lenient().when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
     Node targetNode = mock(NodeImpl.class);
     Identity targetIdentity = mock(Identity.class);
     Event<Identity, Node> event = new Event<>("share_document_event", targetIdentity, targetNode);
-    when(targetIdentity.getProviderId()).thenReturn("USER");
+    lenient().when(targetIdentity.getProviderId()).thenReturn("USER");
     Property property = mock(Property.class);
-    when(targetNode.getProperty("exo:uuid")).thenReturn(property);
-    when(((NodeImpl) targetNode).getIdentifier()).thenReturn("313445hegefezd");
+    lenient().when(targetNode.getProperty("exo:uuid")).thenReturn(property);
+    lenient().when(((NodeImpl) targetNode).getIdentifier()).thenReturn("313445hegefezd");
     Property propertyTitle = mock(Property.class);
     Value value = mock(Value.class);
-    when(propertyTitle.getValue()).thenReturn(value);
-    when(value.getString()).thenReturn("document");
-    when(targetNode.hasProperty("exo:title")).thenReturn(true);
-    when(targetNode.getProperty("exo:title")).thenReturn(propertyTitle);
-    when(targetIdentity.getRemoteId()).thenReturn("user");
-    when(targetNode.hasProperty("exo:uuid")).thenReturn(true);
+    lenient().when(propertyTitle.getValue()).thenReturn(value);
+    lenient().when(value.getString()).thenReturn("document");
+    lenient().when(targetNode.hasProperty("exo:title")).thenReturn(true);
+    lenient().when(targetNode.getProperty("exo:title")).thenReturn(propertyTitle);
+    lenient().when(targetIdentity.getRemoteId()).thenReturn("user");
+    lenient().when(targetNode.hasProperty("exo:uuid")).thenReturn(true);
 
     NotificationContext notificationContext = mock(NotificationContext.class);
     NotificationExecutor notificationExecutor = mock(NotificationExecutor.class);
@@ -139,7 +143,9 @@ public class ShareDocumentNotificationListenerTest {
     when(notificationContext.makeCommand(any())).thenReturn(notificationCommand);
     when(notificationExecutor.with(notificationCommand)).thenReturn(notificationExecutor);
     NOTIFICATION_CONTEXT_IMPL.when(() -> NotificationContextImpl.cloneInstance()).thenReturn(notificationContext);
-
+    NOTIFICATION_UTILS.when(() -> NotificationUtils.isNodeFile(any(Node.class))).thenReturn(true);
+    NOTIFICATION_UTILS.when(() -> NotificationUtils.getSharedDocumentLink(any(Node.class), any(), any())).thenReturn("document/link");
+    NOTIFICATION_UTILS.when(() -> NotificationUtils.getDocumentTitle(any(Node.class))).thenReturn("document");
     shareDocumentNotificationListener.onEvent(event);
     verify(notificationExecutor, times(1)).execute(notificationContext);
     when(targetIdentity.getRemoteId()).thenReturn("space_name");

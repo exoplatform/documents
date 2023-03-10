@@ -1,7 +1,10 @@
 package org.exoplatform.documents.notification.utils;
 
+import static org.exoplatform.documents.notification.utils.NotificationUtils.EXO_SYMLINK_UUID;
+import static org.exoplatform.documents.notification.utils.NotificationUtils.NT_FILE;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -22,7 +25,14 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.rest.util.EntityBuilder;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
+import org.exoplatform.services.jcr.core.ManageableRepository;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -45,6 +55,24 @@ public class NotificationUtilsTest {
 
   @Mock
   private SpaceService                             spaceService;
+
+    @Mock
+    SessionProviderService sessionProviderService;
+
+    @Mock
+    RepositoryService repositoryService;
+
+    @Mock
+    RepositoryEntry repositoryEntry;
+
+    @Mock
+    SessionProvider sessionProvider;
+
+    @Mock
+    ManageableRepository   repository;
+
+    @Mock
+    ExtendedSession session;
 
   @AfterClass
   public static void afterRunBare() throws Exception { // NOSONAR
@@ -79,14 +107,34 @@ public class NotificationUtilsTest {
   }
 
   @Test
-  public void getSharedDocumentLink() {
+  public void getSharedDocumentLink() throws RepositoryException {
     Space space = new Space();
     space.setGroupId("/spaces/spacename");
     when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
-    String link = NotificationUtils.getSharedDocumentLink("123", null, null);
-    assertEquals("http://domain/portal/dw/documents/Private/Documents/Shared?documentPreviewId=123", link);
-    String link1 = NotificationUtils.getSharedDocumentLink("123", spaceService, "space_name");
-    assertEquals("http://domain/portal/g/:spaces:spacename/space_name/documents/Shared?documentPreviewId=123", link1);
+    when(CommonsUtils.getService(SessionProviderService.class)).thenReturn(sessionProviderService);
+    when(CommonsUtils.getService(RepositoryService.class)).thenReturn(repositoryService);
+    when(sessionProviderService.getSessionProvider(any())).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession(any(), any())).thenReturn(session);
+    Node node = Mockito.mock(NodeImpl.class);
+    Node targetNode = Mockito.mock(NodeImpl.class);
+    Property property = Mockito.mock(Property.class);
+    when(((NodeImpl) node).getIdentifier()).thenReturn("123");
+    when(node.getProperty(EXO_SYMLINK_UUID)).thenReturn(property);
+    when(property.getString()).thenReturn("id123");
+    when(session.getNodeByIdentifier(anyString())).thenReturn(targetNode);
+    when(targetNode.isNodeType(NT_FILE)).thenReturn(true);
+    String link = NotificationUtils.getSharedDocumentLink(node, null,null);
+    assertEquals("http://domain/portal/dw/documents/Private/Documents?documentPreviewId=123", link);
+    link = NotificationUtils.getSharedDocumentLink(node, spaceService,"space_name");
+    assertEquals("http://domain/portal/g/:spaces:spacename/space_name/documents?documentPreviewId=123", link);
+    when(targetNode.isNodeType(NT_FILE)).thenReturn(false);
+    link = NotificationUtils.getSharedDocumentLink(node, null,null);
+    assertEquals("http://domain/portal/dw/documents/Private/Documents?folderId=123", link);
+    link = NotificationUtils.getSharedDocumentLink(node, spaceService,"space_name");
+    assertEquals("http://domain/portal/g/:spaces:spacename/space_name/documents?folderId=123", link);
   }
 
   @Test
