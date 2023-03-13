@@ -117,7 +117,18 @@ public class DocumentSearchServiceConnector {
     if (StringUtils.isBlank(filter.getQuery()) && !filter.getFavorites()) {
       throw new IllegalArgumentException("Filter term is mandatory");
     }
-    String esQuery = buildQueryStatement(userIdentity, workspace, path, filter, offset, limit);
+    switch (sortField) {
+      case "lastUpdatedDate" :
+        sortField = "lastUpdatedDate";
+        break;
+      case "title" :
+        sortField = "title.raw";
+        break;
+      default:
+        sortField = "_score";
+    }
+
+    String esQuery = buildQueryStatement(userIdentity, workspace, path, filter, sortField, sortDirection, offset, limit);
     String jsonResponse = this.client.sendRequest(esQuery, this.index);
     return buildResult(jsonResponse);
   }
@@ -126,6 +137,8 @@ public class DocumentSearchServiceConnector {
                                      String workspace,
                                      String path,
                                      DocumentNodeFilter filter,
+                                     String sortField,
+                                     String sortDirection,
                                      int offset,
                                      int limit) {
     Map<String, List<String>> metadataFilters =
@@ -142,6 +155,8 @@ public class DocumentSearchServiceConnector {
                                 .replace("@permissions@", getPermissionFilter(userIdentity))
                                 .replace("@path@", path)
                                 .replace("@workspace@", workspace)
+                                .replace("@sort_field@", sortField)
+                                .replace("@sort_direction@", sortDirection)
                                 .replace("@offset@", String.valueOf(offset))
                                 .replace("@limit@", String.valueOf(limit));
   }
