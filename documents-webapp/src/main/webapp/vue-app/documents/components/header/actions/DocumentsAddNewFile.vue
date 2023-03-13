@@ -3,10 +3,11 @@
     <div v-show="isMobile && !showMobileFilter || !isMobile">
       <button
         v-if="!isFolderView"
-        :id="isMobile ? 'addItemMenuMobile' : 'addItemMenu'"
+        :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
         @click="openDrawer()">
         <v-icon
+          size="13"
           id="addBtn"
           dark>
           mdi-plus
@@ -63,11 +64,13 @@
         size="20"
         class="inputDocumentsFilter text-sub-title pa-1 my-auto "
         v-show="isMobile && showMobileFilter"
-        @click="$root.$emit('resetSearch')">
+        @click="$root.$emit('mobile-filter')">
         fas fa-arrow-left
       </v-icon>
     </div>
-    <documents-add-new-menu-mobile ref="documentAddItemMenu" />
+    <documents-add-new-menu-mobile
+      ref="documentAddItemMenu"
+      :is-mobile="isMobile" />
   </div>
 </template>
 <script>
@@ -77,6 +80,10 @@ export default {
       type: String,
       default: '',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     showMobileFilter: false,
@@ -84,9 +91,6 @@ export default {
     waitTimeUntilCloseMenu: 200,
   }),
   computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     isFolderView() {
       return this.selectedView === 'folder';
     },

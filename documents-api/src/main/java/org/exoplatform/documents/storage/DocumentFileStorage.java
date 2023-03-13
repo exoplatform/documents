@@ -94,9 +94,6 @@ public interface DocumentFileStorage {
    * @param folderId Id of the given folder
    * @param aclIdentity {@link Identity} of the user acessing files
    * @return {@link List} of {@link AbstractNode}
-   * @throws IllegalAccessException when the user isn't allowed to access
-   *           documents of the designated parentFolderId
-   * @throws ObjectNotFoundException when folderId doesn't exisits
    */
   List<FullTreeItem> getFullTreeData(long ownerId, String folderId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
@@ -117,11 +114,14 @@ public interface DocumentFileStorage {
    *
    * @param fileId Id of the given file
    * @param aclIdentity {@link Identity} of the user acessing files
+   * @param conflictAction conflict action
    * @throws IllegalAccessException when the user isn't allowed to access
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
+   * @throws ObjectAlreadyExistsException when file with same name already exists
+   *           in the target path
    */
-  void moveDocument(long ownerId, String fileId, String destPath, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+  void moveDocument(long ownerId, String fileId, String destPath, Identity aclIdentity, String conflictAction) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException;
 
   AbstractNode createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
                                                                                ObjectNotFoundException;
@@ -160,11 +160,14 @@ public interface DocumentFileStorage {
   /**
    * Creates a shortcut for a document
    *
-   * @param documentId document id
-   * @param destPath destination path
+   * @param documentId     document id
+   * @param destPath       destination path
+   * @param aclIdentity    user identity id
+   * @param conflictAction conflict action
    * @throws IllegalAccessException
+   * @throws ObjectAlreadyExistsException
    */
-  void createShortcut(String documentId, String destPath) throws IllegalAccessException;
+  void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException;
 
   /**
    * Retrieves versions of specific file

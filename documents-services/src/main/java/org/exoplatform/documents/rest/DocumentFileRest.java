@@ -29,6 +29,7 @@ import org.apache.commons.lang.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.common.http.HTTPStatus;
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
@@ -117,10 +118,13 @@ public class DocumentFileRest implements ResourceContainer {
                                    String folderPath,
                                    @Parameter(description = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.")
                                    @QueryParam("listingType")
-                                   FileListingType listingType,
+                                     FileListingType listingType,
                                    @Parameter(description = "Search query entered by the user")
-                                   @QueryParam("query")
-                                   String query,
+                                     @QueryParam("query")
+                                     String query,
+                                   @Parameter(description = "extendedSearch")
+                                     @QueryParam("extendedSearch")
+                                     boolean extendedSearch,
                                    @Parameter(description = "userId")
                                    @QueryParam("userId")
                                    String userId,
@@ -160,6 +164,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                                      ownerId,
                                                                                                      symlinkFolderId);
       filter.setQuery(query);
+      filter.setExtendedSearch(extendedSearch);
       filter.setFavorites(favorites);
       filter.setUserId(userId);
       filter.setAscending(ascending);
@@ -350,6 +355,7 @@ public class DocumentFileRest implements ResourceContainer {
 
   @PUT
   @Path("/move")
+  @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Operation(summary = "Move documents", method = "POST", description = "This rename a giving document.")
   @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
@@ -357,8 +363,9 @@ public class DocumentFileRest implements ResourceContainer {
           @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
           @ApiResponse(responseCode = "404", description = "Resource not found")})
   public Response moveDocument (@Parameter(description = "document id") @QueryParam("documentID") String documentID,
-                                  @Parameter(description = "ownerId") @QueryParam("ownerId") Long ownerId,
-                                  @Parameter(description = "new path") @QueryParam("destPath") String destPath) {
+                                @Parameter(description = "ownerId") @QueryParam("ownerId") Long ownerId,
+                                @Parameter(description = "new path") @QueryParam("destPath") String destPath,
+                                @Parameter(description = "conflict action name") @QueryParam("conflictAction") String conflictAction) {
 
     if (ownerId == null && StringUtils.isBlank(documentID)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
@@ -368,8 +375,13 @@ public class DocumentFileRest implements ResourceContainer {
     }
     try {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-      documentFileService.moveDocument(ownerId, documentID, destPath, userIdentityId);
+      documentFileService.moveDocument(ownerId, documentID, destPath, userIdentityId, conflictAction);
       return Response.ok().build();
+    } catch (ObjectAlreadyExistsException e) {
+      LOG.warn("Document with same name already exist", e);
+      return Response.status(HTTPStatus.CONFLICT).entity(e.getExistingObject())
+                                                 .type(MediaType.APPLICATION_JSON)
+                                                 .build();
     } catch (Exception ex) {
       LOG.warn("Failed to rename Document", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
@@ -400,18 +412,21 @@ public class DocumentFileRest implements ResourceContainer {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
       AbstractNode createdFolder = documentFileService.createFolder(ownerId, parentid, folderPath, name, userIdentityId);
       AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
-              identityManager,
-              spaceService,
-              metadataService,
-              createdFolder,
-              null,
-              userIdentityId);
+                                                                                 identityManager,
+                                                                                 spaceService,
+                                                                                 metadataService,
+                                                                                 createdFolder,
+                                                                                 null,
+                                                                                 userIdentityId);
       return Response.ok(abstractNodeEntity).build();
-      } catch (Exception ex) {
-        LOG.warn("Failed to create Folder", ex);
-        return Response.status(HTTPStatus.INTERNAL_ERROR).build();
-      }
+    } catch (ObjectAlreadyExistsException e) {
+      LOG.warn("Folder with same name already exists", e);
+      return Response.status(HTTPStatus.CONFLICT).build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to create Folder", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
+  }
 
   @GET
   @Path("/newname")
@@ -470,6 +485,9 @@ public class DocumentFileRest implements ResourceContainer {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
       documentFileService.renameDocument(ownerId, documentID, newName, userIdentityId);
       return Response.ok().build();
+    } catch (ObjectAlreadyExistsException ex) {
+      LOG.warn("Document with same name already exists", ex);
+      return Response.status(HTTPStatus.CONFLICT).build();
     } catch (Exception ex) {
       LOG.warn("Failed to rename Document", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
@@ -587,7 +605,8 @@ public class DocumentFileRest implements ResourceContainer {
           @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
           @ApiResponse(responseCode = "404", description = "Resource not found")})
   public Response createShortcut (@Parameter(description = "document id") @QueryParam("documentID") String documentID,
-                                @Parameter(description = "new path") @QueryParam("destPath") String destPath) {
+                                  @Parameter(description = "new path") @QueryParam("destPath") String destPath,
+                                  @Parameter(description = "conflict action name") @QueryParam("conflictAction") String conflictAction) {
 
     if (StringUtils.isEmpty(documentID)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Document's id should not be empty").build();
@@ -596,8 +615,11 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Response.Status.BAD_REQUEST).entity("Document destination path should not be empty").build();
     }
     try {
-      documentFileService.createShortcut(documentID, destPath);
+      documentFileService.createShortcut(documentID, destPath, RestUtils.getCurrentUser(), conflictAction);
       return Response.ok().build();
+    } catch (ObjectAlreadyExistsException e) {
+      LOG.warn("Document with same name already exists", e);
+      return Response.status(HTTPStatus.CONFLICT).build();
     } catch (Exception ex) {
       LOG.warn("Failed to create document shortcut", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();

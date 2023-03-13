@@ -16,12 +16,13 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     spaceId() {
       return eXo.env.portal.spaceId;
     },
@@ -39,31 +40,19 @@ export default {
           if (urlDownload.indexOf('/') > 0 && !urlDownload.includes(window.location.hostname)) {
             return;
           }
-          return fetch(urlDownload, {
-            credentials: 'include',
-            method: 'GET',
-          }).then(resp => {
-            if (resp && resp.ok) {
-              return resp.blob();
-            } else {
-              throw new Error(`Error downloading file '${urlDownload}' from server`);
+          const a = document.createElement('a');
+          a.href = urlDownload;
+          a.download = fileName.replace(/\[[0-9]*\]$/g, '');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          document.dispatchEvent(new CustomEvent('download-file', {
+            detail: {
+              'type': 'file',
+              'id': this.file.id,
+              'spaceId': this.spaceId,
             }
-          }).then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName.replace(/\[[0-9]*\]$/g, '');
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            document.dispatchEvent(new CustomEvent('download-file', {
-              detail: {
-                'type': 'file',
-                'id': this.file.id,
-                'spaceId': this.spaceId,
-              }
-            }));
-          });
+          }));
         });
       if ( this.isMobile ) {
         this.$root.$emit('close-file-action-menu');

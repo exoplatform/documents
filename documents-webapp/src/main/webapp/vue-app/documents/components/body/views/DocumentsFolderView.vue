@@ -14,6 +14,8 @@
       :group-desc="groupDesc"
       :loading-text="loadingLabel"
       :class="loadingClass"
+      :custom-sort="customSort"
+      mobile-breakpoint="960"
       hide-default-footer
       disable-pagination
       disable-filtering
@@ -26,6 +28,10 @@
           :key="header.value"
           :extension="header.cellExtension"
           :file="item"
+          :query="query"
+          :extended-search="extendedSearch"
+          :is-mobile="isMobile"
+          :selected-view="selectedView"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template v-if="hasMore" slot="footer">
@@ -70,6 +76,10 @@ export default {
       type: String,
       default: null
     },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
+    },
     initialized: {
       type: Boolean,
       default: false
@@ -89,6 +99,14 @@ export default {
     primaryFilter: {
       type: String,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+    selectedView: {
+      type: String,
+      default: null
     }
   },
   data: () => ({
@@ -141,9 +159,6 @@ export default {
       });
       return headers;
     },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     loadingLabel() {
       return `${this.$t('documents.label.loading')}...`;
     }
@@ -177,6 +192,19 @@ export default {
     this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    customSort: function (items, sortBy, isDesc) {
+      if (sortBy[1] === 'name') {
+        const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
+        const sorted = items.sort((a, b) => {
+          return (b.folder - a.folder) || collator.compare(a.name, b.name);
+        });
+        if (isDesc[1]) {
+          return sorted.reverse();
+        }
+        return sorted;
+      }
+      return items;
+    },
     updateFilter(filter) {
       this.primaryFilter = filter;
     },

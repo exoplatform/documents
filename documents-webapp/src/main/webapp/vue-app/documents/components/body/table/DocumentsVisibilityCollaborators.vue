@@ -61,6 +61,7 @@
         fas fa-eye
       </v-icon>
       <documents-visibility-menu
+        :is-mobile="isMobile"
         @visibility-user="visibilityUser" />
       <v-divider vertical />
       <v-icon
@@ -83,6 +84,10 @@ export default {
       type: Object,
       default: () => ({}),
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data() {
     return {

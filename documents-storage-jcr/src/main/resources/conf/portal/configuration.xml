@@ -31,15 +31,14 @@
     <key>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</key>
     <type>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</type>
     <init-params>
+      <value-param>
+        <name>query.file.path</name>
+        <value>${exo.documents.es.query.path:jar:/documents-search-query.json}</value>
+      </value-param>
       <properties-param>
         <name>constructor.params</name>
-        <property name="searchType" value="file"/>
-        <property name="displayName" value="Files"/>
-        <property name="index" value="file_alias"/>
-        <property name="type" value="file"/>
-        <property name="enable" value="${exo.unified-search.connector.file.enable:true}"/>
-        <property name="titleField" value="title"/>
-        <property name="searchFields" value="title"/>
+        <property name="searchType" value="files" />
+        <property name="index" value="file_alias" />
       </properties-param>
     </init-params>
   </component>

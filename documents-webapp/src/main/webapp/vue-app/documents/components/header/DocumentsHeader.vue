@@ -3,13 +3,24 @@
     <div class="d-flex flex-row">
       <documents-header-left
         v-if="canAdd"
-        :selected-view="selectedView" />
-      <v-spacer v-show="!canShowMobileFilter" />
-      <documents-header-center v-show="!canShowMobileFilter" :selected-view="selectedView" />
-      <v-spacer v-show="!canShowMobileFilter" />
-      <documents-header-right />
+        :selected-view="selectedView" 
+        :is-mobile="isMobile" />
+      <v-spacer />
+      <documents-header-center
+        v-if="!canShowMobileFilter"
+        :selected-view="selectedView"
+        :is-mobile="isMobile" />
+      <v-spacer />
+      <documents-header-right
+        :query="query"
+        :primary-filter="primaryFilter"
+        :is-mobile="isMobile" />
     </div>
-    <documents-breadcrumb v-if="selectedView === 'folder'" class="py-4 px-1" />
+    <documents-breadcrumb
+      v-if="selectedView === 'folder'"
+      v-show="showBreadcrumb"
+      :is-mobile="isMobile"
+      class="py-4 px-1" />
   </div>
 </template>
 
@@ -28,6 +39,18 @@ export default {
       type: String,
       default: '',
     },
+    query: {
+      type: String,
+      default: '',
+    },
+    primaryFilter: {
+      type: String,
+      default: 'all',
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     showMobileFilter: false,
@@ -36,9 +59,9 @@ export default {
     canShowMobileFilter() {
       return this.isMobile && this.showMobileFilter;
     },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
+    showBreadcrumb(){
+      return !this.query;
+    }
   },
   created() {
     this.$root.$on('show-mobile-filter', data => {

@@ -1,6 +1,6 @@
 <template>
   <v-app
-    class="documents-application singlePageApplication border-box-sizing"
+    class="documents-application border-box-sizing"
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
@@ -9,45 +9,37 @@
       @dragover.prevent
       @drop.prevent
       @dragstart.prevent>
-      <div v-if="searchResult">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
+      <documents-header
+        :files-size="files.length"
+        :selected-view="selectedView"
+        :can-add="canAdd"
+        :query="query"
+        :primary-filter="primaryFilter"
+        :is-mobile="isMobile" 
+        class="py-2" />
+      <div v-if="searchResult && !loading">
         <documents-no-result-body
-          :is-mobile="isMobile" />
+          :is-mobile="isMobile"
+          :show-extend-filter="showExtendFilter"
+          :query="query" />
       </div>
       <div
         v-else-if="!filesLoad && !loading && selectedView == 'folder' "
         @drop="dragFile"
         @dragover="startDrag">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-no-body-folder
+          :query="query"
           :is-mobile="isMobile" />
       </div>
       <div v-else-if="!filesLoad && !loading">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-no-body
+          :query="query"
           :is-mobile="isMobile" />
       </div>
       <div
         v-else
         @drop="dragFile"
         @dragover="startDrag">
-        <documents-header
-          :files-size="files.length" 
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          class="py-2" />
         <documents-body
           v-if="optionsLoaded"
           :view-extension="selectedViewExtension"
@@ -62,30 +54,74 @@
           :initialized="initialized"
           :loading="loading"
           :query="query"
-          :primary-filter="primaryFilter" />
+          :extended-search="extendedSearch"
+          :show-extend-filter="showExtendFilter"
+          :primary-filter="primaryFilter"
+          :selected-view="selectedView"
+          :is-mobile="isMobile" />
         <exo-document-notification-alerts />
       </div>
     </div>
-    <documents-visibility-drawer />
-    <document-tree-selector-drawer />
+    <documents-visibility-drawer :is-mobile="isMobile" />
+    <document-tree-selector-drawer :is-mobile="isMobile" />
     <documents-info-drawer
-      :selected-view="selectedView" />
+      :selected-view="selectedView"
+      :is-mobile="isMobile" />
     <v-alert
       v-model="alert"
-      :type="alertType"
-      dismissible>
+      :icon="false"
+      :colored-border="isMobile"
+      :border="isMobile && !isAlertActionRunning? 'top' : ''"
+      :color="alertType"
+      :type="!isMobile? alertType: ''"
+      :class="isMobile? 'documents-alert-mobile': ''"
+      :dismissible="!isMobile">
+      <v-progress-linear
+        v-if="isAlertActionRunning"
+        :active="isAlertActionRunning"
+        :height="isMobile? '8px': '4px'"
+        :indeterminate="true"
+        :class="progressAlertClassMobile"
+        :color="progressAlertColor" />
       {{ message }}
+      <v-btn
+        v-for="action in alertActions"
+        :key="action.event"
+        :disabled="isAlertActionRunning"
+        plain
+        text
+        color="primary"
+        @click="emitAlertAction(action)">
+        {{ $t(`document.conflicts.action.${action.event}`) }}
+      </v-btn>
+      <template #close="{ toggle }">
+        <v-btn
+          v-if="!isMobile"
+          icon
+          @click="handleAlertClose(toggle)">
+          <v-icon>
+            mdi-close-circle
+          </v-icon>
+        </v-btn>
+      </template>
     </v-alert>
     <folder-treeview-drawer
-      ref="folderTreeDrawer" />
-    <documents-app-reminder />
-    <documents-actions-menu-mobile />
+      ref="folderTreeDrawer"
+      :is-mobile="isMobile" />
+    <documents-app-reminder :is-mobile="isMobile" />
+    <documents-actions-menu-mobile :is-mobile="isMobile" />
+    <documents-filter-menu-mobile
+      :primary-filter="primaryFilter"
+      :query="query"
+      :extended-search="extendedSearch"
+      :is-mobile="isMobile" />
     <version-history-drawer
       :can-manage="canManageVersions"
       :enable-edit-description="true"
       :versions="versions"
       :is-loading="isLoadingVersions"
       :show-load-more="showLoadMoreVersions"
+      :is-mobile="isMobile" 
       @drawer-closed="versionsDrawerClosed"
       @open-version="showVersionPreview"
       @restore-version="restoreVersion"
@@ -108,11 +144,13 @@ export default {
     extensionApp: 'Documents',
     extensionType: 'views',
     query: null,
+    extendedSearch: false,
     fileName: null,
     userId: null,
     sortField: 'lastUpdated',
     isFavorites: false,
     ascending: false,
+    showExtendFilter: false,
     parentFolderId: null,
     pageSize: 50,
     files: [],
@@ -122,6 +160,7 @@ export default {
     initialized: false,
     loading: false,
     hasMore: false,
+    canSendSearchStat: true,
     viewExtensions: {},
     currentFolderPath: '',
     currentFolder: null,
@@ -138,9 +177,18 @@ export default {
     alert: false,
     alertType: '',
     message: '',
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
+    alertActions: [],
+    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+    isAlertActionRunning: false,
+    documentsToBeDeleted: [],
   }),
   computed: {
+    progressAlertColor() {
+      return this.alertType === 'warning' ? 'amber' : this.alertType === 'error' ? 'red' : 'primary';
+    },
+    progressAlertClassMobile() {
+      return this.isMobile && 'position-relative document-mobile-alert-progress' || '';
+    },
     showLoadMoreVersions() {
       return this.versions.length < this.allVersions.length;
     },
@@ -157,7 +205,7 @@ export default {
       return null;
     },
     isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+      return this.$vuetify.breakpoint.width < 960;
     },
     searchResult(){
       return ((this.query && this.query.length) || this.isFavorites) && !this.files.length;
@@ -197,12 +245,14 @@ export default {
     this.$root.$on('set-current-folder', this.setCurrentFolder);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
+    this.$root.$on('document-extended-search', this.extendSearch);
     this.$root.$on('save-visibility', this.saveVisibility);
     this.$root.$on('documents-sort', this.sort);
     this.$root.$on('documents-open-attachments-drawer', this.openDrawer);
+    this.$root.$on('set-loading', this.setLoading);
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
-      this.refreshFiles(this.primaryFilter);
+      this.refreshFiles({'primaryFilter': this.primaryFilter});
     });
     this.$root.$on('show-alert', message => {
       this.displayMessage(message);
@@ -211,7 +261,9 @@ export default {
       .finally(() => {
         this.checkDefaultViewOptions();
         this.optionsLoaded = true;
-        this.refreshFiles()
+        const queryParams = new URLSearchParams(window.location.search);
+        const disablePreview = queryParams.has('path');
+        this.refreshFiles({'disablePreview': disablePreview})
           .then(() => {
             this.watchDocumentPreview();
             if (this.selectedView === 'folder') {
@@ -225,18 +277,43 @@ export default {
       });
     this.$root.$on('create-shortcut', this.createShortcut);
     this.$root.$on('show-version-history', this.showVersionHistory);
+    this.$on('keepBoth', this.handleConflicts);
+    this.$on('createNewVersion', this.handleConflicts);
+    this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    handleAlertClose() {
+      this.$root.$emit('cancel-action');
+      this.alert = false;
+    },
+    handleCancelAlertActions() {
+      if (this.alertActions?.length) {
+        this.alert = false;
+        this.alertActions = [];
+      }
+    },
+    handleConflicts(action) {
+      this.isAlertActionRunning = true;
+      if (action.function.name === 'createShortcut') {
+        this.createShortcut(...action.function.params, action.event);
+      }
+      if (action.function.name === 'moveDocument') {
+        this.moveDocument(...action.function.params, action.event);
+      }
+    },
+    emitAlertAction(action) {
+      this.$emit(action.event, action);
+    },
     restoreVersion(version) {
       return this.$documentFileService.restoreVersion(version.id).then(newVersion => {
         if (newVersion) {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.restore.version.success')});
           this.$root.$emit('version-restored', newVersion);
           this.refreshVersions(this.versionableFile, newVersion);
-          this.addRestoreVersionStatistics(this.versionableFile);
+          this.refreshFiles();
         }
       }).catch(() => {
         this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.restore.version.error')});
@@ -256,6 +333,9 @@ export default {
         this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.summary.added.error')});
         this.$root.$emit('version-description-update-error', version);
       });
+    },
+    setLoading(loading) {
+      this.loading = loading;
     },
     versionsDrawerClosed() {
       this.versions = [];
@@ -288,25 +368,6 @@ export default {
       });
       this.addVersionHistoryStatistics();
     },
-    addRestoreVersionStatistics(file) {
-      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
-        detail: {
-          module: 'Drive',
-          subModule: 'Documents',
-          userId: eXo.env.portal.userIdentityId,
-          userName: eXo.env.portal.userName,
-          operation: 'fileUpdated',
-          parameters: {
-            fileSize: file.size,
-            documentType: 'nt:file',
-            fileMimeType: file.mimeType,
-            documentName: file.name,
-            uuid: file.id
-          },
-          timestamp: Date.now()
-        }
-      }));
-    },
     addVersionHistoryStatistics() {
       document.dispatchEvent(new CustomEvent('exo-statistic-message', {
         detail: {
@@ -337,9 +398,31 @@ export default {
       this.refreshFiles();
     },
     search(query) {
+      const oldQuery = this.query;
+      this.extendedSearch = false;
       this.query = query;
-
       this.refreshFiles();
+      if (query && query.length>0){
+        this.$root.$emit('enable-extend-filter');
+        this.showExtendFilter=true;
+      } else {
+        this.$root.$emit('disable-extend-filter');
+        this.showExtendFilter=false;
+      }
+      if (this.canSendSearchStat && oldQuery !== query) {
+        this.canSendSearchStat = false;
+        window.setTimeout(() => {
+          this.simpleSearchStatistics();
+          this.canSendSearchStat = true;
+        }, 2000);
+      }
+
+    },
+    extendSearch() {
+      this.extendedSearch = true;
+      this.showExtendFilter = false;
+      this.refreshFiles();
+      this.extendedSearchStatistics();
     },
     getFolderPath(path){
       if (!path){
@@ -376,7 +459,7 @@ export default {
       setTimeout(() => {
         const deletedDocument = localStorage.getItem('deletedDocument');
         if (deletedDocument != null) {
-          this.refreshFiles(null, true, file.id);
+          this.refreshFiles({'deleted': true,'documentId': file.id });
         }
       }, redirectionTime);
     },
@@ -387,8 +470,8 @@ export default {
       }
     },
     openFolder(parentFolder) {
-      this.folderPath='';
-      this.fileName=null;
+      this.folderPath = '';
+      this.fileName = null;
       this.parentFolderId = parentFolder.id;
       let symlinkId = null;
       if (parentFolder.sourceID){
@@ -396,7 +479,8 @@ export default {
         this.parentFolderId = parentFolder.sourceID; 
       }
       this.files = [];
-      this.refreshFiles(null, null, null, symlinkId);
+      this.refreshFiles({'symlinkId': symlinkId});
+
       this.$root.$emit('set-breadcrumb', parentFolder);
       let folderPath ='';
       if (eXo.env.portal.spaceName) {
@@ -415,7 +499,7 @@ export default {
         const userPublicPathPrefix = `${userName}/Public`;
         if (parentFolder.path.includes(userPrivatePathPrefix)){
           const pathParts = parentFolder.path.split(userPrivatePathPrefix);
-          if (pathParts.length>1){
+          if (pathParts.length > 1){
             folderPath = pathParts[1];
           }
           
@@ -431,20 +515,25 @@ export default {
       }
     },
     loadMore() {
-      this.refreshFiles(this.primaryFilter,null, null, null , true);
+      this.refreshFiles({'primaryFilter': this.primaryFilter, 'append': true});
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
       const url = new URL(window.location.href.substring(0, realPageUrlIndex));
       url.searchParams.set('view', view);
       window.history.replaceState('documents', 'Documents', url.toString());
-
       this.selectedView = view;
       this.parentFolderId = null;
       this.folderPath = null;
       this.files = [];
+      this.$root.$emit('resetSearch');
+      this.primaryFilter='all';
+      this.query=null;
+      this.extendedSearch=false;
+      this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
+      this.$root.$emit('set-documents-filter', 'All');
       this.checkDefaultViewOptions();
-      this.refreshFiles(this.primaryFilter)
+      this.refreshFiles({'primaryFilter': this.primaryFilter})
         .finally(() => {
           if (this.selectedView === 'folder') {
             this.$nextTick().then(() => this.$root.$emit('update-breadcrumb'));
@@ -455,7 +544,7 @@ export default {
       this.parentFolderId=null;  
       this.folderPath='';
       this.fileName=null;
-      this.refreshFiles(this.primaryFilter);
+      this.refreshFiles({'primaryFilter': this.primaryFilter});
       if (window.location.pathname.includes('/Private')){
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname.split('/Private')[0]}?view=${this.selectedView}`);
       } else if (window.location.pathname.includes('/Public')){
@@ -464,7 +553,7 @@ export default {
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
     },
-    refreshFiles(filterPrimary, deleted, documentId, symlinkId, append) {
+    refreshFiles(options) {
       if (!this.selectedViewExtension) {
         return Promise.resolve(null);
       }
@@ -480,6 +569,11 @@ export default {
       }
       if (this.query) {
         filter.query = this.query;
+      } else {
+        this.extendedSearch = false;
+      }
+      if (this.extendedSearch) {
+        filter.extendedSearch = this.extendedSearch;
       }
       if (this.sortField) {
         filter.sortField = this.sortField;
@@ -487,40 +581,41 @@ export default {
       if (this.userId) {
         filter.userId = this.userId;
       }
-      if (this.sortField === 'favorite') {
-        filter.ascending = this.ascending = false;
-      } else {
-        filter.ascending = this.ascending;
-      }
-      if (filterPrimary && filterPrimary==='favorites') {
+      filter.ascending = this.ascending;
+      if (options?.primaryFilter==='favorites') {
         this.isFavorites = true;
       }
-      if (filterPrimary && filterPrimary==='all') {
+      if (options?.primaryFilter==='all') {
         this.isFavorites  =  false;
       }
-      if (symlinkId) {
-        filter.symlinkFolderId  =  symlinkId;
+      if (options?.symlinkId) {
+        filter.symlinkFolderId  =  options.symlinkId;
+      }
+      if (options?.deleted) {
+        this.documentsToBeDeleted.push(options?.documentId);
       }
       filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
-      this.offset = append ? this.offset + this.pageSize : 0 ;
-      this.limit = append ? this.limit + this.pageSize : this.pageSize ;
+      this.offset = options?.append ? this.offset + this.pageSize : 0 ;
+      this.limit = options?.append ? this.limit + this.pageSize : this.pageSize ;
       this.loading = true;
+      this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
+
       return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
           files = this.sortField === 'favorite' ? files && files.sort((file1, file2) => {
             if (file1.favorite === false && file2.favorite === true) {
-              return this.ascending ? 1 : -1;
+              return this.ascending ? -1 : 1;
             }
             if (file1.favorite === true && file2.favorite === false) {
-              return this.ascending ? -1 : 1;
+              return this.ascending ? 1 : -1;
             }
             return 0;
           }) || files : files;
-          this.files = append ? this.files.concat(files) : files ;
-          this.files = deleted ? this.files.filter(doc => doc.id !== documentId) : this.files;
+          this.files = options?.append ? this.files.concat(files) : files ;
+          this.files = options?.deleted ? this.files.filter(this.isDocumentsToBeDeleted) : this.files;
           this.hasMore = files && files.length >= this.limit;
-          if (this.fileName) {
+          if (this.fileName && !options?.disablePreview) {
             const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
             if (result.length > 0) {
               this.showPreview(result[0].id);
@@ -529,11 +624,11 @@ export default {
           this.files.forEach(file => {
             file.canAdd = this.canAdd;
           });
-          if (filter.query){
-            this.$root.$emit('filer-query',filter.query);
-          }
         })
         .finally(() => this.loading = false);
+    },
+    isDocumentsToBeDeleted(doc) {
+      return this.documentsToBeDeleted.find(documentId => documentId === doc.id) ? false : true;
     },
     checkDefaultViewOptions() {
       if (this.selectedView === 'folder') {
@@ -585,7 +680,8 @@ export default {
     },
     addFolder(){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.$documentFileService.getNewName(ownerId,this.parentFolderId,this.folderPath,'new folder') 
+      const i18nName = this.$t('Folder.label.newfolder');
+      this.$documentFileService.getNewName(ownerId, this.parentFolderId, this.folderPath, i18nName)
         .then( newName => {
           const newFolder = {
             'id': -1,
@@ -602,30 +698,102 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name)
         .then(createdFolder => {
+          createdFolder.canAdd = this.canAdd;
           this.files.shift();
           this.files.unshift(createdFolder);
+        }).catch(e => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: this.$t('document.folder.conflict.error.message')
+            });
+          }
         })
-        .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
     renameDocument(file,name){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.renameDocument(ownerId,file.id,name)
-        .then(() => this.refreshFiles())
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
-    },
-    moveDocument(ownerId,fileId,destPath){
-      this.$documentFileService.moveDocument(ownerId,fileId,destPath)
-        .then( () => {
-          this.refreshFiles();
-        })
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
-    },
-    createShortcut(file,destPath, destFolder,space) {
-      this.$documentFileService.createShortcut(file.id,destPath)
         .then(() => {
+          this.refreshFiles();
+          this.$root.$emit('document-renamed', file);
+        })
+        .catch(e => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: file.folder ? this.$t('document.folder.conflict.error.message')
+                : this.$t('document.file.conflict.error.message')
+            });
+          }
+        })
+        .finally(() => {
+          this.loading = false;
+        });
+    },
+    getConflictMessage(file) {
+      if (file.folder && !this.isMobile) {
+        return this.$t('document.folder.conflict.error.message.action');
+      } else if (file.folder && this.isMobile) {
+        return this.$t('document.folder.conflict.error.message');
+      } else if (!file.folder && this.isMobile) {
+        return this.$t('document.file.conflict.error.message');
+      } else {
+        return this.$t('document.file.conflict.error.message.action');
+      }
+    },
+    getConflictActions(object, fn) {
+      const actions = [{
+        event: 'keepBoth',
+        function: fn
+      }];
+      if (object.versionable) {
+        actions.push({event: 'createNewVersion', function: fn});
+        return actions;
+      } else {
+        return actions;
+      }
+    },
+    moveDocument(ownerId, file, destPath, destFolder, space, conflictAction) {
+      this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
+        .then( () => {
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
+          });
+          if (space && space.groupId) {
+            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
+            window.setTimeout(() => {
+              window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+            }, 1000);
+          } else {
+            this.openFolder(destFolder);
+          }
+          this.$root.$emit('document-moved');
+          this.isAlertActionRunning = false;
+        })
+        .catch(e => {
+          if (e.status === 409) {
+            e.json().then(response => {
+              this.$root.$emit('show-alert', {
+                type: 'warning',
+                message: this.getConflictMessage(file),
+                actions: this.getConflictActions(response.existingObject, {
+                  name: 'moveDocument',
+                  params: [ownerId, file, destPath, destFolder, space] // moveDocument function arguments
+                })
+              });
+            });
+          } else {
+            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.alert.move.error')});
+          }
+        })
+        .finally(() => this.loading = false);
+    },
+    createShortcut(file,destPath, destFolder,space, conflictAction) {
+      this.$documentFileService.createShortcut(file.id,destPath, conflictAction)
+        .then(() => {
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t('document.shortcut.creationSuccess')});
           this.createShortcutStatistics(file,space);
           if (space && space.groupId) {
             const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
@@ -633,8 +801,26 @@ export default {
           } else {
             this.openFolder(destFolder);
           }
+          this.$root.$emit('shortcut-created');
+          this.isAlertActionRunning = false;
         })
-        .catch(e => console.error(e))
+        .catch((e) => {
+          if (e.status === 409) {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: this.getConflictMessage(file),
+              actions: [{
+                event: 'keepBoth',
+                function: {
+                  name: 'createShortcut',
+                  params: [file, destPath, destFolder, space] // createShortcut function arguments
+                }
+              }],
+            });
+          } else {
+            this.$root.$emit('show-alert', {type: 'error', message: this.$t('document.shortcut.creationError')});
+          }
+        })
         .finally(() => this.loading = false);
     },
     createShortcutStatistics(file,space) {
@@ -649,6 +835,7 @@ export default {
           parameters: {
             documentName: file.name,
             documentType: 'exo:symlink',
+            origin: 'Portlet document',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
             view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
@@ -657,45 +844,85 @@ export default {
         }
       }));
     },
+
+    simpleSearchStatistics() {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionSimpleSearch',
+          operation: 'simpleSearch',
+          parameters: {
+            spaceId: eXo.env.portal.spaceId,
+            origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
+    extendedSearchStatistics() {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Documents',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          name: 'actionExtendedSearch',
+          operation: 'extendedSearch',
+          parameters: {
+            spaceId: eXo.env.portal.spaceId,
+            origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
     saveVisibility(file){
       this.$documentFileService.saveVisibility(file)
-        .then(() => this.refreshFiles())
-        .catch(e => console.error(e))
-        .finally(() => this.loading = false);
+        .then(() => {
+          this.refreshFiles();
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
+          this.$root.$emit('visibility-saved');
+        })
+        .catch(() => {
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.label.saveVisibility.error')});
+        })
+        .finally(() => {
+          this.loading = false;
+        }
+        );
     },
     openDrawer(files) {
 
-      let attachmentAppConfiguration = {
+      const attachmentAppConfiguration = {
         'sourceApp': 'NEW.APP'
       };
-      if (eXo.env.portal.spaceName){
+      if (eXo.env.portal.spaceName) {
+        attachmentAppConfiguration.defaultDrive = {
+          isSelected: true,
+          name: `.spaces.${eXo.env.portal.spaceGroup}`,
+          title: eXo.env.portal.spaceDisplayName,
+        };
         const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-        if (pathparts.length>1){
-          attachmentAppConfiguration= {
-            'sourceApp': 'NEW.APP',
-            'defaultFolder': this.extractDefaultFolder(),
-            'defaultDrive': {
-              isSelected: true,
-              name: `.spaces.${eXo.env.portal.spaceGroup}`,
-              title: eXo.env.portal.spaceDisplayName,
-            }
-          };
+        if (pathparts.length > 1) {
+          attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
         }
       } else {
+        attachmentAppConfiguration.defaultDrive = {
+          isSelected: true,
+          name: 'Personal Documents',
+          title: 'Personal Documents'
+        };
         let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
-        if (pathparts.length>1 && pathparts[1].startsWith('Private/')){
+        if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
           pathparts = pathparts[1].split('Private/');
         }
         if (pathparts.length>1){
-          attachmentAppConfiguration= {
-            'sourceApp': 'NEW.APP',
-            'defaultFolder': `${this.extractDefaultFolder(true)}`,
-            'defaultDrive': {
-              isSelected: true,
-              name: 'Personal Documents',
-              title: 'Personal Documents'
-            }
-          };
+          attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
         }
       }
       if (files){
@@ -770,8 +997,13 @@ export default {
     displayMessage(message) {
       this.message = message.message;
       this.alertType = message.type;
+      this.alertActions = message.actions;
       this.alert = true;
-      window.setTimeout(() => this.alert = false, 5000);
+      setTimeout(() => {
+        if (!this.alertActions?.length) {
+          this.alert = false;
+        }
+      }, 5000);
     },
     selectFile(path) {
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
@@ -840,13 +1072,18 @@ export default {
         .finally(() => this.loading = false);
     },
     dragFile(e){     
-      if (this.canAdd){
+      const item = e.dataTransfer.items[0];
+      const isFile = item && item.type !== '';
+      if (this.canAdd && isFile){
         this.openDrawer(e.dataTransfer.files);
         this.$root.$emit('hide-upload-overlay');
       }
     },
-    startDrag(){
-      if (this.canAdd){
+    startDrag(e){
+      const item = e.dataTransfer.items[0];
+      //folder haven't type
+      const isFile = item && item.type !== '';
+      if (this.canAdd && isFile){
         this.$root.$emit('show-upload-overlay');
       }
     },

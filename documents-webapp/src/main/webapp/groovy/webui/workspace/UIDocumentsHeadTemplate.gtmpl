@@ -5,6 +5,3 @@
   ExoFeatureService featureService = uicomponent.getApplicationComponent(ExoFeatureService.class);
   def userName = rcontext.getRemoteUser();
 %>
-<script type="text/javascript" id="documentsHeadScripts">
-
-</script>

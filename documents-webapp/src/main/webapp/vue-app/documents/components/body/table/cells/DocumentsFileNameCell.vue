@@ -3,7 +3,7 @@
     class="d-flex flex-nowrap">
     <a
       class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-document-title">
-      <div>
+      <div class="mt-auto mb-auto">
         <v-progress-circular
           v-if="loading"
           indeterminate
@@ -19,7 +19,7 @@
           :size="isMobile && 32 || 22"
           :color="icon.color">{{ icon.class }}</v-icon>
       </div>
-      <div class=" width-document-title">
+      <div class="mt-auto mb-auto width-document-title">
         <div
           v-if="!editNameMode"
           @click="openPreview()"
@@ -27,19 +27,20 @@
           :title="title">
           <div
             v-sanitized-html="title"
-            class="document-name text-truncate ms-4">
+            class="document-name ms-4"
+            :class="title.includes('</b>') ? '' : 'text-truncate'">
           </div>
           <div
             v-sanitized-html="fileType"
             class="document-type ms-0">
           </div>
+          <v-icon
+              v-if="file.sourceID"
+              size="13"
+              class="pe-1 iconStyle ms-1">
+            mdi-link-variant
+          </v-icon>
         </div>
-        <v-icon
-          v-if="file.sourceID"
-          size="10"
-          class="pe-1 iconStyle pb-1">
-          mdi-link-variant
-        </v-icon>
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
@@ -53,7 +54,10 @@
             :value="lastUpdated"
             :format="fullDateFormat"
             class="document-time text-light-color text-no-wrap" />
-          <documents-visibility-cell :file="file" />
+          <documents-visibility-cell
+            :file="file"
+            :is-mobile="isMobile"
+            :selected-view="selectedView" />
         </div>
       </div>
     </a>
@@ -61,8 +65,10 @@
     <documents-info-details-cell
       v-if="!isMobile"
       :file="file"
+      :is-mobile="isMobile" 
       :class="editNameMode ? '' : 'button-info-details'" />
     <div
+      class="ma-auto"
       :id="`document-action-menu-cel-${file.id}`">
       <v-tooltip bottom>
         <template #activator="{ on, attrs }">
@@ -90,7 +96,8 @@
             close-on-click
             absolute>
             <documents-actions-menu
-              :file="file" />
+              :file="file"
+              :is-mobile="isMobile" />
           </v-menu>
         </template>
         <span>
@@ -103,15 +110,28 @@
 <script>
 import ntFileExtension from '../../../../json/NtFileExtension.json';
 export default {
+
   props: {
     file: {
       type: Object,
+      default: null,
+    },
+    query: {
+      type: String,
       default: null,
     },
     extension: {
       type: Object,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+    selectedView: {
+      type: String,
+      default: null
+    }
   },
   data: () => ({
     loading: false,
@@ -125,81 +145,34 @@ export default {
       hour: '2-digit',
       minute: '2-digit',
     },
+    accentMap: {
+      ae: '(ae|æ|ǽ|ǣ)',
+      a: '(a|á|ă|ắ|ặ|ằ|ẳ|ẵ|ǎ|â|ấ|ậ|ầ|ẩ|ẫ|ä|ǟ|ȧ|ǡ|ạ|ȁ|à|ả|ȃ|ā|ą|ᶏ|ẚ|å|ǻ|ḁ|ⱥ|ã)',
+      c: '(c|ć|č|ç|ḉ|ĉ|ɕ|ċ|ƈ|ȼ)',
+      e: '(e|é|ĕ|ě|ȩ|ḝ|ê|ế|ệ|ề|ể|ễ|ḙ|ë|ė|ẹ|ȅ|è|ẻ|ȇ|ē|ḗ|ḕ|ⱸ|ę|ᶒ|ɇ|ẽ|ḛ)',
+      i: '(i|í|ĭ|ǐ|î|ï|ḯ|ị|ȉ|ì|ỉ|ȋ|ī|į|ᶖ|ɨ|ĩ|ḭ)',
+      n: '(n|ń|ň|ņ|ṋ|ȵ|ṅ|ṇ|ǹ|ɲ|ṉ|ƞ|ᵰ|ᶇ|ɳ|ñ)',
+      o: '(o|ó|ŏ|ǒ|ô|ố|ộ|ồ|ổ|ỗ|ö|ȫ|ȯ|ȱ|ọ|ő|ȍ|ò|ỏ|ơ|ớ|ợ|ờ|ở|ỡ|ȏ|ō|ṓ|ṑ|ǫ|ǭ|ø|ǿ|õ|ṍ|ṏ|ȭ)',
+      u: '(u|ú|ŭ|ǔ|û|ṷ|ü|ǘ|ǚ|ǜ|ǖ|ṳ|ụ|ű|ȕ|ù|ủ|ư|ứ|ự|ừ|ử|ữ|ȗ|ū|ṻ|ų|ᶙ|ů|ũ|ṹ|ṵ)'
+    },
+    icon: null
   }),
   computed: {
     title() {
-      return decodeURI(this.fileName);
+      let docTitle = this.fileName;
+      try {
+        docTitle = decodeURI(this.fileName);
+      } catch (error) {
+        // Nothing to do, title contains % character but it represent not an encoded character
+        // No need to decode the title
+      }
+      if (this.query){
+        docTitle = this.highlightSearchResult(docTitle,this.query);
+      }
+      return docTitle;
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
-    icon() {
-      if (this.file && this.file.folder){
-        return {
-          class: 'fas fa-folder',
-          color: '#476A9C',
-        };
-      }
-      const type = this.file && this.file.mimeType || '';
-      if (type.includes('pdf')) {
-        return {
-          class: 'fas fa-file-pdf',
-          color: '#FF0000',
-        };
-      } else if (type.includes('presentation') || type.includes('powerpoint')) {
-        return {
-          class: 'fas fa-file-powerpoint',
-          color: '#CB4B32',
-        };
-      } else if (type.includes('sheet') || type.includes('excel') || type.includes('csv')) {
-        return {
-          class: 'fas fa-file-excel',
-          color: '#217345',
-        };
-      } else if (type.includes('word') || type.includes('opendocument') || type.includes('rtf') ) {
-        return {
-          class: 'fas fa-file-word',
-          color: '#2A5699',
-        };
-      } else if (type.includes('plain')) {
-        return {
-          class: 'fas fa-file-alt',
-          color: '#385989',
-        };
-      } else if (type.includes('image')) {
-        return {
-          class: 'fas fa-file-image',
-          color: '#999999',
-        };
-      } else if (type.includes('video') || type.includes('octet-stream') || type.includes('ogg')) {
-        return {
-          class: 'fas fa-file-video',
-          color: '#79577A',
-        };
-      } else if (type.includes('zip') || type.includes('war') || type.includes('rar')) {
-        return {
-          class: 'fas fa-file-archive',
-          color: '#717272',
-        };
-      } else if (type.includes('illustrator') || type.includes('eps')) {
-        return {
-          class: 'fas fa-file-contract',
-          color: '#E79E24',
-        };
-      } else if (type.includes('html') || type.includes('xml') || type.includes('css')) {
-        return {
-          class: 'fas fa-file-code',
-          color: '#6cf500',
-        };
-      } else {
-        return {
-          class: 'fas fa-file',
-          color: '#476A9C',
-        };
-      }
     },
     fileName() {
       return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(0,this.file.name.lastIndexOf('.')):this.file.name;
@@ -209,7 +182,11 @@ export default {
     },
     fileType() {
       //get extension from the filetypeextension if file name haven't extention 
-      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
+      let fileType = this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
+      if (this.query && !this.extendedSearch){
+        fileType = this.highlightSearchResult(fileType,this.query);      
+      }
+      return fileType;
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
@@ -226,12 +203,25 @@ export default {
     });
     this.$root.$on('update-file-name', this.editFileName);
     this.$root.$on('cancel-edit-mode', this.cancelEditMode);
+    this.getFileIcon();
   },
   beforeDestroy() {
     this.$root.$off('update-file-name', this.editFileName);
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
+    getFileIcon() {
+      const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+      if (this.file?.folder) {
+        this.icon = extensions[0].get('folder');
+      } else {
+        let extension = extensions[0].get(this.file?.mimeType);
+        if (!extension) {
+          extension = extensions[0].get('file');
+        }
+        this.icon = extension;
+      }
+    },
     editFileName(file) {
       if (this.file.id === file.id){
         this.fileToEditId = file.id;
@@ -293,7 +283,22 @@ export default {
         this.menuDisplayed = true;
         $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
       }
-    }
+    },
+    escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    },
+    highlightSearchResult(str, queries) {
+      queries = queries.split(' ');
+      const accentRegex = new RegExp(Object.keys(this.accentMap).join('|'), 'g');
+      const queryRegex = new RegExp(queries.map(q => {
+        return this.escapeRegExp(q).toLowerCase().replace(accentRegex, m => {
+          return this.accentMap[m] || m;
+        });
+      }).join('|'), 'gi');
+      return str.toString().replace(queryRegex, function(matchedTxt){
+        return ( `<b>${matchedTxt}</b>`);
+      });
+    },
   }
 };
 </script>

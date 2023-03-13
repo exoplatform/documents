@@ -57,6 +57,19 @@ export default {
     });
   },
   methods: {
+    sortItems(items) {
+      const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
+      return items.sort((a, b) => collator.compare(a.name, b.name));
+    },
+    sortNestedItems(items) {
+      this.sortItems(items);
+      items.forEach(item => {
+        if (item.children.length) {
+          this.sortNestedItems(item.children);
+        }
+      });
+      return items;
+    },
     open() {
       this.retrieveDocumentTree();
       this.$refs.folderBreadcrumb?.open();
@@ -71,7 +84,9 @@ export default {
       this.items = [];
       this.$refs.folderBreadcrumb?.startLoading();
       this.$documentFileService.getFullTreeData(this.ownerId)
-        .then(data => this.items = data || [])
+        .then(data => {
+          this.items = data && this.sortNestedItems(data) || [];
+        })
         .finally(() => this.$refs.folderBreadcrumb?.endLoading());
     }
   }

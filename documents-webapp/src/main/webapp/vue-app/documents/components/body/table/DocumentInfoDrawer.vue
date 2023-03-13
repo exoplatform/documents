@@ -17,33 +17,65 @@
               class="fileName font-weight-bold text-color ms-2 px-2">
               {{ file.name }}
             </span>
-            <span
-              v-if="file.versionNumber"
-              @click="showVersionHistory"
-              class="item-version text-caption border-radius primary pa-0 px-1 clickable">
-              V{{ file.versionNumber }}
-            </span>
-            <documents-favorite-action v-if="!file.folder" :file="file" />
+            <div class="d-flex align-center pb-1">
+              <span
+                v-if="file.versionNumber"
+                @click="showVersionHistory"
+                class="item-version text-caption border-radius primary pa-0 px-1 clickable">
+                V{{ file.versionNumber }}
+              </span>
+              <documents-favorite-action
+                v-if="!file.folder"
+                :file="file"
+                :is-mobile="isMobile" />
+            </div>
             <v-spacer />
           </a>
         </v-list-item-content>
       </v-list-item>
-      <div v-if="showNoDescription" class="d-flex flex-column justify-center text-center pa-8">
-        <v-icon size="40" class="descriptionIcon"> mdi-message-text-outline </v-icon>
-        <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
-        <a class="align-center" @click="openEditor">
-          <span>{{ $t('documents.message.addYourDescription') }}</span>
-        </a>
+      <div v-if="showNoDescription">
+        <div class="d-flex flex-row justify-center text-center pt-8">
+          <v-icon size="40" class="descriptionIcon"> mdi-message-text-outline </v-icon>
+        </div>
+        <div class="d-flex flex-column justify-center text-center pb-8">
+          <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
+          <a class="align-center" @click="openEditor">
+            <span>{{ $t('documents.message.addYourDescription') }}</span>
+          </a>
+        </div>
       </div>
-      <div
-        v-show="showDescription"
-        :data-text="placeholder"
-        :title="$t('tooltip.clickToEdit')"
-        class="py-4 px-8 cursor-text"
-        @click="openEditor"
-        v-sanitized-html="file.description">
-        {{ placeholder }}
-      </div>
+      <v-hover>
+        <div slot-scope="{ hover }">
+          <v-row class="col-12 py-4 pl-8">
+            <v-col class="col-11 px-0 py-0">
+              <div
+                v-show="showDescription"
+                :data-text="placeholder"
+                class="infoDescriptionToShow"
+                :hover="hover"
+                v-sanitized-html="file.description">
+                {{ placeholder }}
+              </div>
+            </v-col>
+            <v-col class="col-1 px-0 py-0">
+              <v-tooltip :disabled="isMobile" bottom> 
+                <template #activator="{ on, attrs }">
+                  <v-icon
+                    v-show="showDescription && (hover || isMobile)"
+                    v-bind="attrs"
+                    v-on="on"
+                    class="primary--text"
+                    size="16"
+                    @click="openEditor">
+                    {{ 'fa fa-edit' }}
+                  </v-icon>
+                </template>
+                <span> {{ $t('documents.drawer.details.description.edit') }} </span>
+              </v-tooltip>
+            </v-col>
+          </v-row>
+        </div>
+      </v-hover>
       <div v-show="displayEditor" class="py-4 px-8">
         <exo-activity-rich-editor
           ref="activityShareMessage"
@@ -51,23 +83,13 @@
           max-length="1300"
           :placeholder="$t('documents.alert.descriptionLimit')"
           class="flex" />
-        <v-btn
-          id="saveDescriptionButton"
-          :loading="savingDescription"
-          :disabled="disableButton"
-          depressed
-          outlined
-          class="btn mt-2 ml-auto d-flex px-2 btn-primary v-btn v-btn--contained theme--light v-size--default"
-          @click="updateDescription">
-          {{ $t('documents.label.apply') }}
-        </v-btn>
       </div>
       <v-divider dark />
       <template>
         <v-list-item>
           <v-list-item-content class="mt-4 mx-4">
             <v-list-item-title>
-              <a
+              <span
                 class="fileDetails text-color d-flex">
                 <span class="text-center not-clickable font-weight-bold">{{ $t('documents.drawer.details.modified') }}:</span>
                 <date-format
@@ -89,7 +111,7 @@
                 <p v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
                   {{ infoDrawerModifierLabel }}
                 </p>
-              </a>
+              </span>
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
@@ -97,7 +119,7 @@
         <v-list-item>
           <v-list-item-content class="mx-4">
             <v-list-item-title>
-              <a
+              <span
                 class="fileDetails text-color d-flex ">
                 <span class="text-center not-clickable font-weight-bold">
                   {{ $t('documents.drawer.details.created') }}:</span>
@@ -122,7 +144,7 @@
                 <p v-else class="text-decoration-underline not-clickable primary--text font-weight-bold mx-1">
                   {{ infoDrawerCreatorLabel }}
                 </p>
-              </a>
+              </span>
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
@@ -130,15 +152,33 @@
         <v-list-item>
           <v-list-item-content class="mx-4">
             <v-list-item-title>
-              <a
+              <span
                 class="fileDetails not-clickable text-color d-flex">
                 <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
-                <documents-file-size-cell class="mx-1 text-color" :file="file" />
-              </a>
+                <documents-file-size-cell
+                  class="mx-1 text-color"
+                  :file="file"
+                  :is-mobile="isMobile" />
+              </span>
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
       </template>
+    </template>   
+    <template slot="footer">
+      <div class="d-flex">
+        <v-spacer />
+        <v-btn
+          v-show="displayEditor"
+          id="saveDescriptionButton"
+          :loading="savingDescription"
+          :disabled="disableButton"
+          depressed
+          class="primary btn no-box-shadow ms-auto"
+          @click="updateDescription">
+          {{ $t('documents.label.apply') }}
+        </v-btn>
+      </div>
     </template>
   </exo-drawer>
 </template>
@@ -149,6 +189,10 @@ export default {
     selectedView: {
       type: String,
       default: '',
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   data: () => ({
@@ -205,9 +249,6 @@ export default {
     identityCreated(){
       return this.file?.creatorIdentity;
     },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     disableButton() {
       return this.file.description && this.file.description.replace( /(<([^>]+)>)/ig, '').length>1300
       || this.file.description === this.fileInitialDescription 
@@ -237,9 +278,16 @@ export default {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
-          this.displayAlert(this.$t('documents.alert.success.description.updated'));
+          if (this.isMobile){
+            this.displayAlert(this.$t('documents.alert.success.description.updated'));
+          } else {
+            this.$root.$emit('show-alert', {
+              type: 'success',
+              message: this.$t('documents.alert.success.description.updated')
+            });
+          }
           this.showDescription = this.file.description && this.file.description.length;
-          this.showNoDescription = !this.showDescription;
+          this.showNoDescription = !this.file.description;
           this.displayEditor=false;
           this.fileInitialDescription = this.file.description;
         });
@@ -253,7 +301,9 @@ export default {
       this.showNoDescription = !this.file.description && !this.displayEditor;
       this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
       this.fileInitialDescription = this.file.description;      
-      this.$refs.documentInfoDrawer.open();
+      this.$nextTick(()=>{
+        this.$refs.documentInfoDrawer.open();
+      });
     },
     openEditor(){
       this.firstCreateDescription = this.showNoDescription;
@@ -263,11 +313,10 @@ export default {
       this.originDescription = this.file.description;
     },
     close() {
-      this.file = null;
+      this.file.description = this.fileInitialDescription;
       this.displayEditor = false;
       this.showNoDescription = false;
       this.showDescription = true;
-      this.displayEditor=true;
       this.$refs.documentInfoDrawer.close();
 
     },

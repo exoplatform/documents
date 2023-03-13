@@ -57,15 +57,14 @@
                 item-value="value"
                 dense
                 class="caption"
-                outlined
-                :hint="infoMessage"
-                persistent-hint />
+                outlined />
             </div>
-            <div v-if="showSwitch" class="d-flex flex-row align-center my-4">
+            <div v-if="showSwitch" class="d-flex flex-row my-4">
               <v-label for="visibility">
-                <span class="text-color body-2">
+                <span class="text-color body-2 mr-6">
                   {{ $t('documents.label.visibility.allowEveryone') }}
                 </span>
+                <p class="caption"> {{ infoMessage }} </p>
               </v-label>
               <v-spacer />
               <v-switch
@@ -122,6 +121,7 @@
             v-for="user in usersToDisplay"
             :key="user"
             :user="user"
+            :is-mobile="isMobile" 
             @remove-user="removeUser"
             @set-visibility="setUserVisibility" />
           <div class="seeMoreUsers">
@@ -144,6 +144,7 @@
           </v-btn>
           <v-btn
             class="btn btn-primary"
+            :loading="loading"
             @click="saveVisibility()">
             {{ $t('documents.label.visibility.save') }}
           </v-btn>
@@ -152,12 +153,20 @@
     </exo-drawer>
     <documents-visibility-all-users-drawer
       ref="documentAllUsersVisibilityDrawer"
-      :users="users" />
+      :users="users"
+      :is-mobile="isMobile" />
   </div>
 </template>
 <script>
 export default {
+  props: {
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
+  },
   data: () => ({
+    loading: false,
     allGroupsForAdmin: true,
     userGroup: '/platform/users',
     groupType: 'GROUP',
@@ -221,9 +230,6 @@ export default {
         noDataLabel: this.$t('documents.label.visibility.noDataLabel'),
       };
     },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     maxUsersToShow(){
       return this.$vuetify.breakpoint.width < 1600 ? 2 : 4;
     },
@@ -259,6 +265,11 @@ export default {
   created() {
     this.$root.$on('open-visibility-drawer', file => {
       this.open(file);
+    });
+    this.$root.$on('visibility-saved', () => {
+      this.loading = false;
+      this.$refs.documentVisibilityDrawer.endLoading();
+      this.close();
     });
   },
   methods: {
@@ -306,11 +317,14 @@ export default {
     },
     close() {
       this.$refs.documentVisibilityDrawer.close();
+
     },
     displayAllListUsers(){
       this.$refs.documentAllUsersVisibilityDrawer.open();
     },
     saveVisibility(){
+      this.loading = true;
+      this.$refs.documentVisibilityDrawer.startLoading();
       const collaborators = [];
       for (const user of  this.users) {
         const  collaborator= {
@@ -332,7 +346,6 @@ export default {
         this.file.acl.allMembersCanEdit=false;
       }
       this.$root.$emit('save-visibility',this.file);
-      this.close();
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {

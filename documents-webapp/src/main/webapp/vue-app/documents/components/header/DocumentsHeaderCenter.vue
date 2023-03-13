@@ -26,6 +26,10 @@ export default {
       type: String,
       default: '',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     tabsExtensionApp: 'DocumentTabs',
@@ -37,9 +41,6 @@ export default {
     tab: 0,
   }),
   computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     spaceId() {
       return eXo.env.portal.spaceId;
     },

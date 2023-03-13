@@ -448,8 +448,8 @@ public class DocumentFileServiceTest {
   public void testCreateShortcut() throws Exception {
     String docId = "11111111";
     String docPath = "/Groups/spaces/test/Documents/test";
-    documentFileService.createShortcut(docId, "/Groups/spaces/test/Documents/test");
-    verify(documentFileStorage, times(1)).createShortcut(docId, docPath);
+    documentFileService.createShortcut(docId, "/Groups/spaces/test/Documents/test", "user", "keepBoth");
+    verify(documentFileStorage, times(1)).createShortcut(docId, docPath, "user", "keepBoth");
   }
 
   @Test

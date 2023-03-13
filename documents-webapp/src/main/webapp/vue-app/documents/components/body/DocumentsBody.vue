@@ -5,6 +5,17 @@
       :component="viewExtension"
       :params="params"
       :element="div" />
+    <div
+      class="extendFilterButton"
+      v-show="showExtend && !this.isMobile"
+      @click="extendFilter()">
+      <v-icon
+        size="24"
+        class="extendIcon">
+        mdi-file-search
+      </v-icon>
+      <span> {{ $t('documents.message.extendedSearch') }}</span>
+    </div>
   </div>
 </template>
 
@@ -55,10 +66,26 @@ export default {
       type: String,
       default: null,
     },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
+    },
     primaryFilter: {
       type: String,
       default: null,
     },
+    showExtendFilter: {
+      type: Boolean,
+      default: false
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+    selectedView: {
+      type: String,
+      default: null
+    }
   },
   computed: {
     params() {
@@ -73,8 +100,19 @@ export default {
         offset: this.offset,
         limit: this.limit,
         query: this.query,
+        extendedSearch: this.extendedSearch,
+        isMobile: this.isMobile,
+        selectedView: this.selectedView
       };
     },
+    showExtend(){
+      return this.showExtendFilter;
+    }
   },
+  methods: {
+    extendFilter(){
+      this.$root.$emit('document-extended-search');
+    },
+  }
 };
 </script>

@@ -16,27 +16,62 @@
  */
 package org.exoplatform.documents.storage.jcr.util;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.util.Calendar;
+import java.util.List;
+
+import javax.jcr.NodeIterator;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+import javax.jcr.Value;
+import javax.jcr.ValueFormatException;
+import javax.jcr.nodetype.NodeType;
+import javax.jcr.version.Version;
+
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.MockedStatic;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.value.StringValue;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Test;
 
-import javax.jcr.*;
-import javax.jcr.version.Version;
-
-import java.io.IOException;
-import java.util.Calendar;
-
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-
+@RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentsUtilTest {
+
+  private static final MockedStatic<CommonsUtils>        COMMONS_UTILS_UTIL    = mockStatic(CommonsUtils.class);
+
+  @AfterClass
+  public static void afterRunBare() throws Exception { // NOSONAR
+    COMMONS_UTILS_UTIL.close();
+  }
+
+  @Before
+  public void setUp() throws Exception {
+    JCRDeleteFileStorage jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(JCRDeleteFileStorage.class)).thenReturn(jcrDeleteFileStorage);
+  }
 
   @Test
   public void testRetrieveFileProperties() throws IOException, RepositoryException {
@@ -99,5 +134,99 @@ public class JCRDocumentsUtilTest {
     // Then
     verify(documentNode, times(1)).setDescription(anyString());
 
+  }
+
+  @Test
+  public void testToFileNodes() throws  RepositoryException {
+    IdentityManager identityManager = mock(IdentityManager.class);
+    Identity aclIdentity = mock(Identity.class);
+    SpaceService spaceService = mock(SpaceService.class);
+
+    // Initiating files
+
+    // This file will be converted and returned
+    NodeImpl file = mock(NodeImpl.class);
+    NodeImpl fileContent = mock(NodeImpl.class);
+    when(file.getName()).thenReturn("document-test.pdf");
+    when(file.getIdentifier()).thenReturn("fileIdentifier");
+    when(file.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(file.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(fileContent);
+    when(fileContent.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
+    when(fileContent.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    Property mimeTypeProperty = mock(Property.class);
+    when(mimeTypeProperty.getString()).thenReturn("application/pdf");
+    when(fileContent.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    when(file.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(false);
+    when(file.getACL()).thenReturn(new AccessControlList());
+
+    // This file inside a folder's symlink will be converted and returned
+    NodeImpl fileInFolderSymlink = mock(NodeImpl.class);
+    NodeImpl fileContentSymlink = mock(NodeImpl.class);
+    when(fileInFolderSymlink.getName()).thenReturn("second-document-test.pdf");
+    when(fileInFolderSymlink.getIdentifier()).thenReturn("fileIdentifierInsideSymlink");
+    when(fileInFolderSymlink.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(fileInFolderSymlink.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(fileContent);
+    when(fileContentSymlink.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
+    when(fileContentSymlink.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    when(fileContentSymlink.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    when(fileInFolderSymlink.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(false);
+    when(fileInFolderSymlink.getACL()).thenReturn(new AccessControlList());
+
+    // Folder where we search files
+    NodeImpl folderNode = mock(NodeImpl.class);
+    when(folderNode.getIdentifier()).thenReturn("folderIdentifier");
+    when(folderNode.getPath()).thenReturn("/path/folderNode");
+    when(folderNode.isNodeType("nt:folder")).thenReturn(true);
+
+    // folder which symlink is inside FolderNode
+    NodeImpl anotherFolderNode = mock(NodeImpl.class);
+    when(anotherFolderNode.getIdentifier()).thenReturn("anotherFolderIdentifier");
+    when(anotherFolderNode.getPath()).thenReturn("/path/antherFolder/anotherFolderNode");
+    when(anotherFolderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    NodeType anotherFolderPrimaryNT = mock(NodeType.class);
+    when(anotherFolderPrimaryNT.getName()).thenReturn("nt:folder");
+    when(anotherFolderNode.getPrimaryNodeType()).thenReturn(anotherFolderPrimaryNT);
+
+    // Files iterator of anotherFolderNode
+    NodeIterator anotherFolderNodeIterator = mock(NodeIterator.class);
+    when(anotherFolderNodeIterator.hasNext()).thenReturn(true,false);
+    when(anotherFolderNodeIterator.nextNode()).thenReturn(fileInFolderSymlink);
+    when(anotherFolderNode.getNodes()).thenReturn(anotherFolderNodeIterator);
+
+    NodeImpl anotherFolderLink = mock(NodeImpl.class);
+    when(anotherFolderLink.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property anotherFolderSymlinkUUID = mock(Property.class);
+    when(anotherFolderSymlinkUUID.getString()).thenReturn("anotherFolderIdentifier");
+    when(anotherFolderLink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(anotherFolderSymlinkUUID);
+    when(anotherFolderLink.getPath()).thenReturn("/path/folderNode/anotherFolderLink.lnk");
+    when(anotherFolderLink.getACL()).thenReturn(new AccessControlList());
+
+
+    // this folder will be ignored since it is inside its source folder
+    NodeImpl folderLink = mock(NodeImpl.class);
+    folderLink.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID,"test");
+    when(folderLink.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property symlinkUUID = mock(Property.class);
+    when(symlinkUUID.getString()).thenReturn("folderIdentifier");
+    when(folderLink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUID);
+    when(folderLink.getPath()).thenReturn("/path/folderNode/folderLink.lnk");
+    when(folderLink.getACL()).thenReturn(new AccessControlList());
+
+    NodeImpl fileToDelete = mock(NodeImpl.class);
+    when(fileToDelete.getIdentifier()).thenReturn("fileToDeleteIdentifier");
+
+    // Files iterator of folderNode
+    NodeIterator folderNodeIterator = mock(NodeIterator.class);
+    when(folderNodeIterator.hasNext()).thenReturn(true,true, true, false);
+    when(folderNodeIterator.nextNode()).thenReturn(file, folderLink, anotherFolderLink);
+
+    ExtendedSession session = mock(ExtendedSession.class);
+    when(session.getNodeByIdentifier("folderIdentifier")).thenReturn(folderNode);
+    when(session.getNodeByIdentifier("anotherFolderIdentifier")).thenReturn(anotherFolderNode);
+
+    List <FileNode> fileNodes = JCRDocumentsUtil.toFileNodes(identityManager, folderNodeIterator, aclIdentity, session, spaceService,false);
+    assertEquals(2, fileNodes.size());
+    assertEquals("document-test.pdf", fileNodes.get(0).getName());
+    assertEquals("second-document-test.pdf", fileNodes.get(1).getName());
   }
 }

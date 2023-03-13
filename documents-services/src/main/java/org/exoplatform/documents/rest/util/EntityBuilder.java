@@ -204,7 +204,7 @@ public class EntityBuilder {
     try {
       nodeEntity.setId(node.getId());
       nodeEntity.setPath(node.getPath());
-      nodeEntity.setName(node.getName() != null ? URLDecoder.decode(node.getName(), StandardCharsets.UTF_8) : null);
+      nodeEntity.setName(encodeName(node));
       nodeEntity.setDatasource(node.getDatasource());
       nodeEntity.setDescription(node.getDescription());
       nodeEntity.setAcl(toNodePermissionEntity(node,identityManager, spaceService));
@@ -255,6 +255,23 @@ public class EntityBuilder {
     } catch (Exception e) {
       LOG.error("==== exception occured when converting node with ID = {} and name = {}", node.getId(), node.getName(), e);
     }
+  }
+
+  /**
+   * Decode node name if it is already encoded
+   * @param node its name
+   * @return decoded node name
+   */
+  private static String encodeName(AbstractNode node) {
+    String nodeName = node.getName();
+    if(StringUtils.isNotBlank(nodeName)) {
+      try {
+        nodeName = URLDecoder.decode(node.getName(), StandardCharsets.UTF_8);
+      } catch (IllegalArgumentException iae) {
+        // nothing to do
+      }
+    }
+    return nodeName;
   }
 
   private static NodePermissionEntity toNodePermissionEntity(AbstractNode node, IdentityManager identityManager, SpaceService spaceService){

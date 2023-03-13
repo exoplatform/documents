@@ -136,7 +136,7 @@ export function saveVisibility(file) {
     if (!resp || !resp.ok) {
       throw new Error('Response code indicates a server error', resp);
     } else {
-      return resp.json();
+      return resp.ok;
     }
   });
 
@@ -160,13 +160,13 @@ export function renameDocument(ownerId,documentID,newName) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
+    } else {
+      throw resp;
     }
-  }).catch(e => {
-    throw new Error(`Error renaming document ${e}`);
   });
 }
 
-export function moveDocument(ownerId,documentID,destPath) {
+export function moveDocument(ownerId,documentID,destPath, conflictAction) {
   const formData = new FormData();
   if (ownerId) {
     formData.append('ownerId', ownerId);
@@ -177,6 +177,9 @@ export function moveDocument(ownerId,documentID,destPath) {
   if (destPath) {
     formData.append('destPath', destPath);
   }
+  if (conflictAction) {
+    formData.append('conflictAction', conflictAction);
+  }
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/move?${params}`, {
     credentials: 'include',
@@ -184,9 +187,9 @@ export function moveDocument(ownerId,documentID,destPath) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
+    } else {
+      throw resp;
     }
-  }).catch(e => {
-    throw new Error(`Error renaming document ${e}`);
   });
 }
 
@@ -211,9 +214,9 @@ export function createFolder(ownerId,parentid,folderPath,name) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.json();
+    } else {
+      throw resp;
     }
-  }).catch(e => {
-    throw new Error(`Error creating folder ${e}`);
   });
 }
 export function getNewName(ownerId,parentid,folderPath,name) {
@@ -309,13 +312,16 @@ export function updateDescription(ownerId,document) {
   });
 }
 
-export function createShortcut(documentID,destPath) {
+export function createShortcut(documentID,destPath, conflictAction) {
   const formData = new FormData();
   if (documentID) {
     formData.append('documentID', documentID);
   }
   if (destPath) {
     formData.append('destPath', destPath);
+  }
+  if (conflictAction) {
+    formData.append('conflictAction', conflictAction);
   }
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/shortcut?${params}`, {
@@ -324,9 +330,9 @@ export function createShortcut(documentID,destPath) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
+    } else {
+      throw resp;
     }
-  }).catch(e => {
-    throw new Error(`Error renaming document ${e}`);
   });
 }
 

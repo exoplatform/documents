@@ -54,6 +54,13 @@
       right: 18px;
       bottom:4px;
     }
+    .mobileDrawer{
+      top: auto !important;
+      height: auto !important;
+      bottom: 0px;
+      position: fixed !important;
+      width: 100% !important;
+    }
     .inputSpaceName {
       box-shadow: none!important;
       border: none!important;
@@ -95,6 +102,16 @@
       top: 20px;
       left: 9px;
     }
+
+    .extendFilterButton {
+      text-align: center;
+      cursor: pointer;
+      color: var(--allPagesPrimaryColor, #476A9C);
+      .extendIcon{
+        color: var(--allPagesPrimaryColor, #476A9C);
+        }
+    }
+
     .folderBreadcrumb {
       .drawerContent {
         .v-treeview-node__root {
@@ -330,9 +347,26 @@
           }
         }
       }
+
+      .v-data-table__wrapper {
+        overflow-x: hidden !important;
+      }
+    }
+    .v-data-table__mobile-row {
+      display: unset !important;
+    }
+    .visibility-btn {
+      width: 15px !important;
+      height: 15px !important;
     }
   }
   .documentInfoDrawer {
+    .infoDescriptionToShow {
+      &:focus {
+        outline-width: 0 !important;
+      }
+      overflow-wrap: break-word;
+    }
     .v-list-item {
       min-height: 30px!important;
     }
@@ -423,6 +457,20 @@
       #filterDocumentsSelect {
         width: 60px;
       }
+      .mobile-filter-button{
+        border: 1px solid @primaryColorDefault !important;
+        color:  @primaryColorDefault !important;
+        background-image: none !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+        font-weight: normal;
+        padding: 9px 20px;
+        font-size: 15px;
+        border-radius: 5px;
+        .filterIcon{
+          color:  @primaryColorDefault !important;
+        }
+      }
     }
 
     .v-data-table__wrapper {
@@ -480,6 +528,14 @@
   .custom-list-item-min-height {
     min-height: 40px !important;
   }
+
+  .document-mobile-alert-progress {
+    top: -16px;
+    width: 110.2%;
+    left: -16px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px
+  }
 }
 
 
@@ -519,6 +575,13 @@
   .documentEditName {
     width: 179px;
   }
+}
+
+.documents-alert-mobile {
+  border-left: none !important;
+  align-self: center;
+  left: inherit !important;
+  margin-bottom: 70px !important;
 }
 
   /* switch */

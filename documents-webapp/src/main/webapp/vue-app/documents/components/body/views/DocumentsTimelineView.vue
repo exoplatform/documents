@@ -14,6 +14,8 @@
       :disable-sort="isMobile"
       :loading-text="loadingLabel"
       :class="loadingClass"
+      :custom-sort="customSort"
+      mobile-breakpoint="960"
       hide-default-footer
       disable-pagination
       disable-filtering
@@ -25,6 +27,10 @@
           :key="header.value"
           :extension="header.cellExtension"
           :file="item"
+          :query="query"
+          :extended-search="extendedSearch"
+          :is-mobile="isMobile"
+          :selected-view="selectedView"
           :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template
@@ -37,6 +43,7 @@
           :open="isOpen"
           :toggle-function="toggle"
           :query="querySearch"
+          :is-mobile="isMobile"
           :primary-filter="primaryFilterFavorite" />
       </template>
       <template v-if="hasMore" slot="footer">
@@ -81,6 +88,10 @@ export default {
       type: String,
       default: null
     },
+    extendedSearch: {
+      type: Boolean,
+      default: false,
+    },
     initialized: {
       type: Boolean,
       default: false
@@ -101,6 +112,14 @@ export default {
       type: String,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+    selectedView: {
+      type: String,
+      default: null
+    }
   },
   data: () => ({
     lang: eXo.env.portal.language,
@@ -125,7 +144,7 @@ export default {
       return this.headers && this.headers.filter(header => header.cellExtension && header.cellExtension.componentOptions);
     },
     grouping() {
-      return !this.sortField || this.sortField === 'lastUpdated' || this.sortField === 'favorite';
+      return !this.sortField || this.sortField === 'lastUpdated';
     },
     querySearch() {
       return this.query && this.query.length;
@@ -181,9 +200,6 @@ export default {
       });
       return headers;
     },
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
     loadingLabel() {
       return `${this.$t('documents.label.loading')}...`;
     }
@@ -221,6 +237,17 @@ export default {
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
   },
   methods: {
+    customSort: function (items, sortBy, isDesc) {
+      if (sortBy[0] === 'name') {
+        const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
+        const sorted = items.sort((a, b) => collator.compare(a.name, b.name));
+        if (isDesc[0]) {
+          return sorted.reverse();
+        }
+        return sorted;
+      }
+      return items;
+    },
     updateFilter(filter) {
       this.primaryFilter = filter;
     },

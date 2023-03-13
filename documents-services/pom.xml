@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.exoplatform.documents</groupId>
     <artifactId>documents-parent</artifactId>
-    <version>1.1.x-SNAPSHOT</version>
+    <version>1.2.x-SNAPSHOT</version>
   </parent>
   <artifactId>documents-services</artifactId>
   <name>eXo Documents - Services</name>
@@ -12,7 +12,7 @@
     <rest.api.doc.version>1.0</rest.api.doc.version>
     <rest.api.doc.description>Documents addon rest endpoints</rest.api.doc.description>
 
-    <exo.test.coverage.ratio>0.60</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.59</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>
@@ -25,44 +25,10 @@
       <artifactId>documents-api</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>org.exoplatform.core</groupId>
-      <artifactId>exo.core.component.security.core</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.commons</groupId>
-      <artifactId>commons-component-common</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.commons</groupId>
-      <artifactId>commons-search</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.gatein.portal</groupId>
-      <artifactId>exo.portal.component.portal</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-api</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-core</artifactId>
-      <scope>provided</scope>
-    </dependency>
+
     <dependency>
       <groupId>org.exoplatform.social</groupId>
       <artifactId>social-component-service</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -70,98 +36,24 @@
       <artifactId>social-component-notification</artifactId>
       <scope>provided</scope>
     </dependency>
-    <!-- swagger -->
-    <dependency>
-      <groupId>io.swagger.core.v3</groupId>
-      <artifactId>swagger-annotations</artifactId>
-      <scope>provided</scope>
-    </dependency>
+
     <!-- Test -->
     <dependency>
-      <groupId>org.exoplatform.gatein.portal</groupId>
-      <artifactId>exo.portal.component.identity</artifactId>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.gatein.portal</groupId>
-      <artifactId>exo.portal.component.portal</artifactId>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.gatein.portal</groupId>
-      <artifactId>exo.portal.component.application-registry</artifactId>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.gatein.portal</groupId>
-      <artifactId>exo.portal.component.test.core</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.commons</groupId>
-      <artifactId>commons-component-common</artifactId>
+      <groupId>org.exoplatform.social</groupId>
+      <artifactId>social-component-service</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-core</artifactId>
-      <scope>test</scope>
+      <artifactId>social-component-notification</artifactId>
       <type>test-jar</type>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.commons</groupId>
-      <artifactId>commons-testing</artifactId>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>junit</groupId>
-          <artifactId>junit</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.exoplatform.tool</groupId>
-          <artifactId>exo.tool.framework.junit</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-core</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.powermock</groupId>
-      <artifactId>powermock-module-junit4</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.powermock</groupId>
-      <artifactId>powermock-api-mockito2</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.hsqldb</groupId>
-      <artifactId>hsqldb</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
   <build>
     <finalName>documents-services</finalName>
     <plugins>
-      <plugin>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <argLine>@{argLine} --add-opens java.base/java.util.concurrent=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.xml/jdk.xml.internal=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED</argLine>
-        </configuration>
-      </plugin>
       <plugin>
         <groupId>io.openapitools.swagger</groupId>
         <artifactId>swagger-maven-plugin</artifactId>

@@ -17,40 +17,68 @@
 
 package org.exoplatform.documents.rest;
 
-import static org.junit.Assert.*;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.*;
-import static org.powermock.api.mockito.PowerMockito.doThrow;
-
-
-import org.exoplatform.commons.ObjectAlreadyExistsException;
-import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.documents.rest.util.RestUtils;
-import org.exoplatform.documents.service.DocumentFileService;
-import org.exoplatform.services.listener.ListenerService;
-import org.junit.runner.RunWith;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
-import java.util.*;
+import java.util.Map;
 
 import javax.jcr.RepositoryException;
 import javax.ws.rs.core.Response;
 
-import org.exoplatform.documents.rest.util.EntityBuilder;
-import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.MockedStatic;
+import org.mockito.junit.MockitoJUnitRunner;
 
+import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
-import org.exoplatform.documents.model.*;
-import org.exoplatform.documents.rest.model.*;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.BreadCrumbItem;
+import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentGroupsSize;
+import org.exoplatform.documents.model.DocumentTimelineFilter;
+import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.FileVersion;
+import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.documents.model.PermissionEntry;
+import org.exoplatform.documents.model.PermissionRole;
+import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.BreadCrumbItemEntity;
+import org.exoplatform.documents.rest.model.FileNodeEntity;
+import org.exoplatform.documents.rest.model.FileVersionsEntity;
+import org.exoplatform.documents.rest.model.FolderNodeEntity;
+import org.exoplatform.documents.rest.model.IdentityEntity;
+import org.exoplatform.documents.rest.model.NodeAuditTrailItemEntity;
+import org.exoplatform.documents.rest.model.NodeAuditTrailsEntity;
+import org.exoplatform.documents.rest.model.NodePermissionEntity;
+import org.exoplatform.documents.rest.model.PermissionEntryEntity;
+import org.exoplatform.documents.rest.model.Visibility;
+import org.exoplatform.documents.rest.util.EntityBuilder;
+import org.exoplatform.documents.rest.util.RestUtils;
+import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.DocumentFileServiceImpl;
 import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -65,32 +93,33 @@ import org.exoplatform.social.metadata.model.Metadata;
 import org.exoplatform.social.metadata.model.MetadataItem;
 import org.exoplatform.social.metadata.model.MetadataObject;
 import org.exoplatform.social.metadata.model.MetadataType;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-@RunWith(PowerMockRunner.class)
+@RunWith(MockitoJUnitRunner.Silent.class)
 public class DocumentFileRestTest {
 
-  private DocumentFileStorage     documentFileStorage;
+  private static MockedStatic<RestUtils>     REST_UTILS     = mockStatic(RestUtils.class);
 
-  private IdentityManager         identityManager;
+  private static MockedStatic<EntityBuilder> ENTITY_BUILDER = mockStatic(EntityBuilder.class);
 
-  private SpaceService            spaceService;
+  private DocumentFileStorage                      documentFileStorage;
 
-  private IdentityRegistry        identityRegistry;
+  private IdentityManager                          identityManager;
 
-  private MetadataService         metadataService;
+  private SpaceService                             spaceService;
 
-  private Authenticator           authenticator;
+  private IdentityRegistry                         identityRegistry;
 
-  private DocumentFileServiceImpl documentFileService;
+  private MetadataService                          metadataService;
 
-  private DocumentFileRest        documentFileRest;
+  private Authenticator                            authenticator;
 
-  private JCRDeleteFileStorage jcrDeleteFileStorage;
+  private DocumentFileServiceImpl                  documentFileService;
 
-  private ListenerService listenerService;
+  private DocumentFileRest                         documentFileRest;
+
+  private JCRDeleteFileStorage                     jcrDeleteFileStorage;
+
+  private ListenerService                          listenerService;
 
   @Before
   public void setUp() {
@@ -110,6 +139,18 @@ public class DocumentFileRestTest {
                                                       identityRegistry,
                                                       listenerService);
     documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
+  }
+
+  @After
+  public void teardown() throws Exception { // NOSONAR
+    if (REST_UTILS != null) {
+      REST_UTILS.close();
+      REST_UTILS = null;
+    }
+    if (ENTITY_BUILDER != null) {
+      ENTITY_BUILDER.close();
+      ENTITY_BUILDER = null;
+    }
   }
 
   @Test
@@ -179,6 +220,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.TIMELINE,
                                                            null,
+                                                           false,
                                                            null,
                                                            false,
                                                            "",
@@ -195,6 +237,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            null,
                                                            null,
+                                                           false,
                                                            null,
                                                            false,
                                                            "",
@@ -211,6 +254,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.TIMELINE,
                                                            null,
+                                                           false,
                                                            null,
                                                            false,
                                                            "",
@@ -258,6 +302,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.TIMELINE,
                                                            null,
+                                                           false,
                                                            null,
                                                            false,
                                                            "metadatas",
@@ -332,7 +377,7 @@ public class DocumentFileRestTest {
     assertEquals(((DocumentGroupsSize) response4.getEntity()).getThisDay(), 4);
 
     when(documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false)).thenThrow(ObjectNotFoundException.class);
-    Response response =  documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
+    Response response = documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     when(documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false)).thenThrow(RuntimeException.class);
     response =  documentFileRest.getDocumentGroupsCount(currentOwnerId, "", null, false);
@@ -351,6 +396,7 @@ public class DocumentFileRestTest {
     currentProfile.setProperty(Profile.FULL_NAME, username);
     currentIdentity.setProfile(currentProfile);
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
 
     String userbname = "userb";
     long userId = 3;
@@ -391,7 +437,6 @@ public class DocumentFileRestTest {
     identity1.setAvatar(null);
     identity1.setProviderId("organization");
     identity1.setRemoteId("spacetest");
-
 
     NodeAuditTrailItemEntity nodeAuditTrailItemEntity = new NodeAuditTrailItemEntity();
     nodeAuditTrailItemEntity.setId(11);
@@ -452,10 +497,8 @@ public class DocumentFileRestTest {
     permissionEntries.add(permissionEntry4);
     permissionEntries.add(permissionEntry5);
     permissionEntries.add(permissionEntry6);
-    NodePermission nodePermission = new NodePermission(true,true,true,permissionEntries,null, null);
+    NodePermission nodePermission = new NodePermission(true, true, true, permissionEntries, null, null);
     folder1.setAcl(nodePermission);
-
-
 
     FolderNodeEntity folderEntity = new FolderNodeEntity();
     folderEntity.setId("2");
@@ -494,6 +537,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.FOLDER,
                                                            null,
+                                                           false,
                                                            null,
                                                            false,
                                                            "",
@@ -510,6 +554,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.FOLDER,
                                                            null,
+                                                           false,
                                                            null,
                                                            false,
                                                            "",
@@ -526,6 +571,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            FileListingType.FOLDER,
                                                            null,
+                                                           false,
                                                            null,
                                                            false,
                                                            expand,
@@ -590,33 +636,31 @@ public class DocumentFileRestTest {
     breadCrumbItems.add(breadCrumbItem3);
     breadCrumbItems.add(breadCrumbItem4);
 
-
     List<BreadCrumbItemEntity> breadCrumbItemEntities = new ArrayList<>();
 
-
-    when(documentFileStorage.getBreadcrumb(2,"Folder1","",userID)).thenReturn(breadCrumbItems);
+    when(documentFileStorage.getBreadcrumb(2, "Folder1", "", userID)).thenReturn(breadCrumbItems);
 
     Response response1 = documentFileRest.getBreadcrumb(null,
             null,"");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1","");
+    Response response2 = documentFileRest.getBreadcrumb(Long.valueOf(2), "Folder1", "");
 
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    Response response3 = documentFileRest.getBreadcrumb(Long.valueOf(2),"Folder1","");
+    Response response3 = documentFileRest.getBreadcrumb(Long.valueOf(2), "Folder1", "");
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
     breadCrumbItemEntities = (List<BreadCrumbItemEntity>) response3.getEntity();
     assertEquals(breadCrumbItemEntities.size(), 4);
-    assertEquals(breadCrumbItemEntities.get(0).getId(),"4");
-    assertEquals(breadCrumbItemEntities.get(0).getName(),"Folder4");
+    assertEquals(breadCrumbItemEntities.get(0).getId(), "4");
+    assertEquals(breadCrumbItemEntities.get(0).getName(), "Folder4");
 
     when(documentFileRest.getBreadcrumb(1L, "123", "")).thenThrow(ObjectNotFoundException.class);
-    Response response =  documentFileRest.getBreadcrumb(1L, "123", "");
+    Response response = documentFileRest.getBreadcrumb(1L, "123", "");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     when(documentFileRest.getBreadcrumb(1L, "123", "")).thenThrow(RuntimeException.class);
-    response =  documentFileRest.getBreadcrumb(1L, "123", "");
+    response = documentFileRest.getBreadcrumb(1L, "123", "");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
@@ -651,33 +695,33 @@ public class DocumentFileRestTest {
     file2.setMimeType(":file");
     file2.setSize(50);
 
-    when(documentFileStorage.duplicateDocument(2,"oldFile", "copy of",userID)).thenReturn(file2);
-
+    when(documentFileStorage.duplicateDocument(2, "oldFile", "copy of", userID)).thenReturn(file2);
 
     Response response1 = documentFileRest.duplicateDocument(null,
-            null,"copy of","");
+                                                            null,
+                                                            "copy of",
+                                                            "");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile", "copy of","");
+    Response response2 = documentFileRest.duplicateDocument(Long.valueOf(2), "oldFile", "copy of", "");
 
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    Response response3 = documentFileRest.duplicateDocument(Long.valueOf(2),"oldFile", "copy of","");
+    Response response3 = documentFileRest.duplicateDocument(Long.valueOf(2), "oldFile", "copy of", "");
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
     AbstractNodeEntity fileNode = (AbstractNodeEntity) response3.getEntity();
     assertEquals(fileNode.getName(), "Copy of oldFile");
-    assertEquals(fileNode.getId(),"2");
+    assertEquals(fileNode.getId(), "2");
 
     when(documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "")).thenThrow(ObjectNotFoundException.class);
-    Response response =  documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
+    Response response = documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     when(documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "")).thenThrow(RuntimeException.class);
-    response =  documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
+    response = documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
   }
-
 
   @Test
   public void testCreateFolder() throws Exception {
@@ -690,9 +734,10 @@ public class DocumentFileRestTest {
     Profile currentProfile = new Profile();
     currentProfile.setProperty(Profile.FULL_NAME, username);
     currentIdentity.setProfile(currentProfile);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
 
     List<FullTreeItem> children = new ArrayList<>();
-    FullTreeItem fullTreeItem = new FullTreeItem("11111222","test","path",null);
+    FullTreeItem fullTreeItem = new FullTreeItem("11111222", "test", "path", null);
     children.add(fullTreeItem);
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
@@ -702,55 +747,55 @@ public class DocumentFileRestTest {
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
 
-    Response response = documentFileRest.createFolder(null,null,null,"");
+    Response response = documentFileRest.createFolder(null, null, null, "");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("either_ownerId_or_parentid_is_mandatory", response.getEntity());
 
-    response = documentFileRest.createFolder("11111111",null,null,"");
+    response = documentFileRest.createFolder("11111111", null, null, "");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("Folder Name should not be empty", response.getEntity());
 
     AbstractNode folder = new FolderNode();
     when(documentFileStorage.createFolder(2L, "11111111", null, "222", userID)).thenReturn(folder);
-    response = documentFileRest.createFolder("11111111",null,2L,"222");
+    response = documentFileRest.createFolder("11111111", null, 2L, "222");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     when(documentFileStorage.createFolder(2L, "11111111", null, "test", userID)).thenReturn(folder);
-    response = documentFileRest.createFolder("11111111",null,2L,"test");
+    response = documentFileRest.createFolder("11111111", null, 2L, "test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
 
-    when(documentFileRest.createFolder("11111111",null,2L,"test")).thenThrow(RuntimeException.class);
-    response =  documentFileRest.createFolder("11111111",null,2L,"test");
+    when(documentFileRest.createFolder("11111111", null, 2L, "test")).thenThrow(RuntimeException.class);
+    response = documentFileRest.createFolder("11111111", null, 2L, "test");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
-    response = documentFileRest.renameDocument(null,null,"");
+    response = documentFileRest.renameDocument(null, null, "");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("either_ownerId_or_documentID_is_mandatory", response.getEntity());
 
-    response = documentFileRest.renameDocument("11111111",2L,"");
+    response = documentFileRest.renameDocument("11111111", 2L, "");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("Document Name should not be empty", response.getEntity());
 
     doNothing().when(documentFileStorage).renameDocument(2L, "11111111", "renameTest", userID);
-    Response response1 = documentFileRest.renameDocument("11111111",2L,"renameTest");
+    Response response1 = documentFileRest.renameDocument("11111111", 2L, "renameTest");
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
 
     when(documentFileStorage.getFullTreeData(2L, "11111111", userID)).thenReturn(children);
-    Response response2 = documentFileRest.getFullTreeData(2L,"11111111");
+    Response response2 = documentFileRest.getFullTreeData(2L, "11111111");
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
-    Response response3 = documentFileRest.moveDocument(null,null,"/Groups/spaces/test/Documents/test");
+    Response response3 = documentFileRest.moveDocument(null, null, "/Groups/spaces/test/Documents/test", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response3.getStatus());
     assertEquals("either_ownerId_or_documentID_is_mandatory", response3.getEntity());
 
-    Response response4 = documentFileRest.moveDocument("11111111",2L,null);
+    Response response4 = documentFileRest.moveDocument("11111111", 2L, null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response4.getStatus());
 
-    doNothing().when(documentFileStorage).moveDocument(2L, "11111111", "/Groups/spaces/test/Documents/test", userID);
-    Response response5 = documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test");
+    doNothing().when(documentFileStorage).moveDocument(2L, "11111111", "/Groups/spaces/test/Documents/test", userID, "keepBoth");
+    Response response5 = documentFileRest.moveDocument("11111111", 2L, "/Groups/spaces/test/Documents/test", "keepBoth");
     assertEquals(Response.Status.OK.getStatusCode(), response5.getStatus());
 
-    when(documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test")).thenThrow(RuntimeException.class);
-    response =  documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test");
+    when(documentFileRest.moveDocument("11111111",2L,"/Groups/spaces/test/Documents/test", null)).thenThrow(RuntimeException.class);
+    response = documentFileRest.moveDocument("11111111", 2L, "/Groups/spaces/test/Documents/test", null);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
   }
@@ -781,12 +826,12 @@ public class DocumentFileRestTest {
     file1.setMimeType(":file");
     file1.setSize(50);
 
-    Response response = documentFileRest.deleteDocument(null,"/document/oldFile",false, 6);
+    Response response = documentFileRest.deleteDocument(null, "/document/oldFile", false, 6);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("document_id_is_mandatory", response.getEntity());
 
-    doNothing().when(jcrDeleteFileStorage).deleteDocument("1","/document/oldFile",false, true, 6, root, currentOwnerId);
-    response = documentFileRest.deleteDocument("1","/document/oldFile",false, 6);
+    doNothing().when(jcrDeleteFileStorage).deleteDocument("1", "/document/oldFile", false, true, 6, root, currentOwnerId);
+    response = documentFileRest.deleteDocument("1", "/document/oldFile", false, 6);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
   }
 
@@ -826,12 +871,10 @@ public class DocumentFileRestTest {
   }
 
   @Test
-  @PrepareForTest({ RestUtils.class, EntityBuilder.class })
   public void testUpdatePermissions() throws Exception {
     DocumentFileService documentFileService = mock(DocumentFileService.class);
-    PowerMockito.mockStatic(RestUtils.class);
-    PowerMockito.mockStatic(EntityBuilder.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 =
+                                       new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     NodePermission nodePermission = mock(NodePermission.class);
@@ -841,9 +884,10 @@ public class DocumentFileRestTest {
     Response response1 = documentFileRest1.updatePermissions(nodeEntity);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
     nodeEntity.setAcl(nodePermissionEntity);
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     nodeEntity.setId("123");
-    when(EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager)).thenReturn(nodePermission);
+    mockEntityBuilder().when(() -> EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager))
+                  .thenReturn(nodePermission);
     doNothing().when(documentFileService).updatePermissions("123", nodePermission, 1L);
     Response response2 = documentFileRest1.updatePermissions(nodeEntity);
     assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response2.getStatus());
@@ -854,30 +898,29 @@ public class DocumentFileRestTest {
 
   @Test
   public void testCreateShortcut() throws Exception {
+    mockRestUtils().when(() -> RestUtils.getCurrentUser()).thenReturn("user");
     DocumentFileService documentFileService = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
 
-    Response response = documentFileRest1.createShortcut(null,null);
+    Response response = documentFileRest1.createShortcut(null, null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("Document's id should not be empty", response.getEntity());
-    response = documentFileRest1.createShortcut("11111111",null);
+    response = documentFileRest1.createShortcut("11111111", null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("Document destination path should not be empty", response.getEntity());
 
-    doNothing().when(documentFileStorage).createShortcut("11111111", "/Groups/spaces/test/Documents/test");
-    response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
+    doNothing().when(documentFileStorage).createShortcut("11111111", "/Groups/spaces/test/Documents/test", "user", null);
+    response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
 
 
-    when(documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test")).thenThrow(RuntimeException.class);
-    response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test");
+    when(documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test", null)).thenThrow(RuntimeException.class);
+    response = documentFileRest.createShortcut("11111111", "/Groups/spaces/test/Documents/test", null);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
   @Test
-  @PrepareForTest(RestUtils.class)
   public void getFileVersions() {
-    PowerMockito.mockStatic(RestUtils.class);
     FileVersion fileVersion = new FileVersion();
     fileVersion.setCurrent(true);
     fileVersion.setTitle("test.docx");
@@ -890,11 +933,11 @@ public class DocumentFileRestTest {
     versions.add(fileVersion);
     Response response = documentFileRest.getFileVersions(null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
-    when(RestUtils.getCurrentUser()).thenReturn("user");
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUser()).thenReturn("user");
     response = documentFileRest.getFileVersions("3654654651");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     when(documentFileService.getFileVersions("655645ezfefzef6z54", "user")).thenReturn(versions);
     response = documentFileRest.getFileVersions("qsdqs54dq65sd");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
@@ -914,21 +957,19 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     response = documentFileRest.getNewName("123", "patg", 1L, "125");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    when(documentFileService.getNewName(1L,"123","path", "test")).thenReturn("new");
+    when(documentFileService.getNewName(1L, "123", "path", "test")).thenReturn("new");
     response = documentFileRest.getNewName("123", "path", 1L, "test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-    when(documentFileService.getNewName(1L,"123","path", "test")).thenThrow(RuntimeException.class);
+    when(documentFileService.getNewName(1L, "123", "path", "test")).thenThrow(RuntimeException.class);
     response = documentFileRest.getNewName("123", "path", 1L, "test");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
   @Test
-  @PrepareForTest({ RestUtils.class })
   public void updateDocumentDescription() throws IllegalAccessException, RepositoryException {
-    PowerMockito.mockStatic(RestUtils.class);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     doNothing().when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
     Response response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
     assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
@@ -938,29 +979,25 @@ public class DocumentFileRestTest {
   }
 
   @Test
-  @PrepareForTest({ RestUtils.class })
   public void getFullTreeData() {
-    PowerMockito.mockStatic(RestUtils.class);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
-    Response response =  documentFileRest1.getFullTreeData(null, null);
+    Response response = documentFileRest1.getFullTreeData(null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(IllegalAccessException.class);
-    response =  documentFileRest1.getFullTreeData(1L, "123");
+    response = documentFileRest1.getFullTreeData(1L, "123");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(ObjectNotFoundException.class);
-    response =  documentFileRest1.getFullTreeData(1L, "123");
+    response = documentFileRest1.getFullTreeData(1L, "123");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(RuntimeException.class);
-    response =  documentFileRest1.getFullTreeData(1L, "123");
+    response = documentFileRest1.getFullTreeData(1L, "123");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
   @Test
-  @PrepareForTest({ RestUtils.class })
   public void updateVersionSummary() {
-    PowerMockito.mockStatic(RestUtils.class);
-    when(RestUtils.getCurrentUser()).thenReturn("user");
+    mockRestUtils().when(() -> RestUtils.getCurrentUser()).thenReturn("user");
     Map<String, String> summary = new HashMap<>();
     summary.put("value", "test");
     FileVersion fileVersion = new FileVersion();
@@ -977,10 +1014,10 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     response = documentFileRest1.updateVersionSummary(summary, "1225", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
     response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     when(documentFileService1.updateVersionSummary(anyString(), anyString(), anyString(), anyString())).thenReturn(fileVersion);
     response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
@@ -993,28 +1030,24 @@ public class DocumentFileRestTest {
   }
 
   @Test
-  @PrepareForTest({ RestUtils.class })
   public void shouldThrowServerErrorWhenUpdateSummary() {
-    PowerMockito.mockStatic(RestUtils.class);
-    when(RestUtils.getCurrentUser()).thenReturn("user");
+    mockRestUtils().when(() -> RestUtils.getCurrentUser()).thenReturn("user");
     Map<String, String> summary = new HashMap<>();
     summary.put("value", "test");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     when(documentFileService1.updateVersionSummary(anyString(),
-            anyString(),
-            anyString(),
-            anyString())).thenThrow(RuntimeException.class);
+                                                   anyString(),
+                                                   anyString(),
+                                                   anyString())).thenThrow(RuntimeException.class);
     Response response = documentFileRest1.updateVersionSummary(summary, "123", "123336");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
   @Test
-  @PrepareForTest({ RestUtils.class })
   public void restoreVersion() {
-    PowerMockito.mockStatic(RestUtils.class);
-    when(RestUtils.getCurrentUser()).thenReturn("user");
+    mockRestUtils().when(() -> RestUtils.getCurrentUser()).thenReturn("user");
     FileVersion fileVersion = new FileVersion();
     fileVersion.setCurrent(true);
     fileVersion.setTitle("test.docx");
@@ -1027,15 +1060,50 @@ public class DocumentFileRestTest {
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
     Response response = documentFileRest1.restoreVersion(null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
     response = documentFileRest1.restoreVersion("123");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-    when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     when(documentFileService1.restoreVersion(anyString(), anyString())).thenReturn(fileVersion);
     response = documentFileRest1.restoreVersion("123");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-    doThrow(new RuntimeException()).when(documentFileService1).restoreVersion(anyString(),anyString());
+    doThrow(new RuntimeException()).when(documentFileService1).restoreVersion(anyString(), anyString());
     response = documentFileRest1.restoreVersion("123");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
+
+  @Test
+  public void testRenameDocumentWithExistTitle() throws Exception {
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).renameDocument(1L, "123", "test", 2L);
+    Response response = documentFileRest1.renameDocument("123", 1L, "test");
+    assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void testMoveWithExistTitle() throws Exception {
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).moveDocument(1L, "123", "test", 2L, "");
+    Response response = documentFileRest1.moveDocument("123", 1L, "test", "");
+    assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
+  }
+
+  private MockedStatic<RestUtils> mockRestUtils() {
+    if (REST_UTILS == null) {
+      REST_UTILS = mockStatic(RestUtils.class);
+    }
+    return REST_UTILS;
+  }
+
+  private MockedStatic<EntityBuilder> mockEntityBuilder() {
+    if (ENTITY_BUILDER == null) {
+      ENTITY_BUILDER = mockStatic(EntityBuilder.class);
+    }
+    return ENTITY_BUILDER;
+  }
+
 }
