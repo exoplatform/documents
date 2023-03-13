@@ -16,7 +16,7 @@
         </v-icon>
       </v-btn>
     </template>
-    <span class="center">{{ icon.title }}</span>
+    <span class="center">{{ sharedDocumentSuspended ? sharedDocumentSuspendedLabel : icon.title }}</span>
   </v-tooltip>
 </template>
 
@@ -34,6 +34,7 @@ export default {
   },
   data: () => ({
     unit: 'bytes',
+    sharedDocumentSuspended: true,
   }),
   computed: {
     icon() {
@@ -92,11 +93,19 @@ export default {
         }
       }
       return false;
+    },
+    sharedDocumentSuspendedLabel(){
+      return this.$t('documents.label.share.document.suspend');
     }
+  },
+  created() {
+    this.$transferRulesService.getDocumentsTransferRules().then(rules => {
+      this.sharedDocumentSuspended = rules.sharedDocumentStatus === 'true';
+    });
   },
   methods: {
     changeVisibility() {
-      if (!this.file.acl.canEdit) {
+      if (!this.file.acl.canEdit || this.sharedDocumentSuspended) {
         return;
       }
       this.$root.$emit('open-visibility-drawer', this.file);
