@@ -16,7 +16,29 @@
 */
 package org.exoplatform.documents.storage.jcr;
 
-import org.exoplatform.container.PortalContainer;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.Property;
+import javax.jcr.Session;
+import javax.jcr.Workspace;
+import javax.jcr.nodetype.NodeType;
+
+import org.gatein.pc.api.PortletInvokerException;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.container.xml.PropertiesParam;
 import org.exoplatform.container.xml.ValueParam;
@@ -35,19 +57,6 @@ import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
-import org.gatein.pc.api.PortletInvokerException;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import javax.jcr.*;
-import javax.jcr.nodetype.NodeType;
-
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.class)
 public class TrashStorageImplTest {
@@ -69,8 +78,6 @@ public class TrashStorageImplTest {
 
   private ListenerService listenerService;
 
-  private InitParams initParams;
-
   private TrashStorageImpl trashStorage;
 
 
@@ -84,7 +91,6 @@ public class TrashStorageImplTest {
     repositoryEntry = mock(RepositoryEntry.class);
     sessionProvider = mock(SessionProvider.class);
     session = mock(Session.class);
-    initParams = mock(InitParams.class);
     trashStorage = new TrashStorageImpl(repositoryService, sessionProviderService, listenerService, getParams());
   }
   @Test

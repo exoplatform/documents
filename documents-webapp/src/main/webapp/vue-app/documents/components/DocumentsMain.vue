@@ -581,15 +581,11 @@ export default {
       if (this.userId) {
         filter.userId = this.userId;
       }
-      if (this.sortField === 'favorite') {
-        filter.ascending = this.ascending = false;
-      } else {
-        filter.ascending = this.ascending;
-      }
-      if (options?.filterPrimary==='favorites') {
+      filter.ascending = this.ascending;
+      if (options?.primaryFilter==='favorites') {
         this.isFavorites = true;
       }
-      if (options?.filterPrimary==='all') {
+      if (options?.primaryFilter==='all') {
         this.isFavorites  =  false;
       }
       if (options?.symlinkId) {
@@ -609,10 +605,10 @@ export default {
         .then(files => {
           files = this.sortField === 'favorite' ? files && files.sort((file1, file2) => {
             if (file1.favorite === false && file2.favorite === true) {
-              return this.ascending ? 1 : -1;
+              return this.ascending ? -1 : 1;
             }
             if (file1.favorite === true && file2.favorite === false) {
-              return this.ascending ? -1 : 1;
+              return this.ascending ? 1 : -1;
             }
             return 0;
           }) || files : files;

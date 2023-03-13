@@ -16,50 +16,63 @@
  */
 package org.exoplatform.documents.storage.jcr.util;
 
-import org.apache.commons.lang3.StringUtils;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.util.Calendar;
+import java.util.List;
+
+import javax.jcr.NodeIterator;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+import javax.jcr.Value;
+import javax.jcr.ValueFormatException;
+import javax.jcr.nodetype.NodeType;
+import javax.jcr.version.Version;
+
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.MockedStatic;
+import org.mockito.junit.MockitoJUnitRunner;
+
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.FileNode;
-
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
-import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.value.StringValue;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-import javax.jcr.*;
-import javax.jcr.nodetype.NodeType;
-import javax.jcr.version.Version;
-
-import java.io.IOException;
-import java.util.*;
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore({ "javax.management.*" })
-@PrepareForTest({ CommonsUtils.class})
+@RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentsUtilTest {
-  
+
+  private static final MockedStatic<CommonsUtils>        COMMONS_UTILS_UTIL    = mockStatic(CommonsUtils.class);
+
+  @AfterClass
+  public static void afterRunBare() throws Exception { // NOSONAR
+    COMMONS_UTILS_UTIL.close();
+  }
+
   @Before
   public void setUp() throws Exception {
-    PowerMockito.mockStatic(CommonsUtils.class);
     JCRDeleteFileStorage jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
-    when(CommonsUtils.getService(JCRDeleteFileStorage.class)).thenReturn(jcrDeleteFileStorage);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(JCRDeleteFileStorage.class)).thenReturn(jcrDeleteFileStorage);
   }
+
   @Test
   public void testRetrieveFileProperties() throws IOException, RepositoryException {
     IdentityManager identityManager = mock(IdentityManager.class);

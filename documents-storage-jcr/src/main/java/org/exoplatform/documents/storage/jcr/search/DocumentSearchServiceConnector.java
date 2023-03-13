@@ -29,7 +29,6 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
-import org.exoplatform.commons.api.search.data.SearchResult;
 import org.exoplatform.commons.search.es.ElasticSearchException;
 import org.exoplatform.commons.search.es.client.ElasticSearchingClient;
 import org.exoplatform.commons.utils.IOUtil;
@@ -37,6 +36,7 @@ import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.container.configuration.ConfigurationManager;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.container.xml.PropertiesParam;
+import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
