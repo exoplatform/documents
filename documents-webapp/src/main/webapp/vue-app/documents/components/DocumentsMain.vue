@@ -4,131 +4,133 @@
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
-    <div
-      class="pa-3 white"
-      @dragover.prevent
-      @drop.prevent
-      @dragstart.prevent>
-      <documents-header
-        :files-size="files.length"
-        :selected-view="selectedView"
-        :can-add="canAdd"
-        :query="query"
-        :primary-filter="primaryFilter"
-        :is-mobile="isMobile" 
-        class="py-2" />
-      <div v-if="searchResult && !loading">
-        <documents-no-result-body
-          :is-mobile="isMobile"
-          :show-extend-filter="showExtendFilter"
-          :query="query" />
-      </div>
+    <div @mouseover="hideOverlay">
       <div
-        v-else-if="!filesLoad && !loading && selectedView == 'folder' "
-        @drop="dragFile"
-        @dragover="startDrag">
-        <documents-no-body-folder
-          :query="query"
-          :is-mobile="isMobile" />
-      </div>
-      <div v-else-if="!filesLoad && !loading">
-        <documents-no-body
-          :query="query"
-          :is-mobile="isMobile" />
-      </div>
-      <div
-        v-else
-        @drop="dragFile"
-        @dragover="startDrag">
-        <documents-body
-          v-if="optionsLoaded"
-          :view-extension="selectedViewExtension"
-          :files="files"
-          :groups-sizes="groupsSizes"
-          :page-size="pageSize"
-          :offset="offset"
-          :limit="limit"
-          :has-more="hasMore"
-          :sort-field="sortField"
-          :ascending="ascending"
-          :initialized="initialized"
-          :loading="loading"
-          :query="query"
-          :extended-search="extendedSearch"
-          :show-extend-filter="showExtendFilter"
-          :primary-filter="primaryFilter"
+        class="pa-3 white"
+        @dragover.prevent
+        @drop.prevent
+        @dragstart.prevent>
+        <documents-header
+          :files-size="files.length"
           :selected-view="selectedView"
-          :is-mobile="isMobile" />
-        <exo-document-notification-alerts />
+          :can-add="canAdd"
+          :query="query"
+          :primary-filter="primaryFilter"
+          :is-mobile="isMobile" 
+          class="py-2" />
+        <div v-if="searchResult && !loading">
+          <documents-no-result-body
+            :is-mobile="isMobile"
+            :show-extend-filter="showExtendFilter"
+            :query="query" />
+        </div>
+        <div
+          v-else-if="!filesLoad && !loading && selectedView == 'folder' "
+          @drop="dragFile"
+          @dragover="startDrag">
+          <documents-no-body-folder
+            :query="query"
+            :is-mobile="isMobile" />
+        </div>
+        <div v-else-if="!filesLoad && !loading">
+          <documents-no-body
+            :query="query"
+            :is-mobile="isMobile" />
+        </div>
+        <div
+          v-else
+          @drop="dragFile"
+          @dragover="startDrag">
+          <documents-body
+            v-if="optionsLoaded"
+            :view-extension="selectedViewExtension"
+            :files="files"
+            :groups-sizes="groupsSizes"
+            :page-size="pageSize"
+            :offset="offset"
+            :limit="limit"
+            :has-more="hasMore"
+            :sort-field="sortField"
+            :ascending="ascending"
+            :initialized="initialized"
+            :loading="loading"
+            :query="query"
+            :extended-search="extendedSearch"
+            :show-extend-filter="showExtendFilter"
+            :primary-filter="primaryFilter"
+            :selected-view="selectedView"
+            :is-mobile="isMobile" />
+          <exo-document-notification-alerts />
+        </div>
       </div>
-    </div>
-    <documents-visibility-drawer :is-mobile="isMobile" />
-    <document-tree-selector-drawer :is-mobile="isMobile" />
-    <documents-info-drawer
-      :selected-view="selectedView"
-      :is-mobile="isMobile" />
-    <v-alert
-      v-model="alert"
-      :icon="false"
-      :colored-border="isMobile"
-      :border="isMobile && !isAlertActionRunning? 'top' : ''"
-      :color="alertType"
-      :type="!isMobile? alertType: ''"
-      :class="isMobile? 'documents-alert-mobile': ''"
-      :dismissible="!isMobile">
-      <v-progress-linear
-        v-if="isAlertActionRunning"
-        :active="isAlertActionRunning"
-        :height="isMobile? '8px': '4px'"
-        :indeterminate="true"
-        :class="progressAlertClassMobile"
-        :color="progressAlertColor" />
-      {{ message }}
-      <v-btn
-        v-for="action in alertActions"
-        :key="action.event"
-        :disabled="isAlertActionRunning"
-        plain
-        text
-        color="primary"
-        @click="emitAlertAction(action)">
-        {{ $t(`document.conflicts.action.${action.event}`) }}
-      </v-btn>
-      <template #close="{ toggle }">
+      <documents-visibility-drawer :is-mobile="isMobile" />
+      <document-tree-selector-drawer :is-mobile="isMobile" />
+      <documents-info-drawer
+        :selected-view="selectedView"
+        :is-mobile="isMobile" />
+      <v-alert
+        v-model="alert"
+        :icon="false"
+        :colored-border="isMobile"
+        :border="isMobile && !isAlertActionRunning? 'top' : ''"
+        :color="alertType"
+        :type="!isMobile? alertType: ''"
+        :class="isMobile? 'documents-alert-mobile': ''"
+        :dismissible="!isMobile">
+        <v-progress-linear
+          v-if="isAlertActionRunning"
+          :active="isAlertActionRunning"
+          :height="isMobile? '8px': '4px'"
+          :indeterminate="true"
+          :class="progressAlertClassMobile"
+          :color="progressAlertColor" />
+        {{ message }}
         <v-btn
-          v-if="!isMobile"
-          icon
-          @click="handleAlertClose(toggle)">
-          <v-icon>
-            mdi-close-circle
-          </v-icon>
+          v-for="action in alertActions"
+          :key="action.event"
+          :disabled="isAlertActionRunning"
+          plain
+          text
+          color="primary"
+          @click="emitAlertAction(action)">
+          {{ $t(`document.conflicts.action.${action.event}`) }}
         </v-btn>
-      </template>
-    </v-alert>
-    <folder-treeview-drawer
-      ref="folderTreeDrawer"
-      :is-mobile="isMobile" />
-    <documents-app-reminder :is-mobile="isMobile" />
-    <documents-actions-menu-mobile :is-mobile="isMobile" />
-    <documents-filter-menu-mobile
-      :primary-filter="primaryFilter"
-      :query="query"
-      :extended-search="extendedSearch"
-      :is-mobile="isMobile" />
-    <version-history-drawer
-      :can-manage="canManageVersions"
-      :enable-edit-description="true"
-      :versions="versions"
-      :is-loading="isLoadingVersions"
-      :show-load-more="showLoadMoreVersions"
-      :is-mobile="isMobile" 
-      @drawer-closed="versionsDrawerClosed"
-      @open-version="showVersionPreview"
-      @restore-version="restoreVersion"
-      @version-update-description="updateVersionSummary"
-      @load-more="loadMoreVersions"
-      ref="documentVersionHistory" />
-  </v-app>
+        <template #close="{ toggle }">
+          <v-btn
+            v-if="!isMobile"
+            icon
+            @click="handleAlertClose(toggle)">
+            <v-icon>
+              mdi-close-circle
+            </v-icon>
+          </v-btn>
+        </template>
+      </v-alert>
+      <folder-treeview-drawer
+        ref="folderTreeDrawer"
+        :is-mobile="isMobile" />
+      <documents-app-reminder :is-mobile="isMobile" />
+      <documents-actions-menu-mobile :is-mobile="isMobile" />
+      <documents-filter-menu-mobile
+        :primary-filter="primaryFilter"
+        :query="query"
+        :extended-search="extendedSearch"
+        :is-mobile="isMobile" />
+      <version-history-drawer
+        :can-manage="canManageVersions"
+        :enable-edit-description="true"
+        :versions="versions"
+        :is-loading="isLoadingVersions"
+        :show-load-more="showLoadMoreVersions"
+        :is-mobile="isMobile" 
+        @drawer-closed="versionsDrawerClosed"
+        @open-version="showVersionPreview"
+        @restore-version="restoreVersion"
+        @version-update-description="updateVersionSummary"
+        @load-more="loadMoreVersions"
+        ref="documentVersionHistory" />
+      </div>
+    </v-app>
 </template>
 <script>
 
@@ -181,6 +183,7 @@ export default {
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     isAlertActionRunning: false,
     documentsToBeDeleted: [],
+    showOverlay: false,
   }),
   computed: {
     progressAlertColor() {
@@ -1077,15 +1080,23 @@ export default {
       const isFile = item && item.type !== '';
       if (this.canAdd && isFile){
         this.openDrawer(e.dataTransfer.files);
+        this.showOverlay = false;
         this.$root.$emit('hide-upload-overlay');
       }
     },
     startDrag(e){
+      this.showOverlay = true;
       const item = e.dataTransfer.items[0];
       //folder haven't type
       const isFile = item && item.type !== '';
       if (this.canAdd && isFile){
         this.$root.$emit('show-upload-overlay');
+      }
+    },
+    hideOverlay() {
+      if (this.showOverlay){
+        this.showOverlay = false;
+        this.$root.$emit('hide-upload-overlay');
       }
     },
     canAddDocument(){
