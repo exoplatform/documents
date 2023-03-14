@@ -9,11 +9,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
-import javax.jcr.Node;
-import javax.jcr.Property;
-import javax.jcr.RepositoryException;
-import javax.jcr.Value;
+import javax.jcr.*;
 
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,13 +23,8 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.rest.util.EntityBuilder;
-import org.exoplatform.services.jcr.RepositoryService;
-import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
-import org.exoplatform.services.jcr.core.ManageableRepository;
-import org.exoplatform.services.jcr.ext.app.SessionProviderService;
-import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
@@ -55,24 +48,6 @@ public class NotificationUtilsTest {
 
   @Mock
   private SpaceService                             spaceService;
-
-    @Mock
-    SessionProviderService sessionProviderService;
-
-    @Mock
-    RepositoryService repositoryService;
-
-    @Mock
-    RepositoryEntry repositoryEntry;
-
-    @Mock
-    SessionProvider sessionProvider;
-
-    @Mock
-    ManageableRepository   repository;
-
-    @Mock
-    ExtendedSession session;
 
   @AfterClass
   public static void afterRunBare() throws Exception { // NOSONAR
@@ -111,20 +86,15 @@ public class NotificationUtilsTest {
     Space space = new Space();
     space.setGroupId("/spaces/spacename");
     when(spaceService.getSpaceByPrettyName("space_name")).thenReturn(space);
-    when(CommonsUtils.getService(SessionProviderService.class)).thenReturn(sessionProviderService);
-    when(CommonsUtils.getService(RepositoryService.class)).thenReturn(repositoryService);
-    when(sessionProviderService.getSessionProvider(any())).thenReturn(sessionProvider);
-    when(repositoryService.getCurrentRepository()).thenReturn(repository);
-    when(repository.getConfiguration()).thenReturn(repositoryEntry);
-    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
-    when(sessionProvider.getSession(any(), any())).thenReturn(session);
+    SessionImpl session = Mockito.mock(SessionImpl.class);
     Node node = Mockito.mock(NodeImpl.class);
     Node targetNode = Mockito.mock(NodeImpl.class);
     Property property = Mockito.mock(Property.class);
     when(((NodeImpl) node).getIdentifier()).thenReturn("123");
+    when(node.getSession()).thenReturn(session);
     when(node.getProperty(EXO_SYMLINK_UUID)).thenReturn(property);
     when(property.getString()).thenReturn("id123");
-    when(session.getNodeByIdentifier(anyString())).thenReturn(targetNode);
+    when(session.getNodeByUUID(anyString())).thenReturn(targetNode);
     when(targetNode.isNodeType(NT_FILE)).thenReturn(true);
     String link = NotificationUtils.getSharedDocumentLink(node, null,null);
     assertEquals("http://domain/portal/dw/documents/Private/Documents?documentPreviewId=123", link);

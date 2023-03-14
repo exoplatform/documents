@@ -18,11 +18,7 @@ package org.exoplatform.documents.notification.utils;
 
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.rest.util.EntityBuilder;
-import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ExtendedNode;
-import org.exoplatform.services.jcr.core.ExtendedSession;
-import org.exoplatform.services.jcr.ext.app.SessionProviderService;
-import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
@@ -108,20 +104,10 @@ public class NotificationUtils {
     return identity.getProfile();
   }
 
-  public static boolean isNodeFile(Node node) {
-    try {
-      SessionProviderService sessionProviderService = CommonsUtils.getService(SessionProviderService.class);
-      RepositoryService repositoryService = CommonsUtils.getService(RepositoryService.class);
-      SessionProvider sessionProvider = sessionProviderService.getSessionProvider(null);
-      Session session = sessionProvider.getSession(
-                                                   repositoryService.getCurrentRepository()
-                                                                    .getConfiguration()
-                                                                    .getDefaultWorkspaceName(),
-                                                   repositoryService.getCurrentRepository());
-      Node targetNode = ((ExtendedSession) session).getNodeByIdentifier(node.getProperty(EXO_SYMLINK_UUID).getString());
+  public static boolean isNodeFile(Node node) throws RepositoryException {
+      Session session = node.getSession();
+      Node targetNode = session.getNodeByUUID(node.getProperty(EXO_SYMLINK_UUID).getString());
       return targetNode.isNodeType(NT_FILE);
-    } catch (RepositoryException e) {
-      return false;
-    }
+
   }
 }
