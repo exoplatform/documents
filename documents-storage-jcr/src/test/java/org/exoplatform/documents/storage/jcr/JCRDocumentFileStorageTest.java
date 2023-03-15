@@ -299,6 +299,7 @@ public class JCRDocumentFileStorageTest {
                                                            nodeIterator,
                                                            identity,
                                                            spaceService,
+                                                           100,
                                                            false))
                       .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
@@ -339,6 +340,7 @@ public class JCRDocumentFileStorageTest {
                                                            nodeIterator1,
                                                            identity,
                                                            spaceService,
+                                                           100,
                                                            false))
                       .thenCallRealMethod();
     List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
@@ -359,6 +361,7 @@ public class JCRDocumentFileStorageTest {
                                                            nodeIterator2,
                                                            identity,
                                                            spaceService,
+                                                           100,
                                                            false))
                       .thenCallRealMethod();
 

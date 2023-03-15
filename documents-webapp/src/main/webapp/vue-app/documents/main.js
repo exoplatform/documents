@@ -39,7 +39,6 @@ const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale
 
 Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
   Vue.prototype.$shareDocumentSuspended = rules.sharedDocumentStatus === 'true';
-  console.log(`value is ${Vue.prototype.shareDocumentSuspended}`);
 });
 export function init() {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {

@@ -172,6 +172,7 @@ public class JCRDocumentsUtil {
                                            NodeIterator nodeIterator,
                                            Identity aclIdentity,
                                            SpaceService spaceService,
+                                           int limit,
                                            boolean includeHiddenFiles) {
     List<AbstractNode> fileNodes = new ArrayList<>();
     while (nodeIterator.hasNext()) {
@@ -196,6 +197,9 @@ public class JCRDocumentsUtil {
           FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
           fileNode.setMimeType(getMimeType(sourceNode));
           fileNodes.add(fileNode);
+        }
+        if(limit > 0 && fileNodes.size() == limit) {
+          break;
         }
       } catch (RepositoryException e) {
         LOG.warn("Error getting Folder Node for search result with path {}", node, e);

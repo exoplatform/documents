@@ -319,7 +319,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           //((QueryImpl)jcrQuery).setLimit(limit);
           QueryResult queryResult = jcrQuery.execute();
           NodeIterator nodeIterator = queryResult.getNodes();
-          List<AbstractNode> fileItems = toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, includeHiddenFiles);
+          List<AbstractNode> fileItems = toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, limit, includeHiddenFiles);
           if(fileItems.size() < limit) {
             limit = fileItems.size();
           }
