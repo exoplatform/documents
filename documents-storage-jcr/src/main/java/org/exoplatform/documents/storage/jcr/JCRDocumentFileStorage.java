@@ -315,11 +315,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String sortDirection = getSortDirection(filter);
           String statement = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, includeHiddenFiles);
           Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
-          ((QueryImpl)jcrQuery).setOffset(offset);
-          ((QueryImpl)jcrQuery).setLimit(limit);
+          //((QueryImpl)jcrQuery).setOffset(offset);
+          //((QueryImpl)jcrQuery).setLimit(limit);
           QueryResult queryResult = jcrQuery.execute();
           NodeIterator nodeIterator = queryResult.getNodes();
-          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, includeHiddenFiles);
+          List<AbstractNode> fileItems = toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, includeHiddenFiles);
+          if(fileItems.size() < limit) {
+            limit = fileItems.size();
+          }
+          return fileItems.subList(0, limit);
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -651,7 +655,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       //clean node name
       name = URLDecoder.decode(name, "UTF-8");
       if (name.indexOf('.') == -1) {
-        String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE) && node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+        String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE)
+            && node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString()
+                                                             : node.getName();
         if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
           String ext = oldName.substring(oldName.lastIndexOf('.'));
           title = title.concat(ext);
@@ -673,15 +679,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         node.addMixin(NodeTypeConstants.EXO_SORTABLE);
       }
-      if (!node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-        node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
-      }
       node.save();
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
       String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat(SLASH).concat(name);
       node.getSession().getWorkspace().move(srcPath, destPath);
+      if (!node.isNodeType(NodeTypeConstants.EXO_RSS_ENABLE) && node.canAddMixin(NodeTypeConstants.EXO_RSS_ENABLE)) {
+        node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
+      }
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.setProperty(NodeTypeConstants.EXO_NAME, name);
       node.save();
@@ -955,7 +961,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             .append(folderPath)
             .append("/%/%' ")
             .append(hiddenableQuery)
-            .append(" ORDER BY ")
+            .append(" ORDER BY jcr:primaryType DESC,")
             .append(sortField)
             .append(" ")
             .append(sortDirection)

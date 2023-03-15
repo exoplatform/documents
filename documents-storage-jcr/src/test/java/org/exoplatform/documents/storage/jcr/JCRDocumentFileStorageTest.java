@@ -312,8 +312,10 @@ public class JCRDocumentFileStorageTest {
     assertEquals(2, nodes.size());
     when(nodeIterator.hasNext()).thenReturn(true, false);
     when(nodeIterator.nextNode()).thenReturn(folderNode2);
+    nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
+    assertEquals(1, nodes.size());// the list contains just one element and should have one page
     nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
-    assertEquals(1, nodes.size());
+    assertEquals(0, nodes.size());// the list contains just one element and should have one page
 
     // case of folderNodeId empty
     filter.setParentFolderId(null);
@@ -343,7 +345,7 @@ public class JCRDocumentFileStorageTest {
     assertEquals(2, nodes1.size());
     when(nodeIterator1.hasNext()).thenReturn(true, false);
     when(nodeIterator1.nextNode()).thenReturn(folderNode2);
-    nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
+    nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 4);
     assertEquals(1, nodes1.size());
 
     // case folder with specific name

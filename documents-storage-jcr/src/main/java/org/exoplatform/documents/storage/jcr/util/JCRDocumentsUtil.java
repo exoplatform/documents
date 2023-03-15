@@ -202,6 +202,15 @@ public class JCRDocumentsUtil {
       }
     }
 
+    fileNodes.sort((o1, o2) -> {
+      if ((o1.isFolder() && o2.isFolder()) || (!o1.isFolder() && !o2.isFolder())) {
+        return o1.getName().compareTo(o2.getName());
+      } else if (o1.isFolder()) {
+        return -1;
+      } else {
+        return 1;
+      }
+    });
     return fileNodes;
   }
 
