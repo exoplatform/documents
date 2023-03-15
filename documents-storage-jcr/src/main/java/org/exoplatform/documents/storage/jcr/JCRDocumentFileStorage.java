@@ -961,7 +961,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             .append(folderPath)
             .append("/%/%' ")
             .append(hiddenableQuery)
-            .append(" ORDER BY jcr:primaryType DESC,")
+            .append(" ORDER BY ")
             .append(sortField)
             .append(" ")
             .append(sortDirection)
