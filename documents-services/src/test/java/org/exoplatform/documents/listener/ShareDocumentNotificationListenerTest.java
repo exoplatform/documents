@@ -9,6 +9,7 @@ import org.exoplatform.commons.notification.impl.NotificationContextImpl;
 import org.exoplatform.commons.notification.impl.setting.NotificationPluginContainer;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
+import org.exoplatform.documents.notification.utils.NotificationUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.security.ConversationState;
@@ -32,6 +33,7 @@ import javax.jcr.Node;
 import javax.jcr.Property;
 import javax.jcr.Value;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.mock;
@@ -39,7 +41,7 @@ import static org.powermock.api.mockito.PowerMockito.verifyStatic;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore({ "javax.management.*" })
-@PrepareForTest({CommonsUtils.class, ConversationState.class, NotificationContextImpl.class, PluginKey.class, LinkProvider.class})
+@PrepareForTest({CommonsUtils.class, ConversationState.class, NotificationContextImpl.class, PluginKey.class, LinkProvider.class, NotificationUtils.class})
 public class ShareDocumentNotificationListenerTest {
 
 
@@ -75,6 +77,7 @@ public class ShareDocumentNotificationListenerTest {
     PowerMockito.mockStatic(CommonsUtils.class);
     PowerMockito.mockStatic(LinkProvider.class);
     PowerMockito.mockStatic(PluginKey.class);
+    PowerMockito.mockStatic(NotificationUtils.class);
     ConversationState conversationState = mock(ConversationState.class);
     when(ConversationState.getCurrent()).thenReturn(conversationState);
     org.exoplatform.services.security.Identity identity = Mockito.mock(org.exoplatform.services.security.Identity.class);
@@ -113,6 +116,9 @@ public class ShareDocumentNotificationListenerTest {
     when(targetNode.getProperty("exo:title")).thenReturn(propertyTitle);
     when(targetIdentity.getRemoteId()).thenReturn("user");
     when(targetNode.hasProperty("exo:uuid")).thenReturn(true);
+    when(NotificationUtils.isNodeFile(any(Node.class))).thenReturn(true);
+    when(NotificationUtils.getSharedDocumentLink(any(Node.class), any(), any())).thenReturn("document/link");
+    when(NotificationUtils.getDocumentTitle(any(Node.class))).thenReturn("document");
     shareDocumentNotificationListener.onEvent(event);
     verifyStatic(PluginKey.class, times(1));
     PluginKey.key(AddDocumentCollaboratorPlugin.ID);
