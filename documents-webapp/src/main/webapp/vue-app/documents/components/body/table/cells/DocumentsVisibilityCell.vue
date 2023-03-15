@@ -2,7 +2,8 @@
   <v-tooltip bottom>
     <template #activator="{ on, attrs }">
       <v-btn
-        class="ms-2 visibility-btn"
+        class="visibility-btn"
+        :class="btnClass"
         icon
         @click="changeVisibility">
         <v-icon
@@ -30,7 +31,11 @@ export default {
     selectedView: {
       type: String,
       default: null
-    }
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
   data: () => ({
     unit: 'bytes',
@@ -92,6 +97,9 @@ export default {
         }
       }
       return false;
+    },
+    btnClass(){
+      return this.isMobile && 'ms-2' || 'me-4' ;
     }
   },
   methods: {
