@@ -555,11 +555,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (ownerIdentity !=null && ownerIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
         Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
         String groupId = space.getGroupId();
-        List<AccessControlEntry> canUploadPermession = ((ExtendedNode) node).getACL().getPermissionEntries().stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId) && accessControlEntry.getPermission().equals(PermissionType.ADD_NODE)).toList();
-        if (canUploadPermession.isEmpty()){
-          throw new IllegalAccessException();
+        List<AccessControlEntry> canAddNodePermession = ((ExtendedNode) node).getACL().getPermissionEntries().stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId) && accessControlEntry.getPermission().equals(PermissionType.ADD_NODE)).toList();
+        if (canAddNodePermession.isEmpty()){
+          throw new IllegalAccessException("Permission to add folder is missing");
         }
       }
+      //no need to this object later make it eligible to the garbage collector
+      ownerIdentity = null;
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
@@ -572,7 +574,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.save();
       return toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService);
     } catch (IllegalAccessException exception){
-      throw new IllegalAccessException();
+      throw new IllegalAccessException(exception.getMessage());
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {

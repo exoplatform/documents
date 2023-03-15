@@ -428,7 +428,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                  userIdentityId);
       return Response.ok(abstractNodeEntity).build();
     } catch (IllegalAccessException e) {
-      LOG.warn("Not authorized to create folder", e);
+      LOG.warn(e.getMessage());
       return Response.status(HTTPStatus.UNAUTHORIZED).build();
     } catch (ObjectAlreadyExistsException e) {
       LOG.warn("Folder with same name already exists", e);
