@@ -54,12 +54,12 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
     NotificationContext ctx = NotificationContextImpl.cloneInstance();
     String documentLink = null;
     if (targetNode.hasProperty(EXO_SYMLINK_UUID)) {
-      documentLink = NotificationUtils.getSharedDocumentLink(((NodeImpl) targetNode).getIdentifier(), null, null);
+      documentLink = NotificationUtils.getSharedDocumentLink(targetNode, null, null);
     } else {
       documentLink = NotificationUtils.getDocumentLink(targetNode, spaceService, identityManager);
     }
     if (targetIdentity.getProviderId().equals(SpaceIdentityProvider.NAME)) {
-      documentLink = NotificationUtils.getSharedDocumentLink(targetNode.getProperty(EXO_SYMLINK_UUID).getString(),
+      documentLink = NotificationUtils.getSharedDocumentLink(targetNode,
                                                              spaceService,
                                                              targetIdentity.getRemoteId());
     }
