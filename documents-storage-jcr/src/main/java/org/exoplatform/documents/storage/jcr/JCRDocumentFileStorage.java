@@ -36,6 +36,7 @@ import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import org.apache.ecs.vxml.Throw;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
@@ -525,7 +526,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                            String folderId,
                            String folderPath,
                            String title,
-                           Identity aclIdentity) throws ObjectAlreadyExistsException {
+                           Identity aclIdentity) throws ObjectAlreadyExistsException, IllegalAccessException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
       throw new IllegalArgumentException("folder title is not valid");
     }
@@ -550,6 +551,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+      if (ownerIdentity !=null && ownerIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
+        Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+        String groupId = space.getGroupId();
+        List<AccessControlEntry> canUploadPermession = ((ExtendedNode) node).getACL().getPermissionEntries().stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId) && accessControlEntry.getPermission().equals(PermissionType.ADD_NODE)).toList();
+        if (canUploadPermession.isEmpty()){
+          throw new IllegalAccessException();
+        }
+      }
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
@@ -561,6 +571,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
       return toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService);
+    } catch (IllegalAccessException exception){
+      throw new IllegalAccessException();
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {

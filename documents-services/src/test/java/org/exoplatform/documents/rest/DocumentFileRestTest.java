@@ -766,6 +766,10 @@ public class DocumentFileRestTest {
     response = documentFileRest.createFolder("11111111", null, 2L, "test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
 
+    when(documentFileStorage.createFolder(2L, "11111111", null, "222", userID)).thenThrow(IllegalAccessException.class);
+    response = documentFileRest.createFolder("11111111", null, 2L, "222");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+
     when(documentFileRest.createFolder("11111111", null, 2L, "test")).thenThrow(RuntimeException.class);
     response = documentFileRest.createFolder("11111111", null, 2L, "test");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
