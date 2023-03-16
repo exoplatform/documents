@@ -216,4 +216,44 @@ public class JCRDocumentsUtilTest {
     assertEquals("document-test.pdf", fileNodes.get(0).getName());
     assertEquals("second-document-test.pdf", fileNodes.get(1).getName());
   }
-}
+  @Test
+  public void testToNodes() throws RepositoryException {
+    IdentityManager identityManager = mock(IdentityManager.class);
+    SpaceService spaceService = mock(SpaceService.class);
+    Identity identity = mock(Identity.class);
+    NodeIterator nodeIterator = mock(NodeIterator.class);
+    SessionImpl session= mock(SessionImpl.class);
+    NodeImpl file1 = mock(NodeImpl.class);
+    NodeImpl file2 = mock(NodeImpl.class);
+    ExtendedSession extendedSession = mock(ExtendedSession.class);
+
+    //when
+    when(nodeIterator.hasNext()).thenReturn(true, false);
+    when(nodeIterator.nextNode()).thenReturn(file1);
+    when(file1.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property symlinkUUID1 = mock(Property.class);
+    when(symlinkUUID1.getString()).thenReturn("file1Identifier");
+    when(file1.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUID1);
+    when(extendedSession.getNodeByIdentifier("file1Identifier")).thenReturn(null);
+    //then
+    List <AbstractNode> listNodes1 = JCRDocumentsUtil.toNodes(identityManager, extendedSession, nodeIterator, identity, spaceService,false);
+    assertEquals(0, listNodes1.size());
+
+    //when
+    when(file2.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property symlinkUUID2 = mock(Property.class);
+    when(symlinkUUID2.getString()).thenReturn("file2Identifier");
+    when(file2.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUID2);
+    when(extendedSession.getNodeByIdentifier("file2Identifier")).thenReturn(file2);
+    when(file2.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(file2.getSession()).thenReturn(session);
+    NodeType filePrimaryNT = mock(NodeType.class);
+    when(file2.getPrimaryNodeType()).thenReturn(filePrimaryNT);
+    when(file2.getPrimaryNodeType().getName()).thenReturn("");
+    when(nodeIterator.hasNext()).thenReturn(true, true, false);
+    when(nodeIterator.nextNode()).thenReturn(file1, file2);
+    //then
+    List <AbstractNode> listNodes2 = JCRDocumentsUtil.toNodes(identityManager, extendedSession, nodeIterator, identity, spaceService,false);
+    assertEquals(1, listNodes2.size());
+  }
+  }

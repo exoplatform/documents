@@ -183,7 +183,7 @@ public class JCRDocumentsUtil {
           sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           sourceNode = getNodeByIdentifier(session, sourceID);
           if (sourceNode == null) {
-            break;
+            continue;
           }
         }
         if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
