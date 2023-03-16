@@ -552,17 +552,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
-      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
-      if (ownerIdentity !=null && ownerIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
-        Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
-        String groupId = space.getGroupId();
-        List<AccessControlEntry> canAddNodePermession = ((ExtendedNode) node).getACL().getPermissionEntries().stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId) && accessControlEntry.getPermission().equals(PermissionType.ADD_NODE)).toList();
-        if (canAddNodePermession.isEmpty()){
-          throw new IllegalAccessException("Permission to add folder is missing");
-        }
+      Map<String, Boolean> nodeAccessPermission = getAccessPermissions(node,aclIdentity) ;
+      if ( nodeAccessPermission.isEmpty() || nodeAccessPermission.containsKey("canEdit") && nodeAccessPermission.get("canEdit") == false ) {
+        throw new IllegalAccessException("Permission to add folder is missing");
       }
-      //no need to this object later make it eligible to the garbage collector
-      ownerIdentity = null;
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
