@@ -19,7 +19,6 @@ package org.exoplatform.documents.storage.jcr;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -36,7 +35,6 @@ import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import org.apache.ecs.vxml.Throw;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
@@ -383,7 +381,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                        nodeName,
                                        node.getPath(),
-                                       node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
+                                       node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
+                                       getAccessPermissions(node,aclIdentity)));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -405,7 +404,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
                                                node.getPath(),
-                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
+                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
+                                               getAccessPermissions(node,aclIdentity)));
               }
               break;
             } else{
@@ -416,7 +416,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
                                                node.getPath(),
-                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
+                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
+                                               getAccessPermissions(node,aclIdentity)));
               }
             }
           } catch (RepositoryException repositoryException) {
@@ -1477,5 +1478,36 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while restoring version", e);
     }
     return versionFileNode;
+  }
+
+  public Map<String, Boolean> getAccessPermissions(Node node, Identity aclIdentity) throws RepositoryException {
+
+    Map<String, Boolean> keyValuePermission = new HashMap<>();
+    if (node == null) return keyValuePermission;
+    boolean canAccess = false;
+    boolean canEdit = false;
+    boolean canDelete = false;
+    String userId = aclIdentity.getUserId();
+    ExtendedNode extendedNode = (ExtendedNode) node;
+    List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
+    for (AccessControlEntry accessControlEntry : permsList) {
+      String nodeAclIdentity = accessControlEntry.getIdentity();
+      MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
+      if (StringUtils.equals(nodeAclIdentity, userId)
+          || StringUtils.equals(IdentityConstants.ANY, userId)
+          || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
+        canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.ADD_NODE) || accessControlEntry.getPermission()
+                                                                                                                       .contains(PermissionType.SET_PROPERTY);
+        canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
+        canAccess = canAccess || accessControlEntry.getPermission().contains(PermissionType.READ);
+      }
+      if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry) && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
+        canAccess = true;
+      }
+    }
+    keyValuePermission.put("canAccess", canAccess);
+    keyValuePermission.put("canEdit", canEdit);
+    keyValuePermission.put("canDelete", canDelete);
+    return keyValuePermission;
   }
 }

@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.model;
 
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -28,4 +29,5 @@ public class BreadCrumbItem {
   private String                                name;
   private String                                path;
   private boolean                               isSymlink;
+  private Map<String, Boolean>                  accessPermissions ;
 }

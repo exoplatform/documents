@@ -180,7 +180,8 @@ public class EntityBuilder {
                     .map(document -> new BreadCrumbItemEntity(document.getId(),
                                                               document.getName(),
                                                               document.getPath(),
-                                                              document.isSymlink()))
+                                                              document.isSymlink(),
+                                                              document.getAccessPermissions()))
                     .collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;

@@ -708,12 +708,6 @@ export default {
               message: this.$t('document.folder.conflict.error.message')
             });
           }
-          if (e.status === 401) {
-            this.$root.$emit('show-alert', {
-              type: 'error',
-              message: this.$t('documents.alert.error.label.addFolder.permission')
-            });
-          }
         })
         .finally(() => this.loading = false);
     },
