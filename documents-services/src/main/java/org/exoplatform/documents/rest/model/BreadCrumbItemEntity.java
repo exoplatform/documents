@@ -32,5 +32,5 @@ public class BreadCrumbItemEntity {
   private String                                path;
 
   private boolean isSymlink;
-  private Map<String, Boolean> accessPermissions ;
+  private Map<String, Boolean> accessList ;
 }

@@ -181,7 +181,7 @@ public class EntityBuilder {
                                                               document.getName(),
                                                               document.getPath(),
                                                               document.isSymlink(),
-                                                              document.getAccessPermissions()))
+                                                              document.getAccessList()))
                     .collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;

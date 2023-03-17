@@ -728,7 +728,7 @@ public class JCRDocumentFileStorageTest {
 
   }
   @Test
-  public void getAccessPermissionsTest() throws RepositoryException {
+  public void countNodeAccessListTest() throws RepositoryException {
     ExtendedNode extendedNode = mock(ExtendedNode.class);
     org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
     lenient().when(aclIdentity.getUserId()).thenReturn("john");
@@ -737,7 +737,7 @@ public class JCRDocumentFileStorageTest {
     lenient().when(aclIdentity.isMemberOf(accessControlEntry.getMembershipEntry())).thenReturn(true);
     lenient().when(extendedNode.getACL()).thenReturn(acl1);
     //when
-    Map<String, Boolean> accessList = jcrDocumentFileStorage.getAccessPermissions(extendedNode,aclIdentity);
+    Map<String, Boolean> accessList = jcrDocumentFileStorage.countNodeAccessList(extendedNode,aclIdentity);
     //then
     assertEquals(false, accessList.isEmpty());
     assertEquals(true, accessList.get("canAccess"));
@@ -750,7 +750,7 @@ public class JCRDocumentFileStorageTest {
     lenient().when(extendedNode.getACL()).thenReturn(acl2);
 
     //when
-    Map<String, Boolean> accessList1 = jcrDocumentFileStorage.getAccessPermissions(extendedNode,aclIdentity);
+    Map<String, Boolean> accessList1 = jcrDocumentFileStorage.countNodeAccessList(extendedNode,aclIdentity);
 
     //then
     assertEquals(false, accessList1.isEmpty());

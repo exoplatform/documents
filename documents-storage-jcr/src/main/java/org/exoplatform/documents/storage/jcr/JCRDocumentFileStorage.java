@@ -382,7 +382,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                        nodeName,
                                        node.getPath(),
                                        node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
-                                       getAccessPermissions(node,aclIdentity)));
+                                       countNodeAccessList(node,aclIdentity)));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -405,7 +405,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                nodeName,
                                                node.getPath(),
                                                node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
-                                               getAccessPermissions(node,aclIdentity)));
+                                               countNodeAccessList(node,aclIdentity)));
               }
               break;
             } else{
@@ -417,7 +417,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                nodeName,
                                                node.getPath(),
                                                node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
-                                               getAccessPermissions(node,aclIdentity)));
+                                               countNodeAccessList(node,aclIdentity)));
               }
             }
           } catch (RepositoryException repositoryException) {
@@ -552,13 +552,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
-      Map<String, Boolean> nodeAccessPermission = getAccessPermissions(node,aclIdentity) ;
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(node,aclIdentity) ;
       String canEdit = "canEdit";
-      if ( nodeAccessPermission.isEmpty() || nodeAccessPermission.containsKey(canEdit) && !nodeAccessPermission.get(canEdit).booleanValue() ) {
+      if ( nodeAccessList.isEmpty() || nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue() ) {
         throw new IllegalAccessException("Permission to add folder is missing");
       }
       //no need to this object later make it eligible to the garbage collactor
-      nodeAccessPermission = null;
+      nodeAccessList = null;
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
@@ -1476,7 +1476,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return versionFileNode;
   }
 
-  public Map<String, Boolean> getAccessPermissions(Node node, Identity aclIdentity) throws RepositoryException {
+  public Map<String, Boolean> countNodeAccessList(Node node, Identity aclIdentity) throws RepositoryException {
 
     Map<String, Boolean> keyValuePermission = new HashMap<>();
     if (node == null) return keyValuePermission;
@@ -1484,22 +1484,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     boolean canEdit = false;
     boolean canDelete = false;
     String userId = aclIdentity.getUserId();
-    ExtendedNode extendedNode = (ExtendedNode) node;
-    List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
-    for (AccessControlEntry accessControlEntry : permsList) {
-      String nodeAclIdentity = accessControlEntry.getIdentity();
-      MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
-      if (StringUtils.equals(nodeAclIdentity, userId)
-          || StringUtils.equals(IdentityConstants.ANY, userId)
-          || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
-        canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.ADD_NODE) || accessControlEntry.getPermission()
-                                                                                                                       .contains(PermissionType.SET_PROPERTY);
-        canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
-        canAccess = canAccess || accessControlEntry.getPermission().contains(PermissionType.READ);
+    try {
+      ExtendedNode extendedNode = (ExtendedNode) node;
+      List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
+      for (AccessControlEntry accessControlEntry : permsList) {
+        String nodeAclIdentity = accessControlEntry.getIdentity();
+        MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
+        if (StringUtils.equals(nodeAclIdentity, userId)
+            || StringUtils.equals(IdentityConstants.ANY, userId)
+            || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
+          canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.ADD_NODE) || accessControlEntry.getPermission()
+                                                                                                                         .contains(PermissionType.SET_PROPERTY);
+          canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
+          canAccess = canAccess || accessControlEntry.getPermission().contains(PermissionType.READ);
+        }
+        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry) && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
+          canAccess = true;
+        }
       }
-      if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry) && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
-        canAccess = true;
-      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error checking access permission for node'" + node.getUUID() + " for user " + aclIdentity.getUserId(), e);
     }
     keyValuePermission.put("canAccess", canAccess);
     keyValuePermission.put("canEdit", canEdit);

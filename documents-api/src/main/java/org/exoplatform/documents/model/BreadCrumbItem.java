@@ -29,5 +29,5 @@ public class BreadCrumbItem {
   private String                                name;
   private String                                path;
   private boolean                               isSymlink;
-  private Map<String, Boolean>                  accessPermissions ;
+  private Map<String, Boolean>                  accessList;
 }
