@@ -553,9 +553,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       Map<String, Boolean> nodeAccessPermission = getAccessPermissions(node,aclIdentity) ;
-      if ( nodeAccessPermission.isEmpty() || nodeAccessPermission.containsKey("canEdit") && nodeAccessPermission.get("canEdit") == false ) {
+      String canEdit = "canEdit";
+      if ( nodeAccessPermission.isEmpty() || nodeAccessPermission.containsKey(canEdit) && !nodeAccessPermission.get(canEdit).booleanValue() ) {
         throw new IllegalAccessException("Permission to add folder is missing");
       }
+      //no need to this object later make it eligible to the garbage collactor
+      nodeAccessPermission = null;
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
