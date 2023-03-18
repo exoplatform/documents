@@ -419,6 +419,9 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                  null,
                                                                                  userIdentityId);
       return Response.ok(abstractNodeEntity).build();
+    } catch (IllegalAccessException e) {
+      LOG.warn(e.getMessage());
+      return Response.status(HTTPStatus.UNAUTHORIZED).build();
     } catch (ObjectAlreadyExistsException e) {
       LOG.warn("Folder with same name already exists", e);
       return Response.status(HTTPStatus.CONFLICT).build();
