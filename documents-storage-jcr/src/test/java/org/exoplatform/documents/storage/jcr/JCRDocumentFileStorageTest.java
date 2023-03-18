@@ -8,15 +8,12 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -32,6 +29,9 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
+import org.exoplatform.services.jcr.access.AccessControlEntry;
+import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.security.MembershipEntry;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
@@ -726,5 +726,35 @@ public class JCRDocumentFileStorageTest {
     assertEquals(1, fullTreeItemList.size());
     assertTrue(fullTreeItemList.get(0).getChildren().isEmpty());
 
+  }
+  @Test
+  public void countNodeAccessListTest() throws RepositoryException {
+    ExtendedNode extendedNode = mock(ExtendedNode.class);
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    lenient().when(aclIdentity.getUserId()).thenReturn("john");
+    AccessControlEntry accessControlEntry = new AccessControlEntry("*:/spaces/testspace", PermissionType.READ);
+    AccessControlList acl1 = new AccessControlList("john", Arrays.asList(accessControlEntry));
+    lenient().when(aclIdentity.isMemberOf(accessControlEntry.getMembershipEntry())).thenReturn(true);
+    lenient().when(extendedNode.getACL()).thenReturn(acl1);
+    //when
+    Map<String, Boolean> accessList = jcrDocumentFileStorage.countNodeAccessList(extendedNode,aclIdentity);
+    //then
+    assertEquals(false, accessList.isEmpty());
+    assertEquals(true, accessList.get("canAccess"));
+    assertEquals(false, accessList.get("canEdit"));
+    assertEquals(false, accessList.get("canDelete"));
+
+    AccessControlEntry accessControlEntry1 = new AccessControlEntry("*:/spaces/testspace", PermissionType.SET_PROPERTY);
+    AccessControlList acl2 = new AccessControlList("john", Arrays.asList(accessControlEntry,accessControlEntry1));
+    lenient().when(aclIdentity.isMemberOf(accessControlEntry1.getMembershipEntry())).thenReturn(true);
+    lenient().when(extendedNode.getACL()).thenReturn(acl2);
+
+    //when
+    Map<String, Boolean> accessList1 = jcrDocumentFileStorage.countNodeAccessList(extendedNode,aclIdentity);
+
+    //then
+    assertEquals(false, accessList1.isEmpty());
+    assertEquals(true, accessList1.get("canAccess"));
+    assertEquals(true, accessList1.get("canEdit"));
   }
 }
