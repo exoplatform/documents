@@ -554,7 +554,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       Map<String, Boolean> nodeAccessList = countNodeAccessList(node,aclIdentity) ;
       String canEdit = "canEdit";
-      if ( nodeAccessList.isEmpty() || nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue() ) {
+      if ( nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue() ) {
         throw new IllegalAccessException("Permission to add folder is missing");
       }
       //no need to this object later make it eligible to the garbage collactor
