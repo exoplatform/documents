@@ -917,11 +917,12 @@ export default {
           name: 'Personal Documents',
           title: 'Personal Documents'
         };
+        attachmentAppConfiguration.defaultFolder = '/';
         let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
         if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
           pathparts = pathparts[1].split('Private/');
         }
-        if (pathparts.length>1){
+        if (pathparts.length > 1) {
           attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
         }
       }
