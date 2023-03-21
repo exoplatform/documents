@@ -97,7 +97,7 @@ export default {
       return this.selectedView === 'folder';
     },
     disableButton(){
-      return this.currentFolder && this.currentFolder.accessPermissions && this.currentFolder.accessPermissions.canEdit === false ;
+      return this.currentFolder && this.currentFolder.accessList && this.currentFolder.accessList.canEdit === false ;
     }
   },
   created() {
