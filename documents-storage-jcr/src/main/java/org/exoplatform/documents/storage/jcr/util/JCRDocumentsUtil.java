@@ -172,7 +172,8 @@ public class JCRDocumentsUtil {
                                            NodeIterator nodeIterator,
                                            Identity aclIdentity,
                                            SpaceService spaceService,
-                                           boolean includeHiddenFiles) {
+                                           boolean includeHiddenFiles,
+                                           DocumentFolderFilter filter) {
     List<AbstractNode> fileNodes = new ArrayList<>();
     while (nodeIterator.hasNext()) {
       Node node = nodeIterator.nextNode();
@@ -202,6 +203,33 @@ public class JCRDocumentsUtil {
       }
     }
 
+    fileNodes.sort((o1, o2) -> {
+      if ((o1.isFolder() && o2.isFolder()) || (!o1.isFolder() && !o2.isFolder())) {
+        if(filter.getSortField().equals(DocumentSortField.MODIFIED_DATE)) {
+          if(filter.isAscending()) {
+            return (int) (o1.getModifiedDate() - o2.getModifiedDate());
+          } else {
+            return (int) (o2.getModifiedDate() - o1.getModifiedDate());
+          }
+        } else if(filter.getSortField().equals(DocumentSortField.CREATED_DATE)) {
+          if (filter.isAscending()) {
+            return (int) (o1.getCreatedDate() - o2.getCreatedDate());
+          } else {
+            return (int) (o2.getCreatedDate() - o1.getCreatedDate());
+          }
+        } else {
+          if(filter.isAscending()) {
+            return o1.getName().compareTo(o2.getName());
+          } else {
+            return o2.getName().compareTo(o1.getName());
+          }
+        }
+      } else if (o1.isFolder()) {
+        return -1;
+      } else {
+        return 1;
+      }
+    });
     return fileNodes;
   }
 
@@ -319,7 +347,7 @@ public class JCRDocumentsUtil {
                                             AbstractNode documentNode,
                                             SpaceService spaceService) throws RepositoryException {
     documentNode.setId(((NodeImpl) node).getIdentifier());
-    documentNode.setPath(((NodeImpl) node).getPath());
+    documentNode.setPath(node.getPath());
 
     try {
       Node parent = node.getParent();

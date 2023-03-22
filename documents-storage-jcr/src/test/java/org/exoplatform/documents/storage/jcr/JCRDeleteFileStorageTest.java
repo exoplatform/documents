@@ -166,10 +166,11 @@ public class JCRDeleteFileStorageTest {
 
     jcrDeleteFileStorage.deleteDocument(path ,"1", true, true, 0, userID,  currentOwnerId);
 
-    lenient().when(node.isCheckedOut()).thenReturn(true);
-    lenient().when(trashStorage.moveToTrash(node, sessionProvider)).thenReturn(trashId);
-    lenient().when(trashStorage.getNodeByTrashId(trashId)).thenReturn(node);
-    lenient().when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    when(node.isCheckedOut()).thenReturn(true);
+    when(trashStorage.moveToTrash(node, sessionProvider)).thenReturn(trashId);
+    when(trashStorage.getNodeByTrashId(trashId)).thenReturn(node);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
 
     jcrDeleteFileStorage.deleteDocument(path ,"1", false, true, 0, userID,  currentOwnerId);
 
