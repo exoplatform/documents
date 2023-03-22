@@ -20,11 +20,7 @@ import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNod
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -272,5 +268,38 @@ public class JCRDocumentsUtilTest {
     //then
     List <AbstractNode> listNodes2 = JCRDocumentsUtil.toNodes(identityManager, extendedSession, nodeIterator, identity, spaceService,false, null);
     assertEquals(1, listNodes2.size());
+  }
+
+  @Test
+  public void retrieveFileContentProperties() throws RepositoryException, IOException {
+    Node contentNode = mock(Node.class);
+    FileNode fileNode = mock(FileNode.class);
+
+    lenient().when(contentNode.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(true);
+    lenient().when(contentNode.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    lenient().when(contentNode.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+
+    Property descriptionProperty = mock(Property.class);
+    Property mimeTypeProperty = mock(Property.class);
+    Property dataProperty = mock(Property.class);
+
+    lenient().when(contentNode.getProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(descriptionProperty);
+    lenient().when(contentNode.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    lenient().when(contentNode.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
+
+    lenient().when(descriptionProperty.getValues()).thenReturn(new Value[0]);
+    lenient().when(mimeTypeProperty.getString()).thenReturn("application/pdf");
+    lenient().when(dataProperty.getLength()).thenReturn(1024L);
+    
+    JCRDocumentsUtil.retrieveFileContentProperties(contentNode, fileNode);
+
+    verify(fileNode, times(0)).setDescription(anyString());
+    verify(fileNode, times(1)).setMimeType(anyString());
+    verify(fileNode, times(1)).setSize(anyLong());
+
+    lenient().when(descriptionProperty.getValues()).thenReturn(new Value[] { new StringValue("test description") });
+    JCRDocumentsUtil.retrieveFileContentProperties(contentNode, fileNode);
+
+    verify(fileNode, times(1)).setDescription(anyString());
   }
   }
