@@ -400,7 +400,8 @@ public class JCRDocumentsUtil {
   }
 
   public static void retrieveFileContentProperties(Node content, FileNode fileNode) throws RepositoryException {
-    if (content.hasProperty(NodeTypeConstants.DC_DESCRIPTION)) {
+    if (content.hasProperty(NodeTypeConstants.DC_DESCRIPTION)
+        && content.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues().length > 0) {
       fileNode.setDescription(content.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());
     }
     if (content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
