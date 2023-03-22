@@ -8,15 +8,9 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-import java.util.Calendar;
-import java.util.List;
+import java.util.*;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -32,6 +26,10 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
+
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.metadata.tag.TagService;
+import org.exoplatform.social.metadata.tag.model.TagName;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
@@ -111,6 +109,9 @@ public class JCRDocumentFileStorageTest {
 
   @Mock
   private ActivityManager                activityManager;
+  
+  @Mock
+  private TagService                     tagService;
 
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
@@ -726,5 +727,48 @@ public class JCRDocumentFileStorageTest {
     assertEquals(1, fullTreeItemList.size());
     assertTrue(fullTreeItemList.get(0).getChildren().isEmpty());
 
+  }
+
+  @Test
+  public void updateDocumentDescription() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    lenient().when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity))
+                      .thenReturn(sessionProvider);
+    lenient().when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    ExtendedNode node = mock(ExtendedNode.class);
+    Node contentNode = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    lenient().when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
+    lenient().when(node.canAddMixin(NodeTypeConstants.DC_ELEMENT_SET)).thenReturn(true);
+    lenient().when(node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
+    lenient().when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    lenient().when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
+    lenient().when(node.getSession()).thenReturn(session);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(TagService.class)).thenReturn(tagService);
+    Set<TagName> tagNames = new HashSet<>();
+    tagNames.add(new TagName("test"));
+    lenient().when(tagService.detectTagNames(anyString())).thenReturn(tagNames);
+    lenient().when(node.getPath()).thenReturn("path");
+    Identity audienceIdentity = mock(Identity.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getOwnerIdentityFromNodePath("path", identityManager, spaceService))
+                      .thenReturn(audienceIdentity);
+    lenient().when(audienceIdentity.getProviderId()).thenReturn("space");
+    Space space = new Space();
+    space.setId("1");
+    lenient().when(audienceIdentity.getRemoteId()).thenReturn("testSpace");
+    lenient().when(audienceIdentity.getId()).thenReturn("1");
+    Identity userIdentity = mock(Identity.class);
+    lenient().when(userIdentity.getId()).thenReturn("1");
+    lenient().when(identityManager.getOrCreateUserIdentity("user")).thenReturn(userIdentity);
+    lenient().when(spaceService.getSpaceByPrettyName("testSpace")).thenReturn(space);
+    lenient().when(node.getIdentifier()).thenReturn("123");
+    this.jcrDocumentFileStorage.updateDocumentDescription(1L, "123", "test description", identity);
+    verify(session, times(1)).save();
+    verify(sessionProvider, times(1)).close();
   }
 }
