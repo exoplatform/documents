@@ -172,6 +172,7 @@ public class JCRDeleteFileStorageTest {
     when(node.isCheckedOut()).thenReturn(true);
     when(trashStorage.moveToTrash(node, sessionProvider)).thenReturn(trashId);
     when(trashStorage.getNodeByTrashId(trashId)).thenReturn(node);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
     when(node.getPrimaryNodeType()).thenReturn(nodeType);
 
     jcrDeleteFileStorage.deleteDocument(path ,"1", false, true, 0, userID,  currentOwnerId);
