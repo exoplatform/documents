@@ -35,9 +35,9 @@
             class="document-type ms-0">
           </div>
           <v-icon
-              v-if="file.sourceID"
-              size="13"
-              class="pe-1 iconStyle ms-1">
+            v-if="file.sourceID"
+            size="13"
+            class="pe-1 iconStyle ms-1">
             mdi-link-variant
           </v-icon>
         </div>
