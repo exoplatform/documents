@@ -1,6 +1,39 @@
 package org.exoplatform.documents.storage.jcr;
 
-import org.apache.commons.lang3.math.NumberUtils;
+
+
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
+import java.util.*;
+
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
+import javax.jcr.Value;
+import javax.jcr.Workspace;
+import javax.jcr.nodetype.NodeType;
+import javax.jcr.query.QueryManager;
+import javax.jcr.query.QueryResult;
+import javax.jcr.version.Version;
+import javax.jcr.version.VersionHistory;
+import javax.jcr.version.VersionIterator;
+
+
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.metadata.tag.TagService;
+import org.exoplatform.social.metadata.tag.model.TagName;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
@@ -28,31 +61,14 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import javax.jcr.*;
-import javax.jcr.nodetype.NodeType;
-import javax.jcr.query.QueryManager;
-import javax.jcr.query.QueryResult;
-import javax.jcr.version.Version;
-import javax.jcr.version.VersionHistory;
-import javax.jcr.version.VersionIterator;
-
 import java.util.Calendar;
 import java.util.List;
 
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -85,6 +101,9 @@ public class JCRDocumentFileStorageTest {
 
   @Mock
   private ActivityManager                activityManager;
+  
+  @Mock
+  private TagService                     tagService;
 
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
@@ -112,7 +131,7 @@ public class JCRDocumentFileStorageTest {
     Identity identity = mock(Identity.class);
     Node rootNode = mock(Node.class);
     Node sharedNode = mock(Node.class);
-    Node currentNode = Mockito.mock(ExtendedNode.class);
+    Node currentNode = mock(ExtendedNode.class);
     ExtendedNode linkNode = mock(ExtendedNode.class);
     Property property = mock(Property.class);
     NodeType nodeType =  mock(NodeType.class);
@@ -195,7 +214,7 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
     jcrDocumentFileStorage.duplicateDocument(1L,"1","copy of",userID);
     verify(sessionProvider, times(1)).close();
-    PowerMockito.verifyStatic(VersionHistoryUtils.class, Mockito.times(1));
+    PowerMockito.verifyStatic(VersionHistoryUtils.class, times(1));
     VersionHistoryUtils.createVersion(any(Node.class));
   }
   
@@ -373,7 +392,7 @@ public class JCRDocumentFileStorageTest {
     assertEquals("Error while creating a shortcut for document's id " + null + " to destination path" + null, exception.getMessage());
 
     Node rootNode = mock(Node.class);
-    ExtendedNode currentNode = Mockito.mock(ExtendedNode.class);
+    ExtendedNode currentNode = mock(ExtendedNode.class);
     ExtendedNode linkNode = mock(ExtendedNode.class);
     Property property = mock(Property.class);
     NodeType nodeType =  mock(NodeType.class);
@@ -700,5 +719,48 @@ public class JCRDocumentFileStorageTest {
     assertEquals(1, fullTreeItemList.size());
     assertTrue(fullTreeItemList.get(0).getChildren().isEmpty());
 
+  }
+
+  @Test
+  public void updateDocumentDescription() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    ExtendedNode node = mock(ExtendedNode.class);
+    Node contentNode = mock(Node.class);
+    when(JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
+    when(node.canAddMixin(NodeTypeConstants.DC_ELEMENT_SET)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
+    when(node.getSession()).thenReturn(session);
+    when(CommonsUtils.getService(TagService.class)).thenReturn(tagService);
+    Set<TagName> tagNames = new HashSet<>();
+    tagNames.add(new TagName("test"));
+    when(tagService.detectTagNames(anyString())).thenReturn(tagNames);
+    when(node.getPath()).thenReturn("path");
+    Identity audienceIdentity = mock(Identity.class);
+    when(JCRDocumentsUtil.getOwnerIdentityFromNodePath("path", identityManager, spaceService))
+                      .thenReturn(audienceIdentity);
+    when(audienceIdentity.getProviderId()).thenReturn("space");
+    Space space = new Space();
+    space.setId("1");
+    when(audienceIdentity.getRemoteId()).thenReturn("testSpace");
+    when(audienceIdentity.getId()).thenReturn("1");
+    Identity userIdentity = mock(Identity.class);
+    when(userIdentity.getId()).thenReturn("1");
+    when(identityManager.getOrCreateUserIdentity("user")).thenReturn(userIdentity);
+    when(spaceService.getSpaceByPrettyName("testSpace")).thenReturn(space);
+    when(node.getIdentifier()).thenReturn("123");
+    this.jcrDocumentFileStorage.updateDocumentDescription(1L, "123", "test description", identity);
+    verify(session, times(1)).save();
+    verify(sessionProvider, times(1)).close();
   }
 }
