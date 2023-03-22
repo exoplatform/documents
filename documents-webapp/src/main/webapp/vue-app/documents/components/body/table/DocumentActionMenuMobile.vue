@@ -35,10 +35,6 @@ export default {
     menuExtensionApp: 'DocumentMenu',
     menuExtensionType: 'menuActionMenu',
     menuExtensions: {},
-    mobileOnlyExtensions: ['favorite'],
-    desktopOnlyExtensions: ['edit'],
-    editExtensions: 'edit',
-    fileOnlyExtension: ['download','favorite']
   }),
   computed: {
     params() {
@@ -46,10 +42,6 @@ export default {
         file: this.file,
         isMobile: this.isMobile
       };
-    },
-    fileCanEdit(){
-      const type = this.file && this.file.mimeType || '';
-      return ( type.includes('word') || type.includes('presentation') || type.includes('sheet') );
     }
   },
   created() {
@@ -67,24 +59,11 @@ export default {
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
-      if (!this.fileCanEdit) {
-        extensions = extensions.filter(extension => extension.id !== this.editExtensions);
-      }
-      let changed = false;
-      extensions.forEach(extension => {
-        if (extension.id && (!this.menuExtensions[extension.id] || this.menuExtensions[extension.id] !== extension)) {
-          if ( ((!this.isMobile && !this.mobileOnlyExtensions.includes(extension.id))
-              || (this.isMobile && !this.desktopOnlyExtensions.includes(extension.id)))
-              && (!this.file.folder || (this.file.folder && !this.fileOnlyExtension.includes(extension.id)))) {
-            this.menuExtensions[extension.id] = extension;
-            changed = true;
-          }
-        }
-      });
-      // force update of attribute to re-render switch new extension id
-      if (changed) {
-        this.menuExtensions = Object.assign({}, this.menuExtensions);
-      }
+
+      extensions = extensions.filter(extension => extension.enabled(this.file, true));
+
+      this.menuExtensions = extensions;
+
     },
   }
 };
