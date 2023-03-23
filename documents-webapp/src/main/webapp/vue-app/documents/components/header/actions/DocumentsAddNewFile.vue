@@ -19,6 +19,7 @@
         :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
         :key="postKey"
+        :disabled="disableButton"
         @click="openAddItemMenu()">
         <v-icon
           size="13"
@@ -89,11 +90,15 @@ export default {
     showMobileFilter: false,
     addMenu: false,
     waitTimeUntilCloseMenu: 200,
+    currentFolder: null
   }),
   computed: {
     isFolderView() {
       return this.selectedView === 'folder';
     },
+    disableButton(){
+      return this.currentFolder && this.currentFolder.accessList && this.currentFolder.accessList.canEdit === false ;
+    }
   },
   created() {
     $(document).on('mousedown', () => {
@@ -107,6 +112,7 @@ export default {
       this.showMobileFilter= data;
     });
     document.addEventListener('entity-attachments-updated', this.refreshFilesList);
+    this.$root.$on('set-current-folder', this.setCurrentFolder);
   },
   destroyed() {
     document.removeEventListener('entity-attachments-updated', this.refreshFilesList);
@@ -138,6 +144,9 @@ export default {
     hideAddMenuMobile() {
       this.$refs.documentAddItemMenu.close();
     },
+    setCurrentFolder(folder){
+      this.currentFolder =folder;
+    }
   },
 };
 </script>

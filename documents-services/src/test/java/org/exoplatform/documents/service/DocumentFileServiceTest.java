@@ -385,8 +385,8 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "", false);
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "", false);
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "", false,new HashMap<>());
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "", false,new HashMap<>());
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
