@@ -66,7 +66,7 @@ export default {
     nameRegex: /[<\\>:"/|?*]/
   }),
   created() {
-    this.nameRules = [v => !!v, v => !this.nameRegex.test(v)];
+    this.nameRules = [v => !!v.trim(), v => !this.nameRegex.test(v)];
     this.$root.$on('document-renamed', (file) => {
       if (file.id === this.file.id) {
         this.file.name = this.fileName.concat(this.fileType);
