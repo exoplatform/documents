@@ -17,8 +17,7 @@
 package org.exoplatform.documents.storage.jcr.util;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -296,4 +295,12 @@ public class JCRDocumentsUtilTest {
 
     verify(fileNode, times(1)).setDescription(anyString());
   }
+
+  @Test
+  public void isValidDocumentTitle() {
+    assertFalse(JCRDocumentsUtil.isValidDocumentTitle("test:<*?"));
+    assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   "));
+    assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   .docx"));
+    assertTrue(JCRDocumentsUtil.isValidDocumentTitle("test.docx"));
   }
+}

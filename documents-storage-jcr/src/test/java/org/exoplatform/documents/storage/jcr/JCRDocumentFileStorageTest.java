@@ -32,11 +32,9 @@ import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
-import org.exoplatform.services.security.MembershipEntry;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.exoplatform.commons.exception.ObjectNotFoundException;
+
+import org.junit.*;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
@@ -570,6 +568,9 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     Throwable exception = assertThrows(IllegalArgumentException.class,
                                        () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "test:<*?", identity));
+    assertEquals("document title is not valid", exception.getMessage());
+    exception = assertThrows(IllegalArgumentException.class,
+            () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "   ", identity));
     assertEquals("document title is not valid", exception.getMessage());
     when(identityRegistry.getIdentity("user")).thenReturn(identity);
     ManageableRepository manageableRepository = mock(ManageableRepository.class);
