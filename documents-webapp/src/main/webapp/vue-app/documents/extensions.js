@@ -75,7 +75,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
-  enabled: () => true,
+  enabled: (file, isMobile) => {
+    return file && !file.folder && !file.cloudDriveFolder && isMobile;
+  },
   componentOptions: {
     vueComponent: Vue.options.components['favorite-menu-action'],
   },
@@ -103,8 +105,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 2,
-  enabled: (file) => {
-    return file && file.acl.canEdit;
+  enabled: (file, isMobile) => {
+    return file && !file.cloudDriveFolder && file.acl.canEdit && !isMobile;
   },
   componentOptions: {
     vueComponent: Vue.options.components['edit-menu-action'],
@@ -120,7 +122,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 3,
   enabled: (file) => {
-    return file && file.acl.canEdit;
+    return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['rename-menu-action'],
@@ -136,7 +138,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 4,
   enabled: (file) => {
-    return file && file.acl.canEdit;
+    return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['move-menu-action'],
@@ -152,7 +154,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 5,
   enabled: (file) => {
-    return file && file.acl.canEdit;
+    return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['duplicate-menu-action'],
@@ -168,7 +170,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 6,
   enabled: (file) => {
-    return file && file.acl.canEdit && !file.sourceID;
+    return file && !file.cloudDriveFolder && file.acl.canEdit && !file.sourceID;
   },
   componentOptions: {
     vueComponent: Vue.options.components['shortcut-menu-action'],
@@ -185,7 +187,13 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 7,
   enabled: (file) => {
-    return file && file.acl.canEdit && !file.sourceID;
+    if (Vue.prototype.$shareDocumentSuspended) {
+      return false;
+    }
+    return file && !file.cloudDriveFolder
+                && file.acl.canEdit
+                && !file.sourceID
+                && !file.path.includes('News Attachments');
   },
   componentOptions: {
     vueComponent: Vue.options.components['visibility-menu-action'],
@@ -201,7 +209,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 8,
   enabled: (file) => {
-    return file && file.versionable;
+    return file && !file.cloudDriveFolder && file.versionable;
   },
   componentOptions: {
     vueComponent: Vue.options.components['versionHistory-menu-action'],
@@ -218,7 +226,12 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 9,
   enabled: (file) => {
-    return file && file.acl.canEdit || file.sourceID;
+    if (Vue.prototype.$downloadDocumentSuspended) {
+      return false;
+    }
+    return file && !file.cloudDriveFolder
+                && !file.folder
+                && (file.acl.canEdit || file.sourceID);
   },
   componentOptions: {
     vueComponent: Vue.options.components['download-menu-action'],
@@ -233,7 +246,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 40,
-  enabled: () => true,
+  enabled: (file, isMobile) => {
+    return file && !file.cloudDriveFolder && !file.folder && isMobile;
+  },
   componentOptions: {
     vueComponent: Vue.options.components['details-menu-action'],
   },
@@ -248,7 +263,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 10,
   enabled: (file) => {
-    return file && file.acl.canEdit;
+    return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['delete-menu-action'],
