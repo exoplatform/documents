@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 import javax.jcr.*;
 import javax.jcr.version.Version;
 
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.utils.CommonsUtils;
@@ -617,6 +618,7 @@ public class JCRDocumentsUtil {
       extension = oldName.substring(oldName.lastIndexOf("."));
       oldName = oldName.substring(0,oldName.lastIndexOf(".")) ;
     }
+    oldName = oldName.trim();
     String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|";
     StringBuilder ret = new StringBuilder();
     for (int i = 0; i < oldName.length(); i++) {
@@ -632,6 +634,9 @@ public class JCRDocumentsUtil {
   }
 
   public static boolean isValidDocumentTitle(String name) {
+    if (StringUtils.isBlank(FilenameUtils.getBaseName(name))) {
+      return false;
+    }
     Pattern regex = Pattern.compile("[<\\\\>:\"/|?*]");
     Matcher matcher = regex.matcher(name);
     return !matcher.find();
