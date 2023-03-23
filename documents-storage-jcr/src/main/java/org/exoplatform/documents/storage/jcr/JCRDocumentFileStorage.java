@@ -19,7 +19,6 @@ package org.exoplatform.documents.storage.jcr;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -413,7 +412,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                        nodeName,
                                        node.getPath(),
-                                       node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
+                                       node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
+                                       countNodeAccessList(node,aclIdentity)));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
@@ -435,7 +435,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
                                                node.getPath(),
-                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
+                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
+                                               countNodeAccessList(node,aclIdentity)));
               }
               break;
             } else{
@@ -446,7 +447,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
                                                node.getPath(),
-                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK)));
+                                               node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
+                                               countNodeAccessList(node,aclIdentity)));
               }
             }
           } catch (RepositoryException repositoryException) {
@@ -556,7 +558,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                            String folderId,
                            String folderPath,
                            String title,
-                           Identity aclIdentity) throws ObjectAlreadyExistsException {
+                           Identity aclIdentity) throws ObjectAlreadyExistsException, IllegalAccessException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
       throw new IllegalArgumentException("folder title is not valid");
     }
@@ -581,6 +583,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(node,aclIdentity) ;
+      String canEdit = "canEdit";
+      if ( nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue() ) {
+        throw new IllegalAccessException("Permission to add folder is missing");
+      }
+      //no need to this object later make it eligible to the garbage collactor
+      nodeAccessList = null;
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
@@ -592,6 +601,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
       return toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService);
+    } catch (IllegalAccessException exception){
+      throw new IllegalAccessException(exception.getMessage());
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
@@ -1497,5 +1508,40 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while restoring version", e);
     }
     return versionFileNode;
+  }
+
+  public Map<String, Boolean> countNodeAccessList(Node node, Identity aclIdentity) throws RepositoryException {
+
+    Map<String, Boolean> keyValuePermission = new HashMap<>();
+    if (node == null) return keyValuePermission;
+    boolean canAccess = false;
+    boolean canEdit = false;
+    boolean canDelete = false;
+    String userId = aclIdentity.getUserId();
+    try {
+      ExtendedNode extendedNode = (ExtendedNode) node;
+      List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
+      for (AccessControlEntry accessControlEntry : permsList) {
+        String nodeAclIdentity = accessControlEntry.getIdentity();
+        MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
+        if (StringUtils.equals(nodeAclIdentity, userId)
+            || StringUtils.equals(IdentityConstants.ANY, userId)
+            || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
+          canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.ADD_NODE) || accessControlEntry.getPermission()
+                                                                                                                         .contains(PermissionType.SET_PROPERTY);
+          canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
+          canAccess = canAccess || accessControlEntry.getPermission().contains(PermissionType.READ);
+        }
+        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry) && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
+          canAccess = true;
+        }
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error checking access permission for node'" + node.getUUID() + " for user " + aclIdentity.getUserId(), e);
+    }
+    keyValuePermission.put("canAccess", canAccess);
+    keyValuePermission.put("canEdit", canEdit);
+    keyValuePermission.put("canDelete", canDelete);
+    return keyValuePermission;
   }
 }
