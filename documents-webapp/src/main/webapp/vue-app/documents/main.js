@@ -37,6 +37,10 @@ const lang = eXo && eXo.env.portal.language || 'en';
 //should expose the locale ressources as REST API 
 const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.portlet.Documents-${lang}.json`;
 
+Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
+  Vue.prototype.$shareDocumentSuspended = rules.sharedDocumentStatus === 'true';
+  Vue.prototype.$downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
+});
 export function init() {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale ressources are ready
