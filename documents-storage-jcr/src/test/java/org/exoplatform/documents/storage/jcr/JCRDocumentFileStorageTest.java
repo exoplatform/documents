@@ -580,6 +580,9 @@ public class JCRDocumentFileStorageTest {
     Throwable exception = assertThrows(IllegalArgumentException.class,
                                        () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "test:<*?", identity));
     assertEquals("document title is not valid", exception.getMessage());
+    exception = assertThrows(IllegalArgumentException.class,
+            () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "   ", identity));
+    assertEquals("document title is not valid", exception.getMessage());
     when(identityRegistry.getIdentity("user")).thenReturn(identity);
     ManageableRepository manageableRepository = mock(ManageableRepository.class);
     when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
