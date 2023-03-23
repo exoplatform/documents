@@ -582,8 +582,8 @@ public class DocumentFileRestTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "", false);
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "", false);
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "", false,new HashMap<>());
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "", false,new HashMap<>());
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
@@ -725,8 +725,12 @@ public class DocumentFileRestTest {
     response = documentFileRest.createFolder("11111111",null,2L,"test");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
 
-    when(documentFileRest.createFolder("11111111",null,2L,"test")).thenThrow(RuntimeException.class);
-    response =  documentFileRest.createFolder("11111111",null,2L,"test");
+    when(documentFileStorage.createFolder(2L, "11111111", null, "222", userID)).thenThrow(IllegalAccessException.class);
+    response = documentFileRest.createFolder("11111111", null, 2L, "222");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+
+    when(documentFileRest.createFolder("11111111", null, 2L, "test")).thenThrow(RuntimeException.class);
+    response = documentFileRest.createFolder("11111111", null, 2L, "test");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
     response = documentFileRest.renameDocument(null,null,"");

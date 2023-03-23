@@ -29,6 +29,9 @@ import javax.jcr.version.VersionIterator;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
+import org.exoplatform.services.jcr.access.AccessControlEntry;
+import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.security.MembershipEntry;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -762,5 +765,36 @@ public class JCRDocumentFileStorageTest {
     this.jcrDocumentFileStorage.updateDocumentDescription(1L, "123", "test description", identity);
     verify(session, times(1)).save();
     verify(sessionProvider, times(1)).close();
+  }
+
+  @Test
+  public void countNodeAccessListTest() throws RepositoryException {
+    ExtendedNode extendedNode = mock(ExtendedNode.class);
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    when(aclIdentity.getUserId()).thenReturn("john");
+    AccessControlEntry accessControlEntry = new AccessControlEntry("*:/spaces/testspace", PermissionType.READ);
+    AccessControlList acl1 = new AccessControlList("john", Arrays.asList(accessControlEntry));
+    when(aclIdentity.isMemberOf(accessControlEntry.getMembershipEntry())).thenReturn(true);
+    when(extendedNode.getACL()).thenReturn(acl1);
+    //when
+    Map<String, Boolean> accessList = jcrDocumentFileStorage.countNodeAccessList(extendedNode,aclIdentity);
+    //then
+    assertEquals(false, accessList.isEmpty());
+    assertEquals(true, accessList.get("canAccess"));
+    assertEquals(false, accessList.get("canEdit"));
+    assertEquals(false, accessList.get("canDelete"));
+
+    AccessControlEntry accessControlEntry1 = new AccessControlEntry("*:/spaces/testspace", PermissionType.SET_PROPERTY);
+    AccessControlList acl2 = new AccessControlList("john", Arrays.asList(accessControlEntry,accessControlEntry1));
+    when(aclIdentity.isMemberOf(accessControlEntry1.getMembershipEntry())).thenReturn(true);
+    when(extendedNode.getACL()).thenReturn(acl2);
+
+    //when
+    Map<String, Boolean> accessList1 = jcrDocumentFileStorage.countNodeAccessList(extendedNode,aclIdentity);
+
+    //then
+    assertEquals(false, accessList1.isEmpty());
+    assertEquals(true, accessList1.get("canAccess"));
+    assertEquals(true, accessList1.get("canEdit"));
   }
 }
