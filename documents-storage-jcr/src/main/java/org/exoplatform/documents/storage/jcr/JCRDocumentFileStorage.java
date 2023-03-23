@@ -678,7 +678,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, documentID);
       }
-      String name = Text.escapeIllegalJcrChars(cleanName(title));
+      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
       //clean node name
       name = URLDecoder.decode(name, "UTF-8");
       if (name.indexOf('.') == -1) {
@@ -692,7 +692,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
 
-      checkNodeExistence(session, node, title);
+      checkNodeExistence(session, node, name);
 
       if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
         node.addMixin(NodeTypeConstants.EXO_MODIFY);
