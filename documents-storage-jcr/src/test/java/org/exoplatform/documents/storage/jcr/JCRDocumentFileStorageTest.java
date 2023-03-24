@@ -985,4 +985,5 @@ public class JCRDocumentFileStorageTest {
     assertEquals(false, accessList1.isEmpty());
     assertEquals(true, accessList1.get("canAccess"));
     assertEquals(true, accessList1.get("canEdit"));
+  }
 }
