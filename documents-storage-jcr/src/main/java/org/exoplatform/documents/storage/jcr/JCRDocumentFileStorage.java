@@ -314,13 +314,44 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
-          String statement = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, includeHiddenFiles);
-          Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+          // Load folders + symlink of folders
+          String statementOfFolders = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, List.of(NodeTypeConstants.NT_UNSTRUCTURED, NodeTypeConstants.NT_FOLDER, NodeTypeConstants.EXO_SYMLINK), includeHiddenFiles);
+          Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
           ((QueryImpl)jcrQuery).setOffset(offset);
           ((QueryImpl)jcrQuery).setLimit(limit);
           QueryResult queryResult = jcrQuery.execute();
           NodeIterator nodeIterator = queryResult.getNodes();
-          return toNodes(identityManager, session, nodeIterator, aclIdentity, spaceService, includeHiddenFiles);
+          List<AbstractNode> fileItems = new ArrayList<>(toNodes(identityManager,
+                                                 session,
+                                                 nodeIterator,
+                                                 aclIdentity,
+                                                 spaceService,
+                                                 includeHiddenFiles,
+                                                 filter).stream().filter(AbstractNode::isFolder).toList());
+          // load files + symlink of files
+          int itemsSize = fileItems.size();
+          if(itemsSize < limit) {
+            String statementOfSymlinks = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, List.of(NodeTypeConstants.NT_FILE, NodeTypeConstants.EXO_SYMLINK), includeHiddenFiles);
+            jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfSymlinks, Query.SQL);
+            ((QueryImpl)jcrQuery).setOffset(0);
+            ((QueryImpl)jcrQuery).setLimit(limit);
+            queryResult = jcrQuery.execute();
+            nodeIterator = queryResult.getNodes();
+            List<AbstractNode> fileItemsToAdd = toNodes(identityManager,
+                                                   session,
+                                                   nodeIterator,
+                                                   aclIdentity,
+                                                   spaceService,
+                                                   includeHiddenFiles,
+                                                   filter).stream().filter(f -> !f.isFolder()).toList();
+            int limitToAdd = limit - (itemsSize + fileItemsToAdd.size());
+            if(limitToAdd < 0) {
+              fileItems.addAll(fileItemsToAdd.subList(0, limit - itemsSize));
+            } else if (limitToAdd > 0) {
+              fileItems.addAll(fileItemsToAdd);
+            }
+          }
+          return fileItems;
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -640,7 +671,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       //clean node name
       name = URLDecoder.decode(name, "UTF-8");
       if (name.indexOf('.') == -1) {
-        String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE) && node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+        String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE)
+            && node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString()
+                                                             : node.getName();
         if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
           String ext = oldName.substring(oldName.lastIndexOf('.'));
           title = title.concat(ext);
@@ -662,15 +695,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         node.addMixin(NodeTypeConstants.EXO_SORTABLE);
       }
-      if (!node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-        node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
-      }
       node.save();
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
       String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat(SLASH).concat(name);
       node.getSession().getWorkspace().move(srcPath, destPath);
+      if (!node.isNodeType(NodeTypeConstants.EXO_RSS_ENABLE) && node.canAddMixin(NodeTypeConstants.EXO_RSS_ENABLE)) {
+        node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
+      }
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.setProperty(NodeTypeConstants.EXO_NAME, name);
       node.save();
@@ -934,8 +967,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                               .toString();
   }
 
-  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection, boolean includeHiddenFiles) {
+  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection, List<String> types, boolean includeHiddenFiles) {
     String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable' ";
+    String typesStatement =" and (jcr:primaryType ='" + String.join("' OR jcr:primaryType ='", types) + "') ";
     return new StringBuilder().append("SELECT * FROM nt:base")
             .append(" WHERE jcr:path LIKE '")
             .append(folderPath)
@@ -943,6 +977,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             .append(" AND NOT jcr:path LIKE '")
             .append(folderPath)
             .append("/%/%' ")
+            .append(typesStatement)
             .append(hiddenableQuery)
             .append(" ORDER BY ")
             .append(sortField)
@@ -1178,8 +1213,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if(node == null) return false;
 
       String userId = aclIdentity.getUserId();
-      ExtendedNode extendedNode = (ExtendedNode) node;
-      List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
+      List<AccessControlEntry> permsList = ((ExtendedNode) node).getACL().getPermissionEntries();
       for (AccessControlEntry accessControlEntry : permsList) {
         String nodeAclIdentity = accessControlEntry.getIdentity();
         MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();

@@ -17,7 +17,7 @@
         </v-icon>
       </v-btn>
     </template>
-    <span class="center">{{ icon.title }}</span>
+    <span class="center">{{ $shareDocumentSuspended ? shareDocumentSuspendedLabel : icon.title }}</span>
   </v-tooltip>
 </template>
 
@@ -100,11 +100,14 @@ export default {
     },
     btnClass(){
       return this.isMobile && 'ms-2' || 'me-4' ;
+    },
+    shareDocumentSuspendedLabel(){
+      return this.$t('documents.label.share.document.suspend');
     }
   },
   methods: {
     changeVisibility() {
-      if (!this.file.acl.canEdit) {
+      if (!this.file.acl.canEdit || this.$shareDocumentSuspended) {
         return;
       }
       this.$root.$emit('open-visibility-drawer', this.file);

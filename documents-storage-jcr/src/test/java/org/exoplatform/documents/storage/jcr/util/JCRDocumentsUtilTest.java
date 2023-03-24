@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
@@ -259,7 +260,7 @@ public class JCRDocumentsUtilTest {
     when(file1.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUID1);
     when(extendedSession.getNodeByIdentifier("file1Identifier")).thenReturn(null);
     //then
-    List <AbstractNode> listNodes1 = JCRDocumentsUtil.toNodes(identityManager, extendedSession, nodeIterator, identity, spaceService,false);
+    List <AbstractNode> listNodes1 = JCRDocumentsUtil.toNodes(identityManager, extendedSession, nodeIterator, identity, spaceService,false, null);
     assertEquals(0, listNodes1.size());
 
     //when
@@ -274,9 +275,14 @@ public class JCRDocumentsUtilTest {
     when(file2.getPrimaryNodeType()).thenReturn(filePrimaryNT);
     when(file2.getPrimaryNodeType().getName()).thenReturn("");
     when(nodeIterator.hasNext()).thenReturn(true, true, false);
+    AccessControlList accessControlList = mock(AccessControlList.class);
+    when(accessControlList.getPermissionEntries()).thenReturn(new ArrayList<>());
+    when(((ExtendedNode)file1).getACL()).thenReturn(accessControlList);
+    when(((ExtendedNode)file2).getACL()).thenReturn(accessControlList);
+
     when(nodeIterator.nextNode()).thenReturn(file1, file2);
     //then
-    List <AbstractNode> listNodes2 = JCRDocumentsUtil.toNodes(identityManager, extendedSession, nodeIterator, identity, spaceService,false);
+    List <AbstractNode> listNodes2 = JCRDocumentsUtil.toNodes(identityManager, extendedSession, nodeIterator, identity, spaceService,false, null);
     assertEquals(1, listNodes2.size());
   }
 

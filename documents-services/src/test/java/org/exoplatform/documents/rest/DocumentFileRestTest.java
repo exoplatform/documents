@@ -68,6 +68,10 @@ import org.exoplatform.social.metadata.model.MetadataType;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.exoplatform.commons.api.settings.SettingService;
+import org.exoplatform.commons.api.settings.SettingValue;
+import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.commons.api.settings.data.Scope;
 
 @RunWith(PowerMockRunner.class)
 public class DocumentFileRestTest {
@@ -92,6 +96,8 @@ public class DocumentFileRestTest {
 
   private ListenerService listenerService;
 
+  private SettingService  settingService;
+
   @Before
   public void setUp() {
     spaceService = mock(SpaceService.class);
@@ -102,6 +108,7 @@ public class DocumentFileRestTest {
     documentFileStorage = mock(DocumentFileStorage.class);
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     listenerService = mock(ListenerService.class);
+    settingService = mock(SettingService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
@@ -109,7 +116,7 @@ public class DocumentFileRestTest {
                                                       identityManager,
                                                       identityRegistry,
                                                       listenerService);
-    documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
+    documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService, settingService);
   }
 
   @Test
@@ -838,7 +845,7 @@ public class DocumentFileRestTest {
     DocumentFileService documentFileService = mock(DocumentFileService.class);
     PowerMockito.mockStatic(RestUtils.class);
     PowerMockito.mockStatic(EntityBuilder.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService, settingService);
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     NodePermission nodePermission = mock(NodePermission.class);
@@ -857,6 +864,12 @@ public class DocumentFileRestTest {
     doThrow(new IllegalAccessException()).when(documentFileService).updatePermissions("123", nodePermission, 1L);
     Response response3 = documentFileRest1.updatePermissions(nodeEntity);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
+    //assert forbidden response status when the share documents forbidden by administrators
+    when(settingService.get(Context.GLOBAL.id("sharedDocumentStatus"),
+                            Scope.APPLICATION.id("sharedDocumentStatus"),
+                            "exo:sharedDocumentStatus")).thenReturn((SettingValue) SettingValue.create("true"));
+    Response response4 = documentFileRest1.updatePermissions(nodeEntity);
+    assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response4.getStatus());
   }
 
   @Test
@@ -865,7 +878,7 @@ public class DocumentFileRestTest {
     PowerMockito.mockStatic(RestUtils.class);
     when(RestUtils.getCurrentUser()).thenReturn("user");
     DocumentFileService documentFileService = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService, settingService);
 
     Response response = documentFileRest1.createShortcut(null,null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
@@ -937,7 +950,7 @@ public class DocumentFileRestTest {
   public void updateDocumentDescription() throws IllegalAccessException, RepositoryException {
     PowerMockito.mockStatic(RestUtils.class);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService ,settingService);
     when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     doNothing().when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
     Response response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
@@ -952,7 +965,7 @@ public class DocumentFileRestTest {
   public void getFullTreeData() {
     PowerMockito.mockStatic(RestUtils.class);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
     Response response =  documentFileRest1.getFullTreeData(null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(IllegalAccessException.class);
@@ -982,7 +995,7 @@ public class DocumentFileRestTest {
     fileVersion.setAuthorFullName("user user");
     fileVersion.setAuthor("user");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
     Response response = documentFileRest1.updateVersionSummary(summary, null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     response = documentFileRest1.updateVersionSummary(summary, "1225", null);
@@ -1010,7 +1023,7 @@ public class DocumentFileRestTest {
     Map<String, String> summary = new HashMap<>();
     summary.put("value", "test");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
     when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     when(documentFileService1.updateVersionSummary(anyString(),
             anyString(),
@@ -1034,7 +1047,7 @@ public class DocumentFileRestTest {
     fileVersion.setAuthorFullName("user user");
     fileVersion.setAuthor("user");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
     Response response = documentFileRest1.restoreVersion(null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
@@ -1055,7 +1068,7 @@ public class DocumentFileRestTest {
     PowerMockito.mockStatic(RestUtils.class);
     when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).renameDocument(1L, "123", "test", 2L);
     Response response = documentFileRest1.renameDocument("123", 1L, "test");
     assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
@@ -1067,7 +1080,7 @@ public class DocumentFileRestTest {
     PowerMockito.mockStatic(RestUtils.class);
     when(RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).moveDocument(1L, "123", "test", 2L, "");
     Response response = documentFileRest1.moveDocument("123",1L, "test", "");
     assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
