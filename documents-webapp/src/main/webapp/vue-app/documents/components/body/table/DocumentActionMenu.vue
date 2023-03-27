@@ -37,8 +37,8 @@ export default {
   created() {
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
     document.addEventListener('documents-supported-document-types-updated', this.refreshSupportedDocumentExtensions);
-    this.refreshMenuExtensions();
     this.refreshSupportedDocumentExtensions();
+    this.refreshMenuExtensions();
   },
   computed: {
     params() {
