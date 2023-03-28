@@ -32,7 +32,9 @@
             :query="query"
             :is-mobile="isMobile" />
         </div>
-        <div v-else-if="!filesLoad && !loading">
+        <div v-else-if="!filesLoad && !loading"
+             @drop="dragFile"
+             @dragover="startDrag">
           <documents-no-body
             :query="query"
             :is-mobile="isMobile" />
