@@ -28,6 +28,19 @@
         </init-params>
     </component>
 
+    <component>
+        <key>DocumentMultiSelectionFeatureProperties</key>
+        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
+        <init-params>
+            <properties-param>
+                <name>DocumentMultiSelectionFeatureProperties</name>
+                <description>Multi selection enablement flag</description>
+                <property name="exo.feature.DocumentMultiSelection.enabled"
+                          value="${exo.feature.DocumentMultiSelection.enabled:false}" />
+            </properties-param>
+        </init-params>
+    </component>
+
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
         <component-plugin>

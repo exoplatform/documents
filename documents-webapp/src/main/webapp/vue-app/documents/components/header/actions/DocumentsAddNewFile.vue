@@ -1,8 +1,42 @@
 <template>
   <div>
     <div v-show="isMobile && !showMobileFilter || !isMobile">
+      <v-menu
+        v-if="showSelectionsMenu && documentMultiSelectionActive"
+        v-model="selectionsMenu"
+        class="add-menu-btn width-full"
+        offset-y>
+        <template #activator="{ on, attrs }">
+          <v-btn
+            class="btn btn-primary primary"
+            v-bind="attrs"
+            v-on="on">
+            <v-icon
+              class="me-1"
+              size="13"
+              dark>
+              fas fa-ellipsis-v
+            </v-icon>
+            <span
+              v-if="selectionsLength"
+              class="font-weight-regular me-1">
+              {{ selectionsLength }}
+            </span>
+            <span
+              v-if="!isMobile"
+              class="font-weight-regular">
+              {{ $t('document.multiSelection.selected.elements.label') }}
+            </span>
+          </v-btn>
+        </template>
+        <v-list>
+          <v-list-item class="add-menu-list-item">
+            <v-list-item-title>Not yet implemented</v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
       <button
-        v-if="!isFolderView"
+        v-else-if="!isFolderView"
         :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
         @click="openDrawer()">
@@ -15,7 +49,7 @@
         {{ !isMobile ? $t('documents.button.addNew') : '' }}
       </button>
       <button
-        v-if="isFolderView"
+        v-else
         :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
         :key="postKey"
@@ -90,9 +124,15 @@ export default {
     showMobileFilter: false,
     addMenu: false,
     waitTimeUntilCloseMenu: 200,
-    currentFolder: null
+    currentFolder: null,
+    showSelectionsMenu: false,
+    selectionsMenu: false,
+    selectionsLength: 0,
   }),
   computed: {
+    documentMultiSelectionActive() {
+      return eXo?.env?.portal?.documentMultiSelection;
+    },
     isFolderView() {
       return this.selectedView === 'folder';
     },
@@ -102,9 +142,10 @@ export default {
   },
   created() {
     $(document).on('mousedown', () => {
-      if (this.addMenu) {
+      if (this.addMenu || this.selectionsMenu) {
         window.setTimeout(() => {
           this.addMenu = false;
+          this.selectionsMenu = false;
         }, this.waitTimeUntilCloseMenu);
       }
     });
@@ -113,11 +154,24 @@ export default {
     });
     document.addEventListener('entity-attachments-updated', this.refreshFilesList);
     this.$root.$on('set-current-folder', this.setCurrentFolder);
+    this.$root.$on('selection-documents-list-updated', this.handleSelectionListUpdate);
+    this.$root.$on('reset-selections', this.handleResetSelections);
+  },
+  beforeDestroy() {
+    this.$root.$off('reset-selections', this.handleResetSelections);
   },
   destroyed() {
     document.removeEventListener('entity-attachments-updated', this.refreshFilesList);
   },
   methods: {
+    handleResetSelections() {
+      this.showSelectionsMenu = false;
+      this.selectionsLength = 0;
+    },
+    handleSelectionListUpdate(selectedList) {
+      this.showSelectionsMenu = selectedList.length > 1;
+      this.selectionsLength = selectedList.length;
+    },
     refreshFilesList() {
       this.$root.$emit('documents-refresh-files');
     },

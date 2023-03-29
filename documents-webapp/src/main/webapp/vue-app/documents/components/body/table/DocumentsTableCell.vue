@@ -31,6 +31,10 @@ export default {
       type: String,
       default: null
     },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
   },
   computed: {
     params() {
@@ -40,7 +44,8 @@ export default {
         extendedSearch: this.extendedSearch,
         extension: this.extension,
         isMobile: this.isMobile,
-        selectedView: this.selectedView
+        selectedView: this.selectedView,
+        selectedDocuments: this.selectedDocuments
       };
     },
   },
