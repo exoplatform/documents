@@ -119,6 +119,7 @@ export default {
         this.actualFolderId = folder.id;
         this.getBreadCrumbs(); 
       }
+      this.$root.$emit('breadcrumb-updated');
     },
     openFolder(folder) {
       if (folder.name === 'Private'){
@@ -132,6 +133,7 @@ export default {
         this.getBreadCrumbs();
         this.$root.$emit('document-open-folder', folder);
       }
+      this.$root.$emit('breadcrumb-updated');
     },
     openTreeFolderDrawer(){
       this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);

@@ -3,6 +3,7 @@
     <upload-overlay />
     <v-data-table
       ref="dataTable"
+      class="documents-folder-table border-box-sizing"
       :headers="headers"
       :items="items"
       :items-per-page="pageSize"
@@ -16,12 +17,55 @@
       :class="loadingClass"
       :custom-sort="customSort"
       mobile-breakpoint="960"
+      :show-select="!isMobile && documentMultiSelectionActive"
       hide-default-footer
       disable-pagination
-      disable-filtering
-      class="documents-folder-table border-box-sizing">
-      <template slot="group.header"><span></span></template>
+      @item-selected="itemSelected">
+      <template slot="group.header">
+        <span></span>
+      </template>
+      <template #[`header.data-table-select`]="{ on , props }">
+        <v-simple-checkbox
+          v-if="showSelectAll"
+          v-model="selectAll"
+          v-on="on"
+          v-bind="props"
+          color="primary"
+          class="mt-auto"
+          @click="selectAllDocuments" />
+      </template>
       <template
+        v-if="!isMobile && documentMultiSelectionActive"
+        #body="{ items }">
+        <tbody>
+          <tr
+            v-for="item in items"
+            :key="item.id"
+            :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+            @mouseover="showSelectionInput(item)"
+            @mouseleave="hideSelectionInput(item)">
+            <td>
+              <documents-selection-cell
+                :file="item"
+                :selected-documents="selectedDocuments" />
+            </td>
+            <td
+              v-for="header in extendedCells"
+              :key="header.value">
+              <documents-table-cell
+                :extension="header.cellExtension"
+                :file="item"
+                :query="query"
+                :extended-search="extendedSearch"
+                :is-mobile="isMobile"
+                :selected-view="selectedView"
+                :selected-documents="selectedDocuments" />
+            </td>
+          </tr>
+        </tbody>
+      </template>
+      <template
+        v-else
         v-for="header in extendedCells"
         #[`item.${header.value}`]="{item}">
         <documents-table-cell
@@ -32,7 +76,8 @@
           :extended-search="extendedSearch"
           :is-mobile="isMobile"
           :selected-view="selectedView"
-          :class="header.value === 'name' && 'ms-8'" />
+          :selected-documents="selectedDocuments"
+          :class="header.value === 'name' && isXScreen && 'ms-8'" />
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">
@@ -107,7 +152,11 @@ export default {
     selectedView: {
       type: String,
       default: null
-    }
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
   },
   data: () => ({
     lang: eXo.env.portal.language,
@@ -119,8 +168,18 @@ export default {
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
     mobileUnfriendlyExtensions: ['visibility','lastUpdated', 'size', 'lastActivity', 'favorite'],
+    selectAll: false
   }),
   computed: {
+    isXScreen() {
+      return this.$vuetify.breakpoint.width < 600;
+    },
+    documentMultiSelectionActive() {
+      return eXo?.env?.portal?.documentMultiSelection;
+    },
+    showSelectAll() {
+      return this.selectedDocuments && this.selectedDocuments.length;
+    },
     loadingClass() {
       if (this.loading && !this.items.length) {
         return this.isMobile ? 'loadingClassMobile' : 'loadingClass';
@@ -192,6 +251,18 @@ export default {
     this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    isDocumentSelected(item) {
+      return this.selectedDocuments.findIndex(file => file.id === item.id) !== -1;
+    },
+    selectAllDocuments() {
+      this.$root.$emit('select-all-documents', this.selectAll);
+    },
+    showSelectionInput(file) {
+      this.$root.$emit('show-selection-input', file);
+    },
+    hideSelectionInput(file) {
+      this.$root.$emit('hide-selection-input', file);
+    },
     customSort: function (items, sortBy, isDesc) {
       if (sortBy[1] === 'name') {
         const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
