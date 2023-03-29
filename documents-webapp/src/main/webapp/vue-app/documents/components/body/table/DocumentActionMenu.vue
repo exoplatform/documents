@@ -62,7 +62,7 @@ export default {
       if (!this.fileCanEdit) {
         extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
       }
-      extensions = extensions.filter(extension => extension.enabled(this.file));
+      extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile));
 
       this.menuExtensions = extensions;
     },
