@@ -1,8 +1,19 @@
 <template>
   <div
-    class="d-flex flex-nowrap">
+    class="d-flex flex-nowrap"
+    @touchstart="touchStart"
+    @touchend="cancelTouch"
+    @touchmove="cancelTouch">
+    <div
+      v-if="documentMultiSelectionActive"
+      class="ma-auto">
+      <documents-selection-cell
+        v-if="isMobile"
+        :file="file"
+        :selected-documents="selectedDocuments" />
+    </div>
     <a
-      class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-document-title">
+      class="attachment d-flex flex-nowrap text-color not-clickable text-decoration-none openPreviewDoc width-document-title">
       <div class="mt-auto mb-auto">
         <v-progress-circular
           v-if="loading"
@@ -65,7 +76,7 @@
     <documents-info-details-cell
       v-if="!isMobile"
       :file="file"
-      :is-mobile="isMobile" 
+      :is-mobile="isMobile"
       :class="editNameMode ? '' : 'button-info-details'" />
     <div
       class="ma-auto"
@@ -131,7 +142,11 @@ export default {
     selectedView: {
       type: String,
       default: null
-    }
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
   },
   data: () => ({
     loading: false,
@@ -155,9 +170,13 @@ export default {
       o: '(o|ó|ŏ|ǒ|ô|ố|ộ|ồ|ổ|ỗ|ö|ȫ|ȯ|ȱ|ọ|ő|ȍ|ò|ỏ|ơ|ớ|ợ|ờ|ở|ỡ|ȏ|ō|ṓ|ṑ|ǫ|ǭ|ø|ǿ|õ|ṍ|ṏ|ȭ)',
       u: '(u|ú|ŭ|ǔ|û|ṷ|ü|ǘ|ǚ|ǜ|ǖ|ṳ|ụ|ű|ȕ|ù|ủ|ư|ứ|ự|ừ|ử|ữ|ȗ|ū|ṻ|ų|ᶙ|ů|ũ|ṹ|ṵ)'
     },
-    icon: null
+    icon: null,
+    touchTimer: null,
   }),
   computed: {
+    documentMultiSelectionActive() {
+      return eXo?.env?.portal?.documentMultiSelection && this.$vuetify.breakpoint.width >= 600;
+    },
     title() {
       let docTitle = this.fileName;
       try {
@@ -210,6 +229,18 @@ export default {
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
+    touchStart() {
+      if (!this.documentMultiSelectionActive) {
+        return;
+      }
+      this.touchTimer = setTimeout(() => {
+        this.touchTimer = null;
+        this.$root.$emit('show-selection-input', this.file, true);
+      }, 800);
+    },
+    cancelTouch() {
+      clearTimeout(this.touchTimer);
+    },
     getFileIcon() {
       const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
       if (this.file?.folder) {

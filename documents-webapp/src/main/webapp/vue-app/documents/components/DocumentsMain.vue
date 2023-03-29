@@ -61,6 +61,7 @@
             :show-extend-filter="showExtendFilter"
             :primary-filter="primaryFilter"
             :selected-view="selectedView"
+            :selected-documents="selectedDocuments"
             :is-mobile="isMobile" />
           <exo-document-notification-alerts />
         </div>
@@ -131,8 +132,8 @@
         @version-update-description="updateVersionSummary"
         @load-more="loadMoreVersions"
         ref="documentVersionHistory" />
-      </div>
-    </v-app>
+    </div>
+  </v-app>
 </template>
 <script>
 
@@ -186,6 +187,7 @@ export default {
     isAlertActionRunning: false,
     documentsToBeDeleted: [],
     showOverlay: false,
+    selectedDocuments: []
   }),
   computed: {
     progressAlertColor() {
@@ -285,11 +287,22 @@ export default {
     this.$on('keepBoth', this.handleConflicts);
     this.$on('createNewVersion', this.handleConflicts);
     this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
+    this.$root.$on('update-selection-documents-list', this.updateSelectionList);
+    this.$root.$on('breadcrumb-updated', this.resetSelections);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    updateSelectionList(selected, file) {
+      const index = this.selectedDocuments.findIndex(object => object.id === file.id);
+      if (selected && index === -1) {
+        this.selectedDocuments.push(file);
+      } else if (!selected) {
+        this.selectedDocuments.splice(index, 1);
+      }
+      this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
+    },
     handleAlertClose() {
       this.$root.$emit('cancel-action');
       this.alert = false;
@@ -518,9 +531,14 @@ export default {
           window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Public')[0]}/Public${folderPath}?view=folder`);
         }
       }
+      this.resetSelections();
     },
     loadMore() {
       this.refreshFiles({'primaryFilter': this.primaryFilter, 'append': true});
+    },
+    resetSelections() {
+      this.$root.$emit('reset-selections');
+      this.selectedDocuments = [];
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
@@ -532,6 +550,7 @@ export default {
       this.folderPath = null;
       this.files = [];
       this.$root.$emit('resetSearch');
+      this.resetSelections();
       this.primaryFilter='all';
       this.query=null;
       this.extendedSearch=false;
@@ -996,6 +1015,7 @@ export default {
       return this.$nextTick();
     },
     onBrowserNavChange() {
+      this.resetSelections();
       this.getDocumentDataFromUrl();
       this.refreshFiles()
         .finally(() => this.$root.$emit('update-breadcrumb'));
