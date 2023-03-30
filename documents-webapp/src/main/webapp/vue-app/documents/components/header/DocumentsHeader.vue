@@ -4,7 +4,8 @@
       <documents-header-left
         v-if="canAdd"
         :selected-view="selectedView" 
-        :is-mobile="isMobile" />
+        :is-mobile="isMobile"
+        :selected-documents="selectedDocuments" />
       <v-spacer />
       <documents-header-center
         v-if="!canShowMobileFilter"
@@ -50,6 +51,10 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
     }
   },
   data: () => ({

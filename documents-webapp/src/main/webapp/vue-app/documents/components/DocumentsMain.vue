@@ -16,7 +16,8 @@
           :can-add="canAdd"
           :query="query"
           :primary-filter="primaryFilter"
-          :is-mobile="isMobile" 
+          :is-mobile="isMobile"
+          :selected-documents="selectedDocuments"
           class="py-2" />
         <div v-if="searchResult && !loading">
           <documents-no-result-body
@@ -25,16 +26,17 @@
             :query="query" />
         </div>
         <div
-          v-else-if="!filesLoad && !loading && selectedView == 'folder' "
+          v-else-if="!filesLoad && !loading && selectedView === 'folder' "
           @drop="dragFile"
           @dragover="startDrag">
           <documents-no-body-folder
             :query="query"
             :is-mobile="isMobile" />
         </div>
-        <div v-else-if="!filesLoad && !loading"
-             @drop="dragFile"
-             @dragover="startDrag">
+        <div
+          v-else-if="!filesLoad && !loading"
+          @drop="dragFile"
+          @dragover="startDrag">
           <documents-no-body
             :query="query"
             :is-mobile="isMobile" />

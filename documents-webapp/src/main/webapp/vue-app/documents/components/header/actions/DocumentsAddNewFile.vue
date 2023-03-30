@@ -10,7 +10,8 @@
           <v-btn
             class="btn btn-primary primary"
             v-bind="attrs"
-            v-on="on">
+            v-on="!isMobile && on"
+            @click="openMultiSelectionMenuAction">
             <v-icon
               class="me-1"
               size="13"
@@ -29,11 +30,10 @@
             </span>
           </v-btn>
         </template>
-        <v-list>
-          <v-list-item class="add-menu-list-item">
-            <v-list-item-title>Not yet implemented</v-list-item-title>
-          </v-list-item>
-        </v-list>
+        <documents-actions-menu
+          :selected-documents="selectedDocuments"
+          :is-multi-selection="true"
+          :is-mobile="isMobile" />
       </v-menu>
       <button
         v-else-if="!isFolderView"
@@ -118,6 +118,10 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
     }
   },
   data: () => ({
@@ -164,6 +168,11 @@ export default {
     document.removeEventListener('entity-attachments-updated', this.refreshFilesList);
   },
   methods: {
+    openMultiSelectionMenuAction() {
+      if (this.isMobile) {
+        this.$root.$emit('open-file-action-menu-for-multi-selection', this.selectedDocuments);
+      }
+    },
     handleResetSelections() {
       this.showSelectionsMenu = false;
       this.selectionsLength = 0;

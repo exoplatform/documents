@@ -8,8 +8,10 @@
       v-if="documentMultiSelectionActive"
       class="ma-auto">
       <documents-selection-cell
+        class="ms-2 me-2"
         v-if="isMobile"
         :file="file"
+        :select-all-checked="selectAllChecked"
         :selected-documents="selectedDocuments" />
     </div>
     <a
@@ -147,6 +149,10 @@ export default {
       type: Array,
       default: () => []
     },
+    selectAllChecked: {
+      type: Boolean,
+      default: false,
+    },
   },
   data: () => ({
     loading: false,
@@ -236,7 +242,7 @@ export default {
       this.touchTimer = setTimeout(() => {
         this.touchTimer = null;
         this.$root.$emit('show-selection-input', this.file, true);
-      }, 800);
+      }, 600);
     },
     cancelTouch() {
       clearTimeout(this.touchTimer);

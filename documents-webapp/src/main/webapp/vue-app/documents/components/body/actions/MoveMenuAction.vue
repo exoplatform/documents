@@ -24,6 +24,9 @@
       fa-arrows-alt
     </v-icon>
     <span class="ps-1">{{ $t('document.label.move') }}</span>
+    <span v-if="disabledExtension && isMultiSelection">
+      ({{ $t('document.multiSelection.option.disabled.label') }})
+    </span>
   </div>
 </template>
 <script>
@@ -36,7 +39,15 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
-    }
+    },
+    disabledExtension: {
+      type: Boolean,
+      default: false
+    },
+    isMultiSelection: {
+      type: Boolean,
+      default: false
+    },
   },
   methods: {
     moveDocument(){

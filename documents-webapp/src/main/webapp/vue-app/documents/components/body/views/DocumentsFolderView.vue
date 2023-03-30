@@ -19,8 +19,7 @@
       mobile-breakpoint="960"
       :show-select="!isMobile && documentMultiSelectionActive"
       hide-default-footer
-      disable-pagination
-      @item-selected="itemSelected">
+      disable-pagination>
       <template slot="group.header">
         <span></span>
       </template>
@@ -47,6 +46,7 @@
             <td>
               <documents-selection-cell
                 :file="item"
+                :select-all-checked="selectAll"
                 :selected-documents="selectedDocuments" />
             </td>
             <td
@@ -66,18 +66,26 @@
       </template>
       <template
         v-else
-        v-for="header in extendedCells"
-        #[`item.${header.value}`]="{item}">
-        <documents-table-cell
-          :key="header.value"
-          :extension="header.cellExtension"
-          :file="item"
-          :query="query"
-          :extended-search="extendedSearch"
-          :is-mobile="isMobile"
-          :selected-view="selectedView"
-          :selected-documents="selectedDocuments"
-          :class="header.value === 'name' && isXScreen && 'ms-8'" />
+        #item="{item}">
+        <tr
+          :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+          class="v-data-table__mobile-table-row">
+          <td
+            v-for="header in extendedCells"
+            :key="item.id"
+            class="v-data-table__mobile-row">
+            <documents-table-cell
+              :extension="header.cellExtension"
+              :file="item"
+              :query="query"
+              :extended-search="extendedSearch"
+              :is-mobile="isMobile"
+              :selected-view="selectedView"
+              :select-all-checked="selectAll"
+              :selected-documents="selectedDocuments"
+              :class="header.value === 'name' && isXScreen && 'ms-10'" />
+          </td>
+        </tr>
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">
@@ -239,6 +247,7 @@ export default {
 
   },
   created() {
+    this.$root.$on('select-all-documents', (value) => this.selectAll = value);
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
