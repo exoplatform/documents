@@ -41,11 +41,12 @@
           <td>
             <documents-selection-cell
               :file="item"
+              :select-all-checked="selectAll"
               :selected-documents="selectedDocuments" />
           </td>
           <td
             v-for="header in extendedCells"
-            :key="header.value">
+            :key="header.value + item.id">
             <documents-table-cell
               :extension="header.cellExtension"
               :file="item"
@@ -59,18 +60,26 @@
       </template>
       <template
         v-else
-        v-for="header in extendedCells"
-        #[`item.${header.value}`]="{item}">
-        <documents-table-cell
-          :key="header.value"
-          :extension="header.cellExtension"
-          :file="item"
-          :query="query"
-          :extended-search="extendedSearch"
-          :is-mobile="isMobile"
-          :selected-view="selectedView"
-          :selected-documents="selectedDocuments"
-          :class="header.value === 'name' && isXScreen && 'ms-8'" />
+        #item="{item}">
+        <tr
+          :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+          class="v-data-table__mobile-table-row">
+          <td
+            class="v-data-table__mobile-row">
+            <documents-table-cell
+              v-for="header in extendedCells"
+              :key="header.value + item.id"
+              :extension="header.cellExtension"
+              :file="item"
+              :query="query"
+              :extended-search="extendedSearch"
+              :is-mobile="isMobile"
+              :selected-view="selectedView"
+              :select-all-checked="selectAll"
+              :selected-documents="selectedDocuments"
+              :class="header.value === 'name' && isXScreen && 'ms-10'" />
+          </td>
+        </tr>
       </template>
       <template
         v-if="grouping"
