@@ -250,9 +250,9 @@ export default {
       return this.file?.creatorIdentity;
     },
     disableButton() {
-      return this.file.description && this.file.description.replace( /(<([^>]+)>)/ig, '').length>1300
-      || this.file.description === this.fileInitialDescription 
-      || (!this.file.description && !this.fileInitialDescription);
+      return this.file?.description && this.file?.description.replace( /(<([^>]+)>)/ig, '').length>1300
+      || this.file?.description === this.fileInitialDescription
+      || (!this.file?.description && !this.fileInitialDescription);
     },
   },
   created() {

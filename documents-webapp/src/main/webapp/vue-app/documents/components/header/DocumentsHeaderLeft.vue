@@ -19,12 +19,17 @@ export default {
       type: Boolean,
       default: false
     },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    }
   },
   computed: {
     params() {
       return {
         selectedView: this.selectedView,
         isMobile: this.isMobile,
+        selectedDocuments: this.selectedDocuments
       };
     },
   },
