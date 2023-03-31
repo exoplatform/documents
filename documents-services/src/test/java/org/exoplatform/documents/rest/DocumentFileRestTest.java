@@ -17,27 +17,15 @@
 
 package org.exoplatform.documents.rest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import javax.jcr.RepositoryException;
 import javax.ws.rs.core.Response;
 
-import org.exoplatform.commons.api.settings.SettingService;
-import org.exoplatform.commons.api.settings.SettingValue;
-import org.exoplatform.commons.api.settings.data.Context;
-import org.exoplatform.commons.api.settings.data.Scope;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,36 +34,20 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.api.settings.SettingService;
+import org.exoplatform.commons.api.settings.SettingValue;
+import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
-import org.exoplatform.documents.model.AbstractNode;
-import org.exoplatform.documents.model.BreadCrumbItem;
-import org.exoplatform.documents.model.DocumentFolderFilter;
-import org.exoplatform.documents.model.DocumentGroupsSize;
-import org.exoplatform.documents.model.DocumentTimelineFilter;
-import org.exoplatform.documents.model.FileNode;
-import org.exoplatform.documents.model.FileVersion;
-import org.exoplatform.documents.model.FolderNode;
-import org.exoplatform.documents.model.FullTreeItem;
-import org.exoplatform.documents.model.NodePermission;
-import org.exoplatform.documents.model.PermissionEntry;
-import org.exoplatform.documents.model.PermissionRole;
-import org.exoplatform.documents.rest.model.AbstractNodeEntity;
-import org.exoplatform.documents.rest.model.BreadCrumbItemEntity;
-import org.exoplatform.documents.rest.model.FileNodeEntity;
-import org.exoplatform.documents.rest.model.FileVersionsEntity;
-import org.exoplatform.documents.rest.model.FolderNodeEntity;
-import org.exoplatform.documents.rest.model.IdentityEntity;
-import org.exoplatform.documents.rest.model.NodeAuditTrailItemEntity;
-import org.exoplatform.documents.rest.model.NodeAuditTrailsEntity;
-import org.exoplatform.documents.rest.model.NodePermissionEntity;
-import org.exoplatform.documents.rest.model.PermissionEntryEntity;
-import org.exoplatform.documents.rest.model.Visibility;
+import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.DocumentFileServiceImpl;
+import org.exoplatform.documents.service.DocumentWebSocketService;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.ListenerService;
@@ -123,6 +95,8 @@ public class DocumentFileRestTest {
 
   private SettingService                           settingService;
 
+  private DocumentWebSocketService documentWebSocketService;
+
   @Before
   public void setUp() {
     spaceService = mock(SpaceService.class);
@@ -134,6 +108,7 @@ public class DocumentFileRestTest {
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     listenerService = mock(ListenerService.class);
     settingService = mock(SettingService.class);
+    documentWebSocketService = mock(DocumentWebSocketService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
@@ -141,7 +116,12 @@ public class DocumentFileRestTest {
                                                       identityManager,
                                                       identityRegistry,
                                                       listenerService);
-    documentFileRest = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService,settingService);
+    documentFileRest = new DocumentFileRest(documentFileService,
+                                            spaceService,
+                                            identityManager,
+                                            metadataService,
+                                            settingService,
+                                            documentWebSocketService);
   }
 
   @After
@@ -881,7 +861,12 @@ public class DocumentFileRestTest {
   public void testUpdatePermissions() throws Exception {
     DocumentFileService documentFileService = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 =
-                                       new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService,settingService);
+                                       new DocumentFileRest(documentFileService,
+                                                            spaceService,
+                                                            identityManager,
+                                                            metadataService,
+                                                            settingService,
+                                                            documentWebSocketService);
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     NodePermission nodePermission = mock(NodePermission.class);
@@ -914,7 +899,12 @@ public class DocumentFileRestTest {
   public void testCreateShortcut() throws Exception {
     mockRestUtils().when(() -> RestUtils.getCurrentUser()).thenReturn("user");
     DocumentFileService documentFileService = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService, spaceService, identityManager, metadataService,settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
 
     Response response = documentFileRest1.createShortcut(null, null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
@@ -982,7 +972,12 @@ public class DocumentFileRestTest {
   @Test
   public void updateDocumentDescription() throws IllegalAccessException, RepositoryException {
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService,settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     doNothing().when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
     Response response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
@@ -995,7 +990,12 @@ public class DocumentFileRestTest {
   @Test
   public void getFullTreeData() {
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService,settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
     Response response = documentFileRest1.getFullTreeData(null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(IllegalAccessException.class);
@@ -1023,7 +1023,12 @@ public class DocumentFileRestTest {
     fileVersion.setAuthorFullName("user user");
     fileVersion.setAuthor("user");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService,settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
     Response response = documentFileRest1.updateVersionSummary(summary, null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     response = documentFileRest1.updateVersionSummary(summary, "1225", null);
@@ -1049,7 +1054,12 @@ public class DocumentFileRestTest {
     Map<String, String> summary = new HashMap<>();
     summary.put("value", "test");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     when(documentFileService1.updateVersionSummary(anyString(),
                                                    anyString(),
@@ -1071,7 +1081,12 @@ public class DocumentFileRestTest {
     fileVersion.setAuthorFullName("user user");
     fileVersion.setAuthor("user");
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
     Response response = documentFileRest1.restoreVersion(null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
@@ -1090,7 +1105,12 @@ public class DocumentFileRestTest {
   public void testRenameDocumentWithExistTitle() throws Exception {
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).renameDocument(1L, "123", "test", 2L);
     Response response = documentFileRest1.renameDocument("123", 1L, "test");
     assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
@@ -1100,7 +1120,12 @@ public class DocumentFileRestTest {
   public void testMoveWithExistTitle() throws Exception {
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1, spaceService, identityManager, metadataService, settingService);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).moveDocument(1L, "123", "test", 2L, "");
     Response response = documentFileRest1.moveDocument("123", 1L, "test", "");
     assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());

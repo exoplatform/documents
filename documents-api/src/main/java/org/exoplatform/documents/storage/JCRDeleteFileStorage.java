@@ -16,9 +16,15 @@
  */
 package org.exoplatform.documents.storage;
 
-import org.exoplatform.services.security.Identity;
-
+import java.util.List;
 import java.util.Map;
+
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
+
+import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.services.security.Identity;
 
 public interface JCRDeleteFileStorage {
 
@@ -45,4 +51,34 @@ public interface JCRDeleteFileStorage {
    */
   void undoDelete(String documentId, long userIdentityId);
 
+  /**
+   * Delete document (Move to trash)
+   *
+   * @param session
+   * @param folderPath
+   * @param documentId
+   * @param favorite
+   * @param checkToMoveToTrash
+   * @param delay
+   * @param identity
+   * @param userIdentityId
+   */
+  void deleteDocument(Session session,
+                      String folderPath,
+                      String documentId,
+                      boolean favorite,
+                      boolean checkToMoveToTrash,
+                      long delay,
+                      Identity identity,
+                      long userIdentityId) throws ObjectNotFoundException, RepositoryException;
+
+  /**
+   * Delete a list of document (Move to trash)
+   *
+   * @param actionId
+   * @param items
+   * @param identity
+   * @param authenticatedUserId
+   */
+  void deleteDocuments(int actionId, List<AbstractNode> items, Identity identity, long authenticatedUserId);
 }
