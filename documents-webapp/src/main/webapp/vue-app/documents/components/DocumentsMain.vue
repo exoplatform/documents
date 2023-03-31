@@ -189,7 +189,9 @@ export default {
     isAlertActionRunning: false,
     documentsToBeDeleted: [],
     showOverlay: false,
-    selectedDocuments: []
+    selectedDocuments: [],
+    settings: {},
+    settingsLoaded: false,
   }),
   computed: {
     progressAlertColor() {
@@ -236,6 +238,7 @@ export default {
     this.refreshViewExtensions();
     this.canAddDocument();
 
+    this.$root.$on('documents-bulk-delete', this.bulkDeleteDocument);
     this.$root.$on('documents-refresh-files', this.refreshFiles);
     this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
 
@@ -291,11 +294,29 @@ export default {
     this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
     this.$root.$on('update-selection-documents-list', this.updateSelectionList);
     this.$root.$on('breadcrumb-updated', this.resetSelections);
+    this.initSettings();
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    initSettings(userSettings) {
+      if (userSettings) {
+        this.settings = userSettings;
+        this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
+      } else {
+        return this.$documentFileService.getUserSettings()
+          .then(settings => {
+            if (settings) {
+              this.settings = settings;
+              this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
+            }
+          })
+          .finally(() => {
+            this.settingsLoaded = true;
+          });
+      }
+    },
     updateSelectionList(selected, file) {
       const index = this.selectedDocuments.findIndex(object => object.id === file.id);
       if (selected && index === -1) {
@@ -304,6 +325,18 @@ export default {
         this.selectedDocuments.splice(index, 1);
       }
       this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
+    },
+    handleBulkActionNotif(actionData) {
+      this.loading=false;
+      this.resetSelections();
+      this.refreshFiles();
+      if (actionData.status==='DONE_WITH_ERRORS'){
+        this.$root.$emit('show-alert', {type: 'error', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneWithErrors`)});
+      }
+      if (actionData.status==='DONE_SUCCSUSSFULLY'){
+        this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
+      }
+      
     },
     handleAlertClose() {
       this.$root.$emit('cancel-action');
@@ -482,6 +515,13 @@ export default {
           this.refreshFiles({'deleted': true,'documentId': file.id });
         }
       }, redirectionTime);
+    },
+    bulkDeleteDocument(){
+      this.loading = true;
+      const actionId =crypto.getRandomValues(new Uint32Array(1))[0]; 
+      return this.$documentFileService
+        .bulkDeleteDocuments(actionId,this.selectedDocuments)
+        .catch(e => console.error(e));
     },
     undoDeleteDocument(){
       const deletedDocument = localStorage.getItem('deletedDocument');

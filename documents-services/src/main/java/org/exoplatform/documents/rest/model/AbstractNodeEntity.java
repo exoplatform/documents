@@ -21,9 +21,13 @@ import java.util.Map;
 
 import org.exoplatform.social.rest.entity.MetadataItemEntity;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class AbstractNodeEntity {
 
   public AbstractNodeEntity(boolean isFolder) {
