@@ -22,6 +22,10 @@ export default {
       type: Array,
       default: () => [],
     },
+    selectAllChecked: {
+      type: Boolean,
+      default: false,
+    },
   },
   created() {
     this.$root.$on('update-selection-documents-list', this.handleUpdateSelectionList);
@@ -52,10 +56,16 @@ export default {
       }
     },
     initSelected() {
-      this.checked = this.selectedDocuments.findIndex(file => file.id === this.file.id) !== -1;
+      if (this.selectAllChecked) {
+        this.checked = true;
+        this.selectDocument();
+      } else {
+        this.checked = this.selectedDocuments.findIndex(file => file.id === this.file.id) !== -1;
+      }
       this.show = this.selectedDocuments.length;
     },
     handleSelectAllDocuments(selected) {
+      this.selectAllChecked = true;
       this.checked = selected;
       this.selectDocument();
     },

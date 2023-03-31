@@ -74,10 +74,11 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 11,
   enabled: (file, isMobile) => {
     return file && !file.folder && !file.cloudDriveFolder && isMobile;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['favorite-menu-action'],
   },
@@ -92,6 +93,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 1,
   enabled: () => true,
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['copy-link-menu-action'],
   },
@@ -108,6 +110,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file, isMobile) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && !isMobile;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['edit-menu-action'],
   },
@@ -124,6 +127,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['rename-menu-action'],
   },
@@ -140,6 +144,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['move-menu-action'],
   },
@@ -156,6 +161,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['duplicate-menu-action'],
   },
@@ -172,6 +178,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && !file.sourceID;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['shortcut-menu-action'],
   },
@@ -195,6 +202,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
                 && !file.sourceID
                 && !file.path.includes('News Attachments');
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['visibility-menu-action'],
   },
@@ -211,6 +219,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.versionable;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['versionHistory-menu-action'],
   },
@@ -233,6 +242,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
                 && !file.folder
                 && (file.acl.canEdit || file.sourceID);
   },
+  enabledForMultiSelection: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['download-menu-action'],
   },
@@ -245,10 +255,11 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 40,
+  rank: 12,
   enabled: (file, isMobile) => {
     return file && !file.cloudDriveFolder && !file.folder && isMobile;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['details-menu-action'],
   },
@@ -265,6 +276,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
+  enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['delete-menu-action'],
   },

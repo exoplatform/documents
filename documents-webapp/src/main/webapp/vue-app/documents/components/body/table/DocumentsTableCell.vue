@@ -35,6 +35,10 @@ export default {
       type: Array,
       default: () => []
     },
+    selectAllChecked: {
+      type: Boolean,
+      default: false,
+    },
   },
   computed: {
     params() {
@@ -45,7 +49,8 @@ export default {
         extension: this.extension,
         isMobile: this.isMobile,
         selectedView: this.selectedView,
-        selectedDocuments: this.selectedDocuments
+        selectedDocuments: this.selectedDocuments,
+        selectAllChecked: this.selectAllChecked
       };
     },
   },
