@@ -21,17 +21,12 @@ import org.exoplatform.documents.service.DocumentWebSocketService;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.Listener;
 import org.exoplatform.services.security.Identity;
-import org.exoplatform.social.core.manager.IdentityManager;
 
-public class BulkOperationsDocumentNotificationListener extends Listener<Identity, ActionData> {
-
-  private final IdentityManager           identityManager;
+public class BulkActionDocumentListener extends Listener<Identity, ActionData> {
 
   private final DocumentWebSocketService documentWebSocketService;
 
-  public BulkOperationsDocumentNotificationListener(IdentityManager identityManager,
-                                                    DocumentWebSocketService documentWebSocketService) {
-    this.identityManager = identityManager;
+  public BulkActionDocumentListener(DocumentWebSocketService documentWebSocketService) {
     this.documentWebSocketService = documentWebSocketService;
   }
 

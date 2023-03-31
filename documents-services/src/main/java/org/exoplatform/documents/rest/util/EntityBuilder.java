@@ -78,7 +78,7 @@ public class EntityBuilder {
   }
 
   public static List<AbstractNode> toAbstractNodes(List<AbstractNodeEntity> documents) {
-    return documents.stream().map(document -> toAbstractNode(document)).collect(Collectors.toList());
+    return documents.stream().map(EntityBuilder::toAbstractNode).toList();
   }
 
   public static AbstractNode toAbstractNode(AbstractNodeEntity document) {

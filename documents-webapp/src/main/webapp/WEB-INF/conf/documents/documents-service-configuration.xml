@@ -29,7 +29,7 @@
     <component-plugin>
       <name>bulk_actions_document_event</name>
       <set-method>addListener</set-method>
-      <type>org.exoplatform.documents.listener.BulkOperationsDocumentNotificationListener</type>
+      <type>org.exoplatform.documents.listener.BulkActionDocumentListener</type>
     </component-plugin>
   </external-component-plugins>
 

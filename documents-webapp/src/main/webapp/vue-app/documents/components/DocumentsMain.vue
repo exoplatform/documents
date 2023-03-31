@@ -518,8 +518,7 @@ export default {
     },
     bulkDeleteDocument(){
       this.loading = true;
-      const maxActionId = 99999;
-      const actionId = Math.floor(Math.random() * maxActionId);
+      const actionId =crypto.getRandomValues(new Uint32Array(1))[0]; 
       return this.$documentFileService
         .bulkDeleteDocuments(actionId,this.selectedDocuments)
         .catch(e => console.error(e));

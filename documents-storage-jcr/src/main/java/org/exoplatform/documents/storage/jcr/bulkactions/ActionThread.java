@@ -83,14 +83,14 @@ public class ActionThread implements Runnable {
     try {
       RequestLifeCycle.begin(PortalContainer.getInstance());
       processAction();
-    } catch (IOException e) {
+    } catch (Exception e) {
       log.error("Cannot execute Action {} operation", actionData.getActionType(), e);
     } finally {
       RequestLifeCycle.end();
     }
   }
 
-  public void processAction() throws IOException {
+  public void processAction() {
     actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
     if (actionData.getActionType().equals(ActionType.DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());

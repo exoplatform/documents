@@ -17,18 +17,18 @@
 
 package org.exoplatform.documents.service;
 
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.mortbay.cometd.continuation.EXoContinuationBayeux;
+
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Identity;
-import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.websocket.entity.WebSocketMessage;
 import org.exoplatform.ws.frameworks.cometd.ContinuationService;
-import org.mortbay.cometd.continuation.EXoContinuationBayeux;
-
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 
 public class DocumentWebSocketService {
 
@@ -36,17 +36,13 @@ public class DocumentWebSocketService {
 
     public static final String    COMETD_CHANNEL = "/eXo/Application/Addons/Documents";
 
-    private IdentityManager identityManager;
-
     private ContinuationService   continuationService;
 
     private String                cometdContextName;
 
     public DocumentWebSocketService(
-                                  IdentityManager identityManager,
                                   ContinuationService continuationService,
                                   EXoContinuationBayeux continuationBayeux) {
-        this.identityManager = identityManager;
         this.continuationService = continuationService;
         this.cometdContextName = continuationBayeux.getCometdContextName();
     }
