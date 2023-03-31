@@ -7,7 +7,10 @@
         v-for="(extension, i) in tabsList"
         :key="i"
         :class="isMobile ? tabClass(i) + ' px-0' : tabClass(i)"
-        @change="changeDocumentView(extension.viewName)">
+        @change="changeDocumentView(extension.viewName)"
+        @touchstart="touchStart"
+        @touchend="cancelTouch"
+        @touchmove="cancelTouch">
         <v-icon :class="isMobile ? 'tabIcon mobile':'tabIcon'">{{ extension.icon }}</v-icon>
         {{ !isMobile ? $t(extension.labelKey) : '' }}
       </v-tab>
@@ -63,10 +66,27 @@ export default {
     },
   },
   created() {
+    this.$root.$on('reset-selections', this.handleResetSelections);
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
   },
   methods: {
+    handleResetSelections() {
+      this.selectAllChecked = false;
+    },
+    touchStart() {
+      this.selectAllChecked = !this.selectAllChecked;
+      if (!this.documentMultiSelectionActive || this.selectedView !== 'folder') {
+        return;
+      }
+      this.touchTimer = setTimeout(() => {
+        this.touchTimer = null;
+        this.$root.$emit('select-all-documents', this.selectAllChecked);
+      }, 600);
+    },
+    cancelTouch() {
+      clearTimeout(this.touchTimer);
+    },
     refreshTabExtensions() {
       const extensions = extensionRegistry.loadExtensions(this.tabsExtensionApp, this.tabsExtensionType);
       let changed = false;
