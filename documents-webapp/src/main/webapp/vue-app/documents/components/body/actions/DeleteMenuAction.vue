@@ -8,6 +8,9 @@
       fas fa-trash
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.delete') }}</span>
+    <span v-if="disabledExtension && isMultiSelection">
+      ({{ $t('document.multiSelection.option.disabled.label') }})
+    </span>
   </div>
 </template>
 <script>
