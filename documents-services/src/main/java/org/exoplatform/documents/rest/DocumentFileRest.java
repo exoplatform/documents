@@ -582,7 +582,7 @@ public class DocumentFileRest implements ResourceContainer {
   int actionId, @RequestBody(description = "documents List", required = true)
   List<AbstractNodeEntity> documents) {
     if (documents.isEmpty()) {
-      return Response.status(Status.BAD_REQUEST).entity("document_ids list is mandatory").build();
+      return Response.status(Status.BAD_REQUEST).entity("documents list is mandatory").build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {

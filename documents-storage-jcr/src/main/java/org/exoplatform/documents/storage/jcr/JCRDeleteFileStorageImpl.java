@@ -207,7 +207,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         try {
           favoriteService.deleteFavorite(favoriteDocument);
         } catch (ObjectNotFoundException e) {
-          LOG.error("no Favorite to remove for node {}", node.getName());
+          LOG.warn("no Favorite to remove for node {}", node.getName());
         }
       }
       trashId = processRemoveOrMoveToTrash(node, checkToMoveToTrash);
