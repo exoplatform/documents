@@ -53,6 +53,10 @@ export default {
       this.show = false;
     },
     openMenu(event, file, selectedDocuments) {
+      event.preventDefault();
+      if (event.which === 0) {
+        return;
+      }
       this.file = file;
       this.selectedDocuments = selectedDocuments;
       this.isMultiSelection = this.selectedDocuments?.length > 1 && this.isSelected ;
