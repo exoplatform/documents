@@ -134,6 +134,7 @@
         @version-update-description="updateVersionSummary"
         @load-more="loadMoreVersions"
         ref="documentVersionHistory" />
+      <document-action-context-menu />
     </div>
   </v-app>
 </template>
