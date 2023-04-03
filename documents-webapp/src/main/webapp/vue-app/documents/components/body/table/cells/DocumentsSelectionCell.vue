@@ -73,7 +73,7 @@ export default {
       if (this.file.id === file.id) {
         this.show = true;
         if (check) {
-          this.checked = check;
+          this.checked = !this.checked;
           this.selectDocument();
         }
       }

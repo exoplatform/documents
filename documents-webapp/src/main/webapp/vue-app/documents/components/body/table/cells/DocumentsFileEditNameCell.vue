@@ -4,22 +4,24 @@
     v-model="fileName"
     height="35px"
     type="text"
-    :rules="nameRules"
-    @focus="editTitle()"
-    @blur="cancelEditNameMode()"
     class="documentEditName text-color font-weight-bold width-full pt-0 pl-1"
+    :rules="nameRules"
     required
     autofocus
     outlined
     dense
-    @keyup="checkInput($event,fileName)">
+    @focus="editTitle()"
+    @blur="cancelEditNameMode()"
+    @keyup="checkInput($event,fileName)"
+    @contextmenu.stop.prevent>
     <div slot="append" class="d-flex">
       <v-divider v-if="!isMobile" vertical />
       <v-icon
         class="primary--text ma-1 px-1"
         :title="$t('documents.save')"
         small
-        @click="checkInput(13,fileName)">
+        @click="checkInput(13,fileName)"
+        @contextmenu.stop.prevent>
         fa-check
       </v-icon>
       <v-divider vertical />
@@ -28,7 +30,8 @@
         :title="$t('documents.close')"
         color="red"
         small
-        @click="cancelEditNameMode(fileName)">
+        @click="cancelEditNameMode(fileName)"
+        @contextmenu.stop.prevent>
         fa-times
       </v-icon>
     </div>
