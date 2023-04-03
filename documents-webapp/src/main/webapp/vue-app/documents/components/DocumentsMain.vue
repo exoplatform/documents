@@ -73,45 +73,6 @@
       <documents-info-drawer
         :selected-view="selectedView"
         :is-mobile="isMobile" />
-      <v-alert
-        v-model="alert"
-        :icon="false"
-        :colored-border="isMobile"
-        :border="isMobile && !isAlertActionRunning? 'top' : ''"
-        :color="alertType"
-        :type="!isMobile? alertType: ''"
-        class="width-fit-content"
-        :class="isMobile? 'documents-alert-mobile': ''"
-        :dismissible="!isMobile">
-        <v-progress-linear
-          v-if="isAlertActionRunning"
-          :active="isAlertActionRunning"
-          :height="isMobile? '8px': '4px'"
-          :indeterminate="true"
-          :class="progressAlertClassMobile"
-          :color="progressAlertColor" />
-        {{ message }}
-        <v-btn
-          v-for="action in alertActions"
-          :key="action.event"
-          :disabled="isAlertActionRunning"
-          plain
-          text
-          color="primary"
-          @click="emitAlertAction(action)">
-          {{ $t(`document.conflicts.action.${action.event}`) }}
-        </v-btn>
-        <template #close="{ toggle }">
-          <v-btn
-            v-if="!isMobile"
-            icon
-            @click="handleAlertClose(toggle)">
-            <v-icon>
-              mdi-close-circle
-            </v-icon>
-          </v-btn>
-        </template>
-      </v-alert>
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
@@ -137,6 +98,44 @@
         ref="documentVersionHistory" />
       <document-action-context-menu />
     </div>
+    <v-alert
+      v-model="alert"
+      :icon="false"
+      :colored-border="isMobile"
+      :border="isMobile && !isAlertActionRunning? 'top' : ''"
+      :color="alertType"
+      :type="!isMobile? alertType: ''"
+      :class="isMobile? 'documents-alert-mobile': ''"
+      :dismissible="!isMobile">
+      <v-progress-linear
+        v-if="isAlertActionRunning"
+        :active="isAlertActionRunning"
+        :height="isMobile? '8px': '4px'"
+        :indeterminate="true"
+        :class="progressAlertClassMobile"
+        :color="progressAlertColor" />
+      {{ message }}
+      <v-btn
+        v-for="action in alertActions"
+        :key="action.event"
+        :disabled="isAlertActionRunning"
+        plain
+        text
+        color="primary"
+        @click="emitAlertAction(action)">
+        {{ $t(`document.conflicts.action.${action.event}`) }}
+      </v-btn>
+      <template #close="{ toggle }">
+        <v-btn
+          v-if="!isMobile"
+          icon
+          @click="handleAlertClose(toggle)">
+          <v-icon>
+            mdi-close-circle
+          </v-icon>
+        </v-btn>
+      </template>
+    </v-alert>
   </v-app>
 </template>
 <script>
