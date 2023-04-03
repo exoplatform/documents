@@ -73,44 +73,6 @@
       <documents-info-drawer
         :selected-view="selectedView"
         :is-mobile="isMobile" />
-      <v-alert
-        v-model="alert"
-        :icon="false"
-        :colored-border="isMobile"
-        :border="isMobile && !isAlertActionRunning? 'top' : ''"
-        :color="alertType"
-        :type="!isMobile? alertType: ''"
-        :class="isMobile? 'documents-alert-mobile': ''"
-        :dismissible="!isMobile">
-        <v-progress-linear
-          v-if="isAlertActionRunning"
-          :active="isAlertActionRunning"
-          :height="isMobile? '8px': '4px'"
-          :indeterminate="true"
-          :class="progressAlertClassMobile"
-          :color="progressAlertColor" />
-        {{ message }}
-        <v-btn
-          v-for="action in alertActions"
-          :key="action.event"
-          :disabled="isAlertActionRunning"
-          plain
-          text
-          color="primary"
-          @click="emitAlertAction(action)">
-          {{ $t(`document.conflicts.action.${action.event}`) }}
-        </v-btn>
-        <template #close="{ toggle }">
-          <v-btn
-            v-if="!isMobile"
-            icon
-            @click="handleAlertClose(toggle)">
-            <v-icon>
-              mdi-close-circle
-            </v-icon>
-          </v-btn>
-        </template>
-      </v-alert>
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
@@ -134,7 +96,46 @@
         @version-update-description="updateVersionSummary"
         @load-more="loadMoreVersions"
         ref="documentVersionHistory" />
+      <document-action-context-menu />
     </div>
+    <v-alert
+      v-model="alert"
+      :icon="false"
+      :colored-border="isMobile"
+      :border="isMobile && !isAlertActionRunning? 'top' : ''"
+      :color="alertType"
+      :type="!isMobile? alertType: ''"
+      :class="isMobile? 'documents-alert-mobile': ''"
+      :dismissible="!isMobile">
+      <v-progress-linear
+        v-if="isAlertActionRunning"
+        :active="isAlertActionRunning"
+        :height="isMobile? '8px': '4px'"
+        :indeterminate="true"
+        :class="progressAlertClassMobile"
+        :color="progressAlertColor" />
+      {{ message }}
+      <v-btn
+        v-for="action in alertActions"
+        :key="action.event"
+        :disabled="isAlertActionRunning"
+        plain
+        text
+        color="primary"
+        @click="emitAlertAction(action)">
+        {{ $t(`document.conflicts.action.${action.event}`) }}
+      </v-btn>
+      <template #close="{ toggle }">
+        <v-btn
+          v-if="!isMobile"
+          icon
+          @click="handleAlertClose(toggle)">
+          <v-icon>
+            mdi-close-circle
+          </v-icon>
+        </v-btn>
+      </template>
+    </v-alert>
   </v-app>
 </template>
 <script>
@@ -266,8 +267,8 @@ export default {
       this.primaryFilter = filter;
       this.refreshFiles({'primaryFilter': this.primaryFilter});
     });
-    this.$root.$on('show-alert', message => {
-      this.displayMessage(message);
+    this.$root.$on('show-alert', (message, persist) => {
+      this.displayMessage(message, persist);
     });
     this.getDocumentDataFromUrl()
       .finally(() => {
@@ -319,10 +320,22 @@ export default {
     },
     updateSelectionList(selected, file) {
       const index = this.selectedDocuments.findIndex(object => object.id === file.id);
+      let readOnlySelected = false;
       if (selected && index === -1) {
         this.selectedDocuments.push(file);
+        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
+        if (readOnlySelected) {
+          this.$root.$emit('show-alert', {
+            type: 'warning',
+            message: this.$t('document.multiSelection.readOnly.selected.message')
+          }, true);
+        }
       } else if (!selected) {
         this.selectedDocuments.splice(index, 1);
+        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
+        if (!readOnlySelected) {
+          this.hideMessage();
+        }
       }
       this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
     },
@@ -583,6 +596,7 @@ export default {
     resetSelections() {
       this.$root.$emit('reset-selections');
       this.selectedDocuments = [];
+      this.hideMessage();
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
@@ -1064,16 +1078,21 @@ export default {
       this.refreshFiles()
         .finally(() => this.$root.$emit('update-breadcrumb'));
     },
-    displayMessage(message) {
+    displayMessage(message, persist) {
       this.message = message.message;
       this.alertType = message.type;
       this.alertActions = message.actions;
       this.alert = true;
-      setTimeout(() => {
-        if (!this.alertActions?.length) {
-          this.alert = false;
-        }
-      }, 5000);
+      if (!persist) {
+        setTimeout(() => {
+          if (!this.alertActions?.length) {
+            this.alert = false;
+          }
+        }, 5000);
+      }
+    },
+    hideMessage() {
+      this.alert = false;
     },
     selectFile(path) {
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';

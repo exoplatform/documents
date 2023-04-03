@@ -3,7 +3,7 @@
     <v-list-item
       v-for="(extension, i) in menuExtensions"
       :key="i"
-      :disabled="extension.disabled"
+      :disabled="isMultiSelection && extension.disabled"
       class="menu-list px-2 text-left action-menu-item">
       <extension-registry-component
         :component="extension"

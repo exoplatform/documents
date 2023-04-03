@@ -42,12 +42,15 @@
             :key="item.id"
             :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
             @mouseover="showSelectionInput(item)"
-            @mouseleave="hideSelectionInput(item)">
+            @mouseleave="hideSelectionInput(item)"
+            @contextmenu="openContextMenu($event, item)">
             <td>
               <documents-selection-cell
                 :file="item"
                 :select-all-checked="selectAll"
-                :selected-documents="selectedDocuments" />
+                :selected-documents="selectedDocuments"
+                @document-selected="handleDocumentSelection"
+                @document-unselected="handleDocumentSelection" />
             </td>
             <td
               v-for="header in extendedCells"
@@ -260,6 +263,12 @@ export default {
     this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    handleDocumentSelection() {
+      this.selectAll = this.items.length === this.selectedDocuments.length;
+    },
+    openContextMenu(event, file) {
+      this.$root.$emit('open-action-context-menu', event, file, this.selectedDocuments);
+    },
     isDocumentSelected(item) {
       return this.selectedDocuments.findIndex(file => file.id === item.id) !== -1;
     },
