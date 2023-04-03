@@ -95,7 +95,8 @@
               :size="isMobile ? 14 : 18"
               class="clickable text-sub-title"
               :class="editNameMode ? '' : 'button-document-action'"
-              @click="displayActionMenu()">
+              @click="displayActionMenu()"
+              @contextmenu.stop.prevent="preventOpenContextMenu">
               mdi-dots-vertical
             </v-icon>
           </v-btn>
@@ -239,6 +240,9 @@ export default {
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
+    preventOpenContextMenu() {
+      this.$root.$emit('prevent-action-context-menu');
+    },
     touchStart() {
       if (!this.documentMultiSelectionActive) {
         return;

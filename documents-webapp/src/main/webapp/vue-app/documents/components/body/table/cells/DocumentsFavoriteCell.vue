@@ -58,6 +58,9 @@ export default {
     }
   },
   methods: {
+    preventOpenContextMenu() {
+      this.$root.$emit('prevent-action-context-menu');
+    },
     hitFavoriteButton() {
       $(`#FavoriteLink_file_${this.fileId}`).click();
     },
