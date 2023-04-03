@@ -36,6 +36,11 @@ export default {
       default: null,
     },
   },
+  methods: {
+    preventOpenContextMenu() {
+      this.$root.$emit('prevent-action-context-menu');
+    },
+  },
   computed: {
     fileId() {
       return this.file && this.file.id;
