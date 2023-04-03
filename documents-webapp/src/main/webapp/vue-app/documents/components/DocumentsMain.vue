@@ -80,6 +80,7 @@
         :border="isMobile && !isAlertActionRunning? 'top' : ''"
         :color="alertType"
         :type="!isMobile? alertType: ''"
+        class="width-fit-content"
         :class="isMobile? 'documents-alert-mobile': ''"
         :dismissible="!isMobile">
         <v-progress-linear
@@ -264,8 +265,8 @@ export default {
       this.primaryFilter = filter;
       this.refreshFiles({'primaryFilter': this.primaryFilter});
     });
-    this.$root.$on('show-alert', message => {
-      this.displayMessage(message);
+    this.$root.$on('show-alert', (message, persist) => {
+      this.displayMessage(message, persist);
     });
     this.getDocumentDataFromUrl()
       .finally(() => {
@@ -299,10 +300,22 @@ export default {
   methods: {
     updateSelectionList(selected, file) {
       const index = this.selectedDocuments.findIndex(object => object.id === file.id);
+      let readOnlySelected = false;
       if (selected && index === -1) {
         this.selectedDocuments.push(file);
+        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
+        if (readOnlySelected) {
+          this.$root.$emit('show-alert', {
+            type: 'warning',
+            message: this.$t('document.multiSelection.readOnly.selected.message')
+          }, true);
+        }
       } else if (!selected) {
         this.selectedDocuments.splice(index, 1);
+        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
+        if (!readOnlySelected) {
+          this.hideMessage();
+        }
       }
       this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
     },
@@ -542,6 +555,7 @@ export default {
     resetSelections() {
       this.$root.$emit('reset-selections');
       this.selectedDocuments = [];
+      this.hideMessage();
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
@@ -1023,16 +1037,21 @@ export default {
       this.refreshFiles()
         .finally(() => this.$root.$emit('update-breadcrumb'));
     },
-    displayMessage(message) {
+    displayMessage(message, persist) {
       this.message = message.message;
       this.alertType = message.type;
       this.alertActions = message.actions;
       this.alert = true;
-      setTimeout(() => {
-        if (!this.alertActions?.length) {
-          this.alert = false;
-        }
-      }, 5000);
+      if (!persist) {
+        setTimeout(() => {
+          if (!this.alertActions?.length) {
+            this.alert = false;
+          }
+        }, 5000);
+      }
+    },
+    hideMessage() {
+      this.alert = false;
     },
     selectFile(path) {
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
