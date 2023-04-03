@@ -2,7 +2,10 @@
   <div 
     v-show="isFavorite && !file.folder"
     :id="`favorite-cell-file-${fileId}`">
-    <div v-if="!isMobile">
+    <div
+      v-if="!isMobile"
+      class="width-fit-content"
+      @contextmenu.stop.prevent="preventOpenContextMenu">
       <documents-favorite-action
         :file="file"
         :is-mobile="isMobile" />
@@ -56,6 +59,9 @@ export default {
     }
   },
   methods: {
+    preventOpenContextMenu() {
+      this.$root.$emit('prevent-action-context-menu');
+    },
     hitFavoriteButton() {
       $(`#FavoriteLink_file_${this.fileId}`).click();
     },

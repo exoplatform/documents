@@ -5,6 +5,7 @@
         v-if="showSelectionsMenu && documentMultiSelectionActive"
         v-model="selectionsMenu"
         class="add-menu-btn width-full"
+        close-on-click
         offset-y>
         <template #activator="{ on, attrs }">
           <v-btn
@@ -172,6 +173,7 @@ export default {
       if (this.isMobile) {
         this.$root.$emit('open-file-action-menu-for-multi-selection', this.selectedDocuments);
       }
+      this.$root.$emit('prevent-action-context-menu');
     },
     handleResetSelections() {
       this.showSelectionsMenu = false;
