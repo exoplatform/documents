@@ -20,21 +20,28 @@ import static org.junit.Assert.*;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Before;
+import org.junit.Test;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.listener.AttachmentsActivityCacheUpdater;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.FileNodeEntity;
+import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
-
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
-
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -44,8 +51,6 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.core.storage.api.ActivityStorage;
 import org.exoplatform.social.core.storage.cache.CachedActivityStorage;
-import org.junit.Before;
-import org.junit.Test;
 
 public class DocumentFileServiceTest {
 
@@ -430,6 +435,47 @@ public class DocumentFileServiceTest {
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
     verify(documentFileStorage, times(1)).shareDocument("123", 1L);
+  }
+
+  @Test
+  public void testDeleteDocuments() throws IllegalAccessException {
+
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity socialIdentity = mock(Identity.class);
+    when(identityRegistry.getIdentity("username")).thenReturn(identity);
+    when(socialIdentity.getRemoteId()).thenReturn("username");
+    when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
+    FileNodeEntity file1 = new FileNodeEntity();
+    file1.setId("1");
+    file1.setName("oldFile");
+    file1.setPath("/document/oldFile");
+    file1.setDatasource("datasource");
+    file1.setMimeType(":file");
+    file1.setSize(50);
+    FileNodeEntity file2 = new FileNodeEntity();
+    file2.setId("2");
+    file2.setName("oldFile2");
+    file2.setPath("/document/oldFile2");
+    file2.setDatasource("datasource");
+    file2.setMimeType(":file");
+    file2.setSize(50);
+    FileNodeEntity file3 = new FileNodeEntity();
+    file3.setId("3");
+    file3.setName("oldFile3");
+    file3.setPath("/document/oldFile3");
+    file3.setDatasource("datasource");
+    file3.setMimeType(":file");
+    file3.setSize(50);
+
+    List<AbstractNodeEntity> nodeEntities = new ArrayList<>();
+
+    nodeEntities.add(file1);
+    nodeEntities.add(file2);
+    nodeEntities.add(file3);
+    List<AbstractNode> nodes = EntityBuilder.toAbstractNodes(nodeEntities);
+
+    documentFileService.deleteDocuments(123456, nodes, 1L);
+    verify(jcrDeleteFileStorage, times(1)).deleteDocuments(123456, nodes, identity, 1L);
   }
 
   @Test
