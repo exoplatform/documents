@@ -22,6 +22,7 @@ import static org.mockito.Mockito.*;
 
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -87,6 +88,8 @@ public class JCRDeleteFileStorageTest {
 
   @Mock
   private ListenerService listenerService;
+  @Mock
+  private BulkStorageActionService bulkStorageActionService;
 
   private JCRDeleteFileStorageImpl jcrDeleteFileStorage;
 
@@ -105,7 +108,7 @@ public class JCRDeleteFileStorageTest {
     currentProfile.setProperty(Profile.FULL_NAME, username);
     currentIdentity.setProfile(currentProfile);
 
-    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService);
+    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService);
 
 
     JCRDeleteFileStorageImpl.documentsToDeleteQueue.put("1", String.valueOf(2));
@@ -135,7 +138,7 @@ public class JCRDeleteFileStorageTest {
     currentIdentity.setProfile(currentProfile);
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
-    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService);
+    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService);
 
     when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
     when(sessionProviderService.getSessionProvider(any())).thenReturn(sessionProvider);
