@@ -1,3 +1,22 @@
+/*
+ * This file is part of the Meeds project (https://meeds.io/).
+ *
+ * Copyright (C) 2020 - 2023 Meeds Association contact@meeds.io
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
 export function getDocumentItems(itemsFilter, offset, limit, expand) {
   const formData = new FormData();
   if (itemsFilter) {
@@ -33,6 +52,20 @@ export function getDocumentItems(itemsFilter, offset, limit, expand) {
 
 export function canAddDocument(spaceId) {
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/canAddDocument?spaceId=${spaceId}`, {
+    headers: {
+      'Content-Type': 'text/plain'
+    },
+    method: 'GET'
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.json();
+    } else {
+      throw new Error('Server indicates an error while sending request');
+    }
+  });   
+}
+export function getUserSettings() {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/settings`, {
     headers: {
       'Content-Type': 'text/plain'
     },
@@ -284,6 +317,21 @@ export function undoDeleteDocument(documentId) {
       localStorage.removeItem('deletedDocument');
     } else {
       throw new Error('Error when undoing deleting document');
+    }
+  });
+}
+
+export function bulkDeleteDocuments(actionId,documents) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/bulk/${actionId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(documents),
+  }).then((resp) => {
+    if (resp && !resp.ok) {
+      throw new Error('Error when deleting document');
     }
   });
 }
