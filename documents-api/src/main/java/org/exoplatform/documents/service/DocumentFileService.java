@@ -18,12 +18,13 @@ package org.exoplatform.documents.service;
 
 import java.util.List;
 
+import javax.jcr.RepositoryException;
+
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.social.core.identity.model.Identity;
-import javax.jcr.RepositoryException;
 
 public interface DocumentFileService {
 
@@ -158,6 +159,7 @@ public interface DocumentFileService {
    */
   void moveDocument(long ownerId, String fileId, String destPath, long authenticatedUserId, String conflictAction) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException;
 
+
   /**
    * Delete a document.
    *
@@ -177,9 +179,20 @@ public interface DocumentFileService {
    * @param documentId the Id of document
    * @param authenticatedUserId of the user acessing files
    */
+
   void undoDeleteDocument(String documentId, long authenticatedUserId);
 
-  void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException;
+  /**
+   * Delete a list of documents.
+   *
+   * @param documents the list document
+   * @param authenticatedUserId of the user acessing files
+   */
+  void deleteDocuments(int actionId, List<AbstractNode> documents, long authenticatedUserId) throws IllegalAccessException;
+
+  void updatePermissions(String documentId,
+                         NodePermission nodePermissionEntity,
+                         long authenticatedUserId) throws IllegalAccessException;
 
   /**
    * Shares a document with given user or space
