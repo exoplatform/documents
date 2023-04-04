@@ -54,14 +54,14 @@ public interface JCRDeleteFileStorage {
   /**
    * Delete document (Move to trash)
    *
-   * @param session
-   * @param folderPath
-   * @param documentId
-   * @param favorite
-   * @param checkToMoveToTrash
-   * @param delay
-   * @param identity
-   * @param userIdentityId
+   * @param session current session
+   * @param folderPath folder path
+   * @param documentId document id
+   * @param favorite favorite or not
+   * @param checkToMoveToTrash check whether to move to trash
+   * @param delay waiting delay
+   * @param identity user identity
+   * @param userIdentityId user identity id
    */
   void deleteDocument(Session session,
                       String folderPath,
@@ -75,10 +75,10 @@ public interface JCRDeleteFileStorage {
   /**
    * Delete a list of document (Move to trash)
    *
-   * @param actionId
-   * @param items
-   * @param identity
-   * @param authenticatedUserId
+   * @param actionId action id
+   * @param items list of items to delete
+   * @param identity user identity
+   * @param authenticatedUserId current authenticated user id 
    */
   void deleteDocuments(int actionId, List<AbstractNode> items, Identity identity, long authenticatedUserId);
 }

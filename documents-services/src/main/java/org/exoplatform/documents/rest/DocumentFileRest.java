@@ -100,9 +100,9 @@ public class DocumentFileRest implements ResourceContainer {
   @RolesAllowed("users")
   @Path("/settings")
   @Operation(summary = "Get User documents settings", method = "GET")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
-      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  @ApiResponses(value = { 
+       @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getSettings() {
     Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
     try {
@@ -572,7 +572,7 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("bulk/{actionId}")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @Operation(summary = "Delete document", method = "DELETE", description = "This deletes document")
+  @Operation(summary = "Delete list of documents", method = "DELETE", description = "This deletes a list of documents")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "User not authorized to delete the document"),
@@ -591,7 +591,7 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     } catch (Exception e) {
-      LOG.error("Error when deleting the news target with name " + userIdentityId, e);
+      LOG.error("Error while deleting documents", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
