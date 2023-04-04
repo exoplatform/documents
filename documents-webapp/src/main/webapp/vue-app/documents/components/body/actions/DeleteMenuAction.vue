@@ -35,10 +35,16 @@ export default {
   },
   methods: {
     deleteAction() {
-      this.$root.$emit('confirm-document-deletion', this.file);
-      this.$root.$emit('close-file-action-menu');
-      const deleteDelay = 6;
-      this.$documentFileService.deleteDocument(this.file.path, this.file.id, this.file.favorite, deleteDelay);
+      if (!this.isMultiSelection) {
+        this.$root.$emit('confirm-document-deletion', this.file);
+        this.$root.$emit('close-file-action-menu');
+        const deleteDelay = 6;
+        this.$documentFileService.deleteDocument(this.file.path, this.file.id, this.file.favorite, deleteDelay);
+      } else {
+        this.$root.$emit('documents-bulk-delete');
+        this.$root.$emit('close-file-action-menu');
+      }
+
     }
   },
 };
