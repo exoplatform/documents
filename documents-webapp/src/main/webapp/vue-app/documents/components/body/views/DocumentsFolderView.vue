@@ -47,6 +47,7 @@
             <td>
               <documents-selection-cell
                 :file="item"
+                :files="items"
                 :select-all-checked="selectAll"
                 :selected-documents="selectedDocuments"
                 @document-selected="handleDocumentSelection"
