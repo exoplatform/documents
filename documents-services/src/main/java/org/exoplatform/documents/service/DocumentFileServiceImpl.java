@@ -16,7 +16,11 @@
  */
 package org.exoplatform.documents.service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -28,16 +32,14 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.exoplatform.services.log.ExoLogger;
-import org.exoplatform.services.log.Log;
-
-import javax.jcr.RepositoryException;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
@@ -58,6 +60,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   private JCRDeleteFileStorage       jcrDeleteFileStorage;
 
   private ListenerService listenerService;
+
 
   public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage,
                                  JCRDeleteFileStorage jcrDeleteFileStorage,
@@ -257,6 +260,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public void undoDeleteDocument(String documentId, long authenticatedUserId) {
     jcrDeleteFileStorage.undoDelete(documentId, authenticatedUserId);
+  }
+
+  @Override
+  public void deleteDocuments(int actionId,
+                              List<AbstractNode> documents,
+                              long authenticatedUserId) throws IllegalAccessException {
+    jcrDeleteFileStorage.deleteDocuments(actionId, documents, getAclUserIdentity(authenticatedUserId), authenticatedUserId);
   }
 
   @Override

@@ -17,9 +17,19 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-export function injectSortTooltip(tooltipName,markerClass){
-  document.getElementsByClassName(markerClass).forEach(element => {
-    element.getElementsByTagName('i').item(0);
-    element.title = tooltipName; 
+export function initCometd(cometdContext, cometdToken, callback) {
+  const loc = window.location;
+  cCometd.configure({
+    url: `${loc.protocol}//${loc.hostname}${(loc.port && ':') || ''}${loc.port || ''}/${cometdContext}/cometd`,
+    exoId: eXo.env.portal.userName,
+    exoToken: cometdToken,
+  });
+
+  cCometd.subscribe('/eXo/Application/Addons/Documents', null, (event) => {
+    const data = event.data && JSON.parse(event.data);
+    if (!data) {
+      return;
+    }
+    callback(data.message.actiondata);
   });
 }

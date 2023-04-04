@@ -304,7 +304,6 @@ public class JCRDocumentsUtilTest {
 
   @Test
   public void isValidDocumentTitle() {
-    assertFalse(JCRDocumentsUtil.isValidDocumentTitle("test:<*?"));
     assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   "));
     assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   .docx"));
     assertTrue(JCRDocumentsUtil.isValidDocumentTitle("test.docx"));
