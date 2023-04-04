@@ -42,8 +42,11 @@
           <td>
             <documents-selection-cell
               :file="item"
+              :files="items"
               :select-all-checked="selectAll"
-              :selected-documents="selectedDocuments" />
+              :selected-documents="selectedDocuments"
+              @document-selected="handleDocumentSelection"
+              @document-unselected="handleDocumentSelection" />
           </td>
           <td
             v-for="header in extendedCells"
@@ -300,6 +303,9 @@ export default {
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
   },
   methods: {
+    handleDocumentSelection() {
+      this.selectAll = this.items.length === this.selectedDocuments.length;
+    },
     openContextMenu(event, file) {
       this.$root.$emit('open-action-context-menu', event, file, this.selectedDocuments);
     },
