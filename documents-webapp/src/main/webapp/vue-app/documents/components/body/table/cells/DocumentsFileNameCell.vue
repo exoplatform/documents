@@ -180,6 +180,10 @@ export default {
     touchTimer: null,
   }),
   computed: {
+    isFileEditable() {
+      const type = this.file && this.file.mimeType || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+    },
     documentMultiSelectionActive() {
       return eXo?.env?.portal?.documentMultiSelection && this.$vuetify.breakpoint.width >= 600;
     },
@@ -235,9 +239,6 @@ export default {
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
-    preventOpenContextMenu() {
-      this.$root.$emit('prevent-action-context-menu');
-    },
     touchStart() {
       if (!this.documentMultiSelectionActive) {
         return;
@@ -279,10 +280,16 @@ export default {
       const lang = eXo && eXo.env && eXo.env.portal && eXo.env.portal.language || 'en';
       return new Date(this.file.date).toLocaleString(lang, options).split('/').join('-');
     },
+    openInEditMode(file) {
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${file.id}&source=peview`, '_blank');
+    },
     openPreview() {
       this.loading = true;
-      if (this.file && this.file.folder){
+      if (this.file && this.file.folder) {
         this.$root.$emit('document-open-folder', this.file);
+      } else if (!this.isMobile && this.isFileEditable && this.file.acl.canEdit)  {
+        this.openInEditMode(this.file);
+        this.loading = false;
       } else {
         const id = this.file.id;
         this.$attachmentService.getAttachmentById(id)
