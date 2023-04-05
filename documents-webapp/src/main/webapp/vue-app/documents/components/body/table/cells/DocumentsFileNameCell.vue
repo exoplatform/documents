@@ -95,8 +95,7 @@
               :size="isMobile ? 14 : 18"
               class="clickable text-sub-title"
               :class="editNameMode ? '' : 'button-document-action'"
-              @click="displayActionMenu()"
-              @contextmenu.stop.prevent="preventOpenContextMenu">
+              @click="displayActionMenu()">
               mdi-dots-vertical
             </v-icon>
           </v-btn>
