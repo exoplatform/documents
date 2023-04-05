@@ -5,8 +5,7 @@
         class="visibility-btn"
         :class="btnClass"
         icon
-        @click="changeVisibility"
-        @contextmenu.stop.prevent="preventOpenContextMenu">
+        @click="changeVisibility">
         <v-icon
           color="grey"
           dark
@@ -103,9 +102,6 @@ export default {
     btnClass(){
       return this.isMobile && 'ms-2' || 'me-4' ;
     },
-    sharedDocumentSuspendedLabel(){
-      return this.$t('documents.label.share.document.suspend');
-    }
   },
   created() {
     this.$transferRulesService.getDocumentsTransferRules().then(rules => {
@@ -113,9 +109,6 @@ export default {
     });
   },
   methods: {
-    preventOpenContextMenu() {
-      this.$root.$emit('prevent-action-context-menu');
-    },
     changeVisibility() {
       if (!this.file.acl.canEdit || this.$shareDocumentSuspended) {
         return;

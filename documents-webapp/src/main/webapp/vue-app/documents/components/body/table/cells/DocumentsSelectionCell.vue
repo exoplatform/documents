@@ -75,7 +75,7 @@ export default {
       this.canSelectRange = false;
     },
     isFileSelected(file) {
-      return this.selectedDocuments.findIndex(object => object.id === file.id) !== -1;
+      return this.selectedDocuments.findIndex(object => object.id === file?.id) !== -1;
     },
     handleSelectTargetDocument(file) {
       if (file.id === this.file.id) {
