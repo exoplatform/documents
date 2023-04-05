@@ -12,8 +12,7 @@
             v-on="on"
             class="text-sub-title d-none mx-0 px-0"
             size="16"
-            @click="$root.$emit('open-info-drawer', file)"
-            @contextmenu.stop.prevent="preventOpenContextMenu">
+            @click="$root.$emit('open-info-drawer', file)">
             fa-info-circle
           </v-icon>
         </v-btn>
@@ -35,11 +34,6 @@ export default {
     extension: {
       type: Object,
       default: null,
-    },
-  },
-  methods: {
-    preventOpenContextMenu() {
-      this.$root.$emit('prevent-action-context-menu');
     },
   },
   computed: {

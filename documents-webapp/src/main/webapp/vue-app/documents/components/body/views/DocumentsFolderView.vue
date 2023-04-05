@@ -25,13 +25,22 @@
       </template>
       <template #[`header.data-table-select`]="{ on , props }">
         <v-simple-checkbox
-          v-if="showSelectAll"
           v-model="selectAll"
           v-on="on"
           v-bind="props"
           color="primary"
+          :class="showSelectAll? 'visible': 'invisible'"
           class="mt-auto"
+          @mouseover="showSelectAllInputOnHover"
+          @mouseleave="hideSelectAllInputOnHover"
           @click="selectAllDocuments" />
+      </template>
+      <template #[`header.name`]>
+        <span
+          @mouseover="showSelectAllInputOnHover"
+          @mouseleave="hideSelectAllInputOnHover">
+          {{ $t('documents.label.name') }}
+        </span>
       </template>
       <template
         v-if="!isMobile && documentMultiSelectionActive"
@@ -180,7 +189,9 @@ export default {
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
     mobileUnfriendlyExtensions: ['visibility','lastUpdated', 'size', 'lastActivity', 'favorite'],
-    selectAll: false
+    selectAll: false,
+    showSelectAllInput: false,
+    showSelectInputTimer: null
   }),
   computed: {
     isXScreen() {
@@ -190,7 +201,7 @@ export default {
       return eXo?.env?.portal?.documentMultiSelection;
     },
     showSelectAll() {
-      return this.selectedDocuments && this.selectedDocuments.length;
+      return this.selectedDocuments && this.selectedDocuments.length || this.showSelectAllInput;
     },
     loadingClass() {
       if (this.loading && !this.items.length) {
@@ -264,6 +275,15 @@ export default {
     this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    showSelectAllInputOnHover(){
+      clearTimeout(this.showSelectInputTimer);
+      this.showSelectAllInput = true;
+    },
+    hideSelectAllInputOnHover(){
+      this.showSelectInputTimer = setTimeout(() => {
+        this.showSelectAllInput = false;
+      }, 200);
+    },
     handleDocumentSelection() {
       this.selectAll = this.items.length === this.selectedDocuments.length;
     },
