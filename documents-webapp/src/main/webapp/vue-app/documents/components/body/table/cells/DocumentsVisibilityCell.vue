@@ -5,8 +5,7 @@
         class="visibility-btn"
         :class="btnClass"
         icon
-        @click="changeVisibility"
-        @contextmenu.stop.prevent="preventOpenContextMenu">
+        @click="changeVisibility">
         <v-icon
           color="grey"
           dark
@@ -110,9 +109,6 @@ export default {
     });
   },
   methods: {
-    preventOpenContextMenu() {
-      this.$root.$emit('prevent-action-context-menu');
-    },
     changeVisibility() {
       if (!this.file.acl.canEdit || this.$shareDocumentSuspended) {
         return;
