@@ -46,8 +46,6 @@ export default {
   created() {
     this.$root.$on('selection-documents-list-updated', this.refreshMenuExtensions);
     document.addEventListener(`extension-${this.menuExtensionApp}-${this.menuExtensionType}-updated`, this.refreshMenuExtensions);
-    document.addEventListener('documents-supported-document-types-updated', this.refreshSupportedDocumentExtensions);
-    this.refreshSupportedDocumentExtensions();
     this.refreshMenuExtensions();
   },
   beforeDestroy() {
@@ -56,7 +54,7 @@ export default {
   computed: {
     fileCanEdit() {
       const type = this.file && this.file.mimeType || '';
-      return this.supportedDocuments && this.supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
     }
   },
   methods: {
@@ -68,9 +66,6 @@ export default {
         disabledExtension: extension.disabled,
         isMultiSelection: this.isMultiSelection
       };
-    },
-    refreshSupportedDocumentExtensions() {
-      this.supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
