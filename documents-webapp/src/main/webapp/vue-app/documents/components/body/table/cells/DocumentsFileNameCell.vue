@@ -239,9 +239,6 @@ export default {
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
-    preventOpenContextMenu() {
-      this.$root.$emit('prevent-action-context-menu');
-    },
     touchStart() {
       if (!this.documentMultiSelectionActive) {
         return;
