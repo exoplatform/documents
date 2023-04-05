@@ -23,13 +23,22 @@
       class="documents-table border-box-sizing">
       <template #[`header.data-table-select`]="{ on , props }">
         <v-simple-checkbox
-          v-if="showSelectAll"
           v-model="selectAll"
           v-on="on"
           v-bind="props"
           color="primary"
+          :class="showSelectAll? 'visible': 'invisible'"
           class="mt-auto"
+          @mouseover="showSelectAllInputOnHover"
+          @mouseleave="hideSelectAllInputOnHover"
           @click="selectAllDocuments" />
+      </template>
+      <template #[`header.name`]>
+        <span
+          @mouseover="showSelectAllInputOnHover"
+          @mouseleave="hideSelectAllInputOnHover">
+          {{ $t('documents.label.name') }}
+        </span>
       </template>
       <template
         v-if="!isMobile && documentMultiSelectionActive"
@@ -188,14 +197,15 @@ export default {
     weekFirstDay: 0,
     monthFirstDay: 0,
     yearFirstDay: 0,
-    selectAll: false
+    selectAll: false,
+    showSelectAllInput: false
   }),
   computed: {
     isXScreen() {
       return this.$vuetify.breakpoint.width < 600;
     },
     showSelectAll() {
-      return this.selectedDocuments && this.selectedDocuments.length;
+      return this.selectedDocuments && this.selectedDocuments.length  || this.showSelectAllInput;
     },
     documentMultiSelectionActive() {
       return eXo?.env?.portal?.documentMultiSelection;
@@ -303,6 +313,15 @@ export default {
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
   },
   methods: {
+    showSelectAllInputOnHover(){
+      clearTimeout(this.showSelectInputTimer);
+      this.showSelectAllInput = true;
+    },
+    hideSelectAllInputOnHover(){
+      this.showSelectInputTimer = setTimeout(() => {
+        this.showSelectAllInput = false;
+      }, 200);
+    },
     handleDocumentSelection() {
       this.selectAll = this.items.length === this.selectedDocuments.length;
     },

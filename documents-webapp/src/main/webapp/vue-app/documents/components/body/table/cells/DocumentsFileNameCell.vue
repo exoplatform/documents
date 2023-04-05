@@ -37,8 +37,7 @@
           v-if="!editNameMode"
           class="document-title clickable hover-underline d-inline-flex"
           :title="title"
-          @click="openPreview()"
-          @contextmenu.stop.prevent="preventOpenContextMenu">
+          @click="openPreview()">
           <div
             v-sanitized-html="title"
             class="document-name ms-4"
@@ -96,8 +95,7 @@
               :size="isMobile ? 14 : 18"
               class="clickable text-sub-title"
               :class="editNameMode ? '' : 'button-document-action'"
-              @click="displayActionMenu()"
-              @contextmenu.stop.prevent="preventOpenContextMenu">
+              @click="displayActionMenu()">
               mdi-dots-vertical
             </v-icon>
           </v-btn>
