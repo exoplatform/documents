@@ -105,7 +105,7 @@
       :border="isMobile && !isAlertActionRunning? 'top' : ''"
       :color="alertType"
       :type="!isMobile? alertType: ''"
-      :class="isMobile? 'documents-alert-mobile': ''"
+      :class="isMobile? 'documents-alert-mobile': 'documents-alert'"
       :dismissible="!isMobile">
       <v-progress-linear
         v-if="isAlertActionRunning"

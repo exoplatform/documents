@@ -263,6 +263,7 @@ export default {
   },
   created() {
     this.$root.$on('select-all-documents', (value) => this.selectAll = value);
+    this.$root.$on('reset-selections', () => this.selectAll = false);
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
