@@ -8,9 +8,6 @@
       fas fa-download
     </v-icon>
     <span class="ps-1">{{ $t('documents.label.download') }}</span>
-    <span v-if="disabledExtension && isMultiSelection">
-      ({{ $t('document.multiSelection.option.disabled.label') }})
-    </span>
   </div>
 </template>
 <script>
