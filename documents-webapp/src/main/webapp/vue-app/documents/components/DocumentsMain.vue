@@ -653,6 +653,7 @@ export default {
             return 0;
           }) || files : files;
           this.files = options?.append ? this.files.concat(files) : files ;
+          this.files = [...new Map(this.files.map((item) => [item['id'], item])).values()];
           this.files = options?.deleted ? this.files.filter(this.isDocumentsToBeDeleted) : this.files;
           this.hasMore = files && files.length >= this.limit;
           if (this.fileName && !options?.disablePreview) {
