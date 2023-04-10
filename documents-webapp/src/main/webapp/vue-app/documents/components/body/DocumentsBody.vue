@@ -85,6 +85,10 @@ export default {
     selectedView: {
       type: String,
       default: null
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
     }
   },
   computed: {
@@ -102,7 +106,8 @@ export default {
         query: this.query,
         extendedSearch: this.extendedSearch,
         isMobile: this.isMobile,
-        selectedView: this.selectedView
+        selectedView: this.selectedView,
+        selectedDocuments: this.selectedDocuments
       };
     },
     showExtend(){

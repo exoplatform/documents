@@ -3,6 +3,7 @@
     <upload-overlay />
     <v-data-table
       ref="dataTable"
+      class="documents-folder-table border-box-sizing"
       :headers="headers"
       :items="items"
       :items-per-page="pageSize"
@@ -16,23 +17,88 @@
       :class="loadingClass"
       :custom-sort="customSort"
       mobile-breakpoint="960"
+      :show-select="!isMobile && documentMultiSelectionActive"
       hide-default-footer
-      disable-pagination
-      disable-filtering
-      class="documents-folder-table border-box-sizing">
-      <template slot="group.header"><span></span></template>
+      disable-pagination>
+      <template slot="group.header">
+        <span></span>
+      </template>
+      <template #[`header.data-table-select`]="{ on , props }">
+        <v-simple-checkbox
+          v-model="selectAll"
+          v-on="on"
+          v-bind="props"
+          :indeterminate="false"
+          color="primary"
+          :class="showSelectAll? 'visible': 'invisible'"
+          class="mt-auto"
+          @mouseover="showSelectAllInputOnHover"
+          @mouseleave="hideSelectAllInputOnHover"
+          @click="selectAllDocuments" />
+      </template>
+      <template #[`header.name`]>
+        <span
+          id="headerName">
+          {{ $t('documents.label.name') }}
+        </span>
+      </template>
       <template
-        v-for="header in extendedCells"
-        #[`item.${header.value}`]="{item}">
-        <documents-table-cell
-          :key="header.value"
-          :extension="header.cellExtension"
-          :file="item"
-          :query="query"
-          :extended-search="extendedSearch"
-          :is-mobile="isMobile"
-          :selected-view="selectedView"
-          :class="header.value === 'name' && 'ms-8'" />
+        v-if="!isMobile && documentMultiSelectionActive"
+        #body="{ items }">
+        <tbody>
+          <tr
+            v-for="item in items"
+            :key="item.id"
+            :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+            @mouseover="showSelectionInput(item)"
+            @mouseleave="hideSelectionInput(item)"
+            @contextmenu="openContextMenu($event, item)">
+            <td>
+              <documents-selection-cell
+                :file="item"
+                :files="items"
+                :select-all-checked="selectAll"
+                :selected-documents="selectedDocuments"
+                @document-selected="handleDocumentSelection"
+                @document-unselected="handleDocumentSelection" />
+            </td>
+            <td
+              v-for="header in extendedCells"
+              :key="header.value + item.id">
+              <documents-table-cell
+                :extension="header.cellExtension"
+                :file="item"
+                :query="query"
+                :extended-search="extendedSearch"
+                :is-mobile="isMobile"
+                :selected-view="selectedView"
+                :selected-documents="selectedDocuments" />
+            </td>
+          </tr>
+        </tbody>
+      </template>
+      <template
+        v-else
+        #item="{item}">
+        <tr
+          :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+          class="v-data-table__mobile-table-row">
+          <td
+            class="v-data-table__mobile-row">
+            <documents-table-cell
+              v-for="header in extendedCells"
+              :key="header.value + item.id"
+              :extension="header.cellExtension"
+              :file="item"
+              :query="query"
+              :extended-search="extendedSearch"
+              :is-mobile="isMobile"
+              :selected-view="selectedView"
+              :select-all-checked="selectAll"
+              :selected-documents="selectedDocuments"
+              :class="header.value === 'name' && isXScreen && 'ms-10'" />
+          </td>
+        </tr>
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">
@@ -107,7 +173,11 @@ export default {
     selectedView: {
       type: String,
       default: null
-    }
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
   },
   data: () => ({
     lang: eXo.env.portal.language,
@@ -119,8 +189,20 @@ export default {
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
     mobileUnfriendlyExtensions: ['visibility','lastUpdated', 'size', 'lastActivity', 'favorite'],
+    selectAll: false,
+    showSelectAllInput: false,
+    showSelectInputTimer: null
   }),
   computed: {
+    isXScreen() {
+      return this.$vuetify.breakpoint.width < 600;
+    },
+    documentMultiSelectionActive() {
+      return eXo?.env?.portal?.documentMultiSelection;
+    },
+    showSelectAll() {
+      return this.selectedDocuments && this.selectedDocuments.length || this.showSelectAllInput;
+    },
     loadingClass() {
       if (this.loading && !this.items.length) {
         return this.isMobile ? 'loadingClassMobile' : 'loadingClass';
@@ -180,18 +262,49 @@ export default {
 
   },
   created() {
+    this.$root.$on('select-all-documents', (value) => this.selectAll = value);
+    this.$root.$on('reset-selections', () => this.selectAll = false);
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
     this.$root.$on('documents-filter', this.updateFilter);
   },
   mounted(){
+    document.getElementById('headerName').parentElement.addEventListener('mouseover', this.showSelectAllInputOnHover);
+    document.getElementById('headerName').parentElement.addEventListener('mouseleave', this.hideSelectAllInputOnHover);
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    showSelectAllInputOnHover(){
+      clearTimeout(this.showSelectInputTimer);
+      this.showSelectAllInput = true;
+    },
+    hideSelectAllInputOnHover(){
+      this.showSelectInputTimer = setTimeout(() => {
+        this.showSelectAllInput = false;
+      }, 200);
+    },
+    handleDocumentSelection() {
+      this.selectAll = this.items.length === this.selectedDocuments.length;
+    },
+    openContextMenu(event, file) {
+      this.$root.$emit('open-action-context-menu', event, file, this.selectedDocuments);
+    },
+    isDocumentSelected(item) {
+      return this.selectedDocuments.findIndex(file => file.id === item.id) !== -1;
+    },
+    selectAllDocuments() {
+      this.$root.$emit('select-all-documents', this.selectAll);
+    },
+    showSelectionInput(file) {
+      this.$root.$emit('show-selection-input', file);
+    },
+    hideSelectionInput(file) {
+      this.$root.$emit('hide-selection-input', file);
+    },
     customSort: function (items, sortBy, isDesc) {
       if (sortBy[1] === 'name') {
         const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});

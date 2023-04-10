@@ -102,9 +102,6 @@ export default {
     btnClass(){
       return this.isMobile && 'ms-2' || 'me-4' ;
     },
-    sharedDocumentSuspendedLabel(){
-      return this.$t('documents.label.share.document.suspend');
-    }
   },
   created() {
     this.$transferRulesService.getDocumentsTransferRules().then(rules => {

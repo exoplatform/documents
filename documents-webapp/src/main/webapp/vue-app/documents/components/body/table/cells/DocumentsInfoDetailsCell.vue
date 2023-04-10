@@ -8,11 +8,11 @@
           v-bind="attrs"
           v-on="on">
           <v-icon
+            v-bind="attrs"
+            v-on="on"
             class="text-sub-title d-none mx-0 px-0"
             size="16"
-            @click="$root.$emit('open-info-drawer', file)"
-            v-bind="attrs"
-            v-on="on">
+            @click="$root.$emit('open-info-drawer', file)">
             fa-info-circle
           </v-icon>
         </v-btn>

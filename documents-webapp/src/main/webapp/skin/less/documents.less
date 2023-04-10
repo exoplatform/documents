@@ -358,7 +358,19 @@
       width: 15px !important;
       height: 15px !important;
     }
+
+    #action-context-menu {
+      --mouse-x: 0;
+      --mouse-y: 0;
+      display: none;
+      position: fixed;
+      margin: 0;
+      left: 0;
+      top: 0;
+      transform: ~"translateX(min(var(--mouse-x), calc(100vw - 105%))) translateY(min(var(--mouse-y), calc(100vh - 101%)))";
+    }
   }
+
   .documentInfoDrawer {
     .infoDescriptionToShow {
       &:focus {
@@ -515,6 +527,8 @@
       }
 
       .v-data-table__mobile-table-row {
+        display: block !important;
+
         .document-time {
           text-align: left;
           margin-left: 16px;
@@ -573,6 +587,12 @@
 @media screen and (max-width: 360px) {
   .documentEditName {
     width: 179px;
+  }
+}
+
+@media screen and (max-width: 979px) and  (min-width: 960px){
+  .documents-alert {
+    margin-bottom: 60px !important;
   }
 }
 

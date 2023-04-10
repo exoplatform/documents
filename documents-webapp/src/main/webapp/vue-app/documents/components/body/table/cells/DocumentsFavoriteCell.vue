@@ -2,7 +2,9 @@
   <div 
     v-show="isFavorite && !file.folder"
     :id="`favorite-cell-file-${fileId}`">
-    <div v-if="!isMobile">
+    <div
+      v-if="!isMobile"
+      class="width-fit-content">
       <documents-favorite-action
         :file="file"
         :is-mobile="isMobile" />

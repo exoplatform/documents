@@ -55,6 +55,8 @@ import QuickFilterActionMobile from './components/header/actions/QuickFilterActi
 import ExtendFilterActionMobile from './components/header/actions/ExtendFilterActionMobile.vue';
 import UploadOverlay from './components/body/UploadOverlay.vue';
 import VersionHistoryMenuAction from './components/body/actions/VersionHistoryMenuAction.vue';
+import DocumentsSelectionCell from './components/body/table/cells/DocumentsSelectionCell.vue';
+import DocumentActionContextMenu from './components/body/table/DocumentActionContextMenu.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -114,6 +116,8 @@ const components = {
   'all-filter-action': AllFilterActionMobile,
   'quick-filter-action': QuickFilterActionMobile,
   'extend-filter-action': ExtendFilterActionMobile,
+  'documents-selection-cell': DocumentsSelectionCell,
+  'document-action-context-menu': DocumentActionContextMenu
 };
 
 for (const key in components) {

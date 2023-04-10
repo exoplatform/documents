@@ -31,6 +31,14 @@ export default {
       type: String,
       default: null
     },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
+    selectAllChecked: {
+      type: Boolean,
+      default: false,
+    },
   },
   computed: {
     params() {
@@ -40,7 +48,9 @@ export default {
         extendedSearch: this.extendedSearch,
         extension: this.extension,
         isMobile: this.isMobile,
-        selectedView: this.selectedView
+        selectedView: this.selectedView,
+        selectedDocuments: this.selectedDocuments,
+        selectAllChecked: this.selectAllChecked
       };
     },
   },

@@ -24,6 +24,10 @@ if (extensionRegistry) {
       Vue.component(cmp.componentName, cmp.componentOptions);
     });
   }
+  Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
+  document.addEventListener('documents-supported-document-types-updated', () => {
+    Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
+  });
 }
 
 Vue.use(Vuetify);

@@ -36,7 +36,15 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
-    }
+    },
+    disabledExtension: {
+      type: Boolean,
+      default: false
+    },
+    isMultiSelection: {
+      type: Boolean,
+      default: false
+    },
   },
   methods: {
     moveDocument(){

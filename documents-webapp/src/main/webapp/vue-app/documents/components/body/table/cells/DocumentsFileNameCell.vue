@@ -1,8 +1,21 @@
 <template>
   <div
-    class="d-flex flex-nowrap">
+    class="d-flex flex-nowrap"
+    @touchstart="touchStart"
+    @touchend="cancelTouch"
+    @touchmove="cancelTouch">
+    <div
+      v-if="documentMultiSelectionActive"
+      class="ma-auto">
+      <documents-selection-cell
+        class="ms-2 me-2"
+        v-if="isMobile"
+        :file="file"
+        :select-all-checked="selectAllChecked"
+        :selected-documents="selectedDocuments" />
+    </div>
     <a
-      class="attachment d-flex flex-nowrap text-color not-clickable openPreviewDoc width-document-title">
+      class="attachment d-flex flex-nowrap text-color not-clickable text-decoration-none openPreviewDoc width-document-title">
       <div class="mt-auto mb-auto">
         <v-progress-circular
           v-if="loading"
@@ -22,9 +35,9 @@
       <div class="mt-auto mb-auto width-document-title">
         <div
           v-if="!editNameMode"
-          @click="openPreview()"
           class="document-title clickable hover-underline d-inline-flex"
-          :title="title">
+          :title="title"
+          @click="openPreview()">
           <div
             v-sanitized-html="title"
             class="document-name ms-4"
@@ -65,7 +78,7 @@
     <documents-info-details-cell
       v-if="!isMobile"
       :file="file"
-      :is-mobile="isMobile" 
+      :is-mobile="isMobile"
       :class="editNameMode ? '' : 'button-info-details'" />
     <div
       class="ma-auto"
@@ -131,7 +144,15 @@ export default {
     selectedView: {
       type: String,
       default: null
-    }
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
+    selectAllChecked: {
+      type: Boolean,
+      default: false,
+    },
   },
   data: () => ({
     loading: false,
@@ -155,9 +176,17 @@ export default {
       o: '(o|ó|ŏ|ǒ|ô|ố|ộ|ồ|ổ|ỗ|ö|ȫ|ȯ|ȱ|ọ|ő|ȍ|ò|ỏ|ơ|ớ|ợ|ờ|ở|ỡ|ȏ|ō|ṓ|ṑ|ǫ|ǭ|ø|ǿ|õ|ṍ|ṏ|ȭ)',
       u: '(u|ú|ŭ|ǔ|û|ṷ|ü|ǘ|ǚ|ǜ|ǖ|ṳ|ụ|ű|ȕ|ù|ủ|ư|ứ|ự|ừ|ử|ữ|ȗ|ū|ṻ|ų|ᶙ|ů|ũ|ṹ|ṵ)'
     },
-    icon: null
+    icon: null,
+    touchTimer: null,
   }),
   computed: {
+    isFileEditable() {
+      const type = this.file && this.file.mimeType || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+    },
+    documentMultiSelectionActive() {
+      return eXo?.env?.portal?.documentMultiSelection && this.$vuetify.breakpoint.width >= 600;
+    },
     title() {
       let docTitle = this.fileName;
       try {
@@ -210,6 +239,18 @@ export default {
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   methods: {
+    touchStart() {
+      if (!this.documentMultiSelectionActive) {
+        return;
+      }
+      this.touchTimer = setTimeout(() => {
+        this.touchTimer = null;
+        this.$root.$emit('show-selection-input', this.file, true);
+      }, 600);
+    },
+    cancelTouch() {
+      clearTimeout(this.touchTimer);
+    },
     getFileIcon() {
       const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
       if (this.file?.folder) {
@@ -239,10 +280,16 @@ export default {
       const lang = eXo && eXo.env && eXo.env.portal && eXo.env.portal.language || 'en';
       return new Date(this.file.date).toLocaleString(lang, options).split('/').join('-');
     },
+    openInEditMode(file) {
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${file.id}&source=peview`, '_blank');
+    },
     openPreview() {
       this.loading = true;
-      if (this.file && this.file.folder){
+      if (this.file && this.file.folder) {
         this.$root.$emit('document-open-folder', this.file);
+      } else if (!this.isMobile && this.isFileEditable && this.file.acl.canEdit)  {
+        this.openInEditMode(this.file);
+        this.loading = false;
       } else {
         const id = this.file.id;
         this.$attachmentService.getAttachmentById(id)

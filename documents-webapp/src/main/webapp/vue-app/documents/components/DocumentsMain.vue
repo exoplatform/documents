@@ -16,7 +16,8 @@
           :can-add="canAdd"
           :query="query"
           :primary-filter="primaryFilter"
-          :is-mobile="isMobile" 
+          :is-mobile="isMobile"
+          :selected-documents="selectedDocuments"
           class="py-2" />
         <div v-if="searchResult && !loading">
           <documents-no-result-body
@@ -25,16 +26,17 @@
             :query="query" />
         </div>
         <div
-          v-else-if="!filesLoad && !loading && selectedView == 'folder' "
+          v-else-if="!filesLoad && !loading && selectedView === 'folder' "
           @drop="dragFile"
           @dragover="startDrag">
           <documents-no-body-folder
             :query="query"
             :is-mobile="isMobile" />
         </div>
-        <div v-else-if="!filesLoad && !loading"
-             @drop="dragFile"
-             @dragover="startDrag">
+        <div
+          v-else-if="!filesLoad && !loading"
+          @drop="dragFile"
+          @dragover="startDrag">
           <documents-no-body
             :query="query"
             :is-mobile="isMobile" />
@@ -61,6 +63,7 @@
             :show-extend-filter="showExtendFilter"
             :primary-filter="primaryFilter"
             :selected-view="selectedView"
+            :selected-documents="selectedDocuments"
             :is-mobile="isMobile" />
           <exo-document-notification-alerts />
         </div>
@@ -70,44 +73,6 @@
       <documents-info-drawer
         :selected-view="selectedView"
         :is-mobile="isMobile" />
-      <v-alert
-        v-model="alert"
-        :icon="false"
-        :colored-border="isMobile"
-        :border="isMobile && !isAlertActionRunning? 'top' : ''"
-        :color="alertType"
-        :type="!isMobile? alertType: ''"
-        :class="isMobile? 'documents-alert-mobile': ''"
-        :dismissible="!isMobile">
-        <v-progress-linear
-          v-if="isAlertActionRunning"
-          :active="isAlertActionRunning"
-          :height="isMobile? '8px': '4px'"
-          :indeterminate="true"
-          :class="progressAlertClassMobile"
-          :color="progressAlertColor" />
-        {{ message }}
-        <v-btn
-          v-for="action in alertActions"
-          :key="action.event"
-          :disabled="isAlertActionRunning"
-          plain
-          text
-          color="primary"
-          @click="emitAlertAction(action)">
-          {{ $t(`document.conflicts.action.${action.event}`) }}
-        </v-btn>
-        <template #close="{ toggle }">
-          <v-btn
-            v-if="!isMobile"
-            icon
-            @click="handleAlertClose(toggle)">
-            <v-icon>
-              mdi-close-circle
-            </v-icon>
-          </v-btn>
-        </template>
-      </v-alert>
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
@@ -131,8 +96,47 @@
         @version-update-description="updateVersionSummary"
         @load-more="loadMoreVersions"
         ref="documentVersionHistory" />
-      </div>
-    </v-app>
+      <document-action-context-menu />
+    </div>
+    <v-alert
+      v-model="alert"
+      :icon="false"
+      :colored-border="isMobile"
+      :border="isMobile && !isAlertActionRunning? 'top' : ''"
+      :color="alertType"
+      :type="!isMobile? alertType: ''"
+      :class="isMobile? 'documents-alert-mobile': 'documents-alert'"
+      :dismissible="!isMobile">
+      <v-progress-linear
+        v-if="isAlertActionRunning"
+        :active="isAlertActionRunning"
+        :height="isMobile? '8px': '4px'"
+        :indeterminate="true"
+        :class="progressAlertClassMobile"
+        :color="progressAlertColor" />
+      {{ message }}
+      <v-btn
+        v-for="action in alertActions"
+        :key="action.event"
+        :disabled="isAlertActionRunning"
+        plain
+        text
+        color="primary"
+        @click="emitAlertAction(action)">
+        {{ $t(`document.conflicts.action.${action.event}`) }}
+      </v-btn>
+      <template #close="{ toggle }">
+        <v-btn
+          v-if="!isMobile"
+          icon
+          @click="handleAlertClose(toggle)">
+          <v-icon>
+            mdi-close-circle
+          </v-icon>
+        </v-btn>
+      </template>
+    </v-alert>
+  </v-app>
 </template>
 <script>
 
@@ -186,6 +190,7 @@ export default {
     isAlertActionRunning: false,
     documentsToBeDeleted: [],
     showOverlay: false,
+    selectedDocuments: []
   }),
   computed: {
     progressAlertColor() {
@@ -259,8 +264,8 @@ export default {
       this.primaryFilter = filter;
       this.refreshFiles({'primaryFilter': this.primaryFilter});
     });
-    this.$root.$on('show-alert', message => {
-      this.displayMessage(message);
+    this.$root.$on('show-alert', (message, persist) => {
+      this.displayMessage(message, persist);
     });
     this.getDocumentDataFromUrl()
       .finally(() => {
@@ -285,11 +290,34 @@ export default {
     this.$on('keepBoth', this.handleConflicts);
     this.$on('createNewVersion', this.handleConflicts);
     this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
+    this.$root.$on('update-selection-documents-list', this.updateSelectionList);
+    this.$root.$on('breadcrumb-updated', this.resetSelections);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    updateSelectionList(selected, file) {
+      const index = this.selectedDocuments.findIndex(object => object.id === file.id);
+      let readOnlySelected = false;
+      if (selected && index === -1) {
+        this.selectedDocuments.push(file);
+        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
+        if (readOnlySelected) {
+          this.$root.$emit('show-alert', {
+            type: 'warning',
+            message: this.$t('document.multiSelection.readOnly.selected.message')
+          }, true);
+        }
+      } else if (!selected) {
+        this.selectedDocuments.splice(index, 1);
+        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
+        if (!readOnlySelected) {
+          this.hideMessage();
+        }
+      }
+      this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
+    },
     handleAlertClose() {
       this.$root.$emit('cancel-action');
       this.alert = false;
@@ -518,9 +546,15 @@ export default {
           window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Public')[0]}/Public${folderPath}?view=folder`);
         }
       }
+      this.resetSelections();
     },
     loadMore() {
       this.refreshFiles({'primaryFilter': this.primaryFilter, 'append': true});
+    },
+    resetSelections() {
+      this.$root.$emit('reset-selections');
+      this.selectedDocuments = [];
+      this.hideMessage();
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
@@ -532,6 +566,7 @@ export default {
       this.folderPath = null;
       this.files = [];
       this.$root.$emit('resetSearch');
+      this.resetSelections();
       this.primaryFilter='all';
       this.query=null;
       this.extendedSearch=false;
@@ -618,6 +653,7 @@ export default {
             return 0;
           }) || files : files;
           this.files = options?.append ? this.files.concat(files) : files ;
+          this.files = [...new Map(this.files.map((item) => [item['id'], item])).values()];
           this.files = options?.deleted ? this.files.filter(this.isDocumentsToBeDeleted) : this.files;
           this.hasMore = files && files.length >= this.limit;
           if (this.fileName && !options?.disablePreview) {
@@ -996,20 +1032,26 @@ export default {
       return this.$nextTick();
     },
     onBrowserNavChange() {
+      this.resetSelections();
       this.getDocumentDataFromUrl();
       this.refreshFiles()
         .finally(() => this.$root.$emit('update-breadcrumb'));
     },
-    displayMessage(message) {
+    displayMessage(message, persist) {
       this.message = message.message;
       this.alertType = message.type;
       this.alertActions = message.actions;
       this.alert = true;
-      setTimeout(() => {
-        if (!this.alertActions?.length) {
-          this.alert = false;
-        }
-      }, 5000);
+      if (!persist) {
+        setTimeout(() => {
+          if (!this.alertActions?.length) {
+            this.alert = false;
+          }
+        }, 5000);
+      }
+    },
+    hideMessage() {
+      this.alert = false;
     },
     selectFile(path) {
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
