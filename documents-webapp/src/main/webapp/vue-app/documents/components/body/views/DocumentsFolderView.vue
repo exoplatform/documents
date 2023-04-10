@@ -28,6 +28,7 @@
           v-model="selectAll"
           v-on="on"
           v-bind="props"
+          :indeterminate="false"
           color="primary"
           :class="showSelectAll? 'visible': 'invisible'"
           class="mt-auto"
@@ -37,8 +38,7 @@
       </template>
       <template #[`header.name`]>
         <span
-          @mouseover="showSelectAllInputOnHover"
-          @mouseleave="hideSelectAllInputOnHover">
+          id="headerName">
           {{ $t('documents.label.name') }}
         </span>
       </template>
@@ -269,6 +269,8 @@ export default {
     this.$root.$on('documents-filter', this.updateFilter);
   },
   mounted(){
+    document.getElementById('headerName').parentElement.addEventListener('mouseover', this.showSelectAllInputOnHover);
+    document.getElementById('headerName').parentElement.addEventListener('mouseleave', this.hideSelectAllInputOnHover);
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
   },
   beforeDestroy() {
