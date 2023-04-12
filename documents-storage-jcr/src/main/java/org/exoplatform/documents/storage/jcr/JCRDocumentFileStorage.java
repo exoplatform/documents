@@ -1583,10 +1583,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
     ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
-    if(!actionData.getIdentity().getUserId().equals(userName)){
-      throw new IOException("Current user is not allowed to get zip file");
-    }
     if (actionData != null) {
+      if(!actionData.getIdentity().getUserId().equals(userName)){
+        throw new IOException("Current user is not allowed to get zip file");
+      }
       File zipped = new File(actionData.getDownloadZipPath());
       byte[] filesBytes = FileUtils.readFileToByteArray(zipped);
       Files.delete(Path.of(actionData.getDownloadZipPath()));
@@ -1597,12 +1597,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         } catch (Exception e) {
           LOG.error("cannot broadcast bulk action event");
         }
-        return null;
+        return new byte[0];
       }
       bulkStorageActionService.removeActionData(actionData);
       return filesBytes;
     } else
-      return null;
+      return new byte[0];
   }
   public void cancelBulkAction(int actionId, String userName) throws IOException {
     ActionData actionData = bulkStorageActionService.getActionDataById(actionId);

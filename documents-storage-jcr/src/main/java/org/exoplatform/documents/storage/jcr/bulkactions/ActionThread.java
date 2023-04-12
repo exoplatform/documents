@@ -24,10 +24,7 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
-import javax.jcr.PathNotFoundException;
-import javax.jcr.Session;
+import javax.jcr.*;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -162,7 +159,7 @@ public class ActionThread implements Runnable {
       log.error("Cannot create temp folder to download documents", e);
       return;
     }
-    Boolean hasFolders = items.stream().anyMatch(obj -> obj.isFolder());
+    boolean hasFolders = items.stream().anyMatch(obj -> obj.isFolder());
     try {
       actionData.setStatus(ActionStatus.ZIP_FILE_CREATION.name());
       listenerService.broadcast("bulk_actions_document_event", identity, actionData);
@@ -226,7 +223,7 @@ public class ActionThread implements Runnable {
     // TODO
   }
 
-  private File createFile(Node node, String symlinkPath, String sourcePath, boolean hasFolders) throws Exception {
+  private File createFile(Node node, String symlinkPath, String sourcePath, boolean hasFolders) throws RepositoryException, IOException {
     if (checkCanceled()) {
       return null;
     }
@@ -243,14 +240,14 @@ public class ActionThread implements Runnable {
       path = tempFolderPath + File.separator + node.getName();
     }
     File file = new File(path);
-    OutputStream outputStream = new FileOutputStream(file);
-    byte[] buffer = new byte[1024];
-    int length;
-    while ((length = inputStream.read(buffer)) > 0) {
-      outputStream.write(buffer, 0, length);
+    try (OutputStream outputStream = new FileOutputStream(file)) {
+      byte[] buffer = new byte[1024];
+      int length;
+      while ((length = inputStream.read(buffer)) > 0) {
+        outputStream.write(buffer, 0, length);
+      }
+      inputStream.close();
     }
-    inputStream.close();
-    outputStream.close();
     return file;
   }
 
@@ -282,16 +279,12 @@ public class ActionThread implements Runnable {
 
   }
 
-  private void zipFiles(String zipFilePath) {
-    try {
-      FileOutputStream fos = new FileOutputStream(zipFilePath);
-      ZipOutputStream zos = new ZipOutputStream(fos);
-      File folder = new File(tempFolderPath);
-      zipFolder(folder, "", zos, fos, zipFilePath);
-      zos.close();
-      fos.close();
-    } catch (Exception e) {
-      e.printStackTrace();
+  private void zipFiles(String zipFilePath) throws Exception {
+    try (FileOutputStream fos = new FileOutputStream(zipFilePath)) {
+      try (ZipOutputStream zos = new ZipOutputStream(fos)) {
+        File folder = new File(tempFolderPath);
+        zipFolder(folder, "", zos, fos, zipFilePath);
+      }
     }
   }
 
@@ -317,19 +310,18 @@ public class ActionThread implements Runnable {
         }
       } else {
         byte[] buffer = new byte[1024];
-        FileInputStream fis = new FileInputStream(file);
-        if (StringUtils.isNotEmpty(folderName)) {
-          zos.putNextEntry(new ZipEntry(folderName + "/" + file.getName()));
-        } else {
-          zos.putNextEntry(new ZipEntry(file.getName()));
+        try (FileInputStream fis = new FileInputStream(file)) {
+          if (StringUtils.isNotEmpty(folderName)) {
+            zos.putNextEntry(new ZipEntry(folderName + "/" + file.getName()));
+          } else {
+            zos.putNextEntry(new ZipEntry(file.getName()));
+          }
+          int length;
+          while ((length = fis.read(buffer)) > 0) {
+            zos.write(buffer, 0, length);
+          }
+          zos.closeEntry();
         }
-
-        int length;
-        while ((length = fis.read(buffer)) > 0) {
-          zos.write(buffer, 0, length);
-        }
-        zos.closeEntry();
-        fis.close();
       }
     }
   }
