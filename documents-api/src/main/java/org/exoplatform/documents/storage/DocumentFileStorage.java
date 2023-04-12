@@ -16,13 +16,15 @@
  */
 package org.exoplatform.documents.storage;
 
+import java.io.IOException;
 import java.util.List;
+
+import javax.jcr.RepositoryException;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.services.security.Identity;
-import javax.jcr.RepositoryException;
 
 public interface DocumentFileStorage {
 
@@ -137,6 +139,8 @@ public interface DocumentFileStorage {
                                                                                ObjectNotFoundException;
   void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity);
 
+  void downloadDocuments(int actionId, List<AbstractNode> documents, Identity identity, long authenticatedUserId);
+
   /**
    * Shares a document with given user or space
    *
@@ -197,4 +201,20 @@ public interface DocumentFileStorage {
    * @return {@link FileVersion}
    */
   FileVersion restoreVersion(String versionId, String aclIdentity);
+
+  /**
+   * Get the zip for download by action ID
+   *
+   * @param actionId action id
+   * @param userName current user name
+   */
+  byte[] getDownloadZipBytes(int actionId, String userName) throws IOException;
+
+  /**
+   * Cancel any bulk action by action ID
+   *
+   * @param actionId action id
+   * @param userName current user name
+   */
+  void cancelBulkAction(int actionId, String userName) throws IOException;
 }

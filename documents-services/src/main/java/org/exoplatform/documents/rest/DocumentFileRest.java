@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.rest;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -593,6 +594,81 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (Exception e) {
       LOG.error("Error while deleting documents", e);
       return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @POST
+  @Path("bulk/download/{actionId}")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Operation(summary = "download list of documents", method = "POST", description = "This download a list of documents")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Documents downloaded"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "User not authorized to download the documents"),
+      @ApiResponse(responseCode = "500", description = "Internal server error") })
+  public Response downloadDocuments(@Parameter(description = "action ID", required = true)
+  @PathParam("actionId")
+  int actionId, @RequestBody(description = "documents List", required = true)
+  List<AbstractNodeEntity> documents) {
+    if (documents.isEmpty()) {
+      return Response.status(Status.BAD_REQUEST).entity("documents list is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      documentFileService.downloadDocuments(actionId, EntityBuilder.toAbstractNodes(documents), userIdentityId);
+      return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error while deleting documents", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @GET
+  @Path("bulk/download/{actionId}")
+  @RolesAllowed("users")
+  @Operation(summary = "Download zipped list of files", method = "GET", description = "This download a zipped list of files.")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "404", description = "Resource not found") })
+  public Response getDownloadZip(@Parameter(description = "List items", required = true)
+  @PathParam("actionId")
+  int actionId) {
+
+    try {
+      Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
+      byte[] filesBytes = documentFileService.getDownloadZipBytes(actionId,
+              currentUserIdentity.getRemoteId());
+      return Response.ok(filesBytes)
+                     .type("application/zip")
+                     .header("Content-Disposition", "attachment; filename=\"documents_Download" + new Date().getTime() + ".zip\"")
+                     .build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to get download file ", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
+  }
+
+  @GET
+  @Path("bulk/cancel/{actionId}")
+  @RolesAllowed("users")
+  @Operation(summary = "cancel bulk action", method = "GET", description = "Cancel bulk action.")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "404", description = "Resource not found") })
+  public Response cancelBulkAction(@Parameter(description = "List items", required = true)
+  @PathParam("actionId")
+  int actionId) {
+    Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
+    try {
+      documentFileService.cancelBulkAction(actionId, currentUserIdentity.getRemoteId());
+      return Response.ok().build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to cancel bulk action", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
   }
 
