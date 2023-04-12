@@ -14,13 +14,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 package org.exoplatform.documents.model;
+
+import org.exoplatform.services.security.Identity;
 
 import lombok.Data;
 
 @Data
 public class ActionData {
+
   private int    actionId;
 
   private String status;
@@ -30,4 +32,9 @@ public class ActionData {
   private String message;
 
   private int    numberOfItems;
+
+  private String   downloadZipPath;
+
+  private Identity identity;
+
 }

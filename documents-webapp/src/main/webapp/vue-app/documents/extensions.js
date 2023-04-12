@@ -258,10 +258,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
       return false;
     }
     return file && !file.cloudDriveFolder
-                && !file.folder
                 && (file.acl.canEdit || file.sourceID);
   },
-  enabledForMultiSelection: () => false,
+  enabledForMultiSelection: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['download-menu-action'],
   },

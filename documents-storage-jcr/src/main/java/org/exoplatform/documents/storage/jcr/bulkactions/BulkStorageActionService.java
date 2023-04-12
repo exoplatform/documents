@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -43,6 +44,12 @@ public class BulkStorageActionService implements Startable {
 
   private ExecutorService               bulkActionThreadPool;
 
+  private static final String           TEMP_DIRECTORY_PATH = "java.io.tmpdir";
+
+  private static final String           ZIP_PREFIX          = "downloadzip";
+
+  private static final String           TEMP_FOLDER_PREFIX  = "temp_download";
+
   private static final List<ActionData> actionList = new ArrayList<>();
 
   public void executeBulkAction(Session session,
@@ -59,6 +66,7 @@ public class BulkStorageActionService implements Startable {
     actionData.setStatus(ActionStatus.STARTED.name());
     actionData.setActionType(actionType);
     actionData.setNumberOfItems(items.size());
+    actionData.setIdentity(identity);
     actionList.add(actionData);
     bulkActionThreadPool.execute(new ActionThread(documentFileStorage,
                                                   jcrDeleteFileStorage,
@@ -82,10 +90,27 @@ public class BulkStorageActionService implements Startable {
     if (bulkActionThreadPool != null) {
       bulkActionThreadPool.shutdownNow();
     }
+    File temp = new File(System.getProperty(TEMP_DIRECTORY_PATH));
+    cleanTempFiles(temp);
   }
 
+  private void cleanTempFiles(File file) {
+    File[] files = file.listFiles();
+    if (files != null) {
+      for (File f : files) {
+        cleanTempFiles(f);
+      }
+    }
+    if (file.getName().startsWith(TEMP_FOLDER_PREFIX) || file.getName().startsWith(ZIP_PREFIX)) {
+      file.delete();
+    }
+  }
   public ActionData getActionDataById(int id) {
     return actionList.stream().filter(resource -> id == resource.getActionId()).findFirst().orElse(null);
+  }
+
+  public void removeActionData(ActionData actionData) {
+    actionList.remove(actionData);
   }
 
 }
