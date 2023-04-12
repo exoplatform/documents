@@ -37,32 +37,37 @@ export default {
   },
   methods: {
     download() {
-      this.$attachmentService.getAttachmentById(this.file.id)
-        .then(attachment => {
-          this.downloadUrl = attachment.downloadUrl;
-        })
-        .catch(e => console.error(e))
-        .finally(() => {
-          const urlDownload = this.downloadUrl;
-          const fileName = this.file.name;
-          if (urlDownload.indexOf('/') > 0 && !urlDownload.includes(window.location.hostname)) {
-            return;
-          }
-          const a = document.createElement('a');
-          a.href = urlDownload;
-          a.download = fileName.replace(/\[[0-9]*\]$/g, '');
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          document.dispatchEvent(new CustomEvent('download-file', {
-            detail: {
-              'type': 'file',
-              'id': this.file.id,
-              'spaceId': this.spaceId,
+      if (!this.isMultiSelection) {
+        this.$attachmentService.getAttachmentById(this.file.id)
+          .then(attachment => {
+            this.downloadUrl = attachment.downloadUrl;
+          })
+          .catch(e => console.error(e))
+          .finally(() => {
+            const urlDownload = this.downloadUrl;
+            const fileName = this.file.name;
+            if (urlDownload.indexOf('/') > 0 && !urlDownload.includes(window.location.hostname)) {
+              return;
             }
-          }));
-        });
-      if ( this.isMobile ) {
+            const a = document.createElement('a');
+            a.href = urlDownload;
+            a.download = fileName.replace(/\[[0-9]*\]$/g, '');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            document.dispatchEvent(new CustomEvent('download-file', {
+              detail: {
+                'type': 'file',
+                'id': this.file.id,
+                'spaceId': this.spaceId,
+              }
+            }));
+          });
+        if ( this.isMobile ) {
+          this.$root.$emit('close-file-action-menu');
+        }
+      } else {
+        this.$root.$emit('documents-bulk-download');
         this.$root.$emit('close-file-action-menu');
       }
     }

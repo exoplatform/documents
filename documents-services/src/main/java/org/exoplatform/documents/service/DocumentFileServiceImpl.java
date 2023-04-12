@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -270,6 +271,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public void downloadDocuments(int actionId,
+                                List<AbstractNode> documents,
+                                long authenticatedUserId) throws IllegalAccessException {
+    documentFileStorage.downloadDocuments(actionId, documents, getAclUserIdentity(authenticatedUserId), authenticatedUserId);
+  }
+
+  @Override
   public void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException {
 
     documentFileStorage.updatePermissions(documentId, nodePermissionEntity, getAclUserIdentity(authenticatedUserId));
@@ -396,5 +404,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
           && (spaceService.isRedactor(space, currentUserName) || spaceService.isManager(space, currentUserName));
     }
     return canAdd;
+  }
+
+  @Override
+  public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
+    return documentFileStorage.getDownloadZipBytes(actionId,userName);
+  }
+  @Override
+  public void cancelBulkAction(int actionId, String userName) throws IOException {
+    documentFileStorage.cancelBulkAction(actionId, userName);
   }
 }
