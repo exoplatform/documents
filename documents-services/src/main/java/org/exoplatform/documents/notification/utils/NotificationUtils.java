@@ -70,7 +70,7 @@ public class NotificationUtils {
       String groupId = space.getGroupId().replace("/", ":");
       stringBuilder.append("g/").append(groupId).append("/").append(spacePrettyName).append("/documents");
     } else {
-      stringBuilder.append(portalOwner).append("/documents/Private/Documents");
+      stringBuilder.append(portalOwner).append("/documents");
     }
     boolean isTargetNodeFile = isNodeFile(sharedNode);
     if (isTargetNodeFile) {
