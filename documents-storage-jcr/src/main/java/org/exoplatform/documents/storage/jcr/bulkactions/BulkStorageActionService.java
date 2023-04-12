@@ -46,6 +46,10 @@ public class BulkStorageActionService implements Startable {
 
   private static final String           TEMP_DIRECTORY_PATH = "java.io.tmpdir";
 
+  private static final String           ZIP_PREFIX          = "downloadzip";
+
+  private static final String           TEMP_FOLDER_PREFIX  = "temp_download";
+
   private static final List<ActionData> actionList = new ArrayList<>();
 
   public void executeBulkAction(Session session,
@@ -97,7 +101,7 @@ public class BulkStorageActionService implements Startable {
         cleanTempFiles(f);
       }
     }
-    if (file.getName().startsWith("temp_download") || file.getName().startsWith("downloadzip")) {
+    if (file.getName().startsWith(TEMP_FOLDER_PREFIX) || file.getName().startsWith(ZIP_PREFIX)) {
       file.delete();
     }
   }
