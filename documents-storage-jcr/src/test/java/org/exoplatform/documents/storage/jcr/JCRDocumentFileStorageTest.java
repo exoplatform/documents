@@ -176,7 +176,10 @@ public class JCRDocumentFileStorageTest {
     when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
     when(nodeType.getName()).thenReturn("nt:file");
     when(((ExtendedNode) currentNode).getIdentifier()).thenReturn("123");
+    AccessControlEntry accessControlEntry = new AccessControlEntry("username", PermissionType.READ);
     when(identity.getRemoteId()).thenReturn("username");
+    AccessControlList acl1 = new AccessControlList("username", Arrays.asList(accessControlEntry));
+    when(((ExtendedNode) currentNode).getACL()).thenReturn(acl1);
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
     jcrDocumentFileStorage.shareDocument("1", 1L);
     UTILS.verify(() -> times(1));
