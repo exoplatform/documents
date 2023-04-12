@@ -243,7 +243,7 @@ export default {
     this.$root.$on('documents-bulk-delete', this.bulkDeleteDocument);
     this.$root.$on('documents-bulk-download', this.bulkDownloadDocument);
     this.$root.$on('cancel-bulk-Action', (actionId) => {
-      this.loading=false;
+      this.setMultiActionLoading(false);
       this.resetSelections();
       this.cancelBulkAction(actionId);
     });
@@ -350,14 +350,14 @@ export default {
       if (actionData.actionType.toLowerCase() === 'download'){
         if (actionData.status.toLowerCase()==='done_succsussfully'){
           this.$root.$emit('set-download-status','zip_file_created');
-          this.loading=false;
+          this.setMultiActionLoading(false);
           this.resetSelections();
           this.getDownlodedZip(actionData); 
         } else {
           this.$root.$emit('set-download-status',actionData.status);  
         }       
       } else {
-        this.loading=false;
+        this.setMultiActionLoading(false);
         this.resetSelections();
         this.refreshFiles();
         if (actionData.status.toLowerCase()==='done_with_errors'){
@@ -596,7 +596,7 @@ export default {
       }
     },
     bulkDownloadDocument(){
-      this.loading = true;
+      this.setMultiActionLoading(true);
       const max = Math.floor(9999);
       const random = crypto.getRandomValues(new Uint32Array(1))[0];
       const actionId =random % max; 

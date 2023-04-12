@@ -602,9 +602,9 @@ public class DocumentFileRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Operation(summary = "download list of documents", method = "POST", description = "This download a list of documents")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Documents downloaded"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
-      @ApiResponse(responseCode = "401", description = "User not authorized to delete the document"),
+      @ApiResponse(responseCode = "401", description = "User not authorized to download the documents"),
       @ApiResponse(responseCode = "500", description = "Internal server error") })
   public Response downloadDocuments(@Parameter(description = "action ID", required = true)
   @PathParam("actionId")
@@ -628,7 +628,7 @@ public class DocumentFileRest implements ResourceContainer {
   @GET
   @Path("bulk/download/{actionId}")
   @RolesAllowed("users")
-  @Operation(summary = "Download files", method = "GET", description = "This download a list of files.")
+  @Operation(summary = "Download zipped list of files", method = "GET", description = "This download a zipped list of files.")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
