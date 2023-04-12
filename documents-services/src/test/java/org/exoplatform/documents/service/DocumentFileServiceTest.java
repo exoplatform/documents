@@ -20,6 +20,7 @@ import static org.junit.Assert.*;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -476,6 +477,61 @@ public class DocumentFileServiceTest {
 
     documentFileService.deleteDocuments(123456, nodes, 1L);
     verify(jcrDeleteFileStorage, times(1)).deleteDocuments(123456, nodes, identity, 1L);
+  }
+
+  @Test
+  public void testDownloadDocuments() throws IllegalAccessException {
+
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity socialIdentity = mock(Identity.class);
+    when(identityRegistry.getIdentity("username")).thenReturn(identity);
+    when(socialIdentity.getRemoteId()).thenReturn("username");
+    when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
+    FileNodeEntity file1 = new FileNodeEntity();
+    file1.setId("1");
+    file1.setName("oldFile");
+    file1.setPath("/document/oldFile");
+    file1.setDatasource("datasource");
+    file1.setMimeType(":file");
+    file1.setSize(50);
+    FileNodeEntity file2 = new FileNodeEntity();
+    file2.setId("2");
+    file2.setName("oldFile2");
+    file2.setPath("/document/oldFile2");
+    file2.setDatasource("datasource");
+    file2.setMimeType(":file");
+    file2.setSize(50);
+    FileNodeEntity file3 = new FileNodeEntity();
+    file3.setId("3");
+    file3.setName("oldFile3");
+    file3.setPath("/document/oldFile3");
+    file3.setDatasource("datasource");
+    file3.setMimeType(":file");
+    file3.setSize(50);
+
+    List<AbstractNodeEntity> nodeEntities = new ArrayList<>();
+
+    nodeEntities.add(file1);
+    nodeEntities.add(file2);
+    nodeEntities.add(file3);
+    List<AbstractNode> nodes = EntityBuilder.toAbstractNodes(nodeEntities);
+    doNothing().when(documentFileStorage).downloadDocuments(123456, nodes, identity, 1L);
+    documentFileService.downloadDocuments(123456, nodes, 1L);
+    verify(documentFileStorage, times(1)).downloadDocuments(123456, nodes, identity, 1L);
+  }
+
+  @Test
+  public void testGetDownloadZipBytes() throws IOException {
+
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity socialIdentity = mock(Identity.class);
+    when(identityRegistry.getIdentity("username")).thenReturn(identity);
+    when(socialIdentity.getRemoteId()).thenReturn("username");
+    when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
+
+    when(documentFileStorage.getDownloadZipBytes(123456, "userName")).thenReturn(null);
+    documentFileService.getDownloadZipBytes(123456,"userName");
+    verify(documentFileStorage, times(1)).getDownloadZipBytes(123456, "userName");
   }
 
   @Test

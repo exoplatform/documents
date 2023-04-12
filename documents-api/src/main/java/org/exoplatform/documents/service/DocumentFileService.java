@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.service;
 
+import java.io.IOException;
 import java.util.List;
 
 import javax.jcr.RepositoryException;
@@ -190,6 +191,14 @@ public interface DocumentFileService {
    */
   void deleteDocuments(int actionId, List<AbstractNode> documents, long authenticatedUserId) throws IllegalAccessException;
 
+  /**
+   * Download a list of documents.
+   *
+   * @param documents the list document
+   * @param authenticatedUserId of the user accessing files
+   */
+  void downloadDocuments(int actionId, List<AbstractNode> documents, long authenticatedUserId) throws IllegalAccessException;
+
   void updatePermissions(String documentId,
                          NodePermission nodePermissionEntity,
                          long authenticatedUserId) throws IllegalAccessException;
@@ -271,4 +280,19 @@ public interface DocumentFileService {
    */
   boolean canAddDocument(String spaceId, String currentUserName);
 
+  /**
+   * Get the zip for download by action ID
+   *
+   * @param actionId action id
+   * @param userName current user name
+   */
+  byte[] getDownloadZipBytes(int actionId, String userName) throws IOException;
+
+  /**
+   * Cancel any bulk action by action ID
+   *
+   * @param actionId action id
+   * @param userName current user name
+   */
+  void cancelBulkAction(int actionId, String userName) throws IOException;
 }
