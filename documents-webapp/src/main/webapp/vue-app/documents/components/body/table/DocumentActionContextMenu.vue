@@ -44,11 +44,13 @@ export default {
     this.$root.$on('open-action-context-menu', this.openMenu);
     this.$root.$on('prevent-action-context-menu', this.handlePreventMenu);
     this.$root.$on('selection-documents-list-updated', this.handleUpdateSelected);
+    this.$root.$on('set-action-loading', this.closeMenu);
   },
   beforeDestroy() {
     this.$root.$off('open-action-context-menu', this.openMenu);
     this.$root.$off('selection-documents-list-updated', this.handleUpdateSelected);
     this.$root.$off('prevent-action-context-menu', this.handlePreventMenu);
+    this.$root.$off('set-action-loading', this.closeMenu);
   },
   computed: {
     isSelected() {
@@ -56,6 +58,9 @@ export default {
     },
   },
   methods: {
+    closeMenu() {
+      setTimeout(() => this.show = false, 200);
+    },
     handlePreventMenu() {
       this.show = false;
     },
