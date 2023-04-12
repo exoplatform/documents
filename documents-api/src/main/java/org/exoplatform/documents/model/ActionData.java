@@ -14,13 +14,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <gnu.org/licenses>.
  */
-
 package org.exoplatform.documents.model;
+
+import org.exoplatform.services.security.Identity;
 
 import lombok.Data;
 
 @Data
 public class ActionData {
+
   private int    actionId;
 
   private String status;
@@ -30,4 +32,9 @@ public class ActionData {
   private String message;
 
   private int    numberOfItems;
+
+  private String   downloadZipPath;
+
+  private Identity identity;
+
 }

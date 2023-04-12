@@ -21,6 +21,7 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.io.IOException;
 import java.util.*;
 
 import javax.jcr.RepositoryException;
@@ -877,6 +878,83 @@ public class DocumentFileRestTest {
 
     doNothing().when(jcrDeleteFileStorage).deleteDocuments(123456, nodes, userID, currentOwnerId);
     response = documentFileRest.bulkDeleteDocuments(123456, nodeEntities);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void testDownloadDocuments() {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
+    FileNodeEntity file1 = new FileNodeEntity();
+    file1.setId("1");
+    file1.setName("oldFile");
+    file1.setPath("/document/oldFile");
+    file1.setDatasource("datasource");
+    file1.setMimeType(":file");
+    file1.setSize(50);
+    FileNodeEntity file2 = new FileNodeEntity();
+    file2.setId("2");
+    file2.setName("oldFile2");
+    file2.setPath("/document/oldFile2");
+    file2.setDatasource("datasource");
+    file2.setMimeType(":file");
+    file2.setSize(50);
+    FileNodeEntity file3 = new FileNodeEntity();
+    file3.setId("3");
+    file3.setName("oldFile3");
+    file3.setPath("/document/oldFile3");
+    file3.setDatasource("datasource");
+    file3.setMimeType(":file");
+    file3.setSize(50);
+
+    List<AbstractNodeEntity> nodeEntities = new ArrayList<>();
+
+    Response response = documentFileRest.downloadDocuments(123456, nodeEntities);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("documents list is mandatory", response.getEntity());
+
+    nodeEntities.add(file1);
+    nodeEntities.add(file2);
+    nodeEntities.add(file3);
+
+    List<AbstractNode> nodes = EntityBuilder.toAbstractNodes(nodeEntities);
+
+    doNothing().when(documentFileStorage).downloadDocuments(123456, nodes, userID, currentOwnerId);
+    response = documentFileRest.downloadDocuments(123456, nodeEntities);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void testGetDownloadZip() throws IOException {
+    String username = "testuser";
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    Profile currentProfile = new Profile();
+    currentProfile.setProperty(Profile.FULL_NAME, username);
+    currentIdentity.setProfile(currentProfile);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
+    when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(null);
+    Response response = documentFileRest.getDownloadZip(123456);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
   }
 

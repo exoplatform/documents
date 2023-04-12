@@ -70,6 +70,7 @@
       </div>
       <documents-visibility-drawer :is-mobile="isMobile" />
       <document-tree-selector-drawer :is-mobile="isMobile" />
+      <documents-download-drawer />
       <documents-info-drawer
         :selected-view="selectedView"
         :is-mobile="isMobile" />
@@ -240,6 +241,12 @@ export default {
     this.canAddDocument();
 
     this.$root.$on('documents-bulk-delete', this.bulkDeleteDocument);
+    this.$root.$on('documents-bulk-download', this.bulkDownloadDocument);
+    this.$root.$on('cancel-bulk-Action', (actionId) => {
+      this.setMultiActionLoading(false);
+      this.resetSelections();
+      this.cancelBulkAction(actionId);
+    });
     this.$root.$on('documents-refresh-files', this.refreshFiles);
     this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
 
@@ -342,16 +349,54 @@ export default {
       this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
     },
     handleBulkActionNotif(actionData) {
-      this.loading=false;
-      this.resetSelections();
-      this.refreshFiles();
-      if (actionData.status==='DONE_WITH_ERRORS'){
-        this.$root.$emit('show-alert', {type: 'error', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneWithErrors`)});
+      if (actionData.actionType.toLowerCase() === 'download'){
+        if (actionData.status.toLowerCase()==='done_succsussfully'){
+          this.$root.$emit('set-download-status','zip_file_created');
+          this.setMultiActionLoading(false);
+          this.resetSelections();
+          this.getDownlodedZip(actionData); 
+        } else {
+          this.$root.$emit('set-download-status',actionData.status);  
+        }       
+      } else {
+        this.setMultiActionLoading(false);
+        this.resetSelections();
+        this.refreshFiles();
+        if (actionData.status.toLowerCase()==='done_with_errors'){
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneWithErrors`)});
+        }
+        if (actionData.status.toLowerCase()==='done_succsussfully'){
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
+        }
       }
-      if (actionData.status==='DONE_SUCCSUSSFULLY'){
-        this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
-      }
-      
+
+        
+    },
+    getDownlodedZip(actionData) {
+      this.$documentFileService.getDownloadZip(actionData.actionId).then((transfer) => {
+        return transfer.blob();
+      }).then((bytes) => {
+        const today = new Date();
+        const formattedDate = `${(today.getMonth() + 1).toString().padStart(2, '0')}_${today.getDate().toString().padStart(2, '0')}_${today.getFullYear().toString()}`;
+        const zipName = eXo.env.portal.spaceDisplayName? `${eXo.env.portal.spaceDisplayName}_${formattedDate}.zip` : `My Drive_${formattedDate}.zip`;
+        const elm = document.createElement('a');
+        elm.href = URL.createObjectURL(bytes);
+        elm.setAttribute('download', zipName);
+        elm.click();
+        this.$root.$emit('set-download-status',actionData.status);
+        if (actionData.status==='DONE_WITH_ERRORS'){
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneWithErrors`)});
+        }
+        if (actionData.status==='DONE_SUCCSUSSFULLY'){
+          this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
+        }
+      }).catch(e => {
+        console.error('Error when export note page', e);
+        this.$root.$emit('show-alert', {
+          type: 'error',
+          message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.failed`)
+        });
+      });
     },
     handleAlertClose() {
       this.$root.$emit('cancel-action');
@@ -545,6 +590,21 @@ export default {
       if (deletedDocument != null) {
         this.refreshFiles();
       }
+    },
+    bulkDownloadDocument(){
+      this.setMultiActionLoading(true);
+      const max = Math.floor(9999);
+      const random = crypto.getRandomValues(new Uint32Array(1))[0];
+      const actionId =random % max; 
+      this.$root.$emit('open-download-drawer',actionId);
+      return this.$documentFileService
+        .bulkDownloadDocument(actionId,this.selectedDocuments)
+        .catch(e => console.error(e));
+    },
+    cancelBulkAction(actionId){
+      return this.$documentFileService
+        .cancelBulkAction(actionId)
+        .catch(e => console.error(e));
     },
     openFolder(parentFolder) {
       this.folderPath = '';

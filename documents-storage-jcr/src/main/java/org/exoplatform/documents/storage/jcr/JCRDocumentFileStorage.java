@@ -19,8 +19,12 @@ package org.exoplatform.documents.storage.jcr;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -31,9 +35,10 @@ import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.BooleanUtils;
-import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -41,6 +46,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -57,6 +63,8 @@ import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -90,6 +98,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final ActivityManager                activityManager;
 
+  private final BulkStorageActionService            bulkStorageActionService;
+
   private final String                         DATE_FORMAT                = "yyyy-MM-dd";
 
   private final String                         SPACE_PATH_PREFIX          = "/Groups/spaces/";
@@ -111,6 +121,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final String                 CREATE_NEW_VERSION            = "createNewVersion";
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
 
+  private static final Log LOG     = ExoLogger.getLogger(JCRDocumentFileStorage.class);
+
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
                                 DocumentSearchServiceConnector documentSearchServiceConnector,
@@ -118,7 +130,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 SpaceService spaceService,
                                 ListenerService listenerService,
                                 IdentityRegistry identityRegistry,
-                                ActivityManager activityManager) {
+                                ActivityManager activityManager,
+                                BulkStorageActionService bulkStorageActionService) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.repositoryService = repositoryService;
@@ -127,6 +140,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     this.listenerService = listenerService;
     this.identityRegistry = identityRegistry;
     this.activityManager = activityManager;
+    this.bulkStorageActionService = bulkStorageActionService;
   }
 
   @Override
@@ -1549,5 +1563,58 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     keyValuePermission.put("canEdit", canEdit);
     keyValuePermission.put("canDelete", canDelete);
     return keyValuePermission;
+  }
+
+  @Override
+  public void downloadDocuments(int actionId, List<AbstractNode> documents, Identity identity, long authenticatedUserId) {
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                   manageableRepository);
+      bulkStorageActionService.executeBulkAction(session,
+                                                 actionId,
+                                                 this,
+                                                 null,
+                                                 listenerService,
+                                                 documents,
+                                                 ActionType.DOWNLOAD.name(),
+                                                 identity,
+                                                 authenticatedUserId);
+    } catch (RepositoryException e) {
+      LOG.error("Error execute download", e);
+    }
+  }
+
+  public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
+    ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
+    if (actionData != null) {
+      if(!actionData.getIdentity().getUserId().equals(userName)){
+        throw new IOException("Current user is not allowed to get zip file");
+      }
+      File zipped = new File(actionData.getDownloadZipPath());
+      byte[] filesBytes = FileUtils.readFileToByteArray(zipped);
+      Files.delete(Path.of(actionData.getDownloadZipPath()));
+      actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
+      if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
+        try {
+          listenerService.broadcast("bulk_actions_document_event", actionData.getIdentity(), actionData);
+        } catch (Exception e) {
+          LOG.error("cannot broadcast bulk action event");
+        }
+        return new byte[0];
+      }
+      bulkStorageActionService.removeActionData(actionData);
+      return filesBytes;
+    } else
+      return new byte[0];
+  }
+  public void cancelBulkAction(int actionId, String userName) throws IOException {
+    ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
+    if(!actionData.getIdentity().getUserId().equals(userName)){
+      throw new IOException("Current user is not allowed to cancel the download action");
+    }
+    actionData.setStatus(ActionStatus.CANCELED.name());
   }
 }
