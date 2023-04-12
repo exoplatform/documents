@@ -17,11 +17,19 @@
 
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
-
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.Session;
+
+import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.RequestLifeCycle;
@@ -31,6 +39,8 @@ import org.exoplatform.documents.model.ActionStatus;
 import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
+import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -38,7 +48,13 @@ import org.exoplatform.services.security.Identity;
 
 public class ActionThread implements Runnable {
 
-  private static final Log               log = ExoLogger.getLogger(ActionThread.class);
+  private static final Log               log                 = ExoLogger.getLogger(ActionThread.class);
+
+  private static final String            ZIP_EXTENSION       = ".zip";
+
+  private static final String            ZIP_PREFIX          = "downloadzip";
+
+  private static final String            TEMP_DIRECTORY_PATH = "java.io.tmpdir";
 
   private final List<AbstractNode>       items;
 
@@ -57,6 +73,10 @@ public class ActionThread implements Runnable {
   private final Session                  session;
 
   private ActionData                     actionData;
+
+  private String                         parentPath;
+
+  private String                         tempFolderPath;
 
   public ActionThread(DocumentFileStorage documentFileStorage,
                       JCRDeleteFileStorage jCrDeleteFileStorage,
@@ -104,8 +124,7 @@ public class ActionThread implements Runnable {
   private void deleteItems() {
     int errors = 0;
     for (AbstractNode item : items) {
-      actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
-      if (actionData.getStatus().equals(ActionStatus.CANCELLED.name())) {
+      if (checkCanceled()) {
         break;
       }
       try {
@@ -128,12 +147,75 @@ public class ActionThread implements Runnable {
     try {
       listenerService.broadcast("bulk_actions_document_event", identity, actionData);
     } catch (Exception e) {
-      log.error("cannot broadcast delete_files_event");
+      log.error("cannot broadcast bulk action event");
     }
   }
 
   private void downloadItems() {
-    // TODO
+    List<javax.jcr.Node> nodes = items.stream()
+                                      .map(document -> JCRDocumentsUtil.getNodeByIdentifier(session, document.getId()))
+                                      .toList();
+
+    try {
+      tempFolderPath = Files.createTempDirectory("temp_download").toString();
+    } catch (IOException e) {
+      log.error("Cannot create temp folder to download documents", e);
+      return;
+    }
+    Boolean hasFolders = items.stream().anyMatch(obj -> obj.isFolder());
+    try {
+      actionData.setStatus(ActionStatus.ZIP_FILE_CREATION.name());
+      listenerService.broadcast("bulk_actions_document_event", identity, actionData);
+    } catch (Exception e) {
+      log.error("cannot broadcast bulk action event");
+    }
+    try {
+      for (Node node : nodes) {
+        if (checkCanceled()) {
+          File folder = new File(tempFolderPath);
+          cleanFiles(folder);
+          break;
+        }
+        if (StringUtils.isEmpty(parentPath)) {
+          parentPath = node.getParent().getPath();
+        }
+        if (hasFolders) {
+          createTempFilesAndFolders(node, "", "");
+        } else {
+          createFile(node, "", "", hasFolders);
+        }
+
+      }
+    } catch (Exception e) {
+      log.error("Error when creating temp files for download", e);
+      actionData.setStatus(ActionStatus.FAILED.name());
+    }
+
+    String zipName = ZIP_PREFIX + actionData.getActionId() + ZIP_EXTENSION;
+    String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
+    try {
+      zipFiles(zipPath);
+      File zipped = new File(zipPath);
+      actionData.setDownloadZipPath(zipped.getPath());
+      File folder = new File(tempFolderPath);
+      cleanFiles(folder);
+    } catch (Exception e) {
+      log.error("Error when creating zip file", e);
+      actionData.setStatus(ActionStatus.FAILED.name());
+    }
+    if (checkCanceled()) {
+      File zip = new File(zipPath);
+      zip.delete();
+      return;
+    }
+    if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {
+      actionData.setStatus(ActionStatus.DONE_SUCCSUSSFULLY.name());
+    }
+    try {
+      listenerService.broadcast("bulk_actions_document_event", identity, actionData);
+    } catch (Exception e) {
+      log.error("cannot broadcast bulk action event");
+    }
   }
 
   private void duplicateItems() {
@@ -142,6 +224,137 @@ public class ActionThread implements Runnable {
 
   private void moveItems() {
     // TODO
+  }
+
+  private File createFile(Node node, String symlinkPath, String sourcePath, boolean hasFolders) throws Exception {
+    if (checkCanceled()) {
+      return null;
+    }
+    Node jrcNode = node.getNode("jcr:content");
+    InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
+    String path = "";
+    if (hasFolders) {
+      String nodePath = node.getPath();
+      if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
+        nodePath = symlinkPath + nodePath.replace(sourcePath, "");
+      }
+      path = tempFolderPath + nodePath.replace(parentPath, "");
+    } else {
+      path = tempFolderPath + File.separator + node.getName();
+    }
+    File file = new File(path);
+    OutputStream outputStream = new FileOutputStream(file);
+    byte[] buffer = new byte[1024];
+    int length;
+    while ((length = inputStream.read(buffer)) > 0) {
+      outputStream.write(buffer, 0, length);
+    }
+    inputStream.close();
+    outputStream.close();
+    return file;
+  }
+
+  private void createTempFilesAndFolders(Node node, String symlinkPath, String sourcePath) throws Exception {
+    if (checkCanceled()) {
+      return;
+    }
+    if (JCRDocumentsUtil.isFolder(node)) {
+      String nodePath = node.getPath();
+      if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
+        nodePath = symlinkPath + nodePath.replace(sourcePath, "");
+      }
+      String path = tempFolderPath + nodePath.replace(parentPath, "");
+      Files.createDirectories(Paths.get(path));
+      NodeIterator nodeIterator = node.getNodes();
+      while (nodeIterator.hasNext()) {
+        Node child = nodeIterator.nextNode();
+        createTempFilesAndFolders(child, symlinkPath, sourcePath);
+      }
+    } else {
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(session, sourceID);
+        createTempFilesAndFolders(sourceNode, node.getPath(), sourceNode.getPath());
+      } else {
+        createFile(node, symlinkPath, sourcePath, true);
+      }
+    }
+
+  }
+
+  private void zipFiles(String zipFilePath) {
+    try {
+      FileOutputStream fos = new FileOutputStream(zipFilePath);
+      ZipOutputStream zos = new ZipOutputStream(fos);
+      File folder = new File(tempFolderPath);
+      zipFolder(folder, "", zos, fos, zipFilePath);
+      zos.close();
+      fos.close();
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  private void zipFolder(File folder,
+                         String folderName,
+                         ZipOutputStream zos,
+                         FileOutputStream fos,
+                         String zipFilePath) throws Exception {
+    File[] files = folder.listFiles();
+    for (File file : files) {
+      if (checkCanceled()) {
+        zos.close();
+        fos.close();
+        File zip = new File(zipFilePath);
+        zip.delete();
+        return;
+      }
+      if (file.isDirectory()) {
+        if (StringUtils.isNotEmpty(folderName)) {
+          zipFolder(file, folderName + "/" + file.getName(), zos, fos, zipFilePath);
+        } else {
+          zipFolder(file, file.getName(), zos, fos, zipFilePath);
+        }
+      } else {
+        byte[] buffer = new byte[1024];
+        FileInputStream fis = new FileInputStream(file);
+        if (StringUtils.isNotEmpty(folderName)) {
+          zos.putNextEntry(new ZipEntry(folderName + "/" + file.getName()));
+        } else {
+          zos.putNextEntry(new ZipEntry(file.getName()));
+        }
+
+        int length;
+        while ((length = fis.read(buffer)) > 0) {
+          zos.write(buffer, 0, length);
+        }
+        zos.closeEntry();
+        fis.close();
+      }
+    }
+  }
+
+  private void cleanFiles(File file) {
+    File[] files = file.listFiles();
+    if (files != null) {
+      for (File f : files) {
+        cleanFiles(f);
+      }
+    }
+    file.delete();
+  }
+
+  private boolean checkCanceled() {
+    actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
+    if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
+      try {
+        listenerService.broadcast("bulk_actions_document_event", identity, actionData);
+      } catch (Exception e) {
+        log.error("cannot broadcast bulk action event");
+      }
+      return true;
+    }
+    return false;
   }
 
 }

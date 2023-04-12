@@ -2,23 +2,14 @@ package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
 
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
-import javax.jcr.Property;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
-import javax.jcr.Value;
-import javax.jcr.Workspace;
+import javax.jcr.*;
 import javax.jcr.nodetype.NodeType;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
@@ -26,12 +17,6 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
-import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.social.core.space.model.Space;
-import org.exoplatform.social.metadata.tag.TagService;
-import org.exoplatform.social.metadata.tag.model.TagName;
-import org.exoplatform.services.jcr.access.AccessControlEntry;
-import org.exoplatform.services.jcr.access.PermissionType;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -40,20 +25,19 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
-import org.exoplatform.documents.model.AbstractNode;
-import org.exoplatform.documents.model.DocumentFolderFilter;
-import org.exoplatform.documents.model.FileNode;
-import org.exoplatform.documents.model.FileVersion;
-import org.exoplatform.documents.model.FolderNode;
-import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.AccessControlList;
+import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
@@ -70,7 +54,10 @@ import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.ActivityManager;
 import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.metadata.tag.TagService;
+import org.exoplatform.social.metadata.tag.model.TagName;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentFileStorageTest {
@@ -112,6 +99,9 @@ public class JCRDocumentFileStorageTest {
   @Mock
   private TagService                     tagService;
 
+  @Mock
+  private BulkStorageActionService                       bulkStorageActionService;
+
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
@@ -133,7 +123,8 @@ public class JCRDocumentFileStorageTest {
                                                              spaceService,
                                                              listenerService,
                                                              identityRegistry,
-                                                             activityManager);
+                                                             activityManager,
+                                                             bulkStorageActionService);
   }
 
   @Test

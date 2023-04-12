@@ -336,6 +336,21 @@ export function bulkDeleteDocuments(actionId,documents) {
   });
 }
 
+export function bulkDownloadDocument(actionId,documents) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/bulk/download/${actionId}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(documents),
+  }).then((resp) => {
+    if (resp && !resp.ok) {
+      throw new Error('Error when deleting document');
+    }
+  });
+}
+
 export function updateDescription(ownerId,document) {
   const formData = new FormData();
   if (ownerId) {
@@ -435,6 +450,34 @@ export function restoreVersion(versionId) {
       throw new Error('Error while restoring version');
     } else {
       return resp.json();
+    }
+  });
+  
+}
+
+export function getDownloadZip(actionId) {
+
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/bulk/download/${actionId}`, {
+    credentials: 'include',
+    method: 'GET',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp;
+    } else { 
+      throw new Error('Error when getting downloaded files');
+    }
+  });
+}
+export function cancelBulkAction(actionId) {
+
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/bulk/cancel/${actionId}`, {
+    credentials: 'include',
+    method: 'GET',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp;
+    } else { 
+      throw new Error('Error when cancelling action');
     }
   });
 }
