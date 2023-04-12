@@ -78,7 +78,7 @@
         </tbody>
       </template>
       <template
-        v-else
+        v-else-if="documentMultiSelectionActive"
         #item="{item}">
         <tr
           :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
@@ -99,6 +99,20 @@
               :class="header.value === 'name' && isXScreen && 'ms-10'" />
           </td>
         </tr>
+      </template>
+      <template
+        v-else
+        v-for="header in extendedCells"
+        #[`item.${header.value}`]="{item}">
+        <documents-table-cell
+          :key="header.value"
+          :extension="header.cellExtension"
+          :file="item"
+          :query="query"
+          :extended-search="extendedSearch"
+          :is-mobile="isMobile"
+          :selected-view="selectedView"
+          :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">
