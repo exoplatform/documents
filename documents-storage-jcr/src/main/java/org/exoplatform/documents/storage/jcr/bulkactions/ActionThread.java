@@ -50,7 +50,8 @@ public class ActionThread implements Runnable {
   private static final String            ZIP_EXTENSION       = ".zip";
 
   private static final String            ZIP_PREFIX          = "downloadzip";
-  private static final String            TEMP_FOLDER_PREFIX          = "temp_download";
+
+  private static final String            TEMP_FOLDER_PREFIX  = "temp_download";
 
   private static final String            TEMP_DIRECTORY_PATH = "java.io.tmpdir";
 
@@ -224,7 +225,8 @@ public class ActionThread implements Runnable {
     // TODO
   }
 
-  private File createFile(Node node, String symlinkPath, String sourcePath, boolean hasFolders) throws RepositoryException, IOException {
+  private File createFile(Node node, String symlinkPath, String sourcePath, boolean hasFolders) throws RepositoryException,
+                                                                                                IOException {
     if (checkCanceled()) {
       return null;
     }
