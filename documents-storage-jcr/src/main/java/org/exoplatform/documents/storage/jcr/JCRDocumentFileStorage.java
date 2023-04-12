@@ -1106,11 +1106,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
+      Calendar now = Calendar.getInstance();
+      node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+      node.save();
       ((ExtendedNode) node).setPermissions(permissions);
-      if (node.isNodeType(NodeTypeConstants.EXO_MODIFY)) {
-        node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
-        node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
-      }
       session.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error updating permissi" +
