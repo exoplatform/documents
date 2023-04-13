@@ -49,8 +49,8 @@ export default {
           title: this.$t('documents.label.visibility.all'),
         };
       }
-      if (this.isSharedWithCurrentSpace && !this.file.acl.canEdit) {
-        const collaborators = this.file.acl.collaborators.filter(e => e.identity.id === eXo.env.portal.spaceIdentityId );
+      if (this.isSharedWithCurrentSpaceOrDrive && !this.file.acl.canEdit) {
+        const collaborators = this.file.acl.collaborators.filter(e => e.identity.id === eXo.env.portal.spaceIdentityId || eXo.env.portal.userName );
         return collaborators[0].permission === 'read'?
           {
             icon: 'fas fa-eye',
@@ -86,13 +86,20 @@ export default {
         };
       }
     },
-    isSharedWithCurrentSpace(){
+    isSharedWithCurrentSpaceOrDrive(){
       const spaceIdentityId = eXo.env.portal.spaceIdentityId;
       const spaceName = eXo.env.portal.spaceName;
       const collaborators = this.file.acl.collaborators;
-      if (spaceIdentityId && collaborators.length > 0){
+      if (spaceIdentityId && spaceName && collaborators.length > 0){
         for (const collaborator of collaborators) {
           if (collaborator.identity.id === spaceIdentityId && collaborator.identity.remoteId === spaceName) {
+            return true;
+          }
+        }
+      }
+      else if (collaborators.length > 0) {
+        for (const collaborator of collaborators) {
+          if (collaborator.identity.remoteId === eXo.env.portal.userName) {
             return true;
           }
         }

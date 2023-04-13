@@ -1178,7 +1178,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                       permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
                     });
       } else {
-        permissions.put(destIdentity.getRemoteId(), PermissionType.ALL);
+        List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
+        List<String> accessControlEntryPermession = new ArrayList<>();
+        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destIdentity.getRemoteId())).toList()
+           .forEach(accessControlEntry -> {
+             accessControlEntryPermession.add(accessControlEntry.getPermission());
+             permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
+           });
       }
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
