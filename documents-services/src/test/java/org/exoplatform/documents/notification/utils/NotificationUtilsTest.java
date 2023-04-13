@@ -93,12 +93,12 @@ public class NotificationUtilsTest {
     when(session.getNodeByUUID(anyString())).thenReturn(targetNode);
     when(targetNode.isNodeType(NT_FILE)).thenReturn(true);
     String link = NotificationUtils.getSharedDocumentLink(node, null,null);
-    assertEquals("http://domain/portal/dw/documents/Private/Documents?documentPreviewId=123", link);
+    assertEquals("http://domain/portal/dw/documents?documentPreviewId=123", link);
     link = NotificationUtils.getSharedDocumentLink(node, spaceService,"space_name");
     assertEquals("http://domain/portal/g/:spaces:spacename/space_name/documents?documentPreviewId=123", link);
     when(targetNode.isNodeType(NT_FILE)).thenReturn(false);
     link = NotificationUtils.getSharedDocumentLink(node, null,null);
-    assertEquals("http://domain/portal/dw/documents/Private/Documents?folderId=123", link);
+    assertEquals("http://domain/portal/dw/documents?folderId=123", link);
     link = NotificationUtils.getSharedDocumentLink(node, spaceService,"space_name");
     assertEquals("http://domain/portal/g/:spaces:spacename/space_name/documents?folderId=123", link);
   }
