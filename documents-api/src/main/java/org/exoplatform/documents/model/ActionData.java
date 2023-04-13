@@ -20,21 +20,25 @@ import org.exoplatform.services.security.Identity;
 
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class ActionData {
 
-  private int    actionId;
+  private int          actionId;
 
-  private String status;
+  private String       status;
 
-  private String actionType;
+  private String       actionType;
 
-  private String message;
+  private String       message;
 
-  private int    numberOfItems;
+  private int          numberOfItems;
 
-  private String   downloadZipPath;
+  private List<String> treatedItemsIds;
 
-  private Identity identity;
+  private String       downloadZipPath;
+
+  private Identity     identity;
 
 }

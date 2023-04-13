@@ -20,6 +20,7 @@ package org.exoplatform.documents.storage.jcr.bulkactions;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -122,6 +123,7 @@ public class ActionThread implements Runnable {
 
   private void deleteItems() {
     int errors = 0;
+    List<String> treatedItemsIds = new ArrayList<>();
     for (AbstractNode item : items) {
       if (checkCanceled()) {
         break;
@@ -129,6 +131,7 @@ public class ActionThread implements Runnable {
       try {
         jCrDeleteFileStorage.deleteDocument(session, item.getPath(), item.getId(), true, true, 0, identity, identityId);
         actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+        treatedItemsIds.add(item.getId());
       } catch (PathNotFoundException path) {
         log.error("The document with this path is not found" + item.getPath(), path);
         errors++;
@@ -142,7 +145,7 @@ public class ActionThread implements Runnable {
     } else {
       actionData.setStatus(ActionStatus.DONE_SUCCSUSSFULLY.name());
     }
-
+    actionData.setTreatedItemsIds(treatedItemsIds);
     try {
       listenerService.broadcast("bulk_actions_document_event", identity, actionData);
     } catch (Exception e) {
