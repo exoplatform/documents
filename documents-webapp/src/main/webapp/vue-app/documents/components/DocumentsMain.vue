@@ -329,7 +329,9 @@ export default {
       const index = this.selectedDocuments.findIndex(object => object.id === file.id);
       let readOnlySelected = false;
       if (selected && index === -1) {
-        this.selectedDocuments.push(file);
+        const newFile = Object.assign({}, file);
+        newFile.metadatas=null;
+        this.selectedDocuments.push(newFile);
         readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
         if (readOnlySelected) {
           this.$root.$emit('show-alert', {
