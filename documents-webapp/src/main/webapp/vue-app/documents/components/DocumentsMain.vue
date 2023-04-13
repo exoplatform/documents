@@ -347,28 +347,39 @@ export default {
       this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
     },
     handleBulkActionNotif(actionData) {
-      if (actionData.actionType.toLowerCase() === 'download'){
-        if (actionData.status.toLowerCase()==='done_succsussfully'){
+      const actionName = actionData.actionType.toLowerCase();
+      const actionStatus = actionData.status.toLowerCase();
+      if (actionName === 'download'){
+        if (actionStatus === 'done_succsussfully') {
           this.$root.$emit('set-download-status','zip_file_created');
           this.setMultiActionLoading(false);
           this.resetSelections();
           this.getDownlodedZip(actionData); 
         } else {
-          this.$root.$emit('set-download-status',actionData.status);  
-        }       
+          this.$root.$emit('set-download-status',actionData.status);
+        }
       } else {
-        this.setMultiActionLoading(false);
+        const treatedItems = this.selectedDocuments.filter(file => actionData.treatedItemsIds.includes(file.id));
         this.resetSelections();
+        if (actionStatus === 'done_with_errors') {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t(`documents.bulk.${actionName}.doneWithErrors`)
+          });
+        }
+        if (actionStatus === 'done_succsussfully') {
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: this.$t(`documents.bulk.${actionName}.doneSuccessfully`, {0: actionData.numberOfItems})
+          });
+        }
+        if (treatedItems.length && actionName === 'delete') {
+          treatedItems.forEach(file => this.addDeleteDocumentStatistics(file, true));
+        }
+        this.setMultiActionLoading(false);
         this.refreshFiles();
-        if (actionData.status.toLowerCase()==='done_with_errors'){
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneWithErrors`)});
-        }
-        if (actionData.status.toLowerCase()==='done_succsussfully'){
-          this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
-        }
       }
 
-        
     },
     getDownlodedZip(actionData) {
       this.$documentFileService.getDownloadZip(actionData.actionId).then((transfer) => {
@@ -565,12 +576,37 @@ export default {
 
         }).catch(e => console.error(e));
     },
+    addDeleteDocumentStatistics(file, multi) {
+      document.dispatchEvent(new CustomEvent('exo-statistic-message', {
+        detail: {
+          module: 'Drive',
+          subModule: 'Document',
+          userId: eXo.env.portal.userIdentityId,
+          userName: eXo.env.portal.userName,
+          operation: 'fileMovedToTrash',
+          parameters: {
+            uuid: file.id,
+            fileName: file.name,
+            fileType: file.folder? 'nt:folder' : 'nt:file',
+            fileExtension: file.name.split('.').pop(),
+            fileSize: file.size,
+            fileMimeType: file.mimeType,
+            origin: 'Portlet document',
+            spaceId: eXo.env.portal.spaceId,
+            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            deletionType: multi? 'massDeletion': 'individualDeletion'
+          },
+          timestamp: Date.now()
+        }
+      }));
+    },
     deleteDocument(file){
       const redirectionTime = 500;
       setTimeout(() => {
         const deletedDocument = localStorage.getItem('deletedDocument');
         if (deletedDocument != null) {
           this.refreshFiles({'deleted': true,'documentId': file.id });
+          this.addDeleteDocumentStatistics(file);
         }
       }, redirectionTime);
     },
@@ -584,10 +620,7 @@ export default {
       this.setMultiActionLoading(true);
       return this.$documentFileService
         .bulkDeleteDocuments(actionId,this.selectedDocuments)
-        .catch(e => console.error(e))
-        .finally(() => {
-          this.setMultiActionLoading(false);
-        });
+        .catch(e => console.error(e));
     },
     undoDeleteDocument(){
       const deletedDocument = localStorage.getItem('deletedDocument');
