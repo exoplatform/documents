@@ -186,7 +186,7 @@ public class JCRDocumentFileStorageTest {
     verify(sessionProvider, times(1)).close();
 
     //assert that linkNode set  read only permissions
-    verify(linkNode).setPermissions(argThat((Map<String, String[]> map)->map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"read"})));
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"read"})));
 
     //share document with edit permission
     AccessControlEntry accessControlEntry1 = new AccessControlEntry("username", "edit");
@@ -195,7 +195,7 @@ public class JCRDocumentFileStorageTest {
     jcrDocumentFileStorage.shareDocument("1", 1L);
 
     //assert that the linkNode set edit permission
-    verify(linkNode).setPermissions(argThat((Map<String, String[]> map)->map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
 
   }
 
