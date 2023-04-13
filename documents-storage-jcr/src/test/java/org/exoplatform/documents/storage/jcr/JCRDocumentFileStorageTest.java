@@ -31,19 +31,10 @@ import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
-import org.exoplatform.services.security.MembershipEntry;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.exoplatform.services.jcr.access.AccessControlEntry;
-import org.exoplatform.services.jcr.access.PermissionType;
-import org.exoplatform.services.security.MembershipEntry;
 
-import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.social.core.space.model.Space;
-import org.exoplatform.social.metadata.tag.TagService;
-import org.exoplatform.social.metadata.tag.model.TagName;
-import org.junit.*;
 import org.junit.runner.RunWith;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -178,11 +169,28 @@ public class JCRDocumentFileStorageTest {
     when(nodeType.getName()).thenReturn("nt:file");
     when(((ExtendedNode) currentNode).getIdentifier()).thenReturn("123");
     when(identity.getRemoteId()).thenReturn("username");
+    AccessControlEntry accessControlEntry = new AccessControlEntry("username", "read");
+    AccessControlList acl1 = new AccessControlList("username", Arrays.asList(accessControlEntry));
+    when(((ExtendedNode) currentNode).getACL()).thenReturn(acl1);
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
     jcrDocumentFileStorage.shareDocument("1", 1L);
     PowerMockito.verifyStatic(Utils.class, times(1));
+
     Utils.broadcast(listenerService, "share_document_event", identity, linkNode);
     verify(sessionProvider, times(1)).close();
+
+    //assert that linkNode set  read only permissions
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"read"})));
+
+    //share document with edit permission
+    AccessControlEntry accessControlEntry1 = new AccessControlEntry("username", "edit");
+    AccessControlList acl = new AccessControlList("username", Arrays.asList(accessControlEntry1));
+    when(((ExtendedNode) currentNode).getACL()).thenReturn(acl);
+    jcrDocumentFileStorage.shareDocument("1", 1L);
+
+    //assert that the linkNode set edit permission
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
+
   }
 
   @Test
