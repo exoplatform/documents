@@ -546,7 +546,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       public int compare(FullTreeItem o1, FullTreeItem o2) {
         //sorted the tree item when the name contains numbers
         if(NumberUtils.isParsable(o1.getName()) && NumberUtils.isParsable(o2.getName())){
-          return Integer.parseInt(o1.getName()) - Integer.parseInt(o2.getName());
+          return Integer.compare(Integer.parseInt(o1.getName()), Integer.parseInt(o2.getName()));
         }
         // sorted the tree item when the name contains only characters
         return o1.getName().compareToIgnoreCase(o2.getName());
