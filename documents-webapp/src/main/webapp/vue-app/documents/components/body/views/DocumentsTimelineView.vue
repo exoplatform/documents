@@ -357,15 +357,21 @@ export default {
       this.$root.$emit('hide-selection-input', file);
     },
     customSort: function (items, sortBy, isDesc) {
+      let sorted = items;
       if (sortBy[0] === 'name') {
         const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
-        const sorted = items.sort((a, b) => collator.compare(a.name, b.name));
+        sorted = items.sort((a, b) => {
+          return (b.folder - a.folder) || collator.compare(a.name, b.name);
+        });
         if (isDesc[0]) {
           return sorted.reverse();
         }
-        return sorted;
+      } else if (sortBy[0] === 'size') {
+        sorted = items.sort((a, b) => {
+          return isDesc[0] ? a.size - b.size : b.size - a.size;
+        });
       }
-      return items;
+      return sorted;
     },
     updateFilter(filter) {
       this.primaryFilter = filter;

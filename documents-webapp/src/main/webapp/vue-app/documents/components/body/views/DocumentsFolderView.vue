@@ -320,17 +320,29 @@ export default {
       this.$root.$emit('hide-selection-input', file);
     },
     customSort: function (items, sortBy, isDesc) {
+      let sorted = items;
       if (sortBy[1] === 'name') {
         const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
-        const sorted = items.sort((a, b) => {
+        sorted = items.sort((a, b) => {
           return (b.folder - a.folder) || collator.compare(a.name, b.name);
         });
         if (isDesc[1]) {
           return sorted.reverse();
         }
-        return sorted;
+      } else if (sortBy[1] === 'size') {
+        sorted = items.sort((a, b) => {
+          if (a.folder && b.folder) {
+            return 0;
+          } else if (a.folder) {
+            return 1;
+          }
+          else if (b.folder) {
+            return -1;
+          }
+          return isDesc[1] ? b.size - a.size : a.size - b.size;
+        });
       }
-      return items;
+      return sorted;
     },
     updateFilter(filter) {
       this.primaryFilter = filter;
