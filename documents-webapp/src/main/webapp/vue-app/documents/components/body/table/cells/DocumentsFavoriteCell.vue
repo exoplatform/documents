@@ -1,10 +1,10 @@
 <template>
-  <div 
+  <div
+    class="align-center"
     v-show="isFavorite && !file.folder"
     :id="`favorite-cell-file-${fileId}`">
     <div
-      v-if="!isMobile"
-      class="width-fit-content">
+      v-if="!isMobile">
       <documents-favorite-action
         :file="file"
         :is-mobile="isMobile" />

@@ -612,14 +612,14 @@ export default {
         }
       }, redirectionTime);
     },
-    setMultiActionLoading(status) {
-      this.$root.$emit('set-action-loading', status);
+    setMultiActionLoading(status, action) {
+      this.$root.$emit('set-action-loading', status, action);
     },
     bulkDeleteDocument(){
       const max = Math.floor(9999);
       const random = crypto.getRandomValues(new Uint32Array(1))[0];
       const actionId =random % max;
-      this.setMultiActionLoading(true);
+      this.setMultiActionLoading(true, 'delete');
       return this.$documentFileService
         .bulkDeleteDocuments(actionId,this.selectedDocuments)
         .catch(e => console.error(e));
@@ -631,7 +631,7 @@ export default {
       }
     },
     bulkDownloadDocument(){
-      this.setMultiActionLoading(true);
+      this.setMultiActionLoading(true, 'download');
       const max = Math.floor(9999);
       const random = crypto.getRandomValues(new Uint32Array(1))[0];
       const actionId =random % max; 

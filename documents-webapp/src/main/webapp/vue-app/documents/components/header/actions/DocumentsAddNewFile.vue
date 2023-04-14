@@ -93,12 +93,20 @@
           <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.button.addNewFile') }}</span>
         </v-list-item>
       </v-menu>
-      <v-progress-circular
+      <v-tooltip
         v-if="actionLoading"
-        class="ms-2 position-absolute mt-2"
-        :size="20"
-        color="primary"
-        indeterminate />
+        bottom>
+        <template #activator="{ on, attrs }">
+          <v-progress-circular
+            v-bind="attrs"
+            v-on="on"
+            class="ms-2 position-absolute mt-2"
+            :size="20"
+            color="primary"
+            indeterminate />
+        </template>
+        {{ actionLoadingMessage }}
+      </v-tooltip>
     </div>
 
     <div v-show="isMobile && showMobileFilter || !isMobile">
@@ -139,7 +147,8 @@ export default {
     showSelectionsMenu: false,
     selectionsMenu: false,
     selectionsLength: 0,
-    actionLoading: false
+    actionLoading: false,
+    actionLoadingMessage: null
   }),
   computed: {
     documentMultiSelectionActive() {
@@ -168,18 +177,19 @@ export default {
     this.$root.$on('set-current-folder', this.setCurrentFolder);
     this.$root.$on('selection-documents-list-updated', this.handleSelectionListUpdate);
     this.$root.$on('reset-selections', this.handleResetSelections);
-    this.$root.$on('set-action-loading', (status) => this.setActionLoading(status));
+    this.$root.$on('set-action-loading', this.setActionLoading);
   },
   beforeDestroy() {
     this.$root.$off('reset-selections', this.handleResetSelections);
-    this.$root.$off('set-action-loading', (status) => this.setActionLoading(status));
+    this.$root.$off('set-action-loading',  this.setActionLoading);
   },
   destroyed() {
     document.removeEventListener('entity-attachments-updated', this.refreshFilesList);
   },
   methods: {
-    setActionLoading(status) {
+    setActionLoading(status, action) {
       this.actionLoading = status;
+      this.actionLoadingMessage = this.$t(`document.multiple.${action}.action.message`);
     },
     openMultiSelectionMenuAction() {
       if (this.isMobile) {
