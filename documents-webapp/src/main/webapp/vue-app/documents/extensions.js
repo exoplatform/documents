@@ -79,7 +79,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   align: 'center',
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap tooltip-marker',
-  width: '190px',
+  width: '100px',
   rank: 60,
   componentOptions: {
     vueComponent: Vue.options.components['documents-visibility-cell'],
@@ -301,13 +301,26 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 });
 
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
+  id: 'size',
+  labelKey: 'documents.label.size',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap tooltip-marker',
+  width: '100px',
+  rank: 60,
+  componentOptions: {
+    vueComponent: Vue.options.components['documents-size-cell'],
+  },
+});
+
+extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   id: 'favorite',
   labelKey: 'documents.label.favorite',
   align: 'center',
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap tooltip-marker',
   width: '120px',
-  rank: 60,
+  rank: 70,
   componentOptions: {
     vueComponent: Vue.options.components['documents-favorite-cell'],
   },

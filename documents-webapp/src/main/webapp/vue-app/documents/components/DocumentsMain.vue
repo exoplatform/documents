@@ -586,10 +586,7 @@ export default {
       this.setMultiActionLoading(true, 'delete');
       return this.$documentFileService
         .bulkDeleteDocuments(actionId,this.selectedDocuments)
-        .catch(e => console.error(e))
-        .finally(() => {
-          this.setMultiActionLoading(false);
-        });
+        .catch(e => console.error(e));
     },
     undoDeleteDocument(){
       const deletedDocument = localStorage.getItem('deletedDocument');
@@ -598,7 +595,7 @@ export default {
       }
     },
     bulkDownloadDocument(){
-      this.setMultiActionLoading(true);
+      this.setMultiActionLoading(true, 'download');
       const max = Math.floor(9999);
       const random = crypto.getRandomValues(new Uint32Array(1))[0];
       const actionId =random % max; 
