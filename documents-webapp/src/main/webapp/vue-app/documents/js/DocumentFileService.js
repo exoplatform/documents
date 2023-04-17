@@ -481,3 +481,20 @@ export function cancelBulkAction(actionId) {
     }
   });
 }
+
+export function uploadNewFileVersion(nodeId, newContent) {
+  const formData = new FormData();
+  formData.append('nodeId', nodeId);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/createNewVersion?${params}`, {
+    credentials: 'include',
+    method: 'PUT',
+    body: newContent,
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp;
+    } else {
+      throw new Error('Error when creating new version');
+    }
+  });
+}

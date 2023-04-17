@@ -78,6 +78,7 @@ import VersionHistoryMenuAction from './components/body/actions/VersionHistoryMe
 import DocumentsSelectionCell from './components/body/table/cells/DocumentsSelectionCell.vue';
 import DocumentActionContextMenu from './components/body/table/DocumentActionContextMenu.vue';
 import DocumentsSizeCell from './components/body/table/cells/DocumentsSizeCell.vue';
+import UploadNewVersionMenuAction from './components/body/actions/UploadNewVersionMenuAction.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -140,7 +141,8 @@ const components = {
   'extend-filter-action': ExtendFilterActionMobile,
   'documents-selection-cell': DocumentsSelectionCell,
   'document-action-context-menu': DocumentActionContextMenu,
-  'documents-size-cell': DocumentsSizeCell
+  'documents-size-cell': DocumentsSizeCell,
+  'upload-new-version-menu-action': UploadNewVersionMenuAction
 };
 
 for (const key in components) {

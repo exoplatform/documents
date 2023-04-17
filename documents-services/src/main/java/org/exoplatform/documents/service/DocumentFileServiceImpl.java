@@ -17,6 +17,7 @@
 package org.exoplatform.documents.service;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -413,5 +414,19 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public void cancelBulkAction(int actionId, String userName) throws IOException {
     documentFileStorage.cancelBulkAction(actionId, userName);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public FileVersion createNewVersion(String nodeId, String aclIdentity, InputStream newContent) {
+    if (nodeId == null) {
+      throw new IllegalArgumentException("node id is mandatory");
+    }
+    if (aclIdentity == null) {
+      throw new IllegalArgumentException("User identity id is mandatory");
+    }
+    return documentFileStorage.createNewVersion(nodeId, aclIdentity, newContent);
   }
 }
