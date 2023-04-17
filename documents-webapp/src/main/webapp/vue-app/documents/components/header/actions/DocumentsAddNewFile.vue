@@ -93,7 +93,7 @@
           <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.button.addNewFile') }}</span>
         </v-list-item>
       </v-menu>
-      <v-tooltip>
+      <v-tooltip
         v-if="actionLoading"
         bottom>
         <template #activator="{ on, attrs }">
