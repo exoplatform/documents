@@ -98,6 +98,11 @@
         @load-more="loadMoreVersions"
         ref="documentVersionHistory" />
       <document-action-context-menu />
+      <v-file-input
+        id="uploadVersionInput"
+        class="d-none"
+        accept="*/*"
+        @change="handleUploadVersion" />
     </div>
     <v-alert
       v-model="alert"
@@ -194,6 +199,8 @@ export default {
     selectedDocuments: [],
     settings: {},
     settingsLoaded: false,
+    uploadVersionInput: null,
+    newVersionFile: {}
   }),
   computed: {
     progressAlertColor() {
@@ -302,6 +309,7 @@ export default {
     this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
     this.$root.$on('update-selection-documents-list', this.updateSelectionList);
     this.$root.$on('breadcrumb-updated', this.resetSelections);
+    this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
     this.initSettings();
   },
   destroyed() {
@@ -324,6 +332,48 @@ export default {
             this.settingsLoaded = true;
           });
       }
+    },
+    uploadNewVersion(file) {
+      const fileUpload = document.getElementById('uploadVersionInput');
+      this.newVersionFile.targetFileId = file.id;
+      if (fileUpload != null) {
+        fileUpload.accept = file.mimeType;
+        fileUpload.click();
+      }
+    },
+    handleUploadVersion(file) {
+      if (!file) {
+        this.newVersionFile = null;
+        return;
+      }
+      const targetFileId = this.newVersionFile.targetFileId;
+      const reader = new FileReader();
+      reader.onloadstart = () => {
+        this.$root.$emit('document-set-icon-loading', targetFileId, true);
+      };
+      reader.onload = e => {
+        this.newVersionFile.fileBody = e.target.result ;
+        this.newVersionFile.mimeType = file.type;
+      };
+      reader.onloadend = () => {
+        const fileBody = this.newVersionFile.fileBody || null;
+        this.$documentFileService.uploadNewFileVersion(targetFileId, fileBody)
+          .catch(() => {
+            this.$root.$emit('show-alert', {
+              type: 'error',
+              message: this.$t('documents.upload.newVersion.error.message')
+            });
+          })
+          .finally(() => {
+            this.$root.$emit('document-set-icon-loading', targetFileId, false);
+            this.$root.$emit('show-alert', {
+              type: 'success',
+              message: this.$t('documents.upload.newVersion.success.message')
+            });
+            this.refreshFiles();
+          });
+      };
+      reader.readAsArrayBuffer(file);
     },
     updateSelectionList(selected, file) {
       const index = this.selectedDocuments.findIndex(object => object.id === file.id);
