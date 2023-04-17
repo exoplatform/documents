@@ -46,6 +46,7 @@ import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
+import DocumentDownloadDrawer from './components/body/table/DocumentDownloadDrawer.vue';
 import DocumentsTreeSelectorDrawer from './components/body/table/DocumentsTreeSelectorDrawer.vue';
 import DocumentsMoveSpaces from './components/body/table/DocumentsMoveSpaces.vue';
 import DocumentsVisibilityDrawer from './components/body/table/DocumentsVisibilityDrawer.vue';
@@ -107,6 +108,7 @@ const components = {
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-filter-menu-mobile': DocumentFilterMenuMobile,
   'documents-info-drawer': DocumentInfoDrawer,
+  'documents-download-drawer': DocumentDownloadDrawer,
   'document-tree-selector-drawer': DocumentsTreeSelectorDrawer,
   'documents-move-spaces': DocumentsMoveSpaces,
   'documents-visibility-drawer': DocumentsVisibilityDrawer,
