@@ -11,12 +11,25 @@
     <type>org.exoplatform.documents.rest.DocumentFileRest</type>
   </component>
 
+  <component>
+    <type>org.exoplatform.documents.service.DocumentWebSocketService</type>
+  </component>
+
   <external-component-plugins>
     <target-component>org.exoplatform.services.listener.ListenerService</target-component>
     <component-plugin>
       <name>share_document_event</name>
       <set-method>addListener</set-method>
       <type>org.exoplatform.documents.listener.ShareDocumentNotificationListener</type>
+    </component-plugin>
+  </external-component-plugins>
+
+  <external-component-plugins>
+    <target-component>org.exoplatform.services.listener.ListenerService</target-component>
+    <component-plugin>
+      <name>bulk_actions_document_event</name>
+      <set-method>addListener</set-method>
+      <type>org.exoplatform.documents.listener.BulkActionDocumentListener</type>
     </component-plugin>
   </external-component-plugins>
 

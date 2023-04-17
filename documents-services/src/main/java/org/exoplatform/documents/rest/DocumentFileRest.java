@@ -39,24 +39,29 @@ import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.DocumentsUserSettings;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
 import org.exoplatform.documents.rest.model.NodePermissionEntity;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.DocumentWebSocketService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
 import org.exoplatform.services.rest.resource.ResourceContainer;
+import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.MetadataService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.media.Schema;
 
 @Path("/v1/documents")
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
@@ -74,18 +79,44 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final SettingService       settingService;
 
+  private final DocumentWebSocketService documentWebSocketService;
+
   public DocumentFileRest(DocumentFileService documentFileService,
                           SpaceService spaceService,
                           IdentityManager identityManager,
                           MetadataService metadataService,
-                          SettingService settingService) {
+                          SettingService settingService,
+                          DocumentWebSocketService documentWebSocketService) {
     this.documentFileService = documentFileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.metadataService = metadataService;
     this.settingService = settingService;
+    this.documentWebSocketService = documentWebSocketService;
   }
-  
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/settings")
+  @Operation(summary = "Get User documents settings", method = "GET")
+  @ApiResponses(value = { 
+       @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+       @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getSettings() {
+    Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
+    try {
+      DocumentsUserSettings documentsUserSettings = new DocumentsUserSettings();
+      String cometdToken = documentWebSocketService.getUserToken(currentUserIdentity.getRemoteId());
+      documentsUserSettings.setCometdToken(cometdToken);
+      documentsUserSettings.setCometdContextName(documentWebSocketService.getCometdContextName());
+      return Response.ok(documentsUserSettings).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
   @GET
   @Produces(MediaType.TEXT_PLAIN)
   @RolesAllowed("users")
@@ -533,6 +564,34 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.error("Error when deleting the news target with name " + userIdentityId, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @DELETE
+  @Path("bulk/{actionId}")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Operation(summary = "Delete list of documents", method = "DELETE", description = "This deletes a list of documents")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "User not authorized to delete the document"),
+      @ApiResponse(responseCode = "500", description = "Internal server error") })
+  public Response bulkDeleteDocuments(@Parameter(description = "action ID", required = true)
+  @PathParam("actionId")
+  int actionId, @RequestBody(description = "documents List", required = true)
+  List<AbstractNodeEntity> documents) {
+    if (documents.isEmpty()) {
+      return Response.status(Status.BAD_REQUEST).entity("documents list is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      documentFileService.deleteDocuments(actionId, EntityBuilder.toAbstractNodes(documents), userIdentityId);
+      return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error while deleting documents", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }

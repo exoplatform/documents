@@ -16,9 +16,15 @@
  */
 package org.exoplatform.documents.rest.util;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.stream.Collectors;
+
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.container.ExoContainer;
@@ -38,13 +44,6 @@ import org.exoplatform.social.metadata.MetadataService;
 import org.exoplatform.social.metadata.model.MetadataItem;
 import org.exoplatform.social.metadata.model.MetadataObject;
 import org.exoplatform.social.rest.entity.MetadataItemEntity;
-
-import javax.jcr.RepositoryException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class EntityBuilder {
   private static final Log    LOG                       = ExoLogger.getExoLogger(EntityBuilder.class);
@@ -76,6 +75,27 @@ public class EntityBuilder {
                                                           expand,
                                                           authenticatedUserId))
                     .collect(Collectors.toList());
+  }
+
+  public static List<AbstractNode> toAbstractNodes(List<AbstractNodeEntity> documents) {
+    return documents.stream().map(EntityBuilder::toAbstractNode).toList();
+  }
+
+  public static AbstractNode toAbstractNode(AbstractNodeEntity document) {
+
+    if (document.isFolder()) {
+      AbstractNode node = new FolderNode();
+      node.setId(document.getId());
+      node.setPath(document.getPath());
+      node.setName(document.getName());
+      return node;
+    } else {
+      AbstractNode node = new FileNode();
+      node.setId(document.getId());
+      node.setPath(document.getPath());
+      node.setName(document.getName());
+      return node;
+    }
   }
 
   public static AbstractNodeEntity toDocumentItemEntity(DocumentFileService documentFileService,

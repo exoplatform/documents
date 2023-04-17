@@ -12,6 +12,11 @@
     <type>org.exoplatform.documents.storage.jcr.JCRDeleteFileStorageImpl</type>
   </component>
 
+
+  <component>
+    <type>org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService</type>
+  </component>
+
   <component>
     <key>org.exoplatform.documents.storage.TrashStorage</key>
     <type>org.exoplatform.documents.storage.jcr.TrashStorageImpl</type>
