@@ -21,12 +21,15 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 
 import javax.jcr.RepositoryException;
 import javax.ws.rs.core.Response;
 
+import org.apache.ecs.wml.Input;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -1281,4 +1284,36 @@ public class DocumentFileRestTest {
     return ENTITY_BUILDER;
   }
 
+  @Test
+  public void createNewVersion() {
+    mockRestUtils().when(() -> RestUtils.getCurrentUser()).thenReturn("user");
+    FileVersion fileVersion = new FileVersion();
+    fileVersion.setCurrent(true);
+    fileVersion.setTitle("test.docx");
+    fileVersion.setVersionNumber(1);
+    fileVersion.setId("123");
+    fileVersion.setCreatedDate(new Date());
+    fileVersion.setAuthorFullName("user user");
+    fileVersion.setAuthor("user");
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService);
+    InputStream newContent = new ByteArrayInputStream("test".getBytes());
+    Response response = documentFileRest1.createNewVersion(null, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    response = documentFileRest1.createNewVersion(newContent, "123");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    when(documentFileService1.createNewVersion(anyString(), anyString(), any())).thenReturn(fileVersion);
+    response = documentFileRest1.createNewVersion(newContent, "123");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    doThrow(new RuntimeException()).when(documentFileService1).createNewVersion(anyString(), anyString(), any());
+    response = documentFileRest1.createNewVersion(newContent, "123");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
 }

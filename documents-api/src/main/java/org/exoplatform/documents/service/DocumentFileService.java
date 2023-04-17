@@ -17,6 +17,7 @@
 package org.exoplatform.documents.service;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 
 import javax.jcr.RepositoryException;
@@ -295,4 +296,14 @@ public interface DocumentFileService {
    * @param userName current user name
    */
   void cancelBulkAction(int actionId, String userName) throws IOException;
+
+  /**
+   * Creates a new version from an input stream
+   *
+   * @param nodeId target node id
+   * @param aclIdentity current user identity id
+   * @param newContent the new content to be set in the new version
+   * @return {@link FileVersion}
+   */
+  FileVersion createNewVersion(String nodeId, String aclIdentity, InputStream newContent);
 }

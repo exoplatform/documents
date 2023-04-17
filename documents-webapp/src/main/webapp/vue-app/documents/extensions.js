@@ -244,6 +244,25 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'uploadNewVersion',
+  labelKey: 'documents.label.upload.newVersion',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 8,
+  enabled: (file, isMobile) => {
+    if (!file.versionable || file.cloudDriveFolder) {
+      return false;
+    }
+    return !isMobile && file.acl.canEdit;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['upload-new-version-menu-action'],
+  },
+});
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'download',
