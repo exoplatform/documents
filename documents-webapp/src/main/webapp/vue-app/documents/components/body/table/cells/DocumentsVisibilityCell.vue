@@ -1,24 +1,26 @@
 <template>
-  <v-tooltip bottom>
-    <template #activator="{ on, attrs }">
-      <v-btn
-        class="visibility-btn"
-        :class="btnClass"
-        icon
-        @click="changeVisibility">
-        <v-icon
-          color="grey"
-          dark
-          v-bind="attrs"
-          v-on="on"
-          size="13"
-          class="px-2 iconStyle">
-          {{ icon.icon }}
-        </v-icon>
-      </v-btn>
-    </template>
-    <span class="center">{{ $shareDocumentSuspended ? shareDocumentSuspendedLabel : icon.title }}</span>
-  </v-tooltip>
+  <div class="align-center">
+    <v-tooltip bottom>
+      <template #activator="{ on, attrs }">
+        <v-btn
+          class="visibility-btn"
+          :class="btnClass"
+          icon
+          @click="changeVisibility">
+          <v-icon
+            color="grey"
+            dark
+            v-bind="attrs"
+            v-on="on"
+            size="13"
+            class="px-2 iconStyle">
+            {{ icon.icon }}
+          </v-icon>
+        </v-btn>
+      </template>
+      <span class="center">{{ $shareDocumentSuspended ? shareDocumentSuspendedLabel : icon.title }}</span>
+    </v-tooltip>
+  </div>
 </template>
 
 <script>

@@ -77,6 +77,7 @@ import UploadOverlay from './components/body/UploadOverlay.vue';
 import VersionHistoryMenuAction from './components/body/actions/VersionHistoryMenuAction.vue';
 import DocumentsSelectionCell from './components/body/table/cells/DocumentsSelectionCell.vue';
 import DocumentActionContextMenu from './components/body/table/DocumentActionContextMenu.vue';
+import DocumentsSizeCell from './components/body/table/cells/DocumentsSizeCell.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -138,7 +139,8 @@ const components = {
   'quick-filter-action': QuickFilterActionMobile,
   'extend-filter-action': ExtendFilterActionMobile,
   'documents-selection-cell': DocumentsSelectionCell,
-  'document-action-context-menu': DocumentActionContextMenu
+  'document-action-context-menu': DocumentActionContextMenu,
+  'documents-size-cell': DocumentsSizeCell
 };
 
 for (const key in components) {

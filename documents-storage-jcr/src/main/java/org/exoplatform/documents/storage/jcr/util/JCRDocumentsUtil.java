@@ -307,6 +307,9 @@ public class JCRDocumentsUtil {
       fileNode.setDatasource(JCR_DATASOURCE_NAME);
       fileNode.setCloudDriveFile(node.hasProperty("ecd:driveUUID"));
       retrieveFileProperties(identityManager, node, aclIdentity, fileNode, spaceService);
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        retrieveSymlinkSize(node, fileNode);
+      }
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
         retrieveFileContentProperties(content, fileNode);
@@ -316,6 +319,16 @@ public class JCRDocumentsUtil {
         LOG.warn("Error computing File Node for search result with path {}", node.getPath(), e);
       } catch (Exception e1) {
         LOG.warn("Error computing File Node for search result with path {}", node, e);
+      }
+    }
+  }
+  
+  private static void retrieveSymlinkSize(Node node, FileNode fileNode) throws RepositoryException {
+    Node source = getNodeByIdentifier(node.getSession(), fileNode.getSourceID());
+    if (source != null && source.getNode(NodeTypeConstants.JCR_CONTENT) != null) {
+      Node content = source.getNode(NodeTypeConstants.JCR_CONTENT);
+      if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
+        fileNode.setSize(content.getProperty(NodeTypeConstants.JCR_DATA).getLength());
       }
     }
   }
