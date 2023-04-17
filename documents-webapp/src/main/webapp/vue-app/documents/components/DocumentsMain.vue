@@ -531,14 +531,20 @@ export default {
         }
       }, redirectionTime);
     },
+    setMultiActionLoading(status, action) {
+      this.$root.$emit('set-action-loading', status, action);
+    },
     bulkDeleteDocument(){
-      this.loading = true;
       const max = Math.floor(9999);
       const random = crypto.getRandomValues(new Uint32Array(1))[0];
-      const actionId =random % max; 
+      const actionId =random % max;
+      this.setMultiActionLoading(true, 'delete');
       return this.$documentFileService
         .bulkDeleteDocuments(actionId,this.selectedDocuments)
-        .catch(e => console.error(e));
+        .catch(e => console.error(e))
+        .finally(() => {
+          this.setMultiActionLoading(false);
+        });
     },
     undoDeleteDocument(){
       const deletedDocument = localStorage.getItem('deletedDocument');
