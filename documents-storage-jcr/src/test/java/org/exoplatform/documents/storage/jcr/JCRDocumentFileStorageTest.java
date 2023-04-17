@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.*;
 
 import javax.jcr.*;
@@ -1052,5 +1054,32 @@ public class JCRDocumentFileStorageTest {
     assertEquals(false, accessList1.isEmpty());
     assertEquals(true, accessList1.get("canAccess"));
     assertEquals(true, accessList1.get("canEdit"));
+  }
+  
+  @Test
+  public void createNewVersion() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node node = mock(Node.class);
+    Node contentNode = mock(Node.class);
+    Version version = mock(Version.class);
+    when(session.getNodeByUUID("123")).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
+    when(contentNode.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    when(node.isNodeType(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
+    when(node.isCheckedOut()).thenReturn(false);
+    when(node.checkin()).thenReturn(version);
+    when(node.getSession()).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileVersion(version, node, identityManager)).thenReturn(new FileVersion());
+    jcrDocumentFileStorage.createNewVersion("123", "user", new ByteArrayInputStream("test".getBytes()));
+    verify(node, times(1)).save();
+    verify(session, times(1)).save();
   }
 }

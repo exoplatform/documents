@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.rest;
 
+import java.io.InputStream;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -881,6 +882,39 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.warn("Error while restoring version", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @PUT
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/createNewVersion")
+  @Operation(
+          summary = "Creates a new version of a document from an input stream",
+          method = "PUT",
+          description = "Creates a new version of a document from an input stream")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response createNewVersion(@RequestBody(description = "New content", required = true) InputStream newContent,
+                                   @Parameter(description = "target file node identifier", required = true) @QueryParam("nodeId") String nodeId) {
+    if (StringUtils.isBlank(nodeId)) {
+      return Response.status(Status.BAD_REQUEST).entity("version fil id is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      return Response.ok(EntityBuilder.toVersionEntity(documentFileService.createNewVersion(nodeId,
+                                                                                            RestUtils.getCurrentUser(),
+                                                                                            newContent))).build();
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error while creating a new version", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
