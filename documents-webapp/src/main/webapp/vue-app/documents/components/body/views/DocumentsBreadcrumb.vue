@@ -169,6 +169,8 @@ export default {
         const pathParts  = path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length > 1) {
           this.folderPath = pathParts[1];
+        } else {
+          this.folderPath = '';
         }
         if (!eXo.env.portal.spaceName) {
           if (path.includes('/Private/')){

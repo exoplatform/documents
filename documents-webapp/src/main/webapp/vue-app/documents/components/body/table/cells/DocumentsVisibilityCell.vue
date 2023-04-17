@@ -41,7 +41,6 @@ export default {
   },
   data: () => ({
     unit: 'bytes',
-    sharedDocumentSuspended: true,
   }),
   computed: {
     icon() {
@@ -111,11 +110,6 @@ export default {
     btnClass(){
       return this.isMobile && 'ms-2' || 'me-4' ;
     },
-  },
-  created() {
-    this.$transferRulesService.getDocumentsTransferRules().then(rules => {
-      this.sharedDocumentSuspended = rules.sharedDocumentStatus === 'true';
-    });
   },
   methods: {
     changeVisibility() {
