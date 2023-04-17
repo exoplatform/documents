@@ -20,7 +20,9 @@ import static org.junit.Assert.*;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -586,5 +588,18 @@ public class DocumentFileServiceTest {
     verify(documentFileStorage, times(0)).restoreVersion(anyString(), anyString());
     documentFileService.restoreVersion("123", "user");
     verify(documentFileStorage, times(1)).restoreVersion("123", "user");
+  }
+
+  @Test
+  public void createNewVersion() {
+    Throwable exception = assertThrows(IllegalArgumentException.class,
+                                       () -> this.documentFileService.createNewVersion(null, null, null));
+    assertEquals("node id is mandatory", exception.getMessage());
+    exception = assertThrows(IllegalArgumentException.class, () -> this.documentFileService.createNewVersion("123", null, null));
+    assertEquals("User identity id is mandatory", exception.getMessage());
+    verify(documentFileStorage, times(0)).createNewVersion(anyString(), anyString(), any());
+    InputStream newContent = new ByteArrayInputStream("test".getBytes());
+    documentFileService.createNewVersion("123", "user", newContent);
+    verify(documentFileStorage, times(1)).createNewVersion("123", "user", newContent);
   }
 }

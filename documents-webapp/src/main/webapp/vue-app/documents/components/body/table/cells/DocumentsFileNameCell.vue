@@ -232,13 +232,18 @@ export default {
     });
     this.$root.$on('update-file-name', this.editFileName);
     this.$root.$on('cancel-edit-mode', this.cancelEditMode);
+    this.$root.$on('document-set-icon-loading', this.setIconLoading);
     this.getFileIcon();
   },
   beforeDestroy() {
     this.$root.$off('update-file-name', this.editFileName);
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
+    this.$root.$off('document-set-icon-loading', this.setIconLoading);
   },
   methods: {
+    setIconLoading(fileId,status) {
+      this.loading = this.file.id === fileId && status;
+    },
     touchStart() {
       if (!this.documentMultiSelectionActive) {
         return;
@@ -281,7 +286,8 @@ export default {
       return new Date(this.file.date).toLocaleString(lang, options).split('/').join('-');
     },
     openInEditMode(file) {
-      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${file.id}&source=peview`, '_blank');
+      const fileId = file.sourceID? file.sourceID: file.id;
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}&source=peview`, '_blank');
     },
     openPreview() {
       this.loading = true;

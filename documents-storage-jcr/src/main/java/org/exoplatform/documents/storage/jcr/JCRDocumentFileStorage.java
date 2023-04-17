@@ -21,6 +21,7 @@ import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -753,7 +754,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
-  
+
   @Override
   public AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, Identity aclIdentity) throws IllegalAccessException,
                                                                                            ObjectNotFoundException {
@@ -1313,7 +1314,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
-  
+
   @Override
   public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
     Node rootNode;
@@ -1413,7 +1414,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     return linkNode;
   }
-  
+
   /**
    * {@inheritDoc}
    */
@@ -1472,8 +1473,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             activity.setTitle(summary);
             activityManager.updateActivity(activity);
           }
-        } 
-      } 
+        }
+      }
       addVersionLabel(node, summary, version);
       versionFileNode.setSummary(summary);
       session.save();
@@ -1608,5 +1609,41 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IOException("Current user is not allowed to cancel the download action");
     }
     actionData.setStatus(ActionStatus.CANCELED.name());
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public FileVersion createNewVersion(String nodeId, String aclIdentity, InputStream newContent) {
+    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    FileVersion fileVersion = new FileVersion();
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      Node node = session.getNodeByUUID(nodeId);
+      if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && node.getNode(NodeTypeConstants.JCR_CONTENT) != null) {
+        Node contentNode = node.getNode(NodeTypeConstants.JCR_CONTENT);
+        if (contentNode.hasProperty(NodeTypeConstants.JCR_DATA)) {
+          contentNode.setProperty(NodeTypeConstants.JCR_DATA, newContent);
+          contentNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, Calendar.getInstance());
+        }
+        if (node.isNodeType(NodeTypeConstants.EXO_MODIFY)) {
+          node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
+          node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
+        }
+        node.save();
+        if (!node.isCheckedOut()) {
+          node.checkout();
+        }
+        Version version = node.checkin();
+        node.checkout();
+        node.getSession().save();
+        fileVersion = JCRDocumentsUtil.toFileVersion(version, node, identityManager);
+      }
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error while creating new version");
+    }
+    return fileVersion;
   }
 }
