@@ -1022,7 +1022,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   private Node getNodeByPath(Node node, String folderPath, SessionProvider sessionProvider) throws ObjectNotFoundException {
+    String parentPath = "";
     try {
+      parentPath = node.getPath();
       if ((node.getName().equals(USER_PRIVATE_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH)[1];
@@ -1036,8 +1038,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           node = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
           Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(),
                                                        sessionProvider.getCurrentRepository());
-          if (session.itemExists(node.getPath())) {
-            return (Node) session.getItem(node.getPath());
+          if (session.itemExists(parentPath)) {
+            return (Node) session.getItem(parentPath);
           }
           return null;
         }
@@ -1054,7 +1056,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
     } catch (RepositoryException repositoryException) {
-      throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+      throw new ObjectNotFoundException("Folder with path : " + parentPath + folderPath + " isn't found");
     }
   }
 
