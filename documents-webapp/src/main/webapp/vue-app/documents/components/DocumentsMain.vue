@@ -1089,7 +1089,7 @@ export default {
     setCurrentFolder(folder) {
       this.currentFolder = folder;
     },
-    getDocumentDataFromUrl() {
+    getDocumentDataFromUrl(path) {
       const currentUrlSearchParams = window.location.search;
       const queryParams = new URLSearchParams(currentUrlSearchParams);
       if (!eXo.env.portal.spaceName && queryParams.has('userId')) {
@@ -1116,11 +1116,15 @@ export default {
         const path = queryParams.get('path') || '';
         this.selectFile(path);
       } else {
-        const path = window.location.pathname;
+        if (!path) {
+          path = window.location.pathname;
+        }
         const pathParts  = path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathParts.length > 1) {
           this.folderPath = pathParts[1];
           this.selectedView = 'folder';
+        } else {
+          this.folderPath = '';
         }
         if (queryParams.has('view')) {
           const view = queryParams.get('view');
@@ -1138,11 +1142,12 @@ export default {
       }
       return this.$nextTick();
     },
-    onBrowserNavChange() {
+    onBrowserNavChange(e) {
       this.resetSelections();
-      this.getDocumentDataFromUrl();
+      this.getDocumentDataFromUrl(e.currentTarget.location.pathname);
+      this.parentFolderId = null;
       this.refreshFiles()
-        .finally(() => this.$root.$emit('update-breadcrumb'));
+        .finally(() => this.$root.$emit('update-breadcrumb', this.folderPath));
     },
     displayMessage(message, persist) {
       this.message = message.message;
