@@ -123,6 +123,7 @@ export default {
     file: {},
     actionType: '',
     isLoading: false,
+    isMultiSelection: false
   }),
   computed: {
     openLevel() {
@@ -149,8 +150,9 @@ export default {
       }];
       this.retrieveDocumentTree(ownerId);
     });
-    this.$root.$on('open-document-tree-selector-drawer', (file, actionType) => {
+    this.$root.$on('open-document-tree-selector-drawer', (file, actionType, isMultiSelection) => {
       this.actionType = actionType;
+      this.isMultiSelection = isMultiSelection;
       if (file) {
         this.open(file);
       }
@@ -228,7 +230,12 @@ export default {
       this.isLoading = true;
       const destinationPath = this.folder && this.folder.path ? this.folder.path : `/Groups${this.groupId}/Documents`;
       if (this.actionType === 'move') {
-        this.$root.$emit('documents-move', this.ownerId, this.file, destinationPath, this.folder, this.space);
+        if (this.isMultiSelection) {
+          this.$root.$emit('documents-bulk-move', this.ownerId, destinationPath, this.folder, this.space);
+          this.close();
+        } else {
+          this.$root.$emit('documents-move', this.ownerId, this.file, destinationPath, this.folder, this.space);
+        }
       }
       if (this.actionType === 'shortcut') {
         this.$root.$emit('create-shortcut', this.file, destinationPath, this.folder, this.space);

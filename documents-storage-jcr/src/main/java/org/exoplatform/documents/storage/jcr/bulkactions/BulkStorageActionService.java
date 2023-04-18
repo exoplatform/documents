@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage.jcr.bulkactions;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -59,6 +60,7 @@ public class BulkStorageActionService implements Startable {
                                 ListenerService listenerService,
                                 List<AbstractNode> items,
                                 String actionType,
+                                Map<String,Object> params,
                                 Identity identity,
                                 long authenticatedUserId) {
     ActionData actionData = new ActionData();
@@ -73,6 +75,7 @@ public class BulkStorageActionService implements Startable {
                                                   this,
                                                   listenerService,
                                                   actionData,
+                                                  params,
                                                   session,
                                                   items,
                                                   identity,

@@ -626,6 +626,42 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
+  @PUT
+  @Path("bulk/move/{actionId}")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Operation(summary = "move list of documents to specific path", method = "POST", description = "This moves a list of documents")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Documents moved"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "401", description = "User not authorized"),
+          @ApiResponse(responseCode = "500", description = "Internal server error") })
+  public Response moveDocuments(@Parameter(description = "action ID", required = true)
+                                @PathParam("actionId") int actionId,
+                                @Parameter(description = "ownerId") @QueryParam("ownerId") Long ownerId,
+                                @RequestBody(description = "documents List", required = true) List<AbstractNodeEntity> documents,
+                                @Parameter(description = "new path") @QueryParam("destPath") String destPath) {
+    if (documents.isEmpty()) {
+      return Response.status(Status.BAD_REQUEST).entity("documents list is mandatory").build();
+    }
+    if (ownerId == null) {
+      return Response.status(Status.BAD_REQUEST).entity("owner id is mandatory").build();
+    }
+    if (StringUtils.isBlank(destPath)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Documents destination path is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      documentFileService.moveDocuments(actionId, ownerId, EntityBuilder.toAbstractNodes(documents), destPath, userIdentityId);
+      return Response.ok().build();
+    } catch (Exception e) {
+      LOG.error("Error while moving documents", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
   @GET
   @Path("bulk/download/{actionId}")
   @RolesAllowed("users")

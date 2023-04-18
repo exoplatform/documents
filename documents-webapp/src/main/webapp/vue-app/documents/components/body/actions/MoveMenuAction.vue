@@ -24,6 +24,9 @@
       fa-arrows-alt
     </v-icon>
     <span class="ps-1">{{ $t('document.label.move') }}</span>
+    <v-divider
+      v-if="isMultiSelection"
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
@@ -48,8 +51,8 @@ export default {
   },
   methods: {
     moveDocument(){
-      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'move');
-      if ( this.isMobile ) {
+      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'move', this.isMultiSelection);
+      if (this.isMobile) {
         this.$root.$emit('close-file-action-menu');
       }
     }

@@ -498,3 +498,25 @@ export function uploadNewFileVersion(nodeId, newContent) {
     }
   });
 }
+
+export function bulkMoveDocuments(actionId, documents, ownerId, destPath) {
+  const formData = new FormData();
+  formData.append('actionId', actionId);
+  formData.append('ownerId', ownerId);
+  formData.append('destPath', destPath);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/bulk/move/${actionId}?${params}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(documents),
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp;
+    } else {
+      throw new Error('Error moving files');
+    }
+  });
+}

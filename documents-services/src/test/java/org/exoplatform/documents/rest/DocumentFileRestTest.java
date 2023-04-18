@@ -1316,4 +1316,35 @@ public class DocumentFileRestTest {
     response = documentFileRest1.createNewVersion(newContent, "123");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
+
+  @Test
+  public void moveDocuments() throws IllegalAccessException {
+    mockRestUtils().when(RestUtils::getCurrentUser).thenReturn("user");
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
+    AbstractNodeEntity abstractNodeEntity = mock(AbstractNodeEntity.class);
+    List<AbstractNodeEntity> documents = List.of(abstractNodeEntity);
+    Response response = documentFileRest1.moveDocuments(1, null, new ArrayList<>(), null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    response = documentFileRest1.moveDocuments(1, null, documents, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    response = documentFileRest1.moveDocuments(1, 1L, documents, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L);
+    response = documentFileRest1.moveDocuments(1, 1L, documents, "destPath");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockEntityBuilder().when(() -> EntityBuilder.toAbstractNodes(documents)).thenReturn(new ArrayList<AbstractNode>());
+    response = documentFileRest1.moveDocuments(1, 1L, documents, "destPath");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    doThrow(new RuntimeException()).when(documentFileService1).moveDocuments(anyInt(), anyLong(), anyList(), anyString(), anyLong());
+    response = documentFileRest1.moveDocuments(1, 1L, documents, "destPath");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+
+  }
 }

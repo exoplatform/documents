@@ -249,6 +249,7 @@ export default {
 
     this.$root.$on('documents-bulk-delete', this.bulkDeleteDocument);
     this.$root.$on('documents-bulk-download', this.bulkDownloadDocument);
+    this.$root.$on('documents-bulk-move', this.bulkMoveDocument);
     this.$root.$on('cancel-bulk-Action', (actionId) => {
       this.setMultiActionLoading(false);
       this.resetSelections();
@@ -422,18 +423,30 @@ export default {
           });
         }
         if (actionStatus === 'done_succsussfully') {
-          this.$root.$emit('show-alert', {
+          this.setMultiActionLoading(false);
+          this.displayMessage({
             type: 'success',
             message: this.$t(`documents.bulk.${actionName}.doneSuccessfully`, {0: actionData.numberOfItems})
           });
+          if (actionName === 'move') {
+            this.handleBulkMoveRedirect();
+          }
         }
         if (treatedItems.length && actionName === 'delete') {
           treatedItems.forEach(file => this.addDeleteDocumentStatistics(file, true));
         }
-        this.setMultiActionLoading(false);
         this.refreshFiles();
       }
 
+    },
+    handleBulkMoveRedirect() {
+      const folder = JSON.parse(sessionStorage.getItem('folder'));
+      const space = JSON.parse(sessionStorage.getItem('space'));
+      if (space && space.groupId) {
+        this.redirectToSpacePath(space, folder);
+      } else {
+        setTimeout(() => this.openFolder(folder), 500);
+      }
     },
     getDownlodedZip(actionData) {
       this.$documentFileService.getDownloadZip(actionData.actionId).then((transfer) => {
@@ -697,6 +710,25 @@ export default {
         .cancelBulkAction(actionId)
         .catch(e => console.error(e));
     },
+    redirectToSpacePath(space, folder) {
+      const folderPath = folder.path.includes('/Documents/') ? folder.path.split('/Documents/')[1] : '';
+      const pathName = `${window.location.origin}/${eXo.env.portal.containerName}/g/`;
+      const spaceGroup = space.groupId.replaceAll('/', ':');
+      window.setTimeout(() => {
+        window.location.href = `${pathName + spaceGroup }/${space.prettyName}/documents/${folderPath}`;
+      }, 1000);
+    },
+    bulkMoveDocument(ownerId, destPath, folder, space){
+      const max = Math.floor(9999);
+      const random = crypto.getRandomValues(new Uint32Array(1))[0];
+      const actionId =random % max;
+      this.setMultiActionLoading(true, 'move');
+      sessionStorage.setItem('folder', JSON.stringify(folder));
+      sessionStorage.setItem('space', JSON.stringify(space));
+      return this.$documentFileService
+        .bulkMoveDocuments(actionId,this.selectedDocuments, ownerId, destPath)
+        .catch(e => console.error(e));
+    },
     openFolder(parentFolder) {
       this.folderPath = '';
       this.fileName = null;
@@ -725,7 +757,7 @@ export default {
         const userName = eXo.env.portal.userName;
         const userPrivatePathPrefix = `${userName}/Private`;
         const userPublicPathPrefix = `${userName}/Public`;
-        if (parentFolder.path.includes(userPrivatePathPrefix)){
+        if (parentFolder.path?.includes(userPrivatePathPrefix)){
           const pathParts = parentFolder.path.split(userPrivatePathPrefix);
           if (pathParts.length > 1){
             folderPath = pathParts[1];
