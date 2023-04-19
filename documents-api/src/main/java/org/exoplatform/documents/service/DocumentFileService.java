@@ -306,4 +306,15 @@ public interface DocumentFileService {
    * @return {@link FileVersion}
    */
   FileVersion createNewVersion(String nodeId, String aclIdentity, InputStream newContent);
+
+  /**
+   * Move list of documents in bulk
+   *
+   * @param actionId       action id
+   * @param ownerId        owner id
+   * @param documents      list of documents to move
+   * @param destPath       destination path
+   * @param userIdentityId current user identity id
+   */
+  void moveDocuments(int actionId, long ownerId, List<AbstractNode>documents, String destPath, long userIdentityId) throws IllegalAccessException;
 }

@@ -429,4 +429,12 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
     return documentFileStorage.createNewVersion(nodeId, aclIdentity, newContent);
   }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void moveDocuments(int actionId, long ownerId, List<AbstractNode> documents, String destPath, long userIdentityId) throws IllegalAccessException {
+    documentFileStorage.moveDocuments(actionId, ownerId, documents, destPath, getAclUserIdentity(userIdentityId), userIdentityId);
+  }
 }

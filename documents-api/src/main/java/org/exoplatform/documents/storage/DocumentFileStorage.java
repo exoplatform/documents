@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.util.List;
 
 import javax.jcr.RepositoryException;
+import javax.jcr.Session;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -111,6 +112,26 @@ public interface DocumentFileStorage {
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
   AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
+   * Move the given node.
+   *
+   * @param session current jcr session
+   * @param fileId Id of the given file
+   * @param aclIdentity {@link Identity} of the user acessing files
+   * @param conflictAction conflict action
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   * @throws ObjectAlreadyExistsException when file with same name already exists
+   *           in the target path
+   */
+  void moveDocument(Session session,
+                    long ownerId,
+                    String fileId,
+                    String destPath,
+                    Identity aclIdentity,
+                    String conflictAction) throws Exception;
 
   /**
    * Move the given node.
@@ -228,4 +249,16 @@ public interface DocumentFileStorage {
    * @return {@link FileVersion}
    */
   FileVersion createNewVersion(String nodeId, String aclIdentity, InputStream newContent);
+
+  /**
+   * Move list of documents in bulk
+   *
+   * @param actionId       action id
+   * @param ownerId        owner id
+   * @param documents      list of documents to move
+   * @param destPath       destination path
+   * @param userIdentityId current user acl identity id
+   * @param identityId     current user identity id
+   */
+  void moveDocuments(int actionId, long ownerId, List<AbstractNode> documents, String destPath, Identity userIdentityId, long identityId);
 }

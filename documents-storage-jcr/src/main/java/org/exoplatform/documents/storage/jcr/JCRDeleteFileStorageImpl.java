@@ -187,6 +187,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                  listenerService,
                                                  items,
                                                  ActionType.DELETE.name(),
+                                                 null,
                                                  identity,
                                                  authenticatedUserId);
     } catch (RepositoryException e) {
