@@ -1,9 +1,33 @@
 <template>
-  <date-format
+  <div
     v-if="!isMobile"
-    :value="lastUpdated"
-    :format="fullDateFormat"
-    class="document-time text-light-color text-no-wrap" />
+    class="align-center ms-1 d-inline-flex">
+    <exo-user-avatar
+      :profile-id="file.modifierIdentity.remoteId"
+      :size="28"
+      popover
+      avatar
+      class="me-1"
+      popover-left-position
+      align-top />
+    <v-tooltip
+      open-on-hover
+      bottom>
+      <template #activator="{ on, attrs }">
+        <span
+          v-bind="attrs"
+          v-on="on">
+          <date-format
+            :value="lastUpdated"
+            :format="dateFormat"
+            class="document-time text-light-color text-no-wrap" />
+        </span>
+      </template>
+      <date-format
+        :value="lastUpdated"
+        :format="fullDateFormat" />
+    </v-tooltip>
+  </div>
 </template>
 
 <script>
@@ -29,6 +53,11 @@ export default {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+    },
+    dateFormat: {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     },
   }),
   computed: {
