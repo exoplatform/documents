@@ -602,4 +602,17 @@ public class DocumentFileServiceTest {
     documentFileService.createNewVersion("123", "user", newContent);
     verify(documentFileStorage, times(1)).createNewVersion("123", "user", newContent);
   }
+
+  @Test
+  public void moveDocument() throws IllegalAccessException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity userIdentity = mock(Identity.class);
+    AbstractNode abstractNode = mock(AbstractNode.class);
+    List<AbstractNode> documents = List.of(abstractNode);
+    when(identityManager.getIdentity(anyString())).thenReturn(userIdentity);
+    when(userIdentity.getRemoteId()).thenReturn("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    documentFileService.moveDocuments(1, 1L, documents, "destPath", 1L);
+    verify(documentFileStorage, times(1)).moveDocuments(1, 1L, documents, "destPath", identity, 1L);
+  }
 }

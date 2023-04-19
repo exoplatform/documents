@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -78,11 +79,15 @@ public class ActionThread implements Runnable {
 
   private String                         tempFolderPath;
 
+  private Map<String, Object>            params;
+
+
   public ActionThread(DocumentFileStorage documentFileStorage,
                       JCRDeleteFileStorage jCrDeleteFileStorage,
                       BulkStorageActionService bulkStorageActionService,
                       ListenerService listenerService,
                       ActionData actionData,
+                      Map<String, Object> params,
                       Session session,
                       List<AbstractNode> items,
                       Identity identity,
@@ -92,6 +97,7 @@ public class ActionThread implements Runnable {
     this.bulkStorageActionService = bulkStorageActionService;
     this.listenerService = listenerService;
     this.actionData = actionData;
+    this.params = params;
     this.items = items;
     this.session = session;
     this.identity = identity;
@@ -118,6 +124,10 @@ public class ActionThread implements Runnable {
     }
     if (actionData.getActionType().equals(ActionType.DOWNLOAD.name())) {
       downloadItems();
+    }
+    if (actionData.getActionType().equals(ActionType.MOVE.name())) {
+      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+      moveItems();
     }
   }
 
@@ -225,7 +235,37 @@ public class ActionThread implements Runnable {
   }
 
   private void moveItems() {
-    // TODO
+    int errors = 0;
+    List<String> treatedItemsIds = new ArrayList<>();
+    for (AbstractNode item : items) {
+      if (checkCanceled()) {
+        break;
+      }
+      try {
+        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+        documentFileStorage.moveDocument(session,
+                                         (Long) params.get("ownerId"),
+                                         item.getId(),
+                                         (String) params.get("destPath"),
+                                         identity,
+                                         "keepBoth");
+        treatedItemsIds.add(item.getId());
+      } catch (Exception e) {
+        log.error("Error while moving document {} to path {}", item.getName(), params.get("destPath"), e);
+        errors++;
+      }
+    }
+    actionData.setTreatedItemsIds(treatedItemsIds);
+    if (errors > 0) {
+      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
+    } else {
+      actionData.setStatus(ActionStatus.DONE_SUCCSUSSFULLY.name());
+    }
+    try {
+      listenerService.broadcast("bulk_actions_document_event", identity, actionData);
+    } catch (Exception e) {
+      log.error("cannot broadcast bulk action event");
+    }
   }
 
   private File createFile(Node node, String symlinkPath, String sourcePath, boolean hasFolders) throws RepositoryException,
