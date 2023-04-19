@@ -66,7 +66,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   align: 'center',
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap tooltip-marker',
-  width: '190px',
+  width: '170px',
   rank: 40,
   componentOptions: {
     vueComponent: Vue.options.components['documents-last-updated-cell'],
