@@ -1082,4 +1082,136 @@ public class JCRDocumentFileStorageTest {
     verify(node, times(1)).save();
     verify(session, times(1)).save();
   }
+
+  @Test
+  public void moveDocument() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+
+    Node node = mock(Node.class);
+    when(identity.getUserId()).thenReturn("user");
+    Identity ownerIdentity = mock(Identity.class);
+    when(identityManager.getIdentity(anyString())).thenReturn(ownerIdentity);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       "user",
+                                                                       ownerIdentity,
+                                                                       sessionProvider))
+                      .thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
+    when(node.getPath()).thenReturn("path");
+    when(node.getName()).thenReturn("test.docx");
+    when(session.itemExists(anyString())).thenReturn(false);
+    when(node.getSession()).thenReturn(session);
+    Workspace workspace = mock(Workspace.class);
+    when(session.getWorkspace()).thenReturn(workspace);
+    jcrDocumentFileStorage.moveDocument(1L, "123", "destPath", identity, null);
+    verify(workspace, times(1)).move("path", "destPath/test.docx");
+    verify(node, times(2)).save();
+
+    clearInvocations(workspace);
+    when(session.itemExists("destPath/test.docx")).thenReturn(true);
+    Node destNode = mock(Node.class);
+    when(session.getItem("destPath/test.docx")).thenReturn(destNode);
+    when(destNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    assertThrows(ObjectAlreadyExistsException.class,
+                 () -> jcrDocumentFileStorage.moveDocument(1L, "123", "destPath", identity, null));
+    verify(workspace, times(0)).move(anyString(), anyString());
+
+    when(session.itemExists("destPath/test.docx")).thenReturn(true);
+    when(session.getItem("destPath/test(1).docx")).thenReturn(destNode);
+    when(destNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    Property jcrProperty = mock(Property.class);
+    when(destNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(jcrProperty);
+    Value jcrValue = mock(Value.class);
+    when(jcrProperty.getValue()).thenReturn(jcrValue);
+    when(jcrValue.getString()).thenReturn("test.docx");
+    when(destNode.getSession()).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.increaseNameIndex(anyString(), anyInt())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    jcrDocumentFileStorage.moveDocument(1L, "123", "destPath", identity, "keepBoth");
+    verify(workspace, times(1)).move("path", "destPath/test(1).docx");
+    verify(session, times(1)).save();
+
+    Node srcNode = mock(Node.class);
+    Node destContentNode = mock(Node.class);
+    Node srcContentNode = mock(Node.class);
+    when(session.getItem("destPath/test.docx")).thenReturn(destNode);
+    when(session.getItem("path")).thenReturn(srcNode);
+    when(destNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    when(destNode.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(destContentNode);
+    when(srcNode.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(srcContentNode);
+    when(srcContentNode.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(jcrProperty);
+    when(jcrProperty.getValue()).thenReturn(jcrValue);
+    when(jcrValue.getStream()).thenReturn(mock(InputStream.class));
+    when(destNode.isNodeType(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
+    when(destNode.isCheckedOut()).thenReturn(false);
+    clearInvocations(session);
+    jcrDocumentFileStorage.moveDocument(1L, "123", "destPath", identity, "createNewVersion");
+    verify(destNode, times(1)).save();
+    verify(srcNode, times(1)).remove();
+    verify(destNode, times(1)).checkin();
+    verify(destNode, times(2)).checkout();
+    verify(session, times(1)).save();
+
+    clearInvocations(workspace, session);
+    jcrDocumentFileStorage.moveDocument(session,1L, "123", "destPath", identity, "keepBoth");
+    verify(workspace, times(1)).move("path", "destPath/test(1).docx");
+    verify(session, times(1)).save();
+  }
+
+  @Test
+  public void moveDocuments() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+
+    AbstractNode abstractNode = mock(AbstractNode.class);
+    List<AbstractNode> documents = List.of(abstractNode);
+    Map<String, Object> params = new HashMap<>();
+    params.put("destPath", "destPath");
+    params.put("ownerId", 1L);
+    jcrDocumentFileStorage.moveDocuments(1, 1L, documents, "destPath", identity, 1L);
+    verify(bulkStorageActionService, times(1)).executeBulkAction(session,
+                                                                 1,
+                                                                 jcrDocumentFileStorage,
+                                                                 null,
+                                                                 listenerService,
+                                                                 documents,
+                                                                 ActionType.MOVE.name(),
+                                                                 params,
+                                                                 identity,
+                                                                 1L);
+
+    Mockito.doThrow(new RuntimeException())
+           .when(bulkStorageActionService)
+           .executeBulkAction(session,
+                              1,
+                              jcrDocumentFileStorage,
+                              null,
+                              listenerService,
+                              documents,
+                              ActionType.MOVE.name(),
+                              params,
+                              identity,
+                              1L);
+    assertThrows(Exception.class, () -> jcrDocumentFileStorage.moveDocuments(1, 1L, documents, "destPath", identity, 1L));
+  }
+
 }

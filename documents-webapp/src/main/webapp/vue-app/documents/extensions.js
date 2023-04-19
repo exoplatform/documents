@@ -163,7 +163,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
-  enabledForMultiSelection: () => false,
+  enabledForMultiSelection: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['move-menu-action'],
   },

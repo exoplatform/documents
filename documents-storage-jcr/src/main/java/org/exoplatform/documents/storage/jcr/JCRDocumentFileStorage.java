@@ -793,44 +793,56 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public void moveDocument(Session session,
+                           long ownerId,
+                           String fileId,
+                           String destPath,
+                           Identity aclIdentity,
+                           String conflictAction) throws Exception {
+    Node node;
+    String username = aclIdentity.getUserId();
+    if (StringUtils.isBlank(fileId) && ownerId > 0) {
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+      SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+    } else {
+      node = getNodeByIdentifier(session, fileId);
+    }
+    if(node == null) {
+      return;
+    }
+    if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
+      node.addMixin(NodeTypeConstants.EXO_MODIFY);
+    }
+    Calendar now = Calendar.getInstance();
+    node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+    node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+    node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+
+    node.save();
+
+    String srcPath = node.getPath();
+    if (session.itemExists(destPath + SLASH + node.getName())) {
+      handleMoveDocConflict(session, node, srcPath, destPath, conflictAction);
+    } else {
+      node.getSession().getWorkspace().move(srcPath, destPath + SLASH + node.getName());
+      node.save();
+    }
+  }
+
+  @Override
   public void moveDocument(long ownerId,
                            String fileId,
                            String destPath,
                            Identity aclIdentity,
                            String conflictAction) throws ObjectAlreadyExistsException {
-    String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     Session session;
-    Node node;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       session = sessionProvider.getSession(COLLABORATION, manageableRepository);
-      if (StringUtils.isBlank(fileId) && ownerId > 0) {
-        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
-        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
-        fileId = ((NodeImpl) node).getIdentifier();
-      } else {
-        node = getNodeByIdentifier(session, fileId);
-      }
-
-      if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
-        node.addMixin(NodeTypeConstants.EXO_MODIFY);
-      }
-      Calendar now = Calendar.getInstance();
-      node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
-      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
-      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
-
-      node.save();
-
-      String srcPath = node.getPath();
-      if (session.itemExists(destPath + SLASH + node.getName())) {
-        handleMoveDocConflict(session, node, srcPath, destPath, conflictAction);
-      } else {
-        node.getSession().getWorkspace().move(srcPath, destPath + SLASH + node.getName());
-        node.save();
-      }
+      moveDocument(session, ownerId, fileId, destPath, aclIdentity, conflictAction);
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
@@ -840,7 +852,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
-
   }
 
   private void handleMoveDocConflict(Session session,
@@ -1573,6 +1584,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                  listenerService,
                                                  documents,
                                                  ActionType.DOWNLOAD.name(),
+                                                 null,
                                                  identity,
                                                  authenticatedUserId);
     } catch (RepositoryException e) {
@@ -1645,5 +1657,34 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while creating new version");
     }
     return fileVersion;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void moveDocuments(int actionId, long ownerId, List<AbstractNode> documents, String destPath, Identity userIdentity, long identityId) {
+    SessionProvider sessionProvider;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, userIdentity);
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                   manageableRepository);
+      Map<String, Object> params = new HashMap<>();
+      params.put("destPath", destPath);
+      params.put("ownerId", ownerId);
+      bulkStorageActionService.executeBulkAction(session,
+                                                 actionId,
+                                                 this,
+                                                 null,
+                                                 listenerService,
+                                                 documents,
+                                                 ActionType.MOVE.name(),
+                                                 params,
+                                                 userIdentity,
+                                                 identityId);
+    } catch (RepositoryException e) {
+      LOG.error("Error execute move", e);
+    }
   }
 }
