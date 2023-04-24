@@ -48,10 +48,22 @@ export default {
       type: Boolean,
       default: false
     },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
+  },
+  computed: {
+    showCurrentLocation() {
+      return this.selectedDocuments.every(file => this.getParentPath(file.path) === this.getParentPath(this.selectedDocuments[0].path));
+    },
   },
   methods: {
+    getParentPath(path) {
+      return path.substring(0, path.lastIndexOf('/'));
+    },
     moveDocument(){
-      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'move', this.isMultiSelection);
+      this.$root.$emit('open-document-tree-selector-drawer', this.file, 'move', this.isMultiSelection, this.showCurrentLocation);
       if (this.isMobile) {
         this.$root.$emit('close-file-action-menu');
       }

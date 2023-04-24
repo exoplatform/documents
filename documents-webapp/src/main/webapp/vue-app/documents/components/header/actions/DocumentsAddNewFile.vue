@@ -33,6 +33,7 @@
         </template>
         <documents-actions-menu
           :selected-documents="selectedDocuments"
+          :file="selectedDocuments[0]"
           :is-multi-selection="true"
           :is-mobile="isMobile" />
       </v-menu>
