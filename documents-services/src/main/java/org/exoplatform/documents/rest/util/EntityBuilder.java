@@ -522,7 +522,8 @@ public class EntityBuilder {
         identityEntity.setName(space.getDisplayName());
         identityEntity.setAvatar(space.getAvatarUrl());
       }
-    }
+    }else if (identity.getProviderId().equals("group"))
+      identityEntity.setName(identity.getProfile().getFullName());
     return identityEntity;
   }
   private static boolean isEditPermission(String permission){

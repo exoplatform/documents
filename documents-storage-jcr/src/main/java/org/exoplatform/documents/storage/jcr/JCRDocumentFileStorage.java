@@ -45,6 +45,7 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -65,6 +66,7 @@ import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.organization.Membership;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -1101,6 +1103,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
               permissions.put("redactor:" + groupId, new String[] { PermissionType.READ });
             }
           }
+        } else if (permission.getIdentity().getProviderId().equals("group")) {
+          String groupId = permission.getIdentity().getRemoteId();
+          if (permission.getPermission().equals("edit")) {
+            permissions.put("*:"+groupId, PermissionType.ALL);
+          }
+          if (permission.getPermission().equals("read")) {
+            permissions.put("*:"+groupId, new String[]{PermissionType.READ});
+          }
         } else {
           if (permission.getPermission().equals("edit")) {
             permissions.put(permission.getIdentity().getRemoteId(), PermissionType.ALL);
@@ -1192,6 +1202,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
              accessControlEntryPermession.add(accessControlEntry.getPermission());
              permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
            });
+        if (permissions.isEmpty()) {
+          acc.stream().forEach(accessControlEntry -> {
+            MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
+            DocumentFileService documentFileService = CommonsUtils.getService(DocumentFileService.class);
+            try {
+              if (membershipEntry != null && documentFileService.getAclUserIdentity(destIdentity.getRemoteId()).isMemberOf(accessControlEntry.getMembershipEntry())){
+                accessControlEntryPermession.add(accessControlEntry.getPermission());
+                permissions.put(destIdentity.getRemoteId(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
+              }
+            } catch (IllegalAccessException e) {
+              e.printStackTrace();
+            }
+          });
+
+        }
       }
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
