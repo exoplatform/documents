@@ -20,7 +20,7 @@
   <div
     id="action-context-menu"
     ref="actionContextMenu"
-    class="elevation-2">
+    class="elevation-2 documentActionMenu ">
     <documents-actions-menu
       v-if="show"
       :file="file"

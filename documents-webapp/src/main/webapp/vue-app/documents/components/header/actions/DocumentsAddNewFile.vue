@@ -31,11 +31,13 @@
             </span>
           </v-btn>
         </template>
-        <documents-actions-menu
-          :selected-documents="selectedDocuments"
-          :file="selectedDocuments[0]"
-          :is-multi-selection="true"
-          :is-mobile="isMobile" />
+        <div class="documentActionMenu">
+          <documents-actions-menu
+            :selected-documents="selectedDocuments"
+            :file="selectedDocuments[0]"
+            :is-multi-selection="true"
+            :is-mobile="isMobile" />
+        </div>
       </v-menu>
       <button
         v-else-if="!isFolderView"
