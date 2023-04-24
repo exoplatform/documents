@@ -4,11 +4,11 @@
       v-for="(extension, i) in menuExtensions"
       :key="i"
       :disabled="isMultiSelection && extension.disabled"
-      class="menu-list px-2 text-left action-menu-item">
+      class="text-caption px-2 text-left action-menu-item">
       <extension-registry-component
         :component="extension"
         :params="getParams(extension)"
-        class="width-full"
+        class="width-full grey--text text--darken-4"
         :element="div" />
     </v-list-item>
   </v-list>

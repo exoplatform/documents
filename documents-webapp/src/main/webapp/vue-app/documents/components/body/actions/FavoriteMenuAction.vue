@@ -1,6 +1,7 @@
 <template>
   <div
     class="clickable mx-2"
+    :class="isMobile? 'ms-0': ''"
     @click.prevent="hitFavoriteButton">
     <favorite-button
       :id="fileId"

@@ -282,8 +282,8 @@ export default {
       this.primaryFilter = filter;
       this.refreshFiles({'primaryFilter': this.primaryFilter});
     });
-    this.$root.$on('show-alert', (message, persist) => {
-      this.displayMessage(message, persist);
+    this.$root.$on('show-alert', (message) => {
+      this.displayMessage(message);
     });
     this.getDocumentDataFromUrl()
       .finally(() => {
@@ -378,24 +378,36 @@ export default {
       };
       reader.readAsArrayBuffer(file);
     },
+    pushOrRemoveIfReadOnly(array, file, push) {
+      if (file.acl.canEdit) {
+        return false;
+      }
+      const index = array.findIndex(object => object.id === file.id);
+      if (index === -1 && push) {
+        array.push(file);
+      } else {
+        array.splice(index, 1);
+      }
+      return true;
+    },
     updateSelectionList(selected, file) {
       const index = this.selectedDocuments.findIndex(object => object.id === file.id);
-      let readOnlySelected = false;
+      const selectedReadOnly = [];
       if (selected && index === -1) {
         const newFile = Object.assign({}, file);
         newFile.metadatas=null;
         this.selectedDocuments.push(newFile);
-        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
-        if (readOnlySelected) {
+        const pushed = this.pushOrRemoveIfReadOnly(selectedReadOnly, newFile, true);
+        if (pushed) {
           this.$root.$emit('show-alert', {
             type: 'warning',
             message: this.$t('document.multiSelection.readOnly.selected.message')
-          }, true);
+          });
         }
       } else if (!selected) {
         this.selectedDocuments.splice(index, 1);
-        readOnlySelected = this.selectedDocuments.some(file => !file.acl.canEdit);
-        if (!readOnlySelected) {
+        this.pushOrRemoveIfReadOnly(selectedReadOnly, file);
+        if (!selectedReadOnly.length) {
           this.hideMessage();
         }
       }
@@ -1269,18 +1281,16 @@ export default {
       this.refreshFiles()
         .finally(() => this.$root.$emit('update-breadcrumb', this.folderPath));
     },
-    displayMessage(message, persist) {
+    displayMessage(message) {
       this.message = message.message;
       this.alertType = message.type;
       this.alertActions = message.actions;
       this.alert = true;
-      if (!persist) {
-        setTimeout(() => {
-          if (!this.alertActions?.length) {
-            this.alert = false;
-          }
-        }, 5000);
-      }
+      setTimeout(() => {
+        if (!this.alertActions?.length) {
+          this.alert = false;
+        }
+      }, 5000);
     },
     hideMessage() {
       this.alert = false;

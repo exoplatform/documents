@@ -123,7 +123,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   labelKey: 'documents.label.edit',
   align: 'center',
   sortable: true,
-  cssClass: 'font-weight-bold text-no-wrap',
+  cssClass: 'font-weight-bold text-no-wrap ',
   width: '190px',
   rank: 2,
   enabled: (file, isMobile) => {
@@ -252,11 +252,11 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
   rank: 8,
-  enabled: (file, isMobile) => {
+  enabled: (file) => {
     if (!file.versionable || file.cloudDriveFolder) {
       return false;
     }
-    return !isMobile && file.acl.canEdit;
+    return file.acl.canEdit;
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -276,8 +276,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
     if (Vue.prototype.$downloadDocumentSuspended) {
       return false;
     }
-    return file && !file.cloudDriveFolder
-                && (file.acl.canEdit || file.sourceID);
+    return file && !file.cloudDriveFolder || file.sourceID;
   },
   enabledForMultiSelection: () => true,
   componentOptions: {
