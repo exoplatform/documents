@@ -191,7 +191,7 @@ public class JCRDocumentFileStorageTest {
     //assert that the linkNode set edit permission
     verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
 
-    //share document with group
+    //share document with platform users group with read only permission
     when(identity.getRemoteId()).thenReturn("john");
     when(identity.getProviderId()).thenReturn("group");
     org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
@@ -209,8 +209,19 @@ public class JCRDocumentFileStorageTest {
     //assert that the linkNode set read permission
     verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("john") && Arrays.equals(map.get("john"),new String[]{"read"})));
 
+    //share document with organisation employees group with edit permission
+    org.exoplatform.services.security.Identity aclIdentity1 = mock(org.exoplatform.services.security.Identity.class);
+    lenient().when(aclIdentity1.getUserId()).thenReturn("john");
+    AccessControlEntry accessControlEntry3 = new AccessControlEntry("*:/organization/employees", "edit");
+    AccessControlList acl3 = new AccessControlList("john", Arrays.asList(accessControlEntry3));
+    // destination identity is member of the group
+    lenient().when(aclIdentity1.isMemberOf(accessControlEntry3.getMembershipEntry())).thenReturn(true);
+    when(((ExtendedNode) currentNode).getACL()).thenReturn(acl3);
+    lenient().when(documentFileService.getAclUserIdentity(identity.getRemoteId())).thenReturn(aclIdentity1);
+    jcrDocumentFileStorage.shareDocument("1", 1L);
 
-
+    //assert that the linkNode set edit permission
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("john") && Arrays.equals(map.get("john"),new String[]{"edit"})));
   }
 
   @Test

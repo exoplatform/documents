@@ -286,7 +286,7 @@ export default {
         'name': collaborator.displayName || fullName,
         'remoteId': collaborator.providerId === 'group' ? collaborator.spaceId : collaborator.remoteId,
         'providerId': collaborator.providerId,
-        'avatar': collaborator.profile.avatarUrl,
+        'avatar': collaborator.profile.avatarUrl
       };
     },
     applyItemClass(){
