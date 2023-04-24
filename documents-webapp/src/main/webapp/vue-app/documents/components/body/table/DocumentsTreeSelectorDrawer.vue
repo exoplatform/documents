@@ -22,7 +22,7 @@
             </div>
           </div>
         </v-list-item>
-        <v-list-item>
+        <v-list-item v-if="showCurrentLocation">
           <div class="py-2 width-full">
             <span class="font-weight-bold text-color text-no-wrap pb-2">{{
               $t('documents.move.drawer.currentPosition')
@@ -123,7 +123,8 @@ export default {
     file: {},
     actionType: '',
     isLoading: false,
-    isMultiSelection: false
+    isMultiSelection: false,
+    showCurrentLocation: true
   }),
   computed: {
     openLevel() {
@@ -150,9 +151,10 @@ export default {
       }];
       this.retrieveDocumentTree(ownerId);
     });
-    this.$root.$on('open-document-tree-selector-drawer', (file, actionType, isMultiSelection) => {
+    this.$root.$on('open-document-tree-selector-drawer', (file, actionType, isMultiSelection, showCurrentLocation) => {
       this.actionType = actionType;
       this.isMultiSelection = isMultiSelection;
+      this.showCurrentLocation = showCurrentLocation;
       if (file) {
         this.open(file);
       }
@@ -186,8 +188,8 @@ export default {
         avatarUrl: this.spaceDisplayName ? `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/spaces/${this.spaceName}/avatar` :
           `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/users/${this.userName}/avatar`,
       };
-      const lastFolderIndex = this.file.path.lastIndexOf('/');
-      this.currentFolderPath = this.file.path.substring(0, lastFolderIndex);
+      const lastFolderIndex = this.file?.path.lastIndexOf('/');
+      this.currentFolderPath = this.file?.path.substring(0, lastFolderIndex);
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
       const startIndex = this.currentFolderPath.indexOf(parentDriveFolder);
       const nodePath = startIndex >= 0 ? this.currentFolderPath.substring(startIndex + parentDriveFolder.length) : '';
