@@ -16,7 +16,8 @@
       <template #activator="{ on, attrs }">
         <span
           v-bind="attrs"
-          v-on="on">
+          v-on="on"
+          @click="showVersionHistory">
           <date-format
             :value="lastUpdated"
             :format="dateFormat"
@@ -65,5 +66,10 @@ export default {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
     },
   },
+  methods: {
+    showVersionHistory() {
+      this.$root.$emit('show-version-history', this.file);
+    }
+  }
 };
 </script>
