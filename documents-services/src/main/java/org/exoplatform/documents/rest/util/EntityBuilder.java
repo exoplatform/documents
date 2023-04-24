@@ -56,6 +56,8 @@ public class EntityBuilder {
 
   public static final String         USER_PUBLIC_ROOT_NODE           = "/Public";
 
+  public static final String  GROUP_PROVIDER_ID         = "group";
+
   private EntityBuilder() {
   }
 
@@ -354,7 +356,7 @@ public class EntityBuilder {
           if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
             toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
             permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-          } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
+          } else if(permissionEntryEntity.getIdentity().getProviderId().equals(GROUP_PROVIDER_ID)){
             try {
               ExoContainer container = ExoContainerContext.getCurrentContainer();
               OrganizationService orgService = container.getComponentInstanceOfType(OrganizationService.class);
@@ -424,7 +426,7 @@ public class EntityBuilder {
     Identity identity = null;
     if(permissionEntryEntity.getIdentity().getProviderId().equals("space")){
       identity = identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId());
-    } else if (permissionEntryEntity.getIdentity().getProviderId().equals("group")) {
+    } else if (permissionEntryEntity.getIdentity().getProviderId().equals(GROUP_PROVIDER_ID)) {
       identity = new Identity(permissionEntryEntity.getIdentity().getProviderId(), permissionEntryEntity.getIdentity().getRemoteId());
     } else {
       identity = identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId());
@@ -522,7 +524,7 @@ public class EntityBuilder {
         identityEntity.setName(space.getDisplayName());
         identityEntity.setAvatar(space.getAvatarUrl());
       }
-    }else if (identity.getProviderId().equals("group"))
+    }else if (identity.getProviderId().equals(GROUP_PROVIDER_ID))
       identityEntity.setName(identity.getProfile().getFullName());
     return identityEntity;
   }

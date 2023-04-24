@@ -66,7 +66,6 @@ import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.organization.Membership;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -1212,7 +1211,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 permissions.put(destIdentity.getRemoteId(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
               }
             } catch (IllegalAccessException e) {
-              e.printStackTrace();
+              //do nothing
             }
           });
 

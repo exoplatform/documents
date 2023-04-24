@@ -17,6 +17,9 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
+import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.services.organization.Membership;
+import org.exoplatform.services.security.MembershipEntry;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.mockito.*;
@@ -187,6 +190,26 @@ public class JCRDocumentFileStorageTest {
 
     //assert that the linkNode set edit permission
     verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
+
+    //share document with group
+    when(identity.getRemoteId()).thenReturn("john");
+    when(identity.getProviderId()).thenReturn("group");
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    lenient().when(aclIdentity.getUserId()).thenReturn("john");
+    AccessControlEntry accessControlEntry2 = new AccessControlEntry("*:/platform/users", PermissionType.READ);
+    AccessControlList acl2 = new AccessControlList("john", Arrays.asList(accessControlEntry2));
+    // destination identity is member of the group
+    lenient().when(aclIdentity.isMemberOf(accessControlEntry2.getMembershipEntry())).thenReturn(true);
+    when(((ExtendedNode) currentNode).getACL()).thenReturn(acl2);
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    COMMONS_UTILS_UTIL.when(()-> CommonsUtils.getService(DocumentFileService.class)).thenReturn(documentFileService);
+    lenient().when(documentFileService.getAclUserIdentity(identity.getRemoteId())).thenReturn(aclIdentity);
+    jcrDocumentFileStorage.shareDocument("1", 1L);
+
+    //assert that the linkNode set read permission
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("john") && Arrays.equals(map.get("john"),new String[]{"read"})));
+
+
 
   }
 
@@ -1023,7 +1046,7 @@ public class JCRDocumentFileStorageTest {
   public void tearDown() throws Exception {
     JCR_DOCUMENTS_UTIL.reset();
   }
-  
+  @Test
   public void countNodeAccessListTest() throws RepositoryException {
     ExtendedNode extendedNode = mock(ExtendedNode.class);
     org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
