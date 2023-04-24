@@ -20,6 +20,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
@@ -362,7 +363,8 @@ public class EntityBuilder {
               OrganizationService orgService = container.getComponentInstanceOfType(OrganizationService.class);
               invitedGroupId = permissionEntryEntity.getIdentity().getRemoteId();
               ListAccess<User> listAccess = orgService.getUserHandler().findUsersByGroupId(invitedGroupId);
-              User[] users = listAccess.load(0, listAccess.getSize());
+              //exclude the current user from the list
+              User[] users = Stream.of(listAccess.load(0, listAccess.getSize())).filter(user -> !user.getUserName().equals(RestUtils.getCurrentUser())).toArray(User[]::new);
               for(User u : users) {
                 if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(u.getUserName()))) {
                   toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
