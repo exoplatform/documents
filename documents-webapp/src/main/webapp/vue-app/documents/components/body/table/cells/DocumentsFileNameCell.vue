@@ -68,6 +68,7 @@
             :format="fullDateFormat"
             class="document-time text-light-color text-no-wrap" />
           <documents-visibility-cell
+            class="mt-n1"
             :file="file"
             :is-mobile="isMobile"
             :selected-view="selectedView" />
@@ -225,7 +226,7 @@ export default {
     $(document).on('mousedown', () => {
       if (this.menuDisplayed) {
         window.setTimeout(() => {
-          $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#fff');
+          $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().removeAttr('style');
           this.menuDisplayed = false;
         }, this.waitTimeUntilCloseMenu);
       }

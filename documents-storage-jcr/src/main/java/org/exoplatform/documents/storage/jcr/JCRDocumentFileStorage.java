@@ -1267,7 +1267,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void updateDocumentDescription(long ownerId, String documentId, String description, Identity aclIdentity) throws RepositoryException {
+  public void updateDocumentDescription(long ownerId,
+                                        String documentId,
+                                        String description,
+                                        Identity aclIdentity) throws RepositoryException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {
@@ -1276,6 +1279,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       node = getNodeByIdentifier(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new AccessDeniedException();
+      }
       if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
         node.addMixin(NodeTypeConstants.EXO_MODIFY);
       }
@@ -1303,20 +1309,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       // Create tags if the description contains
       TagService tagService = CommonsUtils.getService(TagService.class);
       Set<TagName> tagNames = tagService.detectTagNames(description);
-      if(!tagNames.isEmpty()){
-        org.exoplatform.social.core.identity.model.Identity audienceIdentity = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
+      if (!tagNames.isEmpty()) {
+        org.exoplatform.social.core.identity.model.Identity audienceIdentity = getOwnerIdentityFromNodePath(node.getPath(),
+                                                                                                            identityManager,
+                                                                                                            spaceService);
         long spaceId = 0;
-        if(audienceIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
+        if (audienceIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
           Space space = spaceService.getSpaceByPrettyName(audienceIdentity.getRemoteId());
           spaceId = Long.parseLong(space.getId());
         }
         tagService.saveTags(new TagObject("file", ((ExtendedNode) node).getIdentifier(), null, spaceId),
-                tagNames,
-                Long.parseLong(audienceIdentity.getId()),
-                Long.parseLong(identityManager.getOrCreateUserIdentity(username).getId()));
-        listenerService.broadcast(ADD_TAG_DOCUMENT, new TagObject("Document", ((ExtendedNode) node).getIdentifier(), null, spaceId), tagNames);
+                            tagNames,
+                            Long.parseLong(audienceIdentity.getId()),
+                            Long.parseLong(identityManager.getOrCreateUserIdentity(username).getId()));
+        listenerService.broadcast(ADD_TAG_DOCUMENT,
+                                  new TagObject("Document", ((ExtendedNode) node).getIdentifier(), null, spaceId),
+                                  tagNames);
       }
 
+    } catch (AccessDeniedException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentId, e);
     } finally {

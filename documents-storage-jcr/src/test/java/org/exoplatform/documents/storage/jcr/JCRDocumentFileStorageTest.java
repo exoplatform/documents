@@ -817,6 +817,8 @@ public class JCRDocumentFileStorageTest {
     Identity audienceIdentity = mock(Identity.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getOwnerIdentityFromNodePath("path", identityManager, spaceService))
                       .thenReturn(audienceIdentity);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node))
+            .thenReturn(true);
     lenient().when(audienceIdentity.getProviderId()).thenReturn("space");
     Space space = new Space();
     space.setId("1");

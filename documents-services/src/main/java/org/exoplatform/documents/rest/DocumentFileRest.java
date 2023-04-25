@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import javax.annotation.security.RolesAllowed;
+import javax.jcr.AccessDeniedException;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -780,6 +781,8 @@ public class DocumentFileRest implements ResourceContainer {
       long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
       documentFileService.updateDocumentDescription(ownerId, documentId, description, userIdentityId);
       return Response.noContent().build();
+    } catch (AccessDeniedException e) {
+      return Response.status(HTTPStatus.UNAUTHORIZED).build();
     } catch (Exception ex) {
       LOG.warn("Failed to update document description", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();

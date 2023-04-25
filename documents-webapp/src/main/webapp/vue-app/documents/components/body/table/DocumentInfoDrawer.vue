@@ -39,7 +39,9 @@
         </div>
         <div class="d-flex flex-column justify-center text-center pb-8">
           <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
-          <a class="align-center" @click="openEditor">
+          <a
+            class="align-center"
+            @click="openEditor">
             <span>{{ $t('documents.message.addYourDescription') }}</span>
           </a>
         </div>
@@ -276,7 +278,7 @@ export default {
         this.updateDescriptionStatistics(this.file);
       }
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.$documentFileService.updateDescription(ownerId,this.file)
+      return this.$documentFileService.updateDescription(ownerId,this.file)
         .then(() => {
           if (this.isMobile){
             this.displayAlert(this.$t('documents.alert.success.description.updated'));
@@ -290,6 +292,11 @@ export default {
           this.showNoDescription = !this.file.description;
           this.displayEditor=false;
           this.fileInitialDescription = this.file.description;
+        }).catch(() => {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('documents.alert.error.description.updated')
+          });
         });
     },
     open(file, fileName, fileType, icon) {
