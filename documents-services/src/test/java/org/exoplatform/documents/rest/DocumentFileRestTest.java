@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
+import javax.jcr.AccessDeniedException;
 import javax.jcr.RepositoryException;
 import javax.ws.rs.core.Response;
 
@@ -1121,6 +1122,9 @@ public class DocumentFileRestTest {
     doNothing().when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
     Response response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
     assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+    doThrow(new AccessDeniedException()).when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
+    response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     doThrow(new RuntimeException()).when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
     response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
