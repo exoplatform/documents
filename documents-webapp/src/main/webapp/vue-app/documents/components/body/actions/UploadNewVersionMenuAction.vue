@@ -19,11 +19,18 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
     }
   },
   methods: {
     uploadVersion() {
-      this.$root.$emit('upload-new-version-action-invoke', this.file) ;
+      this.$root.$emit('upload-new-version-action-invoke', this.file);
+      if (this.isMobile) {
+        this.$root.$emit('close-file-action-menu');
+      }
     },
   }
 };

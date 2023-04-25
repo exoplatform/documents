@@ -8,7 +8,7 @@
       <extension-registry-component
         :component="extension"
         :params="getParams(extension)"
-        class="width-full grey--text text--darken-4"
+        class="width-full"
         :element="div" />
     </v-list-item>
   </v-list>
