@@ -40,6 +40,7 @@
         <div class="d-flex flex-column justify-center text-center pb-8">
           <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
           <a
+            v-if="file.acl.canEdit"
             class="align-center"
             @click="openEditor">
             <span>{{ $t('documents.message.addYourDescription') }}</span>
