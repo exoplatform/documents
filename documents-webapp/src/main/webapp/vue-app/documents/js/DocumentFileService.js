@@ -369,6 +369,8 @@ export function updateDescription(ownerId,document) {
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
+    } else {
+      throw resp;
     }
   }).catch(e => {
     throw new Error(`Error when trying to update document description ${e}`);

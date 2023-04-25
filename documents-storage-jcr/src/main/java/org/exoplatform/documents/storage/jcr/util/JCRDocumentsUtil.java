@@ -736,4 +736,13 @@ public class JCRDocumentsUtil {
   public static boolean isFolder(Node node) throws RepositoryException {
     return node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED);
   }
+
+  public static boolean hasEditPermission(Session session, Node node) {
+    try {
+      session.checkPermission(node.getPath(), PermissionType.SET_PROPERTY);
+    } catch (Exception e) {
+      return false;
+    }
+    return true;
+  }
 }

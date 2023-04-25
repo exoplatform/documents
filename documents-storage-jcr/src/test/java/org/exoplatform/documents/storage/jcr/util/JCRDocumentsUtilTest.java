@@ -30,6 +30,7 @@ import javax.jcr.*;
 import javax.jcr.nodetype.NodeType;
 import javax.jcr.version.Version;
 
+import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -307,5 +308,16 @@ public class JCRDocumentsUtilTest {
     assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   "));
     assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   .docx"));
     assertTrue(JCRDocumentsUtil.isValidDocumentTitle("test.docx"));
+  }
+
+  @Test
+  public void hasEditPermission() throws RepositoryException {
+    Session session = mock(Session.class);
+    Node node = mock(Node.class);
+    when(node.getPath()).thenReturn("path");
+    doNothing().when(session).checkPermission("path", PermissionType.SET_PROPERTY);
+    assertTrue(JCRDocumentsUtil.hasEditPermission(session, node));
+    doThrow(new RuntimeException()).when(session).checkPermission("path", PermissionType.SET_PROPERTY);
+    assertFalse(JCRDocumentsUtil.hasEditPermission(session, node));
   }
 }
