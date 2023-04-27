@@ -720,6 +720,43 @@ public class JCRDocumentFileStorageTest {
     assertEquals(1, fullTreeItemList.size());
     assertEquals(3, fullTreeItemList.get(0).getChildren().size());
 
+    // Natural sorted items
+    Node folder1 = mock(NodeImpl.class);
+    when(folder1.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folder1.getName()).thenReturn("folder1");
+    when(folder1.getPath()).thenReturn("/root/folder/folder1");
+    when(((NodeImpl)folder1).getIdentifier()).thenReturn("folder1Identifiuer");
+    when(folder1.getNodes()).thenReturn(nodeIteratorFolder);
+
+    Node folder2 = mock(NodeImpl.class);
+    when(folder2.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folder2.getName()).thenReturn("folder2");
+    when(folder2.getPath()).thenReturn("/root/folder/folder2");
+    when(((NodeImpl)folder2).getIdentifier()).thenReturn("folder2Identifiuer");
+    when(folder2.getNodes()).thenReturn(nodeIteratorFolder);
+
+    Node folder10 = mock(NodeImpl.class);
+    when(folder10.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folder10.getName()).thenReturn("folder10");
+    when(folder10.getPath()).thenReturn("/root/folder/folder10");
+    when(((NodeImpl)folder10).getIdentifier()).thenReturn("folder10Identifiuer");
+    when(folder10.getNodes()).thenReturn(nodeIteratorFolder);
+
+
+    when(nodeIterator.hasNext()).thenReturn(true, true, true, false);
+    when(nodeIterator.nextNode()).thenReturn(folder1, folder10, folder2);
+    when(folderNode.getNodes()).thenReturn(nodeIterator);
+
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity);
+    assertEquals(1, fullTreeItemList.size());
+    assertEquals(3, fullTreeItemList.get(0).getChildren().size());
+    //assert that the folder1 on the first position
+    assertEquals("folder1", fullTreeItemList.get(0).getChildren().get(0).getName());
+    //assert that the folder2 on the second position
+    assertEquals("folder2", fullTreeItemList.get(0).getChildren().get(1).getName());
+    //assert that the folder10 on the last position
+    assertEquals("folder10", fullTreeItemList.get(0).getChildren().get(2).getName());
+
     // when folder ID is null, we return user Home folder
     Node userHome = mock(NodeImpl.class);
     when(((NodeImpl)userHome).getIdentifier()).thenReturn("userHomeFolderIdentifier");
