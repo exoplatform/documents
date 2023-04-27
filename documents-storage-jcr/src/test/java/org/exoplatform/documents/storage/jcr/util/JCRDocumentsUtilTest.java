@@ -333,17 +333,17 @@ public class JCRDocumentsUtilTest {
     list.add("3");
     list.add("2");
 
-    List<String> list1 = list.stream().sorted(new Utils.NaturalComparator()).toList();
+    list.sort(new Utils.NaturalComparator());
     //assert numeric sort
-    assertEquals("1", list1.get(0));
-    assertEquals("3", list1.get(2));
+    assertEquals("1", list.get(0));
+    assertEquals("3", list.get(2));
 
     list.add("Afile");
     list.add("bfile");
-    list1 = list.stream().sorted(new Utils.NaturalComparator()).toList();
+    list.sort(new Utils.NaturalComparator());
     //assert numeric sort then literal sort
-    assertEquals("1", list1.get(0));
-    assertEquals("Afile", list1.get(3));
+    assertEquals("1", list.get(0));
+    assertEquals("Afile", list.get(3));
 
     list.add("file1");
     list.add("file10");
@@ -352,8 +352,8 @@ public class JCRDocumentsUtilTest {
     list.add("file3");
     list.add("2 test");
 
-    list1 = list.stream().sorted(new Utils.NaturalComparator()).toList();
+    list.sort(new Utils.NaturalComparator());
     String[] expectedSortedArray = new String[]{"1", "2", "2 test", "3", "Afile", "bfile", "file1", "file2", "file3" ,"file10", "file20"};
-    assertEquals(expectedSortedArray, list1.toArray(new String[list1.size()]));
+    assertEquals(expectedSortedArray, list.toArray(new String[list.size()]));
   }
 }

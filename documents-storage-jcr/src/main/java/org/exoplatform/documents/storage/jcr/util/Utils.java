@@ -62,7 +62,7 @@ public class Utils {
             return Integer.compare(num1, num2);
           }
         } else {
-          int result = arr1[i].compareTo(arr2[i]);
+          int result = arr1[i].compareToIgnoreCase(arr2[i]);
           if (result != 0) {
             return result;
           }
