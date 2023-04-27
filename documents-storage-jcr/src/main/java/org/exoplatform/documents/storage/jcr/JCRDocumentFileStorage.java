@@ -556,16 +556,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       }
     }
-    return folderListNodes.stream().sorted( new Comparator<FullTreeItem>() {
-      public int compare(FullTreeItem o1, FullTreeItem o2) {
-        //sorted the tree item when the name contains numbers
-        if(NumberUtils.isParsable(o1.getName()) && NumberUtils.isParsable(o2.getName())){
-          return Integer.compare(Integer.parseInt(o1.getName()), Integer.parseInt(o2.getName()));
-        }
-        // sorted the tree item when the name contains only characters
-        return o1.getName().compareToIgnoreCase(o2.getName());
-      }
-    }).collect(Collectors.toList());
+    return folderListNodes.stream().sorted((fullTreeItem1, fullTreeItem2)-> new Utils.NaturalComparator().compare(fullTreeItem1.getName(), fullTreeItem2.getName())).toList();
   }
   @Override
   public AbstractNode createFolder(long ownerId,
