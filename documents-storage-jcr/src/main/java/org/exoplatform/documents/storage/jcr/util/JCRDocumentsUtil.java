@@ -68,7 +68,7 @@ public class JCRDocumentsUtil {
 
   private static final String                          SPACE_PATH_PREFIX = "/Groups/spaces/";
 
-  private static final String                  GROUP_ADMINISTRATORS       = "*:/platform/administrators";
+  private static final String                          GROUP_ADMINISTRATORS = "*:/platform/administrators";
 
   protected static final Map<DocumentSortField, String> SORT_FIELDS_ES_CORRESPONDING  = new EnumMap<>(DocumentSortField.class);
 
@@ -579,7 +579,9 @@ public class JCRDocumentsUtil {
         if (session.itemExists(privatePathNode)) {
           identityRootNode = (Node) session.getItem(privatePathNode);
         }
-     }
+     }else if (ownerIdentity.getProviderId().equals("group")){
+      identityRootNode = getGroupNode(nodeHierarchyCreator, session, ownerIdentity.getRemoteId());
+    }
     return identityRootNode;
   }
 

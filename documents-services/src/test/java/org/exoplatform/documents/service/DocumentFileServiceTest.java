@@ -425,8 +425,8 @@ public class DocumentFileServiceTest {
   @Test
   public void testUpdatePermissions() throws IllegalAccessException {
     NodePermission nodePermission = new NodePermission();
-    Map<Long, String> toShare = new HashMap<>();
-    toShare.put(1L, "read");
+    Map<String, String> toShare = new HashMap<>();
+    toShare.put("1", "read");
     nodePermission.setToShare(toShare);
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     Identity socialIdentity = mock(Identity.class);
@@ -435,7 +435,7 @@ public class DocumentFileServiceTest {
     when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
-    verify(documentFileStorage, times(1)).shareDocument("123", 1L);
+    verify(documentFileStorage, times(1)).shareDocument("123", "1");
   }
 
   @Test

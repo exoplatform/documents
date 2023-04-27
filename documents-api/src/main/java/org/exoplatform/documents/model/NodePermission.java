@@ -34,7 +34,7 @@ public class NodePermission {
 
   private List<PermissionEntry> permissions;
 
-  private Map<Long,String> toShare;
+  private Map<String,String> toShare;
 
   private Map<Long,String> toNotify;
 

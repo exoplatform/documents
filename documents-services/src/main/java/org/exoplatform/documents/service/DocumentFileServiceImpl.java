@@ -300,7 +300,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public void shareDocument(String documentId, long destId) throws IllegalAccessException {
+  public void shareDocument(String documentId, String destId) throws IllegalAccessException {
 
     documentFileStorage.shareDocument(documentId, destId);
   }

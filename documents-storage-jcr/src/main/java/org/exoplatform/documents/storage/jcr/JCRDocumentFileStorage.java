@@ -111,6 +111,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                  SPACE_PROVIDER_ID          = "space";
 
+  private static final String                  GROUP_PROVIDER_ID          = "group";
+
   private static final String                  SHARED_FOLDER_NAME         = "Shared";
 
   private static final String                  EOO_COMMENT_ID             = "eoo:commentId";
@@ -1138,7 +1140,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  public void shareDocument(String documentId, long destId) {
+  public void shareDocument(String documentId, String destId) {
     Node rootNode = null;
     Node shared = null;
     SessionProvider sessionProvider = null;
@@ -1149,8 +1151,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node currentNode = getNodeByIdentifier(systemSession, documentId);
       //add symlink to destination user
       org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
+      if (destIdentity == null && groupToIdentity(destId)!= null){
+        destIdentity = groupToIdentity(destId) ;
+      }
       rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
-      if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
+      if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID) && !destIdentity.getProviderId().equals(GROUP_PROVIDER_ID) ){
         rootNode = rootNode.getNode("Documents");
       }
       if(!rootNode.hasNode(SHARED_FOLDER_NAME)){
@@ -1193,29 +1198,24 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                       accessControlEntryPermession.add(accessControlEntry.getPermission());
                       permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
                     });
+      }  else if (destIdentity.getProviderId().equals("group")) {
+        String groupId = destIdentity.getRemoteId();
+          List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
+          List<String> accessControlEntryPermession = new ArrayList<>();
+          acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId)).toList()
+             .forEach(accessControlEntry -> {
+               accessControlEntryPermession.add(accessControlEntry.getPermission());
+               permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
+             });
       } else {
         List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
         List<String> accessControlEntryPermession = new ArrayList<>();
-        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destIdentity.getRemoteId())).toList()
+        org.exoplatform.social.core.identity.model.Identity finalDestIdentity = destIdentity;
+        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(finalDestIdentity.getRemoteId())).toList()
            .forEach(accessControlEntry -> {
              accessControlEntryPermession.add(accessControlEntry.getPermission());
              permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
            });
-        if (permissions.isEmpty()) {
-          acc.stream().forEach(accessControlEntry -> {
-            MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
-            DocumentFileService documentFileService = CommonsUtils.getService(DocumentFileService.class);
-            try {
-              if (membershipEntry != null && documentFileService.getAclUserIdentity(destIdentity.getRemoteId()).isMemberOf(accessControlEntry.getMembershipEntry())){
-                accessControlEntryPermession.add(accessControlEntry.getPermission());
-                permissions.put(destIdentity.getRemoteId(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
-              }
-            } catch (IllegalAccessException e) {
-              //do nothing
-            }
-          });
-
-        }
       }
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);

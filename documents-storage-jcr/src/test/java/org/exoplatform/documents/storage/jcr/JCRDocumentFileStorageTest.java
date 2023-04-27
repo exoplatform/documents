@@ -149,7 +149,9 @@ public class JCRDocumentFileStorageTest {
                                     manageableRepository)).thenReturn(systemSession);
     when(identityManager.getIdentity("1")).thenReturn(identity);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(currentNode);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService, nodeHierarchyCreator,identity, systemSession)).thenReturn(rootNode);
+    Identity finalIdentity = identity;
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService, nodeHierarchyCreator,
+                                                                       finalIdentity, systemSession)).thenReturn(rootNode);
     when(identity.getProviderId()).thenReturn("USER");
     when(rootNode.hasNode("Shared")).thenReturn(false);
     when(rootNode.getNode("Documents")).thenReturn(rootNode);
@@ -173,7 +175,7 @@ public class JCRDocumentFileStorageTest {
     AccessControlList acl1 = new AccessControlList("username", Arrays.asList(accessControlEntry));
     when(((ExtendedNode) currentNode).getACL()).thenReturn(acl1);
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
-    jcrDocumentFileStorage.shareDocument("1", 1L);
+    jcrDocumentFileStorage.shareDocument("1", "1");
 
     UTILS.verify(() -> times(1));
     Utils.broadcast(listenerService, "share_document_event", identity, linkNode);
@@ -186,42 +188,31 @@ public class JCRDocumentFileStorageTest {
     AccessControlEntry accessControlEntry1 = new AccessControlEntry("username", "edit");
     AccessControlList acl = new AccessControlList("username", Arrays.asList(accessControlEntry1));
     when(((ExtendedNode) currentNode).getACL()).thenReturn(acl);
-    jcrDocumentFileStorage.shareDocument("1", 1L);
+    jcrDocumentFileStorage.shareDocument("1", "1");
 
     //assert that the linkNode set edit permission
     verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
 
     //share document with platform users group with read only permission
-    when(identity.getRemoteId()).thenReturn("john");
+    when(identity.getRemoteId()).thenReturn("/platform/users");
     when(identity.getProviderId()).thenReturn("group");
-    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
-    lenient().when(aclIdentity.getUserId()).thenReturn("john");
+    JCR_DOCUMENTS_UTIL.when(()-> JCRDocumentsUtil.groupToIdentity("/platform/users")).thenReturn(identity);
     AccessControlEntry accessControlEntry2 = new AccessControlEntry("*:/platform/users", PermissionType.READ);
     AccessControlList acl2 = new AccessControlList("john", Arrays.asList(accessControlEntry2));
-    // destination identity is member of the group
-    lenient().when(aclIdentity.isMemberOf(accessControlEntry2.getMembershipEntry())).thenReturn(true);
     when(((ExtendedNode) currentNode).getACL()).thenReturn(acl2);
-    DocumentFileService documentFileService = mock(DocumentFileService.class);
-    COMMONS_UTILS_UTIL.when(()-> CommonsUtils.getService(DocumentFileService.class)).thenReturn(documentFileService);
-    lenient().when(documentFileService.getAclUserIdentity(identity.getRemoteId())).thenReturn(aclIdentity);
-    jcrDocumentFileStorage.shareDocument("1", 1L);
+    jcrDocumentFileStorage.shareDocument("1", "1");
 
-    //assert that the linkNode set read permission
-    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("john") && Arrays.equals(map.get("john"),new String[]{"read"})));
-
-    //share document with organisation employees group with edit permission
-    org.exoplatform.services.security.Identity aclIdentity1 = mock(org.exoplatform.services.security.Identity.class);
-    lenient().when(aclIdentity1.getUserId()).thenReturn("john");
+    //share document with organization employees group with read only permission
+    when(identity.getRemoteId()).thenReturn("/organization/employees");
+    when(identity.getProviderId()).thenReturn("group");
+    JCR_DOCUMENTS_UTIL.when(()-> JCRDocumentsUtil.groupToIdentity("/organization/employees")).thenReturn(identity);
     AccessControlEntry accessControlEntry3 = new AccessControlEntry("*:/organization/employees", "edit");
     AccessControlList acl3 = new AccessControlList("john", Arrays.asList(accessControlEntry3));
-    // destination identity is member of the group
-    lenient().when(aclIdentity1.isMemberOf(accessControlEntry3.getMembershipEntry())).thenReturn(true);
     when(((ExtendedNode) currentNode).getACL()).thenReturn(acl3);
-    lenient().when(documentFileService.getAclUserIdentity(identity.getRemoteId())).thenReturn(aclIdentity1);
-    jcrDocumentFileStorage.shareDocument("1", 1L);
+    jcrDocumentFileStorage.shareDocument("1", "1");
 
     //assert that the linkNode set edit permission
-    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("john") && Arrays.equals(map.get("john"),new String[]{"edit"})));
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("*:/organization/employees") && Arrays.equals(map.get("*:/organization/employees"),new String[]{"edit"})));
   }
 
   @Test

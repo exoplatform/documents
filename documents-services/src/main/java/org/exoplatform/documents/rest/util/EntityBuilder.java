@@ -20,23 +20,17 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.commons.utils.ListAccess;
-import org.exoplatform.container.ExoContainer;
-import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.organization.OrganizationService;
-import org.exoplatform.services.organization.User;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
@@ -51,11 +45,11 @@ public class EntityBuilder {
 
   private static final String FILE_METADATA_OBJECT_TYPE = "file";
 
-  private static final String        SPACE_PATH_PREFIX = "/Groups/spaces/";
+  private static final String SPACE_PATH_PREFIX         = "/Groups/spaces/";
 
-  public static final String         USER_PRIVATE_ROOT_NODE           = "/Private";
+  public static final String  USER_PRIVATE_ROOT_NODE    = "/Private";
 
-  public static final String         USER_PUBLIC_ROOT_NODE           = "/Public";
+  public static final String  USER_PUBLIC_ROOT_NODE     = "/Public";
 
   public static final String  GROUP_PROVIDER_ID         = "group";
 
@@ -347,7 +341,7 @@ public class EntityBuilder {
     if(identity!=null){
       List<PermissionEntryEntity> collaborators = nodePermissionEntity.getCollaborators();
       List<PermissionEntry> permissions = new ArrayList<>();
-      Map<Long,String> toShare = new HashMap<>();
+      Map<String,String> toShare = new HashMap<>();
       Map<Long,String> toNotify = new HashMap<>();
       String invitedGroupId = null;
 
@@ -355,23 +349,12 @@ public class EntityBuilder {
         Identity ownerId = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
         if(ownerId != null && !ownerId.getId().equals(permissionEntryEntity.getIdentity().getId())) {
           if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
-            toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
+            toShare.put(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId(), permissionEntryEntity.getPermission());
             permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
           } else if(permissionEntryEntity.getIdentity().getProviderId().equals(GROUP_PROVIDER_ID)){
             try {
-              ExoContainer container = ExoContainerContext.getCurrentContainer();
-              OrganizationService orgService = container.getComponentInstanceOfType(OrganizationService.class);
               invitedGroupId = permissionEntryEntity.getIdentity().getRemoteId();
-              ListAccess<User> listAccess = orgService.getUserHandler().findUsersByGroupId(invitedGroupId);
-              //exclude the current user from the list
-              User[] users = Stream.of(listAccess.load(0, listAccess.getSize())).filter(user -> !user.getUserName().equals(RestUtils.getCurrentUser())).toArray(User[]::new);
-              for(User u : users) {
-                if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(u.getUserName()))) {
-                  toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
-                } else {
-                  toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
-                }
-              }
+              toShare.put(invitedGroupId, permissionEntryEntity.getPermission());
               permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
             } catch (Exception e) {
               LOG.warn("Failed to invite users from group " + invitedGroupId, e);
@@ -379,7 +362,7 @@ public class EntityBuilder {
           } else {
             try {
               if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()))) {
-                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+                toShare.put(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId(),permissionEntryEntity.getPermission());
               } else {
                 toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
               }
