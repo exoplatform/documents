@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * Copyright (C) 2023 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ *
+-->
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd"
+               xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
+<external-component-plugins>
+    <target-component>org.exoplatform.appcenter.service.ApplicationCenterService</target-component>
+    <component-plugin>
+      <name>Drives</name>
+      <set-method>addApplicationPlugin</set-method>
+      <type>org.exoplatform.appcenter.plugin.ApplicationPlugin</type>
+      <init-params>
+        <value-param>
+          <name>imagePath</name>
+          <value>war:/../images/Documents.png</value>
+        </value-param>
+        <value-param>
+          <name>override</name>
+          <value>${exo.app-center.drives.override:true}</value>
+        </value-param>
+        <value-param>
+          <name>override-mode</name>
+          <value>${exo.app-center.drives.override-mode:merge}</value>
+        </value-param>
+        <object-param>
+          <name>application</name>
+          <description>description</description>
+          <object type="org.exoplatform.appcenter.dto.Application">
+            <field name="title">
+              <string>Drives</string>
+            </field>
+            <field name="url">
+              <string>./drives</string>
+            </field>
+            <field name="description">
+              <string>Drives application</string>
+            </field>
+            <field name="permissions">
+              <collection type="java.util.ArrayList" item-type="java.lang.String">
+                <value>
+                  <string>*:/platform/users</string>
+                </value>
+				<value>
+                  <string>*:/platform/externals</string>
+                </value>
+              </collection>
+            </field>
+            <field name="active">
+              <boolean>true</boolean>
+            </field>
+            <field name="isMandatory">
+              <boolean>false</boolean>
+            </field>
+            <field name="isMobile">
+              <boolean>false</boolean>
+            </field>
+          </object>
+        </object-param>
+      </init-params>
+    </component-plugin>
+  </external-component-plugins>
+</configuration>
