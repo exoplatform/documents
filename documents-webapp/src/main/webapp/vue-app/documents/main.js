@@ -73,7 +73,6 @@ Vue.prototype.$nextTick(() => {
     Vue.prototype.$downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
   });
 });
-
 export function init() {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale ressources are ready
@@ -82,20 +81,5 @@ export function init() {
       vuetify,
       i18n
     }, `#${appId}`, 'Documents');
-  });
-  //Temporarily used to add VuetifyApp class on new documents view
-  if ( !document.getElementById('UIJcrExplorerContainer').classList.contains('VuetifyApp') ){
-    document.getElementById('UIJcrExplorerContainer').classList.add('VuetifyApp');
-  }
-}
-
-export function initSwitchApp() {
-  exoi18n.loadLanguageAsync(lang, url).then(i18n => {
-    // init Vue app when locale ressources are ready
-    Vue.createApp({
-      template: '<switch-new-document id="#newAppSwitch" />',
-      vuetify,
-      i18n
-    }, '#newAppSwitch', 'SwitchDocuments');
   });
 }
