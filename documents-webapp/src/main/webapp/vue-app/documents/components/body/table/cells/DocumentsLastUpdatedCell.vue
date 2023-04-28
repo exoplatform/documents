@@ -17,6 +17,7 @@
         <span
           v-bind="attrs"
           v-on="on"
+          :class="isVersionable? 'hover-underline':''"
           @click="showVersionHistory">
           <date-format
             :value="lastUpdated"
@@ -65,10 +66,15 @@ export default {
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
     },
+    isVersionable() {
+      return !this.file?.folder && this.file?.versionable;
+    }
   },
   methods: {
     showVersionHistory() {
-      this.$root.$emit('show-version-history', this.file);
+      if (this.isVersionable) {
+        this.$root.$emit('show-version-history', this.file);
+      }
     }
   }
 };
