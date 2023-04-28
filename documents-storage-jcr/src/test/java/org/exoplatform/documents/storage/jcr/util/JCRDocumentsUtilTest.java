@@ -325,4 +325,35 @@ public class JCRDocumentsUtilTest {
     assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   .docx"));
     assertTrue(JCRDocumentsUtil.isValidDocumentTitle("test.docx"));
   }
+
+  @Test
+  public void TestNaturalCompare(){
+    List<String> list = new ArrayList<>();
+    list.add("1");
+    list.add("3");
+    list.add("2");
+
+    list.sort(new Utils.NaturalComparator());
+    //assert numeric sort
+    assertEquals("1", list.get(0));
+    assertEquals("3", list.get(2));
+
+    list.add("Afile");
+    list.add("bfile");
+    list.sort(new Utils.NaturalComparator());
+    //assert numeric sort then literal sort
+    assertEquals("1", list.get(0));
+    assertEquals("Afile", list.get(3));
+
+    list.add("file1");
+    list.add("file10");
+    list.add("file2");
+    list.add("file20");
+    list.add("file3");
+    list.add("2 test");
+
+    list.sort(new Utils.NaturalComparator());
+    String[] expectedSortedArray = new String[]{"1", "2", "2 test", "3", "Afile", "bfile", "file1", "file2", "file3" ,"file10", "file20"};
+    assertEquals(expectedSortedArray, list.toArray(new String[list.size()]));
+  }
 }
