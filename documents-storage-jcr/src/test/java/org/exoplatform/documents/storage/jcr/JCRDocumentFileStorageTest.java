@@ -202,6 +202,9 @@ public class JCRDocumentFileStorageTest {
     when(((ExtendedNode) currentNode).getACL()).thenReturn(acl2);
     jcrDocumentFileStorage.shareDocument("1", "1");
 
+    //assert that the linkNode set read permission
+    verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("*:/platform/users") && Arrays.equals(map.get("*:/platform/users"),new String[]{"read"})));
+
     //share document with organization employees group with read only permission
     when(identity.getRemoteId()).thenReturn("/organization/employees");
     when(identity.getProviderId()).thenReturn("group");

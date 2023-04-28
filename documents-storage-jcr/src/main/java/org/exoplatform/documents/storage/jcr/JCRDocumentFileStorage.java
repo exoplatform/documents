@@ -38,14 +38,12 @@ import javax.jcr.version.VersionIterator;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.math.NumberUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
-import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -1104,7 +1102,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
               permissions.put("redactor:" + groupId, new String[] { PermissionType.READ });
             }
           }
-        } else if (permission.getIdentity().getProviderId().equals("group")) {
+        } else if (permission.getIdentity().getProviderId().equals(GROUP_PROVIDER_ID)) {
           String groupId = permission.getIdentity().getRemoteId();
           if (permission.getPermission().equals("edit")) {
             permissions.put("*:"+groupId, PermissionType.ALL);
@@ -1198,7 +1196,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                       accessControlEntryPermession.add(accessControlEntry.getPermission());
                       permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
                     });
-      }  else if (destIdentity.getProviderId().equals("group")) {
+      }  else if (destIdentity.getProviderId().equals(GROUP_PROVIDER_ID)) {
         String groupId = destIdentity.getRemoteId();
           List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
           List<String> accessControlEntryPermession = new ArrayList<>();
