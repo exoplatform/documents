@@ -2,9 +2,12 @@
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd"
   xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
 
+  <import>war:/conf/documents/portal-configuration.xml</import>
+  <import>war:/conf/documents/application-registry-configuration.xml</import>
   <import>war:/conf/documents/documents-service-configuration.xml</import>
   <import>war:/conf/documents/features-flags-configuration.xml</import>
   <import>war:/conf/documents/notification-configuration.xml</import>
   <import>war:/conf/documents/dynamic-container-configuration.xml</import>
-
+  <import>war:/conf/documents/spaces-templates-configuration.xml</import>
+  <import profiles="app-center">war:/conf/documents/app-center-configuration.xml</import>
 </configuration>
