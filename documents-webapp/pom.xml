@@ -68,6 +68,7 @@
               <compress>false</compress>
               <includes>
                 <include>documents.less</include>
+                <include>global-documents.less</include>
               </includes>
             </configuration>
             <goals>

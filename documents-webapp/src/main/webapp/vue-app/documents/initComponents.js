@@ -19,7 +19,6 @@
 
 import DocumentsMain from './components/DocumentsMain.vue';
 import DocumentsAppReminder from './components/DocumentsAppReminder.vue';
-import SwitchNewDocument from './components/SwitchNewDocument.vue';
 import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
 import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
@@ -131,7 +130,6 @@ const components = {
   'folder-treeview-drawer': FolderTreeViewDrawer,
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
-  'switch-new-document': SwitchNewDocument,
   'documents-app-reminder': DocumentsAppReminder,
   'upload-overlay': UploadOverlay,
   'versionHistory-menu-action': VersionHistoryMenuAction,
