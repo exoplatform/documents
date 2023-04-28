@@ -11,6 +11,13 @@
     <css-path>/skin/css/documents.css</css-path>
   </portlet-skin>
 
+  <portal-skin>
+    <skin-name>Enterprise</skin-name>
+    <skin-module>Documents</skin-module>
+    <css-path>/skin/css/global-documents.css</css-path>
+    <css-priority>2</css-priority>
+  </portal-skin>
+
   <portlet>
     <name>Documents</name>
     <module>
