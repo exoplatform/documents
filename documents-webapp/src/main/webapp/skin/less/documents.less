@@ -1,4 +1,10 @@
 @import "./variables.less";
+@import './mixins.less';
+
+.uiIconAppDocuments-portlet .uiIconAppDocuments {
+  &:extend(.fas);
+  .fa-folder-open();
+}
 
 .VuetifyApp {
   .v-application
@@ -814,5 +820,3 @@
     min-height: 30px !important;
   }
 }
-
-
