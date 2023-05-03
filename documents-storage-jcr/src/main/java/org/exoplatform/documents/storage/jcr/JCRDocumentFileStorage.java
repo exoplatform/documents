@@ -342,10 +342,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                    spaceService,
                                                    includeHiddenFiles,
                                                    filter).stream().filter(f -> !f.isFolder()).toList();
-            int limitToAdd = limit - (itemsSize + fileItemsToAdd.size());
-            if(limitToAdd < 0) {
+            int limitToAdd = limit - itemsSize;
+            if(fileItemsToAdd.size() > limitToAdd) {
               fileItems.addAll(fileItemsToAdd.subList(0, limit - itemsSize));
-            } else if (limitToAdd > 0) {
+            } else {
               fileItems.addAll(fileItemsToAdd);
             }
           }
