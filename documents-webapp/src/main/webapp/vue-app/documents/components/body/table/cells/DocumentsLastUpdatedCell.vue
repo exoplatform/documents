@@ -3,6 +3,7 @@
     v-if="!isMobile"
     class="align-center ms-1 d-inline-flex mt-2">
     <exo-user-avatar
+      v-if="file.modifierIdentity"
       :profile-id="file.modifierIdentity.remoteId"
       :size="28"
       popover
