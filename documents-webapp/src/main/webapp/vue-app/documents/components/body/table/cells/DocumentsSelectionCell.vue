@@ -86,7 +86,7 @@ export default {
       this.resetRangeSelect();
       this.rangeSelectTimer = setInterval(() => {
         this.canSelectRange = !this.isFileSelected(this.file) && this.selectedDocuments.length > 0;
-      },1500);
+      },500);
     },
     resetRangeSelect() {
       clearInterval(this.rangeSelectTimer);
