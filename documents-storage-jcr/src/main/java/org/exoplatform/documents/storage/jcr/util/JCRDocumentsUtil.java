@@ -41,6 +41,8 @@ import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.organization.Group;
+import org.exoplatform.services.organization.OrganizationService;
 import org.exoplatform.services.security.*;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -65,6 +67,8 @@ public class JCRDocumentsUtil {
   public static final String                           USER_PUBLIC_ROOT_NODE           = "Public";
 
   private static final String                          SPACE_PATH_PREFIX = "/Groups/spaces/";
+
+  private static final String                          GROUP_ADMINISTRATORS = "*:/platform/administrators";
 
   protected static final Map<DocumentSortField, String> SORT_FIELDS_ES_CORRESPONDING  = new EnumMap<>(DocumentSortField.class);
 
@@ -477,6 +481,8 @@ public class JCRDocumentsUtil {
           if(identity!=null){
             permissions.add(new PermissionEntry(identity, accessControlEntry.getPermission(),getPermissionRole(accessControlEntry.getMembershipEntry().getMembershipType())));
           }
+        } else if (!membershipEntry.toString().equals(GROUP_ADMINISTRATORS) && groupToIdentity(membershipEntry.getGroup()) != null) {
+          permissions.add(new PermissionEntry(groupToIdentity(membershipEntry.getGroup()), accessControlEntry.getPermission(),PermissionRole.ALL.name()));
         }
       } else{
         org.exoplatform.social.core.identity.model.Identity identity = identityManager.getOrCreateUserIdentity(nodeAclIdentity);
@@ -744,5 +750,26 @@ public class JCRDocumentsUtil {
       return false;
     }
     return true;
+  }
+  /*
+  * Build a group to identity model to display it on the manage access drawer collaborators .
+  * Like the built model by the identity suggester for group suggester .
+  */
+  public static org.exoplatform.social.core.identity.model.Identity groupToIdentity(String groupId){
+
+    OrganizationService organizationService = CommonsUtils.getService(OrganizationService.class);
+    try {
+      Group group = organizationService.getGroupHandler().findGroupById(groupId);
+      org.exoplatform.social.core.identity.model.Identity identity = new org.exoplatform.social.core.identity.model.Identity();
+      Profile profile = new Profile();
+      profile.setProperty("fullName", group.getLabel());
+      identity.setId("group:"+group.getGroupName());
+      identity.setRemoteId(groupId);
+      identity.setProviderId("group");
+      identity.setProfile(profile);
+      return identity;
+    } catch (Exception e){
+      return null ;
+    }
   }
 }
