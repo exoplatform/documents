@@ -344,6 +344,11 @@
               }
             }
           }
+
+          tr.is-intersected[data-isfolder="true"] {
+            border: 2px dashed #c0bebe !important;
+            cursor: move;
+          }
         }
       }
 
@@ -368,6 +373,15 @@
       left: 0;
       top: 0;
       transform: ~"translateX(min(var(--mouse-x), calc(100vw - 105%))) translateY(min(var(--mouse-y), calc(100vh - 101%)))";
+    }
+
+    .drag-tooltip {
+      border: 1px solid @primaryColor;
+
+      span {
+        font-family: @fontFamily;
+        color: @textColorDefault;
+      }
     }
   }
 
