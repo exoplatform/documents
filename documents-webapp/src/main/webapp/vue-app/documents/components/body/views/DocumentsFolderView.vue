@@ -82,7 +82,7 @@
         #item="{item}">
         <tr
           :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
-          class="v-data-table__mobile-table-row">
+          class="v-data-table__mobile-table-row pb-2 pt-2">
           <td
             class="v-data-table__mobile-row">
             <documents-table-cell
