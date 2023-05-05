@@ -878,15 +878,20 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
                       .thenCallRealMethod();
     when(JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
-    doCallRealMethod().when(JCRDocumentsUtil.class,"retrieveFileProperties",any(), any(), any(), any(), any());
+    doCallRealMethod().when(JCRDocumentsUtil.class,
+                            "retrieveFileProperties",
+                            any(IdentityManager.class),
+                            any(Node.class),
+                            any(org.exoplatform.services.security.Identity.class),
+                            any(AbstractNode.class),
+                            any(SpaceService.class));
     when(JCRDocumentsUtil.toFileNode(any(IdentityManager.class),
-                                                              any(org.exoplatform.services.security.Identity.class),
-                                                              any(Node.class),
-                                                              anyString(),
-                                                              any(SpaceService.class)))
-                      .thenCallRealMethod();
-
-     //creation date
+                                     any(org.exoplatform.services.security.Identity.class),
+                                     any(NodeImpl.class),
+                                     any(FileNode.class),
+                                     any(SpaceService.class))).thenCallRealMethod();
+    when(JCRDocumentsUtil.toFileNode(any(IdentityManager.class), any(org.exoplatform.services.security.Identity.class), any(Node.class), anyString(), any(SpaceService.class))).thenCallRealMethod();
+    //creation date
     filter.setSortField(DocumentSortField.CREATED_DATE);
     filter.setAscending(true);
     List<AbstractNode> fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
@@ -948,6 +953,36 @@ public class JCRDocumentFileStorageTest {
     assertEquals("Abc", fileNodes.get(2).getName());
     assertEquals("Xyz", fileNodes.get(0).getName());
     assertEquals("Efg.lnk", fileNodes.get(1).getName());
+
+    Node file3 = createFileMock("file3", Calendar.getInstance(), userSession);
+    Node file4 = createFileMock("file4", Calendar.getInstance(), userSession);
+    Node file5 = createFileMock("file5", Calendar.getInstance(), userSession);
+    Node file6 = createFileMock("file6", Calendar.getInstance(), userSession);
+    Node file7 = createFileMock("file7", Calendar.getInstance(), userSession);
+    Node file8 = createFileMock("file8", Calendar.getInstance(), userSession);
+    Node file9 = createFileMock("file9", Calendar.getInstance(), userSession);
+    Node file10 = createFileMock("file10", Calendar.getInstance(), userSession);
+
+    when(subItemsIterator.hasNext()).thenReturn(false, true, true, true, true, true, true, true, true, true, true, false);
+    when(subItemsIterator.nextNode()).thenReturn(file1, file2, file3, file4, file5, file6, file7, file8, file9, file10);
+
+    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 4);
+    assertNotNull(fileNodes);
+    assertEquals(4, fileNodes.size());
+
+    when(subItemsIterator.hasNext()).thenReturn(false, true, true, true, true, true, true, true, true, true, true, false);
+    when(subItemsIterator.nextNode()).thenReturn(file1, file2, file3, file4, file5, file6, file7, file8, file9, file10);
+
+    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 8);
+    assertNotNull(fileNodes);
+    assertEquals(8, fileNodes.size());
+
+    when(subItemsIterator.hasNext()).thenReturn(false, true, true, true, true, true, true, true, true, true, true, false);
+    when(subItemsIterator.nextNode()).thenReturn(file1, file2, file3, file4, file5, file6, file7, file8, file9, file10);
+
+    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 12);
+    assertNotNull(fileNodes);
+    assertEquals(10, fileNodes.size());
 
   }
 
