@@ -293,16 +293,15 @@ public class JCRDocumentsUtil {
     if(StringUtils.isNotBlank(sourceID)){
       fileNode.setSourceID(sourceID);
     }
-
     toFileNode(identityManager, aclIdentity, node, fileNode , spaceService);
     return fileNode;
   }
 
-  public static void toFileNode(IdentityManager identityManager,
-                                Identity aclIdentity,
-                                Node node,
-                                FileNode fileNode,
-                                SpaceService spaceService) {
+  public static FileNode toFileNode(IdentityManager identityManager,
+                                    Identity aclIdentity,
+                                    Node node,
+                                    FileNode fileNode,
+                                    SpaceService spaceService) {
     try {
       fileNode.setDatasource(JCR_DATASOURCE_NAME);
       fileNode.setCloudDriveFile(node.hasProperty("ecd:driveUUID"));
@@ -318,6 +317,7 @@ public class JCRDocumentsUtil {
         LOG.warn("Error computing File Node for search result with path {}", node, e);
       }
     }
+    return fileNode;
   }
 
   public static Node getNode(Session session,
@@ -356,7 +356,7 @@ public class JCRDocumentsUtil {
         documentNode.setParentFolderId(((NodeImpl) parent).getIdentifier());
       }
     } catch (RepositoryException repositoryException) {
-      //Do noting, it means that the current user don't have access to the parent node
+      //Do nothing, it means that the current user don't have access to the parent node
     }
 
     Node versionNode = node;

@@ -878,15 +878,20 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
                       .thenCallRealMethod();
     when(JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
-    doCallRealMethod().when(JCRDocumentsUtil.class,"retrieveFileProperties",any(), any(), any(), any(), any());
+    doCallRealMethod().when(JCRDocumentsUtil.class,
+                            "retrieveFileProperties",
+                            any(IdentityManager.class),
+                            any(Node.class),
+                            any(org.exoplatform.services.security.Identity.class),
+                            any(AbstractNode.class),
+                            any(SpaceService.class));
     when(JCRDocumentsUtil.toFileNode(any(IdentityManager.class),
-                                                              any(org.exoplatform.services.security.Identity.class),
-                                                              any(Node.class),
-                                                              anyString(),
-                                                              any(SpaceService.class)))
-                      .thenCallRealMethod();
-
-     //creation date
+                                     any(org.exoplatform.services.security.Identity.class),
+                                     any(NodeImpl.class),
+                                     any(FileNode.class),
+                                     any(SpaceService.class))).thenCallRealMethod();
+    when(JCRDocumentsUtil.toFileNode(any(IdentityManager.class), any(org.exoplatform.services.security.Identity.class), any(Node.class), anyString(), any(SpaceService.class))).thenCallRealMethod();
+    //creation date
     filter.setSortField(DocumentSortField.CREATED_DATE);
     filter.setAscending(true);
     List<AbstractNode> fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
