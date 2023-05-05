@@ -948,6 +948,7 @@ public class JCRDocumentFileStorageTest {
     assertEquals("Abc", fileNodes.get(2).getName());
     assertEquals("Xyz", fileNodes.get(0).getName());
     assertEquals("Efg.lnk", fileNodes.get(1).getName());
+
   }
 
   private Node createFolderMock(String name, Calendar createdDate, Session session) throws RepositoryException {
