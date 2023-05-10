@@ -68,8 +68,6 @@ public class JCRDocumentsUtil {
 
   private static final String                          SPACE_PATH_PREFIX = "/Groups/spaces/";
 
-  private static final String                          GROUP_ADMINISTRATORS = "*:/platform/administrators";
-
   protected static final Map<DocumentSortField, String> SORT_FIELDS_ES_CORRESPONDING  = new EnumMap<>(DocumentSortField.class);
 
   protected static final Map<DocumentSortField, String> SORT_FIELDS_JCR_CORRESPONDING = new EnumMap<>(DocumentSortField.class);
@@ -481,7 +479,7 @@ public class JCRDocumentsUtil {
           if(identity!=null){
             permissions.add(new PermissionEntry(identity, accessControlEntry.getPermission(),getPermissionRole(accessControlEntry.getMembershipEntry().getMembershipType())));
           }
-        } else if (!membershipEntry.toString().equals(GROUP_ADMINISTRATORS) && groupToIdentity(membershipEntry.getGroup()) != null) {
+        } else if (groupToIdentity(membershipEntry.getGroup()) != null) {
           permissions.add(new PermissionEntry(groupToIdentity(membershipEntry.getGroup()), accessControlEntry.getPermission(),PermissionRole.ALL.name()));
         }
       } else{
