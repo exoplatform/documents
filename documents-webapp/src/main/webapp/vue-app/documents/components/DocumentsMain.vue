@@ -451,6 +451,7 @@ export default {
         const treatedItems = this.selectedDocuments.filter(file => actionData.treatedItemsIds.includes(file.id));
         this.resetSelections();
         if (actionStatus === 'done_with_errors') {
+          this.setMultiActionLoading(false);
           this.$root.$emit('show-alert', {
             type: 'error',
             message: this.$t(`documents.bulk.${actionName}.doneWithErrors`)
