@@ -3,7 +3,8 @@
     "eslint-config-meedsio"
   ],
   "globals": {
-    "documentPreview": true
+    "documentPreview": true,
+    "DocumentsDraggable": true
   },
   "rules": {
     "vue/no-mutating-props": "warn",
