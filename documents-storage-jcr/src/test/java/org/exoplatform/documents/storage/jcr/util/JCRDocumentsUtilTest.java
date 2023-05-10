@@ -33,6 +33,9 @@ import javax.jcr.nodetype.NodeType;
 import javax.jcr.version.Version;
 
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
+import org.exoplatform.services.organization.Group;
+import org.exoplatform.services.organization.GroupHandler;
+import org.exoplatform.services.organization.OrganizationService;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -356,4 +359,23 @@ public class JCRDocumentsUtilTest {
     String[] expectedSortedArray = new String[]{"1", "2", "2 test", "3", "Afile", "bfile", "file1", "file2", "file3" ,"file10", "file20"};
     assertEquals(expectedSortedArray, list.toArray(new String[list.size()]));
   }
+
+  @Test
+  public void testGroupToIdentity() throws Exception {
+    OrganizationService organizationService = mock(OrganizationService.class);
+    Group group = mock(Group.class);
+    when(group.getGroupName()).thenReturn("users");
+    when(group.getLabel()).thenReturn("Users");
+    when(group.getId()).thenReturn("/platform/users");
+    when(CommonsUtils.getService(OrganizationService.class)).thenReturn(organizationService);
+    GroupHandler groupHandler = mock(GroupHandler.class);
+    when(organizationService.getGroupHandler()).thenReturn(groupHandler);
+    when(groupHandler.findGroupById("/platform/users")).thenReturn(group);
+    org.exoplatform.social.core.identity.model.Identity identity = JCRDocumentsUtil.groupToIdentity(group.getId());
+    assertNotNull(identity);
+    assertEquals("group:users", identity.getId());
+    assertEquals(group.getId(), identity.getRemoteId());
+    assertEquals("group", identity.getProviderId());
+  }
+
 }

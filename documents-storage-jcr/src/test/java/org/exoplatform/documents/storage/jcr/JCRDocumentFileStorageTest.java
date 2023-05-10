@@ -1070,4 +1070,42 @@ public class JCRDocumentFileStorageTest {
     assertEquals(true, accessList1.get("canAccess"));
     assertEquals(true, accessList1.get("canEdit"));
   }
+  
+  @Test
+  public void TestUpdatePermission() throws RepositoryException {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    org.exoplatform.social.core.identity.model.Identity identity = mock(org.exoplatform.social.core.identity.model.Identity.class);
+    org.exoplatform.social.core.identity.model.Identity identity1 = mock(org.exoplatform.social.core.identity.model.Identity.class);
+    when(identity.getProviderId()).thenReturn("group");
+    when(identity.getRemoteId()).thenReturn("/platform/users");
+    when(identity1.getProviderId()).thenReturn("user");
+    when(identity1.getRemoteId()).thenReturn("John");
+    when(aclIdentity.getUserId()).thenReturn("user");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    ExtendedNode node = mock(ExtendedNode.class);
+    when(JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    when(node.canAddMixin(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(true);
+    when(node.canAddMixin(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(true);
+    when(node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    NodePermission nodePermission = mock(NodePermission.class);
+    // permissionsList including group permission
+    List<PermissionEntry> permissionsList = new ArrayList<>();
+    permissionsList.add(new PermissionEntry(identity, "read", null));
+    permissionsList.add(new PermissionEntry(identity1, "edit", null));
+    when(nodePermission.getPermissions()).thenReturn(permissionsList);
+    //When
+    jcrDocumentFileStorage.updatePermissions("123",  nodePermission, aclIdentity);
+    //Then
+    verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("*:/platform/administrators") && Arrays.equals(map.get("*:/platform/administrators"),PermissionType.ALL)));
+    verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("*:/platform/users") && Arrays.equals(map.get("*:/platform/users"),new String[]{"read"})));
+    verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("John") && Arrays.equals(map.get("John"),PermissionType.ALL)));
+  }
+
 }
