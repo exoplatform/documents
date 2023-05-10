@@ -32,6 +32,9 @@ import javax.jcr.version.Version;
 
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
+import org.exoplatform.services.organization.Group;
+import org.exoplatform.services.organization.GroupHandler;
+import org.exoplatform.services.organization.OrganizationService;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -352,4 +355,23 @@ public class JCRDocumentsUtilTest {
     doThrow(new RuntimeException()).when(session).checkPermission("path", PermissionType.SET_PROPERTY);
     assertFalse(JCRDocumentsUtil.hasEditPermission(session, node));
   }
+
+  @Test
+  public void testGroupToIdentity() throws Exception {
+    OrganizationService organizationService = mock(OrganizationService.class);
+    Group group = mock(Group.class);
+    when(group.getGroupName()).thenReturn("users");
+    when(group.getLabel()).thenReturn("Users");
+    when(group.getId()).thenReturn("/platform/users");
+    COMMONS_UTILS_UTIL.when(()-> CommonsUtils.getService(OrganizationService.class)).thenReturn(organizationService);
+    GroupHandler groupHandler = mock(GroupHandler.class);
+    when(organizationService.getGroupHandler()).thenReturn(groupHandler);
+    when(groupHandler.findGroupById("/platform/users")).thenReturn(group);
+    org.exoplatform.social.core.identity.model.Identity identity = JCRDocumentsUtil.groupToIdentity(group.getId());
+    assertNotNull(identity);
+    assertEquals("group:users", identity.getId());
+    assertEquals(group.getId(), identity.getRemoteId());
+    assertEquals("group", identity.getProviderId());
+  }
+
 }

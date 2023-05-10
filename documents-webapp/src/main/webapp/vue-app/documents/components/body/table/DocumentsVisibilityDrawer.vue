@@ -284,7 +284,7 @@ export default {
           'fullName': fullName,
         },
         'name': collaborator.displayName || fullName,
-        'remoteId': collaborator.remoteId,
+        'remoteId': collaborator.providerId === 'group' ? collaborator.spaceId : collaborator.remoteId,
         'providerId': collaborator.providerId,
         'avatar': collaborator.profile.avatarUrl
 
@@ -340,6 +340,9 @@ export default {
             'providerId': user.providerId,
           }
         };
+        if (user.groupId) {
+          collaborator.identity.groupId = user.groupId;
+        }
         collaborators.push(collaborator);      }
       this.file.acl.collaborators=collaborators;
       if (this.file.acl.visibilityChoice==='SPECIFIC_COLLABORATOR'){

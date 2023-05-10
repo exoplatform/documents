@@ -56,6 +56,8 @@ public class EntityBuilder {
 
   public static final String         USER_PUBLIC_ROOT_NODE           = "/Public";
 
+  public static final String         GROUP_PROVIDER_ID               = "group";
+
   private EntityBuilder() {
   }
 
@@ -355,23 +357,7 @@ public class EntityBuilder {
             toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
             permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
           } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
-            try {
-              ExoContainer container = ExoContainerContext.getCurrentContainer();
-              OrganizationService orgService = container.getComponentInstanceOfType(OrganizationService.class);
-              invitedGroupId = permissionEntryEntity.getIdentity().getRemoteId();
-              ListAccess<User> listAccess = orgService.getUserHandler().findUsersByGroupId(invitedGroupId);
-              User[] users = listAccess.load(0, listAccess.getSize());
-              for(User u : users) {
-                if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(u.getUserName()))) {
-                  toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
-                } else {
-                  toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(u.getUserName()).getId()), permissionEntryEntity.getPermission());
-                }
-              }
               permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-            } catch (Exception e) {
-              LOG.warn("Failed to invite users from group " + invitedGroupId, e);
-            }
           } else {
             try {
               if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()))) {
@@ -522,7 +508,8 @@ public class EntityBuilder {
         identityEntity.setName(space.getDisplayName());
         identityEntity.setAvatar(space.getAvatarUrl());
       }
-    }
+    } else if (identity.getProviderId().equals(GROUP_PROVIDER_ID))
+      identityEntity.setName(identity.getProfile().getFullName());
     return identityEntity;
   }
   private static boolean isEditPermission(String permission){
