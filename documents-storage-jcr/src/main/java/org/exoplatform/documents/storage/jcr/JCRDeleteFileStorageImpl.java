@@ -27,6 +27,7 @@ import javax.jcr.lock.LockException;
 import javax.jcr.version.VersionException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.picocontainer.Startable;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -203,8 +204,8 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       node = JCRDocumentsUtil.getNodeByPath(session, folderPath);
     }
     if (node != null) {
-      if(favorite) {
-        Favorite favoriteDocument = new Favorite("file", node.getUUID(), null, userIdentityId);
+      if (favorite) {
+        Favorite favoriteDocument = new Favorite("file", ((NodeImpl) node).getIdentifier(), null, userIdentityId);
         try {
           favoriteService.deleteFavorite(favoriteDocument);
         } catch (ObjectNotFoundException e) {
