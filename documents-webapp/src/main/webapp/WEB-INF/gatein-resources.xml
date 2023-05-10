@@ -57,6 +57,9 @@
         <module>commons-cometd3</module>
         <as>cCometd</as>
       </depends>
+      <depends>
+        <module>DocumentsDraggable</module>
+      </depends>
     </module>
   </portlet>
 
@@ -92,6 +95,21 @@
     </script>
     <depends>
       <module>vue</module>
+    </depends>
+  </module>
+
+  <module>
+    <name>DocumentsDraggable</name>
+    <script>
+      <minify>false</minify>
+      <path>/js/DocumentsDraggable.js</path>
+    </script>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>jquery</module>
+      <as>$</as>
     </depends>
   </module>
 
