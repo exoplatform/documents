@@ -3,6 +3,7 @@
     <upload-overlay />
     <v-data-table
       ref="dataTable"
+      id="folderView"
       class="documents-folder-table border-box-sizing"
       :headers="headers"
       :items="items"
@@ -50,6 +51,10 @@
             v-for="item in items"
             :key="item.id"
             :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+            draggable="true"
+            :data-fileId="item.id"
+            :data-isFolder="item.folder? 'true': 'false'"
+            :data-canEdit="canEditFile(item)? 'true': 'false'"
             @mouseover="showSelectionInput(item)"
             @mouseleave="hideSelectionInput(item)"
             @contextmenu="openContextMenu($event, item)">
@@ -273,7 +278,6 @@ export default {
         this.$root.$emit('documents-sort', sortField, ascending);
       }
     },
-
   },
   created() {
     this.$root.$on('select-all-documents', (value) => this.selectAll = value);
@@ -287,11 +291,15 @@ export default {
     document.getElementById('headerName').parentElement.addEventListener('mouseover', this.showSelectAllInputOnHover);
     document.getElementById('headerName').parentElement.addEventListener('mouseleave', this.hideSelectAllInputOnHover);
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
+    DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
   },
   methods: {
+    canEditFile(file) {
+      return file?.acl?.canEdit;
+    },
     showSelectAllInputOnHover(){
       clearTimeout(this.showSelectInputTimer);
       this.showSelectAllInput = true;
