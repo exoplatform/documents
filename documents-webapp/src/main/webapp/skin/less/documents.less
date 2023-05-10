@@ -344,6 +344,11 @@
               }
             }
           }
+
+          tr.is-intersected[data-isfolder="true"] {
+            border: 2px dashed #c0bebe !important;
+            cursor: move;
+          }
         }
       }
 
@@ -812,5 +817,20 @@
 
   .action-menu-item {
     min-height: 30px !important;
+  }
+}
+
+#documents-drag-tooltip {
+  border: 1px solid @primaryColor;
+
+  .text-tooltip {
+    margin-top: 2px;
+  }
+
+  span {
+    font-family: @fontFamily;
+    color: @textColorDefault;
+    padding-left: 8px ~'; /** orientation=lt */ ';
+    padding-right: 8px ~'; /** orientation=rt */ ';
   }
 }
