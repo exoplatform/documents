@@ -32,6 +32,7 @@ import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
@@ -151,10 +152,10 @@ public class JCRDeleteFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
     when(sessionProvider.getSession(Mockito.any(), Mockito.any())).thenReturn(session1);
 
-    Node node = Mockito.mock(ExtendedNode.class);
+    NodeImpl node = Mockito.mock(NodeImpl.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session1, path)).thenReturn(node);
     NodeType nodeType = Mockito.mock(NodeType.class);
-    when(node.getUUID()).thenReturn("id123");
+    when(node.getIdentifier()).thenReturn("id123");
     when(node.getName()).thenReturn("name123");
     when(node.getPath()).thenReturn(path);
     when(session.getNodeByUUID(eq("id123"))).thenReturn(node);
