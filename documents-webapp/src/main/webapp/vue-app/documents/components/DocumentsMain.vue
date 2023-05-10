@@ -200,7 +200,7 @@ export default {
     settings: {},
     settingsLoaded: false,
     uploadVersionInput: null,
-    newVersionFile: {}
+    newVersionFile: {},
   }),
   computed: {
     progressAlertColor() {
@@ -312,11 +312,33 @@ export default {
     this.$root.$on('breadcrumb-updated', this.resetSelections);
     this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
     this.initSettings();
+    document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
+    document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    handleOpenFolderToDrop(event) {
+      const folderId = event.detail.folder;
+      const index = this.files.findIndex(file => file.id === folderId);
+      this.openFolder(this.files[index]);
+    },
+    handleMoveDroppedDocuments(event) {
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      const index = this.files.findIndex(file => file.id === event.detail.destinationId);
+      const folder = this.files[index];
+      if (!folder.folder) {
+        return;
+      }
+      const filesToMove = event.detail.sourceFiles;
+      if (filesToMove?.length > 1) {
+        this.selectedDocuments = filesToMove;
+        this.bulkMoveDocument(ownerId, folder.path, folder, null);
+      } else {
+        this.moveDocument(ownerId, filesToMove[0], folder.path, folder, null, null);
+      }
+    },
     initSettings(userSettings) {
       if (userSettings) {
         this.settings = userSettings;
@@ -489,6 +511,7 @@ export default {
     },
     handleAlertClose() {
       this.$root.$emit('cancel-action');
+      document.dispatchEvent(new CustomEvent('cancel-action-alert'));
       this.alert = false;
     },
     handleCancelAlertActions() {
@@ -786,6 +809,7 @@ export default {
           window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Public')[0]}/Public${folderPath}?view=folder`);
         }
       }
+      document.dispatchEvent(new CustomEvent('documents-folder-opened'));
       this.resetSelections();
     },
     loadMore() {
@@ -794,7 +818,6 @@ export default {
     resetSelections() {
       this.$root.$emit('reset-selections');
       this.selectedDocuments = [];
-      this.hideMessage();
     },
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
@@ -1038,7 +1061,7 @@ export default {
     moveDocument(ownerId, file, destPath, destFolder, space, conflictAction) {
       this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
         .then( () => {
-          this.$root.$emit('show-alert', {
+          this.displayMessage({
             type: 'success',
             message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
           });
