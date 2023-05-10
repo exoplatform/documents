@@ -1112,6 +1112,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
               permissions.put("redactor:" + groupId, new String[] { PermissionType.READ });
             }
           }
+        } else if (permission.getIdentity().getProviderId().equals("group")) {
+          String groupId = permission.getIdentity().getRemoteId();
+          if (permission.getPermission().equals("edit")) {
+            permissions.put("*:"+groupId, PermissionType.ALL);
+          }
+          if (permission.getPermission().equals("read")) {
+            permissions.put("*:"+groupId, new String[]{PermissionType.READ});
+          }
         } else {
           if (permission.getPermission().equals("edit")) {
             permissions.put(permission.getIdentity().getRemoteId(), PermissionType.ALL);
