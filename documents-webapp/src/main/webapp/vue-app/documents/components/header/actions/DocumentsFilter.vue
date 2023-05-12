@@ -15,7 +15,7 @@
       </option>
     </select>
     <button
-      v-if="canShowMobileFilter"
+      v-if="isMobile"
       :class="btnClass"
       class="px-3 width-max-content"
       @click="openDrawer()">
@@ -35,14 +35,10 @@ export default {
   data: () => ({
     filterDocumentsSelected: 'All',
     filterDocuments: [{name: 'All'},{name: 'Favorites'}],
-    showMobileFilter: false,
     query: '',
     extended: false,
   }),
   created() {
-    this.$root.$on('show-mobile-filter', data => {
-      this.showMobileFilter= data;
-    });
     this.$root.$on('set-documents-filter', data => {
       this.filterDocumentsSelected= data;
     });
@@ -52,9 +48,6 @@ export default {
     });
   },
   computed: {
-    canShowMobileFilter() {
-      return this.isMobile && this.showMobileFilter;
-    },
     filterNumber(){
       let fNum = 0;
       if (this.filterDocumentsSelected.toLowerCase()!=='all') {

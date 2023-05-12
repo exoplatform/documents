@@ -24,12 +24,18 @@ extensionRegistry.registerComponent('DocumentsHeaderLeft', 'documents-header-lef
 });
 
 extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
+  id: 'documents-filter-botton',
+  vueComponent: Vue.options.components['documents-filter-botton'],
+  rank: 20,
+});
+
+extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
   id: 'filter-input',
   vueComponent: Vue.options.components['documents-filter-input'],
   rank: 20,
 });
 
-extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
+extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
   id: 'primary-filter',
   cssClass: 'pt-1',
   vueComponent: Vue.options.components['documents-filter'],
