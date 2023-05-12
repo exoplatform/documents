@@ -1,31 +1,20 @@
-<!--
-* Copyright (C) 2023 eXo Platform SAS
-*
-*  This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Affero General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Affero General Public License
-* along with this program.  If not, see <gnu.org/licenses>.
--->
-
-
 <template>
-  <div v-if="showFilter">
+  <div v-if="showMobileFilter" class="d-flex flex-row">
+         <v-icon
+          size="20"
+          class="mx-auto ma-lg-0"
+          @click="hideFilter">
+          fas fa-arrow-left
+        </v-icon>
+        <v-spacer />
     <extension-registry-components
-      name="DocumentsFilters"
-      type="documents-filters"
-      :params="params"
-      class="d-flex flex-no-wrap align-center documents-header-filter-container fill-available"
-      parent-element="div"
-      element="div"
-      element-class="mx-auto ma-lg-0 documents-header-filter-element" />
+    name="DocumentsFilters"
+    type="documents-filters"
+    :params="params"
+    class="d-flex flex-no-wrap documents-header-filter-container"
+    parent-element="div"
+    element="div"
+    element-class="mx-auto ma-lg-0  documents-header-filter-container" />
   </div>
 </template>
 <script>
@@ -40,37 +29,17 @@ export default {
       type: String,
       default: 'all',
     },
-    fileType: {
-      type: Array,
-      default: () => []
-    },
-    afterDate: {
-      type: Number,
-      default: null,
-    },
-    beforDate: {
-      type: Number,
-      default: null,
-    },
-    minSize: {
-      type: Number,
-      default: null,
-    },
-    maxSize: {
-      type: Number,
-      default: null,
-    },
     isMobile: {
       type: Boolean,
       default: false
     },
   },
   data: () => ({
-    showFilter: false,
+    showMobileFilter: false,
   }),
   created() {
     this.$root.$on('show-mobile-filter', data => {
-      this.showFilter= data;
+      this.showMobileFilter= data;
     });
   },
   computed: {
@@ -78,15 +47,15 @@ export default {
       return {
         query: this.query,
         primaryFilter: this.primaryFilter,
-        fileType: this.fileType,
-        afterDate: this.afterDate,
-        beforDate: this.beforDate,
-        minSize: this.minSize,
-        maxSize: this.maxSize,
         isMobile: this.isMobile,
       };
     }
   },
- 
+  methods: {
+    hideFilter(){
+      this.showMobileFilter = !this.showMobileFilter;
+      this.$root.$emit('show-mobile-filter', this.showMobileFilter);
+    },
+  },
 };
 </script>
