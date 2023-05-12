@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="d-flex flex-row">
+    <div v-if="!showFilter" class="d-flex flex-row">
       <documents-header-left
         v-if="canAdd"
         :selected-view="selectedView" 
@@ -8,11 +8,16 @@
         :selected-documents="selectedDocuments" />
       <v-spacer />
       <documents-header-center
-        v-if="!canShowMobileFilter"
         :selected-view="selectedView"
         :is-mobile="isMobile" />
       <v-spacer />
       <documents-header-right
+        :query="query"
+        :primary-filter="primaryFilter"
+        :is-mobile="isMobile" />
+    </div>
+    <div>
+      <documents-filter-conatiner
         :query="query"
         :primary-filter="primaryFilter"
         :is-mobile="isMobile" />
@@ -58,11 +63,11 @@ export default {
     }
   },
   data: () => ({
-    showMobileFilter: false,
+    showFilter: false,
   }),
   computed: {
     canShowMobileFilter() {
-      return this.isMobile && this.showMobileFilter;
+      return this.isMobile && this.showFilter;
     },
     showBreadcrumb(){
       return !this.query;
@@ -70,7 +75,7 @@ export default {
   },
   created() {
     this.$root.$on('show-mobile-filter', data => {
-      this.showMobileFilter= data;
+      this.showFilter= data;
     });
   },
 };
