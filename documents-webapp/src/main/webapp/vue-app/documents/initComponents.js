@@ -24,6 +24,7 @@ import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
 import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
 import DocumentsHeaderCenter from './components/header/DocumentsHeaderCenter.vue';
+import DocumentsFilterContainer from './components/header/DocumentsFilterContainer.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
 import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
@@ -43,6 +44,7 @@ import DocumentsFavoriteAction from './components/body/table/action/DocumentFavo
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
 import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
+import FilterBotton from './components/header/actions/FilterBotton.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
@@ -86,9 +88,11 @@ const components = {
   'documents-header-left': DocumentsHeaderLeft,
   'documents-header-right': DocumentsHeaderRight,
   'documents-header-center': DocumentsHeaderCenter,
+  'documents-filter-conatiner': DocumentsFilterContainer,
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-filter-input': DocumentsFilterInput,
   'documents-filter': DocumentsFilter,
+  'documents-filter-botton': FilterBotton,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
   'documents-no-body-folder': DocumentsNoBodyFolder,

@@ -14,56 +14,55 @@
   along with this program; if not, write to the Free Software Foundation,
   Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 -->
-
 <template>
-  <div
-    class="pt-1 mx-2 clickable"
-    @click="changeFilterOption()">
+  <div>
     <v-icon
-      size="21"
-      v-if="activated"
-      class="pe-1 pb-1 iconStyle">
-      mdi-check-bold
+      size="24"
+      class="text-sub-title pa-1 my-auto mt-2"
+      v-show="!showFilter"
+      @click="mobileFilter()">
+      {{ filterIcon }}
     </v-icon>
-    <span :class="activated?'ps-1':'ps-8'">{{ $t('documents.filter.favorites') }}</span>
   </div>
 </template>
 <script>
 export default {
   props: {
-    quickFilter: {
-      type: Boolean,
-      default: false,
+    query: {
+      type: String,
+      default: null,
     },
-    quickFilterValue: {
+    primaryFilter: {
       type: String,
       default: 'all',
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
   },
+  data: () => ({
+    showFilter: false,
+  }),
   computed: {
-    activated() {
-      return this.quickFilterValue === 'favorites';
-    },
-    filterOption() {
-      return this.quickFilterValue;
-    },
-  },
-  created() {
-    this.$root.$on('set-mobile-filter', this.setFilterOption);
-  },
-  methods: {
-    setFilterOption(option){
-      this.filterOption = option;
-    },
-    changeFilterOption(){
-      if (!this.activated){
-        this.filterOption = 'favorites';
-        this.$root.$emit('documents-filter', 'favorites');
-        this.$root.$emit('set-documents-filter', 'favorites');
-      }
-      this.$root.$emit('close-mobile-filter-menu',false);
-    },
+    filterIcon() {
+      return (this.query!=null && this.query.length > 0)  || this.primaryFilter !== 'all'  ? 'mdi-filter' : 'mdi-filter-outline';
+    }
   },
 
+  created() {
+    this.$root.$on('resetSearch', this.cancelSearch);
+    this.$root.$on('mobile-filter', this.mobileFilter);
+  },
+  methods: {
+    mobileFilter(){
+      this.showFilter = !this.showFilter;
+      this.$root.$emit('show-mobile-filter', this.showFilter);
+    },
+    cancelSearch(){
+      this.query = null;
+      this.$refs.inputQuery.blur();
+    },
+  },
 };
 </script>
