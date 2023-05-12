@@ -15,7 +15,7 @@
       </option>
     </select>
     <button
-      v-if="canShowMobileFilter"
+      v-if="isMobile"
       :class="btnClass"
       class="px-3 width-max-content"
       @click="openDrawer()">
@@ -48,9 +48,6 @@ export default {
     });
   },
   computed: {
-    canShowMobileFilter() {
-      return this.isMobile;
-    },
     filterNumber(){
       let fNum = 0;
       if (this.filterDocumentsSelected.toLowerCase()!=='all') {

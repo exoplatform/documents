@@ -5,7 +5,6 @@
       ref="inputQuery"
       :placeholder="$t('documents.label.filterDocuments')"
       :append-icon="appendIcon"
-      :prepend-inner-icon="prependIcon"
       class="inputDocumentsFilter pa-1 my-auto width-full"
       @click:append="cancelSearch" />
   </div>
@@ -34,9 +33,6 @@ export default {
   computed: {
     appendIcon() {
       return this.query && 'mdi-close primary--text' || null;
-    },
-    prependIcon() {
-      return !this.isMobile && 'fa-filter' || null;
     },
     filterIcon() {
       return (this.query!=null && this.query.length > 0)  || this.primaryFilter !== 'all'  ? 'mdi-filter' : 'mdi-filter-outline';
