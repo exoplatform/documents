@@ -2,28 +2,40 @@
     'use strict';
 
     let table = null;
+    let breadCrumbList = null;
+    let breadcrumbListId = null;
+    let parentDragElement = null;
+    let currentOpenedFolder = null;
     let openFolderTimer = null;
     let currentRow = null,
-        realDragElement = null,
         dragElements = [],
         dragTooltipElement = null,
         mouseDrag = false;
 
     const DocumentsDraggable = function () {/**/
     };
-    DocumentsDraggable.prototype.invoke = function (tableId) {
+    DocumentsDraggable.prototype.invoke = function (tableId, _breadcrumbListId) {
         table = document.getElementById(tableId);
+        breadcrumbListId = _breadcrumbListId
         bindMouse();
     };
 
     function bindMouse() {
-        table.addEventListener('dragstart', handleDragStart);
+        document.addEventListener('dragstart', handleDragStart);
         document.addEventListener('open-folder-on-hover', handleOpenFolder);
         document.addEventListener('cancel-action-alert', handleCancelAction);
         document.addEventListener("contextmenu", clearElements);
         document.addEventListener('mousemove', moveRowPosition);
         document.addEventListener('mouseup', dropElements);
         document.addEventListener('dragend', dropElements);
+        document.addEventListener('documents-folder-opened', handleFolderOpened)
+    }
+
+    function handleFolderOpened(event) {
+        currentOpenedFolder = event.detail.folder;
+        setTimeout(() => {
+            checkEnableDropOnBreadCrumb();
+        }, 200)
     }
 
     function handleDragStart(event) {
@@ -32,8 +44,8 @@
         }
         const target = getTargetRow(event.target);
         const selections = getSelectedRows();
-        realDragElement = target.cloneNode(true);
         currentRow = target;
+        parentDragElement = getParentDragElement();
         if (selections.length) {
             addDraggableRows(target, selections);
         } else {
@@ -41,6 +53,7 @@
             target.classList.add('v-data-table__selected', 'drag-source');
         }
         mouseDrag = true;
+        checkEnableDropOnBreadCrumb();
     }
 
     function handleOpenFolder(event) {
@@ -49,7 +62,11 @@
         }
         clearTimeout(openFolderTimer);
         openFolderTimer = setTimeout(() => {
-            document.dispatchEvent(new CustomEvent('document-open-folder-to-drop', event))
+            if (event.detail.breadcrumb) {
+                document.dispatchEvent(new CustomEvent('document-open-root-folder-to-drop'))
+            } else {
+                document.dispatchEvent(new CustomEvent('document-open-folder-to-drop', event))
+            }
         }, 2000);
     }
 
@@ -58,16 +75,45 @@
             element.remove();
         });
         dragElements = [];
-        dragTooltipElement.remove();
-        realDragElement = null;
+        dragTooltipElement?.remove();
         mouseDrag = false;
+        parentDragElement = null;
         clearTimeout(openFolderTimer);
         table.querySelector('tr.is-dragover')?.classList.remove('is-dragover', 'grey', 'lighten-3');
         table.querySelector('tr.drag-source')?.classList.remove('v-data-table__selected', 'drag-source');
+        getBreadCrumbListElement()?.classList.remove('is-intersected', 'is-drop-active');
+        getDocumentsBoyElement().classList.remove('is-drop-active');
     }
 
     function handleCancelAction() {
         table.querySelector('tr.is-intersected')?.classList.remove('is-intersected');
+    }
+
+    function getDocumentsBoyElement() {
+        return document.querySelectorAll('div.documents-body')[0];
+    }
+
+    function checkDropOnDocumentsBody(onDrop) {
+        const bodyIntersected = isIntersection(dragTooltipElement, getDocumentsBoyElement()) && !isIntersection(dragTooltipElement, table);
+        const allowed = canDropOnListFiles();
+        if (bodyIntersected) {
+            if (allowed) {
+                dragTooltipElement.style.cursor = 'move';
+                getDocumentsBoyElement().classList.add('is-drop-active');
+                if (onDrop) {
+                    document.dispatchEvent(new CustomEvent('move-dropped-documents', {
+                        detail: {
+                            sourceFiles: getSourceFiles(),
+                            currentOpenedFolder: currentOpenedFolder,
+                        }
+                    }));
+                }
+            } else {
+                dragTooltipElement.style.cursor = 'not-allowed';
+            }
+        } else {
+            getDocumentsBoyElement().classList.remove('is-drop-active');
+        }
     }
 
     function dropElements() {
@@ -75,6 +121,8 @@
             return;
         }
         checkIntersection(true);
+        checkDropAndMoveOnBreadcrumb(true)
+        checkDropOnDocumentsBody(true);
         clearElements();
     }
 
@@ -84,9 +132,11 @@
         }
         const coords = getMouseCoords(event);
         dragTooltipElement.style.top = `${(coords.y - 15)}px`;
-        dragTooltipElement.style.left = `${(coords.x + - 5)}px`;
+        dragTooltipElement.style.left = `${(coords.x + -5)}px`;
         clearTimeout(openFolderTimer);
         checkIntersection();
+        checkDropAndMoveOnBreadcrumb();
+        checkDropOnDocumentsBody();
         scrollOnDrag();
     }
 
@@ -127,45 +177,73 @@
         return style ? style : null;
     }
 
-    function isIntersecting(min0, max0, min1, max1) {
-        return Math.max(min0, max0) >= Math.min(min1, max1) &&
-            Math.min(min0, max0) <= Math.max(min1, max1);
+    function checkDropAndMoveOnBreadcrumb(onDrop) {
+        if (isIntersection(dragTooltipElement, getBreadCrumbListElement())) {
+            getBreadCrumbListElement().classList.replace('is-intersected', 'is-drop-active');
+            document.dispatchEvent(new CustomEvent('open-folder-on-hover', {
+                detail: {breadcrumb: true}
+            }));
+            const allowed = getBreadCrumbListElement().dataset.canedit === 'true';
+            dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
+            if (onDrop && allowed) {
+                document.dispatchEvent(new CustomEvent('move-dropped-documents-on-breadcrumb', {
+                    detail: {
+                        sourceFiles: getSourceFiles(),
+                        destinationId: getRootFolder().dataset.fileid
+                    }
+                }));
+            }
+        } else {
+            getBreadCrumbListElement().classList.replace('is-drop-active', 'is-intersected');
+        }
     }
 
-    function checkIntersection(onDrop) {
-        let dPos = realDragElement.getBoundingClientRect();
-        const index = dragElements.findIndex(element => element.dataset.fileid === realDragElement.dataset.fileid);
-        if (index !== -1) {
-            dPos = dragTooltipElement.getBoundingClientRect();
-        }
-        const currStartY = dPos.y;
-        const currEndY = currStartY + dPos.height;
-
-        const sourceIds = [];
+    function getSourceFiles() {
         const sourceFiles = [];
         dragElements.forEach(element => {
-            sourceIds.push(element.dataset.fileid);
             sourceFiles.push({
                 id: element.dataset.fileid,
                 folder: element.dataset.isfolder === 'true'
             });
         });
+        return sourceFiles;
+    }
+
+    function isIntersection(element1, element2) {
+        const rect1 = element1.getBoundingClientRect();
+        const rect2 = element2.getBoundingClientRect();
+        return !(
+            rect1.top > rect2.bottom ||
+            rect1.right < rect2.left ||
+            rect1.bottom < rect2.top ||
+            rect1.left > rect2.right
+        );
+    }
+
+    function checkIntersection(onDrop) {
+        const dPos = dragTooltipElement.getBoundingClientRect();
+        const currStartY = dPos.y;
+
+        const sourceIds = [];
+        dragElements.forEach(element => {
+            sourceIds.push(element.dataset.fileid);
+        });
 
         const rows = getRows();
         for (const rowElem of rows) {
             let rowSize = rowElem.getBoundingClientRect(),
-                rowStartY = rowSize.y, rowEndY = rowStartY + rowSize.height;
+                rowStartY = rowSize.y;
             rowElem.classList.remove('is-intersected');
             rowElem.classList.remove('is-dragover', 'grey', 'lighten-3');
-            if (isIntersecting(currStartY, currEndY, rowStartY, rowEndY)) {
+            if (isIntersection(dragTooltipElement, rowElem)) {
                 const destinationId = rowElem.dataset.fileid;
                 const isFolder = rowElem.dataset.isfolder === 'true';
                 const canEdit = rowElem.dataset.canedit === 'true';
-                const allowed = !sourceIds.includes(destinationId) && isFolder && canEdit;
+                const allowed = !sourceIds.includes(destinationId) && (isFolder && canEdit) || canDropOnListFiles();
                 if (Math.abs(currStartY - rowStartY) < rowSize.height / 2) {
                     rowElem.classList.add('is-dragover', 'grey', 'lighten-3');
                     dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
-                    checkDropElements(allowed, onDrop, rowElem, sourceFiles)
+                    checkDropElements(allowed, onDrop, rowElem, getSourceFiles())
                 }
             }
         }
@@ -183,6 +261,7 @@
                 document.dispatchEvent(new CustomEvent('move-dropped-documents', {
                     detail: {
                         sourceFiles: sourceFiles,
+                        currentOpenedFolder: currentOpenedFolder,
                         destinationId: rowElem.dataset.fileid
                     }
                 }));
@@ -199,6 +278,39 @@
 
     function getRows() {
         return table.querySelectorAll('tbody tr');
+    }
+
+    function getParentDragElement() {
+        return getBreadCrumbListElement().querySelector('div.documents-tree-item:last-child').cloneNode(true);
+    }
+
+    function getRootFolder() {
+        return getBreadCrumbListElement().querySelector('div.documents-tree-item:first-child').cloneNode(true);
+    }
+
+    function isRootFolder() {
+        return getBreadCrumbListElement().querySelectorAll('div.documents-tree-item')?.length === 1;
+    }
+
+    function canDropOnListFiles() {
+        return currentOpenedFolder && currentOpenedFolder?.id !== parentDragElement.dataset.fileid
+            && (currentOpenedFolder?.acl?.canEdit || currentOpenedFolder?.accessList?.canEdit);
+    }
+
+    function getBreadCrumbListElement() {
+        if (!breadCrumbList) {
+            breadCrumbList = document.getElementById(breadcrumbListId);
+        }
+        return breadCrumbList;
+    }
+
+    function checkEnableDropOnBreadCrumb() {
+        const isRootPath = isRootFolder();
+        if (!isRootPath && mouseDrag) {
+            getBreadCrumbListElement().classList.add('is-intersected');
+        } else {
+            getBreadCrumbListElement().classList.remove('is-intersected', 'is-drop-active');
+        }
     }
 
     function addDraggableToolTip(target, selectionsLength) {

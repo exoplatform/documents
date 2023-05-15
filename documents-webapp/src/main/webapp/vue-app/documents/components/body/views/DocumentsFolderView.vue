@@ -291,7 +291,7 @@ export default {
     document.getElementById('headerName').parentElement.addEventListener('mouseover', this.showSelectAllInputOnHover);
     document.getElementById('headerName').parentElement.addEventListener('mouseleave', this.hideSelectAllInputOnHover);
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
-    DocumentsDraggable.invoke('folderView');
+    DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);

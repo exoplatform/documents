@@ -1,5 +1,6 @@
 <template>
-  <div class="documents-body">
+  <div
+    class="documents-body">
     <extension-registry-component
       v-if="viewExtension"
       :component="viewExtension"
