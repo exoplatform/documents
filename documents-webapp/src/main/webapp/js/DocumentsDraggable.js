@@ -186,6 +186,9 @@
             const allowed = getBreadCrumbListElement().dataset.canedit === 'true';
             dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
             if (onDrop && allowed) {
+                if (getRootFolder().dataset.fileid === parentDragElement.dataset.fileid) {
+                    return;
+                }
                 document.dispatchEvent(new CustomEvent('move-dropped-documents-on-breadcrumb', {
                     detail: {
                         sourceFiles: getSourceFiles(),
