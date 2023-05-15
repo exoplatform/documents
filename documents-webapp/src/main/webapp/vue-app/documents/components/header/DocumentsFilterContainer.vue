@@ -1,5 +1,5 @@
 <template>
-  <div v-if="showMobileFilter" class="d-flex flex-row">
+  <div v-if="showFilter" class="d-flex flex-row">
          <v-icon
           size="20"
           class="mx-auto ma-lg-0"
@@ -36,11 +36,11 @@ export default {
     },
   },
   data: () => ({
-    showMobileFilter: false,
+    showFilter: false,
   }),
   created() {
     this.$root.$on('show-mobile-filter', data => {
-      this.showMobileFilter= data;
+      this.showFilter= data;
     });
   },
   computed: {
@@ -54,8 +54,8 @@ export default {
   },
   methods: {
     hideFilter(){
-      this.showMobileFilter = !this.showMobileFilter;
-      this.$root.$emit('show-mobile-filter', this.showMobileFilter);
+      this.showFilter = !this.showFilter;
+      this.$root.$emit('show-mobile-filter', this.showFilter);
     },
   },
   
