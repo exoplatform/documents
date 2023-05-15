@@ -3,9 +3,10 @@
     <v-text-field
       v-model="query"
       ref="inputQuery"
+      autofocus
       :placeholder="$t('documents.label.filterDocuments')"
       :append-icon="appendIcon"
-      class="inputDocumentsFilter pa-1 my-auto width-full"
+      class="inputDocumentsFilter pa-3 my-auto width-full"
       @click:append="cancelSearch" />
   </div>
 </template>

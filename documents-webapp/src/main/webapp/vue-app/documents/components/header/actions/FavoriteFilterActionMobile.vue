@@ -57,9 +57,9 @@ export default {
     },
     changeFilterOption(){
       if (!this.activated){
-        this.filterOption = 'Favorites';
+        this.filterOption = 'favorites';
         this.$root.$emit('documents-filter', 'favorites');
-        this.$root.$emit('set-documents-filter', 'Favorites');
+        this.$root.$emit('set-documents-filter', 'favorites');
       }
       this.$root.$emit('close-mobile-filter-menu',false);
     },
