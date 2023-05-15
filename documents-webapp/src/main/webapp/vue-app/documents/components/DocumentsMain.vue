@@ -322,14 +322,17 @@ export default {
     handleOpenFolderToDrop(event) {
       const folderId = event.detail.folder;
       const index = this.files.findIndex(file => file.id === folderId);
-      this.openFolder(this.files[index]);
+      const file = this.files[index];
+      if (file.folder) {
+        this.openFolder(file);
+      }
     },
     handleMoveDroppedDocuments(event) {
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       const index = this.files.findIndex(file => file.id === event.detail.destinationId);
-      const folder = this.files[index];
-      if (!folder.folder) {
-        return;
+      let folder = this.files[index];
+      if (!folder?.folder) {
+        folder = event.detail.currentOpenedFolder;
       }
       const filesToMove = event.detail.sourceFiles;
       if (filesToMove?.length > 1) {
@@ -809,7 +812,7 @@ export default {
           window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Public')[0]}/Public${folderPath}?view=folder`);
         }
       }
-      document.dispatchEvent(new CustomEvent('documents-folder-opened'));
+      document.dispatchEvent(new CustomEvent('documents-folder-opened', {detail: {folder: parentFolder}}));
       this.resetSelections();
     },
     loadMore() {
@@ -855,6 +858,7 @@ export default {
       } else {
         window.history.pushState('Documents', 'Personal Documents', `${window.location.pathname}?view=${this.selectedView}`);
       }
+      document.dispatchEvent(new CustomEvent('documents-folder-opened', {detail: {folder: null}}));
     },
     refreshFiles(options) {
       if (!this.selectedViewExtension) {
