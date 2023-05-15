@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div v-show="isMobile && !showMobileFilter || !isMobile">
+    <div v-show="isMobile && !showFilter || !isMobile">
       <v-menu
         v-if="showSelectionsMenu && documentMultiSelectionActive"
         v-model="selectionsMenu"
@@ -110,11 +110,11 @@
         </template>
         {{ actionLoadingMessage }}
       </v-tooltip>
-      <div v-show="isMobile && showMobileFilter || !isMobile">
+      <div v-show="isMobile && showFilter || !isMobile">
         <v-icon
           size="20"
           class="inputDocumentsFilter text-sub-title pa-1 my-auto "
-          v-show="isMobile && showMobileFilter"
+          v-show="isMobile && showFilter"
           @click="$root.$emit('mobile-filter')">
           fas fa-arrow-left
         </v-icon>
@@ -142,7 +142,7 @@ export default {
     }
   },
   data: () => ({
-    showMobileFilter: false,
+    showFilter: false,
     addMenu: false,
     waitTimeUntilCloseMenu: 200,
     currentFolder: null,
@@ -173,7 +173,7 @@ export default {
       }
     });
     this.$root.$on('show-mobile-filter', data => {
-      this.showMobileFilter= data;
+      this.showFilter= data;
     });
     document.addEventListener('entity-attachments-updated', this.refreshFilesList);
     this.$root.$on('set-current-folder', this.setCurrentFolder);

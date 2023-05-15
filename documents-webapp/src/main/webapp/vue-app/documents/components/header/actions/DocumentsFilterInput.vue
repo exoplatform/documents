@@ -28,7 +28,7 @@ export default {
   },
   data: () => ({
     startSearchAfterInMilliseconds: 300,
-    showMobileFilter: false,
+    showFilter: false,
     timeout: null,
   }),
   computed: {
@@ -69,8 +69,8 @@ export default {
       this.$root.$emit('document-search', this.query);     
     },
     mobileFilter(){
-      this.showMobileFilter = !this.showMobileFilter;
-      this.$root.$emit('show-mobile-filter', this.showMobileFilter);
+      this.showFilter = !this.showFilter;
+      this.$root.$emit('show-mobile-filter', this.showFilter);
     },
     cancelSearch(){
       this.query = null;
