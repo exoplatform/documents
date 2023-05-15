@@ -19,7 +19,7 @@
     <v-icon
       size="24"
       class="text-sub-title pa-1 my-auto mt-2"
-      v-show="!showMobileFilter"
+      v-show="!showFilter"
       @click="mobileFilter()">
       {{ filterIcon }}
     </v-icon>
@@ -42,7 +42,7 @@ export default {
     },
   },
   data: () => ({
-    showMobileFilter: false,
+    showFilter: false,
   }),
   computed: {
     filterIcon() {
@@ -56,8 +56,8 @@ export default {
   },
   methods: {
     mobileFilter(){
-      this.showMobileFilter = !this.showMobileFilter;
-      this.$root.$emit('show-mobile-filter', this.showMobileFilter);
+      this.showFilter = !this.showFilter;
+      this.$root.$emit('show-mobile-filter', this.showFilter);
     },
     cancelSearch(){
       this.query = null;
