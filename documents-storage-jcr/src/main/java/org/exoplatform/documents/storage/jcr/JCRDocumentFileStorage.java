@@ -595,7 +595,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       //no need to this object later make it eligible to the garbage collactor
       nodeAccessList = null;
-      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
+      String name = Text.escapeIllegalJcrChars(cleanFolderName(title.toLowerCase()));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
       }
@@ -645,7 +645,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
-      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
+      String name = Text.escapeIllegalJcrChars(cleanFolderName(title.toLowerCase()));
       int i =0;
       String newName = name;
       String newTitle = title;
@@ -683,7 +683,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, documentID);
       }
-      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
+      String name = Text.escapeIllegalJcrChars(node.isNodeType(NodeTypeConstants.NT_FOLDER) ? cleanFolderName(title.toLowerCase()) : cleanName(title.toLowerCase()));
       //clean node name
       name = URLDecoder.decode(name, "UTF-8");
       if (name.indexOf('.') == -1) {

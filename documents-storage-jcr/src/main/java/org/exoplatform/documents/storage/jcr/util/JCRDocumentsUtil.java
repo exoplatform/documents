@@ -641,7 +641,7 @@ public class JCRDocumentsUtil {
       oldName = oldName.substring(0,oldName.lastIndexOf(".")) ;
     }
     oldName = oldName.trim();
-    String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|";
+    String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|+";
     StringBuilder ret = new StringBuilder();
     for (int i = 0; i < oldName.length(); i++) {
       char currentChar = oldName.charAt(i);
@@ -652,6 +652,26 @@ public class JCRDocumentsUtil {
       }
     }
     ret.append(extension);
+    return ret.toString();
+  }
+
+  /*
+  * We cannot use the cleanName method for folders because we can create a folder with name contains a '.' character .
+  * Using cleanName method we use the '.' character to extract the file extension .
+  */
+  public static String cleanFolderName(String oldName) {
+    if (org.apache.commons.lang.StringUtils.isEmpty(oldName)) return oldName;
+    oldName = oldName.trim();
+    String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|+";
+    StringBuilder ret = new StringBuilder();
+    for (int i = 0; i < oldName.length(); i++) {
+      char currentChar = oldName.charAt(i);
+      if (specialChar.indexOf(currentChar) > -1) {
+        ret.append('_');
+      } else {
+        ret.append(currentChar);
+      }
+    }
     return ret.toString();
   }
 
