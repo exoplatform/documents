@@ -31,7 +31,7 @@
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
-                value="documentTypes" />
+                value="documents" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
@@ -48,7 +48,7 @@
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
-                value="sheetTypes" />
+                value="sheets" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
@@ -65,7 +65,7 @@
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
-                value="presentationTypes" />
+                value="presentations" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
@@ -82,7 +82,7 @@
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
-                value="pdfTypes" />
+                value="pdfs" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
@@ -99,7 +99,7 @@
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
-                value="imageTypes" />
+                value="images" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
@@ -116,7 +116,7 @@
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
-                value="videoTypes" />
+                value="videos" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">

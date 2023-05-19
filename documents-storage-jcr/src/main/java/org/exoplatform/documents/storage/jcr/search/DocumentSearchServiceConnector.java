@@ -22,6 +22,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import liquibase.repackaged.org.apache.commons.text.CaseUtils;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.json.simple.JSONArray;
@@ -65,23 +66,23 @@ public class DocumentSearchServiceConnector {
           + "    \"query\": \"*@term@*\""
           + "  }" + "},";
 
-  private static final String          imageTypes                   =
+  private static final String          IMAGES                   =
                                                   "\"image/bmp\",\"image/jpeg\",\"image/webp\",\"image/png\",\"image/gif\",\"image/avif\",\"image/tiff\"";
 
-  private static final String          sheetTypes                   =
+  private static final String          SHEETS                   =
                                                   "\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"application/vnd.oasis.opendocument.spreadsheet\",\"officedocument.spreadsheetml.sheet\",\"application/vnd.ms-excel\",\"text/csv\"";
 
-  private static final String          presentationTypes            =
+  private static final String          PRESENTATIONS            =
                                                          "\"application/vnd.ms-powerpoint\",\"application/vnd.openxmlformats-officedocument.presentationml.presentation\",\"application/vnd.oasis.opendocument.presentation\"";
 
-  private static final String          pdfTypes                     = "\"application/pdf\"";
+  private static final String          PDFS                     = "\"application/pdf\"";
 
-  private static final String          archiveTypes                 = "\"application/zip\",\"application/vnd.rar\"";
+  private static final String          ARCHIVES                 = "\"application/zip\",\"application/vnd.rar\"";
 
-  private static final String          videoTypes                   =
+  private static final String          VIDEOS                   =
                                                   "\"video/x-msvideo\",\"video/mp4\",\"video/mpeg\",\"video/ogg\",\"video/webm\",\"video/3gpp\"";
 
-  private static final String          documentTypes                =
+  private static final String          DOCUMENTS                =
                                                      "\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"application/msword\",\"application/rtf\",\"application/vnd.oasis.opendocument.text\"";
 
   private final ConfigurationManager   configurationManager;
@@ -191,12 +192,12 @@ public class DocumentSearchServiceConnector {
       List<String> types = new ArrayList<>();
       for (String type : filter.getFileTypes().split(",")) {
         try {
-          types.add((String) this.getClass().getDeclaredField(type).get(0));
+          types.add((String) this.getClass().getDeclaredField(type.toUpperCase()).get(0));
         } catch (Exception e) {
           LOG.warn("Cannot get list of mimeTypes related to type {}", type, e);
         }
       }
-      String typesSB = "{\n" +
+      return "{\n" +
               "   \"bool\":{\n" +
               "      \"should\":[\n" +
               "          {\n" +
@@ -209,7 +210,6 @@ public class DocumentSearchServiceConnector {
               "      ]\n" +
               "   }\n" +
               "},\n";
-      return typesSB;
     }
     return "";
   }
@@ -223,7 +223,7 @@ public class DocumentSearchServiceConnector {
       if (filter.getMaxSize() != null) {
         sizes.add("\"lte\": " + filter.getMaxSize().longValue() * 1024 * 1024);
       }
-      String sizesSB = "{\n" +
+      return "{\n" +
               "   \"bool\":{\n" +
               "      \"should\":[\n" +
               "         {\n" +
@@ -236,7 +236,6 @@ public class DocumentSearchServiceConnector {
               "    ]\n" +
               "  }\n" +
               "},\n";
-      return sizesSB;
     }
     return "";
   }
@@ -250,7 +249,7 @@ public class DocumentSearchServiceConnector {
       if (filter.getBeforDate() != null) {
         dates.add("\"lte\": " + filter.getBeforDate());
       }
-      String datesSB = "{\n" +
+      return "{\n" +
               "   \"bool\":{\n" +
               "      \"should\":[\n" +
               "         {\n" +
@@ -263,7 +262,6 @@ public class DocumentSearchServiceConnector {
               "    ]\n" +
               "  }\n" +
               "},\n";
-      return datesSB;
     }
     return "";
   }

@@ -16,12 +16,11 @@
  */
 package org.exoplatform.documents.model;
 
-import io.swagger.v3.oas.annotations.Parameter;
 import org.exoplatform.documents.constant.DocumentSortField;
 
-import lombok.*;
-
-import javax.ws.rs.QueryParam;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
@@ -30,7 +29,7 @@ public abstract class DocumentNodeFilter {
 
   private String            query;
 
-  private boolean            extendedSearch;
+  private boolean           extendedSearch;
 
   private DocumentSortField sortField;
 
@@ -38,18 +37,18 @@ public abstract class DocumentNodeFilter {
 
   private Boolean           favorites;
 
-  private String           userId;
+  private String            userId;
 
-  private boolean          includeHiddenFiles;
+  private boolean           includeHiddenFiles;
 
-  private String fileTypes;
+  private String            fileTypes;
 
-  private Long afterDate;
+  private Long              afterDate;
 
-  private Long beforDate;
+  private Long              beforDate;
 
-  private Long minSize;
+  private Long              minSize;
 
-  private Long maxSize;
+  private Long              maxSize;
 
 }
