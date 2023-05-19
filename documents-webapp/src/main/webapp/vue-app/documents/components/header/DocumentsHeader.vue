@@ -14,12 +14,22 @@
       <documents-header-right
         :query="query"
         :primary-filter="primaryFilter"
+        :file-type="fileType"
+        :after-date="afterDate"
+        :befor-date="beforDate"
+        :min-size="minSize"
+        :max-size="maxSize"
         :is-mobile="isMobile" />
     </div>
     <div>
       <documents-filter-conatiner
         :query="query"
         :primary-filter="primaryFilter"
+        :file-type="fileType"
+        :after-date="afterDate"
+        :befor-date="beforDate"
+        :min-size="minSize"
+        :max-size="maxSize"
         :is-mobile="isMobile" />
     </div>
     <documents-breadcrumb
@@ -52,6 +62,26 @@ export default {
     primaryFilter: {
       type: String,
       default: 'all',
+    },
+    fileType: {
+      type: Array,
+      default: () => []
+    },
+    afterDate: {
+      type: Number,
+      default: null,
+    },
+    beforDate: {
+      type: Number,
+      default: null,
+    },
+    minSize: {
+      type: Number,
+      default: null,
+    },
+    maxSize: {
+      type: Number,
+      default: null,
     },
     isMobile: {
       type: Boolean,

@@ -119,7 +119,11 @@
           :toggle-function="toggle"
           :query="querySearch"
           :is-mobile="isMobile"
-          :primary-filter="primaryFilterFavorite" />
+          :primary-filter="primaryFilterFavorite"
+          :file-type="fileType"
+          :after-date="afterDate"
+          :befor-date="beforDate"
+          :min-size="minSize" />
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">
@@ -187,6 +191,26 @@ export default {
       type: String,
       default: null,
     },
+    fileType: {
+      type: Array,
+      default: () => []
+    },
+    afterDate: {
+      type: Number,
+      default: null,
+    },
+    beforDate: {
+      type: Number,
+      default: null,
+    },
+    minSize: {
+      type: Number,
+      default: null,
+    },
+    maxSize: {
+      type: Number,
+      default: null,
+    },
     isMobile: {
       type: Boolean,
       default: false
@@ -234,7 +258,7 @@ export default {
       return this.headers && this.headers.filter(header => header.cellExtension && header.cellExtension.componentOptions);
     },
     grouping() {
-      return !this.sortField || this.sortField === 'lastUpdated';
+      return !(this.query?.length > 0  || this.primaryFilter !== 'all' || this.fileType?.length>0 || this.afterDate || this.beforDate || this.minSize || this.maxSize) && (!this.sortField || this.sortField === 'lastUpdated') ;
     },
     querySearch() {
       return this.query && this.query.length;

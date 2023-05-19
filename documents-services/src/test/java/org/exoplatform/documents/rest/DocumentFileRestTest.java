@@ -30,7 +30,6 @@ import javax.jcr.AccessDeniedException;
 import javax.jcr.RepositoryException;
 import javax.ws.rs.core.Response;
 
-import org.apache.ecs.wml.Input;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -157,6 +156,7 @@ public class DocumentFileRestTest {
     DocumentTimelineFilter filter = null;
     filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
     filter.setFavorites(false);
+    filter.setFileTypes("");
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -216,7 +216,12 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0,
-                                                           false);
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
     Response response2 = documentFileRest.getDocumentItems(currentOwnerId,
@@ -233,7 +238,12 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0,
-                                                           false);
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
@@ -250,7 +260,12 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0,
-                                                           false);
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
@@ -298,7 +313,12 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0,
-                                                           false);
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null);
     assertEquals(Response.Status.OK.getStatusCode(), response4.getStatus());
     List<FileNodeEntity> filesNodeEntity = new ArrayList<>();
     filesNodeEntity = (List<FileNodeEntity>) response4.getEntity();
@@ -332,6 +352,7 @@ public class DocumentFileRestTest {
     DocumentTimelineFilter filter = null;
     filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
     filter.setFavorites(false);
+
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
@@ -417,6 +438,7 @@ public class DocumentFileRestTest {
     filter = new DocumentFolderFilter(null, null, currentOwnerId, null);
     filter.setFavorites(false);
     filter.setSortField(DocumentSortField.NAME);
+    filter.setFileTypes("");
     IdentityEntity identity1 = new IdentityEntity();
     IdentityEntity identity2 = new IdentityEntity("3", "userb", "userb", null, "organization", "spacetest");
     identity1.setId("2");
@@ -533,7 +555,12 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0,
-                                                           false);
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
     Response response2 = documentFileRest.getDocumentItems(currentOwnerId,
@@ -550,7 +577,12 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0,
-                                                           false);
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.getDocumentItems(currentOwnerId,
@@ -567,7 +599,12 @@ public class DocumentFileRestTest {
                                                            false,
                                                            0,
                                                            0,
-                                                           false);
+                                                           false,
+                                                           "",
+                                                           null,
+                                                           null,
+                                                           null,
+                                                           null);
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
 
     List<FolderNodeEntity> foldersNodeEntity = new ArrayList<>();

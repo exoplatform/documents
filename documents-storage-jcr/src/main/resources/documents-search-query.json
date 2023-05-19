@@ -29,6 +29,9 @@
                   ]
                 }
               },
+              @fileTypes_query@
+              @size_query@
+              @date_query@
               {
                 "bool": {
                   "should": {
