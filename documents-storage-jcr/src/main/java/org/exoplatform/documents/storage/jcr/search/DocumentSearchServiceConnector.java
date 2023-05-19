@@ -65,6 +65,25 @@ public class DocumentSearchServiceConnector {
           + "    \"query\": \"*@term@*\""
           + "  }" + "},";
 
+  private static final String          imageTypes                   =
+                                                  "\"image/bmp\",\"image/jpeg\",\"image/webp\",\"image/png\",\"image/gif\",\"image/avif\",\"image/tiff\"";
+
+  private static final String          sheetTypes                   =
+                                                  "\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"application/vnd.oasis.opendocument.spreadsheet\",\"officedocument.spreadsheetml.sheet\",\"application/vnd.ms-excel\",\"text/csv\"";
+
+  private static final String          presentationTypes            =
+                                                         "\"application/vnd.ms-powerpoint\",\"application/vnd.openxmlformats-officedocument.presentationml.presentation\",\"application/vnd.oasis.opendocument.presentation\"";
+
+  private static final String          pdfTypes                     = "\"application/pdf\"";
+
+  private static final String          archiveTypes                 = "\"application/zip\",\"application/vnd.rar\"";
+
+  private static final String          videoTypes                   =
+                                                  "\"video/x-msvideo\",\"video/mp4\",\"video/mpeg\",\"video/ogg\",\"video/webm\",\"video/3gpp\"";
+
+  private static final String          documentTypes                =
+                                                     "\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"application/msword\",\"application/rtf\",\"application/vnd.oasis.opendocument.text\"";
+
   private final ConfigurationManager   configurationManager;
 
   private final IdentityManager        identityManager;
@@ -114,7 +133,9 @@ public class DocumentSearchServiceConnector {
     if (limit < 0) {
       throw new IllegalArgumentException("Limit must be positive");
     }
-    if (StringUtils.isBlank(filter.getQuery()) && !filter.getFavorites()) {
+    if (StringUtils.isBlank(filter.getQuery()) && !filter.getFavorites() && StringUtils.isEmpty(filter.getFileTypes())
+        && filter.getAfterDate() == null && filter.getBeforDate() == null && filter.getMaxSize() == null
+        && filter.getMinSize() == null) {
       throw new IllegalArgumentException("Filter term is mandatory");
     }
     switch (sortField) {
@@ -153,6 +174,9 @@ public class DocumentSearchServiceConnector {
     return retrieveSearchQuery().replace("@term_query@", termQuery)
                                 .replace("@favorite_query@", favoriteQuery)
                                 .replace("@permissions@", getPermissionFilter(userIdentity))
+                                .replace("@fileTypes_query@", getFileTypesQuery(filter))
+                                .replace("@size_query@", getSizeQuery(filter))
+                                .replace("@date_query@", getDatesQuery(filter))
                                 .replace("@path@", path)
                                 .replace("@workspace@", workspace)
                                 .replace("@sort_field@", sortField)
@@ -161,6 +185,88 @@ public class DocumentSearchServiceConnector {
                                 .replace("@limit@", String.valueOf(limit));
   }
 
+  private String getFileTypesQuery(DocumentNodeFilter filter) {
+
+    if (StringUtils.isNotEmpty(filter.getFileTypes())) {
+      List<String> types = new ArrayList<>();
+      for (String type : filter.getFileTypes().split(",")) {
+        try {
+          types.add((String) this.getClass().getDeclaredField(type).get(0));
+        } catch (Exception e) {
+          LOG.warn("Cannot get list of mimeTypes related to type {}", type, e);
+        }
+      }
+      String typesSB = "{\n" +
+              "   \"bool\":{\n" +
+              "      \"should\":[\n" +
+              "          {\n" +
+              "           \"terms\":{\n" +
+              "               \"fileType\":[\n" +
+              types.stream().collect(Collectors.joining(",")) +
+              "]\n" +
+              "            }\n" +
+              "         }\n" +
+              "      ]\n" +
+              "   }\n" +
+              "},\n";
+      return typesSB;
+    }
+    return "";
+  }
+
+  private String getSizeQuery(DocumentNodeFilter filter) {
+    if (filter.getMinSize() != null || filter.getMaxSize() != null) {
+      List<String> sizes = new ArrayList<>();
+      if (filter.getMinSize() != null) {
+        sizes.add("\"gte\": " + filter.getMinSize().longValue() * 1024 * 1024);
+      }
+      if (filter.getMaxSize() != null) {
+        sizes.add("\"lte\": " + filter.getMaxSize().longValue() * 1024 * 1024);
+      }
+      String sizesSB = "{\n" +
+              "   \"bool\":{\n" +
+              "      \"should\":[\n" +
+              "         {\n" +
+              "           \"range\": {\n" +
+              "             \"fileSize\": {\n" +
+              sizes.stream().collect(Collectors.joining(",")) +
+              "             }\n" +
+              "        }\n" +
+              "      }\n" +
+              "    ]\n" +
+              "  }\n" +
+              "},\n";
+      return sizesSB;
+    }
+    return "";
+  }
+
+  private String getDatesQuery(DocumentNodeFilter filter) {
+    if (filter.getAfterDate() != null || filter.getBeforDate() != null) {
+      List<String> dates = new ArrayList<>();
+      if (filter.getAfterDate() != null) {
+        dates.add("\"gte\": " + filter.getAfterDate());
+      }
+      if (filter.getBeforDate() != null) {
+        dates.add("\"lte\": " + filter.getBeforDate());
+      }
+      String datesSB = "{\n" +
+              "   \"bool\":{\n" +
+              "      \"should\":[\n" +
+              "         {\n" +
+              "           \"range\": {\n" +
+              "             \"lastUpdatedDate\": {\n" +
+              dates.stream().collect(Collectors.joining(",")) +
+              "             }\n" +
+              "        }\n" +
+              "      }\n" +
+              "    ]\n" +
+              "  }\n" +
+              "},\n";
+      return datesSB;
+    }
+    return "";
+  }
   private String getPermissionFilter(org.exoplatform.services.security.Identity userIdentity) {
     StringBuilder permissionSB = new StringBuilder();
     Set<String> membershipSet = getUserMemberships(userIdentity);
