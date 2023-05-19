@@ -195,7 +195,21 @@
     }
     .documents-header-filter-container {
       .inputDocumentsFilter {
-        width: 1130px;
+        width: 1048px;
+      }
+      .filter-active-button{
+        border: 1px solid @primaryColorDefault !important;
+        color:  @primaryColorDefault !important;
+        background-image: none !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+        font-weight: normal;
+        padding: 9px 20px;
+        font-size: 15px;
+        border-radius: 5px;
+        .filterIcon{
+          color:  @primaryColorDefault !important;
+        }
       }
 
       .v-input__slot:before {
@@ -224,7 +238,7 @@
         height: 40px;
         width: -moz-fit-content;
         width: fit-content;
-      }
+      }          
 
     }
 
@@ -385,6 +399,38 @@
       border: 2px solid transparent;
     }
   }
+  .DocumentAdvancedFilterDrawer{
+    .time-picker {
+      display: inline;
+      min-width: auto !important;
+      width: auto !important;
+      margin: 0;
+      padding: 0;
+    }
+    .date-time-selection {
+      letter-spacing: 0px !important;
+      white-space: nowrap;
+    }
+    .period-selection {
+      box-sizing: border-box;
+  
+      .v-btn {
+        width: 33%;
+        box-sizing: border-box;
+        border: 0 !important;
+      }
+    }
+  
+    .selected-period-menu-content {
+      max-width: 400px !important;
+      width: 400px !important;
+    }
+  
+    .sizeValue {
+      max-width: 100px;
+    }
+  
+  }
 
   .documentInfoDrawer {
     .infoDescriptionToShow {
@@ -490,20 +536,6 @@
 
       #filterDocumentsSelect {
         width: 60px;
-      }
-      .mobile-filter-button{
-        border: 1px solid @primaryColorDefault !important;
-        color:  @primaryColorDefault !important;
-        background-image: none !important;
-        text-shadow: none !important;
-        box-shadow: none !important;
-        font-weight: normal;
-        padding: 9px 20px;
-        font-size: 15px;
-        border-radius: 5px;
-        .filterIcon{
-          color:  @primaryColorDefault !important;
-        }
       }
     }
 
