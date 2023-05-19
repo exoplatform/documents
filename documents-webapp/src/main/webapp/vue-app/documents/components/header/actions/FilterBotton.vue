@@ -36,6 +36,26 @@ export default {
       type: String,
       default: 'all',
     },
+    fileType: {
+      type: Array,
+      default: () => []
+    },
+    afterDate: {
+      type: Number,
+      default: null,
+    },
+    beforDate: {
+      type: Number,
+      default: null,
+    },
+    minSize: {
+      type: Number,
+      default: null,
+    },
+    maxSize: {
+      type: Number,
+      default: null,
+    },
     isMobile: {
       type: Boolean,
       default: false
@@ -46,7 +66,7 @@ export default {
   }),
   computed: {
     filterIcon() {
-      return (this.query!=null && this.query.length > 0)  || this.primaryFilter !== 'all'  ? 'mdi-filter' : 'mdi-filter-outline';
+      return (this.query?.length > 0)  || this.primaryFilter !== 'all' || this.fileType?.length>0 || this.afterDate || this.beforDate || this.minSize || this.maxSize ? 'mdi-filter' : 'mdi-filter-outline';
     }
   },
 

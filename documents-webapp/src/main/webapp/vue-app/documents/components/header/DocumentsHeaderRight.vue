@@ -20,6 +20,26 @@ export default {
       type: String,
       default: 'all',
     },
+    fileType: {
+      type: Array,
+      default: () => []
+    },
+    afterDate: {
+      type: Number,
+      default: null,
+    },
+    beforDate: {
+      type: Number,
+      default: null,
+    },
+    minSize: {
+      type: Number,
+      default: null,
+    },
+    maxSize: {
+      type: Number,
+      default: null,
+    },
     isMobile: {
       type: Boolean,
       default: false
@@ -30,6 +50,11 @@ export default {
       return {
         query: this.query,
         primaryFilter: this.primaryFilter,
+        fileType: this.fileType,
+        afterDate: this.afterDate,
+        beforDate: this.beforDate,
+        minSize: this.minSize,
+        maxSize: this.maxSize,
         isMobile: this.isMobile,
       };
     }

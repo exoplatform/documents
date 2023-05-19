@@ -1,22 +1,21 @@
 <template>
   <div v-if="showFilter" class="d-flex flex-row">
-         <v-icon
-          size="20"
-          class="mx-auto ma-lg-0"
-          @click="hideFilter">
-          fas fa-arrow-left
-        </v-icon>
-        <v-spacer />
+    <v-icon
+      size="20"
+      class="mx-auto ma-lg-0"
+      @click="hideFilter">
+      fas fa-arrow-left
+    </v-icon>
+    <v-spacer />
     <extension-registry-components
-    name="DocumentsFilters"
-    type="documents-filters"
-    :params="params"
-    class="d-flex flex-no-wrap documents-header-filter-container"
-    parent-element="div"
-    element="div"
-    element-class="mx-auto ma-lg-0  documents-header-filter-container" />
+      name="DocumentsFilters"
+      type="documents-filters"
+      :params="params"
+      class="d-flex flex-no-wrap documents-header-filter-container"
+      parent-element="div"
+      element="div"
+      element-class="mx-auto ma-lg-0  documents-header-filter-container" />
   </div>
-
 </template>
 <script>
 
@@ -29,6 +28,26 @@ export default {
     primaryFilter: {
       type: String,
       default: 'all',
+    },
+    fileType: {
+      type: Array,
+      default: () => []
+    },
+    afterDate: {
+      type: Number,
+      default: null,
+    },
+    beforDate: {
+      type: Number,
+      default: null,
+    },
+    minSize: {
+      type: Number,
+      default: null,
+    },
+    maxSize: {
+      type: Number,
+      default: null,
     },
     isMobile: {
       type: Boolean,
@@ -48,6 +67,11 @@ export default {
       return {
         query: this.query,
         primaryFilter: this.primaryFilter,
+        fileType: this.fileType,
+        afterDate: this.afterDate,
+        beforDate: this.beforDate,
+        minSize: this.minSize,
+        maxSize: this.maxSize,
         isMobile: this.isMobile,
       };
     }
