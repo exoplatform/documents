@@ -1,11 +1,11 @@
 <template>
-  <v-scale-transition>
+  <v-row>
     <select
       id="filterDocumentsSelect"
       v-model="primaryFilter"
       v-if="!isMobile"
       name="documentsFilter"
-      class="selectPrimaryFilter input-block-level ignore-vuetify-classes  pa-0 my-auto ml-2"
+      class="selectPrimaryFilter input-block-level ignore-vuetify-classes  pa-0 my-auto mx-1"
       @change="changeDocumentsFilter">
       <option
         v-for="item in filterDocuments"
@@ -14,15 +14,16 @@
         {{ $t('documents.filter.'+item.name.toLowerCase()) }}
       </option>
     </select>
+
     <button
-      v-if="isMobile"
       :class="btnClass"
-      class="px-3 width-max-content"
+      class="btn pa-2 width-max-content mx-1"
       @click="openDrawer()">
       <v-icon size="16" class="filterIcon"> fa-sliders-h </v-icon>
+      <span v-if="!isMobile">{{ $t('documents.label.filter') }}</span>    
       <span v-if="filterNumber>0">({{ filterNumber }})</span>    
     </button>
-  </v-scale-transition>
+  </v-row>
 </template>
 <script>
 export default {
@@ -34,6 +35,26 @@ export default {
     primaryFilter: {
       type: String,
       default: 'all',
+    },
+    fileType: {
+      type: Array,
+      default: () => []
+    },
+    afterDate: {
+      type: Number,
+      default: null,
+    },
+    beforDate: {
+      type: Number,
+      default: null,
+    },
+    minSize: {
+      type: Number,
+      default: null,
+    },
+    maxSize: {
+      type: Number,
+      default: null,
     },
   },
   data: () => ({
@@ -59,13 +80,25 @@ export default {
       if (this.extended && this.query) {
         fNum++;
       }
+      if (this.fileType?.length>0) {
+        fNum++;
+      }
+      if (this.afterDate && this.beforDate) {
+        fNum++;
+      }
+      if (this.minSize) {
+        fNum++;
+      }
+      if (this.maxSize) {
+        fNum++;
+      }
       return fNum;
     },
     btnClass(){
       if (this.filterNumber>0 || this.query){
-        return 'mobile-filter-button';
+        return 'filter-active-button';
       }
-      return 'btn py-3';
+      return '';
     }
   },
   methods: {
@@ -74,7 +107,12 @@ export default {
       this.$root.$emit('set-mobile-filter', this.primaryFilter);
     },
     openDrawer(){
-      this.$root.$emit('open-mobile-filter-menu',true);
+      if (this.isMobile){
+        this.$root.$emit('open-mobile-filter-menu',true);
+      } else {
+        this.$root.$emit('open-advanced-filter-drawer');
+      }
+      
     },  
   },
 };

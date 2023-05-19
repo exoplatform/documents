@@ -16,6 +16,11 @@
           :can-add="canAdd"
           :query="query"
           :primary-filter="primaryFilter"
+          :file-type="fileType"
+          :after-date="afterDate"
+          :befor-date="beforDate"
+          :min-size="minSize"
+          :max-size="maxSize"
           :is-mobile="isMobile"
           :selected-documents="selectedDocuments"
           class="py-2" />
@@ -62,6 +67,11 @@
             :extended-search="extendedSearch"
             :show-extend-filter="showExtendFilter"
             :primary-filter="primaryFilter"
+            :file-type="fileType"
+            :after-date="afterDate"
+            :befor-date="beforDate"
+            :min-size="minSize"
+            :max-size="maxSize"
             :selected-view="selectedView"
             :selected-documents="selectedDocuments"
             :is-mobile="isMobile" />
@@ -70,6 +80,7 @@
       </div>
       <documents-visibility-drawer :is-mobile="isMobile" />
       <document-tree-selector-drawer :is-mobile="isMobile" />
+      <documents-advanced-filter-drawer />
       <documents-download-drawer />
       <documents-info-drawer
         :selected-view="selectedView"
@@ -201,6 +212,11 @@ export default {
     settingsLoaded: false,
     uploadVersionInput: null,
     newVersionFile: {},
+    fileType: [],
+    afterDate: null,
+    beforDate: null,
+    minSize: null,
+    maxSize: null,
   }),
   computed: {
     progressAlertColor() {
@@ -281,6 +297,14 @@ export default {
     this.$root.$on('documents-filter', filter => {
       this.primaryFilter = filter;
       this.refreshFiles({'primaryFilter': this.primaryFilter});
+    });
+    this.$root.$on('set-advanced-filter', advancedFilter => {
+      this.fileType = advancedFilter.fileType;
+      this.afterDate = advancedFilter.selectedPeriod?.min;
+      this.beforDate = advancedFilter.selectedPeriod?.max;
+      this.minSize = advancedFilter.minSize;
+      this.maxSize = advancedFilter.maxSize;
+      this.refreshFiles();
     });
     this.$root.$on('show-alert', (message) => {
       this.displayMessage(message);
@@ -900,6 +924,24 @@ export default {
       }
       if (options?.deleted) {
         this.documentsToBeDeleted.push(options?.documentId);
+      }
+      if (this.userId) {
+        filter.userId = this.userId;
+      } 
+      if (this.fileType?.length>0) {
+        filter.fileType = this.fileType.join();
+      }  
+      if (this.afterDate) {
+        filter.afterDate = this.afterDate;
+      }      
+      if (this.beforDate) {
+        filter.beforDate = this.beforDate;
+      }     
+      if (this.minSize) {
+        filter.minSize = this.minSize;
+      }  
+      if (this.maxSize) {
+        filter.maxSize = this.maxSize;
       }
       filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';
