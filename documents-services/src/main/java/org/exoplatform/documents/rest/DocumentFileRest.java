@@ -190,7 +190,22 @@ public class DocumentFileRest implements ResourceContainer {
                                    int limit,
                                    @Parameter(description = "showHiddenFiles of results to return") @Schema(defaultValue = "false")
                                    @QueryParam("showHiddenFiles")
-                                   boolean showHiddenFiles) {
+                                   boolean showHiddenFiles,
+                                   @Parameter(description = "fileType")
+                                   @QueryParam("fileType")
+                                   String fileType,
+                                   @Parameter(description = "afterDate")
+                                   @QueryParam("afterDate")
+                                   Long afterDate,
+                                   @Parameter(description = "beforDate")
+                                   @QueryParam("beforDate")
+                                   Long beforDate,
+                                   @Parameter(description = "minSize")
+                                   @QueryParam("minSize")
+                                   Long minSize,
+                                   @Parameter(description = "maxSize")
+                                   @QueryParam("maxSize")
+                                   Long maxSize) {
 
     if (ownerId == null && StringUtils.isBlank(parentFolderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
@@ -209,6 +224,11 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setExtendedSearch(extendedSearch);
       filter.setFavorites(favorites);
       filter.setUserId(userId);
+      filter.setFileTypes(fileType);
+      filter.setAfterDate(afterDate);
+      filter.setBeforDate(beforDate);
+      filter.setMaxSize(maxSize);
+      filter.setMinSize(minSize);
       filter.setAscending(ascending);
       filter.setSortField(DocumentSortField.getFromAlias(sortField));
       List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, offset, limit, userIdentityId,showHiddenFiles);

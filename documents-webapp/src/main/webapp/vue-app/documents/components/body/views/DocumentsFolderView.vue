@@ -195,6 +195,26 @@ export default {
       type: String,
       default: null,
     },
+    fileType: {
+      type: Array,
+      default: () => []
+    },
+    afterDate: {
+      type: Number,
+      default: null,
+    },
+    beforDate: {
+      type: Number,
+      default: null,
+    },
+    minSize: {
+      type: Number,
+      default: null,
+    },
+    maxSize: {
+      type: Number,
+      default: null,
+    },
     isMobile: {
       type: Boolean,
       default: false

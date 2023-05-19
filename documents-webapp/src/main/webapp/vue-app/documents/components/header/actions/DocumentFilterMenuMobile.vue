@@ -73,6 +73,11 @@ export default {
         isMobile: this.isMobile,
         query: this.query,
         extendedSearch: this.extendedSearch,
+        fileType: this.fileType,
+        afterDate: this.afterDate,
+        beforDate: this.beforDate,
+        minSize: this.minSize,
+        maxSize: this.maxSize,
       };
     }
   },
