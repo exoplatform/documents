@@ -1,6 +1,5 @@
 <template>
   <td
-    v-if="!query && !primaryFilter"
     :colspan="colspan"
     class="white ps-1">
     <v-btn
@@ -20,10 +19,6 @@ export default {
       type: String,
       default: null,
     },
-    query: {
-      type: Boolean,
-      default: false,
-    },
     headers: {
       type: Array,
       default: null,
@@ -39,11 +34,7 @@ export default {
     toggleFunction: {
       type: Object,
       default: null,
-    },
-    primaryFilter: {
-      type: Boolean,
-      default: false,
-    },
+    }
   },
   computed: {
     colspan() {
@@ -61,7 +52,7 @@ export default {
       }
       const labelKey = this.group.split(':')[1];
       return this.$t(`documents.timeline.label.${labelKey}`);
-    },
+    }
   },
 };
 </script>

@@ -165,7 +165,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
-      if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
+      if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
+          && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforDate() == null
+          && filter.getMaxSize() == null && filter.getMinSize() == null) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
         String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection);
@@ -324,7 +326,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       if (parent != null) {
-        if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())) {
+        if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
+            && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforDate() == null
+            && filter.getMaxSize() == null && filter.getMinSize() == null) {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
           // Load folders + symlink of folders

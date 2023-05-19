@@ -43,6 +43,7 @@ import DocumentsFavoriteAction from './components/body/table/action/DocumentFavo
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
 import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
+import SelectPeriod from './components/header/actions/SelectPeriod.vue';
 import FilterBotton from './components/header/actions/FilterBotton.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
@@ -69,6 +70,7 @@ import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
+import DocumentAdvancedFilterDrawer from './components/header/actions/DocumentAdvancedFilterDrawer.vue';
 import DocumentFilterMenuMobile from './components/header/actions/DocumentFilterMenuMobile.vue';
 import FavoriteFilterActionMobile from './components/header/actions/FavoriteFilterActionMobile.vue';
 import AllFilterActionMobile from './components/header/actions/AllFilterActionMobile.vue';
@@ -111,9 +113,11 @@ const components = {
   'documents-actions-menu': DocumentActionMenu,
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
+  'documents-advanced-filter-drawer': DocumentAdvancedFilterDrawer,
   'documents-filter-menu-mobile': DocumentFilterMenuMobile,
   'documents-info-drawer': DocumentInfoDrawer,
   'documents-download-drawer': DocumentDownloadDrawer,
+  'documents-select-period': SelectPeriod,
   'document-tree-selector-drawer': DocumentsTreeSelectorDrawer,
   'documents-move-spaces': DocumentsMoveSpaces,
   'documents-visibility-drawer': DocumentsVisibilityDrawer,
