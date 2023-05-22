@@ -43,8 +43,10 @@ import DocumentsFavoriteAction from './components/body/table/action/DocumentFavo
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
 import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
+import DocumentsPrimaryFilter from './components/header/actions/DocumentsPrimaryFilter.vue';
 import SelectPeriod from './components/header/actions/SelectPeriod.vue';
 import FilterBotton from './components/header/actions/FilterBotton.vue';
+import FilterBackBotton from './components/header/actions/FilterBackBotton.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
@@ -93,7 +95,9 @@ const components = {
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-filter-input': DocumentsFilterInput,
   'documents-filter': DocumentsFilter,
+  'documents-primary-filter': DocumentsPrimaryFilter,
   'documents-filter-botton': FilterBotton,
+  'documents-filter-back-botton': FilterBackBotton,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
   'documents-no-body-folder': DocumentsNoBodyFolder,

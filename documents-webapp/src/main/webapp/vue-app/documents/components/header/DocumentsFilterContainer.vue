@@ -1,20 +1,31 @@
+<!--
+* Copyright (C) 2023 eXo Platform SAS
+*
+*  This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Affero General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU Affero General Public License
+* along with this program.  If not, see <gnu.org/licenses>.
+-->
+
+
 <template>
-  <div v-if="showFilter" class="d-flex flex-row">
-    <v-icon
-      size="20"
-      class="mx-auto ma-lg-0"
-      @click="hideFilter">
-      fas fa-arrow-left
-    </v-icon>
-    <v-spacer />
+  <div v-if="showFilter">
     <extension-registry-components
       name="DocumentsFilters"
       type="documents-filters"
       :params="params"
-      class="d-flex flex-no-wrap documents-header-filter-container"
+      class="d-flex flex-no-wrap align-center documents-header-filter-container fill-available"
       parent-element="div"
       element="div"
-      element-class="mx-auto ma-lg-0  documents-header-filter-container" />
+      element-class="mx-auto ma-lg-0 documents-header-filter-element" />
   </div>
 </template>
 <script>
@@ -76,13 +87,6 @@ export default {
       };
     }
   },
-  methods: {
-    hideFilter(){
-      this.showFilter = !this.showFilter;
-      this.$root.$emit('show-mobile-filter', this.showFilter);
-    },
-  },
-  
  
 };
 </script>

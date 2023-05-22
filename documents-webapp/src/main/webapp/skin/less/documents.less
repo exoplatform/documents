@@ -42,6 +42,10 @@
         }
       }
     }
+    .fill-available{
+      width: -webkit-fill-available;
+      width: -moz-available;
+    }
     .driveFolderIcon {
       color: @primaryColorDefault;
       font-size:22px;
@@ -194,9 +198,6 @@
       }
     }
     .documents-header-filter-container {
-      .inputDocumentsFilter {
-        width: 1048px;
-      }
       .filter-active-button{
         border: 1px solid @primaryColorDefault !important;
         color:  @primaryColorDefault !important;
@@ -235,7 +236,7 @@
       }
 
       #filterDocumentsSelect {
-        height: 40px;
+        height: 38px;
         width: -moz-fit-content;
         width: fit-content;
       }          
@@ -524,10 +525,6 @@
     }
 
     .documents-header-filter-container {
-      .inputDocumentsFilter {
-        width: auto;
-      }
-
       .v-input__prepend-inner {
         i {
           font-size: 16px;
