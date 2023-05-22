@@ -480,6 +480,9 @@ public class JCRDocumentsUtil {
             permissions.add(new PermissionEntry(identity, accessControlEntry.getPermission(),getPermissionRole(accessControlEntry.getMembershipEntry().getMembershipType())));
           }
         } else if (groupToIdentity(membershipEntry.getGroup()) != null) {
+          if (membershipEntry.toString().equals("*:/platform/administrators") && !aclIdentity.isMemberOf(membershipEntry)) {
+            continue;
+          }
           permissions.add(new PermissionEntry(groupToIdentity(membershipEntry.getGroup()), accessControlEntry.getPermission(),PermissionRole.ALL.name()));
         }
       } else{
