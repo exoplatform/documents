@@ -24,10 +24,10 @@
       {{ $t('documents.advanced.filter.drawer.title') }}
     </template>
     <template slot="content">
-      <v-card flat class="px-2 pt-2">      
+      <v-card flat class="px-2 pt-4">      
         <div class="font-weight-bold text-start text-color body-2 pa-2 mb-5">{{ $t('documents.advanced.filter.drawer.file.types') }}</div>
         <v-list>
-          <v-list-item class="my-n11">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
@@ -41,11 +41,11 @@
                   :color="docIcon && docIcon.color">
                   {{ docIcon && docIcon.class }}
                 </v-icon>
-                <div class="pa-5">{{ $t('documents.file.type.document') }}</div>
+                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.document') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n11">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
@@ -63,7 +63,7 @@
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n11">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
@@ -81,7 +81,7 @@
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n11">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
@@ -99,7 +99,7 @@
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n11">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
@@ -117,7 +117,7 @@
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n11">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
@@ -137,27 +137,27 @@
           </v-list-item>
         </v-list>
 
-        <div class="font-weight-bold text-start text-color body-2  px-2 pb-4 pt-6">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
+        <div class="font-weight-bold text-start text-color body-2  px-2 pb-5 pt-10">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
 
         <documents-select-period v-model="advancedFilter.selectedPeriod" />
 
-        <div class="font-weight-bold text-start text-color body-2 px-2 pb-4 pt-4">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
+        <div class="font-weight-bold text-start text-color body-2 px-2 pb-5 pt-10">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
          
-        <div class="d-flex px-3">
-          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}</div>
+        <div class="d-flex">
+          <div class="font-weight-bold text-start text-color body-2 pt-5 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}:</div>
           <v-text-field
             v-model="advancedFilter.minSize"
-            class="size-text-field py-2"
-            :suffix="$t('documents.label.mega')"
+            class="me-2 py-2"
+            :suffix="$t('documents.advanced.filter.drawer.mb')"
             outlined
             dense
             type="number"
             min="0" />
-          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2 ps-6">{{ $t('documents.advanced.filter.drawer.max') }}</div>
+          <div class="font-weight-bold text-start text-color body-2 pt-5 pe-2 ps-4">{{ $t('documents.advanced.filter.drawer.max') }}:</div>
           <v-text-field
             v-model="advancedFilter.maxSize"
-            class="size-text-field py-2"
-            :suffix="$t('documents.label.mega')"
+            class="me-2 py-2"
+            :suffix="$t('documents.advanced.filter.drawer.mb')"
             outlined
             dense
             type="number"
