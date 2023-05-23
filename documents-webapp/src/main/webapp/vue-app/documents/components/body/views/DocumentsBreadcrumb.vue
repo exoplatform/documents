@@ -142,6 +142,8 @@ export default {
     getName(name){
       if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
+      } else if (name==='Documents'){
+        return this.$t('documents.label.spaceHomeDocuments');
       }
       return name;
     },
