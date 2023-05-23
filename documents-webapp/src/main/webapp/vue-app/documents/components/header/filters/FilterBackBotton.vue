@@ -25,6 +25,13 @@
 </template>
 <script>
 export default {
+  mounted() {
+    document.addEventListener('keydown', (e) => {
+      if (e.keyCode === 27) {
+        this.hideFilter();
+      }
+    });
+  },
   methods: {
     hideFilter(){
       this.$root.$emit('show-mobile-filter', false);
