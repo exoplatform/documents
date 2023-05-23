@@ -1,12 +1,12 @@
 <template>
-    <button
-      :class="btnClass"
-      class="btn pa-2 width-max-content mx-1"
-      @click="openDrawer()">
-      <v-icon size="16" class="filterIcon"> fa-sliders-h </v-icon>
-      <span v-if="!isMobile">{{ $t('documents.label.filter') }}</span>    
-      <span v-if="filterNumber>0">({{ filterNumber }})</span>    
-    </button>
+  <button
+    :class="btnClass"
+    class="btn pa-2 width-max-content mx-1"
+    @click="openDrawer()">
+    <v-icon size="16" class="filterIcon"> fa-sliders-h </v-icon>
+    <span v-if="!isMobile">{{ $t('documents.label.filter') }}</span>    
+    <span v-if="filterNumber>0">({{ filterNumber }})</span>    
+  </button>
 </template>
 <script>
 export default {

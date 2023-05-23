@@ -17,20 +17,20 @@
 
 
 <template>
-    <select
-      id="filterDocumentsSelect"
-      v-model="primaryFilter"
-      v-if="!isMobile"
-      name="documentsFilter"
-      class="selectPrimaryFilter input-block-level ignore-vuetify-classes  pa-0 my-auto mx-1"
-      @change="changeDocumentsFilter">
-      <option
-        v-for="item in filterDocuments"
-        :key="item.name"
-        :value="item.name">
-        {{ $t('documents.filter.'+item.name.toLowerCase()) }}
-      </option>
-    </select>
+  <select
+    id="filterDocumentsSelect"
+    v-model="primaryFilter"
+    v-if="!isMobile"
+    name="documentsFilter"
+    class="selectPrimaryFilter input-block-level ignore-vuetify-classes  pa-0 my-auto mx-1"
+    @change="changeDocumentsFilter">
+    <option
+      v-for="item in filterDocuments"
+      :key="item.name"
+      :value="item.name">
+      {{ $t('documents.filter.'+item.name.toLowerCase()) }}
+    </option>
+  </select>
 </template>
 <script>
 export default {
