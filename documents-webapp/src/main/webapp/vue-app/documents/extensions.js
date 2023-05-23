@@ -30,16 +30,29 @@ extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-ri
 });
 
 extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
+  id: 'documents-filter-back-botton',
+  vueComponent: Vue.options.components['documents-filter-back-botton'],
+  rank: 10,
+});
+
+extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
   id: 'filter-input',
   vueComponent: Vue.options.components['documents-filter-input'],
   rank: 20,
 });
 
 extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
-  id: 'primary-filter',
+  id: 'documents-filter',
   cssClass: 'pt-1',
   vueComponent: Vue.options.components['documents-filter'],
-  rank: 20,
+  rank: 40,
+});
+
+extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
+  id: 'primary-filter',
+  cssClass: 'pt-1',
+  vueComponent: Vue.options.components['documents-primary-filter'],
+  rank: 30,
 });
 
 extensionRegistry.registerExtension('Documents', 'views', {

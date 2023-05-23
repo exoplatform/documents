@@ -1,20 +1,4 @@
 <template>
-  <v-row>
-    <select
-      id="filterDocumentsSelect"
-      v-model="primaryFilter"
-      v-if="!isMobile"
-      name="documentsFilter"
-      class="selectPrimaryFilter input-block-level ignore-vuetify-classes  pa-0 my-auto mx-1"
-      @change="changeDocumentsFilter">
-      <option
-        v-for="item in filterDocuments"
-        :key="item.name"
-        :value="item.name">
-        {{ $t('documents.filter.'+item.name.toLowerCase()) }}
-      </option>
-    </select>
-
     <button
       :class="btnClass"
       class="btn pa-2 width-max-content mx-1"
@@ -23,7 +7,6 @@
       <span v-if="!isMobile">{{ $t('documents.label.filter') }}</span>    
       <span v-if="filterNumber>0">({{ filterNumber }})</span>    
     </button>
-  </v-row>
 </template>
 <script>
 export default {
