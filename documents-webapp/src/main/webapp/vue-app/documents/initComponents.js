@@ -26,7 +26,7 @@ import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
 import DocumentsHeaderCenter from './components/header/DocumentsHeaderCenter.vue';
 import DocumentsFilterContainer from './components/header/DocumentsFilterContainer.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
-import DocumentsFilterInput from './components/header/actions/DocumentsFilterInput.vue';
+import DocumentsFilterInput from './components/header/filters/DocumentsFilterInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
 import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
 import DocumentsNoBodyFolder from './components/body/DocumentsNoBodyFolder.vue';
@@ -43,11 +43,11 @@ import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavori
 import DocumentsFavoriteAction from './components/body/table/action/DocumentFavoriteAction.vue';
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
-import DocumentsFilter from './components/header/actions/DocumentsFilter.vue';
-import DocumentsPrimaryFilter from './components/header/actions/DocumentsPrimaryFilter.vue';
-import SelectPeriod from './components/header/actions/SelectPeriod.vue';
-import FilterBotton from './components/header/actions/FilterBotton.vue';
-import FilterBackBotton from './components/header/actions/FilterBackBotton.vue';
+import DocumentsFilter from './components/header/filters/DocumentsFilter.vue';
+import DocumentsPrimaryFilter from './components/header/filters/DocumentsPrimaryFilter.vue';
+import SelectPeriod from './components/header/filters/SelectPeriod.vue';
+import FilterBotton from './components/header/filters/FilterBotton.vue';
+import FilterBackBotton from './components/header/filters/FilterBackBotton.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
@@ -73,12 +73,13 @@ import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
-import DocumentAdvancedFilterDrawer from './components/header/actions/DocumentAdvancedFilterDrawer.vue';
-import DocumentFilterMenuMobile from './components/header/actions/DocumentFilterMenuMobile.vue';
-import FavoriteFilterActionMobile from './components/header/actions/FavoriteFilterActionMobile.vue';
-import AllFilterActionMobile from './components/header/actions/AllFilterActionMobile.vue';
-import QuickFilterActionMobile from './components/header/actions/QuickFilterActionMobile.vue';
-import ExtendFilterActionMobile from './components/header/actions/ExtendFilterActionMobile.vue';
+import DocumentAdvancedFilterDrawer from './components/header/filters/DocumentAdvancedFilterDrawer.vue';
+import DocumentFilterMenuMobile from './components/header/filters/DocumentFilterMenuMobile.vue';
+import FavoriteFilterActionMobile from './components/header/filters/FavoriteFilterActionMobile.vue';
+import AllFilterActionMobile from './components/header/filters/AllFilterActionMobile.vue';
+import QuickFilterActionMobile from './components/header/filters/QuickFilterActionMobile.vue';
+import AdvancedFilterActionMobile from './components/header/filters/AdvancedFilterActionMobile.vue';
+import ExtendFilterActionMobile from './components/header/filters/ExtendFilterActionMobile.vue';
 import UploadOverlay from './components/body/UploadOverlay.vue';
 import VersionHistoryMenuAction from './components/body/actions/VersionHistoryMenuAction.vue';
 import DocumentsSelectionCell from './components/body/table/cells/DocumentsSelectionCell.vue';
@@ -150,6 +151,7 @@ const components = {
   'favorite-filter-action': FavoriteFilterActionMobile,
   'all-filter-action': AllFilterActionMobile,
   'quick-filter-action': QuickFilterActionMobile,
+  'mobile-advanced-filter-action': AdvancedFilterActionMobile,
   'extend-filter-action': ExtendFilterActionMobile,
   'documents-selection-cell': DocumentsSelectionCell,
   'document-action-context-menu': DocumentActionContextMenu,
