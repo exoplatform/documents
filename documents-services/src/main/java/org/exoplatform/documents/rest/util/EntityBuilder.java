@@ -340,10 +340,11 @@ public class EntityBuilder {
               permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
           } else {
             try {
-              if (!documentFileService.canAccess(node.getId(), documentFileService.getAclUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()))) {
-                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
-              } else {
+              //check if the owner is a space and the destination is a member of this space
+              if (ownerId.isSpace() && spaceService.isMember(spaceService.getSpaceByDisplayName(ownerId.getRemoteId()), permissionEntryEntity.getIdentity().getRemoteId())) {
                 toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+              } else {
+                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
               }
               permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
             } catch (Exception exception) {
