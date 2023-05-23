@@ -113,7 +113,7 @@
       <div v-show="isMobile && showFilter || !isMobile">
         <v-icon
           size="20"
-          class="inputDocumentsFilter text-sub-title pa-1 my-auto "
+          class="text-sub-title pa-1 my-auto "
           v-show="isMobile && showFilter"
           @click="$root.$emit('mobile-filter')">
           fas fa-arrow-left
