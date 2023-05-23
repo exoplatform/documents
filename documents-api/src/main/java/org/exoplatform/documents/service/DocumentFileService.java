@@ -317,4 +317,14 @@ public interface DocumentFileService {
    * @param userIdentityId current user identity id
    */
   void moveDocuments(int actionId, long ownerId, List<AbstractNode>documents, String destPath, long userIdentityId) throws IllegalAccessException;
+
+  /**
+   * Checks if user has edit permission on document
+   *
+   * @param nodeId document node id
+   * @param userIdentityId user identity id
+   * @return true if has edit permission or false
+   * @throws IllegalAccessException
+   */
+  boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException;
 }

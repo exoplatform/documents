@@ -34,7 +34,7 @@
         prepend-inner-icon="mdi-calendar"
         class="selected-period-input pt-0 mt-0  ms-3"
         rel="tooltip"
-        :placeholder="$t('documents.advaced.filter.drawer.rage.placeholder')"
+        :placeholder="$t('documents.advanced.filter.drawer.rage.placeholder')"
         readonly
         v-bind="attrs"
         v-on="on" />
