@@ -1,44 +1,18 @@
 <template>
-  <div>
     <v-text-field
       v-model="query"
       ref="inputQuery"
       autofocus
       :placeholder="$t('documents.label.filterDocuments')"
       :append-icon="appendIcon"
-      class="inputDocumentsFilter pa-3 my-auto width-full"
+      class="pa-2 my-auto width-full inputDocumentsFilter"
       @click:append="cancelSearch" />
-  </div>
 </template>
 <script>
 export default {
   props: {
     query: {
       type: String,
-      default: null,
-    },
-    primaryFilter: {
-      type: String,
-      default: 'all',
-    },
-    fileType: {
-      type: Array,
-      default: () => []
-    },
-    afterDate: {
-      type: Number,
-      default: null,
-    },
-    beforDate: {
-      type: Number,
-      default: null,
-    },
-    minSize: {
-      type: Number,
-      default: null,
-    },
-    maxSize: {
-      type: Number,
       default: null,
     },
     isMobile: {
@@ -54,9 +28,6 @@ export default {
   computed: {
     appendIcon() {
       return this.query && 'mdi-close primary--text' || null;
-    },
-    filterIcon() {
-      return (this.query!=null && this.query.length > 0)  || this.primaryFilter !== 'all'  ? 'mdi-filter' : 'mdi-filter-outline';
     }
   },
   watch: {
@@ -79,6 +50,10 @@ export default {
     this.$root.$on('resetSearch', this.cancelSearch);
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('mobile-filter', this.mobileFilter);
+    
+  },
+  mounted(){
+    this.$el.parentElement.classList.add('fill-available'); //Since :has css pseudo-class is not supported in firefox, we need to add the class to parent manually  
   },
   methods: {
     filterQuery(query){
