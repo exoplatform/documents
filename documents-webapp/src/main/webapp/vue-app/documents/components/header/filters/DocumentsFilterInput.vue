@@ -1,12 +1,12 @@
 <template>
-    <v-text-field
-      v-model="query"
-      ref="inputQuery"
-      autofocus
-      :placeholder="$t('documents.label.filterDocuments')"
-      :append-icon="appendIcon"
-      class="pa-2 my-auto width-full inputDocumentsFilter"
-      @click:append="cancelSearch" />
+  <v-text-field
+    v-model="query"
+    ref="inputQuery"
+    autofocus
+    :placeholder="$t('documents.label.filterDocuments')"
+    :append-icon="appendIcon"
+    class="pa-2 my-auto width-full inputDocumentsFilter"
+    @click:append="cancelSearch" />
 </template>
 <script>
 export default {

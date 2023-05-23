@@ -25,166 +25,144 @@
     </template>
     <template slot="content">
       <v-card flat class="px-2 pt-4">      
-        <div class="font-weight-bold text-start text-color body-2 py-4">{{ $t('documents.advanced.filter.drawer.file.types') }}</div>
+        <div class="font-weight-bold text-start text-color body-2 pa-2 mb-5">{{ $t('documents.advanced.filter.drawer.file.types') }}</div>
         <v-list>
-          <v-list-item class="my-n6">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
+                class="ma-auto typeCheckbox"
                 value="documents" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
                 <v-icon
-                  :size="24"
+                  :size="26"
                   :color="docIcon && docIcon.color">
                   {{ docIcon && docIcon.class }}
                 </v-icon>
-                <div class="pa-5">{{ $t('documents.file.type.document') }}</div>
+                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.document') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n6">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
+                class="ma-auto typeCheckbox"
                 value="sheets" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
                 <v-icon
-                  :size="24"
+                  :size="26"
                   :color="sheetIcon && sheetIcon.color">
                   {{ sheetIcon && sheetIcon.class }}
                 </v-icon>
-                <div class="pa-5">{{ $t('documents.file.type.sheet') }}</div>
+                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.sheet') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n6">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
+                class="ma-auto typeCheckbox"
                 value="presentations" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
                 <v-icon
-                  :size="24"
+                  :size="26"
                   :color="prezIcon && prezIcon.color">
                   {{ prezIcon && prezIcon.class }}
                 </v-icon>
-                <div class="pa-5">{{ $t('documents.file.type.presentation') }}</div>
+                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.presentation') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n6">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
+                class="ma-auto typeCheckbox"
                 value="pdfs" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
                 <v-icon
-                  :size="24"
+                  :size="26"
                   :color="pdfIcon && pdfIcon.color">
                   {{ pdfIcon && pdfIcon.class }}
                 </v-icon>
-                <div class="pa-5">{{ $t('documents.file.type.pdf') }}</div>
+                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.pdf') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n6">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
+                class="ma-auto typeCheckbox"
                 value="images" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
                 <v-icon
-                  :size="24"
+                  :size="26"
                   :color="imageIcon && imageIcon.color">
                   {{ imageIcon && imageIcon.class }}
                 </v-icon>
-                <div class="pa-5">{{ $t('documents.file.type.image') }}</div>
+                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.image') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n6">
+          <v-list-item class="my-n9">
             <v-list-item-action class="mx-3">
               <v-checkbox
                 v-model="advancedFilter.fileType"
+                class="ma-auto typeCheckbox"
                 value="videos" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto">
                 <v-icon
-                  :size="24"
+                  :size="26"
                   :color="videoIcon && videoIcon.color">
                   {{ videoIcon && videoIcon.class }}
                 </v-icon>
-                <div class="pa-5">{{ $t('documents.file.type.video') }}</div>
+                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.video') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
         </v-list>
 
-        <div class="font-weight-bold text-start text-color body-2  py-4">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
+        <div class="font-weight-bold text-start text-color body-2  px-2 pb-5 pt-10">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
 
-        <v-row class="mr-auto pa-5">
-          <documents-select-period v-model="advancedFilter.selectedPeriod" />
-        </v-row>
+        <documents-select-period v-model="advancedFilter.selectedPeriod" />
 
-        <div class="font-weight-bold text-start text-color body-2 py-4">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
+        <div class="font-weight-bold text-start text-color body-2 px-2 pb-5 pt-10">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
          
-        <v-row class="mr-auto px-3">
-          <v-col
-            class="d-flex"
-            cols="12"
-            sm="12">
-            <v-slider
-              v-model="advancedFilter.minSize"
-              class="align-center"
-              :label="$t('documents.advanced.filter.drawer.min')"
-              min="0"
-              max="2000"
-              thumb-label>
-              <template #append>
-                <v-text-field
-                  v-model="advancedFilter.minSize"
-                  suffix="MB"
-                  class="sliderValue mt-0 pt-0 sizeValue"
-                  hide-details
-                  single-line
-                  type="number" />
-              </template>
-            </v-slider>
-          </v-col>
-          <v-col
-            class="d-flex"
-            cols="12"
-            sm="12">
-            <v-slider
-              v-model="advancedFilter.maxSize"
-              class="align-center"
-              :label="$t('documents.advanced.filter.drawer.max')"
-              min="0"
-              max="2000"
-              thumb-label>
-              <template #append>
-                <v-text-field
-                  v-model="advancedFilter.maxSize"
-                  suffix="MB"
-                  class="sliderValue mt-0 pt-0 sizeValue"
-                  hide-details
-                  single-line
-                  type="number" />
-              </template>
-            </v-slider>
-          </v-col>
-        </v-row>
+        <div class="d-flex">
+          <div class="font-weight-bold text-start text-color body-2 pt-5 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}:</div>
+          <v-text-field
+            v-model="advancedFilter.minSize"
+            class="me-2 py-2"
+            :suffix="$t('documents.advanced.filter.drawer.mb')"
+            outlined
+            dense
+            type="number"
+            min="0" />
+          <div class="font-weight-bold text-start text-color body-2 pt-5 pe-2 ps-4">{{ $t('documents.advanced.filter.drawer.max') }}:</div>
+          <v-text-field
+            v-model="advancedFilter.maxSize"
+            class="me-2 py-2"
+            :suffix="$t('documents.advanced.filter.drawer.mb')"
+            outlined
+            dense
+            type="number"
+            min="0" />
+        </div>
       </v-card> 
     </template>
     <template slot="footer">

@@ -17,11 +17,11 @@
 
 <template>
   <v-icon
-      size="20"
-      class="mx-auto ma-lg-0"
-      @click="hideFilter">
-      fas fa-arrow-left
-    </v-icon>
+    size="20"
+    class="mx-auto ma-lg-0"
+    @click="hideFilter">
+    fas fa-arrow-left
+  </v-icon>
 </template>
 <script>
 export default {

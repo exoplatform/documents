@@ -420,6 +420,20 @@ extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilte
 });
 
 extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilterMenu', {
+  id: 'mobileAdvancedFilter',
+  labelKey: 'documents.label.mobileAdvancedFilter',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap',
+  width: '190px',
+  rank: 50,
+  menuType: 'searchType',
+  componentOptions: {
+    vueComponent: Vue.options.components['mobile-advanced-filter-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilterMenu', {
   id: 'all',
   labelKey: 'documents.label.all',
   align: 'center',
