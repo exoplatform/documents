@@ -17,14 +17,12 @@
 -->
 <template>
   <div>
-    <p
-      v-if="isAccessGranted"
-      class="center primary--text text-subtitle-1 text--lighten-1">
+    <p class="center primary--text text-subtitle-1 text--lighten-1">
       {{ $t('document.public.access.download.documents.message') }}
     </p>
     <div>
       <div
-        v-if="isAccessGranted"
+        v-if="isDocumentExist"
         class="center mb-6">
         <p>
           <v-icon
@@ -40,7 +38,17 @@
         </p>
       </div>
       <p
-        v-if="!isAccessGranted"
+        v-if="!isDocumentExist"
+        class="red--text center text-body-1">
+        <v-icon
+          size="20"
+          color="red">
+          fas fa-times-circle
+        </v-icon>
+        {{ $t('document.public.access.document.not.exists') }}
+      </p>
+      <p
+        v-else-if="!isPublicAccessActive"
         class="red--text center text-body-1">
         <v-icon
           size="20"
@@ -103,6 +111,7 @@ import {downloadPublicDocument} from '../../documents/js/DocumentFileService.js'
 export default {
   data: () => ({
     isDownloading: false,
+    filename: 'file',
     iconColor: '#476A9C',
     iconClass: 'fas fa-file',
     password: null,
@@ -115,6 +124,9 @@ export default {
     },
   },
   computed: {
+    isDocumentExist() {
+      return this.params?.documentName;
+    },
     passwordType(){
       return this.showPassword ? 'text' :'password';
     },
@@ -126,20 +138,18 @@ export default {
     },
     isPublicAccessActive() {
       return this.params?.hasPublicLink;
-    },
-    isAccessGranted() {
-      return this.params?.documentName && this.params?.hasPublicLink;
     }
   },
   methods: {
     downloadDocument() {
       this.isDownloading = true;
       downloadPublicDocument(this.params?.nodeId, this.password).then((response) => {
+        this.filename = response.headers.get('Content-Disposition').split('filename=')[1].slice(1, -1);
         return response.blob();
       }).then(blob => {
         const element = document.createElement('a');
         element.href = URL.createObjectURL(blob);
-        element.setAttribute('download', this.params?.documentName);
+        element.setAttribute('download', decodeURIComponent(this.filename));
         element.click();
         element.remove();
       }).finally(() => {

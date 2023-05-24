@@ -59,7 +59,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private Authenticator       authenticator;
 
-  private JCRDeleteFileStorage       jcrDeleteFileStorage;
+  private JCRDeleteFileStorage jcrDeleteFileStorage;
 
   private ListenerService listenerService;
 
@@ -437,4 +437,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void moveDocuments(int actionId, long ownerId, List<AbstractNode> documents, String destPath, long userIdentityId) throws IllegalAccessException {
     documentFileStorage.moveDocuments(actionId, ownerId, documents, destPath, getAclUserIdentity(userIdentityId), userIdentityId);
   }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException {
+    return documentFileStorage.hasEditPermissions(nodeId, getAclUserIdentity(userIdentityId));
+  }
+
 }

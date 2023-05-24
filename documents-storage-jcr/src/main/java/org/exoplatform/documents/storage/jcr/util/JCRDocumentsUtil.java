@@ -16,9 +16,14 @@
  */
 package org.exoplatform.documents.storage.jcr.util;
 
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import javax.jcr.*;
 import javax.jcr.version.Version;
@@ -299,7 +304,7 @@ public class JCRDocumentsUtil {
     toFileNode(identityManager, aclIdentity, node, fileNode , spaceService);
     return fileNode;
   }
-
+  
   public static void toFileNode(IdentityManager identityManager,
                                 Identity aclIdentity,
                                 Node node,
@@ -768,6 +773,138 @@ public class JCRDocumentsUtil {
       return identity;
     } catch (Exception e){
       return null ;
+    }
+  }
+  
+  public static DownloadItem toDownloadItem(Node node) throws Exception {
+    ByteArrayOutputStream byteArrayOutputStream = null;
+    String mimeType = null;
+    if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+      if (content != null && content.hasProperty(NodeTypeConstants.JCR_DATA)) {
+        InputStream inputStream = content.getProperty(NodeTypeConstants.JCR_DATA).getStream();
+        byteArrayOutputStream = write(inputStream);
+        mimeType = Utils.getStringProperty(content, NodeTypeConstants.JCR_MIME_TYPE);
+      }
+    }
+    return new DownloadItem(((NodeImpl) node).getIdentifier(),
+                            Utils.getStringProperty(node, NodeTypeConstants.EXO_TITLE),
+                            byteArrayOutputStream,
+                            mimeType);
+  }
+
+  private static ByteArrayOutputStream write(InputStream is) throws Exception {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    int length;
+    byte[] buffer = new byte[1024];
+    while ((length = is.read(buffer, 0, buffer.length)) != -1) {
+      outputStream.write(buffer, 0, length);
+    }
+    return outputStream;
+  }
+
+  public static void createFile(Node node,
+                                 String symlinkPath,
+                                 String sourcePath,
+                                 String tempFolderPath,
+                                 String parentPath) throws RepositoryException, IOException {
+    if (node == null) {
+      return;
+    }
+    Node jrcNode = node.getNode("jcr:content");
+    InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
+    String path = "";
+    String nodePath = node.getPath();
+    if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
+      nodePath = symlinkPath + nodePath.replace(sourcePath, "");
+    }
+    path = tempFolderPath + nodePath.replace(parentPath, "");
+    File file = new File(path);
+    try (OutputStream outputStream = new FileOutputStream(file)) {
+      byte[] buffer = new byte[1024];
+      int length;
+      while ((length = inputStream.read(buffer)) > 0) {
+        outputStream.write(buffer, 0, length);
+      }
+      inputStream.close();
+    }
+  }
+
+  public static void createTempFilesAndFolders(Node node,
+                                               String symlinkPath,
+                                               String sourcePath,
+                                               String tempFolderPath,
+                                               String parentPath) throws Exception {
+    if (node == null) {
+      return;
+    }
+    if (JCRDocumentsUtil.isFolder(node)) {
+      String nodePath = node.getPath();
+      if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
+        nodePath = symlinkPath + nodePath.replace(sourcePath, "");
+      }
+      String path = tempFolderPath + nodePath.replace(parentPath, "");
+      Files.createDirectories(Paths.get(path));
+      NodeIterator nodeIterator = node.getNodes();
+      while (nodeIterator.hasNext()) {
+        Node child = nodeIterator.nextNode();
+        createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath);
+      }
+    } else {
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
+        if (sourceNode != null) {
+          createTempFilesAndFolders(sourceNode, node.getPath(), sourceNode.getPath(), tempFolderPath, parentPath);
+        }
+      } else {
+        createFile(node, symlinkPath, sourcePath, tempFolderPath, parentPath);
+      }
+    }
+  }
+
+  public static void cleanFiles(File file) throws IOException {
+    File[] files = file.listFiles();
+    if (files != null) {
+      for (File f : files) {
+        cleanFiles(f);
+      }
+    }
+    Files.delete(file.toPath());
+  }
+
+  public static void zipFiles(String zipFilePath, String tempFolderPath) throws Exception {
+    try (FileOutputStream fos = new FileOutputStream(zipFilePath)) {
+      try (ZipOutputStream zos = new ZipOutputStream(fos)) {
+        File folder = new File(tempFolderPath);
+        zipFolder(folder, "", zos);
+      }
+    }
+  }
+
+  private static String getFolderName(File file, String folderName) {
+    return StringUtils.isNotEmpty(folderName) ? folderName + "/" + file.getName() : file.getName();
+  }
+  
+  private static void zipFolder(File folder, String folderName, ZipOutputStream zipOutputStream) throws Exception {
+    File[] files = folder.listFiles();
+    if (files == null) {
+      return;
+    }
+    for (File file : files) {
+      if (file.isDirectory()) {
+        zipFolder(file, getFolderName(file, folderName), zipOutputStream);
+      } else {
+        byte[] buffer = new byte[1024];
+        try (FileInputStream fis = new FileInputStream(file)) {
+          zipOutputStream.putNextEntry(new ZipEntry(getFolderName(file, folderName)));
+          int length;
+          while ((length = fis.read(buffer)) > 0) {
+            zipOutputStream.write(buffer, 0, length);
+          }
+          zipOutputStream.closeEntry();
+        }
+      }
     }
   }
 }
