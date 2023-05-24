@@ -218,6 +218,8 @@ export default {
     beforDate: null,
     minSize: null,
     maxSize: null,
+    publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`
+
   }),
   computed: {
     progressAlertColor() {
@@ -339,6 +341,8 @@ export default {
     this.$root.$on('update-selection-documents-list', this.updateSelectionList);
     this.$root.$on('breadcrumb-updated', this.resetSelections);
     this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
+    this.$root.$on('copy-public-access-link', this.getPublicAccessLink);
+    this.initSettings();
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
@@ -346,6 +350,43 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    getPublicAccessLink(file, password, expirationDate, isNew) {
+      return this.$documentFileService.getDocumentPublicAccess(file.id, file.folder, password, expirationDate, isNew)
+        .then(token => {
+          if (!isNew) {
+            navigator.clipboard.writeText(`${this.publicLinkUrl}${token}`).then(() => {
+              this.$root.$emit('show-alert', {
+                type: 'success',
+                message: this.$t('documents.alert.success.label.linkCopied')
+              });
+            }).catch(() => {
+              this.$root.$emit('show-alert', {
+                type: 'error',
+                message: this.$t('document.public.access.copyLink.error.message')
+              });
+            });
+          }
+        }).catch((e) => {
+          if (e.status === 404 && !isNew) {
+            navigator.clipboard.writeText(`${this.publicLinkUrl}${file.id}`).then(() => {
+              this.$root.$emit('show-alert', {
+                type: 'warning',
+                message: this.$t('document.visibility.publicAccess.save.message')
+              });
+            }).catch(() => {
+              this.$root.$emit('show-alert', {
+                type: 'error',
+                message: this.$t('document.public.access.copyLink.error.message')
+              });
+            });
+          } else {
+            this.$root.$emit('show-alert', {
+              type: 'error',
+              message: this.$t('document.visibility.publicAccess.error.message')
+            });
+          }
+        });
+    },
     handleOpenFolderToDrop(event) {
       const folderId = event.detail.folder;
       const index = this.files.findIndex(file => file.id === folderId);
@@ -1235,9 +1276,12 @@ export default {
         }
       }));
     },
-    saveVisibility(file){
+    saveVisibility(file, publicAccess) {
       this.$documentFileService.saveVisibility(file)
         .then(() => {
+          if (publicAccess) {
+            this.getPublicAccessLink(file, null, null, true);
+          }
           this.refreshFiles();
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
           this.$root.$emit('visibility-saved');
