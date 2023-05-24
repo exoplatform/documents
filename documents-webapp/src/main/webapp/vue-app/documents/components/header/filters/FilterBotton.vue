@@ -18,7 +18,7 @@
   <div>
     <v-icon
       size="24"
-      class="text-sub-title pa-1 my-auto mt-2"
+      class="text-sub-title pa-1 my-auto mt-1"
       v-show="!showFilter"
       @click="mobileFilter()">
       {{ filterIcon }}
