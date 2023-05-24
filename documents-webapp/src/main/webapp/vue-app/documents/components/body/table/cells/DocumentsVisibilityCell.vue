@@ -51,8 +51,8 @@ export default {
         };
       }
       if (this.isSharedWithCurrentSpaceOrDrive && !this.file.acl.canEdit) {
-        const collaborators = this.file.acl.collaborators.filter(e => e.identity.id === eXo.env.portal.spaceIdentityId || eXo.env.portal.userName );
-        return collaborators[0].permission === 'read'?
+        const collaborators = this.file.acl.collaborators.filter(e => e.identity.id === eXo.env.portal.spaceIdentityId || eXo.env.portal.userName);
+        return collaborators[0].permission === 'read' ?
           {
             icon: 'fas fa-eye',
             title: this.$t('documents.label.visibility.specific.manger'),
