@@ -31,10 +31,11 @@
       <v-text-field
         :value="rangeDate"
         :title="rangeDateTimeTitle"
-        prepend-inner-icon="mdi-calendar"
-        class="selected-period-input pt-0 mt-0"
+        height="36"
+        prepend-inner-icon="fa-calendar-alt fa-lg"
+        class="selected-period-input pt-0 mt-0 mx-8 full-height"
         rel="tooltip"
-        :placeholder="$t('documents.advaced.filter.drawer.rage.placeholder')"
+        :placeholder="$t('documents.advanced.filter.drawer.range.placeholder')"
         readonly
         v-bind="attrs"
         v-on="on" />
@@ -70,6 +71,13 @@
           <div>{{ item.text }}</div>
         </v-btn>
       </v-btn-toggle>
+      <v-divider />
+      <div class="date-time-selection caption mx-auto pa-2 text-center muted ">
+        <span class="text-capitalize">{{ $t('documents.label.from') }}</span>
+        <span class="primary--text">{{ fromDateTitle }}</span>
+        <span class="text-capitalize">{{ $t('documents.label.to') }}</span>
+        <span class="primary--text">{{ toDateTitle }}</span>
+      </div>
     </div>
   </v-menu>
 </template>
@@ -124,27 +132,27 @@ export default {
       return [
         {
           value: 'thisYear',
-          text: this.$t('documents.periodOptions.thisYear')
+          text: this.$t('documents.label.thisYear')
         },
         {
           value: 'thisSemester',
-          text: this.$t('documents.periodOptions.thisSemester'),
+          text: this.$t('documents.label.thisSemester'),
         },
         {
           value: 'thisQuarter',
-          text: this.$t('documents.periodOptions.thisQuarter')
+          text: this.$t('documents.label.thisQuarter')
         },
         {
           value: 'thisMonth',
-          text: this.$t('documents.periodOptions.thisMonth')
+          text: this.$t('documents.label.thisMonth')
         },
         {
           value: 'thisWeek',
-          text: this.$t('documents.periodOptions.thisWeek')
+          text: this.$t('documents.label.thisWeek')
         },
         {
           value: 'today',
-          text: this.$t('documents.periodOptions.today')
+          text: this.$t('documents.label.today')
         },
       ];
     },

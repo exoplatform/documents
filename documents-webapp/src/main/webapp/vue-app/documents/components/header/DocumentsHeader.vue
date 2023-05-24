@@ -36,7 +36,7 @@
       v-if="selectedView === 'folder'"
       v-show="showBreadcrumb"
       :is-mobile="isMobile"
-      class="py-4 px-1" />
+      class="pt-4 px-1" />
   </div>
 </template>
 
