@@ -365,6 +365,8 @@ export default {
                 message: this.$t('document.public.access.copyLink.error.message')
               });
             });
+          } else {
+            this.refreshFiles();
           }
         }).catch((e) => {
           if (e.status === 404 && !isNew) {
@@ -1288,8 +1290,9 @@ export default {
         .then(() => {
           if (publicAccess) {
             this.getPublicAccessLink(file, null, null, true);
+          } else {
+            this.refreshFiles();
           }
-          this.refreshFiles();
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
           this.$root.$emit('visibility-saved');
         })
