@@ -19,9 +19,7 @@ package org.exoplatform.documents.storage.jcr;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -100,25 +98,33 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final BulkStorageActionService            bulkStorageActionService;
 
-  private final String                         DATE_FORMAT                = "yyyy-MM-dd";
+  private final String                              DATE_FORMAT          = "yyyy-MM-dd";
 
-  private final String                         SPACE_PATH_PREFIX          = "/Groups/spaces/";
+  private final String                              SPACE_PATH_PREFIX    = "/Groups/spaces/";
 
-  private final SimpleDateFormat               formatter                  = new SimpleDateFormat(DATE_FORMAT);
+  private final SimpleDateFormat                    formatter            = new SimpleDateFormat(DATE_FORMAT);
 
-  private static final String                  GROUP_ADMINISTRATORS       = "*:/platform/administrators";
+  private static final String                       GROUP_ADMINISTRATORS = "*:/platform/administrators";
 
-  private static final String                  SPACE_PROVIDER_ID          = "space";
+  private static final String                       SPACE_PROVIDER_ID    = "space";
 
-  private static final String                  SHARED_FOLDER_NAME         = "Shared";
+  private static final String                       SHARED_FOLDER_NAME   = "Shared";
 
-  private static final String                  EOO_COMMENT_ID             = "eoo:commentId";
+  private static final String                       EOO_COMMENT_ID       = "eoo:commentId";
 
-  private static final String                  ADD_TAG_DOCUMENT             = "add_tag_document";
+  private static final String                       ADD_TAG_DOCUMENT     = "add_tag_document";
 
-  private static final String                  KEEP_BOTH                    = "keepBoth";
+  private static final String                       KEEP_BOTH            = "keepBoth";
 
-  private static final String                 CREATE_NEW_VERSION            = "createNewVersion";
+  private static final String                       CREATE_NEW_VERSION   = "createNewVersion";
+
+  private static final String                       ZIP_PREFIX           = "downloadzip";
+
+  private static final String                       TEMP_FOLDER_PREFIX   = "temp_download";
+
+  private static final String                       ZIP_EXTENSION        = ".zip";
+
+  private static final String                       TEMP_DIRECTORY_PATH  = "java.io.tmpdir";
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
 
   private static final Log LOG     = ExoLogger.getLogger(JCRDocumentFileStorage.class);
@@ -1710,5 +1716,84 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       LOG.error("Error execute move", e);
     }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean hasEditPermissions(String nodeId, Identity aclUserIdentity) {
+    SessionProvider sessionProvider;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclUserIdentity);
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                   manageableRepository);
+      Node node = getNodeByIdentifier(session, nodeId);
+      return JCRDocumentsUtil.hasEditPermission(session, node);
+    } catch (Exception e) {
+      LOG.error("Error while checking edit permissions on document {}", nodeId, e);
+      return false;
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DownloadItem getDocumentDownloadItem(String documentId) {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node node = getNodeByIdentifier(systemSession, documentId);
+      if (node != null) {
+        return toDownloadItem(node);
+      }
+    } catch (Exception e) {
+      LOG.error("Error while getting document: {}", documentId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+    return null;
+  }
+
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String downloadFolder(String folderId) {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node node = getNodeByIdentifier(systemSession, folderId);
+      if (node != null) {
+        Path tempFolder = Files.createTempDirectory(TEMP_FOLDER_PREFIX + System.nanoTime()); //NOSONAR
+        tempFolder.toFile().deleteOnExit();
+        String tempFolderPath = tempFolder.toString();
+        String parentPath = node.getParent().getPath();
+        JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
+        String zipName = ZIP_PREFIX + folderId + ZIP_EXTENSION;
+        String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
+        zipFiles(zipPath, tempFolderPath);
+        File zipped = new File(zipPath);
+        File folder = new File(tempFolderPath);
+        JCRDocumentsUtil.cleanFiles(folder);
+        return zipped.getPath();
+      }
+    } catch (Exception e) {
+      LOG.error("Error while getting folder: {}", folderId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+    return null;
   }
 }
