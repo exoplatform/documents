@@ -32,6 +32,7 @@ import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
+import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -480,6 +481,10 @@ public class JCRDocumentsUtil {
             permissions.add(new PermissionEntry(identity, accessControlEntry.getPermission(),getPermissionRole(accessControlEntry.getMembershipEntry().getMembershipType())));
           }
         } else if (groupToIdentity(membershipEntry.getGroup()) != null) {
+          UserACL userACL = CommonsUtils.getService(UserACL.class);
+          if (membershipEntry.getGroup().equals(userACL.getAdminGroups()) && !aclIdentity.isMemberOf(membershipEntry)) {
+            continue;
+          }
           permissions.add(new PermissionEntry(groupToIdentity(membershipEntry.getGroup()), accessControlEntry.getPermission(),PermissionRole.ALL.name()));
         }
       } else{
