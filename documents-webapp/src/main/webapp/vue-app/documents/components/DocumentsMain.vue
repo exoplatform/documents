@@ -1316,7 +1316,6 @@ export default {
           } else {
             this.refreshFiles();
           }
-          this.refreshFiles();
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
           this.$root.$emit('visibility-saved');
         })
