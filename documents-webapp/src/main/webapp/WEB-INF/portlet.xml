@@ -25,7 +25,28 @@
     </portlet-info>
    </portlet>
 
-   <portlet>
+    <portlet>
+        <portlet-name>DownloadDocumentsPublicAccess</portlet-name>
+        <display-name xml:lang="EN">Download Documents Public Access</display-name>
+        <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
+        <init-param>
+            <name>portlet-view-dispatched-file-path</name>
+            <value>/WEB-INF/jsp/download_document.jsp</value>
+        </init-param>
+        <expiration-cache>-1</expiration-cache>
+        <cache-scope>PUBLIC</cache-scope>
+        <supports>
+            <mime-type>text/html</mime-type>
+        </supports>
+        <supported-locale>en</supported-locale>
+        <resource-bundle>locale.portlet.Documents</resource-bundle>
+        <portlet-info>
+            <title>Download Documents Public Access</title>
+            <keywords>Download Documents Public Access</keywords>
+        </portlet-info>
+    </portlet>
+
+    <portlet>
     <portlet-name>DocumentsExtensions</portlet-name>
     <display-name>Documents Extensions Application</display-name>
     <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>

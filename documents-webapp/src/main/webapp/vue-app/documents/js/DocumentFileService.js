@@ -535,3 +535,74 @@ export function bulkMoveDocuments(actionId, documents, ownerId, destPath) {
     }
   });
 }
+
+export function createDocumentPublicAccess(nodeId, publicAccessOptions) {
+  const formData = new FormData();
+  if (nodeId) {
+    formData.append('nodeId', nodeId);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/publicAccessLink?${params}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(publicAccessOptions, (key, value) => {
+      if (value !== null) {
+        return value;
+      }
+    }),
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.json();
+    }
+  });
+}
+
+export function getDocumentPublicAccess(nodeId) {
+  const formData = new FormData();
+  if (nodeId) {
+    formData.append('nodeId', nodeId);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/publicAccessLink?${params}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.json();
+    }
+  });
+}
+
+export function downloadPublicDocument(nodeId, password) {
+  const formData = new FormData();
+  if (nodeId) {
+    formData.append('nodeId', nodeId);
+  }
+  if (password) {
+    formData.append('password', password);
+  }
+  const params = new URLSearchParams(formData).toString();
+  const url = `${window.location.origin}${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/download?${params}`;
+  return fetch(url, {
+    headers: {
+      'Content-Type': 'text/plain'
+    },
+    method: 'GET'
+  }).then(response => {
+    if (response?.ok) {
+      return response;
+    } else {
+      throw response;
+    }
+  });
+}

@@ -263,4 +263,29 @@ public interface DocumentFileStorage {
    * @param identityId     current user identity id
    */
   void moveDocuments(int actionId, long ownerId, List<AbstractNode> documents, String destPath, Identity userIdentityId, long identityId);
+
+  /**
+   * Checks if user has edit permission on document
+   *
+   * @param nodeId document node id
+   * @param aclUserIdentity user identity id
+   * @return true if has edit permission or false
+   */
+  boolean hasEditPermissions(String nodeId, Identity aclUserIdentity);
+
+  /**
+   * Gets a download item of a given document
+   *
+   * @param documentId document id
+   * @return {@link DownloadItem}
+   */
+  DownloadItem getDocumentDownloadItem(String documentId);
+
+  /**
+   * Download a zipped folder
+   *
+   * @param folderId  folder node id
+   * @return downloaded zip path
+   */
+  String downloadFolder(String folderId);
 }
