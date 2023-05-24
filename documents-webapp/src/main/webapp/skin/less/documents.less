@@ -198,6 +198,7 @@
       }
     }
     .documents-header-filter-container {
+      padding-bottom: 2px !important;
       .filter-active-button{
         border: 1px solid @primaryColorDefault !important;
         color:  @primaryColorDefault !important;
@@ -405,13 +406,17 @@
       i {
         font-size: 24px;
       }
-  
+
       label {
         margin-left: 12px;
       }
     }
-    .fileTypeLabel {
-      font-size: 16px;
+
+    .selected-period-input {
+      max-width: 220px !important;
+      .v-input__slot {
+        margin: 4px 0 0;
+      }
     }
     .time-picker {
       display: inline;
@@ -426,22 +431,24 @@
     }
     .period-selection {
       box-sizing: border-box;
-  
       .v-btn {
         width: 33%;
         box-sizing: border-box;
         border: 0 !important;
       }
     }
-  
     .selected-period-menu-content {
       max-width: 360px !important;
     }
-  
     .sizeValue {
       max-width: 100px;
     }
-  
+    .v-list-item{
+      min-height: 39px !important;
+    }
+    .v-list-item__content{
+      padding: 0  !important;
+    }
   }
 
   .documentInfoDrawer {
@@ -536,6 +543,7 @@
     }
 
     .documents-header-filter-container {
+      padding-bottom: 2px !important;
       .v-input__prepend-inner {
         i {
           font-size: 16px;

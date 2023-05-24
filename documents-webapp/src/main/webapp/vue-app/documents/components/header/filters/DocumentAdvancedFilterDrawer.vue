@@ -24,140 +24,142 @@
       {{ $t('documents.advanced.filter.drawer.title') }}
     </template>
     <template slot="content">
-      <v-card flat class="px-2 pt-4">      
-        <div class="font-weight-bold text-start text-color body-2 pa-2 mb-5">{{ $t('documents.advanced.filter.drawer.file.types') }}</div>
+      <v-card flat class="px-2 pt-2">      
+        <div class="font-weight-bold text-start text-color body-2 px-2 py-3">{{ $t('documents.advanced.filter.drawer.file.types') }}</div>
         <v-list>
-          <v-list-item class="my-n9">
-            <v-list-item-action class="mx-3">
+          <v-list-item class="">
+            <v-list-item-action class="mx-3 my-0">
               <v-checkbox
+                ripple="false"
                 v-model="advancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="documents" />
             </v-list-item-action>
             <v-list-item-content>
-              <v-row class="ma-auto">
+              <v-row class="ma-auto pa-0">
                 <v-icon
                   :size="26"
                   :color="docIcon && docIcon.color">
                   {{ docIcon && docIcon.class }}
                 </v-icon>
-                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.document') }}</div>
+                <div class="px-5 mt-2">{{ $t('documents.file.type.document') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n9">
-            <v-list-item-action class="mx-3">
+          <v-list-item class="">
+            <v-list-item-action class="mx-3 my-0">
               <v-checkbox
                 v-model="advancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="sheets" />
             </v-list-item-action>
             <v-list-item-content>
-              <v-row class="ma-auto">
+              <v-row class="ma-auto pa-0">
                 <v-icon
                   :size="26"
                   :color="sheetIcon && sheetIcon.color">
                   {{ sheetIcon && sheetIcon.class }}
                 </v-icon>
-                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.sheet') }}</div>
+                <div class="px-5 mt-2 fileTypeLabel">{{ $t('documents.file.type.sheet') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n9">
-            <v-list-item-action class="mx-3">
+          <v-list-item class="">
+            <v-list-item-action class="mx-3 my-0">
               <v-checkbox
                 v-model="advancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="presentations" />
             </v-list-item-action>
             <v-list-item-content>
-              <v-row class="ma-auto">
+              <v-row class="ma-auto pa-0">
                 <v-icon
                   :size="26"
                   :color="prezIcon && prezIcon.color">
                   {{ prezIcon && prezIcon.class }}
                 </v-icon>
-                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.presentation') }}</div>
+                <div class="px-5 mt-2 fileTypeLabel">{{ $t('documents.file.type.presentation') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n9">
-            <v-list-item-action class="mx-3">
+          <v-list-item class="">
+            <v-list-item-action class="mx-3 my-0">
               <v-checkbox
                 v-model="advancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="pdfs" />
             </v-list-item-action>
             <v-list-item-content>
-              <v-row class="ma-auto">
+              <v-row class="ma-auto pa-0">
                 <v-icon
                   :size="26"
                   :color="pdfIcon && pdfIcon.color">
                   {{ pdfIcon && pdfIcon.class }}
                 </v-icon>
-                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.pdf') }}</div>
+                <div class="px-5 mt-2 fileTypeLabel">{{ $t('documents.file.type.pdf') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n9">
-            <v-list-item-action class="mx-3">
+          <v-list-item class="">
+            <v-list-item-action class="mx-3 my-0">
               <v-checkbox
                 v-model="advancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="images" />
             </v-list-item-action>
             <v-list-item-content>
-              <v-row class="ma-auto">
+              <v-row class="ma-auto pa-0">
                 <v-icon
                   :size="26"
                   :color="imageIcon && imageIcon.color">
                   {{ imageIcon && imageIcon.class }}
                 </v-icon>
-                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.image') }}</div>
+                <div class="px-5 mt-2 fileTypeLabel">{{ $t('documents.file.type.image') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
-          <v-list-item class="my-n9">
-            <v-list-item-action class="mx-3">
+          <v-list-item class="">
+            <v-list-item-action class="mx-3 my-0">
               <v-checkbox
                 v-model="advancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="videos" />
             </v-list-item-action>
             <v-list-item-content>
-              <v-row class="ma-auto">
+              <v-row class="ma-auto pa-0">
                 <v-icon
                   :size="26"
                   :color="videoIcon && videoIcon.color">
                   {{ videoIcon && videoIcon.class }}
                 </v-icon>
-                <div class="pa-5 fileTypeLabel">{{ $t('documents.file.type.video') }}</div>
+                <div class="px-5 mt-2 fileTypeLabel">{{ $t('documents.file.type.video') }}</div>
               </v-row>
             </v-list-item-content>        
           </v-list-item>
         </v-list>
 
-        <div class="font-weight-bold text-start text-color body-2  px-2 pb-5 pt-10">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
+        <div class="font-weight-bold text-start text-color body-2  px-2 py-3">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
 
         <documents-select-period v-model="advancedFilter.selectedPeriod" />
 
-        <div class="font-weight-bold text-start text-color body-2 px-2 pb-5 pt-10">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
+        <div class="font-weight-bold text-start text-color body-2 px-2 pb-5 pt-7">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
          
-        <div class="d-flex">
-          <div class="font-weight-bold text-start text-color body-2 pt-5 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}:</div>
+        <div class="d-flex px-8">
+          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}</div>
           <v-text-field
             v-model="advancedFilter.minSize"
-            class="me-2 py-2"
-            :suffix="$t('documents.advanced.filter.drawer.mb')"
+            class="py-2"
+            :suffix="$t('documents.label.mega')"
             outlined
             dense
             type="number"
             min="0" />
-          <div class="font-weight-bold text-start text-color body-2 pt-5 pe-2 ps-4">{{ $t('documents.advanced.filter.drawer.max') }}:</div>
+            <v-spacer/>
+          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2 ps-8">{{ $t('documents.advanced.filter.drawer.max') }}</div>
           <v-text-field
             v-model="advancedFilter.maxSize"
-            class="me-2 py-2"
-            :suffix="$t('documents.advanced.filter.drawer.mb')"
+            class="py-2"
+            :suffix="$t('documents.label.mega')"
             outlined
             dense
             type="number"

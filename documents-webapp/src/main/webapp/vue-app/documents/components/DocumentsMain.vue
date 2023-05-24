@@ -6,7 +6,8 @@
     flat>
     <div @mouseover="hideOverlay">
       <div
-        class="pa-3 white"
+        v-show="initialized"
+        class="pa-4 white"
         @dragover.prevent
         @drop.prevent
         @dragstart.prevent>
@@ -196,7 +197,7 @@ export default {
       'thisYear': 0,
       'beforeThisYear': 0,
     },
-    selectedView: 'timeline',
+    selectedView: '',
     previewMode: false,
     primaryFilter: 'all',
     alert: false,
