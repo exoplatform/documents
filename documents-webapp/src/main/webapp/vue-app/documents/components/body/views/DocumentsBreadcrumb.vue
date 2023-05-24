@@ -12,50 +12,58 @@
         </v-icon>
       </v-btn>
       <div
-        v-for="(documents, index) in documentsBreadcrumbToDisplay"
-        :key="index"
-        :class="documentsBreadcrumbToDisplay.length === 1 && 'single-path-element' || ''"
-        class="documents-tree-item d-flex text-truncate">
-        <v-tooltip max-width="300" bottom>
-          <template #activator="{ on, attrs }">
-            <v-btn
-              height="20px"
-              min-width="45px"
-              class="pa-0 flex-shrink-1 text-truncate documents-breadcrumb-element"
-              :class="documentsBreadcrumbToDisplay[documentsBreadcrumbToDisplay.length-1].id === actualFolderId && 'clickable' || ''"
-              text
-              v-bind="attrs"
-              v-on="on"
-              :disabled="disabledIconTree"
-              @click="openFolder(documents)">
-              <a
-                class="caption text-truncate"
-                :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
-                :class="index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name) }}</a>
+        id="breadcrumb-list-items"
+        data-isfolder="true"
+        :data-fileId="documentsBreadcrumbToDisplay[0].id"
+        :data-canEdit="canEditFile(documentsBreadcrumbToDisplay[0])? 'true': 'false'"
+        class="pa-1 d-flex width-fit-content">
+        <div
+          v-for="(documents, index) in documentsBreadcrumbToDisplay"
+          :key="index"
+          :data-fileId="documents.id"
+          :class="documentsBreadcrumbToDisplay.length === 1 && 'single-path-element' || ''"
+          class="documents-tree-item d-flex text-truncate">
+          <v-tooltip max-width="300" bottom>
+            <template #activator="{ on, attrs }">
+              <v-btn
+                height="20px"
+                min-width="45px"
+                class="pa-0 flex-shrink-1 text-truncate documents-breadcrumb-element"
+                :class="documentsBreadcrumbToDisplay[documentsBreadcrumbToDisplay.length-1].id === actualFolderId && 'clickable' || ''"
+                text
+                v-bind="attrs"
+                v-on="on"
+                :disabled="disabledIconTree"
+                @click="openFolder(documents)">
+                <a
+                  class="caption text-truncate"
+                  :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
+                  :class="index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name) }}</a>
+                <v-icon
+                  v-if="documents.symlink"
+                  size="10"
+                  class="pe-1 iconStyle">
+                  mdi-link-variant
+                </v-icon>
+              </v-btn>
+            </template>
+            <span class="caption breadcrumbName">
+              {{ getName(documents.name) }}
               <v-icon
                 v-if="documents.symlink"
                 size="10"
                 class="pe-1 iconStyle">
                 mdi-link-variant
               </v-icon>
-            </v-btn>
-          </template>
-          <span class="caption breadcrumbName">
-            {{ getName(documents.name) }}
-            <v-icon
-              v-if="documents.symlink"
-              size="10"
-              class="pe-1 iconStyle">
-              mdi-link-variant
-            </v-icon>
-          </span>
-        </v-tooltip>
-        <v-icon
-          v-if="index < documentsBreadcrumbToDisplay.length-1"
-          :size="move ? 12 : 14"
-          :class="move ? 'px-1' : 'px-3'">
-          fa-chevron-right
-        </v-icon>
+            </span>
+          </v-tooltip>
+          <v-icon
+            v-if="index < documentsBreadcrumbToDisplay.length-1"
+            :size="move ? 12 : 14"
+            :class="move ? 'px-1' : 'px-3'">
+            fa-chevron-right
+          </v-icon>
+        </div>
       </div>
     </div>
   </div>
@@ -106,13 +114,28 @@ export default {
     this.$root.$on('set-breadcrumb', this.setBreadcrumb);
     this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$on('open-folder', this.openFolder);
+    document.addEventListener('document-open-root-folder-to-drop', this.handleOpenRootFolder);
+    document.addEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
   },
   beforeDestroy() {
     this.$root.$off('set-breadcrumb', this.setBreadcrumb);
     this.$root.$off('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$off('open-folder', this.openFolder);
+    document.removeEventListener('document-open-root-folder-to-drop', this.handleOpenRootFolder);
+    document.removeEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
   },
   methods: {
+    handleMoveDroppedOnBreadcrumb(event) {
+      event.detail.currentOpenedFolder =  this.documentsBreadcrumbToDisplay[0];
+      document.dispatchEvent(new CustomEvent('move-dropped-documents', event));
+    },
+    handleOpenRootFolder() {
+      this.$root.$emit('document-open-folder', this.documentsBreadcrumbToDisplay[0]);
+
+    },
+    canEditFile(file) {
+      return file?.accessList?.canEdit;
+    },
     setBreadcrumb(folder) {
       this.folderPath = '';
       if (folder) {
