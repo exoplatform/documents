@@ -535,3 +535,65 @@ export function bulkMoveDocuments(actionId, documents, ownerId, destPath) {
     }
   });
 }
+
+export function getDocumentPublicAccess(nodeId, isFolder, password, expirationDate, isNew) {
+  const formData = new FormData();
+  if (nodeId) {
+    formData.append('nodeId', nodeId);
+  }
+  if (isFolder) {
+    formData.append('isFolder', isFolder);
+  }
+  if (password) {
+    formData.append('password', password);
+  }
+  if (expirationDate) {
+    formData.append('expirationDate', expirationDate);
+  }
+  if (isNew) {
+    formData.append('isNew', isNew);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/publicAccessLink?${params}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      isFolder: isFolder,
+      password: password,
+      expirationDate: expirationDate
+    }),
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.text();
+    }
+  });
+}
+
+export function downloadPublicDocument(nodeId, password) {
+  const formData = new FormData();
+  if (nodeId) {
+    formData.append('nodeId', nodeId);
+  }
+  if (password) {
+    formData.append('password', password);
+  }
+  const params = new URLSearchParams(formData).toString();
+  const url = `${window.location.origin}${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/download?${params}`;
+  return fetch(url, {
+    headers: {
+      'Content-Type': 'text/plain'
+    },
+    method: 'GET'
+  }).then(response => {
+    if (response?.ok) {
+      return response;
+    } else {
+      throw response;
+    }
+  });
+}

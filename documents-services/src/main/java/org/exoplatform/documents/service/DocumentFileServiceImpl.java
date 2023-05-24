@@ -63,7 +63,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private Authenticator       authenticator;
 
-  private JCRDeleteFileStorage       jcrDeleteFileStorage;
+  private JCRDeleteFileStorage jcrDeleteFileStorage;
 
   private ListenerService listenerService;
 
@@ -483,4 +483,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                             SettingValue.create(view));
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException {
+    return documentFileStorage.hasEditPermissions(nodeId, getAclUserIdentity(userIdentityId));
+  }
 }
