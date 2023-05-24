@@ -19,5 +19,6 @@ package org.exoplatform.documents.rest.model;
 public enum Visibility {
   ALL_MEMBERS,
   SPECIFIC_COLLABORATOR,
-  COLLABORATORS_AND_PUBLIC_ACCESS;
+
+  SPACES_MEMBERS_AND_PUBLIC_ACCESS;
 }

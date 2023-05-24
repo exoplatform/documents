@@ -26,6 +26,7 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.entity.PublicDocumentAccessEntity;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
@@ -341,7 +342,7 @@ public class EntityBuilder {
     }
     String visibilityChoice = allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name();
     if (publicDocumentAccessService.hasDocumentPublicAccess(node.getId())) {
-      visibilityChoice = Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name();
+      visibilityChoice = Visibility.SPACES_MEMBERS_AND_PUBLIC_ACCESS.name();
     }
     return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, visibilityChoice, new ArrayList<>(map.values()));
   }
@@ -532,12 +533,25 @@ public class EntityBuilder {
     return  permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove") ? true : false;
   }
 
-  public static PublicDocumentAccessEntity toPublicDocumentAccessEntity(PublicDocumentAccess publicDocumentAccess) {
+  public static PublicDocumentAccess toDocumentToken(PublicDocumentAccessEntity publicDocumentAccessEntity) {
+    if (publicDocumentAccessEntity == null) {
+      return null;
+    }
+    return new PublicDocumentAccess(publicDocumentAccessEntity.getId(),
+                             publicDocumentAccessEntity.getNodeId(),
+                             publicDocumentAccessEntity.getToken(),
+                             publicDocumentAccessEntity.getExpirationDate(),
+                             publicDocumentAccessEntity.isHasPassword());
+  }
+
+  public static PublicDocumentAccessEntity toDocumentTokenEntity(PublicDocumentAccess publicDocumentAccess) {
     PublicDocumentAccessEntity publicDocumentAccessEntity = new PublicDocumentAccessEntity();
+    publicDocumentAccessEntity.setId(publicDocumentAccess.getId());
     publicDocumentAccessEntity.setNodeId(publicDocumentAccess.getNodeId());
+    publicDocumentAccessEntity.setToken(publicDocumentAccess.getToken());
     publicDocumentAccessEntity.setExpirationDate(publicDocumentAccess.getExpirationDate());
-    publicDocumentAccessEntity.setHasPassword(publicDocumentAccess.getPasswordHashKey() != null);
-    publicDocumentAccessEntity.setDecodedPassword(publicDocumentAccess.getDecodedPassword());
+    publicDocumentAccessEntity.setHasPassword(publicDocumentAccess.isHasPassword());
     return publicDocumentAccessEntity;
   }
+
 }

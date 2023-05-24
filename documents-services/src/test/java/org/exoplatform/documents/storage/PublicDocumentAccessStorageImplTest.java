@@ -32,19 +32,19 @@ public class PublicDocumentAccessStorageImplTest {
   }
 
   @Test
-  public void getDocumentPublicAccessById() {
+  public void getTokenById() {
     PublicDocumentAccessEntity publicDocumentAccessEntity = new PublicDocumentAccessEntity();
     publicDocumentAccessEntity.setId(1L);
     publicDocumentAccessEntity.setNodeId("123");
-    publicDocumentAccessEntity.setPasswordHashKey("hash");
-    publicDocumentAccessEntity.setPasswordHashKey("100:test:test");
+    publicDocumentAccessEntity.setToken("token");
+    publicDocumentAccessEntity.setHasPassword(true);
     publicDocumentAccessEntity.setExpirationDate(new Date());
     when(publicDocumentAccessDAO.getPublicDocumentAccessByNodeId("123")).thenReturn(publicDocumentAccessEntity);
     assertNotNull(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123"));
   }
 
   @Test
-  public void removeDocumentPublicAccess() {
+  public void removeToken() {
     PublicDocumentAccessEntity publicDocumentAccessEntity = new PublicDocumentAccessEntity();
     when(publicDocumentAccessDAO.getPublicDocumentAccessByNodeId("123")).thenReturn(publicDocumentAccessEntity);
     publicDocumentAccessStorage.removePublicDocumentAccess("123");
@@ -52,12 +52,12 @@ public class PublicDocumentAccessStorageImplTest {
   }
 
   @Test
-  public void saveDocumentPublicAccess() {
+  public void saveToken() {
     PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess();
     publicDocumentAccess.setId(0L);
     when(identityManager.getIdentity("1")).thenReturn(null, mock(Identity.class));
     Throwable exception = assertThrows(IllegalArgumentException.class, () -> publicDocumentAccessStorage.savePublicDocumentAccess(null, 1L));
-    assertEquals("document access object argument is null", exception.getMessage());
+    assertEquals("documentToken argument is null", exception.getMessage());
     exception = assertThrows(IllegalArgumentException.class, () -> publicDocumentAccessStorage.savePublicDocumentAccess(publicDocumentAccess, 1L));
     assertEquals("identity is not exist", exception.getMessage());
     publicDocumentAccessStorage.savePublicDocumentAccess(publicDocumentAccess, 1L);

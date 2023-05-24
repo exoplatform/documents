@@ -71,15 +71,6 @@
   </external-component-plugins>
 
   <external-component-plugins>
-    <target-component>org.exoplatform.social.core.space.spi.SpaceService</target-component>
-    <component-plugin>
-      <name>DocumentsSpaceApplicationListener</name>
-      <set-method>registerSpaceLifeCycleListener</set-method>
-      <type>org.exoplatform.documents.listener.DocumentsSpaceApplicationListener</type>
-    </component-plugin>
-  </external-component-plugins>
-
-  <external-component-plugins>
     <target-component>org.exoplatform.web.WebAppController</target-component>
     <component-plugin>
       <name>PublicAccessDownloadDocumentHandler</name>
@@ -90,39 +81,6 @@
           <name>public.download.jsp.path</name>
           <value>${documents.public.download.jsp.path:/WEB-INF/jsp/download_document.jsp}</value>
         </value-param>
-      </init-params>
-    </component-plugin>
-  </external-component-plugins>
-
-  <external-component-plugins>
-    <target-component>org.exoplatform.web.filter.ExtensibleFilter</target-component>
-    <component-plugin>
-      <name>Documents preview filter</name>
-      <set-method>addFilterDefinitions</set-method>
-      <type>org.exoplatform.web.filter.FilterDefinitionPlugin</type>
-      <priority>2</priority>
-      <init-params>
-        <object-param>
-          <name>Registered document filter definition</name>
-          <object type="org.exoplatform.web.filter.FilterDefinition">
-            <field name="filter">
-              <object type="org.exoplatform.documents.filter.DocumentPreviewFilter" />
-            </field>
-            <field name="patterns">
-              <collection type="java.util.ArrayList" item-type="java.lang.String">
-                <value>
-                  <string>/.*/documents.*</string>
-                </value>
-                <value>
-                  <string>/.*/drives.*</string>
-                </value>
-                <value>
-                  <string>/.*/oeditor.*</string>
-                </value>
-              </collection>
-            </field>
-          </object>
-        </object-param>
       </init-params>
     </component-plugin>
   </external-component-plugins>

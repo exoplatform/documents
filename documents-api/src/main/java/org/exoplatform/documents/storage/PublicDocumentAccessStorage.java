@@ -21,23 +21,23 @@ import org.exoplatform.documents.model.PublicDocumentAccess;
 public interface PublicDocumentAccessStorage {
 
     /**
-     * Gets a public access by its document id (nodeId)
+     * Gets a token by its document id (nodeId)
      * @param nodeId node id
      * @return {@link PublicDocumentAccess}
      */
     PublicDocumentAccess getPublicDocumentAccessByNodeId(String nodeId);
 
     /**
-     * Removes an existing document public access
+     * Removes an existing document token
      *
      * @param nodeId document id
      */
     void removePublicDocumentAccess(String nodeId);
 
     /**
-     * Save a created document public access
+     * Save a generated document token
      *
-     * @param publicDocumentAccess document public access object
+     * @param publicDocumentAccess document token object
      * @param userId current user id
      * @return {@link PublicDocumentAccess}
      */
