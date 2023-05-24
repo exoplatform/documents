@@ -143,20 +143,19 @@
 
         <div class="font-weight-bold text-start text-color body-2 px-2 pb-4 pt-4">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
          
-        <div class="d-flex ps-3">
-          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}:</div>
+        <div class="d-flex px-3">
+          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}</div>
           <v-text-field
             v-model="advancedFilter.minSize"
-            class="me-2 py-2"
+            class="size-text-field py-2"
             :suffix="$t('documents.label.mega')"
             outlined
-            dense
-            type="number"
+            densetype="number"
             min="0" />
-          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2 ps-2">{{ $t('documents.advanced.filter.drawer.max') }}:</div>
+          <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2 ps-6">{{ $t('documents.advanced.filter.drawer.max') }}</div>
           <v-text-field
             v-model="advancedFilter.maxSize"
-            class="me-2 py-2"
+            class="size-text-field py-2"
             :suffix="$t('documents.label.mega')"
             outlined
             dense

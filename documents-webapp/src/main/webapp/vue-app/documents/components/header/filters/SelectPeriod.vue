@@ -32,7 +32,7 @@
         :value="rangeDate"
         :title="rangeDateTimeTitle"
         prepend-inner-icon="mdi-calendar"
-        class="selected-period-input pt-0 mt-0  ms-3"
+        class="selected-period-input pt-0 mt-0  mx-3"
         rel="tooltip"
         :placeholder="$t('documents.advanced.filter.drawer.rage.placeholder')"
         readonly
