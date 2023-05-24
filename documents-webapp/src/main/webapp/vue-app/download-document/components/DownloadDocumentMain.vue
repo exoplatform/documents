@@ -111,7 +111,6 @@ import {downloadPublicDocument} from '../../documents/js/DocumentFileService.js'
 export default {
   data: () => ({
     isDownloading: false,
-    filename: 'file',
     iconColor: '#476A9C',
     iconClass: 'fas fa-file',
     password: null,
@@ -144,12 +143,11 @@ export default {
     downloadDocument() {
       this.isDownloading = true;
       downloadPublicDocument(this.params?.nodeId, this.password).then((response) => {
-        this.filename = response.headers.get('Content-Disposition').split('filename=')[1].slice(1, -1);
         return response.blob();
       }).then(blob => {
         const element = document.createElement('a');
         element.href = URL.createObjectURL(blob);
-        element.setAttribute('download', decodeURIComponent(this.filename));
+        element.setAttribute('download', this.params?.documentName);
         element.click();
         element.remove();
       }).finally(() => {
