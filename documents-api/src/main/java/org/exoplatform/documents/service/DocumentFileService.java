@@ -335,4 +335,14 @@ public interface DocumentFileService {
    * @param view the view to store
    */
   void setDefaultView(Long ownerId, String userIdentityId, String view);
+  
+  /**
+   * Checks if user has edit permission on document
+   *
+   * @param nodeId document node id
+   * @param userIdentityId user identity id
+   * @return true if has edit permission or false
+   * @throws IllegalAccessException
+   */
+  boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException;
 }
