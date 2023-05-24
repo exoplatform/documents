@@ -31,4 +31,6 @@ public class DocumentsUserSettings {
   @ToString.Exclude
   @lombok.EqualsAndHashCode.Exclude
   private String cometdContextName = null;
+
+  private String view              = null;
 }

@@ -46,7 +46,10 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
-import org.exoplatform.documents.service.*;
+import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.DocumentWebSocketService;
+import org.exoplatform.documents.service.ExternalDownloadService;
+import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
@@ -107,19 +110,44 @@ public class DocumentFileRest implements ResourceContainer {
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @Path("/settings")
+  @Path("/settings/{ownerId}")
   @Operation(summary = "Get User documents settings", method = "GET")
   @ApiResponses(value = { 
        @ApiResponse(responseCode = "200", description = "Request fulfilled"),
        @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response getSettings() {
+  public Response getSettings(@Parameter(description = "Identity technical identifier, required = true")
+  @PathParam("ownerId")
+  Long ownerId) {
     Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
     try {
       DocumentsUserSettings documentsUserSettings = new DocumentsUserSettings();
       String cometdToken = documentWebSocketService.getUserToken(currentUserIdentity.getRemoteId());
       documentsUserSettings.setCometdToken(cometdToken);
       documentsUserSettings.setCometdContextName(documentWebSocketService.getCometdContextName());
+      documentsUserSettings.setView(documentFileService.getDefaultView(ownerId, currentUserIdentity.getId()));
       return Response.ok(documentsUserSettings).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @POST
+  @RolesAllowed("users")
+  @Path("/settings/{ownerId}/{view}")
+  @Operation(summary = "Get User documents settings", method = "GET")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getDefaultView(@Parameter(description = "view", required = true)
+  @PathParam("view")
+  String view,
+                                 @Parameter(description = "Identity technical identifier", required = true)
+                                 @PathParam("ownerId")
+                                 Long ownerId) {
+    Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
+    try {
+      documentFileService.setDefaultView(ownerId, currentUserIdentity.getId(), view);
+      return Response.ok().build();
     } catch (Exception e) {
       LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
       return Response.serverError().entity(e.getMessage()).build();

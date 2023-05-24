@@ -28,11 +28,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.exoplatform.documents.storage.DocumentFileStorage;
-import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.junit.Before;
 import org.junit.Test;
 
+import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.listener.AttachmentsActivityCacheUpdater;
@@ -40,6 +39,8 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
 import org.exoplatform.documents.rest.util.EntityBuilder;
+import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
@@ -75,6 +76,8 @@ public class DocumentFileServiceTest {
 
   private ListenerService         listenerService;
 
+  private SettingService          settingService;
+
   private CachedActivityStorage   cachedActivityStorage;
 
   private Identity                currentIdentity;
@@ -92,6 +95,7 @@ public class DocumentFileServiceTest {
     documentFileStorage = mock(DocumentFileStorage.class);
     activityStorage = mock(ActivityStorage.class);
     listenerService = mock(ListenerService.class);
+    settingService = mock(SettingService.class);
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     cachedActivityStorage = mock(CachedActivityStorage.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
@@ -100,7 +104,8 @@ public class DocumentFileServiceTest {
                                                       spaceService,
                                                       identityManager,
                                                       identityRegistry,
-                                                      listenerService);
+                                                      listenerService,
+                                                      settingService);
 
     currentIdentity = new Identity(OrganizationIdentityProvider.NAME, userName);
     currentIdentity.setId(String.valueOf(currentOwnerId));
