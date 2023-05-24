@@ -5,7 +5,7 @@
     autofocus
     :placeholder="$t('documents.label.filterDocuments')"
     :append-icon="appendIcon"
-    class="pa-2 my-auto width-full inputDocumentsFilter"
+    class="pa-2 mb-n3 inputDocumentsFilter"
     @click:append="cancelSearch" />
 </template>
 <script>
