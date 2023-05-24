@@ -85,6 +85,7 @@ import DocumentsSelectionCell from './components/body/table/cells/DocumentsSelec
 import DocumentActionContextMenu from './components/body/table/DocumentActionContextMenu.vue';
 import DocumentsSizeCell from './components/body/table/cells/DocumentsSizeCell.vue';
 import UploadNewVersionMenuAction from './components/body/actions/UploadNewVersionMenuAction.vue';
+import PublicDocumentOptionsDrawer from './components/body/table/PublicDocumentOptionsDrawer.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -154,7 +155,8 @@ const components = {
   'documents-selection-cell': DocumentsSelectionCell,
   'document-action-context-menu': DocumentActionContextMenu,
   'documents-size-cell': DocumentsSizeCell,
-  'upload-new-version-menu-action': UploadNewVersionMenuAction
+  'upload-new-version-menu-action': UploadNewVersionMenuAction,
+  'public-document-options-drawer': PublicDocumentOptionsDrawer
 };
 
 for (const key in components) {

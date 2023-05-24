@@ -80,6 +80,11 @@ export default {
             icon: 'fas fa-eye',
             title: this.$t('documents.label.visibility.specific.manger'),
           };
+      case 'SPACES_MEMBERS_AND_PUBLIC_ACCESS':
+        return {
+          icon: 'fas fa-globe',
+          title: this.$t('documents.label.visibility.public.access'),
+        };
       default:
         return {
           icon: 'fas fa-layer-group',
