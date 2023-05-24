@@ -26,16 +26,13 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.commons.utils.ListAccess;
-import org.exoplatform.container.ExoContainer;
-import org.exoplatform.container.ExoContainerContext;
+import org.exoplatform.documents.entity.PublicDocumentAccessEntity;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.organization.OrganizationService;
-import org.exoplatform.services.organization.User;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
@@ -65,6 +62,7 @@ public class EntityBuilder {
                                                                 IdentityManager identityManager,
                                                                 SpaceService spaceService,
                                                                 MetadataService metadataService,
+                                                                PublicDocumentAccessService publicDocumentAccessService,
                                                                 List<AbstractNode> documents,
                                                                 String expand,
                                                                 long authenticatedUserId) {
@@ -73,6 +71,7 @@ public class EntityBuilder {
                                                           identityManager,
                                                           spaceService,
                                                           metadataService,
+                            publicDocumentAccessService,
                                                           document,
                                                           expand,
                                                           authenticatedUserId))
@@ -104,6 +103,7 @@ public class EntityBuilder {
                                                         IdentityManager identityManager,
                                                         SpaceService spaceService,
                                                         MetadataService metadataService,
+                                                        PublicDocumentAccessService publicDocumentAccessService,
                                                         AbstractNode document,
                                                         String expand,
                                                         long authenticatedUserId) {
@@ -116,6 +116,7 @@ public class EntityBuilder {
                           identityManager,
                           spaceService,
                           metadataService,
+              publicDocumentAccessService,
                           (FileNode) document,
                           expandProperties,
                           authenticatedUserId);
@@ -124,6 +125,7 @@ public class EntityBuilder {
                             identityManager,
                             spaceService,
                             metadataService,
+              publicDocumentAccessService,
                             (FolderNode) document,
                             expandProperties,
                             authenticatedUserId);
@@ -135,6 +137,7 @@ public class EntityBuilder {
                                             IdentityManager identityManager,
                                             SpaceService spaceService,
                                             MetadataService metadataService,
+                                            PublicDocumentAccessService publicDocumentAccessService,
                                             FileNode file,
                                             List<String> expandProperties,
                                             long authenticatedUserId) {
@@ -143,6 +146,7 @@ public class EntityBuilder {
            identityManager,
            spaceService,
            metadataService,
+            publicDocumentAccessService,
            file,
            fileEntity,
            expandProperties,
@@ -181,6 +185,7 @@ public class EntityBuilder {
                                                 IdentityManager identityManager,
                                                 SpaceService spaceService,
                                                 MetadataService metadataService,
+                                                PublicDocumentAccessService publicDocumentAccessService,
                                                 FolderNode folder,
                                                 List<String> expandProperties,
                                                 long authenticatedUser) {
@@ -189,6 +194,7 @@ public class EntityBuilder {
            identityManager,
            spaceService,
            metadataService,
+            publicDocumentAccessService,
            folder,
            folderEntity,
            expandProperties,
@@ -220,6 +226,7 @@ public class EntityBuilder {
                              IdentityManager identityManager,
                              SpaceService spaceService,
                              MetadataService metadataService,
+                             PublicDocumentAccessService publicDocumentAccessService,
                              AbstractNode node,
                              AbstractNodeEntity nodeEntity,
                              List<String> expandProperties,
@@ -230,7 +237,7 @@ public class EntityBuilder {
       nodeEntity.setName(encodeName(node));
       nodeEntity.setDatasource(node.getDatasource());
       nodeEntity.setDescription(node.getDescription());
-      nodeEntity.setAcl(toNodePermissionEntity(node,identityManager, spaceService));
+      nodeEntity.setAcl(toNodePermissionEntity(node,identityManager, spaceService, publicDocumentAccessService));
       nodeEntity.setCreatedDate(node.getCreatedDate());
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
@@ -297,7 +304,10 @@ public class EntityBuilder {
     return nodeName;
   }
 
-  private static NodePermissionEntity toNodePermissionEntity(AbstractNode node, IdentityManager identityManager, SpaceService spaceService){
+  private static NodePermissionEntity toNodePermissionEntity(AbstractNode node,
+                                                             IdentityManager identityManager,
+                                                             SpaceService spaceService,
+                                                             PublicDocumentAccessService publicDocumentAccessService) {
     String path = node.getPath();
     NodePermission nodePermission = node.getAcl();
     if(nodePermission == null) return null;
@@ -329,7 +339,11 @@ public class EntityBuilder {
 
       }
     }
-    return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name(), new ArrayList<>(map.values()));
+    String visibilityChoice = allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name();
+    if (publicDocumentAccessService.hasDocumentPublicAccess(node.getId())) {
+      visibilityChoice = Visibility.SPACES_MEMBERS_AND_PUBLIC_ACCESS.name();
+    }
+    return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, visibilityChoice, new ArrayList<>(map.values()));
   }
   private static PermissionEntryEntity toPermissionEntryEntity(PermissionEntry permissionEntry, SpaceService spaceService){
     if(permissionEntry == null) return null;
@@ -515,6 +529,27 @@ public class EntityBuilder {
   }
   private static boolean isEditPermission(String permission){
     return  permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove") ? true : false;
+  }
+
+  public static PublicDocumentAccess toDocumentToken(PublicDocumentAccessEntity publicDocumentAccessEntity) {
+    if (publicDocumentAccessEntity == null) {
+      return null;
+    }
+    return new PublicDocumentAccess(publicDocumentAccessEntity.getId(),
+                             publicDocumentAccessEntity.getNodeId(),
+                             publicDocumentAccessEntity.getToken(),
+                             publicDocumentAccessEntity.getExpirationDate(),
+                             publicDocumentAccessEntity.isHasPassword());
+  }
+
+  public static PublicDocumentAccessEntity toDocumentTokenEntity(PublicDocumentAccess publicDocumentAccess) {
+    PublicDocumentAccessEntity publicDocumentAccessEntity = new PublicDocumentAccessEntity();
+    publicDocumentAccessEntity.setId(publicDocumentAccess.getId());
+    publicDocumentAccessEntity.setNodeId(publicDocumentAccess.getNodeId());
+    publicDocumentAccessEntity.setToken(publicDocumentAccess.getToken());
+    publicDocumentAccessEntity.setExpirationDate(publicDocumentAccess.getExpirationDate());
+    publicDocumentAccessEntity.setHasPassword(publicDocumentAccess.isHasPassword());
+    return publicDocumentAccessEntity;
   }
 
 }

@@ -17,6 +17,8 @@
 package org.exoplatform.documents.rest;
 
 import java.io.InputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -41,14 +43,10 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
-import org.exoplatform.documents.rest.model.AbstractNodeEntity;
-import org.exoplatform.documents.rest.model.DocumentsUserSettings;
-import org.exoplatform.documents.rest.model.FileNodeEntity;
-import org.exoplatform.documents.rest.model.NodePermissionEntity;
+import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
-import org.exoplatform.documents.service.DocumentFileService;
-import org.exoplatform.documents.service.DocumentWebSocketService;
+import org.exoplatform.documents.service.*;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
@@ -84,18 +82,26 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final DocumentWebSocketService documentWebSocketService;
 
+  private PublicDocumentAccessService publicDocumentAccessService;
+  
+  private ExternalDownloadService        externalDownloadService;
+
   public DocumentFileRest(DocumentFileService documentFileService,
                           SpaceService spaceService,
                           IdentityManager identityManager,
                           MetadataService metadataService,
                           SettingService settingService,
-                          DocumentWebSocketService documentWebSocketService) {
+                          DocumentWebSocketService documentWebSocketService,
+                          PublicDocumentAccessService publicDocumentAccessService,
+                          ExternalDownloadService externalDownloadService) {
     this.documentFileService = documentFileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.metadataService = metadataService;
     this.settingService = settingService;
     this.documentWebSocketService = documentWebSocketService;
+    this.publicDocumentAccessService = publicDocumentAccessService;
+    this.externalDownloadService = externalDownloadService;
   }
 
   @GET
@@ -261,6 +267,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                        identityManager,
                                                                                        spaceService,
                                                                                        metadataService,
+              publicDocumentAccessService,
                                                                                        documents,
                                                                                        expand,
                                                                                        userIdentityId);
@@ -425,6 +432,7 @@ public class DocumentFileRest implements ResourceContainer {
               identityManager,
               spaceService,
               metadataService,
+              publicDocumentAccessService,
               abstractNode,
               expand,
               userIdentityId);
@@ -502,6 +510,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                  identityManager,
                                                                                  spaceService,
                                                                                  metadataService,
+              publicDocumentAccessService,
                                                                                  createdFolder,
                                                                                  null,
                                                                                  userIdentityId);
@@ -802,6 +811,9 @@ public class DocumentFileRest implements ResourceContainer {
 
     try {
       documentFileService.updatePermissions(nodeEntity.getId(),EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager), userIdentityId);
+      if (!nodeEntity.getAcl().getVisibilityChoice().equals(Visibility.SPACES_MEMBERS_AND_PUBLIC_ACCESS.name())) {
+        publicDocumentAccessService.revokeDocumentPublicAccess(nodeEntity.getId());
+      }
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     }
@@ -1003,6 +1015,108 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (Exception e) {
       LOG.warn("Error while creating a new version", e);
       return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @POST
+  @Produces(MediaType.TEXT_PLAIN)
+  @RolesAllowed("users")
+  @Path("/publicAccessLink")
+  @Operation(summary = "Generate a new public link for a specific document",
+             method = "POST",
+             description = "Generate a new public link for a specific document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getPublicAccessLink(@Parameter(description = "target file node identifier", required = true)
+                                      @QueryParam("nodeId") String nodeId,
+                                      @RequestBody(description = "public access link params", required = true) 
+                                      Map<String, String> params,
+                                      @Parameter(description = "Generate or get existing token")
+                                      @DefaultValue("false") @QueryParam("isNew") boolean isNew) {
+
+    if (StringUtils.isBlank(nodeId) || params.isEmpty()) {
+      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      boolean isFolder = Boolean.parseBoolean(params.get("isFolder"));
+      String password = params.get("password");
+      Long expirationDate = NumberUtils.toLong(params.get("expirationDate"));
+      boolean hasEditPermission = documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId);
+      if (!hasEditPermission) {
+        return Response.status(Response.Status.UNAUTHORIZED).build();
+      }
+      if (isNew) {
+        return Response.ok(publicDocumentAccessService.createPublicDocumentAccess(userIdentityId, nodeId, isFolder, password, expirationDate))
+                .type(MediaType.TEXT_PLAIN_TYPE)
+                .build();
+      } else {
+        PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
+        if (publicDocumentAccess == null) {
+          return Response.status(Status.NOT_FOUND).build();
+        }
+        return Response.ok(publicDocumentAccess.getNodeId()).type(MediaType.TEXT_PLAIN_TYPE).build();
+      }
+   
+    } catch (Exception e) {
+      LOG.error("Error while generation a public access token for document: {}", nodeId, e);
+      return Response.serverError().build();
+    }
+  }
+
+  @GET
+  @Produces
+  @Path("/download")
+  @Operation(summary = "Download a given document",
+          method = "GET",
+          description = "Download a given document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response downloadDocument(@Parameter(description = "public link token id", required = true)
+                                   @QueryParam("nodeId") String nodeId,
+                                   @Parameter(description = "token lock password")
+                                   @QueryParam("password") String password) {
+
+    if (StringUtils.isBlank(nodeId)) {
+      return Response.status(Status.BAD_REQUEST).entity("nodeId id is mandatory").build();
+    }
+    try {
+      if (publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId)) {
+        return Response.status(Status.UNAUTHORIZED).entity("token expired").build();
+      }
+      if (!publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
+        return Response.status(Status.BAD_REQUEST).entity("token signature is not valid").build();
+      }
+      DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
+      if (downloadItem == null) {
+        return Response.status(Status.NOT_FOUND).build();
+      }
+      if(downloadItem.getMimeType() != null) {
+        return Response.ok(downloadItem.getItemContent().toByteArray())
+                .type(downloadItem.getMimeType())
+                .header("Content-Disposition",
+                        "attachment;filename=\""
+                                + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
+                                .replace("+", "%20") + "\"").build();
+      } else {
+        byte[] filesBytes = externalDownloadService.downloadZippedFolder(downloadItem.getItemId());
+        return Response.ok(filesBytes)
+                       .type("application/zip")
+                       .header("Content-Disposition",
+                               "attachment; filename=\""
+                                   + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
+                                       .replace("+", "%20") + ".zip\"").build();
+      }
+    } catch (Exception e) {
+      LOG.error("Error while downloading document", e);
+      return Response.serverError().build();
     }
   }
 
