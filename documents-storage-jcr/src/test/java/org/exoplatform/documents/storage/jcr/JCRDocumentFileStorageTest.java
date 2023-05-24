@@ -63,7 +63,7 @@ import org.exoplatform.social.metadata.tag.model.TagName;
 public class JCRDocumentFileStorageTest {
 
   private static final MockedStatic<Utils>               UTILS                 = mockStatic(Utils.class);
-
+  
   private static final MockedStatic<JCRDocumentsUtil>    JCR_DOCUMENTS_UTIL    = mockStatic(JCRDocumentsUtil.class);
 
   private static final MockedStatic<SessionProvider>     SESSION_PROVIDER      = mockStatic(SessionProvider.class);
@@ -1283,5 +1283,75 @@ public class JCRDocumentFileStorageTest {
     verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("*:/platform/users") && Arrays.equals(map.get("*:/platform/users"),new String[]{"read"})));
     verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("John") && Arrays.equals(map.get("John"),PermissionType.ALL)));
   }
+  
+  private Session getMockedSession(org.exoplatform.services.security.Identity identity) throws RepositoryException {
+    SessionProvider systemSessionprovider = mock(SessionProvider.class);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionprovider);
 
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    when(systemSessionprovider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    return session;
+  }
+
+  @Test
+  public void hasEditPermissions() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    Session session = getMockedSession(identity);
+    Node node = mock(Node.class);
+    when(node.getPath()).thenReturn("path");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true, false);
+    assertTrue(jcrDocumentFileStorage.hasEditPermissions("123", identity));
+    assertFalse(jcrDocumentFileStorage.hasEditPermissions("123", identity));
+  }
+  
+  @Test
+  public void getDocumentDownloadItem() throws RepositoryException {
+    Session session = getMockedSession(null);
+    NodeImpl node = mock(NodeImpl.class);
+    Node contentNode = mock(Node.class);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
+    when(contentNode.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    InputStream inputStream = new ByteArrayInputStream("test".getBytes());
+    Property dataProperty = mock(Property.class);
+    Value dataValue = mock(Value.class);
+    when(dataProperty.getValue()).thenReturn(dataValue);
+    Property mimeTypeProperty = mock(Property.class);
+    Value mimeTypeValue = mock(Value.class);
+    when(dataProperty.getValue()).thenReturn(dataValue);
+    when(dataValue.getStream()).thenReturn(inputStream);
+    when(mimeTypeProperty.getValue()).thenReturn(mimeTypeValue);
+    when(mimeTypeValue.getString()).thenReturn("application/pdf");
+    when(contentNode.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
+    when(contentNode.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    when(node.getIdentifier()).thenReturn("123");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadItem(node)).thenCallRealMethod();
+    DownloadItem downloadItem = jcrDocumentFileStorage.getDocumentDownloadItem("123");
+    assertNotNull(downloadItem);
+  }
+
+  @Test
+  public void downloadFolder() throws RepositoryException {
+    Session session = getMockedSession(null);
+    Node node = mock(Node.class);
+    Node parentNode = mock(Node.class);
+    when(parentNode.getPath()).thenReturn("parentPath");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    when(node.getParent()).thenReturn(parentNode);
+    String zipPath = jcrDocumentFileStorage.downloadFolder("123");
+    assertNotNull(zipPath);
+  }
 }

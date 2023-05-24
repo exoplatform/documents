@@ -28,6 +28,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -38,8 +40,6 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
 import org.exoplatform.documents.rest.util.EntityBuilder;
-import org.exoplatform.documents.storage.DocumentFileStorage;
-import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
@@ -614,5 +614,19 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity("user")).thenReturn(identity);
     documentFileService.moveDocuments(1, 1L, documents, "destPath", 1L);
     verify(documentFileStorage, times(1)).moveDocuments(1, 1L, documents, "destPath", identity, 1L);
+  }
+  
+  @Test
+  public void hasEditPermissionOnDocument() throws IllegalAccessException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity userIdentity = mock(Identity.class);
+    AbstractNode abstractNode = mock(AbstractNode.class);
+    List<AbstractNode> documents = List.of(abstractNode);
+    when(identityManager.getIdentity(anyString())).thenReturn(userIdentity);
+    when(userIdentity.getRemoteId()).thenReturn("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    when(documentFileStorage.hasEditPermissions("123", identity)).thenReturn(true, false);
+    assertTrue(documentFileService.hasEditPermissionOnDocument("123", 1L));
+    assertFalse(documentFileService.hasEditPermissionOnDocument("123", 1L));
   }
 }

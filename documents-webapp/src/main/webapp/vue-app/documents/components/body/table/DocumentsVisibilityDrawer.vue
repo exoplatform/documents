@@ -58,18 +58,57 @@
                 dense
                 class="caption"
                 outlined />
+              <p
+                v-if="showPublicAccessOption"
+                class="text-caption grey--text text--darken-2 caption text-break">
+                {{ $t('document.visibility.publicAccess.and.spaceMembers.choice.info') }}
+              </p>
             </div>
-            <div v-if="showSwitch" class="d-flex flex-row my-4">
-              <v-label for="visibility">
+            <div
+              v-if="showPublicAccessOption"
+              class="d-flex flex-row my-4 ms-4 mt-n1">
+              <v-label for="publicAccess">
                 <span class="text-color body-2 mr-6">
-                  {{ $t('documents.label.visibility.allowEveryone') }}
+                  {{ $t('document.visibility.publicAccess.message') }}
                 </span>
-                <p class="caption"> {{ infoMessage }} </p>
+                <p class="caption"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
               </v-label>
-              <v-spacer />
-              <v-switch
-                v-model="file.acl.allMembersCanEdit"
-                class="mt-0 me-1" />
+              <v-tooltip bottom>
+                <template #activator="{ on, attrs}">
+                  <v-btn
+                    v-bind="attrs"
+                    v-on="on"
+                    class="ms-8 mt-n1"
+                    color="primary"
+                    icon
+                    @click="copyPublicAccessLink">
+                    <v-icon
+                      size="18">
+                      fas fa-clone
+                    </v-icon>
+                  </v-btn>
+                </template>
+                {{ $t('document.visibility.publicAccess.copyLink.message') }}
+              </v-tooltip>
+            </div>
+            <div
+              v-if="showSwitch"
+              class="mt-4">
+              <p class="font-weight-bold text-start text-color body-2">
+                {{ $t(`document.visibility.who.canEdit.${fileGenderLabel}.message`) }}
+              </p>
+              <div class="d-flex flex-row my-4">
+                <v-label for="visibility">
+                  <span class="text-color body-2 mr-6">
+                    {{ $t('documents.label.visibility.allowEveryone') }}
+                  </span>
+                  <p class="caption"> {{ infoMessage }} </p>
+                </v-label>
+                <v-spacer />
+                <v-switch
+                  v-model="file.acl.allMembersCanEdit"
+                  class="mt-0 me-1" />
+              </div>
             </div>
           </v-list-item-content>
         </v-list-item>
@@ -158,6 +197,7 @@
   </div>
 </template>
 <script>
+
 export default {
   props: {
     isMobile: {
@@ -178,9 +218,11 @@ export default {
       fullname: 'System',
       avatar: '/portal/rest/v1/social/users/default-image/avatar',
     },
-    file: { 'acl': {
-      'visibilityChoice': 'ALL_MEMBERS'
-    }},
+    file: {
+      acl: {
+        visibilityChoice: 'ALL_MEMBERS'
+      }
+    },
     collaborators: [],
     searchOptions: {
       currentUser: '',
@@ -188,6 +230,9 @@ export default {
     users: [],
   }),
   computed: {
+    fileGenderLabel() {
+      return this.file.folder? 'folder': 'document';
+    },
     ignoreItems() {
       return eXo.env.portal.spaceName && [`space:${eXo.env.portal.spaceName}`] || [];
     },
@@ -204,6 +249,10 @@ export default {
           text: this.$t('documents.label.visibility.specific'),
           value: 'SPECIFIC_COLLABORATOR',
         },
+        {
+          text: this.$t('document.visibility.publicAccess.and.spaceMembers.message'),
+          value: 'SPACES_MEMBERS_AND_PUBLIC_ACCESS',
+        }
       ];
     },
     infoMessage(){
@@ -215,13 +264,17 @@ export default {
           return this.$t('documents.label.folders.visibility.user.info');
         }
       case 'ALL_MEMBERS':
+      case 'SPACES_MEMBERS_AND_PUBLIC_ACCESS':
         return this.file.acl.allMembersCanEdit ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
       default:
         return this.$t('documents.label.visibility.allMembers.info');
       }
     },
     showSwitch(){
-      return this.file.acl.visibilityChoice === 'ALL_MEMBERS';
+      return this.file.acl.visibilityChoice === 'ALL_MEMBERS' ||  this.file.acl.visibilityChoice === 'SPACES_MEMBERS_AND_PUBLIC_ACCESS';
+    },
+    showPublicAccessOption(){
+      return this.file.acl.visibilityChoice === 'SPACES_MEMBERS_AND_PUBLIC_ACCESS';
     },
     suggesterLabels() {
       return {
@@ -273,6 +326,9 @@ export default {
     });
   },
   methods: {
+    copyPublicAccessLink() {
+      this.$root.$emit('copy-public-access-link', this.file, null, null);
+    },
     mapCollaborator(collaborator) {
       const fullName = collaborator.profile
           && collaborator.profile.fullName
@@ -348,7 +404,8 @@ export default {
       if (this.file.acl.visibilityChoice==='SPECIFIC_COLLABORATOR'){
         this.file.acl.allMembersCanEdit=false;
       }
-      this.$root.$emit('save-visibility',this.file);
+      const publicAccess = this.file.acl.visibilityChoice === 'SPACES_MEMBERS_AND_PUBLIC_ACCESS';
+      this.$root.$emit('save-visibility',this.file, publicAccess);
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {
