@@ -18,6 +18,7 @@
 -->
 <template>
   <v-tooltip
+    v-if="selectedDocuments.length"
     v-model="canSelectRange"
     :disabled="!canSelectRange"
     open-on-hover
@@ -35,6 +36,24 @@
         @mouseleave="resetRangeSelect" />
     </template>
     {{ $t('document.multiSelection.select.range.message') }}
+  </v-tooltip>
+  <v-tooltip
+    v-else
+    open-on-hover
+    bottom>
+    <template #activator="{ on, attrs }">
+      <v-simple-checkbox
+        v-model="checked"
+        v-bind="attrs"
+        v-on="on"
+        color="primary"
+        class="mt-auto"
+        :class="show? 'visible': 'invisible'"
+        @click="selectDocument($event)"
+        @mouseover="checkRangeSelect"
+        @mouseleave="resetRangeSelect" />
+    </template>
+    {{ $t('documents.multiSelection.select.element.tooltip.message') }}
   </v-tooltip>
 </template>
 
