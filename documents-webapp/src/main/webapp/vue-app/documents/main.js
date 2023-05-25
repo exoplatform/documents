@@ -84,8 +84,8 @@ export function init() {
     }, `#${appId}`, 'Documents');
   });
   //Temporarily used to add VuetifyApp class on new documents view
-  if ( !document.getElementById('UIJcrExplorerContainer').classList.contains('VuetifyApp') ){
-    document.getElementById('UIJcrExplorerContainer').classList.add('VuetifyApp');
+  if ( !document.getElementById('UIJcrExplorerContainer')?.classList.contains('VuetifyApp') ){
+    document.getElementById('UIJcrExplorerContainer')?.classList.add('VuetifyApp');
   }
 }
 
