@@ -22,17 +22,27 @@
       disable-filtering
       class="documents-table border-box-sizing">
       <template #[`header.data-table-select`]="{ on , props }">
-        <v-simple-checkbox
-          v-model="selectAll"
+        <v-tooltip
           v-on="on"
           v-bind="props"
-          :indeterminate="false"
-          color="primary"
-          :class="showSelectAll? 'visible': 'invisible'"
-          class="mt-auto"
-          @mouseover="showSelectAllInputOnHover"
-          @mouseleave="hideSelectAllInputOnHover"
-          @click="selectAllDocuments" />
+          :disabled="selectAll"
+          open-on-hover
+          bottom>
+          <template #activator="{ on, attrs }">
+            <v-simple-checkbox
+              v-model="selectAll"
+              v-on="on"
+              v-bind="attrs"
+              :indeterminate="false"
+              color="primary"
+              :class="showSelectAll? 'visible': 'invisible'"
+              class="mt-auto"
+              @mouseover="showSelectAllInputOnHover"
+              @mouseleave="hideSelectAllInputOnHover"
+              @click="selectAllDocuments" />
+          </template>
+          {{ $t('documents.multiSelection.selectAll.element.tooltip.message') }}
+        </v-tooltip>
       </template>
       <template #[`header.name`]>
         <span
