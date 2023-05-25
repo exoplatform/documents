@@ -135,10 +135,10 @@ public class DocumentFileRest implements ResourceContainer {
   @POST
   @RolesAllowed("users")
   @Path("/settings/{ownerId}/{view}")
-  @Operation(summary = "Get User documents settings", method = "GET")
+  @Operation(summary = Set the user default view settings", method = "GET")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response getDefaultView(@Parameter(description = "view", required = true)
+  public Response setDefaultView(@Parameter(description = "view", required = true)
   @PathParam("view")
   String view,
                                  @Parameter(description = "Identity technical identifier", required = true)
