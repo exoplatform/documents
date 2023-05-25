@@ -298,8 +298,8 @@ export default {
     this.$root.$on('documents-filter', this.updateFilter);
   },
   mounted(){
-    document.getElementById('headerName').parentElement.addEventListener('mouseover', this.showSelectAllInputOnHover);
-    document.getElementById('headerName').parentElement.addEventListener('mouseleave', this.hideSelectAllInputOnHover);
+    document.getElementById('headerName')?.closest('tr').addEventListener('mouseover', this.showSelectAllInputOnHover);
+    document.getElementById('headerName')?.closest('tr').addEventListener('mouseleave', this.hideSelectAllInputOnHover);
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
     DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
   },
