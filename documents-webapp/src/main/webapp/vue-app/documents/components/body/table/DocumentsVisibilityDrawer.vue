@@ -240,7 +240,7 @@ export default {
       return this.$t('documents.label.visibilityTitle', {0: this.file?.name});
     },
     visibilityLabel(){
-      return [
+      return eXo?.env?.portal?.spaceGroup && [
         {
           text: this.$t('documents.label.visibility.allMembers'),
           value: 'ALL_MEMBERS',
@@ -251,7 +251,16 @@ export default {
         },
         {
           text: this.$t('document.visibility.publicAccess.and.spaceMembers.message'),
-          value: 'SPACES_MEMBERS_AND_PUBLIC_ACCESS',
+          value: 'COLLABORATORS_AND_PUBLIC_ACCESS',
+        }
+      ] || [
+        {
+          text: this.$t('documents.myDrive.visibility.specific.collaborators'),
+          value: 'SPECIFIC_COLLABORATOR',
+        },
+        {
+          text: this.$t('documents.myDrive.visibility.public.access'),
+          value: 'COLLABORATORS_AND_PUBLIC_ACCESS',
         }
       ];
     },
@@ -264,17 +273,17 @@ export default {
           return this.$t('documents.label.folders.visibility.user.info');
         }
       case 'ALL_MEMBERS':
-      case 'SPACES_MEMBERS_AND_PUBLIC_ACCESS':
+      case 'COLLABORATORS_AND_PUBLIC_ACCESS':
         return this.file.acl.allMembersCanEdit ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
       default:
         return this.$t('documents.label.visibility.allMembers.info');
       }
     },
     showSwitch(){
-      return this.file.acl.visibilityChoice === 'ALL_MEMBERS' ||  this.file.acl.visibilityChoice === 'SPACES_MEMBERS_AND_PUBLIC_ACCESS';
+      return eXo.env.portal.spaceGroup && ['ALL_MEMBERS', 'COLLABORATORS_AND_PUBLIC_ACCESS'].includes(this.file.acl.visibilityChoice);
     },
     showPublicAccessOption(){
-      return this.file.acl.visibilityChoice === 'SPACES_MEMBERS_AND_PUBLIC_ACCESS';
+      return this.file.acl.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
     },
     suggesterLabels() {
       return {
@@ -404,7 +413,7 @@ export default {
       if (this.file.acl.visibilityChoice==='SPECIFIC_COLLABORATOR'){
         this.file.acl.allMembersCanEdit=false;
       }
-      const publicAccess = this.file.acl.visibilityChoice === 'SPACES_MEMBERS_AND_PUBLIC_ACCESS';
+      const publicAccess = this.file.acl.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
       this.$root.$emit('save-visibility',this.file, publicAccess);
     },
     removeUser(user) {
