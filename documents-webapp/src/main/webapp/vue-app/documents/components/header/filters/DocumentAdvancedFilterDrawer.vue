@@ -150,7 +150,8 @@
             class="size-text-field py-2"
             :suffix="$t('documents.label.mega')"
             outlined
-            densetype="number"
+            dense
+            type="number"
             min="0" />
           <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2 ps-6">{{ $t('documents.advanced.filter.drawer.max') }}</div>
           <v-text-field
