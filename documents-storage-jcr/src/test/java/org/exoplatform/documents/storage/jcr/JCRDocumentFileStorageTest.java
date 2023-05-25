@@ -589,10 +589,13 @@ public class JCRDocumentFileStorageTest {
     when(JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
     when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
     Node node = mock(Node.class);
+    NodeType nodeType = mock(NodeType.class);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
     when(getNodeByIdentifier(session, "123")).thenReturn(node);
     when(identity.getUserId()).thenReturn("user");
     doCallRealMethod().when(JCRDocumentsUtil.class, "isValidDocumentTitle", anyString());
-    doCallRealMethod().when(JCRDocumentsUtil.class, "cleanName", anyString());
+    doCallRealMethod().when(JCRDocumentsUtil.class, "cleanName", anyString(), anyString());
     when(node.getName()).thenReturn("oldName");
     when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
     when(node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)).thenReturn(true);
@@ -613,7 +616,6 @@ public class JCRDocumentFileStorageTest {
     when(node.getParent()).thenReturn(parent);
     when(parent.hasNode("exist")).thenReturn(true);
     when(parent.getNode("exist")).thenReturn(existNode);
-    NodeType nodeType = mock(NodeType.class);
     when(nodeType.getName()).thenReturn("nt:file");
     when(existNode.getPrimaryNodeType()).thenReturn(nodeType);
     when(node.getPrimaryNodeType()).thenReturn(nodeType);
