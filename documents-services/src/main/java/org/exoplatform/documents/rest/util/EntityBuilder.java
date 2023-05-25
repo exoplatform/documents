@@ -340,7 +340,7 @@ public class EntityBuilder {
     }
     String visibilityChoice = allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name();
     if (publicDocumentAccessService.hasDocumentPublicAccess(node.getId())) {
-      visibilityChoice = Visibility.SPACES_MEMBERS_AND_PUBLIC_ACCESS.name();
+      visibilityChoice = Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name();
     }
     return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, visibilityChoice, new ArrayList<>(map.values()));
   }

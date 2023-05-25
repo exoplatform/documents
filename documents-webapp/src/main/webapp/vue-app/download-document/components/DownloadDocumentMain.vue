@@ -17,11 +17,6 @@
 -->
 <template>
   <div>
-    <p
-      v-if="isAccessGranted"
-      class="center primary--text text-subtitle-1 text--lighten-1">
-      {{ $t('document.public.access.download.documents.message') }}
-    </p>
     <div>
       <div
         v-if="isAccessGranted"

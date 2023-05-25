@@ -1080,7 +1080,7 @@ public class DocumentFileRestTest {
     nodeEntity.setId("123");
     mockEntityBuilder().when(() -> EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager))
                        .thenReturn(nodePermission);
-    nodeEntity.getAcl().setVisibilityChoice(Visibility.SPACES_MEMBERS_AND_PUBLIC_ACCESS.name());
+    nodeEntity.getAcl().setVisibilityChoice(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name());
     doNothing().when(documentFileService).updatePermissions("123", nodePermission, 1L);
     doNothing().when(publicDocumentAccessService).revokeDocumentPublicAccess("123");
     Response response2 = documentFileRest1.updatePermissions(nodeEntity);
