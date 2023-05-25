@@ -21,7 +21,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.jcr.*;
-import javax.jcr.nodetype.NodeType;
 import javax.jcr.version.Version;
 
 import org.apache.commons.io.FilenameUtils;
@@ -634,6 +633,9 @@ public class JCRDocumentsUtil {
    *
    * @return the string
    */
+  public static String cleanName(String oldName) {
+    return cleanName(oldName, NodeTypeConstants.NT_FILE);
+  }
   public static String cleanName(String oldName, String nodeType) {
     if (org.apache.commons.lang.StringUtils.isEmpty(oldName)) return oldName;
     String extension = "" ;
