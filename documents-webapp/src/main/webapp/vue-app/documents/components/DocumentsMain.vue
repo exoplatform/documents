@@ -5,7 +5,8 @@
     role="main"
     flat>
     <div @mouseover="hideOverlay">
-      <div v-show="initialized"
+      <div
+        v-show="initialized"
         class="pa-3 white"
         @dragover.prevent
         @drop.prevent
