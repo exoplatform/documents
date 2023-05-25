@@ -25,7 +25,7 @@
             <v-list-item-title 
               class="body-2 mx-2 mt-1"
               :class="idItemActive === item.id ? 'primary--text font-weight-bold' : ''">
-              {{ item.name }}
+              {{ item.name === 'Documents' ? $t('documents.label.spaceHomeDocuments') : item.name }}               
             </v-list-item-title>
           </div>
         </template>
