@@ -31,9 +31,6 @@ import javax.jcr.AccessDeniedException;
 import javax.jcr.RepositoryException;
 import javax.ws.rs.core.Response;
 
-import org.exoplatform.documents.service.*;
-import org.exoplatform.documents.storage.DocumentFileStorage;
-import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,6 +50,9 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
+import org.exoplatform.documents.service.*;
+import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
@@ -124,7 +124,8 @@ public class DocumentFileRestTest {
                                                       spaceService,
                                                       identityManager,
                                                       identityRegistry,
-                                                      listenerService);
+                                                      listenerService,
+                                                      settingService);
     documentFileRest = new DocumentFileRest(documentFileService,
                                             spaceService,
                                             identityManager,
