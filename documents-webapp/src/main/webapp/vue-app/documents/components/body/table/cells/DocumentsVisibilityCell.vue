@@ -81,10 +81,11 @@ export default {
             icon: 'fas fa-eye',
             title: this.$t('documents.label.visibility.specific.manger'),
           };
-      case 'SPACES_MEMBERS_AND_PUBLIC_ACCESS':
+      case 'COLLABORATORS_AND_PUBLIC_ACCESS':
         return {
           icon: 'fas fa-globe',
-          title: this.$t('documents.label.visibility.public.access'),
+          title: eXo.env.portal.spaceGroup ? this.$t('documents.label.visibility.public.access') :
+            this.$t('documents.myDrive.label.visibility.public.access'),
         };
       default:
         return {
