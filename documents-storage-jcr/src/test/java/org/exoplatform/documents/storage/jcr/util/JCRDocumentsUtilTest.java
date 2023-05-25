@@ -378,4 +378,27 @@ public class JCRDocumentsUtilTest {
     assertEquals("group", identity.getProviderId());
   }
 
+  @Test
+  public void testCleanName(){
+    //legal document name
+    String fileName = "fileName.text";
+    String folderName = "folderName";
+    assertEquals(fileName, JCRDocumentsUtil.cleanName(fileName, NodeTypeConstants.NT_FILE));
+    assertEquals(folderName, JCRDocumentsUtil.cleanName(folderName, NodeTypeConstants.NT_FOLDER));
+
+    // illegal document name
+    String illeglFileName = "illegal&file#Name.text";
+    String illegalFolderName = "illegal&folder#Name";
+    assertEquals("illegal_file_Name.text", JCRDocumentsUtil.cleanName(illeglFileName, NodeTypeConstants.NT_FILE));
+    assertEquals("illegal_folder_Name", JCRDocumentsUtil.cleanName(illegalFolderName, NodeTypeConstants.NT_FOLDER));
+
+    // folder name with '.' character
+    String folderNameWithPointChar = "folderNameWithPoint.char";
+    assertEquals("folderNameWithPoint_char", JCRDocumentsUtil.cleanName(folderNameWithPointChar, NodeTypeConstants.NT_FOLDER));
+
+    //folder name with '.' character followed by a special character
+    String folderNameWithPointfollowedBySpChar = "folder&Name.followedBy#character";
+    assertEquals("folder_Name_followedBy_character", JCRDocumentsUtil.cleanName(folderNameWithPointfollowedBySpChar, NodeTypeConstants.NT_FOLDER));
+  }
+
 }
