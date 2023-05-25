@@ -634,9 +634,12 @@ public class JCRDocumentsUtil {
    * @return the string
    */
   public static String cleanName(String oldName) {
+    return cleanName(oldName, NodeTypeConstants.NT_FILE);
+  }
+  public static String cleanName(String oldName, String nodeType) {
     if (org.apache.commons.lang.StringUtils.isEmpty(oldName)) return oldName;
     String extension = "" ;
-    if(oldName.lastIndexOf(".") > -1){
+    if(nodeType.equals(NodeTypeConstants.NT_FILE) && oldName.lastIndexOf(".") > -1){
       extension = oldName.substring(oldName.lastIndexOf("."));
       oldName = oldName.substring(0,oldName.lastIndexOf(".")) ;
     }
