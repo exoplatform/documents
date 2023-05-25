@@ -310,22 +310,25 @@ export default {
     this.$root.$on('show-alert', (message) => {
       this.displayMessage(message);
     });
-    this.getDocumentDataFromUrl()
+    this.initSettings()
       .finally(() => {
-        this.checkDefaultViewOptions();
-        this.optionsLoaded = true;
-        const queryParams = new URLSearchParams(window.location.search);
-        const disablePreview = queryParams.has('path');
-        this.refreshFiles({'disablePreview': disablePreview})
-          .then(() => {
-            this.watchDocumentPreview();
-            if (this.selectedView === 'folder') {
-              this.$nextTick().then(() => this.$root.$emit('update-breadcrumb', this.folderPath));
-            }
-          })
+        this.getDocumentDataFromUrl()
           .finally(() => {
-            this.initialized = true;
-            this.$root.$applicationLoaded();
+            this.checkDefaultViewOptions();
+            this.optionsLoaded = true;
+            const queryParams = new URLSearchParams(window.location.search);
+            const disablePreview = queryParams.has('path');
+            this.refreshFiles({'disablePreview': disablePreview})
+              .then(() => {
+                this.watchDocumentPreview();
+                if (this.selectedView === 'folder') {
+                  this.$nextTick().then(() => this.$root.$emit('update-breadcrumb', this.folderPath));
+                }
+              })
+              .finally(() => {
+                this.initialized = true;
+                this.$root.$applicationLoaded();
+              });
           });
       });
     this.$root.$on('create-shortcut', this.createShortcut);
@@ -336,7 +339,6 @@ export default {
     this.$root.$on('update-selection-documents-list', this.updateSelectionList);
     this.$root.$on('breadcrumb-updated', this.resetSelections);
     this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
-    this.initSettings();
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
@@ -367,22 +369,22 @@ export default {
         this.moveDocument(ownerId, filesToMove[0], folder.path, folder, null, null);
       }
     },
-    initSettings(userSettings) {
-      if (userSettings) {
-        this.settings = userSettings;
-        this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
-      } else {
-        return this.$documentFileService.getUserSettings()
-          .then(settings => {
-            if (settings) {
-              this.settings = settings;
-              this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
+    initSettings() {
+      return this.$documentFileService.getUserSettings()
+        .then(settings => {
+          if (settings) {
+            this.settings = settings;
+            if (settings.view && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === settings.view)) {
+              this.selectedView = settings.view;
+            } else {
+              this.selectedView = 'timeline';
             }
-          })
-          .finally(() => {
-            this.settingsLoaded = true;
-          });
-      }
+            this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
+          }
+        })
+        .finally(() => {
+          this.settingsLoaded = true;
+        });
     },
     uploadNewVersion(file) {
       const fileUpload = document.getElementById('uploadVersionInput');
@@ -853,6 +855,7 @@ export default {
       url.searchParams.set('view', view);
       window.history.replaceState('documents', 'Documents', url.toString());
       this.selectedView = view;
+      this.$documentFileService.setUserDefaultView(view);
       this.parentFolderId = null;
       this.folderPath = null;
       this.files = [];
@@ -1334,9 +1337,10 @@ export default {
           if (view.toLowerCase() === 'folder'){
             this.selectedView = 'folder';
           } else {
-            this.parentFolderId = null;
-            this.folderPath = null;
-            this.selectedView ='timeline';
+            if (this.selectedView === 'timeline'){
+              this.parentFolderId = null;
+              this.folderPath = null;
+            }
           }
         }
         if (this.selectedView === 'folder') {
