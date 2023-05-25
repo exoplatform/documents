@@ -59,9 +59,8 @@
                 class="caption"
                 outlined />
               <p
-                v-if="showPublicAccessOption"
                 class="text-caption grey--text text--darken-2 caption text-break">
-                {{ $t('document.visibility.publicAccess.and.spaceMembers.choice.info') }}
+                {{ choiceInfo }}
               </p>
             </div>
             <div
@@ -336,7 +335,7 @@ export default {
       }
     },
     visibilityLabel(){
-      return [
+      return eXo?.env?.portal?.spaceGroup && [
         {
           text: this.$t('documents.label.visibility.allMembers'),
           value: 'ALL_MEMBERS',
@@ -347,7 +346,16 @@ export default {
         },
         {
           text: this.$t('document.visibility.publicAccess.and.spaceMembers.message'),
-          value: 'SPACES_MEMBERS_AND_PUBLIC_ACCESS',
+          value: 'COLLABORATORS_AND_PUBLIC_ACCESS',
+        }
+      ] || [
+        {
+          text: this.$t('documents.myDrive.visibility.specific.collaborators'),
+          value: 'SPECIFIC_COLLABORATOR',
+        },
+        {
+          text: this.$t('documents.myDrive.visibility.public.access'),
+          value: 'COLLABORATORS_AND_PUBLIC_ACCESS',
         }
       ];
     },
@@ -360,7 +368,7 @@ export default {
           return this.$t('documents.label.folders.visibility.user.info');
         }
       case 'ALL_MEMBERS':
-      case 'SPACES_MEMBERS_AND_PUBLIC_ACCESS':
+      case 'COLLABORATORS_AND_PUBLIC_ACCESS':
         return this.file.acl.allMembersCanEdit ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
       default:
         return this.$t('documents.label.visibility.allMembers.info');

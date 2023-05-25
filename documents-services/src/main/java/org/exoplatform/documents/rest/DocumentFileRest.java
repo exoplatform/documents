@@ -819,7 +819,7 @@ public class DocumentFileRest implements ResourceContainer {
 
     try {
       documentFileService.updatePermissions(nodeEntity.getId(),EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager), userIdentityId);
-      if (!nodeEntity.getAcl().getVisibilityChoice().equals(Visibility.SPACES_MEMBERS_AND_PUBLIC_ACCESS.name())) {
+      if (!nodeEntity.getAcl().getVisibilityChoice().equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name())) {
         publicDocumentAccessService.revokeDocumentPublicAccess(nodeEntity.getId());
       }
     } catch (IllegalAccessException e) {
