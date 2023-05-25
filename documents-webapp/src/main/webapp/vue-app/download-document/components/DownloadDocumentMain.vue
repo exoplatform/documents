@@ -17,12 +17,14 @@
 -->
 <template>
   <div>
-    <p class="center primary--text text-subtitle-1 text--lighten-1">
+    <p
+      v-if="isAccessGranted"
+      class="center primary--text text-subtitle-1 text--lighten-1">
       {{ $t('document.public.access.download.documents.message') }}
     </p>
     <div>
       <div
-        v-if="isDocumentExist"
+        v-if="isAccessGranted"
         class="center mb-6">
         <p>
           <v-icon
@@ -38,17 +40,7 @@
         </p>
       </div>
       <p
-        v-if="!isDocumentExist"
-        class="red--text center text-body-1">
-        <v-icon
-          size="20"
-          color="red">
-          fas fa-times-circle
-        </v-icon>
-        {{ $t('document.public.access.document.not.exists') }}
-      </p>
-      <p
-        v-else-if="!isPublicAccessActive"
+        v-if="!isAccessGranted"
         class="red--text center text-body-1">
         <v-icon
           size="20"
@@ -123,9 +115,6 @@ export default {
     },
   },
   computed: {
-    isDocumentExist() {
-      return this.params?.documentName;
-    },
     passwordType(){
       return this.showPassword ? 'text' :'password';
     },
@@ -137,6 +126,9 @@ export default {
     },
     isPublicAccessActive() {
       return this.params?.hasPublicLink;
+    },
+    isAccessGranted() {
+      return this.params?.documentName && this.params?.hasPublicLink;
     }
   },
   methods: {
