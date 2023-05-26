@@ -7,7 +7,7 @@
     <div @mouseover="hideOverlay">
       <div
         v-show="initialized"
-        class="pa-3 white"
+        class="pa-4 white"
         @dragover.prevent
         @drop.prevent
         @dragstart.prevent>
