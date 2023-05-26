@@ -386,13 +386,13 @@
       transform: ~"translateX(min(var(--mouse-x), calc(100vw - 105%))) translateY(min(var(--mouse-y), calc(100vh - 101%)))";
     }
 
-    .is-intersected[data-isfolder="true"] {
-      border: 2px dashed #c0bebe !important;
+    .is-intersected[data-isfolder="true"], .is-drop-active-onBody, .is-body-intersected {
+      border: 2px dashed @primaryColor !important;
       cursor: move;
     }
 
     .is-drop-active {
-      border: 2px dashed @primaryColor !important;
+      border: 2px dashed #c0bebe !important;
       cursor: move;
     }
 
