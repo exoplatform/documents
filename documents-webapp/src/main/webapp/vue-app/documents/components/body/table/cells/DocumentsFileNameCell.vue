@@ -309,7 +309,7 @@ export default {
                 workspace: 'collaboration',
                 //concat the file type if attachement title haven't extension on preview mode
                 title: decodeURI(attachment.title).lastIndexOf('.') >= 0 ? decodeURI(attachment.title) : decodeURI(attachment.title).concat(this.fileType),
-                downloadUrl: attachment.downloadUrl.replace(nodeName, encodeURIComponent(nodeName).replace('%', '%25')),
+                downloadUrl: attachment.downloadUrl.replace(nodeName, encodeURIComponent(nodeName).replaceAll('%', '%25')),
                 openUrl: attachment.openUrl,
                 breadCrumb: attachment.previewBreadcrumb,
                 fileInfo: this.fileInfo(),
