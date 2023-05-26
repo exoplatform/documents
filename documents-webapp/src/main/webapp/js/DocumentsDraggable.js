@@ -96,7 +96,7 @@
         table.querySelector('tr.is-dragover')?.classList.remove('is-dragover', 'grey', 'lighten-3');
         table.querySelector('tr.drag-source')?.classList.remove('v-data-table__selected', 'drag-source');
         getBreadCrumbListElement()?.classList.remove('is-intersected', 'is-drop-active');
-        getDocumentsBoyElement().classList.remove('is-drop-active');
+        getDocumentsBoyElement().classList.remove('is-drop-active', 'is-body-intersected');
     }
 
     function handleCancelAction() {
@@ -108,12 +108,13 @@
     }
 
     function checkDropOnDocumentsBody(onDrop) {
-        const bodyIntersected = isIntersection(dragTooltipElement, getDocumentsBoyElement()) && !isIntersection(dragTooltipElement, table);
+        const bodyIntersected = isIntersection(dragTooltipElement, getDocumentsBoyElement())
+                                                          && !isIntersection(dragTooltipElement, table);
         const allowed = canDropOnListFiles();
         if (bodyIntersected) {
             if (allowed) {
                 dragTooltipElement.style.cursor = 'move';
-                getDocumentsBoyElement().classList.add('is-drop-active');
+                getDocumentsBoyElement().classList.add('is-drop-active-onBody');
                 if (onDrop) {
                     document.dispatchEvent(new CustomEvent('move-dropped-documents', {
                         detail: {
@@ -126,7 +127,7 @@
                 dragTooltipElement.style.cursor = 'not-allowed';
             }
         } else {
-            getDocumentsBoyElement().classList.remove('is-drop-active');
+            getDocumentsBoyElement().classList.remove('is-drop-active-onBody');
         }
     }
 
@@ -193,7 +194,7 @@
 
     function checkDropAndMoveOnBreadcrumb(onDrop) {
         if (isIntersection(dragTooltipElement, getBreadCrumbListElement())) {
-            getBreadCrumbListElement().classList.replace('is-intersected', 'is-drop-active');
+            getBreadCrumbListElement().classList.replace('is-drop-active', 'is-intersected');
             document.dispatchEvent(new CustomEvent('open-folder-on-hover', {
                 detail: {breadcrumb: true}
             }));
@@ -211,7 +212,7 @@
                 }));
             }
         } else {
-            getBreadCrumbListElement().classList.replace('is-drop-active', 'is-intersected');
+            getBreadCrumbListElement().classList.replace('is-intersected', 'is-drop-active');
         }
     }
 
@@ -260,14 +261,25 @@
                 if (Math.abs(currStartY - rowStartY) < rowSize.height / 2) {
                     rowElem.classList.add('is-dragover', 'grey', 'lighten-3');
                     dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
-                    checkDropElements(allowed, onDrop, rowElem, getSourceFiles())
+                    checkDropElements(isFolder, allowed, onDrop, rowElem, getSourceFiles())
+                } else {
+                    getDocumentsBoyElement().classList.remove('is-body-intersected');
                 }
             }
         }
     }
 
-    function checkDropElements(allowed, onDrop, rowElem, sourceFiles) {
+    function showActiveDropOnBody(isFolder) {
+        if (!isFolder) {
+            getDocumentsBoyElement().classList.add('is-body-intersected');
+        } else {
+            getDocumentsBoyElement().classList.remove('is-body-intersected');
+        }
+    }
+
+    function checkDropElements(isFolder, allowed, onDrop, rowElem, sourceFiles) {
         if (allowed) {
+            showActiveDropOnBody(isFolder);
             rowElem.classList.add('is-intersected');
             document.dispatchEvent(new CustomEvent('open-folder-on-hover', {
                 detail: {
@@ -324,7 +336,7 @@
     function checkEnableDropOnBreadCrumb() {
         const isRootPath = isRootFolder();
         if (!isRootPath && mouseDrag) {
-            getBreadCrumbListElement().classList.add('is-intersected');
+            getBreadCrumbListElement().classList.add('is-drop-active');
         } else {
             getBreadCrumbListElement().classList.remove('is-intersected', 'is-drop-active');
         }
