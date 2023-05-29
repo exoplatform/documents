@@ -479,7 +479,7 @@ export function getDownloadZip(actionId) {
     if (resp && resp.ok) {
       return resp;
     } else { 
-      throw new Error('Error when getting downloaded files');
+      throw resp;
     }
   });
 }
