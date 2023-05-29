@@ -50,7 +50,7 @@
         currentOpenedFolder = event.detail.folder;
         setTimeout(() => {
             checkEnableDropOnBreadCrumb();
-        }, 200)
+        }, 500)
     }
 
     function handleDragStart(event) {
@@ -77,7 +77,7 @@
         clearTimeout(openFolderTimer);
         openFolderTimer = setTimeout(() => {
             if (event.detail.breadcrumb) {
-                document.dispatchEvent(new CustomEvent('document-open-root-folder-to-drop'))
+                document.dispatchEvent(new CustomEvent('document-open-previous-folder-to-drop'))
             } else {
                 document.dispatchEvent(new CustomEvent('document-open-folder-to-drop', event))
             }
@@ -265,6 +265,8 @@
                 } else {
                     getDocumentsBoyElement().classList.remove('is-body-intersected');
                 }
+            } else {
+                getDocumentsBoyElement().classList.remove('is-body-intersected');
             }
         }
     }
