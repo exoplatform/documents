@@ -154,7 +154,7 @@
             dense
             type="number"
             min="0" />
-            <v-spacer/>
+          <v-spacer />
           <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2 ps-8">{{ $t('documents.advanced.filter.drawer.max') }}</div>
           <v-text-field
             v-model="advancedFilter.maxSize"
