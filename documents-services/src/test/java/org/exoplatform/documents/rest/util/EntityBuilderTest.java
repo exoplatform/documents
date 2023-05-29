@@ -84,7 +84,7 @@ public class EntityBuilderTest {
         when(identity.getId()).thenReturn("3");
         when(identity.isSpace()).thenReturn(true);
         when(identity.getRemoteId()).thenReturn("spaceTest");
-        when(spaceService.getSpaceByDisplayName(identity.getRemoteId())).thenReturn(space);
+        when(spaceService.getSpaceByPrettyName(identity.getRemoteId())).thenReturn(space);
         // Destination user isn't member of the space
         when(spaceService.isMember(space, "userRemoteId")).thenReturn(false);
         // When
