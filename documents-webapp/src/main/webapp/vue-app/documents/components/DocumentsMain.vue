@@ -574,11 +574,15 @@ export default {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
         }
       }).catch(e => {
-        console.error('Error when export note page', e);
-        this.$root.$emit('show-alert', {
-          type: 'error',
-          message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.failed`)
-        });
+        if (e.status === 410) {
+          this.$root.$emit('set-download-status',actionData.status);
+        } else {
+          console.error('Error when export note page', e);
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.failed`)
+          });
+        }
       });
     },
     handleAlertClose() {

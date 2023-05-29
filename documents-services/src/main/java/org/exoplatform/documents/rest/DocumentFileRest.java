@@ -724,10 +724,10 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("bulk/download/{actionId}")
   @RolesAllowed("users")
   @Operation(summary = "Download zipped list of files", method = "GET", description = "This download a zipped list of files.")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "400", description = "Invalid query input"),
-      @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
-      @ApiResponse(responseCode = "404", description = "Resource not found") })
+  @ApiResponses(value = { 
+          @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "410", description = "Resource no more available") })
   public Response getDownloadZip(@Parameter(description = "List items", required = true)
   @PathParam("actionId")
   int actionId) {
@@ -736,6 +736,9 @@ public class DocumentFileRest implements ResourceContainer {
       Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
       byte[] filesBytes = documentFileService.getDownloadZipBytes(actionId,
               currentUserIdentity.getRemoteId());
+      if (filesBytes.length == 0) {
+        return Response.status(Status.GONE).build();
+      }
       return Response.ok(filesBytes)
                      .type("application/zip")
                      .header("Content-Disposition", "attachment; filename=\"documents_Download" + new Date().getTime() + ".zip\"")
