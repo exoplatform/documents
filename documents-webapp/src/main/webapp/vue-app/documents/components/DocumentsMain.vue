@@ -1069,10 +1069,10 @@ export default {
             type: 'success',
             message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
           });
-          if (space && space.groupId) {
-            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
+          if (this.selectedView === 'timeline') {
+            const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : destFolder.path.substring(destFolder.path.indexOf('Private/'));
             window.setTimeout(() => {
-              window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+              window.location.href = `${window.location.pathname}/${folderPath}?view=folder`;
             }, 1000);
           } else {
             this.openFolder(destFolder);
@@ -1103,9 +1103,9 @@ export default {
         .then(() => {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('document.shortcut.creationSuccess')});
           this.createShortcutStatistics(file,space);
-          if (space && space.groupId) {
-            const folderPath = destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : '';
-            window.location.href = `${window.location.pathname.split(':spaces')[0] + space.groupId.replaceAll('/', ':')}/${space.prettyName}/documents/${folderPath}`;
+          if (this.selectedView === 'timeline') {
+            const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : destFolder.path.substring(destFolder.path.indexOf('/Private/'));
+            window.location.href = `${window.location.pathname}/${folderPath}?view=folder`;
           } else {
             this.openFolder(destFolder);
           }
