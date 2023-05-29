@@ -31,7 +31,7 @@
             <v-list-item-action class="mx-3 my-0">
               <v-checkbox
                 ripple="false"
-                v-model="advancedFilter.fileType"
+                v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="documents" />
             </v-list-item-action>
@@ -49,7 +49,7 @@
           <v-list-item class="">
             <v-list-item-action class="mx-3 my-0">
               <v-checkbox
-                v-model="advancedFilter.fileType"
+                v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="sheets" />
             </v-list-item-action>
@@ -67,7 +67,7 @@
           <v-list-item class="">
             <v-list-item-action class="mx-3 my-0">
               <v-checkbox
-                v-model="advancedFilter.fileType"
+                v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="presentations" />
             </v-list-item-action>
@@ -85,7 +85,7 @@
           <v-list-item class="">
             <v-list-item-action class="mx-3 my-0">
               <v-checkbox
-                v-model="advancedFilter.fileType"
+                v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="pdfs" />
             </v-list-item-action>
@@ -103,7 +103,7 @@
           <v-list-item class="">
             <v-list-item-action class="mx-3 my-0">
               <v-checkbox
-                v-model="advancedFilter.fileType"
+                v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="images" />
             </v-list-item-action>
@@ -121,7 +121,7 @@
           <v-list-item class="">
             <v-list-item-action class="mx-3 my-0">
               <v-checkbox
-                v-model="advancedFilter.fileType"
+                v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 value="videos" />
             </v-list-item-action>
@@ -140,14 +140,14 @@
 
         <div class="font-weight-bold text-start text-color body-2  px-2 py-3">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
 
-        <documents-select-period v-model="advancedFilter.selectedPeriod" />
+        <documents-select-period v-model="tempAdvancedFilter.selectedPeriod" />
 
         <div class="font-weight-bold text-start text-color body-2 px-2 pb-5 pt-7">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
          
         <div class="d-flex px-8">
           <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}</div>
           <v-text-field
-            v-model="advancedFilter.minSize"
+            v-model="tempAdvancedFilter.minSize"
             class="py-2"
             :suffix="$t('documents.label.mega')"
             outlined
@@ -157,7 +157,7 @@
           <v-spacer />
           <div class="font-weight-bold text-start text-color body-2 pt-4 pe-2 ps-8">{{ $t('documents.advanced.filter.drawer.max') }}</div>
           <v-text-field
-            v-model="advancedFilter.maxSize"
+            v-model="tempAdvancedFilter.maxSize"
             class="py-2"
             :suffix="$t('documents.label.mega')"
             outlined
@@ -194,18 +194,26 @@
 export default {
 
   data: () => (
-    {advancedFilter: {
-      fileType: [],
-      selectedPeriod: null,
-      minSize: null,
-      maxSize: null,
+    {
+      advancedFilter: {
+        fileType: [],
+        selectedPeriod: null,
+        minSize: null,
+        maxSize: null,
+      },
       docIcon: {},
       prezIcon: {},
       pdfIcon: {},
       videoIcon: {},
       imageIcon: {},
       sheetIcon: {},
-    }}
+      tempAdvancedFilter: {
+        fileType: [],
+        selectedPeriod: null,
+        minSize: null,
+        maxSize: null,
+      },
+    }
   ),
 
 
@@ -217,11 +225,17 @@ export default {
   methods: {
     open() {
       this.$refs.DocumentAdvancedFilterDrawer.open();
+      this.tempAdvancedFilter = JSON.parse(JSON.stringify(this.advancedFilter));
     },
     close() {
+      this.tempAdvancedFilter.fileType= [];
+      this.tempAdvancedFilter.selectedPeriod= null;
+      this.tempAdvancedFilter.minSize= null;
+      this.tempAdvancedFilter.maxSize= null;
       this.$refs.DocumentAdvancedFilterDrawer.close();
     },
     confirm() {
+      this.advancedFilter = JSON.parse(JSON.stringify(this.tempAdvancedFilter));
       this.$root.$emit('set-advanced-filter', this.advancedFilter);
       this.close();
     },
@@ -230,6 +244,7 @@ export default {
       this.advancedFilter.selectedPeriod= null;
       this.advancedFilter.minSize= null;
       this.advancedFilter.maxSize= null;
+      this.tempAdvancedFilter = JSON.parse(JSON.stringify(this.advancedFilter));
       this.confirm();
     },
     getTypeIcons() {
