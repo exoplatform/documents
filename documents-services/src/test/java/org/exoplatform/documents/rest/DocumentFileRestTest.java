@@ -1002,8 +1002,11 @@ public class DocumentFileRestTest {
     when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
-    when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(null);
+    when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(new byte[0]);
     Response response = documentFileRest.getDownloadZip(123456);
+    assertEquals(Response.Status.GONE.getStatusCode(), response.getStatus());
+    when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(new byte[10]);
+    response = documentFileRest.getDownloadZip(123456);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
   }
 
