@@ -27,7 +27,7 @@
 export default {
   mounted() {
     document.addEventListener('keydown', (e) => {
-      if (e.keyCode === 27) {
+      if (e.key === 'Escape') {
         this.hideFilter();
       }
     });
