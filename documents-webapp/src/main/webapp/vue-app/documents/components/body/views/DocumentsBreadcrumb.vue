@@ -114,14 +114,14 @@ export default {
     this.$root.$on('set-breadcrumb', this.setBreadcrumb);
     this.$root.$on('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$on('open-folder', this.openFolder);
-    document.addEventListener('document-open-root-folder-to-drop', this.handleOpenRootFolder);
+    document.addEventListener('document-open-previous-folder-to-drop', this.handleOpenRootFolder);
     document.addEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
   },
   beforeDestroy() {
     this.$root.$off('set-breadcrumb', this.setBreadcrumb);
     this.$root.$off('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$off('open-folder', this.openFolder);
-    document.removeEventListener('document-open-root-folder-to-drop', this.handleOpenRootFolder);
+    document.removeEventListener('document-open-previous-folder-to-drop', this.handleOpenRootFolder);
     document.removeEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
   },
   methods: {
@@ -130,8 +130,9 @@ export default {
       document.dispatchEvent(new CustomEvent('move-dropped-documents', event));
     },
     handleOpenRootFolder() {
-      this.$root.$emit('document-open-folder', this.documentsBreadcrumbToDisplay[0]);
-
+      if (this.documentsBreadcrumbToDisplay.length > 1) {
+        this.$root.$emit('document-open-folder', this.documentsBreadcrumbToDisplay[this.documentsBreadcrumbToDisplay.length - 2]);
+      }
     },
     canEditFile(file) {
       return file?.accessList?.canEdit;
