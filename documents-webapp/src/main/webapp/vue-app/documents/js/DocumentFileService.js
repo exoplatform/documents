@@ -65,11 +65,24 @@ export function canAddDocument(spaceId) {
   });   
 }
 export function getUserSettings() {
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/settings`, {
+  const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/settings/${ownerId}`, {
     headers: {
       'Content-Type': 'text/plain'
     },
     method: 'GET'
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.json();
+    } else {
+      throw new Error('Server indicates an error while sending request');
+    }
+  });   
+}
+export function setUserDefaultView(view) {
+  const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/settings/${ownerId}/${view}`, {
+    method: 'POST'
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.json();

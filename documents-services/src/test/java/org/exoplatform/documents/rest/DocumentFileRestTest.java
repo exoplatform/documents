@@ -119,7 +119,8 @@ public class DocumentFileRestTest {
                                                       spaceService,
                                                       identityManager,
                                                       identityRegistry,
-                                                      listenerService);
+                                                      listenerService,
+                                                      settingService);
     documentFileRest = new DocumentFileRest(documentFileService,
                                             spaceService,
                                             identityManager,

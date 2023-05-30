@@ -27,6 +27,10 @@ import javax.jcr.RepositoryException;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.api.settings.SettingService;
+import org.exoplatform.commons.api.settings.SettingValue;
+import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
@@ -63,6 +67,12 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private ListenerService listenerService;
 
+  private SettingService       settingService;
+
+  private static final Scope   DOCUMENTS_USER_SETTING_SCOPE = Scope.APPLICATION.id("Documents");
+
+  private static final String  DOCUMENTS_USER_SETTING_KEY   = "DocumentsSettings";
+
 
   public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage,
                                  JCRDeleteFileStorage jcrDeleteFileStorage,
@@ -70,7 +80,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                  SpaceService spaceService,
                                  IdentityManager identityManager,
                                  IdentityRegistry identityRegistry,
-                                 ListenerService listenerService) {
+                                 ListenerService listenerService,
+                                 SettingService settingService) {
     this.documentFileStorage = documentFileStorage;
     this.jcrDeleteFileStorage = jcrDeleteFileStorage;
     this.spaceService = spaceService;
@@ -78,6 +89,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     this.identityRegistry = identityRegistry;
     this.authenticator = authenticator;
     this.listenerService = listenerService;
+    this.settingService = settingService;
   }
 
   @Override
@@ -437,4 +449,38 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void moveDocuments(int actionId, long ownerId, List<AbstractNode> documents, String destPath, long userIdentityId) throws IllegalAccessException {
     documentFileStorage.moveDocuments(actionId, ownerId, documents, destPath, getAclUserIdentity(userIdentityId), userIdentityId);
   }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDefaultView(Long ownerId, String userIdentityId) {
+    SettingValue<?> settingValue = settingService.get(Context.USER.id(userIdentityId),
+                                                      DOCUMENTS_USER_SETTING_SCOPE,
+                                                      DOCUMENTS_USER_SETTING_KEY + "_" + ownerId);
+    if (settingValue == null || settingValue.getValue() == null || StringUtils.isBlank(settingValue.getValue().toString())) {
+      return null;
+    } else {
+      return settingValue.getValue().toString();
+    }
+
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setDefaultView(Long ownerId, String userIdentityId, String view) {
+    if (Long.parseLong(userIdentityId) <= 0) {
+      throw new IllegalArgumentException("User identity id is mandatory");
+    }
+    if (ownerId <= 0) {
+      throw new IllegalArgumentException("Owner id is mandatory");
+    }
+    this.settingService.set(Context.USER.id(userIdentityId),
+                            DOCUMENTS_USER_SETTING_SCOPE,
+                            DOCUMENTS_USER_SETTING_KEY + "_" + ownerId,
+                            SettingValue.create(view));
+  }
+
 }

@@ -317,4 +317,22 @@ public interface DocumentFileService {
    * @param userIdentityId current user identity id
    */
   void moveDocuments(int actionId, long ownerId, List<AbstractNode>documents, String destPath, long userIdentityId) throws IllegalAccessException;
+
+  /**
+   * Get Stored default View for the current user
+   *
+   * @param ownerId Id of the owner Identity
+   * @param userIdentityId user identity id
+   * @return the stored view
+   */
+  String getDefaultView(Long ownerId, String userIdentityId);
+
+  /**
+   * Set default View for the current user
+   *
+   * @param ownerId Id of the owner Identity
+   * @param userIdentityId user identity id
+   * @param view the view to store
+   */
+  void setDefaultView(Long ownerId, String userIdentityId, String view);
 }
