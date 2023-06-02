@@ -644,7 +644,7 @@ public class JCRDocumentsUtil {
       oldName = oldName.substring(0,oldName.lastIndexOf(".")) ;
     }
     oldName = oldName.trim();
-    String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|";
+    String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|’";
     StringBuilder ret = new StringBuilder();
     for (int i = 0; i < oldName.length(); i++) {
       char currentChar = oldName.charAt(i);
