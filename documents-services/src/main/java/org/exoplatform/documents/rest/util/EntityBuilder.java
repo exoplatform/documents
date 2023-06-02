@@ -154,6 +154,7 @@ public class EntityBuilder {
     fileEntity.setVersionnedFileId(file.getVersionnedFileId());
     fileEntity.setMimeType(file.getMimeType());
     fileEntity.setSize(file.getSize());
+    fileEntity.setViews(file.getViews());
     if (expandProperties.contains("versions")) {
       fileEntity.setVersions(toVersionEntities(documentFileService.getFileVersions(file.getId(), RestUtils.getCurrentUser())));
     }
