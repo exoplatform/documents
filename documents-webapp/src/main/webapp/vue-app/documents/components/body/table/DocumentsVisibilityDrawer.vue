@@ -59,9 +59,8 @@
                 class="caption"
                 outlined />
               <p
-                v-if="showPublicAccessOption"
                 class="text-caption grey--text text--darken-2 caption text-break">
-                {{ $t('document.visibility.publicAccess.and.spaceMembers.choice.info') }}
+                {{ choiceInfo }}
               </p>
             </div>
             <div
@@ -238,6 +237,20 @@ export default {
     },
     visibilityTitle(){
       return this.$t('documents.label.visibilityTitle', {0: this.file?.name});
+    },
+    choiceInfo() {
+      switch (this.file.acl.visibilityChoice) {
+      case 'SPECIFIC_COLLABORATOR':
+        return eXo.env.portal.spaceGroup ? this.$t('document.visibility.collaborators.choice.info'):
+          this.$t('document.myDrive.visibility.collaborators.choice.info');
+      case 'ALL_MEMBERS':
+        return this.$t('document.visibility.allMembers.choice.info');
+      case 'COLLABORATORS_AND_PUBLIC_ACCESS':
+        return eXo.env.portal.spaceGroup ? this.$t('document.visibility.publicAccess.and.spaceMembers.choice.info'):
+          this.$t('document.myDrive.visibility.publicAccess.choice.info');
+      default:
+        return this.$t('document.visibility.collaborators.choice.info');
+      }
     },
     visibilityLabel(){
       return eXo?.env?.portal?.spaceGroup && [
