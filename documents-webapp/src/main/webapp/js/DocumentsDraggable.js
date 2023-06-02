@@ -262,8 +262,6 @@
                     dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
                     checkDropElements(allowed, onDrop, rowElem, getSourceFiles())
                 }
-            } else {
-                getDocumentsBoyElement().classList.remove('is-body-intersected');
             }
         }
     }
