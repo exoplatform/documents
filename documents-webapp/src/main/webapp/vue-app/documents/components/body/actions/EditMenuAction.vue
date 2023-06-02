@@ -32,6 +32,7 @@ export default {
     editFile() {
       if (this.fileId) {
         window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${this.fileId}&source=peview`, '_blank');
+        this.$root.$emit('mark-document-as-viewed', this.file);
       }
     },
   },
