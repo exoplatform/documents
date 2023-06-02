@@ -25,7 +25,7 @@
             <v-list-item-title 
               class="body-2 mx-2 mt-1"
               :class="idItemActive === item.id ? 'primary--text font-weight-bold' : ''">
-              {{ item.name }}
+              {{ displayName(item.name) }}               
             </v-list-item-title>
           </div>
         </template>
@@ -41,7 +41,7 @@ export default {
     items: [],
     currentFolderPathTab: [],
   }),
-  computed: {
+  computed: {   
     openLevel() {
       return this.items && this.items.length ? this.currentFolderPathTab : [];
     },
@@ -57,6 +57,9 @@ export default {
     });
   },
   methods: {
+    displayName(name) {
+      return name === 'Documents' ? this.$t('documents.label.spaceHomeDocuments') : name;
+    },   
     sortItems(items) {
       const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
       return items.sort((a, b) => collator.compare(a.name, b.name));
