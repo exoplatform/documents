@@ -318,6 +318,7 @@ public class JCRDocumentsUtil {
       if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         retrieveSymlinkSize(node, fileNode);
       }
+      retrieveViewsProperty(node, fileNode);
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
         retrieveFileContentProperties(content, fileNode);
@@ -329,6 +330,17 @@ public class JCRDocumentsUtil {
         LOG.warn("Error computing File Node for search result with path {}", node, e);
       }
     }
+  }
+  
+  private static void retrieveViewsProperty(Node node, FileNode fileNode) throws RepositoryException {
+    long views = 0L;
+    if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      node = getNodeByIdentifier(node.getSession(), fileNode.getSourceID());
+    }
+    if (node != null && node.hasProperty(NodeTypeConstants.DOCUMENT_VIEWS_PROPERTY)) {
+      views = node.getProperty(NodeTypeConstants.DOCUMENT_VIEWS_PROPERTY).getLong();
+    }
+    fileNode.setViews(views);
   }
   
   private static void retrieveSymlinkSize(Node node, FileNode fileNode) throws RepositoryException {
