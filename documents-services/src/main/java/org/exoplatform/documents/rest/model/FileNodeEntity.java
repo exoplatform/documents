@@ -29,6 +29,8 @@ public class FileNodeEntity extends AbstractNodeEntity {
 
   private long               size;
 
+  private long               views;
+
   private String             mimeType;
 
   private FileVersionsEntity versions;
