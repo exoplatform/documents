@@ -166,6 +166,17 @@
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
+        <v-list-item>
+          <v-list-item-content class="mx-4">
+            <v-list-item-title>
+              <span
+                class="fileDetails not-clickable text-color d-flex">
+                <span class="text-center font-weight-bold">{{ $t('documents.details.view.label') }}:</span>
+                <span class="ms-1">{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</span>
+              </span>
+            </v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
       </template>
     </template>   
     <template slot="footer">
@@ -266,9 +277,15 @@ export default {
         this.file.versionNumber++;
       }
     });
+    document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
   },
   methods: {
+    handleUpdateViews(event) {
+      if (this.file?.id === event.detail?.file?.id) {
+        this.file.views = event.detail?.views;
+      }
+    },
     showVersionHistory() {
       this.$root.$emit('show-version-history', this.file);
     },
