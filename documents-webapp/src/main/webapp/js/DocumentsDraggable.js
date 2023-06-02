@@ -265,8 +265,6 @@
                 } else {
                     getDocumentsBoyElement().classList.remove('is-body-intersected');
                 }
-            } else {
-                getDocumentsBoyElement().classList.remove('is-body-intersected');
             }
         }
     }
