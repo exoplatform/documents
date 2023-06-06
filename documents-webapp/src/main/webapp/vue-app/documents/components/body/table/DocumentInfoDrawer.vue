@@ -166,7 +166,7 @@
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item>
+        <v-list-item v-if="!file.folder">
           <v-list-item-content class="mx-4">
             <v-list-item-title>
               <span
