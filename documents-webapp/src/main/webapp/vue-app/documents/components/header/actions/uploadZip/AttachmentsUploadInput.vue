@@ -99,8 +99,9 @@ export default {
       this.$refs.uploadInput.value = '';
     },
     getNewUploadId: function () {
-      const maxUploadId = 100000;
-      return Math.floor(Math.random() * maxUploadId);
+      const max = Math.floor(100000);
+      const random = crypto.getRandomValues(new Uint32Array(1))[0];
+      return random % max;
     },
     queueUpload: function (file) {
       if (this.attachments.length >= this.maxFilesCount) {
