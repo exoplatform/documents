@@ -59,19 +59,19 @@ public class BulkActionDocumentListener extends Listener<Identity, ActionData> {
     ctx.append(NotificationConstants.FOLDER_NAME, importData.getParentFolderName());
     ctx.append(NotificationConstants.TOTAL_NUMBER, String.valueOf(importData.getImportedFilesCount()));
     ctx.append(NotificationConstants.DURATION, String.valueOf((int) (importData.getDuration() / 1000)));
-    if (importData.getCreatedFiles().size() > 0) {
+    if (!importData.getCreatedFiles().isEmpty()) {
       filesCreated = "<li>" + String.join("</li><li>", importData.getCreatedFiles()) + "</li>";
     }
-    if (importData.getDuplicatedFiles().size() > 0) {
+    if (!importData.getDuplicatedFiles().isEmpty()) {
       filesDuplicated = "<li>" + String.join("</li><li>", importData.getDuplicatedFiles()) + "</li>";
     }
-    if (importData.getUpdatedFiles().size() > 0) {
+    if (!importData.getUpdatedFiles().isEmpty()) {
       filesUpdated = "<li>" + String.join("</li><li>", importData.getUpdatedFiles()) + "</li>";
     }
-    if (importData.getIgnoredFiles().size() > 0) {
+    if (!importData.getIgnoredFiles().isEmpty()) {
       filesIgnored = "<li>" + String.join("</li><li>", importData.getIgnoredFiles()) + "</li>";
     }
-    if (importData.getFailedFiles().size() > 0) {
+    if (!importData.getFailedFiles().isEmpty()) {
       filesFailed = "<li>" + String.join("</li><li>", importData.getFailedFiles()) + "</li>";
     }
     ctx.append(NotificationConstants.FILES_CREATED, filesCreated);

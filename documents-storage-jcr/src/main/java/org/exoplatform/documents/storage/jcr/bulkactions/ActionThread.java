@@ -41,13 +41,10 @@ import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
-import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.security.Identity;
-import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 import net.lingala.zip4j.ZipFile;
 
@@ -169,7 +166,7 @@ public class ActionThread implements Runnable {
     }
   }
 
-  public void processAction() throws RepositoryException, IOException {
+  public void processAction() throws RepositoryException {
     actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
     if (actionData.getActionType().equals(ActionType.DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());
@@ -221,7 +218,7 @@ public class ActionThread implements Runnable {
                                       .toList();
 
     try {
-      tempFolderPath = Files.createTempDirectory(bulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
+      tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
     } catch (IOException e) {
       log.error("Cannot create temp folder to download documents", e);
       return;
@@ -325,12 +322,11 @@ public class ActionThread implements Runnable {
   }
 
   public void importFromZip() throws RepositoryException {
-    try {
+    try (ZipFile zip = new ZipFile(uploadService.getUploadResource(actionData.getActionId()).getStoreLocation())) {
       startTime = System.currentTimeMillis();
       actionData.setStatus(ActionStatus.UNZIPPING.name());
       brodcastEvent();
-      UploadResource uploadResource = uploadService.getUploadResource(actionData.getActionId());
-      new ZipFile(uploadResource.getStoreLocation()).extractAll(actionData.getTempFolderPath());
+      zip.extractAll(actionData.getTempFolderPath());
       List<String> files = new ArrayList<>();
       listFiles(new File(actionData.getTempFolderPath()), files);
       actionData.setFiles(files);

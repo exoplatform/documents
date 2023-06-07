@@ -62,15 +62,15 @@ public class ActionData {
 
   private long         duration;
 
-  private List<String> createdFiles       = new ArrayList<String>();
+  private List<String> createdFiles       = new ArrayList<>();
 
-  private List<String> ignoredFiles       = new ArrayList<String>();
+  private List<String> ignoredFiles       = new ArrayList<>();
 
-  private List<String> duplicatedFiles    = new ArrayList<String>();
+  private List<String> duplicatedFiles    = new ArrayList<>();
 
-  private List<String> updatedFiles       = new ArrayList<String>();
+  private List<String> updatedFiles       = new ArrayList<>();
 
-  private List<String> failedFiles        = new ArrayList<String>();
+  private List<String> failedFiles        = new ArrayList<>();
 
   public void addCreatedFile(String fileName) {
     createdFiles.add(fileName);

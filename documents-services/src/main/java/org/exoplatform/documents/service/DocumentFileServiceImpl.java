@@ -16,17 +16,13 @@
  */
 package org.exoplatform.documents.service;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
 import javax.jcr.RepositoryException;
-
 import org.apache.commons.lang3.StringUtils;
-
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
