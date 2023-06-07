@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.service;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -424,7 +425,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getDownloadZipBytes(actionId,userName);
   }
   @Override
-  public void cancelBulkAction(int actionId, String userName) throws IOException {
+  public void cancelBulkAction(String actionId, String userName) throws IOException {
     documentFileStorage.cancelBulkAction(actionId, userName);
   }
 
@@ -490,4 +491,35 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException {
     return documentFileStorage.hasEditPermissions(nodeId, getAclUserIdentity(userIdentityId));
   }
+  @Override
+  public void importFiles(String ownerId,
+                          String folderId,
+                          String folderPath,
+                          String uploadId,
+                          String conflict,
+                          org.exoplatform.services.security.Identity identity,
+                          long authenticatedUserId) throws Exception {
+
+    String userName = "";
+    Space space = null;
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    if (ownerIdentity == null) {
+      throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+    }
+    if (ownerIdentity.isSpace()) {
+      space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      if (!spaceService.hasAccessPermission(space, identity.getUserId())) {
+        throw new IllegalAccessException("User " + identity.getUserId() + " attempts to access documents of space "
+                + space.getDisplayName() + " while it's not a member");
+      }
+    } else if (ownerIdentity.isUser()) {
+      if (!StringUtils.equals(ownerIdentity.getRemoteId(), identity.getUserId())) {
+        throw new IllegalAccessException("User " + identity.getUserId() + " attempts to access private documents of user "
+                + ownerIdentity.getRemoteId());
+      }
+      userName = ownerIdentity.getRemoteId();
+    }
+    documentFileStorage.importFiles(uploadId, space, userName, folderId, folderPath, conflict, identity,ownerId, authenticatedUserId);
+  }
+
 }

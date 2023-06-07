@@ -16,7 +16,14 @@
  */
 package org.exoplatform.documents.listener;
 
+import org.exoplatform.commons.api.notification.NotificationContext;
+import org.exoplatform.commons.api.notification.model.PluginKey;
+import org.exoplatform.commons.notification.impl.NotificationContextImpl;
 import org.exoplatform.documents.model.ActionData;
+import org.exoplatform.documents.model.ActionStatus;
+import org.exoplatform.documents.model.ActionType;
+import org.exoplatform.documents.notification.plugin.ImportDocumentsPlugin;
+import org.exoplatform.documents.notification.utils.NotificationConstants;
 import org.exoplatform.documents.service.DocumentWebSocketService;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.Listener;
@@ -35,5 +42,45 @@ public class BulkActionDocumentListener extends Listener<Identity, ActionData> {
     ActionData actionData = event.getData();
     Identity identity = event.getSource();
     documentWebSocketService.sendMessage(actionData.getActionType(), actionData, identity);
+    if (actionData.getActionType().equals(ActionType.IMPORT_ZIP.name()) && actionData.getStatus().equals(ActionStatus.DONE_SUCCESSFULLY.name())) {
+      sendNotification(actionData, identity);
+    }
   }
+
+  private void sendNotification(ActionData importData, Identity identity) {
+    String filesCreated = "";
+    String filesDuplicated = "";
+    String filesUpdated = "";
+    String filesIgnored = "";
+    String filesFailed = "";
+    NotificationContext ctx = NotificationContextImpl.cloneInstance();
+    ctx.append(NotificationConstants.FROM_USER, identity.getUserId());
+    ctx.append(NotificationConstants.FOLDER_URL, importData.getParentFolder());
+    ctx.append(NotificationConstants.FOLDER_NAME, importData.getParentFolderName());
+    ctx.append(NotificationConstants.TOTAL_NUMBER, String.valueOf(importData.getImportedFilesCount()));
+    ctx.append(NotificationConstants.DURATION, String.valueOf((int) (importData.getDuration() / 1000)));
+    if (importData.getCreatedFiles().size() > 0) {
+      filesCreated = "<li>" + String.join("</li><li>", importData.getCreatedFiles()) + "</li>";
+    }
+    if (importData.getDuplicatedFiles().size() > 0) {
+      filesDuplicated = "<li>" + String.join("</li><li>", importData.getDuplicatedFiles()) + "</li>";
+    }
+    if (importData.getUpdatedFiles().size() > 0) {
+      filesUpdated = "<li>" + String.join("</li><li>", importData.getUpdatedFiles()) + "</li>";
+    }
+    if (importData.getIgnoredFiles().size() > 0) {
+      filesIgnored = "<li>" + String.join("</li><li>", importData.getIgnoredFiles()) + "</li>";
+    }
+    if (importData.getFailedFiles().size() > 0) {
+      filesFailed = "<li>" + String.join("</li><li>", importData.getFailedFiles()) + "</li>";
+    }
+    ctx.append(NotificationConstants.FILES_CREATED, filesCreated);
+    ctx.append(NotificationConstants.FILES_DUPLICATED, filesDuplicated);
+    ctx.append(NotificationConstants.FILES_UPDATED, filesUpdated);
+    ctx.append(NotificationConstants.FILES_IGNORED, filesIgnored);
+    ctx.append(NotificationConstants.FILES_FAILED, filesFailed);
+    ctx.append(NotificationConstants.RECEIVERS, identity.getUserId());
+    ctx.getNotificationExecutor().with(ctx.makeCommand(PluginKey.key(ImportDocumentsPlugin.ID))).execute(ctx);
+  }
+
 }
