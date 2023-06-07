@@ -12,7 +12,7 @@
             class="clickable pr-2">
             fa-folder
           </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color">{{ $t('documents.button.addNewFolder') }}</span>
+          <span class="body-2 text-color">{{ $t('documents.button.addNewFolder') }}</span>
         </v-list-item>
         <v-list-item
           @click="openDrawer()"
@@ -22,7 +22,7 @@
             class="clickable pr-2">
             fa-file-alt
           </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color">{{ $t('documents.button.addNewFile') }}</span>
+          <span class="body-2 text-color">{{ $t('documents.button.addNewFile') }}</span>
         </v-list-item>
       </v-list>
       <exo-drawer />
