@@ -51,6 +51,7 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
 import org.exoplatform.services.rest.resource.ResourceContainer;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -756,7 +757,7 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "404", description = "Resource not found") })
   public Response cancelBulkAction(@Parameter(description = "List items", required = true)
   @PathParam("actionId")
-  int actionId) {
+  String actionId) {
     Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
     try {
       documentFileService.cancelBulkAction(actionId, currentUserIdentity.getRemoteId());
@@ -1119,6 +1120,38 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.serverError().build();
     }
   }
+
+  @POST
+  @Path("/importzip/{uploadId}")
+  @RolesAllowed("users")
+  public Response importDocuments(@PathParam("uploadId")
+                                  String uploadId, @QueryParam("ownerId")
+                                  String ownerId, @QueryParam("folderId")
+                                  String folderId, @QueryParam("folderPath")
+                                  String folderPath, @QueryParam("conflict")
+                                  String conflict) {
+
+    try {
+
+      org.exoplatform.services.security.Identity identity = ConversationState.getCurrent().getIdentity();
+      if (StringUtils.isEmpty(ownerId)) {
+        return Response.status(Response.Status.BAD_REQUEST).build();
+      }
+      if (uploadId == null) {
+        return Response.status(Response.Status.BAD_REQUEST).build();
+      }
+      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+      documentFileService.importFiles(ownerId, folderId, folderPath, uploadId, conflict, identity, userIdentityId);
+      return Response.status(Response.Status.OK).build();
+    } catch (IllegalAccessException e) {
+      LOG.error("User does not have import permissions", e);
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to import documents ", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
+  }
+
 
 }
 

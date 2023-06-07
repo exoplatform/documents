@@ -295,7 +295,7 @@ public interface DocumentFileService {
    * @param actionId action id
    * @param userName current user name
    */
-  void cancelBulkAction(int actionId, String userName) throws IOException;
+  void cancelBulkAction(String actionId, String userName) throws IOException;
 
   /**
    * Creates a new version from an input stream
@@ -335,7 +335,7 @@ public interface DocumentFileService {
    * @param view the view to store
    */
   void setDefaultView(Long ownerId, String userIdentityId, String view);
-  
+
   /**
    * Checks if user has edit permission on document
    *
@@ -345,4 +345,12 @@ public interface DocumentFileService {
    * @throws IllegalAccessException
    */
   boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException;
+
+  void importFiles(String ownerId,
+                   String folderId,
+                   String folderPath,
+                   String uploadId,
+                   String conflict,
+                   org.exoplatform.services.security.Identity identity,
+                   long authenticatedUserId) throws Exception;
 }
