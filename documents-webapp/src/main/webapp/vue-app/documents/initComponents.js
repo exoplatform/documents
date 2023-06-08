@@ -86,6 +86,11 @@ import DocumentsSizeCell from './components/body/table/cells/DocumentsSizeCell.v
 import UploadNewVersionMenuAction from './components/body/actions/UploadNewVersionMenuAction.vue';
 import PublicDocumentOptionsDrawer from './components/body/table/PublicDocumentOptionsDrawer.vue';
 
+import DocumentImportFromZipDrawer from './components/header/actions/DocumentImportFromZipDrawer.vue';
+import AttachmentsUploadInput from './components/header/actions/uploadZip/AttachmentsUploadInput.vue';
+import AttachmentsUploaded from './components/header/actions/uploadZip/AttachmentsUploaded.vue';
+import AttachmentsItem from './components/header/actions/uploadZip/AttachmentsItem.vue';
+
 const components = {
   'documents-main': DocumentsMain,
   'documents-header': DocumentsHeader,
@@ -154,7 +159,10 @@ const components = {
   'document-action-context-menu': DocumentActionContextMenu,
   'documents-size-cell': DocumentsSizeCell,
   'upload-new-version-menu-action': UploadNewVersionMenuAction,
-  'public-document-options-drawer': PublicDocumentOptionsDrawer
+  'document-import-from-zip-drawer': DocumentImportFromZipDrawer,
+  'documents-zip-upload-input': AttachmentsUploadInput,
+  'documents-zip-uploaded': AttachmentsUploaded,
+  'documents-zip-item': AttachmentsItem,
 };
 
 for (const key in components) {

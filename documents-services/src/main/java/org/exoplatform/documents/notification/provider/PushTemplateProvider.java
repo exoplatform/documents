@@ -28,6 +28,7 @@ import org.exoplatform.commons.api.notification.service.template.TemplateContext
 import org.exoplatform.commons.notification.template.TemplateUtils;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
+import org.exoplatform.documents.notification.plugin.ImportDocumentsPlugin;
 import org.exoplatform.documents.notification.utils.NotificationConstants;
 import org.exoplatform.documents.notification.utils.NotificationUtils;
 import org.exoplatform.social.core.identity.model.Profile;
@@ -36,7 +37,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import java.io.Writer;
 
 @TemplateConfigs(templates = {
-    @TemplateConfig(pluginId = AddDocumentCollaboratorPlugin.ID, template = "war:/notification/templates/push/AddDocumentCollaboratorPlugin.gtmpl") })
+    @TemplateConfig(pluginId = AddDocumentCollaboratorPlugin.ID, template = "war:/notification/templates/push/AddDocumentCollaboratorPlugin.gtmpl"),
+        @TemplateConfig(pluginId = ImportDocumentsPlugin.ID, template = "war:/notification/templates/push/ImportDocumentsPlugin.gtmpl") })
 public class PushTemplateProvider extends TemplateProvider {
 
   private final IdentityManager identityManager;
@@ -44,6 +46,7 @@ public class PushTemplateProvider extends TemplateProvider {
   public PushTemplateProvider(InitParams initParams, IdentityManager identityManager) {
     super(initParams);
     this.templateBuilders.put(PluginKey.key(AddDocumentCollaboratorPlugin.ID), new TemplateBuilder());
+    this.templateBuilders.put(PluginKey.key(ImportDocumentsPlugin.ID), new TemplateBuilder());
     this.identityManager = identityManager;
   }
 
@@ -55,9 +58,11 @@ public class PushTemplateProvider extends TemplateProvider {
       String pluginId = notificationInfo.getKey().getId();
       String fromUser = notificationInfo.getValueOwnerParameter(NotificationConstants.FROM_USER.getKey());
       String documentName = notificationInfo.getValueOwnerParameter(NotificationConstants.DOCUMENT_NAME.getKey());
+      String folderName = notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_NAME.getKey());
       String language = getLanguage(notificationInfo);
       TemplateContext templateContext = TemplateContext.newChannelInstance(getChannelKey(), pluginId, language);
       templateContext.put("DOCUMENT_NAME", documentName);
+      templateContext.put("FOLDER_NAME", folderName);
       Profile userProfile = NotificationUtils.getUserProfile(identityManager, fromUser);
       templateContext.put("USER", userProfile.getFullName());
       String subject = TemplateUtils.processSubject(templateContext);

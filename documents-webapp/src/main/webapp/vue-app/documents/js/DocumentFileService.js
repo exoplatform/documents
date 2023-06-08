@@ -597,3 +597,33 @@ export function downloadPublicDocument(nodeId, password) {
     }
   });
 }
+
+export function importFilesFromZip(ownerId,folderId,folderPath,uploadId,conflict) {
+  const formData = new FormData();
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  if (folderId) {
+    formData.append('folderId', folderId);
+  }
+  if (folderPath) {
+    formData.append('folderPath', folderPath);
+  }
+  if (conflict) {
+    formData.append('conflict', conflict);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/importzip/${uploadId}?${params}`, {
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    method: 'POST',
+    credentials: 'include',
+  }).then((resp) => {
+    if (!resp || !resp.ok) {
+      throw new Error('error', resp);
+    } else {
+      return resp;    }
+  });
+}
