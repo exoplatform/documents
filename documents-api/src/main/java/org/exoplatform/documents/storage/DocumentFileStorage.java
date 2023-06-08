@@ -27,6 +27,7 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.services.security.Identity;
+import org.exoplatform.social.core.space.model.Space;
 
 public interface DocumentFileStorage {
 
@@ -238,7 +239,7 @@ public interface DocumentFileStorage {
    * @param actionId action id
    * @param userName current user name
    */
-  void cancelBulkAction(int actionId, String userName) throws IOException;
+  void cancelBulkAction(String actionId, String userName) throws IOException;
 
   /**
    * Creates a new version from an input stream
@@ -286,4 +287,26 @@ public interface DocumentFileStorage {
    * @return downloaded zip path
    */
   String downloadFolder(String folderId);
+
+  /**
+   * Import list of documents from an uploaded zip
+   *
+   * @param ownerId       owner id
+   * @param space       space where to create documents
+   * @param folderId        folder id
+   * @param folderPath      folder path
+   * @param importId       import id
+   * @param conflict conflict rule
+   * @param identity current user identity
+   * @param authenticatedUserId current user identity id
+   */
+  void importFiles(String importId,
+                   Space space,
+                   String userName,
+                   String folderId,
+                   String folderPath,
+                   String conflict,
+                   Identity identity,
+                   String ownerId,
+                   long authenticatedUserId) throws Exception;
 }

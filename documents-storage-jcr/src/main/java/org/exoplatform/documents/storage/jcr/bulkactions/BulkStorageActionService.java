@@ -23,8 +23,11 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javax.jcr.Node;
 import javax.jcr.Session;
 
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
+import org.exoplatform.upload.UploadService;
 import org.picocontainer.Startable;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -37,7 +40,6 @@ import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.security.Identity;
 
 public class BulkStorageActionService implements Startable {
 
@@ -49,36 +51,34 @@ public class BulkStorageActionService implements Startable {
 
   private static final String           ZIP_PREFIX          = "downloadzip";
 
-  private static final String           TEMP_FOLDER_PREFIX  = "temp_download";
+  public static final String           TEMP_DOWNLOAD_FOLDER_PREFIX  = "temp_download";
+
+  public static final String           TEMP_IMPORT_FOLDER_PREFIX  = "temp_import";
 
   private static final List<ActionData> actionList = new ArrayList<>();
 
   public void executeBulkAction(Session session,
-                                int actionId,
                                 DocumentFileStorage documentFileStorage,
                                 JCRDeleteFileStorage jcrDeleteFileStorage,
                                 ListenerService listenerService,
+                                UploadService uploadService,
                                 List<AbstractNode> items,
-                                String actionType,
+                                ActionData actionData,
+                                Node parent,
                                 Map<String,Object> params,
-                                Identity identity,
                                 long authenticatedUserId) {
-    ActionData actionData = new ActionData();
-    actionData.setActionId(actionId);
     actionData.setStatus(ActionStatus.STARTED.name());
-    actionData.setActionType(actionType);
-    actionData.setNumberOfItems(items.size());
-    actionData.setIdentity(identity);
     actionList.add(actionData);
     bulkActionThreadPool.execute(new ActionThread(documentFileStorage,
                                                   jcrDeleteFileStorage,
                                                   this,
                                                   listenerService,
+                                                  uploadService,
                                                   actionData,
+                                                  parent,
                                                   params,
                                                   session,
                                                   items,
-                                                  identity,
                                                   authenticatedUserId));
   }
 
@@ -94,21 +94,24 @@ public class BulkStorageActionService implements Startable {
       bulkActionThreadPool.shutdownNow();
     }
     File temp = new File(System.getProperty(TEMP_DIRECTORY_PATH));
-    cleanTempFiles(temp);
+    if(cleanTempFiles(temp)){
+      LOG.info("All temp files were deleted");
+    }
   }
 
-  private void cleanTempFiles(File file) {
+  private boolean cleanTempFiles(File file) {
     File[] files = file.listFiles();
     if (files != null) {
       for (File f : files) {
         cleanTempFiles(f);
       }
     }
-    if (file.getName().startsWith(TEMP_FOLDER_PREFIX) || file.getName().startsWith(ZIP_PREFIX)) {
-      file.delete();
+    if (file.getName().startsWith(TEMP_DOWNLOAD_FOLDER_PREFIX) || file.getName().startsWith(TEMP_IMPORT_FOLDER_PREFIX) || file.getName().startsWith(ZIP_PREFIX)) {
+      JCRDocumentsUtil.cleanFiles(file);
     }
+    return true;
   }
-  public ActionData getActionDataById(int id) {
+  public ActionData getActionDataById(String id) {
     return actionList.stream().filter(resource -> id == resource.getActionId()).findFirst().orElse(null);
   }
 
