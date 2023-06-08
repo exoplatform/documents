@@ -27,6 +27,7 @@ import javax.jcr.lock.LockException;
 import javax.jcr.version.VersionException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.picocontainer.Startable;
 
@@ -181,16 +182,21 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
       Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
                                                    manageableRepository);
+
+      ActionData actionData = new ActionData();
+      actionData.setActionId(String.valueOf(actionId));
+      actionData.setActionType(ActionType.DELETE.name());
+      actionData.setIdentity(identity);
       bulkStorageActionService.executeBulkAction(session,
-                                                 actionId,
-                                                 null,
-                                                 this,
-                                                 listenerService,
-                                                 items,
-                                                 ActionType.DELETE.name(),
-                                                 null,
-                                                 identity,
-                                                 authenticatedUserId);
+              null,
+              this,
+              listenerService,
+              null,
+              items,
+              actionData,
+              null,
+              null,
+              authenticatedUserId);
     } catch (RepositoryException e) {
       LOG.error("Error execute bulk delete", e);
     }
