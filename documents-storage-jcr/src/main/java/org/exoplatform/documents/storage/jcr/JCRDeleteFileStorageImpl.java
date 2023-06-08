@@ -27,7 +27,6 @@ import javax.jcr.lock.LockException;
 import javax.jcr.version.VersionException;
 
 import org.apache.commons.lang3.StringUtils;
-import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.picocontainer.Startable;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -35,6 +34,7 @@ import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.TrashStorage;
@@ -47,6 +47,7 @@ import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -181,15 +182,20 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
       Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
                                                    manageableRepository);
+
+      ActionData actionData = new ActionData();
+      actionData.setActionId(String.valueOf(actionId));
+      actionData.setActionType(ActionType.DELETE.name());
+      actionData.setIdentity(identity);
       bulkStorageActionService.executeBulkAction(session,
-                                                 actionId,
                                                  null,
                                                  this,
                                                  listenerService,
-                                                 items,
-                                                 ActionType.DELETE.name(),
                                                  null,
-                                                 identity,
+                                                 items,
+                                                 actionData,
+                                                 null,
+                                                 null,
                                                  authenticatedUserId);
     } catch (RepositoryException e) {
       LOG.error("Error execute bulk delete", e);
