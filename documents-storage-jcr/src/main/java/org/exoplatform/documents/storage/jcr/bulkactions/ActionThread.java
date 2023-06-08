@@ -372,7 +372,7 @@ public class ActionThread implements Runnable {
         if (StringUtils.isNotEmpty(folderPath)) {
           for (String folderName : folderPath.split("/")) {
             if (StringUtils.isNotEmpty(folderName)) {
-              String name = Text.escapeIllegalJcrChars(cleanName(folderName));
+              String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(folderName));
               name = URLDecoder.decode(name, StandardCharsets.UTF_8);
               if (folderNode.hasNode(name)) {
                 folderNode = folderNode.getNode(name);
@@ -389,33 +389,13 @@ public class ActionThread implements Runnable {
           }
         }
         String title = file.getName();
-        String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase()));
+        String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(title.toLowerCase()));
         name = URLDecoder.decode(name, StandardCharsets.UTF_8);
         if (!folderNode.hasNode(name)) {
           createFile(folderNode, file, name, title);
           actionData.addCreatedFile(filePath.replace(tempFolderPath, ""));
         } else {
-          if (actionData.getConflict().equals("updateAll")) {
-            Node existingNode = folderNode.getNode(name);
-            createNewVersion(existingNode, file);
-            actionData.addUpdatedFile(filePath.replace(tempFolderPath, ""));
-          } else if (actionData.getConflict().equals("duplicate")) {
-            int i = 1;
-            String extension = FilenameUtils.getExtension(name);
-            String fileBaseName = FilenameUtils.getBaseName(name);
-            String titleBase = FilenameUtils.getBaseName(title);
-            String newFileName = fileBaseName + "_" + i + "." + extension;
-            String newFileTitle = titleBase + "_" + i + "." + extension;
-            while (folderNode.hasNode(newFileName)) {
-              i++;
-              newFileName = fileBaseName + "_" + i + "." + extension;
-              newFileTitle = titleBase + "_" + i + "." + extension;
-            }
-            createFile(folderNode, file, newFileName, newFileTitle);
-            actionData.addDuplicatedFile(filePath.replace(tempFolderPath, ""));
-          } else {
-            actionData.addIgnoredFile(filePath.replace(tempFolderPath, ""));
-          }
+          handleImportConflict(file, folderNode, name, title, filePath);
         }
       } catch (Exception e) {
         log.error("Cannot create file {}", filePath.replace(tempFolderPath, ""), e);
@@ -432,6 +412,30 @@ public class ActionThread implements Runnable {
     }
     actionData.setDuration(System.currentTimeMillis() - startTime);
     brodcastEvent();
+  }
+
+  public void handleImportConflict(File file, Node folderNode, String name, String title, String filePath) throws Exception {
+    if (actionData.getConflict().equals("updateAll")) {
+      Node existingNode = folderNode.getNode(name);
+      createNewVersion(existingNode, file);
+      actionData.addUpdatedFile(filePath.replace(tempFolderPath, ""));
+    } else if (actionData.getConflict().equals("duplicate")) {
+      int i = 1;
+      String extension = FilenameUtils.getExtension(name);
+      String fileBaseName = FilenameUtils.getBaseName(name);
+      String titleBase = FilenameUtils.getBaseName(title);
+      String newFileName = fileBaseName + "_" + i + "." + extension;
+      String newFileTitle = titleBase + "_" + i + "." + extension;
+      while (folderNode.hasNode(newFileName)) {
+        i++;
+        newFileName = fileBaseName + "_" + i + "." + extension;
+        newFileTitle = titleBase + "_" + i + "." + extension;
+      }
+      createFile(folderNode, file, newFileName, newFileTitle);
+      actionData.addDuplicatedFile(filePath.replace(tempFolderPath, ""));
+    } else {
+      actionData.addIgnoredFile(filePath.replace(tempFolderPath, ""));
+    }
   }
 
   public void createNewVersion(Node node, File file) throws RepositoryException, FileNotFoundException {
@@ -482,30 +486,6 @@ public class ActionThread implements Runnable {
     jcrContent.setProperty(JCR_MIME_TYPE, mimeType);
     folderNode.save();
   }
-  
-  private String cleanName(String oldName) {
-    if (org.apache.commons.lang.StringUtils.isEmpty(oldName))
-      return oldName;
-    String extension = "";
-    if (oldName.lastIndexOf(".") > -1) {
-      extension = oldName.substring(oldName.lastIndexOf("."));
-      oldName = oldName.substring(0, oldName.lastIndexOf("."));
-    }
-    oldName = oldName.trim();
-    String specialChar = "&#*@.'\"\t\r\n$\\><:;[]/|";
-    StringBuilder ret = new StringBuilder();
-    for (int i = 0; i < oldName.length(); i++) {
-      char currentChar = oldName.charAt(i);
-      if (specialChar.indexOf(currentChar) > -1) {
-        ret.append('_');
-      } else {
-        ret.append(currentChar);
-      }
-    }
-    ret.append(extension);
-    return ret.toString();
-  }
-
   private void brodcastEvent() {
     try {
       listenerService.broadcast("bulk_actions_document_event", actionData.getIdentity(), actionData);

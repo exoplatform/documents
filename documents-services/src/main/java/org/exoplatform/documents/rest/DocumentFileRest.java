@@ -1124,12 +1124,23 @@ public class DocumentFileRest implements ResourceContainer {
   @POST
   @Path("/importzip/{uploadId}")
   @RolesAllowed("users")
-  public Response importDocuments(@PathParam("uploadId")
-                                  String uploadId, @QueryParam("ownerId")
-                                  String ownerId, @QueryParam("folderId")
-                                  String folderId, @QueryParam("folderPath")
-                                  String folderPath, @QueryParam("conflict")
-                                  String conflict) {
+  @Operation(summary = "Import document from a zip",
+          method = "POST",
+          description = "Import document from a zip")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response importDocuments(@Parameter(description = "upload id", required = true)
+                                  @PathParam("uploadId") String uploadId,
+                                  @Parameter(description = "the owner id")
+                                  @QueryParam("ownerId") String ownerId,
+                                  @Parameter(description = "the folder id, where the documents will be imported")
+                                  @QueryParam("folderId") String folderId,
+                                  @Parameter(description = "the folder path, where the documents will be imported")
+                                  @QueryParam("folderPath") String folderPath,
+                                  @Parameter(description = "the rule to apply in case of conflict")
+                                  @QueryParam("conflict")  String conflict) {
 
     try {
 

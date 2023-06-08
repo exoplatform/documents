@@ -288,6 +288,18 @@ public interface DocumentFileStorage {
    */
   String downloadFolder(String folderId);
 
+  /**
+   * Import list of documents from an uploaded zip
+   *
+   * @param ownerId       owner id
+   * @param space       space where to create documents
+   * @param folderId        folder id
+   * @param folderPath      folder path
+   * @param importId       import id
+   * @param conflict conflict rule
+   * @param identity current user identity
+   * @param authenticatedUserId current user identity id
+   */
   void importFiles(String importId,
                    Space space,
                    String userName,

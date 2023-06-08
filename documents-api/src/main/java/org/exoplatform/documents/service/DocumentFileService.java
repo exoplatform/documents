@@ -346,6 +346,17 @@ public interface DocumentFileService {
    */
   boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException;
 
+  /**
+   * Import list of documents from an uploaded zip
+   *
+   * @param ownerId       owner id
+   * @param folderId        folder id
+   * @param folderPath      folder path
+   * @param uploadId       upload id
+   * @param conflict conflict rule
+   * @param identity current user identity
+   * @param authenticatedUserId current user identity id
+   */
   void importFiles(String ownerId,
                    String folderId,
                    String folderPath,
