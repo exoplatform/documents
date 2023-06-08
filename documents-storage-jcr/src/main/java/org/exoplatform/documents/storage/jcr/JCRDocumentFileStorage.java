@@ -53,6 +53,7 @@ import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
@@ -75,6 +76,7 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
+import org.exoplatform.upload.UploadService;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
@@ -91,6 +93,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final DocumentSearchServiceConnector documentSearchServiceConnector;
 
   private final ListenerService                listenerService;
+
+  private final UploadService                  uploadService;
 
   private final IdentityRegistry               identityRegistry;
 
@@ -120,7 +124,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       ZIP_PREFIX           = "downloadzip";
 
-  private static final String                       TEMP_FOLDER_PREFIX   = "temp_download";
+  public static final String                       TEMP_DOWNLOAD_FOLDER_PREFIX   = "temp_download";
+
+  public static final String                       TEMP_IMPORT_FOLDER_PREFIX   = "temp_import";
 
   private static final String                       ZIP_EXTENSION        = ".zip";
 
@@ -135,6 +141,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 IdentityManager identityManager,
                                 SpaceService spaceService,
                                 ListenerService listenerService,
+                                UploadService uploadService,
                                 IdentityRegistry identityRegistry,
                                 ActivityManager activityManager,
                                 BulkStorageActionService bulkStorageActionService) {
@@ -144,6 +151,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     this.nodeHierarchyCreator = nodeHierarchyCreator;
     this.documentSearchServiceConnector = documentSearchServiceConnector;
     this.listenerService = listenerService;
+    this.uploadService = uploadService;
     this.identityRegistry = identityRegistry;
     this.activityManager = activityManager;
     this.bulkStorageActionService = bulkStorageActionService;
@@ -1607,23 +1615,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
       Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
                                                    manageableRepository);
+      ActionData actionData = new ActionData();
+      actionData.setActionId(String.valueOf(actionId));
+      actionData.setActionType(ActionType.DOWNLOAD.name());
+      actionData.setNumberOfItems(documents.size());
+      actionData.setIdentity(identity);
       bulkStorageActionService.executeBulkAction(session,
-                                                 actionId,
-                                                 this,
-                                                 null,
-                                                 listenerService,
-                                                 documents,
-                                                 ActionType.DOWNLOAD.name(),
-                                                 null,
-                                                 identity,
-                                                 authenticatedUserId);
+                                                this,
+                                                null,
+                                                listenerService,
+                                                null,
+                                                documents,
+                                                actionData,
+                                                null,
+                                                null,
+                                                authenticatedUserId);
+
     } catch (RepositoryException e) {
       LOG.error("Error execute download", e);
     }
   }
 
   public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
-    ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
+    ActionData actionData = bulkStorageActionService.getActionDataById(String.valueOf(actionId));
     if (actionData != null) {
       if(!actionData.getIdentity().getUserId().equals(userName)){
         throw new IOException("Current user is not allowed to get zip file");
@@ -1645,7 +1659,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } else
       return new byte[0];
   }
-  public void cancelBulkAction(int actionId, String userName) throws IOException {
+
+  public void cancelBulkAction(String actionId, String userName) throws IOException {
     ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
     if(!actionData.getIdentity().getUserId().equals(userName)){
       throw new IOException("Current user is not allowed to cancel the download action");
@@ -1703,15 +1718,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Map<String, Object> params = new HashMap<>();
       params.put("destPath", destPath);
       params.put("ownerId", ownerId);
+      ActionData actionData = new ActionData();
+      actionData.setActionId(String.valueOf(actionId));
+      actionData.setActionType(ActionType.MOVE.name());
+      actionData.setNumberOfItems(documents.size());
+      actionData.setIdentity(userIdentity);
       bulkStorageActionService.executeBulkAction(session,
-                                                 actionId,
                                                  this,
                                                  null,
                                                  listenerService,
+                                                 null,
                                                  documents,
-                                                 ActionType.MOVE.name(),
+                                                 actionData,
+                                                 null,
                                                  params,
-                                                 userIdentity,
                                                  identityId);
     } catch (RepositoryException e) {
       LOG.error("Error execute move", e);
@@ -1774,7 +1794,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node node = getNodeByIdentifier(systemSession, folderId);
       if (node != null) {
-        Path tempFolder = Files.createTempDirectory(TEMP_FOLDER_PREFIX + System.nanoTime()); //NOSONAR
+        Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX + System.nanoTime()); //NOSONAR
         tempFolder.toFile().deleteOnExit();
         String tempFolderPath = tempFolder.toString();
         String parentPath = node.getParent().getPath();
@@ -1796,4 +1816,55 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     return null;
   }
+
+  @Override
+  public void importFiles(String importId,
+                          Space space,
+                          String userName,
+                          String folderId,
+                          String folderPath,
+                          String conflict,
+                          Identity identity,
+                          String ownerId,
+                          long authenticatedUserId) throws Exception {
+    String tempFolderPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + TEMP_IMPORT_FOLDER_PREFIX + importId;
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
+    ActionData actionData = new ActionData();
+    actionData.setActionId(importId);
+    actionData.setFolderPath(folderPath);
+    actionData.setTempFolderPath(tempFolderPath);
+    actionData.setUserName(userName);
+    actionData.setIdentity(identity);
+    actionData.setConflict(conflict);
+    SessionProvider sessionProvider = null;
+    ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+    sessionProvider = getUserSessionProvider(repositoryService, identity);
+    Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+    String path = folderPath;
+    Node parent = getIdentityRootNode(spaceService, nodeHierarchyCreator, userName, ownerIdentity, sessionProvider);
+    if (StringUtils.isNotEmpty(path)) {
+      path = path.replace("Private/Public", "Public");
+      parent = parent.getNode(java.net.URLDecoder.decode(path, StandardCharsets.UTF_8).replace("%", "%25"));
+    }
+    if (StringUtils.isNotEmpty(folderId)) {
+      parent = ((ExtendedSession) session).getNodeByIdentifier(folderId);
+    }
+    actionData.setParentFolder(getFolderLink(parent, space));
+    actionData.setParentFolderName(parent.getName());
+    actionData.setActionType(ActionType.IMPORT_ZIP.name());
+    bulkStorageActionService.executeBulkAction(session,
+                                              this,
+                                              null,
+                                              listenerService,
+                                              uploadService,
+                                              null,
+                                              actionData,
+                                              parent,
+                                              null,
+                                              authenticatedUserId);
+  }
+
+
+
+
 }
