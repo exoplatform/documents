@@ -53,6 +53,7 @@ import org.exoplatform.services.security.*;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
@@ -883,14 +884,18 @@ public class JCRDocumentsUtil {
     }
   }
 
-  public static void cleanFiles(File file) throws IOException {
+  public static void cleanFiles(File file) {
     File[] files = file.listFiles();
     if (files != null) {
       for (File f : files) {
         cleanFiles(f);
       }
     }
-    Files.delete(file.toPath());
+    try {
+      Files.delete(file.toPath());
+    } catch (IOException e) {
+      LOG.warn("Cannot delete {}",file.toPath(),e);
+    }
   }
 
   public static void zipFiles(String zipFilePath, String tempFolderPath) throws Exception {
@@ -926,5 +931,21 @@ public class JCRDocumentsUtil {
         }
       }
     }
+  }
+
+  public static String getFolderLink(Node node, Space space) throws RepositoryException {
+    StringBuilder stringBuilder = new StringBuilder();
+    String portalOwner = CommonsUtils.getCurrentPortalOwner();
+    String domain = CommonsUtils.getCurrentDomain();
+    stringBuilder.append(domain).append("/").append(LinkProvider.getPortalName(null)).append("/");
+    if (space != null) {
+      String groupId = space.getGroupId().replace("/", ":");
+      stringBuilder.append("g/").append(groupId).append("/").append(space.getPrettyName()).append("/documents");
+    } else {
+      stringBuilder.append(portalOwner).append("/documents");
+    }
+    stringBuilder.append("?folderId=");
+    stringBuilder.append(((NodeImpl) node).getIdentifier());
+    return stringBuilder.toString();
   }
 }

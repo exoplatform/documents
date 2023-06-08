@@ -27,4 +27,23 @@ public class NotificationConstants {
   public static final ArgumentLiteral<String> DOCUMENT_NAME = new ArgumentLiteral<>(String.class, "DOCUMENT_NAME");
 
   public static final ArgumentLiteral<String> RECEIVERS     = new ArgumentLiteral<>(String.class, "RECEIVERS");
+
+  public static final ArgumentLiteral<String> FOLDER_URL       = new ArgumentLiteral<>(String.class, "FOLDER_URL");
+
+  public static final ArgumentLiteral<String> FOLDER_NAME      = new ArgumentLiteral<>(String.class, "FOLDER_NAME");
+
+  public static final ArgumentLiteral<String> TOTAL_NUMBER     = new ArgumentLiteral<>(String.class, "TOTAL_NUMBER");
+
+  public static final ArgumentLiteral<String> DURATION         = new ArgumentLiteral<>(String.class, "DURATION");
+
+  public static final ArgumentLiteral<String> FILES_CREATED    = new ArgumentLiteral<>(String.class, "FILES_CREATED");
+
+  public static final ArgumentLiteral<String> FILES_DUPLICATED = new ArgumentLiteral<>(String.class, "FILES_DUPLICATED");
+
+  public static final ArgumentLiteral<String> FILES_UPDATED    = new ArgumentLiteral<>(String.class, "FILES_UPDATED");
+
+  public static final ArgumentLiteral<String> FILES_IGNORED    = new ArgumentLiteral<>(String.class, "FILES_IGNORED");
+
+  public static final ArgumentLiteral<String> FILES_FAILED     = new ArgumentLiteral<>(String.class, "FILES_FAILED");
+
 }

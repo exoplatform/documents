@@ -147,7 +147,7 @@ export default {
       if (this.downloadStatus==='zip_file_created'){
         this.zipFileCreated = true;
       }
-      if (this.downloadStatus==='done_succsussfully'){
+      if (this.downloadStatus==='done_successfully'){
         this.doneSuccsussfully =  true;
         this.downloading=false;
         window.setTimeout(() => {

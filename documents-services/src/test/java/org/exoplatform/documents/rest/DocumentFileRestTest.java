@@ -1490,4 +1490,28 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
   }
+
+  @Test
+  public void importDocuments() throws Exception {
+    String username = "user";
+    org.exoplatform.services.security.Identity user = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(user));
+    mockRestUtils().when(RestUtils::getCurrentUser).thenReturn("user");
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService,
+            publicDocumentAccessService,
+            externalDownloadService);
+    Response response = documentFileRest1.importDocuments("1", null, null,null,"ignore");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    response = documentFileRest1.importDocuments(null, "1", null,null,"ignore");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    response = documentFileRest1.importDocuments("1", "1", null,null,"ignore");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
 }

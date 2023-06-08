@@ -20,12 +20,13 @@ import org.exoplatform.services.security.Identity;
 
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
 public class ActionData {
 
-  private int          actionId;
+  private String          actionId;
 
   private String       status;
 
@@ -40,5 +41,60 @@ public class ActionData {
   private String       downloadZipPath;
 
   private Identity     identity;
+
+  private String       tempFolderPath;
+
+  private String       userName;
+
+  private String       folderPath;
+
+  private String       conflict;
+
+  private List<String> files;
+
+  private String       documentInProgress;
+
+  private String       parentFolder;
+
+  private String       parentFolderName;
+
+  private int          importedFilesCount = 0;
+
+  private long         duration;
+
+  private List<String> createdFiles       = new ArrayList<>();
+
+  private List<String> ignoredFiles       = new ArrayList<>();
+
+  private List<String> duplicatedFiles    = new ArrayList<>();
+
+  private List<String> updatedFiles       = new ArrayList<>();
+
+  private List<String> failedFiles        = new ArrayList<>();
+
+  public void addCreatedFile(String fileName) {
+    createdFiles.add(fileName);
+  }
+
+  public void addIgnoredFile(String fileName) {
+    ignoredFiles.add(fileName);
+  }
+
+  public void addDuplicatedFile(String fileName) {
+    duplicatedFiles.add(fileName);
+  }
+
+  public void addFailedFile(String fileName) {
+    failedFiles.add(fileName);
+  }
+
+  public void addUpdatedFile(String fileName) {
+    updatedFiles.add(fileName);
+  }
+
+  public void incrementImportCount() {
+    importedFilesCount++;
+  }
+
 
 }
