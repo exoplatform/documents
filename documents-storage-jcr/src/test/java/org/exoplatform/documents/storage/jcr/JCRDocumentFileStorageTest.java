@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.util.*;
 
@@ -19,6 +20,10 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
+import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.services.jcr.core.ExtendedSession;
+import org.exoplatform.upload.UploadService;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.mockito.*;
@@ -91,6 +96,9 @@ public class JCRDocumentFileStorageTest {
   private ListenerService                listenerService;
 
   @Mock
+  private UploadService                  uploadService;
+
+  @Mock
   private IdentityRegistry               identityRegistry;
 
   @Mock
@@ -122,6 +130,7 @@ public class JCRDocumentFileStorageTest {
                                                              identityManager,
                                                              spaceService,
                                                              listenerService,
+                                                             uploadService,
                                                              identityRegistry,
                                                              activityManager,
                                                              bulkStorageActionService);
@@ -1222,31 +1231,85 @@ public class JCRDocumentFileStorageTest {
     Map<String, Object> params = new HashMap<>();
     params.put("destPath", "destPath");
     params.put("ownerId", 1L);
+    ActionData actionData =  new ActionData();
+    actionData.setActionType(ActionType.MOVE.name());
+    actionData.setActionId("1");
+    actionData.setIdentity(identity);
+    actionData.setNumberOfItems(1);
+
     jcrDocumentFileStorage.moveDocuments(1, 1L, documents, "destPath", identity, 1L);
     verify(bulkStorageActionService, times(1)).executeBulkAction(session,
-                                                                 1,
-                                                                 jcrDocumentFileStorage,
-                                                                 null,
-                                                                 listenerService,
-                                                                 documents,
-                                                                 ActionType.MOVE.name(),
-                                                                 params,
-                                                                 identity,
-                                                                 1L);
+            jcrDocumentFileStorage,
+            null,
+            listenerService,
+            null,
+            documents,
+            actionData,
+            null,
+            params,
+            1L);
+
 
     Mockito.doThrow(new RuntimeException())
            .when(bulkStorageActionService)
            .executeBulkAction(session,
-                              1,
-                              jcrDocumentFileStorage,
-                              null,
-                              listenerService,
-                              documents,
-                              ActionType.MOVE.name(),
-                              params,
-                              identity,
-                              1L);
+            jcrDocumentFileStorage,
+            null,
+            listenerService,
+            null,
+            documents,
+            actionData,
+            null,
+            params,
+            1L);
     assertThrows(Exception.class, () -> jcrDocumentFileStorage.moveDocuments(1, 1L, documents, "destPath", identity, 1L));
+  }
+  @Test
+  public void importDocuments() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Identity ownerIdentity = mock(Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+
+
+    ActionData actionData =  new ActionData();
+    actionData.setActionType(ActionType.IMPORT_ZIP.name());
+    actionData.setActionId("1");
+    actionData.setIdentity(identity);
+    actionData.setParentFolderName("documents");
+    actionData.setTempFolderPath(System.getProperty("java.io.tmpdir") + File.separator + "temp_import1");
+    when(JCRDocumentsUtil.getFolderLink(any(),any())).thenReturn(null);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    NodeImpl parentNodeImp = mock(NodeImpl.class);
+    when(parentNodeImp.getName()).thenReturn("documents");
+    when(parentNodeImp.getPath()).thenReturn("/documents/path");
+    when(parentNodeImp.getNode(any())).thenReturn(parentNodeImp);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+            nodeHierarchyCreator,
+            null,
+            ownerIdentity,
+            sessionProvider)).thenReturn(parentNodeImp);
+    jcrDocumentFileStorage.importFiles("1", null, null, null, null, null, identity, "1",1L);
+    verify(bulkStorageActionService, times(1)).executeBulkAction(session,
+            jcrDocumentFileStorage,
+            null,
+            listenerService,
+            uploadService,
+            null,
+            actionData,
+            parentNodeImp,
+            null,
+            1L);
+
   }
 
   @Test

@@ -28,6 +28,7 @@
   <properties>
     <!-- 3rd party libraries versions -->
     <addon.exo.jcr.version>6.5.x-experience-SNAPSHOT</addon.exo.jcr.version>
+    <net.lingala.zip4j.version>2.11.5</net.lingala.zip4j.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
   </properties>
@@ -40,6 +41,13 @@
         <version>${addon.exo.jcr.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <!-- 3rd party libraries artifacts -->
+      <dependency>
+        <groupId>net.lingala.zip4j</groupId>
+        <artifactId>zip4j</artifactId>
+        <version>${net.lingala.zip4j.version}</version>
       </dependency>
       
       <!-- Current project artifacts -->

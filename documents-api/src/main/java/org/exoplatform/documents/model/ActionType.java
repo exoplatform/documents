@@ -19,6 +19,6 @@ package org.exoplatform.documents.model;
 
 public enum ActionType {
 
-  MOVE, DELETE, DOWNLOAD, DUPLICATE
+  MOVE, DELETE, DOWNLOAD, DUPLICATE, IMPORT_ZIP
 
 }
