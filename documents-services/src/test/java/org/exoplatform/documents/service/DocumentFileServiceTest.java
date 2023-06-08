@@ -634,4 +634,39 @@ public class DocumentFileServiceTest {
     assertTrue(documentFileService.hasEditPermissionOnDocument("123", 1L));
     assertFalse(documentFileService.hasEditPermissionOnDocument("123", 1L));
   }
+
+  @Test
+  public void importDocuments() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
+      documentFileService.importFiles("1", null, null, "1", "ignore", identity, 1L);
+    });
+    assertEquals("Owner Identity with id : 1 isn't found", exception.getMessage());
+    Identity ownerIdentity = mock(Identity.class);
+    when(identityManager.getIdentity(anyString())).thenReturn(ownerIdentity);
+    when(ownerIdentity.getRemoteId()).thenReturn("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    documentFileService.importFiles("1", null, null, "1", "ignore", identity, 1L);
+    verify(documentFileStorage, times(1)).importFiles("1", null, "", null, null,"ignore", identity, "1",1L);
+    when(ownerIdentity.isUser()).thenReturn(true);
+    when(ownerIdentity.getRemoteId()).thenReturn("test");
+    when(identity.getUserId()).thenReturn("test1");
+    exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.importFiles("1", null, null, "1", "ignore", identity, 1L);
+    });
+    assertEquals("User test1 attempts to access private documents of user test" , exception.getMessage());
+    when(ownerIdentity.isSpace()).thenReturn(true);
+    when(identity.getUserId()).thenReturn("user");
+    when(ownerIdentity.getRemoteId()).thenReturn("test1");
+    Space space = new Space();
+    space.setPrettyName("test1");
+    space.setDisplayName("test1");
+    when(spaceService.getSpaceByPrettyName("test1")).thenReturn(space);
+    when(spaceService.hasAccessPermission(space, identity.getUserId())).thenReturn(false);
+    exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.importFiles("1", null, null, "1", "ignore", identity, 1L);
+    });
+    assertEquals("User user attempts to access documents of space test1 while it's not a member" , exception.getMessage());
+  }
+
 }
