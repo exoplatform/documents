@@ -21,16 +21,22 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>documents-storage-jcr</artifactId>
-      <scope>provided</scope>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>documents-storage-jcr</artifactId>
+        <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>documents-webapp</artifactId>
-      <scope>provided</scope>
-      <type>war</type>
-    </dependency>
+      <dependency>
+          <groupId>${project.groupId}</groupId>
+          <artifactId>documents-webapp</artifactId>
+          <scope>provided</scope>
+          <type>war</type>
+      </dependency>
+      <dependency>
+          <groupId>net.lingala.zip4j</groupId>
+          <artifactId>zip4j</artifactId>
+          <type>jar</type>
+          <scope>provided</scope>
+      </dependency>
   </dependencies>
   <build>
     <finalName>documents-addon</finalName>

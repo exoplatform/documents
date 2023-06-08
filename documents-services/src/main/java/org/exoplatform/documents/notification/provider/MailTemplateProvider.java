@@ -16,6 +16,10 @@
  */
 package org.exoplatform.documents.notification.provider;
 
+import java.io.Writer;
+import java.util.Calendar;
+import java.util.Locale;
+
 import org.exoplatform.commons.api.notification.NotificationContext;
 import org.exoplatform.commons.api.notification.NotificationMessageUtils;
 import org.exoplatform.commons.api.notification.annotation.TemplateConfig;
@@ -30,6 +34,7 @@ import org.exoplatform.commons.notification.template.TemplateUtils;
 import org.exoplatform.commons.utils.HTMLEntityEncoder;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
+import org.exoplatform.documents.notification.plugin.ImportDocumentsPlugin;
 import org.exoplatform.documents.notification.utils.NotificationConstants;
 import org.exoplatform.documents.notification.utils.NotificationUtils;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -39,12 +44,9 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.notification.LinkProviderUtils;
 import org.exoplatform.webui.utils.TimeConvertUtils;
 
-import java.io.Writer;
-import java.util.Calendar;
-import java.util.Locale;
-
 @TemplateConfigs(templates = {
-    @TemplateConfig(pluginId = AddDocumentCollaboratorPlugin.ID, template = "war:/notification/templates/mail/AddDocumentCollaboratorPlugin.gtmpl") })
+    @TemplateConfig(pluginId = AddDocumentCollaboratorPlugin.ID, template = "war:/notification/templates/mail/AddDocumentCollaboratorPlugin.gtmpl"),
+    @TemplateConfig(pluginId = ImportDocumentsPlugin.ID, template = "war:/notification/templates/mail/ImportDocumentsPlugin.gtmpl") })
 public class MailTemplateProvider extends TemplateProvider {
 
   private final IdentityManager identityManager;
@@ -52,6 +54,7 @@ public class MailTemplateProvider extends TemplateProvider {
   public MailTemplateProvider(InitParams initParams, IdentityManager identityManager) {
     super(initParams);
     this.templateBuilders.put(PluginKey.key(AddDocumentCollaboratorPlugin.ID), new TemplateBuilder());
+    this.templateBuilders.put(PluginKey.key(ImportDocumentsPlugin.ID), new TemplateBuilder());
     this.identityManager = identityManager;
   }
 
@@ -65,10 +68,28 @@ public class MailTemplateProvider extends TemplateProvider {
       String fromUser = notificationInfo.getValueOwnerParameter(NotificationConstants.FROM_USER.getKey());
       String documentUrl = notificationInfo.getValueOwnerParameter(NotificationConstants.DOCUMENT_URL.getKey());
       String documentName = notificationInfo.getValueOwnerParameter(NotificationConstants.DOCUMENT_NAME.getKey());
+      String folderUrl = notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_URL.getKey());
+      String folderName = notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_NAME.getKey());
+      String totalNumber = notificationInfo.getValueOwnerParameter(NotificationConstants.TOTAL_NUMBER.getKey());
+      String duration = notificationInfo.getValueOwnerParameter(NotificationConstants.DURATION.getKey());
+      String filesCreated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_CREATED.getKey());
+      String filesDuplicated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_DUPLICATED.getKey());
+      String filesUpdated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_UPDATED.getKey());
+      String filesIgnored = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_IGNORED.getKey());
+      String filesFailed = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_FAILED.getKey());
       String language = getLanguage(notificationInfo);
       TemplateContext templateContext = TemplateContext.newChannelInstance(getChannelKey(), pluginId, language);
       templateContext.put("DOCUMENT_URL", documentUrl);
       templateContext.put("DOCUMENT_NAME", documentName);
+      templateContext.put("FOLDER_URL", folderUrl);
+      templateContext.put("TOTAL_NUMBER", totalNumber);
+      templateContext.put("FOLDER_NAME", folderName);
+      templateContext.put("DURATION", duration);
+      templateContext.put("FILES_CREATED", filesCreated);
+      templateContext.put("FILES_DUPLICATED", filesDuplicated);
+      templateContext.put("FILES_UPDATED", filesUpdated);
+      templateContext.put("FILES_IGNORED", filesIgnored);
+      templateContext.put("FILES_FAILED", filesFailed);
       Profile userProfile = NotificationUtils.getUserProfile(identityManager, fromUser);
       templateContext.put("USER", encoder.encode(userProfile.getFullName()));
       templateContext.put("PROFILE_URL", encoder.encode(userProfile.getUrl()));
