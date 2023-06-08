@@ -357,7 +357,7 @@ public class ActionThread implements Runnable {
     }
   }
 
-  public void createItems() throws RepositoryException, IOException {
+  public void createItems() throws RepositoryException {
     String tempFolderPath = actionData.getTempFolderPath();
     for (String filePath : actionData.getFiles()) {
       try {
