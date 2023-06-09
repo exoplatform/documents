@@ -21,10 +21,12 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -46,7 +48,11 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
-import org.exoplatform.documents.service.*;
+import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.DocumentWebSocketService;
+import org.exoplatform.documents.service.ExternalDownloadService;
+import org.exoplatform.documents.service.PublicDocumentAccessService;
+import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
@@ -83,9 +89,11 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final DocumentWebSocketService documentWebSocketService;
 
-  private PublicDocumentAccessService publicDocumentAccessService;
+  private final PublicDocumentAccessService publicDocumentAccessService;
   
-  private ExternalDownloadService        externalDownloadService;
+  private final ExternalDownloadService        externalDownloadService;
+
+  public static final UserFieldValidator    PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
 
   public DocumentFileRest(DocumentFileService documentFileService,
                           SpaceService spaceService,
@@ -1020,7 +1028,7 @@ public class DocumentFileRest implements ResourceContainer {
   }
 
   @POST
-  @Produces(MediaType.TEXT_PLAIN)
+  @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/publicAccessLink")
   @Operation(summary = "Generate a new public link for a specific document",
@@ -1030,14 +1038,61 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response getPublicAccessLink(@Parameter(description = "target file node identifier", required = true)
-                                      @QueryParam("nodeId") String nodeId,
-                                      @RequestBody(description = "public access link params", required = true) 
-                                      Map<String, String> params,
-                                      @Parameter(description = "Generate or get existing token")
-                                      @DefaultValue("false") @QueryParam("isNew") boolean isNew) {
+  public Response createPublicAccessLink(@javax.ws.rs.core.Context HttpServletRequest request,
+                                         @Parameter(description = "target file node identifier", required = true)
+                                         @QueryParam("nodeId") String nodeId,
+                                         @RequestBody(description = "public access document options object", required = true)
+                                         PublicDocumentAccessOptionsEntity publicDocumentAccessOptionsEntity) {
 
-    if (StringUtils.isBlank(nodeId) || params.isEmpty()) {
+    Locale locale = request == null ? Locale.ENGLISH : request.getLocale();
+    if (StringUtils.isBlank(nodeId)) {
+      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    
+    if (publicDocumentAccessOptionsEntity.getPassword() != null) {
+      String errorMessage = PASSWORD_VALIDATOR.validate(locale, publicDocumentAccessOptionsEntity.getPassword());
+      if (StringUtils.isNotBlank(errorMessage)) {
+        return Response.status(Response.Status.BAD_REQUEST).entity(errorMessage).build();
+      }
+    }
+    try {
+      boolean hasEditPermission = documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId);
+      if (!hasEditPermission) {
+        return Response.status(Response.Status.UNAUTHORIZED).build();
+      }
+
+      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccessService.createPublicDocumentAccess(userIdentityId,
+                                                                                                                           nodeId,
+                                                                                                                           publicDocumentAccessOptionsEntity.getPassword(),
+                                                                                                                           publicDocumentAccessOptionsEntity.getExpirationDate(),
+                                                                                                                           publicDocumentAccessOptionsEntity.isHasPassword())))
+                     .build();
+
+    } catch (Exception e) {
+      LOG.error("Error while creating a document public access for document: {}", nodeId, e);
+      return Response.serverError().build();
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/publicAccessLink")
+  @Operation(summary = "Get public access details of a specific document",
+          method = "GET",
+          description = "Get public access details of a specific document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getPublicAccessLink(@Parameter(description = "target file node identifier", required = true)
+                                      @QueryParam("nodeId") String nodeId) {
+
+    if (StringUtils.isBlank(nodeId)) {
       return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
@@ -1045,30 +1100,18 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Response.Status.UNAUTHORIZED).build();
     }
     try {
-      boolean isFolder = Boolean.parseBoolean(params.get("isFolder"));
-      String password = params.get("password");
-      Long expirationDate = NumberUtils.toLong(params.get("expirationDate"));
-      boolean hasEditPermission = documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId);
-      if (!hasEditPermission) {
-        return Response.status(Response.Status.UNAUTHORIZED).build();
+      PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
+      if (publicDocumentAccess == null) {
+        return Response.status(Status.NOT_FOUND).build();
       }
-      if (isNew) {
-        return Response.ok(publicDocumentAccessService.createPublicDocumentAccess(userIdentityId, nodeId, isFolder, password, expirationDate))
-                .type(MediaType.TEXT_PLAIN_TYPE)
-                .build();
-      } else {
-        PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
-        if (publicDocumentAccess == null) {
-          return Response.status(Status.NOT_FOUND).build();
-        }
-        return Response.ok(publicDocumentAccess.getNodeId()).type(MediaType.TEXT_PLAIN_TYPE).build();
-      }
-   
+      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccess)).build();
+
     } catch (Exception e) {
-      LOG.error("Error while generation a public access token for document: {}", nodeId, e);
+      LOG.error("Error while getting public access link for document: {}", nodeId, e);
       return Response.serverError().build();
     }
   }
+
 
   @GET
   @Produces
@@ -1080,9 +1123,9 @@ public class DocumentFileRest implements ResourceContainer {
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
           @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response downloadDocument(@Parameter(description = "public link token id", required = true)
+  public Response downloadDocument(@Parameter(description = "public link node id", required = true)
                                    @QueryParam("nodeId") String nodeId,
-                                   @Parameter(description = "token lock password")
+                                   @Parameter(description = "public access password")
                                    @QueryParam("password") String password) {
 
     if (StringUtils.isBlank(nodeId)) {
@@ -1090,10 +1133,10 @@ public class DocumentFileRest implements ResourceContainer {
     }
     try {
       if (publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId)) {
-        return Response.status(Status.UNAUTHORIZED).entity("token expired").build();
+        return Response.status(Status.UNAUTHORIZED).entity("access expired").build();
       }
       if (!publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
-        return Response.status(Status.BAD_REQUEST).entity("token signature is not valid").build();
+        return Response.status(Status.UNAUTHORIZED).entity("access is not valid").build();
       }
       DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
       if (downloadItem == null) {

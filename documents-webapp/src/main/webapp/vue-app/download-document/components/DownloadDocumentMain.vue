@@ -20,7 +20,7 @@
     <div>
       <div
         v-if="isAccessGranted"
-        class="center mb-6">
+        class="center">
         <p>
           <v-icon
             class="mt-n1"
@@ -44,7 +44,9 @@
         </v-icon>
         {{ $t('download.public.link.not.active.message') }}
       </p>
-      <v-form v-else-if="!isLinkExpired">
+      <v-form
+        v-else-if="!isLinkExpired"
+        ref="form">
         <div v-if="requirePassword">
           <v-label
             for="documentPassword">
@@ -63,7 +65,8 @@
             prepend-inner-icon="fas fa-lock ms-n2 grey--text text--lighten-1"
             class="pt-2 login-password border-box-sizing"
             name="documentPassword"
-            required="required"
+            :rules="[v => !!v || $t('documents.public.access.password.mandatory')]"
+            required
             outlined
             dense
             @click:append="toggleShow" />
@@ -71,6 +74,7 @@
         <div class="center">
           <v-btn
             :loading="isDownloading"
+            :disabled="requirePassword && !password"
             class="btn btn-primary mt-4"
             @click="downloadDocument">
             {{ $t('document.public.access.download.label') }}
@@ -101,7 +105,7 @@ export default {
     iconColor: '#476A9C',
     iconClass: 'fas fa-file',
     password: null,
-    showPassword: false
+    showPassword: false,
   }),
   props: {
     params: {
@@ -114,10 +118,10 @@ export default {
       return this.showPassword ? 'text' :'password';
     },
     requirePassword() {
-      return this.isPublicAccessActive && this.params?.isTokenLocked;
+      return this.isPublicAccessActive && this.params?.isAccessLocked;
     },
     isLinkExpired() {
-      return this.params?.isTokenExpired;
+      return this.params?.isAccessExpired;
     },
     isPublicAccessActive() {
       return this.params?.hasPublicLink;
@@ -127,7 +131,13 @@ export default {
     }
   },
   methods: {
+    validatePassword() {
+      return this.$refs.form.validate();
+    },
     downloadDocument() {
+      if (!this.validatePassword()) {
+        return;
+      }
       this.isDownloading = true;
       downloadPublicDocument(this.params?.nodeId, this.password).then((response) => {
         return response.blob();
@@ -137,8 +147,14 @@ export default {
         element.setAttribute('download', this.params?.documentName);
         element.click();
         element.remove();
+      }).catch((error) => {
+        if (error.status === 401) {
+          this.$root.$emit('alert-message', this.$t('documents.public.access.password.wrong'), 'error');
+        }
       }).finally(() => {
         this.isDownloading = false;
+        this.$refs.form.reset();
+        this.$refs.form.resetValidation();
       });
     },
     toggleShow() {
@@ -163,7 +179,9 @@ export default {
     this.getFileIcon(this.params.documentType);
   },
   mounted() {
-    this.downloadDocument();
+    if (!this.requirePassword) {
+      this.downloadDocument();
+    }
   }
 };
 </script>
