@@ -25,7 +25,7 @@ import javax.persistence.TypedQuery;
 public class PublicDocumentAccessDAO extends GenericDAOJPAImpl<PublicDocumentAccessEntity, Long> {
 
   public PublicDocumentAccessEntity getPublicDocumentAccessByNodeId(String nodeId) {
-    TypedQuery<PublicDocumentAccessEntity> query = getEntityManager().createNamedQuery("PublicDocumentAccess.getTokenByNodeId",
+    TypedQuery<PublicDocumentAccessEntity> query = getEntityManager().createNamedQuery("PublicDocumentAccess.getPublicAccessByNodeId",
                                                                                 PublicDocumentAccessEntity.class);
     query.setParameter("nodeId", nodeId);
     try {

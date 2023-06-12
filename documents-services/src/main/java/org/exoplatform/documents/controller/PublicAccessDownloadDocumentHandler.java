@@ -42,7 +42,7 @@ public class PublicAccessDownloadDocumentHandler extends JspBasedWebHandler {
 
   private ServletContext                servletContext;
 
-  private static final QualifiedName    TOKEN_ID                   = QualifiedName.create("gtn", "nodeId");
+  private static final QualifiedName    NODE_ID                   = QualifiedName.create("gtn", "nodeId");
 
   private static final String           DOWNLOAD_DOCUMENT_JSP_PATH = "public.download.jsp.path";
 
@@ -76,17 +76,17 @@ public class PublicAccessDownloadDocumentHandler extends JspBasedWebHandler {
     HttpServletRequest request = controllerContext.getRequest();
     HttpServletResponse response = controllerContext.getResponse();
 
-    String nodeId = controllerContext.getParameter(TOKEN_ID);
+    String nodeId = controllerContext.getParameter(NODE_ID);
     DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
     PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
     boolean hasPublicLink = publicDocumentAccess != null;
-    boolean isTokenLocked = hasPublicLink && publicDocumentAccess.isHasPassword();
-    boolean isTokenExpired = publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId);
+    boolean isAccessLocked = hasPublicLink && publicDocumentAccess.getPasswordHashKey() != null;
+    boolean isAccessExpired = publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId);
     Map<String, Object> parameters = new HashMap<>();
     parameters.put("nodeId", nodeId);
     parameters.put("hasPublicLink", hasPublicLink);
-    parameters.put("isTokenLocked", isTokenLocked);
-    parameters.put("isTokenExpired", isTokenExpired);
+    parameters.put("isAccessLocked", isAccessLocked);
+    parameters.put("isAccessExpired", isAccessExpired);
     if (downloadItem != null) {
       parameters.put("documentName", downloadItem.getItemName());
       parameters.put("documentType", downloadItem.getMimeType());

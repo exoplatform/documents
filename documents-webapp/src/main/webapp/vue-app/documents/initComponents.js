@@ -85,6 +85,7 @@ import DocumentsSelectionCell from './components/body/table/cells/DocumentsSelec
 import DocumentActionContextMenu from './components/body/table/DocumentActionContextMenu.vue';
 import DocumentsSizeCell from './components/body/table/cells/DocumentsSizeCell.vue';
 import UploadNewVersionMenuAction from './components/body/actions/UploadNewVersionMenuAction.vue';
+import PublicDocumentOptionsDrawer from './components/body/table/PublicDocumentOptionsDrawer.vue';
 
 import DocumentImportFromZipDrawer from './components/header/actions/DocumentImportFromZipDrawer.vue';
 import AttachmentsUploadInput from './components/header/actions/uploadZip/AttachmentsUploadInput.vue';
@@ -164,6 +165,7 @@ const components = {
   'documents-zip-upload-input': AttachmentsUploadInput,
   'documents-zip-uploaded': AttachmentsUploaded,
   'documents-zip-item': AttachmentsItem,
+  'public-document-options-drawer': PublicDocumentOptionsDrawer
 };
 
 for (const key in components) {

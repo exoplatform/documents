@@ -51,7 +51,7 @@
                 <span v-else class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.folders.visibility.choice') + ' :' }}</span>
               </v-label>
               <v-select
-                v-model="file.acl.visibilityChoice"
+                v-model="visibilityChoice"
                 :items="visibilityLabel"
                 item-text="text"
                 item-value="value"
@@ -65,30 +65,85 @@
             </div>
             <div
               v-if="showPublicAccessOption"
-              class="d-flex flex-row my-4 ms-4 mt-n1">
-              <v-label for="publicAccess">
-                <span class="text-color body-2 mr-6">
-                  {{ $t('document.visibility.publicAccess.message') }}
-                </span>
-                <p class="caption"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
-              </v-label>
-              <v-tooltip bottom>
-                <template #activator="{ on, attrs}">
-                  <v-btn
-                    v-bind="attrs"
-                    v-on="on"
-                    class="ms-8 mt-n1"
-                    color="primary"
-                    icon
-                    @click="copyPublicAccessLink">
-                    <v-icon
-                      size="18">
-                      fas fa-clone
-                    </v-icon>
-                  </v-btn>
-                </template>
-                {{ $t('document.visibility.publicAccess.copyLink.message') }}
-              </v-tooltip>
+              class="d-block">
+              <div class="d-flex flex-row my-4 ms-4 mt-n1">
+                <div class="d-flex flex-column full-width">
+                  <v-label for="publicAccess">
+                    <span class="text-color body-2 mr-6">
+                      {{ $t('document.visibility.publicAccess.message') }}
+                    </span>
+                    <p class="caption"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
+                  </v-label>
+                </div>
+                <div class="d-flex flex-column">
+                  <v-tooltip bottom>
+                    <template #activator="{ on, attrs}">
+                      <v-btn
+                        v-bind="attrs"
+                        v-on="on"
+                        class="ms-n9 mt-n1"
+                        color="primary"
+                        icon
+                        @click="copyPublicAccessLink">
+                        <v-icon
+                          size="18">
+                          fas fa-clone
+                        </v-icon>
+                      </v-btn>
+                    </template>
+                    {{ $t('document.visibility.publicAccess.copyLink.message') }}
+                  </v-tooltip>
+                </div>
+              </div>
+              <div class="d-flex flex-row my-4 ms-4 mt-n1">
+                <div class="d-flex flex-column full-width">
+                  <v-label for="publicAccessOptions">
+                    <span class="text-color body-2 mr-6">
+                      {{ $t('documents.public.access.options.message') }}
+                    </span>
+                    <p class="caption">
+                      <span v-if="!hasPublicAccessPassword">
+                        {{ $t('documents.public.access.options.undefined.password') }}
+                      </span>
+                      <span v-else>
+                        {{ $t('documents.public.access.password.active.label') }}
+                      </span>
+                      <span v-if="!hasPublicAccessExpirationDate">
+                        - {{ $t('documents.public.access.options.undefined.expirationDate') }}
+                      </span>
+                      <span
+                        v-else-if="!isPublicAccessExpired">
+                        - {{ $t('documents.public.access.expiration.label', {0: publicAccessExpirationDate}) }}
+                      </span>
+                      <span
+                        v-else>-
+                        <span class="red--text">
+                          {{ $t('documents.public.access.expired.label') }}
+                        </span>
+                      </span>
+                    </p>
+                  </v-label>
+                </div>
+                <div class="d-flex flex-column">
+                  <v-tooltip bottom>
+                    <template #activator="{ on, attrs}">
+                      <v-btn
+                        v-bind="attrs"
+                        v-on="on"
+                        class="ms-n9 mt-n1"
+                        color="primary"
+                        icon
+                        @click="openEditLinkDrawer">
+                        <v-icon
+                          size="18">
+                          fas fa-edit
+                        </v-icon>
+                      </v-btn>
+                    </template>
+                    {{ $t('documents.public.access.options.tooltip') }}
+                  </v-tooltip>
+                </div>
+              </div>
             </div>
             <div
               v-if="showSwitch"
@@ -227,8 +282,35 @@ export default {
       currentUser: '',
     },
     users: [],
+    publicDocumentAccess: null,
+    publicDocumentAccessOptions: null,
+    isEditingPublicAccessOptions: false,
+    visibilityChoice: null
   }),
   computed: {
+    publicAccessExpirationDate() {
+      return this.isEditingPublicAccessOptions && this.newPublicAccessExpirationDate
+                                               || this.hasPublicAccessExpirationDate
+                                               && new Date(this.publicDocumentAccess.expirationDate.time).toLocaleDateString(eXo.env.portal.language);
+    },
+    newPublicAccessExpirationDate() {
+      return this.publicDocumentAccessOptions?.expirationDate && new Date(this.publicDocumentAccessOptions.expirationDate).toLocaleDateString(eXo.env.portal.language);
+    },
+    hasNewPublicAccessPassword() {
+      return this.publicDocumentAccessOptions?.password;
+    },
+    hasPublicAccessPassword() {
+      return this.isEditingPublicAccessOptions && this.hasNewPublicAccessPassword
+                                               || this.publicDocumentAccess?.hasPassword;
+    },
+    isPublicAccessExpired() {
+      return !this.isEditingPublicAccessOptions && this.hasPublicAccessExpirationDate
+                                                && this.publicDocumentAccess.expirationDate.time < new Date().getTime();
+    },
+    hasPublicAccessExpirationDate() {
+      return this.isEditingPublicAccessOptions && this.newPublicAccessExpirationDate
+                                               || (!this.isEditingPublicAccessOptions && this.publicDocumentAccess?.expirationDate);
+    },
     fileGenderLabel() {
       return this.file.folder? 'folder': 'document';
     },
@@ -239,7 +321,7 @@ export default {
       return this.$t('documents.label.visibilityTitle', {0: this.file?.name});
     },
     choiceInfo() {
-      switch (this.file.acl.visibilityChoice) {
+      switch (this.visibilityChoice) {
       case 'SPECIFIC_COLLABORATOR':
         return eXo.env.portal.spaceGroup ? this.$t('document.visibility.collaborators.choice.info'):
           this.$t('document.myDrive.visibility.collaborators.choice.info');
@@ -278,7 +360,7 @@ export default {
       ];
     },
     infoMessage(){
-      switch (this.file.acl.visibilityChoice) {
+      switch (this.visibilityChoice) {
       case 'SPECIFIC_COLLABORATOR':
         if (!this.file.folder) {
           return this.$t('documents.label.visibility.user.info');
@@ -293,10 +375,10 @@ export default {
       }
     },
     showSwitch(){
-      return eXo.env.portal.spaceGroup && ['ALL_MEMBERS', 'COLLABORATORS_AND_PUBLIC_ACCESS'].includes(this.file.acl.visibilityChoice);
+      return eXo.env.portal.spaceGroup && ['ALL_MEMBERS', 'COLLABORATORS_AND_PUBLIC_ACCESS'].includes(this.visibilityChoice);
     },
     showPublicAccessOption(){
-      return this.file.acl.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
+      return this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
     },
     suggesterLabels() {
       return {
@@ -338,6 +420,7 @@ export default {
     },
   },
   created() {
+    this.$root.$on('set-document-public-access-options', this.setDocumentPublicAccessOptions);
     this.$root.$on('open-visibility-drawer', file => {
       this.open(file);
     });
@@ -348,8 +431,22 @@ export default {
     });
   },
   methods: {
+    setDocumentPublicAccessOptions(options) {
+      this.isEditingPublicAccessOptions = true;
+      this.publicDocumentAccessOptions = options;
+      this.publicDocumentAccess.hasPassword = options.hasPassword;
+      this.publicDocumentAccess.expirationDate = options.expirationDate;
+    },
+    getDocumentPublicAccessInfo() {
+      this.$documentFileService.getDocumentPublicAccess(this.file.id).then(publicDocumentAccess => {
+        this.publicDocumentAccess = publicDocumentAccess;
+      });
+    },
+    openEditLinkDrawer() {
+      this.$root.$emit('open-public-document-options-drawer', this.publicDocumentAccess);
+    },
     copyPublicAccessLink() {
-      this.$root.$emit('copy-public-access-link', this.file, null, null);
+      this.$root.$emit('copy-public-access-link', this.file.id);
     },
     mapCollaborator(collaborator) {
       const fullName = collaborator.profile
@@ -380,6 +477,10 @@ export default {
     },
     open(file) {
       this.file = file;
+      this.visibilityChoice = this.file.acl.visibilityChoice;
+      this.publicDocumentAccess = null;
+      this.publicDocumentAccessOptions = null;
+      this.getDocumentPublicAccessInfo();
       if (this.file?.creatorIdentity?.remoteId){
         this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
           this.ownerIdentity = user;
@@ -394,6 +495,8 @@ export default {
       this.$refs.documentVisibilityDrawer.open();
     },
     close() {
+      this.isEditingPublicAccessOptions = false;
+      this.publicDocumentAccessOptions = {};
       this.$refs.documentVisibilityDrawer.close();
 
     },
@@ -423,11 +526,12 @@ export default {
         }
         collaborators.push(collaborator);      }
       this.file.acl.collaborators=collaborators;
-      if (this.file.acl.visibilityChoice==='SPECIFIC_COLLABORATOR'){
+      if (this.visibilityChoice==='SPECIFIC_COLLABORATOR'){
         this.file.acl.allMembersCanEdit=false;
       }
-      const publicAccess = this.file.acl.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
-      this.$root.$emit('save-visibility',this.file, publicAccess);
+      const publicAccess = this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
+      this.file.acl.visibilityChoice = this.visibilityChoice;
+      this.$root.$emit('save-visibility',this.file, publicAccess, this.publicDocumentAccessOptions);
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {
