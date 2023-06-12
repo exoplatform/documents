@@ -21,42 +21,45 @@ import org.exoplatform.documents.model.PublicDocumentAccess;
 public interface PublicDocumentAccessService {
 
   /**
-   * Generates a token for public access of a document
+   * Creates a public access for a document
    *
    * @param docOwnerId     document owner
    * @param nodeId         document node id
-   * @param isFolder       if the document is a folder
-   * @param password       password to sign the token with
-   * @param expirationDate token expiration date
-   * @return a generated jwt token
+   * @param password       password of the public access
+   * @param expirationDate public access expiration date
+   * @param hasPassword document has already old password
+   * @return {@link PublicDocumentAccess}
    */
-  String createPublicDocumentAccess(long docOwnerId, String nodeId, boolean isFolder, String password, Long expirationDate);
+  PublicDocumentAccess createPublicDocumentAccess(long docOwnerId,
+                                                  String nodeId,
+                                                  String password,
+                                                  Long expirationDate,
+                                                  boolean hasPassword);
 
   /**
-   * Gets a document token by its token id
+   * Gets a document public access by its node id
    *
-   * @param documentId token id
+   * @param documentId node id
    * @return {@link PublicDocumentAccess}
    */
   PublicDocumentAccess getPublicDocumentAccess(String documentId);
 
   /**
-   * Checks if token expired
+   * Checks if public access expired
    *
-   * @param documentId token id
+   * @param documentId node id
    * @return true or false
    */
   boolean isPublicDocumentAccessExpired(String documentId);
 
   /**
-   * Checks the validity of a given token
+   * Checks the validity of a public access
    * 
-   * @param token token string
-   * @param password password of the document used to sign the token beside the
-   *          secret key
-   * @return true if token is valid or false else
+   * @param documentId node id
+   * @param password password of the document public access
+   * @return true if access is valid or false else
    */
-  boolean isDocumentPublicAccessValid(String token, String password);
+  boolean isDocumentPublicAccessValid(String documentId, String password);
 
   /**
    * Checks if a document has public access

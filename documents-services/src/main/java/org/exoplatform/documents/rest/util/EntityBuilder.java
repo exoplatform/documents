@@ -26,7 +26,6 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.documents.entity.PublicDocumentAccessEntity;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
@@ -532,25 +531,11 @@ public class EntityBuilder {
     return  permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove") ? true : false;
   }
 
-  public static PublicDocumentAccess toDocumentToken(PublicDocumentAccessEntity publicDocumentAccessEntity) {
-    if (publicDocumentAccessEntity == null) {
-      return null;
-    }
-    return new PublicDocumentAccess(publicDocumentAccessEntity.getId(),
-                             publicDocumentAccessEntity.getNodeId(),
-                             publicDocumentAccessEntity.getToken(),
-                             publicDocumentAccessEntity.getExpirationDate(),
-                             publicDocumentAccessEntity.isHasPassword());
-  }
-
-  public static PublicDocumentAccessEntity toDocumentTokenEntity(PublicDocumentAccess publicDocumentAccess) {
+  public static PublicDocumentAccessEntity toPublicDocumentAccessEntity(PublicDocumentAccess publicDocumentAccess) {
     PublicDocumentAccessEntity publicDocumentAccessEntity = new PublicDocumentAccessEntity();
-    publicDocumentAccessEntity.setId(publicDocumentAccess.getId());
     publicDocumentAccessEntity.setNodeId(publicDocumentAccess.getNodeId());
-    publicDocumentAccessEntity.setToken(publicDocumentAccess.getToken());
     publicDocumentAccessEntity.setExpirationDate(publicDocumentAccess.getExpirationDate());
-    publicDocumentAccessEntity.setHasPassword(publicDocumentAccess.isHasPassword());
+    publicDocumentAccessEntity.setHasPassword(publicDocumentAccess.getPasswordHashKey() != null);
     return publicDocumentAccessEntity;
   }
-
 }

@@ -19,7 +19,7 @@ package org.exoplatform.documents.storage;
 import org.exoplatform.documents.dao.PublicDocumentAccessDAO;
 import org.exoplatform.documents.entity.PublicDocumentAccessEntity;
 import org.exoplatform.documents.model.PublicDocumentAccess;
-import org.exoplatform.documents.rest.util.EntityBuilder;
+import org.exoplatform.documents.utils.EntityMapper;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 
@@ -36,31 +36,31 @@ public class PublicDocumentAccessStorageImpl implements PublicDocumentAccessStor
 
   @Override
   public PublicDocumentAccess getPublicDocumentAccessByNodeId(String nodeId) {
-    return EntityBuilder.toDocumentToken(publicDocumentAccessDAO.getPublicDocumentAccessByNodeId(nodeId));
+    return EntityMapper.toDocumentPublicAccess(publicDocumentAccessDAO.getPublicDocumentAccessByNodeId(nodeId));
   }
 
   @Override
   public void removePublicDocumentAccess(String nodeId) {
     PublicDocumentAccess publicDocumentAccess = getPublicDocumentAccessByNodeId(nodeId);
     if (publicDocumentAccess != null) {
-      publicDocumentAccessDAO.delete(EntityBuilder.toDocumentTokenEntity(publicDocumentAccess));
+      publicDocumentAccessDAO.delete(EntityMapper.toPublicDocumentAccessEntity(publicDocumentAccess));
     }
   }
   @Override
   public PublicDocumentAccess savePublicDocumentAccess(PublicDocumentAccess publicDocumentAccess, long userId) {
     if (publicDocumentAccess == null) {
-      throw new IllegalArgumentException("documentToken argument is null");
+      throw new IllegalArgumentException("document access object argument is null");
     }
     Identity identity = identityManager.getIdentity(String.valueOf(userId));
     if (identity == null) {
       throw new IllegalArgumentException("identity is not exist");
     }
-    PublicDocumentAccessEntity publicDocumentAccessEntity = EntityBuilder.toDocumentTokenEntity(publicDocumentAccess);
+    PublicDocumentAccessEntity publicDocumentAccessEntity = EntityMapper.toPublicDocumentAccessEntity(publicDocumentAccess);
     if (publicDocumentAccessEntity.getId() == 0L) {
       publicDocumentAccessEntity.setId(null);
-      return EntityBuilder.toDocumentToken(publicDocumentAccessDAO.create(publicDocumentAccessEntity));
+      return EntityMapper.toDocumentPublicAccess(publicDocumentAccessDAO.create(publicDocumentAccessEntity));
     }
-    return EntityBuilder.toDocumentToken(publicDocumentAccessDAO.update(publicDocumentAccessEntity));
+    return EntityMapper.toDocumentPublicAccess(publicDocumentAccessDAO.update(publicDocumentAccessEntity));
   }
 
 }
