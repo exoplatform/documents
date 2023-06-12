@@ -16,64 +16,97 @@
  */
 package org.exoplatform.documents.service;
 
-import io.jsonwebtoken.*;
-import io.jsonwebtoken.impl.crypto.DefaultJwtSignatureValidator;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
-import org.exoplatform.commons.utils.PropertyManager;
+import org.apache.commons.codec.binary.Hex;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.storage.PublicDocumentAccessStorage;
-import org.exoplatform.web.security.codec.AbstractCodec;
-import org.exoplatform.web.security.codec.CodecInitializer;
-import org.exoplatform.web.security.security.TokenServiceInitializationException;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.util.Date;
 
 public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessService {
 
-  private final AbstractCodec  codec;
+  private static final Log            LOG                      = ExoLogger.getLogger(PublicDocumentAccessServiceImpl.class);
 
   private PublicDocumentAccessStorage publicDocumentAccessStorage;
 
-  private static final String  PUBLIC_ACCESS_SECRET_KEY = "exo.documents.public.access.secret";
+  private static final String         HASHING_ALGORITHM            = "PBKDF2WithHmacSHA512";
 
-  private static final String  TOKEN_TYPE               = "Document Public Access";
+  private static final int            HASHING_ALGORITHM_ITERATIONS = 65536;
 
-  public PublicDocumentAccessServiceImpl(PublicDocumentAccessStorage publicDocumentAccessStorage, CodecInitializer codecInitializer)
-      throws TokenServiceInitializationException {
+  private static final int            HASH_KEY_LENGTH              = 256;
+  
+  
+  public PublicDocumentAccessServiceImpl(PublicDocumentAccessStorage publicDocumentAccessStorage) {
     this.publicDocumentAccessStorage = publicDocumentAccessStorage;
-    this.codec = codecInitializer.getCodec();
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
-  public String createPublicDocumentAccess(long docOwnerId, String nodeId, boolean isFolder, String password, Long expirationDate) {
-    String token = generateToken(docOwnerId, nodeId, isFolder, password, expirationDate);
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(nodeId);
-    Date expiration = expirationDate != 0L ? new Date(expirationDate) : null;
-    long id = publicDocumentAccess != null ? publicDocumentAccess.getId() : 0L;
-    boolean hasPassword = password != null;
-    publicDocumentAccess = publicDocumentAccessStorage.savePublicDocumentAccess(new PublicDocumentAccess(id, nodeId, token, expiration, hasPassword), docOwnerId);
-    return publicDocumentAccess.getNodeId();
-  }
-  
-  private String generateToken(long docOwnerId, String nodeId, boolean isFolder, String password, Long expirationDate) {
-    JwtBuilder jwtBuilder = Jwts.builder();
-    jwtBuilder.setHeaderParam("type", "JWT")
-              .setSubject(TOKEN_TYPE)
-              .setIssuer(String.valueOf(docOwnerId))
-              .setAudience("*")
-              .claim("nodeId", nodeId)
-              .claim("isFolder", isFolder)
-              .setIssuedAt(new Date());
-    if (expirationDate != 0L) {
-      jwtBuilder.setExpiration(new Date(expirationDate));
+  public PublicDocumentAccess createPublicDocumentAccess(long docOwnerId,
+                                                         String nodeId,
+                                                         String password,
+                                                         Long expirationDate,
+                                                         boolean hasPassword) {
+    try {
+      PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(nodeId);
+      Date expiration = expirationDate != 0L ? new Date(expirationDate) : null;
+      long id = publicDocumentAccess != null ? publicDocumentAccess.getId() : 0L;
+      String hashKey = null;
+      if (password != null) {
+        hashKey = generatePasswordHash(password);
+      } else if (hasPassword && publicDocumentAccess != null) {
+        hashKey = publicDocumentAccess.getPasswordHashKey();
+      }
+      publicDocumentAccess = publicDocumentAccessStorage.savePublicDocumentAccess(
+                                                                                  new PublicDocumentAccess(id,
+                                                                                                           nodeId,
+                                                                                                           hashKey,
+                                                                                                           expiration),
+                                                                                  docOwnerId);
+      return publicDocumentAccess;
+    } catch (Exception e) {
+      LOG.error("Error while creating document public access", e);
     }
-    jwtBuilder.signWith(Keys.hmacShaKeyFor(getSecretKey(password).getBytes()), SignatureAlgorithm.HS256);
-    return jwtBuilder.compact();
+    return null;
+  }
+
+  private String generatePasswordHash(String password) throws NoSuchAlgorithmException, InvalidKeySpecException {
+    SecureRandom random = new SecureRandom();
+    byte[] salt = new byte[16];
+    random.nextBytes(salt);
+    KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, HASHING_ALGORITHM_ITERATIONS, HASH_KEY_LENGTH);
+    SecretKeyFactory factory = SecretKeyFactory.getInstance(HASHING_ALGORITHM);
+    byte[] hash = factory.generateSecret(spec).getEncoded();
+    return HASHING_ALGORITHM_ITERATIONS + ":" + Hex.encodeHexString(salt) + ":" + Hex.encodeHexString(hash);
+  }
+
+  private static boolean validatePassword(String password, String hashKey) {
+    try {
+      String[] parts = hashKey.split(":");
+      int iterations = Integer.parseInt(parts[0]);
+      byte[] salt = Hex.decodeHex(parts[1].toCharArray());
+      byte[] hash = Hex.decodeHex(parts[2].toCharArray());
+      PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, hash.length * 8);
+      SecretKeyFactory skf = SecretKeyFactory.getInstance(HASHING_ALGORITHM);
+      byte[] checkHash = skf.generateSecret(spec).getEncoded();
+      int diff = hash.length ^ checkHash.length;
+      for (int i = 0; i < hash.length && i < checkHash.length; i++) {
+        diff |= hash[i] ^ checkHash[i];
+      }
+      return diff == 0;
+    } catch (Exception e) {
+      LOG.error("Error while validating document public access password", e);
+      return false;
+    }
   }
 
   /**
@@ -106,26 +139,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
     if (publicDocumentAccess == null) {
       return false;
     }
-    String[] chunks = publicDocumentAccess.getToken().split("\\.");
-    String tokenWithoutSignature = chunks[0] + "." + chunks[1];
-    String signature = chunks[2];
-    SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
-    SecretKeySpec secretKeySpec = new SecretKeySpec(getSecretKey(password).getBytes(), signatureAlgorithm.getJcaName());
-    DefaultJwtSignatureValidator jwtSignatureValidator = new DefaultJwtSignatureValidator(signatureAlgorithm,
-                                                                                          secretKeySpec,
-                                                                                          Decoders.BASE64URL);
-    return jwtSignatureValidator.isValid(tokenWithoutSignature, signature);
-  }
-
-  private String getSecretKey(String password) {
-    String secretKey = PropertyManager.getProperty(PUBLIC_ACCESS_SECRET_KEY);
-    if (secretKey == null) {
-      throw new IllegalArgumentException("secret key is missing");
-    }
-    if (password != null) {
-      secretKey += codec.encode(password);
-    }
-    return secretKey;
+    return validatePassword(password, publicDocumentAccess.getPasswordHashKey());
   }
 
   /**

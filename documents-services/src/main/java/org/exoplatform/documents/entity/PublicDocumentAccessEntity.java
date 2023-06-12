@@ -27,24 +27,22 @@ import java.util.Date;
 @ExoEntity
 @Table(name = "DOCUMENTS_PUBLIC_ACCESS")
 @Data
-@NamedQuery(name = "PublicDocumentAccess.getTokenByNodeId", query = "SELECT DISTINCT c FROM PublicDocumentAccess c where c.nodeId = :nodeId")
+@NamedQuery(name = "PublicDocumentAccess.getPublicAccessByNodeId", query = "SELECT DISTINCT c FROM PublicDocumentAccess c where c.nodeId = :nodeId")
 public class PublicDocumentAccessEntity implements Serializable {
 
   @Id
-  @SequenceGenerator(name = "SEQ_DOCUMENT_TOKEN_ID", sequenceName = "SEQ_DOCUMENT_TOKEN_ID", allocationSize = 1)
-  @GeneratedValue(strategy = GenerationType.AUTO, generator = "SEQ_DOCUMENT_TOKEN_ID")
+  @SequenceGenerator(name = "SEQ_DOCUMENT_PUBLIC_ACCESS_ID", sequenceName = "SEQ_DOCUMENT_PUBLIC_ACCESS_ID", allocationSize = 1)
+  @GeneratedValue(strategy = GenerationType.AUTO, generator = "SEQ_DOCUMENT_PUBLIC_ACCESS_ID")
   @Column(name = "ID", nullable = false)
   private Long    id;
 
   @Column(name = "NODE_ID", nullable = false)
   private String nodeId;
 
-  @Column(name = "TOKEN", nullable = false)
-  private String  token;
+  @Column(name = "PASSWORD_HASH_KEY", nullable = false)
+  private String  passwordHashKey;
 
   @Column(name = "EXPIRATION_DATE")
   private Date    expirationDate;
 
-  @Column(name = "HAS_PASSWORD", nullable = false)
-  private boolean hasPassword;
 }

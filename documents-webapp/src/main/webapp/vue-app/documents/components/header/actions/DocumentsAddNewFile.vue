@@ -93,7 +93,10 @@
           <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.label.zip.upload') }}</span>
         </v-list-item>
       </v-menu>
-      <div v-if="actionLoading" @click="openActionDrawer()" class="d-inline">
+      <div
+        v-if="actionLoading"
+        @click="openActionDrawer()"
+        class="d-inline">
         <v-tooltip
           bottom>
           <template #activator="{ on, attrs }">

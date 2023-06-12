@@ -536,22 +536,10 @@ export function bulkMoveDocuments(actionId, documents, ownerId, destPath) {
   });
 }
 
-export function getDocumentPublicAccess(nodeId, isFolder, password, expirationDate, isNew) {
+export function createDocumentPublicAccess(nodeId, publicAccessOptions) {
   const formData = new FormData();
   if (nodeId) {
     formData.append('nodeId', nodeId);
-  }
-  if (isFolder) {
-    formData.append('isFolder', isFolder);
-  }
-  if (password) {
-    formData.append('password', password);
-  }
-  if (expirationDate) {
-    formData.append('expirationDate', expirationDate);
-  }
-  if (isNew) {
-    formData.append('isNew', isNew);
   }
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/publicAccessLink?${params}`, {
@@ -560,16 +548,33 @@ export function getDocumentPublicAccess(nodeId, isFolder, password, expirationDa
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      isFolder: isFolder,
-      password: password,
-      expirationDate: expirationDate
-    }),
+    body: JSON.stringify(publicAccessOptions),
   }).then(resp => {
     if (!resp?.ok) {
       throw resp;
     } else {
-      return resp.text();
+      return resp.json();
+    }
+  });
+}
+
+export function getDocumentPublicAccess(nodeId) {
+  const formData = new FormData();
+  if (nodeId) {
+    formData.append('nodeId', nodeId);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/publicAccessLink?${params}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.json();
     }
   });
 }

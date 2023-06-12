@@ -163,6 +163,7 @@ const components = {
   'documents-zip-upload-input': AttachmentsUploadInput,
   'documents-zip-uploaded': AttachmentsUploaded,
   'documents-zip-item': AttachmentsItem,
+  'public-document-options-drawer': PublicDocumentOptionsDrawer
 };
 
 for (const key in components) {

@@ -343,7 +343,7 @@ export default {
     this.$root.$on('update-selection-documents-list', this.updateSelectionList);
     this.$root.$on('breadcrumb-updated', this.resetSelections);
     this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
-    this.$root.$on('copy-public-access-link', this.getPublicAccessLink);
+    this.$root.$on('copy-public-access-link', this.getDocumentPublicAccessLink);
     this.$root.$on('mark-document-as-viewed', this.markDocumentAsViewed);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
@@ -355,43 +355,49 @@ export default {
     markDocumentAsViewed(file) {
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: file}}));
     },
-    getPublicAccessLink(file, password, expirationDate, isNew) {
-      return this.$documentFileService.getDocumentPublicAccess(file.id, file.folder, password, expirationDate, isNew)
-        .then(token => {
-          if (!isNew) {
-            navigator.clipboard.writeText(`${this.publicLinkUrl}${token}`).then(() => {
-              this.$root.$emit('show-alert', {
-                type: 'success',
-                message: this.$t('documents.alert.success.label.linkCopied')
-              });
-            }).catch(() => {
-              this.$root.$emit('show-alert', {
-                type: 'error',
-                message: this.$t('document.public.access.copyLink.error.message')
-              });
+    getDocumentPublicAccessLink(nodeId) {
+      this.$documentFileService.getDocumentPublicAccess(nodeId).then(publicDocumentAccess => {
+        navigator.clipboard.writeText(`${this.publicLinkUrl}${publicDocumentAccess.nodeId}`).then(() => {
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: this.$t('documents.alert.success.label.linkCopied')
+          });
+        }).catch(() => {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('document.public.access.copyLink.error.message')
+          });
+        });
+      }).catch((e) => {
+        if (e.status === 404) {
+          navigator.clipboard.writeText(`${this.publicLinkUrl}${nodeId}`).then(() => {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: this.$t('document.visibility.publicAccess.save.message')
             });
-          } else {
-            this.refreshFiles();
-          }
-        }).catch((e) => {
-          if (e.status === 404 && !isNew) {
-            navigator.clipboard.writeText(`${this.publicLinkUrl}${file.id}`).then(() => {
-              this.$root.$emit('show-alert', {
-                type: 'warning',
-                message: this.$t('document.visibility.publicAccess.save.message')
-              });
-            }).catch(() => {
-              this.$root.$emit('show-alert', {
-                type: 'error',
-                message: this.$t('document.public.access.copyLink.error.message')
-              });
-            });
-          } else {
+          }).catch(() => {
             this.$root.$emit('show-alert', {
               type: 'error',
-              message: this.$t('document.visibility.publicAccess.error.message')
+              message: this.$t('document.public.access.copyLink.error.message')
             });
-          }
+          });
+        } else {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('document.visibility.publicAccess.error.message')
+          });
+        }
+      });
+    },
+    createDocumentPublicAccessLink(file, publicAccessOptions) {
+      return this.$documentFileService.createDocumentPublicAccess(file.id, publicAccessOptions)
+        .then(() => {
+          this.refreshFiles();
+        }).catch(() => {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('document.visibility.publicAccess.error.message')
+          });
         });
     },
     handleOpenFolderToDrop(event) {
@@ -1325,11 +1331,11 @@ export default {
         }
       }));
     },
-    saveVisibility(file, publicAccess) {
+    saveVisibility(file, publicAccess, publicOptions) {
       this.$documentFileService.saveVisibility(file)
         .then(() => {
           if (publicAccess) {
-            this.getPublicAccessLink(file, null, null, true);
+            this.createDocumentPublicAccessLink(file, publicOptions);
           } else {
             this.refreshFiles();
           }

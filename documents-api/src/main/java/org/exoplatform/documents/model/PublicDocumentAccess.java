@@ -27,13 +27,12 @@ import java.util.Date;
 @AllArgsConstructor
 public class PublicDocumentAccess {
 
-  private Long    id;
+  private Long   id;
 
   private String nodeId;
 
-  private String  token;
+  private String passwordHashKey;
 
-  private Date    expirationDate;
+  private Date   expirationDate;
 
-  private boolean hasPassword;
 }
