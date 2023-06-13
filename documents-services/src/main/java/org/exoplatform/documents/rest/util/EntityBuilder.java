@@ -387,7 +387,8 @@ public class EntityBuilder {
           }
         }
       }
-      if(nodePermissionEntity.getVisibilityChoice().equals(Visibility.ALL_MEMBERS.name())){
+      if (nodePermissionEntity.getVisibilityChoice().equals(Visibility.ALL_MEMBERS.name())
+          || nodePermissionEntity.getVisibilityChoice().equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name())) {
         permissions.add(new PermissionEntry(identity,"read", PermissionRole.ALL.name()));
         if(nodePermissionEntity.isAllMembersCanEdit()){
           permissions.add(new PermissionEntry(identity,"edit",PermissionRole.ALL.name()));

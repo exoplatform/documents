@@ -72,7 +72,7 @@
                     <span class="text-color body-2 mr-6">
                       {{ $t('document.visibility.publicAccess.message') }}
                     </span>
-                    <p class="caption"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
+                    <p class="caption pe-8"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
                   </v-label>
                 </div>
                 <div class="d-flex flex-column">
