@@ -139,6 +139,9 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
     if (publicDocumentAccess == null) {
       return false;
     }
+    if (publicDocumentAccess.getPasswordHashKey() == null) {
+      return true;
+    }
     return validatePassword(password, publicDocumentAccess.getPasswordHashKey());
   }
 

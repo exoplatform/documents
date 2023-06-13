@@ -1052,8 +1052,10 @@ public class DocumentFileRest implements ResourceContainer {
     if (userIdentityId == 0) {
       return Response.status(Response.Status.UNAUTHORIZED).build();
     }
-    
-    if (publicDocumentAccessOptionsEntity.getPassword() != null) {
+    String password = publicDocumentAccessOptionsEntity != null ? publicDocumentAccessOptionsEntity.getPassword() : null;
+    Long expirationDate = publicDocumentAccessOptionsEntity != null ? publicDocumentAccessOptionsEntity.getExpirationDate() : 0L;
+    boolean hasPassword = publicDocumentAccessOptionsEntity != null && publicDocumentAccessOptionsEntity.isHasPassword();
+    if (password != null) {
       String errorMessage = PASSWORD_VALIDATOR.validate(locale, publicDocumentAccessOptionsEntity.getPassword());
       if (StringUtils.isNotBlank(errorMessage)) {
         return Response.status(Response.Status.BAD_REQUEST).entity(errorMessage).build();
@@ -1067,9 +1069,9 @@ public class DocumentFileRest implements ResourceContainer {
 
       return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccessService.createPublicDocumentAccess(userIdentityId,
                                                                                                                            nodeId,
-                                                                                                                           publicDocumentAccessOptionsEntity.getPassword(),
-                                                                                                                           publicDocumentAccessOptionsEntity.getExpirationDate(),
-                                                                                                                           publicDocumentAccessOptionsEntity.isHasPassword())))
+                                                                                                                           password,
+                                                                                                                           expirationDate,
+                                                                                                                           hasPassword)))
                      .build();
 
     } catch (Exception e) {
