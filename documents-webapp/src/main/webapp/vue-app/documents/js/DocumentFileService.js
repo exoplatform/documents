@@ -548,7 +548,11 @@ export function createDocumentPublicAccess(nodeId, publicAccessOptions) {
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(publicAccessOptions),
+    body: JSON.stringify(publicAccessOptions, (key, value) => {
+      if (value !== null) {
+        return value;
+      }
+    }),
   }).then(resp => {
     if (!resp?.ok) {
       throw resp;
