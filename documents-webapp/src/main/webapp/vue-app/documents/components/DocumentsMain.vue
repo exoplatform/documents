@@ -473,7 +473,7 @@ export default {
           this.$root.$emit('set-download-status','zip_file_created');
           this.setMultiActionLoading(false);
           this.resetSelections();
-          this.getDownlodedZip(actionData); 
+          this.getDownloadedZip(actionData);
         } else {
           this.$root.$emit('set-download-status',actionData.status);
         }
@@ -513,13 +513,15 @@ export default {
         setTimeout(() => this.openFolder(folder), 500);
       }
     },
-    getDownlodedZip(actionData) {
+    getDownloadedZip(actionData) {
       this.$documentFileService.getDownloadZip(actionData.actionId).then((transfer) => {
         return transfer.blob();
       }).then((bytes) => {
         const today = new Date();
         const formattedDate = `${(today.getMonth() + 1).toString().padStart(2, '0')}_${today.getDate().toString().padStart(2, '0')}_${today.getFullYear().toString()}`;
-        const zipName = eXo.env.portal.spaceDisplayName? `${eXo.env.portal.spaceDisplayName}_${formattedDate}.zip` : `My Drive_${formattedDate}.zip`;
+        const sourceName = localStorage.getItem(`bulkDownloadSourceName${actionData.actionId}`);
+        const zipName = `${sourceName}_${formattedDate}.zip`;
+        localStorage.removeItem(sourceName);
         const elm = document.createElement('a');
         elm.href = URL.createObjectURL(bytes);
         elm.setAttribute('download', zipName);
@@ -532,11 +534,15 @@ export default {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
         }
       }).catch(e => {
-        console.error('Error when export note page', e);
-        this.$root.$emit('show-alert', {
-          type: 'error',
-          message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.failed`)
-        });
+        if (e.status === 410) {
+          this.$root.$emit('set-download-status',actionData.status);
+        } else {
+          console.error('Error when export note page', e);
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.failed`)
+          });
+        }
       });
     },
     handleAlertClose() {
@@ -767,6 +773,7 @@ export default {
       const random = crypto.getRandomValues(new Uint32Array(1))[0];
       const actionId =random % max; 
       this.$root.$emit('open-download-drawer',actionId);
+      localStorage.setItem(`bulkDownloadSourceName${actionId}`, eXo?.env?.portal?.spaceDisplayName || 'My Drive');
       return this.$documentFileService
         .bulkDownloadDocument(actionId,this.selectedDocuments)
         .catch(e => console.error(e));
