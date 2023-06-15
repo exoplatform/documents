@@ -331,18 +331,6 @@ export default {
       if (!this.showPasswordInput) {
         this.startCheckPassword = false;
       }
-    },
-    delayTypeTimes(value) {
-      if (value > 6 && this.delayType === 'day') {
-        this.delayType = 'week';
-        this.delayTypeTimes = 1;
-      } else if (value > 3 && this.delayType === 'week') {
-        this.delayType = 'month';
-        this.delayTypeTimes = 1;
-      } else if (value > 11 && this.delayType === 'month') {
-        this.delayType = 'year';
-        this.delayTypeTimes = 1;
-      }
     }
   },
   methods: {
@@ -382,6 +370,7 @@ export default {
     cancel() {
       this.$refs.form.reset();
       this.$refs.form.resetValidation();
+      this.$refs.publicDocumentOptionsDrawer.close();
     },
     getExpirationDelayDate() {
       const delayDate = new Date(new Date());
