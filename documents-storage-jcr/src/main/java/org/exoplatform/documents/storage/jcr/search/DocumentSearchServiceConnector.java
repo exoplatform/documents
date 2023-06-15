@@ -66,6 +66,7 @@ public class DocumentSearchServiceConnector {
           + "    \"query\": \"*@term@*\""
           + "  }" + "},";
 
+  public static final String           QUERY_TAG_TERM           = "@term@";
   private static final String          IMAGES                   =
                                                   "\"image/bmp\",\"image/jpeg\",\"image/webp\",\"image/png\",\"image/gif\",\"image/avif\",\"image/tiff\"";
 
@@ -424,13 +425,16 @@ public class DocumentSearchServiceConnector {
     if (StringUtils.isBlank(term)) {
       return "";
     }
+    String originalTerm = term;
     term = escapeReservedCharacters(term);
+    boolean isEscapedReservedCharactersTerm = !originalTerm.equals(term);
     List<String> queryParts = Arrays.asList(term.split(" "));
     String escapedQueryWithAndOperator = StringUtils.join(queryParts, "* AND *");
     if (!extendedSearch) {
-      return SEARCH_QUERY_TERM.replace("@term@", escapedQueryWithAndOperator);
+      // If the reserved characters are escaped we will escape also the * character in the search query term.
+      return isEscapedReservedCharactersTerm ? SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, escapedQueryWithAndOperator) : SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator) ;
     }
-    return EXTENDED_SEARCH_QUERY_TERM.replace("@term@", escapedQueryWithAndOperator);
+    return isEscapedReservedCharactersTerm ? EXTENDED_SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, escapedQueryWithAndOperator) : EXTENDED_SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator);
   }
 
   private String retrieveSearchQuery() {
