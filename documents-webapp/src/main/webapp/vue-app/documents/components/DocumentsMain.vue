@@ -348,6 +348,7 @@ export default {
     this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
     this.$root.$on('copy-public-access-link', this.getDocumentPublicAccessLink);
     this.$root.$on('mark-document-as-viewed', this.markDocumentAsViewed);
+    this.$root.$on('documents-folder-download', this.downloadFolder);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
@@ -355,6 +356,10 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    downloadFolder(file) {
+      this.selectedDocuments.push(file);
+      this.bulkDownloadDocument();
+    },
     markDocumentAsViewed(file) {
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: file}}));
     },
