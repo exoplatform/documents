@@ -20,6 +20,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -112,7 +113,7 @@ public class BulkStorageActionService implements Startable {
     return true;
   }
   public ActionData getActionDataById(String id) {
-    return actionList.stream().filter(resource -> id == resource.getActionId()).findFirst().orElse(null);
+    return actionList.stream().filter(resource -> Objects.equals(id, resource.getActionId())).findFirst().orElse(null);
   }
 
   public void removeActionData(ActionData actionData) {
