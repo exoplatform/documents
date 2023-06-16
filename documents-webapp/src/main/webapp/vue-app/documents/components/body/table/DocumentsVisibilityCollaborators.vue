@@ -22,7 +22,7 @@
         <v-icon
           v-if="user.providerId ==='group'"
           size="19"
-          class="fas fa-users" />
+          class="mt-n1 fas fa-users" />
         <v-avatar
           v-else
           size="32"
