@@ -30,7 +30,7 @@
           v-bind="attrs"
           v-on="on">
           <v-icon
-            class="pb-2"
+            class="mt-3 pb-2"
             :size="16">
             mdi-chevron-down
           </v-icon>
