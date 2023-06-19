@@ -1208,6 +1208,49 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/size/{ownerId}")
+  @Operation(summary = "Get documents size", method = "GET")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getSize(@Parameter(description = "Identity technical identifier, required = true")
+  @PathParam("ownerId")
+  Long ownerId) {
+    if (ownerId == null || ownerId < 1) {
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
+    Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
+    try {
+      return Response.ok(documentFileService.getDocumentsSizeStat(ownerId, Long.parseLong(currentUserIdentity.getId()))).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @POST
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/size/{ownerId}")
+  @Operation(summary = "Calculate documents size", method = "POST")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response addSize(@Parameter(description = "Identity technical identifier, required = true")
+  @PathParam("ownerId")
+  Long ownerId) {
+    if (ownerId == null || ownerId < 1) {
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
+    Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
+    try {
+      return Response.ok(documentFileService.addDocumentsSizeStat(ownerId, Long.parseLong(currentUserIdentity.getId()))).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
 
 }
 
