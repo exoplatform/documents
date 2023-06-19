@@ -32,20 +32,33 @@
         </div>
       </div>
       <div v-if="initialized" class="d-flex flex-wrap justify-space-around align-center my-3">
-        <a :href="documentsBaseLink">
-          <div class="width-max-content font-weight-bold headline  ma-2 v-slider--horizontal black--text">
-            <v-icon
-              size="28"
-              color="red"
-              class="pe-1">
-              fas fa-folder-open
-            </v-icon>
-            {{ toSize.value }} {{ $t('document.size.label.unit.'+toSize.unit) }}
-          </div>
-          <div class="sub-title-1 text-sub-title px-1">
-            {{ documentsLocationMessage }}
-          </div>
-        </a>
+        <v-tooltip :disabled="isMobile" top> 
+          <template #activator="{ on, attrs }">
+            <a
+              :href="documentsBaseLink" 
+              v-bind="attrs"
+              v-on="on">
+              <div class="width-max-content font-weight-bold headline  ma-2 v-slider--horizontal black--text">
+                <v-icon
+                  size="28"
+                  color="red"
+                  class="pe-1">
+                  fas fa-folder-open
+                </v-icon>
+                {{ toSize.value }} {{ $t('document.size.label.unit.'+toSize.unit) }}
+              </div>
+              <div class="sub-title-1 text-sub-title px-1">
+                {{ documentsLocationMessage }}
+              </div>
+            </a>
+          </template>
+          <date-format
+            :value="sizeData.toSizeDate"
+            :format="dateFormat"
+            class="ms-1" />
+        </v-tooltip>
+          
+       
         <a :href="documentsBaseLink">
           <div class="width-max-content font-weight-bold subtitle-2 ma-2 pt-2 v-slider--horizontal ">
             <v-icon
@@ -72,7 +85,8 @@ export default {
   data: () => ({
     sizeData: {},
     inProgress: false,
-    initialized: false
+    initialized: false,
+    dateFormat: {   dateStyle: 'long',  timeStyle: 'short' }
   }),
   created() {
     this.getData();
