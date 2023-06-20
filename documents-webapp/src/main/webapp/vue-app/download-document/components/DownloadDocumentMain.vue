@@ -20,6 +20,7 @@
     <div>
       <div
         v-if="isAccessGranted"
+        :class="isMobile? 'mt-5': ''"
         class="center">
         <p>
           <v-icon
@@ -75,7 +76,7 @@
           <v-btn
             :loading="isDownloading"
             :disabled="requirePassword && !password"
-            class="btn btn-primary mt-4"
+            class="btn btn-primary mt-4 primary"
             @click="downloadDocument">
             {{ $t('document.public.access.download.label') }}
           </v-btn>
@@ -114,6 +115,9 @@ export default {
     },
   },
   computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.width < 960;
+    },
     passwordType(){
       return this.showPassword ? 'text' :'password';
     },

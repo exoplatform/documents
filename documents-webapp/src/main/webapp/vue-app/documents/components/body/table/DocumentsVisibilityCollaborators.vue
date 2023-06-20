@@ -22,7 +22,7 @@
         <v-icon
           v-if="user.providerId ==='group'"
           size="19"
-          class="mt-n1 fas fa-users" />
+          class="fas fa-users" />
         <v-avatar
           v-else
           size="32"
@@ -48,15 +48,13 @@
       class="ma-auto d-flex pe-2">
       <v-icon
         v-if="userVisibility && userVisibility === 'edit' || user.permission === 'edit'"
-        class="mt-2 pb-2"
         color="grey lighten-1"
         :size="16">
         fas fa-edit
       </v-icon>
       <v-icon
         v-else
-        class="pb-2"
-        color="mt-2 grey lighten-1"
+        color="grey lighten-1"
         :size="16">
         fas fa-eye
       </v-icon>
