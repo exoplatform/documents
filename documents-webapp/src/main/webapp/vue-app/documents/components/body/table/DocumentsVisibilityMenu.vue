@@ -15,7 +15,7 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div class="text-center pe-1">
+  <div class="ma-auto text-center pe-1">
     <v-menu
       v-model="showMenu"
       transition="slide-x-reverse-transition"
@@ -30,7 +30,6 @@
           v-bind="attrs"
           v-on="on">
           <v-icon
-            class="mt-3 pb-2"
             :size="16">
             mdi-chevron-down
           </v-icon>
