@@ -19,7 +19,9 @@ package org.exoplatform.documents.storage.jcr;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

@@ -20,7 +20,7 @@ import './initComponents.js';
 import * as documentSizeService from './js/DocumentSizeService.js';
 import * as documentsUtils from '../../js/DocumentsUtils.js';
 
-if (!Vue.prototype.$documentSizeService) {
+if (!Vue.prototype.$documentFileService) {
   window.Object.defineProperty(Vue.prototype, '$documentSizeService', {
     value: documentSizeService,
   });
