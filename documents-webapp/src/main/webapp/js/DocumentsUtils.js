@@ -23,3 +23,14 @@ export function injectSortTooltip(tooltipName,markerClass){
     element.title = tooltipName; 
   });
 }
+
+export function getSize(size) {
+  if ( size === 0){
+    return  {value: 0, unit: 'B'};
+  } 
+  const m = size > 0 ? 1 : -1;
+  const k = Math.floor((Math.log2(Math.abs(size)) / 10));
+  const rank = `${'KMGT'[k - 1]}B`;
+  const count = (Math.abs(size) / Math.pow(1024, k)).toFixed(2);
+  return {value: Math.round(count*m), unit: rank};
+}

@@ -37,6 +37,7 @@ import org.junit.runner.RunWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import org.exoplatform.analytics.api.service.AnalyticsService;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
@@ -101,6 +102,8 @@ public class DocumentFileRestTest {
 
   private DocumentWebSocketService documentWebSocketService;
 
+  private AnalyticsService                   analyticsService;
+
   @Before
   public void setUp() {
     spaceService = mock(SpaceService.class);
@@ -113,6 +116,8 @@ public class DocumentFileRestTest {
     listenerService = mock(ListenerService.class);
     settingService = mock(SettingService.class);
     documentWebSocketService = mock(DocumentWebSocketService.class);
+    analyticsService = mock(AnalyticsService.class);
+
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
@@ -120,7 +125,8 @@ public class DocumentFileRestTest {
                                                       identityManager,
                                                       identityRegistry,
                                                       listenerService,
-                                                      settingService);
+                                                      settingService,
+                                                      analyticsService);
     documentFileRest = new DocumentFileRest(documentFileService,
                                             spaceService,
                                             identityManager,
@@ -1391,5 +1397,47 @@ public class DocumentFileRestTest {
     response = documentFileRest1.moveDocuments(1, 1L, documents, "destPath");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
+  }
+
+  @Test
+  public void getSize() throws IllegalAccessException, ObjectNotFoundException {
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
+    Response response = documentFileRest1.getSize(null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    when(documentFileService1.getDocumentsSizeStat(1L, 1L)).thenThrow(new RuntimeException());
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, "username");
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
+    response = documentFileRest1.getSize(1L);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void updateSize() {
+    String username = "user";
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService);
+    Response response = documentFileRest1.addSize(null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    response = documentFileRest1.addSize(1L);
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
+    response = documentFileRest1.addSize(1L);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
   }
 }

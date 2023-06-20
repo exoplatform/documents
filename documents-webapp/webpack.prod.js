@@ -36,7 +36,8 @@ const config = {
   entry: {
     documents: './src/main/webapp/vue-app/documents/main.js',
     documentsSnackbarComponent : './src/main/webapp/vue-app/snackbar/main.js',
-    documentsExtensions: './src/main/webapp/vue-app/documents-extensions/main.js'
+    documentsExtensions: './src/main/webapp/vue-app/documents-extensions/main.js',
+    documentsSizeGadget: './src/main/webapp/vue-app/documents-size-gadget/main.js'
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
