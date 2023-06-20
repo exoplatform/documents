@@ -51,6 +51,8 @@ public interface DocumentFileStorage {
                                   int limit) throws ObjectNotFoundException;
 
 
+  long calculateFilesSize(Long ownerId, Identity aclIdentity) throws ObjectNotFoundException;
+
   /**
    * Retrieves the number of existing files by group.
    *
