@@ -1225,7 +1225,7 @@ public class DocumentFileRest implements ResourceContainer {
     try {
       return Response.ok(documentFileService.getDocumentsSizeStat(ownerId, Long.parseLong(currentUserIdentity.getId()))).build();
     } catch (Exception e) {
-      LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
+      LOG.error("Error retrieving documents size", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
@@ -1247,7 +1247,7 @@ public class DocumentFileRest implements ResourceContainer {
     try {
       return Response.ok(documentFileService.addDocumentsSizeStat(ownerId, Long.parseLong(currentUserIdentity.getId()))).build();
     } catch (Exception e) {
-      LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
+      LOG.error("Error while calculating documents size", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
