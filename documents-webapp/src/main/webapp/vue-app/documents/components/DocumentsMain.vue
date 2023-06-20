@@ -160,8 +160,6 @@
 </template>
 <script>
 
-import copy from 'copy-to-clipboard';
-
 export default {
   data: () => ({
     canAdd: false,
@@ -356,6 +354,16 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    copyToClipBoard(text) {
+      const inputTemp = $('<input>');
+      $('body').append(inputTemp);
+      inputTemp.val(text).select();
+      return new Promise((resolve) => {
+        document.execCommand('copy');
+        inputTemp.remove();
+        resolve();
+      });
+    },
     downloadFolder(file) {
       this.selectedDocuments.push(file);
       this.bulkDownloadDocument();
@@ -365,17 +373,29 @@ export default {
     },
     getDocumentPublicAccessLink(nodeId) {
       this.$documentFileService.getDocumentPublicAccess(nodeId).then(publicDocumentAccess => {
-        copy(`${this.publicLinkUrl}${publicDocumentAccess.nodeId}`);
-        this.$root.$emit('show-alert', {
-          type: 'success',
-          message: this.$t('documents.alert.success.label.linkCopied')
+        this.copyToClipBoard(`${this.publicLinkUrl}${publicDocumentAccess.nodeId}`).then(() => {
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: this.$t('documents.alert.success.label.linkCopied')
+          });
+        }).catch(() => {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('document.public.access.copyLink.error.message')
+          });
         });
       }).catch((e) => {
         if (e.status === 404) {
-          copy(`${this.publicLinkUrl}${nodeId}`);
-          this.$root.$emit('show-alert', {
-            type: 'warning',
-            message: this.$t('document.visibility.publicAccess.save.message')
+          this.copyToClipBoard(`${this.publicLinkUrl}${nodeId}`).then(() => {
+            this.$root.$emit('show-alert', {
+              type: 'success',
+              message: this.$t('documents.alert.success.label.linkCopied')
+            });
+          }).catch(() => {
+            this.$root.$emit('show-alert', {
+              type: 'error',
+              message: this.$t('document.public.access.copyLink.error.message')
+            });
           });
         } else {
           this.$root.$emit('show-alert', {
