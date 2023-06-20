@@ -100,44 +100,70 @@
       <depends>
         <module>commonVueComponents</module>
       </depends>
-      <depends>
-        <module>vue</module>
-      </depends>
-      <depends>
-        <module>vuetify</module>
-      </depends>
-      <depends>
-        <module>eXoVueI18n</module>
-      </depends>
-      <depends>
-        <module>jquery</module>
-        <as>$</as>
-      </depends>
-      <depends>
-        <module>extensionRegistry</module>
-      </depends>
+        <depends>
+            <module>vue</module>
+        </depends>
+        <depends>
+            <module>vuetify</module>
+        </depends>
+        <depends>
+            <module>eXoVueI18n</module>
+        </depends>
+        <depends>
+            <module>jquery</module>
+            <as>$</as>
+        </depends>
+        <depends>
+            <module>extensionRegistry</module>
+        </depends>
     </module>
   </portlet>
 
-  <module>
-    <name>documentsSnackbarComponent</name>
-    <script>
-      <minify>false</minify>
-      <path>/js/documentsSnackbarComponent.bundle.js</path>
-    </script>
-    <depends>
-      <module>vue</module>
-    </depends>
-  </module>
+    <portlet>
+        <name>DocumentsSizeGadget</name>
+        <module>
+            <script>
+                <minify>false</minify>
+                <path>/js/documentsSizeGadget.bundle.js</path>
+            </script>
+            <depends>
+                <module>commonVueComponents</module>
+            </depends>
+            <depends>
+                <module>vue</module>
+            </depends>
+            <depends>
+                <module>vuetify</module>
+            </depends>
+            <depends>
+                <module>eXoVueI18n</module>
+            </depends>
+            <depends>
+                <module>jquery</module>
+                <as>$</as>
+            </depends>
+        </module>
+    </portlet>
 
-  <module>
-    <name>DocumentsDraggable</name>
-    <script>
-      <minify>false</minify>
-      <path>/js/DocumentsDraggable.js</path>
-    </script>
-    <depends>
-      <module>eXoVueI18n</module>
+    <module>
+        <name>documentsSnackbarComponent</name>
+        <script>
+            <minify>false</minify>
+            <path>/js/documentsSnackbarComponent.bundle.js</path>
+        </script>
+        <depends>
+            <module>vue</module>
+        </depends>
+    </module>
+
+    <module>
+        <name>DocumentsDraggable</name>
+        <script>
+            <minify>false</minify>
+            <path>/js/DocumentsDraggable.js</path>
+        </script>
+        <depends>
+            <module>eXoVueI18n</module>
     </depends>
     <depends>
       <module>jquery</module>
