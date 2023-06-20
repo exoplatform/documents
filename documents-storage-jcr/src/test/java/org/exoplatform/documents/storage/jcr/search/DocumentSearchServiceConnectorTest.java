@@ -16,8 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.search;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 import java.io.ByteArrayInputStream;
@@ -170,15 +169,15 @@ public class DocumentSearchServiceConnectorTest {
                                                                             sort_direction);
 
     // then
-    //verify call with the expected query
-    //assert search result
+    // verify call with the expected query
+    // assert search result
     verify(client, times(1)).sendRequest(expectedQuery, ES_INDEX);
     assertFalse(result.isEmpty());
 
     // when
     // search term contains ES reserved character
-    filter.setQuery("term-with-reserved-character");
-    String esquipedReservedCharactersTermQuery = "\\\\*term\\\\-with\\\\-reserved\\\\-character\\\\*";
+    filter.setQuery("term with reserved - character");
+    String esquipedReservedCharactersTermQuery = "*term* AND *with* AND *reserved* AND \\\\*\\\\-\\\\* AND *character*";
     String oldSearchedTermQuery = "*test*";
     when(client.sendRequest(expectedQuery.replace(oldSearchedTermQuery, esquipedReservedCharactersTermQuery),
                             ES_INDEX)).thenReturn(searchWithReservedCharacterResult);
@@ -192,10 +191,30 @@ public class DocumentSearchServiceConnectorTest {
                                                    sort_direction);
 
     // verify expected search query
-    //assert search result
+    // assert search result
     verify(client, times(1)).sendRequest(expectedQuery.replace(oldSearchedTermQuery, esquipedReservedCharactersTermQuery),
                                          ES_INDEX);
     assertFalse(result.isEmpty());
+  }
+
+  @Test
+  public void buildEscapedQueryWithAndOperatorTest() {
+    DocumentSearchServiceConnector documentSearchServiceConnector = new DocumentSearchServiceConnector(configurationManager,
+                                                                                                       identityManager,
+                                                                                                       client,
+                                                                                                       getParams());
+    // when
+    String term = documentSearchServiceConnector.escapeReservedCharacters("termquery");
+    String escapedQueryWithAndOperator = documentSearchServiceConnector.buildEscapedQueryWithAndOperator(term);
+    // then
+    assertEquals("termquery", escapedQueryWithAndOperator);
+
+    //when
+    String escapedReservedCharacters = documentSearchServiceConnector.escapeReservedCharacters("test escaped-query");
+    escapedQueryWithAndOperator = documentSearchServiceConnector.buildEscapedQueryWithAndOperator(escapedReservedCharacters);
+    //then
+    assertEquals("test* AND \\\\*escaped\\\\-query\\\\", escapedQueryWithAndOperator);
+
   }
 
   private InitParams getParams() {
