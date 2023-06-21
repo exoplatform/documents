@@ -39,7 +39,9 @@ public class DocumentPreviewFilter implements Filter {
     HttpServletRequest httpServletRequest = (HttpServletRequest) request;
     String documentPreviewId = httpServletRequest.getParameter("documentPreviewId");
     String documentEditId = httpServletRequest.getParameter("docId");
-    if (documentPreviewId != null || documentEditId != null) {
+    String sourcePreview = httpServletRequest.getParameter("source");
+
+    if (documentPreviewId != null || (documentEditId != null && sourcePreview == null)) {
       String viewer = httpServletRequest.getRemoteUser();
       try {
         String documentId = documentPreviewId != null ? documentPreviewId : documentEditId;

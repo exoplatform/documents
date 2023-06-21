@@ -45,8 +45,9 @@ public class DocumentPreviewFilterTest {
     ServletResponse servletResponse = mock(ServletResponse.class);
     FilterChain filterChain = mock(FilterChain.class);
     HttpServletRequest httpServletRequest = mock(HttpServletRequest.class);
-    when(httpServletRequest.getParameter("documentPreviewId")).thenReturn("123", null, null);
-    when(httpServletRequest.getParameter("docId")).thenReturn(null, "123", null);
+    when(httpServletRequest.getParameter("documentPreviewId")).thenReturn("123", null, null, null);
+    when(httpServletRequest.getParameter("docId")).thenReturn(null, "123", null, "123");
+    when(httpServletRequest.getParameter("source")).thenReturn(null, null, "preview");
     when(httpServletRequest.getRemoteUser()).thenReturn("user");
     documentPreviewFilter.doFilter(httpServletRequest, servletResponse, filterChain);
     verify(listenerService, times(1)).broadcast("update-document-views-detail", "user", "123");
@@ -57,6 +58,9 @@ public class DocumentPreviewFilterTest {
     documentPreviewFilter.doFilter(httpServletRequest, servletResponse, filterChain);
     verify(listenerService, times(0)).broadcast("update-document-views-detail", "user", "123");
     verify(filterChain, times(3)).doFilter(any(), any());
+    documentPreviewFilter.doFilter(httpServletRequest, servletResponse, filterChain);
+    verify(listenerService, times(0)).broadcast("update-document-views-detail", "user", "123");
+    verify(filterChain, times(4)).doFilter(any(), any());
 
   }
 }
