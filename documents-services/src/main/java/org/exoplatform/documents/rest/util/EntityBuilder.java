@@ -537,6 +537,7 @@ public class EntityBuilder {
     publicDocumentAccessEntity.setNodeId(publicDocumentAccess.getNodeId());
     publicDocumentAccessEntity.setExpirationDate(publicDocumentAccess.getExpirationDate());
     publicDocumentAccessEntity.setHasPassword(publicDocumentAccess.getPasswordHashKey() != null);
+    publicDocumentAccessEntity.setDecodedPassword(publicDocumentAccess.getDecodedPassword());
     return publicDocumentAccessEntity;
   }
 }

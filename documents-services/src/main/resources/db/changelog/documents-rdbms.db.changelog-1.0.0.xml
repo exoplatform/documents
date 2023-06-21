@@ -39,6 +39,7 @@
                 <constraints nullable="false"/>
             </column>
             <column name="PASSWORD_HASH_KEY" type="NVARCHAR(2000)" />
+            <column name="ENCODED_PASSWORD" type="NVARCHAR(1000)" />
             <column name="EXPIRATION_DATE" type="TIMESTAMP"/>
         </createTable>
         <modifySql dbms="mysql">
