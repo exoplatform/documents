@@ -15,5 +15,7 @@ public class PublicDocumentAccessEntity {
 
     private Date expirationDate;
 
+    private String decodedPassword;
+
     private boolean hasPassword;
 }

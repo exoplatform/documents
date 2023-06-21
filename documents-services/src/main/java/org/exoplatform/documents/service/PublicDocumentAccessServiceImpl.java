@@ -21,6 +21,9 @@ import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.storage.PublicDocumentAccessStorage;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.web.security.codec.AbstractCodec;
+import org.exoplatform.web.security.codec.CodecInitializer;
+import org.exoplatform.web.security.security.TokenServiceInitializationException;
 
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -36,6 +39,9 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
 
   private PublicDocumentAccessStorage publicDocumentAccessStorage;
 
+  private final AbstractCodec codec;
+
+
   private static final String         HASHING_ALGORITHM            = "PBKDF2WithHmacSHA512";
 
   private static final int            HASHING_ALGORITHM_ITERATIONS = 65536;
@@ -43,8 +49,11 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   private static final int            HASH_KEY_LENGTH              = 256;
   
   
-  public PublicDocumentAccessServiceImpl(PublicDocumentAccessStorage publicDocumentAccessStorage) {
+  public PublicDocumentAccessServiceImpl(PublicDocumentAccessStorage publicDocumentAccessStorage,
+                                         CodecInitializer codecInitializer)
+      throws TokenServiceInitializationException {
     this.publicDocumentAccessStorage = publicDocumentAccessStorage;
+    this.codec = codecInitializer.getCodec();
   }
 
   /**
@@ -61,17 +70,22 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
       Date expiration = expirationDate != 0L ? new Date(expirationDate) : null;
       long id = publicDocumentAccess != null ? publicDocumentAccess.getId() : 0L;
       String hashKey = null;
+      String encodedPassword = null;
       if (password != null) {
         hashKey = generatePasswordHash(password);
+        encodedPassword = codec.encode(password);
       } else if (hasPassword && publicDocumentAccess != null) {
         hashKey = publicDocumentAccess.getPasswordHashKey();
+        encodedPassword = publicDocumentAccess.getEncodedPassword();
       }
       publicDocumentAccess = publicDocumentAccessStorage.savePublicDocumentAccess(
                                                                                   new PublicDocumentAccess(id,
                                                                                                            nodeId,
                                                                                                            hashKey,
+                                                                                                           encodedPassword,
                                                                                                            expiration),
                                                                                   docOwnerId);
+      publicDocumentAccess.setDecodedPassword(password);
       return publicDocumentAccess;
     } catch (Exception e) {
       LOG.error("Error while creating document public access", e);
@@ -80,12 +94,13 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   }
 
   private String generatePasswordHash(String password) throws NoSuchAlgorithmException, InvalidKeySpecException {
-    SecureRandom random = new SecureRandom();
+    codec.encode(password);
+    SecureRandom secureRandom = new SecureRandom();
     byte[] salt = new byte[16];
-    random.nextBytes(salt);
-    KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, HASHING_ALGORITHM_ITERATIONS, HASH_KEY_LENGTH);
+    secureRandom.nextBytes(salt);
+    KeySpec keySpec = new PBEKeySpec(password.toCharArray(), salt, HASHING_ALGORITHM_ITERATIONS, HASH_KEY_LENGTH);
     SecretKeyFactory factory = SecretKeyFactory.getInstance(HASHING_ALGORITHM);
-    byte[] hash = factory.generateSecret(spec).getEncoded();
+    byte[] hash = factory.generateSecret(keySpec).getEncoded();
     return HASHING_ALGORITHM_ITERATIONS + ":" + Hex.encodeHexString(salt) + ":" + Hex.encodeHexString(hash);
   }
 
@@ -95,9 +110,9 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
       int iterations = Integer.parseInt(parts[0]);
       byte[] salt = Hex.decodeHex(parts[1].toCharArray());
       byte[] hash = Hex.decodeHex(parts[2].toCharArray());
-      PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, hash.length * 8);
-      SecretKeyFactory skf = SecretKeyFactory.getInstance(HASHING_ALGORITHM);
-      byte[] checkHash = skf.generateSecret(spec).getEncoded();
+      PBEKeySpec pbeKeySpec = new PBEKeySpec(password.toCharArray(), salt, iterations, hash.length * 8);
+      SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(HASHING_ALGORITHM);
+      byte[] checkHash = secretKeyFactory.generateSecret(pbeKeySpec).getEncoded();
       int diff = hash.length ^ checkHash.length;
       for (int i = 0; i < hash.length && i < checkHash.length; i++) {
         diff |= hash[i] ^ checkHash[i];
@@ -114,7 +129,11 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    */
   @Override
   public PublicDocumentAccess getPublicDocumentAccess(String documentId) {
-    return publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    if (publicDocumentAccess != null) {
+      publicDocumentAccess.setDecodedPassword(codec.decode(publicDocumentAccess.getEncodedPassword()));
+    }
+    return publicDocumentAccess;
   }
 
   /**

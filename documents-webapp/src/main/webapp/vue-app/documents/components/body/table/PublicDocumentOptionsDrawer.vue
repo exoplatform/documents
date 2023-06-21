@@ -111,17 +111,39 @@
             v-if="!showPasswordInput && existOldPassword && hasPassword"
             class="d-flex flex-row mb-3">
             <div class="d-flex flex-column full-width">
-              <p>
-                {{ $t('documents.public.access.password.modify.message') }}
-              </p>
+              <input
+                :type="currentPasswordType"
+                disabled
+                readonly
+                class="ps-0 mt-auto mb-auto elevation-0"
+                :value="publicDocumentAccess.decodedPassword">
             </div>
-            <div class="d-flex flex-column ms-n11">
+            <div class="d-flex flex-column ms-n16">
               <v-tooltip bottom>
                 <template #activator="{ on, attrs}">
                   <v-btn
                     v-bind="attrs"
                     v-on="on"
-                    class="mt-0 me-1 mt-n2"
+                    class="mt-0 me-1 mt-auto mb-auto"
+                    color="primary"
+                    icon
+                    @click="showCurrentPassword = !showCurrentPassword">
+                    <v-icon
+                      size="18">
+                      {{ showCurrentPassword ? 'fas fa-eye-slash' : 'fas fa-eye' }}
+                    </v-icon>
+                  </v-btn>
+                </template>
+                {{ $t('documents.public.access.password.modify.tooltip') }}
+              </v-tooltip>
+            </div>
+            <div class="d-flex flex-column ms-n2">
+              <v-tooltip bottom>
+                <template #activator="{ on, attrs}">
+                  <v-btn
+                    v-bind="attrs"
+                    v-on="on"
+                    class="mt-0 me-1 mt-auto mb-auto"
                     color="primary"
                     icon
                     @click="showPasswordInput = true">
@@ -287,7 +309,8 @@ export default {
       year: 'numeric',
     },
     hasPassword: false,
-    existOldPassword: false
+    existOldPassword: false,
+    showCurrentPassword: false
   }),
   created() {
     document.addEventListener('mousedown', this.closeDatePickerMenu);
@@ -312,6 +335,9 @@ export default {
     },
     confirmPasswordType() {
       return this.showConfirmPassword ? 'text' :'password';
+    },
+    currentPasswordType() {
+      return this.showCurrentPassword && 'text' || 'password';
     }
   },
   watch: {

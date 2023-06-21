@@ -15,6 +15,7 @@ public class EntityMapper {
     return new PublicDocumentAccess(publicDocumentAccessEntity.getId(),
                                     publicDocumentAccessEntity.getNodeId(),
                                     publicDocumentAccessEntity.getPasswordHashKey(),
+                                    publicDocumentAccessEntity.getEncodedPassword(),
                                     publicDocumentAccessEntity.getExpirationDate());
   }
 
@@ -24,6 +25,7 @@ public class EntityMapper {
     publicDocumentAccessEntity.setNodeId(publicDocumentAccess.getNodeId());
     publicDocumentAccessEntity.setPasswordHashKey(publicDocumentAccess.getPasswordHashKey());
     publicDocumentAccessEntity.setExpirationDate(publicDocumentAccess.getExpirationDate());
+    publicDocumentAccessEntity.setEncodedPassword(publicDocumentAccess.getEncodedPassword());
     return publicDocumentAccessEntity;
   }
 }
