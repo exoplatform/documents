@@ -288,7 +288,7 @@ export default {
     },
     openInEditMode(file) {
       const fileId = file.sourceID? file.sourceID: file.id;
-      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}&source=peview`, '_blank');
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}`, '_blank');
     },
     openPreview() {
       this.loading = true;
