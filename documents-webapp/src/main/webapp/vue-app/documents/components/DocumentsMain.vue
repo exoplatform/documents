@@ -388,8 +388,8 @@ export default {
         if (e.status === 404) {
           this.copyToClipBoard(`${this.publicLinkUrl}${nodeId}`).then(() => {
             this.$root.$emit('show-alert', {
-              type: 'success',
-              message: this.$t('documents.alert.success.label.linkCopied')
+              type: 'warning',
+              message: this.$t('document.visibility.publicAccess.save.message')
             });
           }).catch(() => {
             this.$root.$emit('show-alert', {
