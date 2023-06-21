@@ -39,8 +39,11 @@ public class PublicDocumentAccessEntity implements Serializable {
   @Column(name = "NODE_ID", nullable = false)
   private String nodeId;
 
-  @Column(name = "PASSWORD_HASH_KEY", nullable = false)
+  @Column(name = "PASSWORD_HASH_KEY")
   private String  passwordHashKey;
+
+  @Column(name = "ENCODED_PASSWORD")
+  private String encodedPassword;
 
   @Column(name = "EXPIRATION_DATE")
   private Date    expirationDate;
