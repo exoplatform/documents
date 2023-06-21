@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.model;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -24,15 +23,36 @@ import java.util.Date;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class PublicDocumentAccess {
 
   private Long   id;
 
   private String nodeId;
 
+  /**
+   * Password hash used to validate the access
+   */
   private String passwordHashKey;
+
+  /**
+   * Password encoded stored in database used to display
+   * the password to the user after decoding it
+   */
+  private String encodedPassword;
+
+  /**
+   * Password decoded used to display the password
+   * to the user in the front
+   */
+  private String decodedPassword;
 
   private Date   expirationDate;
 
+  public PublicDocumentAccess(Long id, String nodeId, String passwordHashKey, String encodedPassword, Date expirationDate) {
+    this.id = id;
+    this.nodeId = nodeId;
+    this.passwordHashKey = passwordHashKey;
+    this.encodedPassword = encodedPassword;
+    this.expirationDate = expirationDate;
+  }
 }

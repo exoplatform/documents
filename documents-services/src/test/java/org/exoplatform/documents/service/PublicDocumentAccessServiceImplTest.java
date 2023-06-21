@@ -2,6 +2,8 @@ package org.exoplatform.documents.service;
 
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.storage.PublicDocumentAccessStorage;
+import org.exoplatform.web.security.codec.AbstractCodec;
+import org.exoplatform.web.security.codec.CodecInitializer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -21,10 +23,15 @@ public class PublicDocumentAccessServiceImplTest {
 
   private PublicDocumentAccessService publicDocumentAccessService;
 
+  private AbstractCodec               codec;
+
   @Before
   public void setUp() throws Exception {
     publicDocumentAccessStorage = mock(PublicDocumentAccessStorage.class);
-    publicDocumentAccessService = new PublicDocumentAccessServiceImpl(publicDocumentAccessStorage);
+    codec = mock(AbstractCodec.class);
+    CodecInitializer codecInitializer = mock(CodecInitializer.class);
+    when(codecInitializer.getCodec()).thenReturn(codec);
+    publicDocumentAccessService = new PublicDocumentAccessServiceImpl(publicDocumentAccessStorage, codecInitializer);
   }
 
   @Test
@@ -40,6 +47,10 @@ public class PublicDocumentAccessServiceImplTest {
 
   @Test
   public void getDocumentPublicAccess() {
+    PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess();
+    publicDocumentAccess.setEncodedPassword("encoded");
+    when(codec.decode("encoded")).thenReturn("decoded");
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(publicDocumentAccess);
     publicDocumentAccessService.getPublicDocumentAccess("123");
     verify(publicDocumentAccessStorage, times(1)).getPublicDocumentAccessByNodeId("123");
   }
@@ -54,7 +65,9 @@ public class PublicDocumentAccessServiceImplTest {
     assertFalse(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
   }
 
-  private String generatePasswordHash(String password) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+  private String generatePasswordHash(String password) throws NoSuchMethodException,
+                                                       InvocationTargetException,
+                                                       IllegalAccessException {
     Method generatePasswordHash = publicDocumentAccessService.getClass().getDeclaredMethod("generatePasswordHash", String.class);
     generatePasswordHash.setAccessible(true);
     return (String) generatePasswordHash.invoke(publicDocumentAccessService, password);
