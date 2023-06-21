@@ -79,13 +79,17 @@ export default {
       'visibilityChoice': 'ALL_MEMBERS'
     }},
   }),
+  created() {
+    this.$root.$on('open-all-users-visibility-drawer', file => this.open(file));
+  },
   computed: {
     specificCollaborators(){
       return this.$t('documents.label.visibility.specificCollaborator');
     },
   },
   methods: {
-    open() {
+    open(file) {
+      this.file = file;
       this.$refs.documentAllUsersVisibilityDrawer.open();
     },
     close() {
