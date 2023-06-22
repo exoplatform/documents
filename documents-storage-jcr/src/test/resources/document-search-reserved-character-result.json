@@ -22,11 +22,11 @@
         "_source": {
           "path": "/Groups/spaces/test/Documents/term-with-reserved-character.png",
           "workspace": "collaboration",
-          "name": "term-with-reserved-character.png"
+          "name": "term with reserved - character.png"
         },
         "highlight": {
           "title": [
-            "<span class='searchMatchExcerpt'>term-with-reserved-character</span>.png"
+            "<span class='searchMatchExcerpt'>term with reserved - character</span>.png"
           ]
         },
         "sort": [
