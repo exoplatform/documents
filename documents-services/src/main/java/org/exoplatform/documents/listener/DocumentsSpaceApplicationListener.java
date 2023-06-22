@@ -274,7 +274,7 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
     return removed;
   }
 
-  private Page getSpaceHomePage(Space space) throws Exception {
+  private Page getSpaceHomePage(Space space) {
     Page homePage = getSpaceHomePageBySpaceTemplate(space);
     if (homePage != null) {
       return homePage;
