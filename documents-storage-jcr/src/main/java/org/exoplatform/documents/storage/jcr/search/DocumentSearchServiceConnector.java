@@ -427,14 +427,14 @@ public class DocumentSearchServiceConnector {
     }
     String originalTerm = term;
     term = escapeReservedCharacters(term);
+    String escapedQueryWithAndOperator = buildEscapedQueryWithAndOperator(term);
     boolean isEscapedReservedCharactersTerm = !originalTerm.equals(term);
-    List<String> queryParts = Arrays.asList(term.split(" "));
-    String escapedQueryWithAndOperator = StringUtils.join(queryParts, "* AND *");
+    boolean isEscapedQueryWithAndOperator = !escapedQueryWithAndOperator.equals(term);
     if (!extendedSearch) {
       // If the reserved characters are escaped we will escape also the * character in the search query term.
-      return isEscapedReservedCharactersTerm ? SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, escapedQueryWithAndOperator) : SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator) ;
+      return isEscapedReservedCharactersTerm && !isEscapedQueryWithAndOperator ? SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, term) : SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator);
     }
-    return isEscapedReservedCharactersTerm ? EXTENDED_SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, escapedQueryWithAndOperator) : EXTENDED_SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator);
+    return isEscapedReservedCharactersTerm && ! isEscapedQueryWithAndOperator ? EXTENDED_SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, term ) : EXTENDED_SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator);
   }
 
   private String retrieveSearchQuery() {
@@ -467,5 +467,36 @@ public class DocumentSearchServiceConnector {
       metadataFilters.put(FavoriteService.METADATA_TYPE.getName(), Collections.singletonList(userIdentity.getId()));
     }
     return metadataFilters;
+  }
+  protected String buildEscapedQueryWithAndOperator(String term) {
+    List<String> queryParts = Arrays.asList(term.split(" "));
+    if (queryParts.size() > 1) {
+      StringBuilder escapedQueryWithAndOperator = new StringBuilder();
+      String pattern = "[-+=&|><!(){}\\[\\]^\"*?:\\\\/]";
+      Pattern regex = Pattern.compile(pattern);
+      for (int i = 0 , j = 1 ; i < queryParts.size() && j < queryParts.size() ; i++ , j++) {
+        Matcher matcher = regex.matcher(queryParts.get(i));
+        Matcher nextMatcher = regex.matcher(queryParts.get(j));
+        escapedQueryWithAndOperator.append(queryParts.get(i));
+        if (matcher.find()){
+          escapedQueryWithAndOperator.append("\\\\* AND ");
+        } else {
+          escapedQueryWithAndOperator.append("* AND ");
+        }
+        if (nextMatcher.find()) {
+          escapedQueryWithAndOperator.append("\\\\*");
+        } else {
+          escapedQueryWithAndOperator.append("*");
+        }
+        if (j == queryParts.size() - 1) {
+          escapedQueryWithAndOperator.append(queryParts.get(j));
+          if (nextMatcher.find()){
+            escapedQueryWithAndOperator.append("\\\\");
+          }
+        }
+      }
+      return escapedQueryWithAndOperator.toString();
+    }
+    return term;
   }
 }
