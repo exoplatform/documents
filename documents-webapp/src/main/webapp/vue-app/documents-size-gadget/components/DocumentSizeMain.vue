@@ -17,8 +17,8 @@
 -->
 <template>
   <v-app class="border-box-sizing" flat>
-    <v-main class="white">
-      <div class="d-flex align-center pa-2">
+    <v-main class="white pa-4">
+      <div class="d-flex align-center">
         <a :href="documentsBaseLink" class="body-1 text-uppercase text-sub-title">
           {{ $t('document.size.header.label') }}
         </a>
@@ -31,14 +31,15 @@
           {{ $t('document.size.computing.progress.label') }}
         </div>
       </div>
-      <div v-if="initialized" class="d-flex flex-wrap justify-space-around align-center my-3">
+      <div v-if="initialized" class="d-flex flex-wrap">
         <v-tooltip :disabled="isMobile" top> 
           <template #activator="{ on, attrs }">
             <a
               :href="documentsBaseLink" 
+              class="d-flex flex-wrap flex-column justify-space-around align-center col-6 pa-0 "
               v-bind="attrs"
               v-on="on">
-              <div class="width-max-content font-weight-bold headline  ma-2 v-slider--horizontal black--text">
+              <div class="width-max-content font-weight-bold headline  ma-2 black--text v-slider--horizontal">
                 <v-icon
                   size="28"
                   color="red"
@@ -47,7 +48,7 @@
                 </v-icon>
                 {{ toSize.value }} {{ $t('document.size.label.unit.'+toSize.unit) }}
               </div>
-              <div class="sub-title-1 text-sub-title px-1">
+              <div class="text-sub-title px-1">
                 {{ documentsLocationMessage }}
               </div>
             </a>
@@ -59,8 +60,8 @@
         </v-tooltip>
           
        
-        <a :href="documentsBaseLink">
-          <div class="width-max-content font-weight-bold subtitle-2 ma-2 pt-2 v-slider--horizontal ">
+        <a :href="documentsBaseLink" class="d-flex flex-wrap flex-column justify-space-around align-center pa-0 col-6">
+          <div class="width-max-content font-weight-bold subtitle-2 ma-2 pt-2 v-slider--horizontal">
             <v-icon
               size="20"
               :color="diffSize.value > 0 ? 'red':'green'"
@@ -69,7 +70,7 @@
             </v-icon>
             <span :class="diffSize.value > 0 ? 'red--text' : 'green--text'">{{ diffSize.value }} {{ $t('document.size.label.unit.'+diffSize.unit) }}</span> 
           </div>
-          <div class="sub-title-1 text-sub-title px-1">
+          <div class="text-sub-title px-1">
             {{ documentsdaysMessage }}
           </div>
         </a>
