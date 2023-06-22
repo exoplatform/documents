@@ -188,7 +188,7 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
   private boolean documentsSizeGadgetAddedInHomePage(Space space) throws Exception {
     Page page = getSpaceHomePage(space);
     if (page == null) {
-      LOG.info("Can't find home page content of space '{}', the widget AgendaTimeline will not be installed in Space Home page",
+      LOG.info("Can't find home page content of space '{}', the  Documents Size Gadget will not be installed in Space Home page",
                space.getDisplayName());
       return false;
     }
@@ -286,14 +286,14 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
     String spaceDisplayName = space.getDisplayName();
     NavigationContext navigation = getNavigationService().loadNavigation(SiteKey.group(space.getGroupId()));
     if (navigation == null || navigation.getData() == null || navigation.getData().getRootId() == null) {
-      LOG.debug("Can't find home page of space '{}', the widget AgendaTimeline will not be installed in Space Home page",
+      LOG.debug("Can't find home page of space '{}', the  Documents Size Gadget will not be installed in Space Home page",
                 spaceDisplayName);
       return null;
     }
     String rootId = navigation.getData().getRootId();
     PageKey homePageKey = getHomePageRef(rootId, spaceDisplayName);
     if (homePageKey == null) {
-      LOG.debug("Can't find home page reference of space '{}', the widget AgendaTimeline will not be installed in Space Home page",
+      LOG.debug("Can't find home page reference of space '{}', the  Documents Size Gadget will not be installed in Space Home page",
                 spaceDisplayName);
       return null;
     }
@@ -313,7 +313,7 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
   private PageKey getHomePageRef(String rootId, String spaceDisplayName) {
     NodeData node = getNavigationStore().loadNode(Safe.parseLong(rootId));
     if (node == null) {
-      LOG.debug("Can't find home page of space '{}', the widget AgendaTimeline will not be installed in Space Home page",
+      LOG.debug("Can't find home page of space '{}', the  Documents Size Gadget will not be installed in Space Home page",
                 spaceDisplayName);
       return null;
     }
