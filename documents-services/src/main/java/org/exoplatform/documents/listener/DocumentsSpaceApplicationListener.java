@@ -282,7 +282,7 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
     return getSpaceHomePageFromNavigation(space);
   }
 
-  private Page getSpaceHomePageFromNavigation(Space space) throws Exception {
+  private Page getSpaceHomePageFromNavigation(Space space) {
     String spaceDisplayName = space.getDisplayName();
     NavigationContext navigation = getNavigationService().loadNavigation(SiteKey.group(space.getGroupId()));
     if (navigation == null || navigation.getData() == null || navigation.getData().getRootId() == null) {
@@ -300,7 +300,7 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
     return getDataStorage().getPage(homePageKey.format());
   }
 
-  private Page getSpaceHomePageBySpaceTemplate(Space space) throws Exception {
+  private Page getSpaceHomePageBySpaceTemplate(Space space) {
     SpaceTemplate spaceTemplate = getSpaceTemplateService().getSpaceTemplateByName(space.getTemplate());
     if (spaceTemplate != null && spaceTemplate.getSpaceHomeApplication() != null) {
       String homePageName = spaceTemplate.getSpaceHomeApplication().getPortletName();
@@ -383,7 +383,7 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
 
   private static Application<Portlet> getDocumentsSizeGadgetModel() {
     PortletApplication model = new PortletApplication();
-    PortletState<Portlet> state = new PortletState<>(new TransientApplicationState<Portlet>(DOCUMENTS_DOCUMENTS_SIZE_COMPLETE_ID),
+    PortletState<Portlet> state = new PortletState<>(new TransientApplicationState<>(DOCUMENTS_DOCUMENTS_SIZE_COMPLETE_ID),
                                                      ApplicationType.PORTLET);
     model.setState(state.getApplicationState());
     model.setTitle(DOCUMENTS_DOCUMENTS_SIZE_PORTLET_ID);
