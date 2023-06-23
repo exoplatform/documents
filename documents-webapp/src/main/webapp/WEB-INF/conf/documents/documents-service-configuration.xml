@@ -71,6 +71,15 @@
   </external-component-plugins>
 
   <external-component-plugins>
+    <target-component>org.exoplatform.social.core.space.spi.SpaceService</target-component>
+    <component-plugin>
+      <name>AgendaSpaceApplicationListener</name>
+      <set-method>registerSpaceLifeCycleListener</set-method>
+      <type>org.exoplatform.documents.listener.DocumentsSpaceApplicationListener</type>
+    </component-plugin>
+  </external-component-plugins>
+
+  <external-component-plugins>
     <target-component>org.exoplatform.web.WebAppController</target-component>
     <component-plugin>
       <name>PublicAccessDownloadDocumentHandler</name>
