@@ -320,7 +320,7 @@ export default {
 
     },
     displayAllListUsers(){
-      this.$refs.documentAllUsersVisibilityDrawer.open();
+      this.$root.$emit('open-all-users-visibility-drawer', this.file);
     },
     saveVisibility(){
       this.loading = true;
