@@ -1,0 +1,38 @@
+{
+  "took": 28,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 1,
+      "relation": "eq"
+    },
+    "max_score": 1.0,
+    "hits": [
+      {
+        "_index": "file_v3",
+        "_type": "_doc",
+        "_id": "c4a221847f0001013218c5b049ffd95c",
+        "_score": 1.0,
+        "_source": {
+          "path": "/Groups/spaces/test/Documents/term-with-reserved-character.png",
+          "workspace": "collaboration",
+          "name": "term with reserved - character.png"
+        },
+        "highlight": {
+          "title": [
+            "<span class='searchMatchExcerpt'>term with reserved - character</span>.png"
+          ]
+        },
+        "sort": [
+          "term-with-reserved-character.png"
+        ]
+      }
+    ]
+  }
+}
