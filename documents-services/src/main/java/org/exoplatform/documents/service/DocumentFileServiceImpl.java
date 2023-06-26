@@ -22,8 +22,11 @@ import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+
 import javax.jcr.RepositoryException;
+
 import org.apache.commons.lang3.StringUtils;
+
 import org.exoplatform.analytics.api.service.AnalyticsService;
 import org.exoplatform.analytics.model.StatisticData;
 import org.exoplatform.analytics.model.filter.AnalyticsFilter;
@@ -532,15 +535,20 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                                                                ObjectNotFoundException {
     Identity currentUserIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
     Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    StatisticData statisticData = new StatisticData();
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
     }
-    if (ownerIdentity.isUser() && ownerId != userIdentityId) {
-      throw new IllegalAccessException("Current user with identity id : " + userIdentityId
-          + " attempts to calculate the size of private documents of user  with identity id  " + ownerId);
+    if (ownerIdentity.isUser()) {
+      if (ownerId != userIdentityId) {
+        throw new IllegalAccessException("Current user with identity id : " + userIdentityId
+            + " attempts to calculate the size of private documents of user  with identity id  " + ownerId);
+      }
+      statisticData.setUserId(userIdentityId);
     }
     if (ownerIdentity.isSpace()) {
       Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      statisticData.addParameter("spaceId", space.getId());
       if (!spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())) {
         throw new IllegalAccessException("Current user with identity id : " + userIdentityId
             + " attempts to calculate size of documents of space with identity id " + ownerId + " while it's not a member");
@@ -548,7 +556,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
     long size = documentFileStorage.calculateFilesSize(ownerId, aclIdentity);
-    StatisticData statisticData = new StatisticData();
     statisticData.setModule("Drive");
     statisticData.setSubModule("Documents");
     statisticData.setOperation("documentsSize");
