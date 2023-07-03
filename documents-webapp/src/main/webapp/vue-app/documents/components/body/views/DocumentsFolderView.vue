@@ -18,7 +18,7 @@
       :class="loadingClass"
       :custom-sort="customSort"
       mobile-breakpoint="960"
-      :show-select="!isMobile && documentMultiSelectionActive"
+      :show-select="!isMobile"
       hide-default-footer
       disable-pagination>
       <template slot="group.header">
@@ -54,7 +54,7 @@
         </span>
       </template>
       <template
-        v-if="!isMobile && documentMultiSelectionActive"
+        v-if="!isMobile"
         #body="{ items }">
         <tbody>
           <tr
@@ -93,7 +93,7 @@
         </tbody>
       </template>
       <template
-        v-else-if="documentMultiSelectionActive"
+        v-else
         #item="{item}">
         <tr
           :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
@@ -114,20 +114,6 @@
               :class="header.value === 'name' && isXScreen && 'ms-10'" />
           </td>
         </tr>
-      </template>
-      <template
-        v-else
-        v-for="header in extendedCells"
-        #[`item.${header.value}`]="{item}">
-        <documents-table-cell
-          :key="header.value"
-          :extension="header.cellExtension"
-          :file="item"
-          :query="query"
-          :extended-search="extendedSearch"
-          :is-mobile="isMobile"
-          :selected-view="selectedView"
-          :class="header.value === 'name' && 'ms-8'" />
       </template>
       <template v-if="hasMore" slot="footer">
         <v-flex class="d-flex py-2 border-box-sizing mb-1">
@@ -245,9 +231,6 @@ export default {
   computed: {
     isXScreen() {
       return this.$vuetify.breakpoint.width < 600;
-    },
-    documentMultiSelectionActive() {
-      return eXo?.env?.portal?.documentMultiSelection;
     },
     showSelectAll() {
       return this.selectedDocuments && this.selectedDocuments.length || this.showSelectAllInput;
