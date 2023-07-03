@@ -42,7 +42,7 @@
               <div class="width-max-content font-weight-bold headline  ma-2 black--text v-slider--horizontal">
                 <v-icon
                   size="28"
-                  color="red"
+                  color="primary"
                   class="pe-1">
                   fas fa-folder-open
                 </v-icon>
@@ -60,7 +60,7 @@
         </v-tooltip>
           
        
-        <a :href="documentsBaseLink" class="d-flex flex-wrap flex-column justify-space-around align-center pa-0 col-6">
+        <div class="d-flex flex-wrap flex-column justify-space-around align-center pa-0 col-6">
           <div class="width-max-content font-weight-bold subtitle-2 ma-2 pt-2 v-slider--horizontal">
             <v-icon
               size="20"
@@ -73,7 +73,7 @@
           <div class="text-sub-title px-1">
             {{ documentsdaysMessage }}
           </div>
-        </a>
+        </div>
       </div>
     </v-main> 
   </v-app>
