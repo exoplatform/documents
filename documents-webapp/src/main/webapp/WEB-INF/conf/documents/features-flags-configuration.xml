@@ -17,18 +17,4 @@
             </init-params>
         </component-plugin>
     </external-component-plugins>
-
-    <external-component-plugins>
-        <target-component>org.exoplatform.commons.api.settings.ExoFeatureService</target-component>
-        <component-plugin>
-            <name>IntroduceNewDocApp</name>
-            <set-method>addFeaturePlugin</set-method>
-            <type>org.exoplatform.documents.plugin.DocumentsFeaturePlugin</type>
-        </component-plugin>
-        <component-plugin>
-            <name>IntroduceSwitchOldDocApp</name>
-            <set-method>addFeaturePlugin</set-method>
-            <type>org.exoplatform.documents.plugin.DocumentsFeaturePlugin</type>
-        </component-plugin>
-    </external-component-plugins>
 </configuration>
