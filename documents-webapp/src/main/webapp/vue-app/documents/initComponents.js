@@ -18,7 +18,6 @@
  */
 
 import DocumentsMain from './components/DocumentsMain.vue';
-import DocumentsAppReminder from './components/DocumentsAppReminder.vue';
 import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
 import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
@@ -149,7 +148,6 @@ const components = {
   'folder-treeview-drawer': FolderTreeViewDrawer,
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
-  'documents-app-reminder': DocumentsAppReminder,
   'upload-overlay': UploadOverlay,
   'versionHistory-menu-action': VersionHistoryMenuAction,
   'favorite-filter-action': FavoriteFilterActionMobile,

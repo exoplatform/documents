@@ -90,7 +90,6 @@
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
-      <documents-app-reminder :is-mobile="isMobile" />
       <documents-actions-menu-mobile :is-mobile="isMobile" />
       <documents-filter-menu-mobile
         :primary-filter="primaryFilter"
