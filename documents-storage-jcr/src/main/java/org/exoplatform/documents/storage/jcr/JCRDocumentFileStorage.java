@@ -400,7 +400,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         folderId = ((NodeImpl) node).getIdentifier();
       } else {
         node = getNodeByIdentifier(session, folderId);
-        node = checkSymlinkHistory(node, session, ownerId);
       }
       if (StringUtils.isNotBlank(folderPath)) {
         node = getNodeByPath(node, folderPath, sessionProvider);
@@ -439,10 +438,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
               }
               break;
             } else{
-              node = node.getParent();
+              Node parentNode = node.getParent();
+              node = parentNode;
               node = checkSymlinkHistory(node, session, ownerId);
               if (node != null) {
                 nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+                String identifier = ((NodeImpl)node).getIdentifier();
+                // If the symlink exists on the breadcrumb list, then the required node is the non-symlink node
+                if (parents.stream().anyMatch(breadCrumbItem -> breadCrumbItem.isSymlink() && breadCrumbItem.getId().equals(identifier))){
+                  node = parentNode;
+                }
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
                                                node.getPath(),
