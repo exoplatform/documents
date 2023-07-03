@@ -103,10 +103,11 @@
             <v-progress-circular
               v-bind="attrs"
               v-on="on"
-              class="ms-2 position-absolute mt-2"
-              :size="20"
+              class="ms-2 position-absolute mt-1"
               color="primary"
-              indeterminate />
+              :indeterminate = "action !== 'import'" >
+                <span v-if="action === 'import'">{{ Math.ceil(progress) }}</span>
+            </v-progress-circular>
           </template>
           {{ actionLoadingMessage }}
         </v-tooltip>
@@ -153,7 +154,7 @@ export default {
     actionLoading: false,
     actionLoadingMessage: null,
     action: '',
-    progress: 0
+    progress: ''
   }),
   computed: {
     isFolderView() {
@@ -196,6 +197,9 @@ export default {
       this.actionLoading = status;
       this.actionLoadingMessage = this.$t(`document.multiple.${action}.action.message`);
       this.action=action;
+      if (!this.actionLoading) {
+        this.progress='';
+      }
     },
     openMultiSelectionMenuAction() {
       if (this.isMobile) {

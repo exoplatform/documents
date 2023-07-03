@@ -17,16 +17,19 @@
 
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import javax.jcr.*;
+import javax.jcr.Node;
+import javax.jcr.PathNotFoundException;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -46,6 +49,7 @@ import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.upload.UploadService;
+
 import net.lingala.zip4j.ZipFile;
 
 public class ActionThread implements Runnable {
@@ -120,8 +124,6 @@ public class ActionThread implements Runnable {
   private ActionData                     actionData;
 
   private String                         parentPath;
-
-  private String                         tempFolderPath;
 
   private Map<String, Object>            params;
 
@@ -218,11 +220,8 @@ public class ActionThread implements Runnable {
                                       .toList();
 
     try {
-      tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
-    } catch (IOException e) {
-      log.error("Cannot create temp folder to download documents", e);
-      return;
-    }
+      String tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
+
     boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
     brodcastEvent();
     try {
@@ -268,6 +267,9 @@ public class ActionThread implements Runnable {
       actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
     }
     brodcastEvent();
+  } catch (IOException e) {
+    log.error("Cannot create temp folder to download documents", e);
+  }
   }
 
   private void duplicateItems() {
@@ -359,8 +361,11 @@ public class ActionThread implements Runnable {
 
   public void createItems() throws RepositoryException {
     String tempFolderPath = actionData.getTempFolderPath();
+    Map<String, String> folderReplaced = new HashMap<>();
+    Map<String, String> folderCreated = new HashMap<>();
     for (String filePath : actionData.getFiles()) {
       try {
+        boolean ignored = false;
         File file = new File(filePath);
         filePath = filePath.replace("\\", "/");
         actionData.setDocumentInProgress(filePath.replace(tempFolderPath, ""));
@@ -375,7 +380,39 @@ public class ActionThread implements Runnable {
               String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(folderName));
               name = URLDecoder.decode(name, StandardCharsets.UTF_8);
               if (folderNode.hasNode(name)) {
-                folderNode = folderNode.getNode(name);
+                String existingFolderId = folderNode.getNode(name).getUUID();
+                if (actionData.getConflict().equals("duplicate")) {
+                  if (folderCreated.containsKey(existingFolderId)) {
+                    folderNode = folderNode.getNode(folderCreated.get(existingFolderId));
+                  } else if (folderReplaced.containsKey(existingFolderId)) {
+                    folderNode = folderNode.getNode(folderReplaced.get(existingFolderId));
+                  } else {
+                    int i = 1;
+                    String newName = name + " (" + i + ")";
+                    String newTitle = folderName + " (" + i + ")";
+                    while (folderNode.hasNode(newName)) {
+                      i++;
+                      newName = name + " (" + i + ")";
+                      newTitle = folderName + " (" + i + ")";
+                    }
+                    folderReplaced.put(existingFolderId, newName);
+                    Node addedNode = folderNode.addNode(newName, NT_FOLDER);
+                    addedNode.setProperty(EXO_TITLE, newTitle);
+                    if (addedNode.canAddMixin(MIX_REFERENCEABLE)) {
+                      addedNode.addMixin(MIX_REFERENCEABLE);
+                    }
+                    folderNode.save();
+                    folderNode = folderNode.getNode(newName);
+                    folderCreated.put(folderNode.getUUID(), newName);
+                  }
+                } else {
+                  if (folderCreated.containsKey(existingFolderId)) {
+                    folderNode = folderNode.getNode(folderCreated.get(existingFolderId));
+                  } else {
+                    actionData.addIgnoredFile(filePath.replace(tempFolderPath, ""));
+                    ignored = true;
+                  }
+                }
               } else {
                 Node addedNode = folderNode.addNode(name, NT_FOLDER);
                 addedNode.setProperty(EXO_TITLE, folderName);
@@ -384,9 +421,15 @@ public class ActionThread implements Runnable {
                 }
                 folderNode.save();
                 folderNode = folderNode.getNode(name);
+                folderCreated.put(folderNode.getUUID(), name);
               }
             }
           }
+        }
+        if (ignored) {
+          actionData.incrementImportCount();
+          brodcastEvent();
+          continue;
         }
         String title = file.getName();
         String name = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(title.toLowerCase()));
@@ -418,23 +461,23 @@ public class ActionThread implements Runnable {
     if (actionData.getConflict().equals("updateAll")) {
       Node existingNode = folderNode.getNode(name);
       createNewVersion(existingNode, file);
-      actionData.addUpdatedFile(filePath.replace(tempFolderPath, ""));
+      actionData.addUpdatedFile(filePath.replace(actionData.getTempFolderPath(), ""));
     } else if (actionData.getConflict().equals("duplicate")) {
       int i = 1;
       String extension = FilenameUtils.getExtension(name);
       String fileBaseName = FilenameUtils.getBaseName(name);
       String titleBase = FilenameUtils.getBaseName(title);
-      String newFileName = fileBaseName + "_" + i + "." + extension;
-      String newFileTitle = titleBase + "_" + i + "." + extension;
+      String newFileName = fileBaseName + "(" + i + ")." + extension;
+      String newFileTitle = titleBase + "(" + i + ")." + extension;
       while (folderNode.hasNode(newFileName)) {
         i++;
-        newFileName = fileBaseName + "_" + i + "." + extension;
-        newFileTitle = titleBase + "_" + i + "." + extension;
+        newFileName = fileBaseName + "(" + i + ")." + extension;
+        newFileTitle = titleBase + "(" + i + ")." + extension;
       }
       createFile(folderNode, file, newFileName, newFileTitle);
-      actionData.addDuplicatedFile(filePath.replace(tempFolderPath, ""));
+      actionData.addDuplicatedFile(filePath.replace(actionData.getTempFolderPath(), ""));
     } else {
-      actionData.addIgnoredFile(filePath.replace(tempFolderPath, ""));
+      actionData.addIgnoredFile(filePath.replace(actionData.getTempFolderPath(), ""));
     }
   }
 
