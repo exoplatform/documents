@@ -387,11 +387,9 @@ public class ActionThread implements Runnable {
                   } else if (folderReplaced.containsKey(existingFolderId)) {
                     folderNode = folderNode.getNode(folderReplaced.get(existingFolderId));
                   } else {
-                    String newName = name;
-                    String newTitle = folderName;
                     int i = 1;
-                    newName = name + " (" + i + ")";
-                    newTitle = folderName + " (" + i + ")";
+                    String newName = name + " (" + i + ")";
+                    String newTitle = folderName + " (" + i + ")";
                     while (folderNode.hasNode(newName)) {
                       i++;
                       newName = name + " (" + i + ")";
