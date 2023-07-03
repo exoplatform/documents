@@ -90,6 +90,20 @@ public class DocumentSearchServiceConnectorTest {
     }
   }
 
+  private String getSizeAgg(boolean getTotalSize) {
+    if (getTotalSize) {
+      return "\"aggs\": {\n" + "      \"total_size\": { \"sum\": { \"field\": \"fileSize\" } }\n" + "    },";
+    }
+    return "";
+  }
+
+  public String getLimit(int limit) {
+    if (limit > 0) {
+      return "\"size\":" + limit + ",";
+    } else
+      return "";
+  }
+
   @Test
   public void searchTest() {
 
@@ -116,10 +130,11 @@ public class DocumentSearchServiceConnectorTest {
                                        .replace("@date_query@", "")
                                        .replace("@path@", path)
                                        .replace("@workspace@", WORKSPACE)
+                                       .replace("@size_agg@", getSizeAgg(false))
                                        .replace("@sort_field@", sort_field + ".raw")
                                        .replace("@sort_direction@", sort_direction)
                                        .replace("@offset@", String.valueOf(offset))
-                                       .replace("@limit@", String.valueOf(limit));
+                                       .replace("@limit@", getLimit(limit));
     DocumentSearchServiceConnector documentSearchServiceConnector = new DocumentSearchServiceConnector(configurationManager,
                                                                                                        identityManager,
                                                                                                        client,
