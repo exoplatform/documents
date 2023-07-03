@@ -36,7 +36,6 @@ import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
-import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -73,9 +72,7 @@ public class ActionThread implements Runnable {
   private ActionData                     actionData;
 
   private String                         parentPath;
-
-  private String                         tempFolderPath;
-
+  
   private Map<String, Object>            params;
 
 
@@ -161,6 +158,7 @@ public class ActionThread implements Runnable {
   }
 
   private void downloadItems() {
+    String tempFolderPath;
     List<javax.jcr.Node> nodes = items.stream()
                                       .map(document -> JCRDocumentsUtil.getNodeByIdentifier(session, document.getId()))
                                       .toList();
