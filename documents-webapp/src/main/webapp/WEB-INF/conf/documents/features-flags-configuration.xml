@@ -2,45 +2,6 @@
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd"
                xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
 
-    <component>
-        <key>IntroduceNewDocAppFeatureProperties</key>
-        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
-        <init-params>
-            <properties-param>
-                <name>IntroduceNewDocAppFeatureProperties</name>
-                <description>Introduce New Document App Feature enablement flag</description>
-                <property name="exo.feature.IntroduceNewDocApp.enabled"
-                          value="${exo.feature.IntroduceNewDocApp.enabled:false}"/>
-            </properties-param>
-        </init-params>
-    </component>
-
-    <component>
-        <key>IntroduceSwitchOldDocAppFeatureProperties</key>
-        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
-        <init-params>
-            <properties-param>
-                <name>IntroduceSwitchOldDocAppFeatureProperties</name>
-                <description>Introduce Switch to old Document App Feature enablement flag</description>
-                <property name="exo.feature.IntroduceSwitchOldDocApp.enabled"
-                          value="${exo.feature.IntroduceSwitchOldDocApp.enabled:false}"/>
-            </properties-param>
-        </init-params>
-    </component>
-
-    <component>
-        <key>DocumentMultiSelectionFeatureProperties</key>
-        <type>org.exoplatform.container.ExtendedPropertyConfigurator</type>
-        <init-params>
-            <properties-param>
-                <name>DocumentMultiSelectionFeatureProperties</name>
-                <description>Multi selection enablement flag</description>
-                <property name="exo.feature.DocumentMultiSelection.enabled"
-                          value="${exo.feature.DocumentMultiSelection.enabled:false}" />
-            </properties-param>
-        </init-params>
-    </component>
-
     <external-component-plugins>
         <target-component>org.exoplatform.groovyscript.text.TemplateService</target-component>
         <component-plugin>
