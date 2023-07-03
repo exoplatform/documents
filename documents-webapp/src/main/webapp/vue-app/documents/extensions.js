@@ -145,8 +145,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'font-weight-bold text-no-wrap ',
   width: '190px',
   rank: 2,
-  enabled: (file, isMobile) => {
-    return file && !file.cloudDriveFolder && file.acl.canEdit && !isMobile;
+  enabled: (file) => {
+    return file && !file.cloudDriveFolder && file.acl.canEdit;
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
