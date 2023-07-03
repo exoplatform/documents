@@ -42,9 +42,6 @@ export default {
     selectAllChecked: false
   }),
   computed: {
-    documentMultiSelectionActive() {
-      return eXo?.env?.portal?.documentMultiSelection && this.$vuetify.breakpoint.width >= 600;
-    },
     spaceId() {
       return eXo.env.portal.spaceId;
     },
