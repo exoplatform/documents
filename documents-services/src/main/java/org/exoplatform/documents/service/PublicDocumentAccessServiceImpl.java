@@ -130,7 +130,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   @Override
   public PublicDocumentAccess getPublicDocumentAccess(String documentId) {
     PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
-    if (publicDocumentAccess != null) {
+    if (publicDocumentAccess != null && publicDocumentAccess.getEncodedPassword() != null) {
       publicDocumentAccess.setDecodedPassword(codec.decode(publicDocumentAccess.getEncodedPassword()));
     }
     return publicDocumentAccess;
