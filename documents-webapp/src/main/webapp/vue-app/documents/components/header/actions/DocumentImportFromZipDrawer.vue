@@ -7,79 +7,47 @@
       show-overlay
       right>
       <template slot="title">
-        {{ $t('documents.drawer.upload.zip.title') }}
       </template>
       <template slot="content">
         <div v-if="!importing">
           <template>
-            <v-stepper
-              v-model="stepper"
-              vertical
-              flat
-              class="ma-0 me-4"> 
-              <v-stepper-step
-                :complete="stepper > 1"
-                step="1">
+            <div class="d-flex align-center px-4 py-2">
+              <v-subheader class="text-header-title pl-0 d-flex">
                 {{ $t('documents.label.upload.zip.choice') }}
-                <span v-if=" stepper!==1 && value " class="text-light-color caption">{{ $t('documents.label.zip.choice.sub.title') }}</span>
-              </v-stepper-step>
+              </v-subheader>
+              <v-divider />
+            </div>
+            
+            <documents-zip-upload-input
+              v-if="value.length === 0"
+              :attachments="value" />
 
-              <v-stepper-content step="1">
-                <documents-zip-upload-input
-                  :attachments="value" />
-
-                <documents-zip-uploaded
-                  :attachments="value" />
-
-                <v-card-actions class="px-0">
-                  <v-spacer />
-                  <v-btn
-                    :disabled="continueButtonDisabled"
-                    class="btn btn-primary"
-                    outlined
-                    @click="stepper = 2">
-                    {{ $t('documents.label.button.continue') }}
-                    <v-icon size="18" class="ms-2">
-                      {{ $vuetify.rtl && 'fa-caret-left' || 'fa-caret-right' }}
-                    </v-icon>
-                  </v-btn>
-                </v-card-actions>
-              </v-stepper-content>
-
-              <v-stepper-step
-                :complete="stepper > 2"
-                step="2">
+            <documents-zip-uploaded
+              v-else
+              :attachments="value" />
+                  
+            <div class="d-flex align-center px-4 py-2">
+              <v-subheader class="text-header-title pl-0 d-flex">
                 {{ $t('documents.label.upload.zip.rules') }}
-              </v-stepper-step>
-
-              <v-stepper-content step="2" class="py-0 ps-0">
-                <div class="radio-group-container ps-4">
-                  <v-radio-group
-                    v-model="selected">
-                    <v-radio
-                      :label="$t('documents.label.upload.zip.rules.update')"
-                      value="updateAll" />
-                    <v-radio
-                      :label="$t('documents.label.upload.zip.rules.duplicate')"
-                      value="duplicate" />
-                    <v-radio
-                      :label="$t('documents.label.upload.zip.rules.ignore')"
-                      value="ignore" />
-                  </v-radio-group>
-                </div>
-
-                <v-card-actions class="mt-4 px-0">
-                  <v-btn
-                    class="btn"
-                    @click="stepper = 1">
-                    <v-icon size="18" class="me-2">
-                      {{ $vuetify.rtl && 'fa-caret-right' || 'fa-caret-left' }}
-                    </v-icon>
-                    {{ $t('documents.label.button.back') }}
-                  </v-btn>
-                </v-card-actions>
-              </v-stepper-content>
-            </v-stepper>
+              </v-subheader>
+              <v-divider />
+            </div>
+            <div class="d-flex align-center">
+      <v-subheader class="text-sub-title px-4 mt-n7 d-flex">
+        {{ $t('documents.label.upload.zip.rules.description') }}
+      </v-subheader>
+    </div>
+            <div class="radio-group-container ps-4">
+              <v-radio-group
+                v-model="selected">
+                <v-radio
+                  :label="$t('documents.label.upload.zip.rules.duplicate')"
+                  value="duplicate" />
+                <v-radio
+                  :label="$t('documents.label.upload.zip.rules.ignore')"
+                  value="ignore" />
+              </v-radio-group>
+            </div>
           </template>
         </div>
         <div v-else>
@@ -292,7 +260,7 @@ export default {
       }
     },
     uploadButtonDisabled(){
-      if (this.selected!=='' && this.stepper===2 && this.value && this.value[0] && this.value[0].uploadId && !this.importing)
+      if (this.selected!=='' &&  this.value && this.value[0] && this.value[0].uploadId && !this.importing)
       {
         return false;
       } else {
@@ -315,6 +283,9 @@ export default {
     });
     this.$root.$on('set-total-number', (totalNumber) => {
       this.totalNumber=totalNumber;
+    });
+    this.$root.$on('delete-uploaded-file', () => {
+      this.value = [];
     });
   },
   methods: {
