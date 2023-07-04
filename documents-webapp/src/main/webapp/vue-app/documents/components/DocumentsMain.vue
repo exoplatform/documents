@@ -800,11 +800,20 @@ export default {
         .then(() => {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('document.shortcut.creationSuccess')});
           this.createShortcutStatistics(file,space);
+          const isShortcutToDifferentSpace = space?.id && eXo.env.portal.spaceId !== space.id;
           if (this.selectedView === 'timeline') {
-            const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : destFolder.path.substring(destFolder.path.indexOf('/Private/'));
-            window.location.href = `${window.location.pathname}/${folderPath}?view=folder`;
+            if (isShortcutToDifferentSpace) {
+              this.redirectTodestinationSpace(destFolder,space);
+            } else {
+              const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents') ? destFolder.path.split('/Documents')[1] : destFolder.path.substring(destFolder.path.indexOf('/Private/'));
+              window.location.href = `${window.location.pathname}/${folderPath}?view=folder`;
+            }
           } else {
-            this.openFolder(destFolder);
+            if (isShortcutToDifferentSpace) {
+              this.redirectTodestinationSpace(destFolder,space);
+            } else {
+              this.openFolder(destFolder);
+            }
           }
           this.$root.$emit('shortcut-created');
           this.isAlertActionRunning = false;
@@ -1117,6 +1126,18 @@ export default {
           });
       }
       
+    },
+    redirectTodestinationSpace(destFolder, space) {
+      const folderPath = destFolder.path.split('/Groups/spaces/')[1].replace('/Documents', '/documents');
+      let pathName;
+      const isSpaceLocation = eXo.env.portal.spaceName !== '';
+      //from space to space
+      if (isSpaceLocation) {
+        pathName = window.location.pathname.split(eXo.env.portal.selectedNodeUri)[0].replace(`:spaces:${eXo.env.portal.spaceGroup}`,`:spaces:${space.prettyName}`);
+      }
+      //from personal drive to space
+      pathName = `${eXo.env.portal.context}/g/${space.groupId.replaceAll('/', ':')}/`;
+      window.location.replace(`${pathName}${folderPath}?view=folder`, window.location.pathname);
     }
   },
 };
