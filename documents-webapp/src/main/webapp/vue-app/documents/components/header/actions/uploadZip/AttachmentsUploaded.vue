@@ -1,12 +1,6 @@
 <template>
   <div class="uploadedFiles">
     <div class="uploadedFiles ma-2">
-      <div class="attachments-list d-flex align-center">
-        <v-subheader class="text-sub-title pl-0 d-flex">
-          {{ $t('documents.label.zip.attachments.title') }}
-        </v-subheader>
-        <v-divider />
-      </div>
       <div v-if="attachments.length === 0" class="no-files-attached d-flex flex-column align-center text-sub-title">
         <div class="d-flex pl-6 not-files-icon">
           <i class="uiIconAttach uiIcon64x64"></i>
