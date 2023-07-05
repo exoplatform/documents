@@ -83,6 +83,23 @@ public class DocumentWebSocketService {
         }
     }
 
+    public void sendBroadcastMessage(String wsEventName, ActionData actionData) {
+      broadcastMessage(wsEventName, actionData);
+    }
+
+    /**
+     * Propagate an event from Backend to frontend for all users
+     *
+     * @param wsEventName event name that will allow Browser to distinguish which
+     *          behavior to adopt in order to update UI
+     * @param params an Array of parameters to include in message sent via WebSocket
+     */
+    public void broadcastMessage(String wsEventName, Object... params) {
+      WebSocketMessage messageObject = new WebSocketMessage(wsEventName, params);
+      String message = messageObject.toString();
+      continuationService.sendBroadcastMessage(COMETD_CHANNEL, message);
+    }
+
     /**
      * @return 'cometd' webapp context name
      */

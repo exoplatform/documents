@@ -78,6 +78,7 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
+import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
@@ -133,6 +134,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final String                       ZIP_EXTENSION        = ".zip";
 
   private static final String                       TEMP_DIRECTORY_PATH  = "java.io.tmpdir";
+
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
 
   private static final Log LOG     = ExoLogger.getLogger(JCRDocumentFileStorage.class);
@@ -1869,6 +1871,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     actionData.setUserName(userName);
     actionData.setIdentity(identity);
     actionData.setConflict(conflict);
+    UploadResource uploadResource = uploadService.getUploadResource(importId);
+    actionData.setSize(uploadResource.getEstimatedSize());
+    bulkStorageActionService.checkTotalUplaodsLimit(identity, true);
     SessionProvider sessionProvider = null;
     ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
     sessionProvider = getUserSessionProvider(repositoryService, identity);
@@ -1898,6 +1903,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
 
+  @Override
+  public boolean canImport(Identity identity) {
+    return bulkStorageActionService.checkTotalUplaodsLimit(identity, false);
+  }
 
 
 }

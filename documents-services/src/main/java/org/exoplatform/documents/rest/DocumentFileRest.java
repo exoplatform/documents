@@ -131,6 +131,7 @@ public class DocumentFileRest implements ResourceContainer {
       documentsUserSettings.setCometdToken(cometdToken);
       documentsUserSettings.setCometdContextName(documentWebSocketService.getCometdContextName());
       documentsUserSettings.setView(documentFileService.getDefaultView(ownerId, currentUserIdentity.getId()));
+      documentsUserSettings.setCanImport(documentFileService.canImport(ConversationState.getCurrent().getIdentity()));
       return Response.ok(documentsUserSettings).build();
     } catch (Exception e) {
       LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);

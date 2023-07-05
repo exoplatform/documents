@@ -19,7 +19,6 @@ package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -481,27 +480,29 @@ public class ActionThread implements Runnable {
     }
   }
 
-  public void createNewVersion(Node node, File file) throws RepositoryException, FileNotFoundException {
+  public void createNewVersion(Node node, File file) throws RepositoryException, IOException {
     if (node.isNodeType(MIX_VERSIONABLE)) {
-      Node destContentNode = node.getNode(JCR_CONTENT);
-      destContentNode.setProperty(JCR_DATA, new FileInputStream(file));
-      destContentNode.setProperty(JCR_LAST_MODIFIED, Calendar.getInstance());
-      if (node.isNodeType(EXO_MODIFY)) {
-        node.setProperty(EXO_DATE_MODIFIED, Calendar.getInstance());
-        node.setProperty(EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
-      }
-      node.save();
-      if (!node.isCheckedOut()) {
+      try (FileInputStream fileInputStream = new FileInputStream(file)) {
+        Node destContentNode = node.getNode(JCR_CONTENT);
+        destContentNode.setProperty(JCR_DATA, fileInputStream);
+        destContentNode.setProperty(JCR_LAST_MODIFIED, Calendar.getInstance());
+        if (node.isNodeType(EXO_MODIFY)) {
+          node.setProperty(EXO_DATE_MODIFIED, Calendar.getInstance());
+          node.setProperty(EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
+        }
+        node.save();
+        if (!node.isCheckedOut()) {
+          node.checkout();
+        }
+        node.checkin();
         node.checkout();
+        node.getSession().save();
       }
-      node.checkin();
-      node.checkout();
-      node.getSession().save();
     }
   }
 
   private void createFile(Node folderNode, File file, String name, String title) throws Exception{
-
+    try (FileInputStream fileInputStream = new FileInputStream(file)) {
     Node fileNode = folderNode.addNode(name, NT_FILE);
     if (!fileNode.isNodeType(EXO_RSS_ENABLE) && fileNode.canAddMixin(EXO_RSS_ENABLE)) {
       fileNode.addMixin(EXO_RSS_ENABLE);
@@ -522,12 +523,13 @@ public class ActionThread implements Runnable {
       fileNode.addMixin(MIX_VERSIONABLE);
     }
     Node jcrContent = fileNode.addNode(JCR_CONTENT, NT_RESOURCE);
-    jcrContent.setProperty(JCR_DATA, new FileInputStream(file));
+    jcrContent.setProperty(JCR_DATA, fileInputStream);
     jcrContent.setProperty(JCR_LAST_MODIFIED, java.util.Calendar.getInstance());
     jcrContent.setProperty(JCR_ENCODING, "UTF-8");
     String mimeType = mimeTypes.getMimeType(file.getName());
     jcrContent.setProperty(JCR_MIME_TYPE, mimeType);
     folderNode.save();
+  }
   }
   private void brodcastEvent() {
     try {

@@ -328,6 +328,13 @@ public interface DocumentFileService {
   String getDefaultView(Long ownerId, String userIdentityId);
 
   /**
+   * Check if the current user can import documents from zip
+   *
+   * @param identity Current user Identity
+   */
+  boolean canImport(org.exoplatform.services.security.Identity identity);
+
+  /**
    * Get the total size of a space or user drive
    *
    * @param ownerId Id of the owner Identity

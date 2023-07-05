@@ -17,4 +17,10 @@
 *
 */
 %>
-<%=_ctx.appRes(Notification.documents.document.imported", TOTAL_NUMBER, FOLDER_NAME)%>
+<div>
+    <div class="contentSmall" data-link="<%= FOLDER_URL %>">
+        <div class="status">
+            <%= _ctx.appRes("Notification.documents.document.imported", TOTAL_NUMBER, FOLDER_NAME) %>
+        </div>
+    </div>
+</div>
