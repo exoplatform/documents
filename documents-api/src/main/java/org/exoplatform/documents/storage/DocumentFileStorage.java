@@ -311,4 +311,6 @@ public interface DocumentFileStorage {
                    Identity identity,
                    String ownerId,
                    long authenticatedUserId) throws Exception;
+
+  boolean canImport(Identity identity);
 }
