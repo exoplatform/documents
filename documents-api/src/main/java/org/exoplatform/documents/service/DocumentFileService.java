@@ -328,6 +328,24 @@ public interface DocumentFileService {
   String getDefaultView(Long ownerId, String userIdentityId);
 
   /**
+   * Get the total size of a space or user drive
+   *
+   * @param ownerId Id of the owner Identity
+   * @return the document size object
+   */
+  DocumentsSize getDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
+   * Calculate total size of a space or user drive and store the result in new
+   * analytics entry
+   *
+   * @param ownerId Id of the owner Identity
+   * @param userIdentityId current user identity id
+   * @return the document size object
+   */
+  DocumentsSize addDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
    * Set default View for the current user
    *
    * @param ownerId Id of the owner Identity

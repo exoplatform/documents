@@ -21,7 +21,7 @@ import './initComponents.js';
 import './extensions.js';
 
 import * as documentFileService from './js/DocumentFileService.js';
-import * as documentsUtils from './js/DocumentsUtils.js';
+import * as documentsUtils from '../../js/DocumentsUtils.js';
 import * as documentsWebSocket from './js/WebSocket.js';
 
 if (!Vue.prototype.$documentFileService) {

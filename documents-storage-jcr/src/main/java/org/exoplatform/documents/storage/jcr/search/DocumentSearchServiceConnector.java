@@ -22,8 +22,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import liquibase.repackaged.org.apache.commons.text.CaseUtils;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -39,6 +39,7 @@ import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.container.xml.PropertiesParam;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.DocumentNodeFilter;
+import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Identity;
@@ -135,7 +136,8 @@ public class DocumentSearchServiceConnector {
     if (limit < 0) {
       throw new IllegalArgumentException("Limit must be positive");
     }
-    if (StringUtils.isBlank(filter.getQuery()) && !filter.getFavorites() && StringUtils.isEmpty(filter.getFileTypes())
+    if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isFalse(filter.getFavorites())
+        && StringUtils.isEmpty(filter.getFileTypes())
         && filter.getAfterDate() == null && filter.getBeforDate() == null && filter.getMaxSize() == null
         && filter.getMinSize() == null) {
       throw new IllegalArgumentException("Filter term is mandatory");
@@ -151,9 +153,46 @@ public class DocumentSearchServiceConnector {
         sortField = "_score";
     }
 
-    String esQuery = buildQueryStatement(userIdentity, workspace, path, filter, sortField, sortDirection, offset, limit);
+    String esQuery = buildQueryStatement(userIdentity, workspace, path, filter, sortField, sortDirection, false, offset, limit);
     String jsonResponse = this.client.sendRequest(esQuery, this.index);
     return buildResult(jsonResponse);
+  }
+
+  public long getTotalSize(Identity userIdentity, String workspace, String path) {
+    if (userIdentity == null) {
+      throw new IllegalArgumentException("Viewer identity is mandatory");
+    }
+    String esQuery = buildQueryStatement(userIdentity,
+                                         workspace,
+                                         path,
+                                         new DocumentTimelineFilter(),
+                                         "lastUpdatedDate",
+                                         "ASC",
+                                         true,
+                                         0,
+                                         0);
+    String jsonResponse = this.client.sendRequest(esQuery, this.index);
+    try {
+      JSONParser parser = new JSONParser();
+      Map json;
+      try {
+        json = (Map) parser.parse(jsonResponse);
+      } catch (ParseException e) {
+        throw new ElasticSearchException("Unable to parse JSON response", e);
+      }
+      JSONObject jsonResult = (JSONObject) json.get("aggregations");
+      jsonResult = (JSONObject) jsonResult.get("total_size");
+      return ((Double) jsonResult.get("value")).longValue();
+    } catch (Exception e) {
+      throw new ElasticSearchException("Unable to get documents size", e);
+    }
+  }
+
+  public String getLimit(int limit) {
+    if (limit > 0) {
+      return "\"size\":" + limit + ",";
+    } else
+      return "";
   }
 
   private String buildQueryStatement(Identity userIdentity,
@@ -162,13 +201,14 @@ public class DocumentSearchServiceConnector {
                                      DocumentNodeFilter filter,
                                      String sortField,
                                      String sortDirection,
+                                     boolean getTotalSize,
                                      int offset,
                                      int limit) {
     Map<String, List<String>> metadataFilters =
                                               buildMetadatasFilter(filter,
                                                                    identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME,
                                                                                                        userIdentity.getUserId()));
-    String termQuery = buildTermQueryStatement(filter.getQuery(), filter.isExtendedSearch());
+    String termQuery = buildTermQueryStatement(filter.getQuery(), BooleanUtils.isTrue(filter.isExtendedSearch()));
     String favoriteQuery = buildFavoriteQueryStatement(metadataFilters.get(FavoriteService.METADATA_TYPE.getName()));
     if (StringUtils.isNotEmpty(path) && !path.endsWith("/")) {
       path += "/";
@@ -181,10 +221,11 @@ public class DocumentSearchServiceConnector {
                                 .replace("@date_query@", getDatesQuery(filter))
                                 .replace("@path@", path)
                                 .replace("@workspace@", workspace)
+                                .replace("@size_agg@", getSizeAgg(getTotalSize))
                                 .replace("@sort_field@", sortField)
                                 .replace("@sort_direction@", sortDirection)
                                 .replace("@offset@", String.valueOf(offset))
-                                .replace("@limit@", String.valueOf(limit));
+                                .replace("@limit@", getLimit(limit));
   }
 
   private String getFileTypesQuery(DocumentNodeFilter filter) {
@@ -263,6 +304,13 @@ public class DocumentSearchServiceConnector {
               "    ]\n" +
               "  }\n" +
               "},\n";
+    }
+    return "";
+  }
+
+  private String getSizeAgg(boolean getTotalSize) {
+    if (getTotalSize) {
+      return "\"aggs\": {\n" + "      \"total_size\": { \"sum\": { \"field\": \"fileSize\" } }\n" + "    },";
     }
     return "";
   }
@@ -463,7 +511,7 @@ public class DocumentSearchServiceConnector {
   private Map<String, List<String>> buildMetadatasFilter(DocumentNodeFilter filter,
                                                          org.exoplatform.social.core.identity.model.Identity userIdentity) {
     Map<String, List<String>> metadataFilters = new HashMap<>();
-    if (filter.getFavorites()) {
+    if (BooleanUtils.isTrue(filter.getFavorites())) {
       metadataFilters.put(FavoriteService.METADATA_TYPE.getName(), Collections.singletonList(userIdentity.getId()));
     }
     return metadataFilters;

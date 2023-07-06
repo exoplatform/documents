@@ -18,14 +18,19 @@ package org.exoplatform.documents.service;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.text.SimpleDateFormat;
+import java.time.*;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 
 import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
 
+import org.exoplatform.analytics.api.service.AnalyticsService;
+import org.exoplatform.analytics.model.StatisticData;
+import org.exoplatform.analytics.model.filter.AnalyticsFilter;
+import org.exoplatform.analytics.utils.AnalyticsUtils;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
@@ -69,10 +74,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private SettingService       settingService;
 
+  private AnalyticsService     analyticsService;
+
   private static final Scope   DOCUMENTS_USER_SETTING_SCOPE = Scope.APPLICATION.id("Documents");
 
   private static final String  DOCUMENTS_USER_SETTING_KEY   = "DocumentsSettings";
 
+  String                       dateFormat                   = "MM-dd-yyyy";
+
+  SimpleDateFormat             simpleDateFormat             = new SimpleDateFormat(dateFormat);
 
   public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage,
                                  JCRDeleteFileStorage jcrDeleteFileStorage,
@@ -81,7 +91,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                  IdentityManager identityManager,
                                  IdentityRegistry identityRegistry,
                                  ListenerService listenerService,
-                                 SettingService settingService) {
+                                 SettingService settingService,
+                                 AnalyticsService analyticsService) {
     this.documentFileStorage = documentFileStorage;
     this.jcrDeleteFileStorage = jcrDeleteFileStorage;
     this.spaceService = spaceService;
@@ -90,6 +101,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     this.authenticator = authenticator;
     this.listenerService = listenerService;
     this.settingService = settingService;
+    this.analyticsService = analyticsService;
   }
 
   @Override
@@ -463,7 +475,98 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     } else {
       return settingValue.getValue().toString();
     }
+  }
 
+  @Override
+  public DocumentsSize getDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException,
+                                                                               ObjectNotFoundException {
+    Identity currentUserIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
+    Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    if (ownerIdentity == null) {
+      throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+    }
+    if (ownerIdentity.isUser() && ownerId != userIdentityId) {
+      throw new IllegalAccessException("Current user with identity id : " + userIdentityId
+          + " attempts to get the size of private documents of user  with identity id  " + ownerId);
+    }
+    if (ownerIdentity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      if (!spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())) {
+        throw new IllegalAccessException("Current user with identity id : " + userIdentityId
+            + " attempts to get size of documents of space with identity id " + ownerId + " while it's not a member");
+      }
+    }
+    DocumentsSize documentsSize = new DocumentsSize();
+    LocalDate toLocalDate = LocalDate.now();
+    LocalDate fromLocalDate = toLocalDate.minusDays(30);
+    LocalDateTime from = fromLocalDate.atTime(LocalTime.MIN);
+    LocalDateTime to = toLocalDate.atTime(LocalTime.MAX);
+    AnalyticsFilter filter = new AnalyticsFilter();
+    filter.addEqualFilter("ownerId", String.valueOf(ownerId));
+    filter.addEqualFilter("operation", "documentsSize");
+    ZonedDateTime zdtStart = ZonedDateTime.of(from, ZoneId.systemDefault());
+    ZonedDateTime zdtEnd = ZonedDateTime.of(to, ZoneId.systemDefault());
+    filter.addRangeFilter("timestamp",
+                          String.valueOf(zdtStart.toInstant().toEpochMilli()),
+                          String.valueOf(zdtEnd.toInstant().toEpochMilli()));
+    List<StatisticData> stats = analyticsService.retrieveData(filter);
+    if (!stats.isEmpty()) {
+      StatisticData toStat = stats.get(0);
+      stats.stream().sorted(Comparator.comparing(StatisticData::getTimestamp)).toList();
+      documentsSize.setOwnerId(ownerId);
+      documentsSize.setToSize(Long.parseLong(toStat.getParameters().get("size")));
+      documentsSize.setToSizeDate(toStat.getTimestamp());
+      documentsSize.setTodaySize(simpleDateFormat.format(new Date())
+                                                 .equals(simpleDateFormat.format(new Date(toStat.getTimestamp()))));
+      if (stats.size() > 1) {
+        StatisticData fromStat = stats.get(stats.size() - 1);
+        documentsSize.setFromSize(Long.parseLong(fromStat.getParameters().get("size")));
+        documentsSize.setFromSizeDate(fromStat.getTimestamp());
+        LocalDateTime date = LocalDateTime.ofInstant(Instant.ofEpochMilli(fromStat.getTimestamp()), ZoneId.systemDefault());
+        long diff = ChronoUnit.DAYS.between(date, to);
+        documentsSize.setDiffDays(diff);
+      }
+    }
+    return documentsSize;
+  }
+
+  @Override
+  public DocumentsSize addDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException,
+                                                                               ObjectNotFoundException {
+    Identity currentUserIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
+    Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    StatisticData statisticData = new StatisticData();
+    if (ownerIdentity == null) {
+      throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+    }
+    if (ownerIdentity.isUser()) {
+      if (ownerId != userIdentityId) {
+        throw new IllegalAccessException("Current user with identity id : " + userIdentityId
+            + " attempts to calculate the size of private documents of user  with identity id  " + ownerId);
+      }
+      statisticData.setUserId(userIdentityId);
+    }
+    if (ownerIdentity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      statisticData.addParameter("spaceId", space.getId());
+      if (!spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())) {
+        throw new IllegalAccessException("Current user with identity id : " + userIdentityId
+            + " attempts to calculate size of documents of space with identity id " + ownerId + " while it's not a member");
+      }
+    }
+    org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
+    long size = documentFileStorage.calculateFilesSize(ownerId, aclIdentity);
+    statisticData.setModule("Drive");
+    statisticData.setSubModule("Documents");
+    statisticData.setOperation("documentsSize");
+    statisticData.setTimestamp(new Date().getTime());
+    statisticData.addParameter("ownerId", ownerId);
+    statisticData.addParameter("size", size);
+    AnalyticsUtils.addStatisticData(statisticData);
+    DocumentsSize documentsSize = getDocumentsSizeStat(ownerId, userIdentityId);
+    documentsSize.setTodaySize(true);
+    documentsSize.setToSize(size);
+    return documentsSize;
   }
 
   /**

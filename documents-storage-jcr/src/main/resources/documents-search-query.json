@@ -1,6 +1,6 @@
 {
   "from": @offset@,
-  "size": @limit@,
+  @limit@
   "track_scores": true,
   "sort": [
     {
@@ -81,6 +81,7 @@
       ]
     }
   },
+  @size_agg@
   "highlight": {
     "pre_tags": [
       "<span class='searchMatchExcerpt'>"

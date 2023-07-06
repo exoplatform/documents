@@ -31,6 +31,7 @@ import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 
+import org.exoplatform.analytics.api.service.AnalyticsService;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.FileListingType;
@@ -80,6 +81,8 @@ public class DocumentFileServiceTest {
 
   private CachedActivityStorage   cachedActivityStorage;
 
+  private AnalyticsService        analyticsService;
+
   private Identity                currentIdentity;
 
   String                          userName       = "testuser";
@@ -98,6 +101,7 @@ public class DocumentFileServiceTest {
     settingService = mock(SettingService.class);
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     cachedActivityStorage = mock(CachedActivityStorage.class);
+    analyticsService = mock(AnalyticsService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
@@ -105,7 +109,8 @@ public class DocumentFileServiceTest {
                                                       identityManager,
                                                       identityRegistry,
                                                       listenerService,
-                                                      settingService);
+                                                      settingService,
+                                                      analyticsService);
 
     currentIdentity = new Identity(OrganizationIdentityProvider.NAME, userName);
     currentIdentity.setId(String.valueOf(currentOwnerId));
@@ -620,4 +625,85 @@ public class DocumentFileServiceTest {
     documentFileService.moveDocuments(1, 1L, documents, "destPath", 1L);
     verify(documentFileStorage, times(1)).moveDocuments(1, 1L, documents, "destPath", identity, 1L);
   }
+
+  @Test
+  public void getDocumentsSizeStats() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
+      documentFileService.getDocumentsSizeStat(1, 1);
+    });
+    assertEquals("Owner Identity with id : 1 isn't found", exception.getMessage());
+    Identity ownerIdentity = mock(Identity.class);
+    Identity currentUserIdentity = mock(Identity.class);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    when(identityManager.getIdentity("2")).thenReturn(currentUserIdentity);
+    when(ownerIdentity.getRemoteId()).thenReturn("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    when(ownerIdentity.isUser()).thenReturn(true);
+    when(ownerIdentity.isSpace()).thenReturn(false);
+    exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.getDocumentsSizeStat(1, 2);
+    });
+    assertEquals("Current user with identity id : 2 attempts to get the size of private documents of user  with identity id  1",
+                 exception.getMessage());
+    when(ownerIdentity.isUser()).thenReturn(false);
+    when(ownerIdentity.isSpace()).thenReturn(true);
+    when(identity.getUserId()).thenReturn("user");
+    when(currentUserIdentity.getRemoteId()).thenReturn("user");
+    when(ownerIdentity.getRemoteId()).thenReturn("test1");
+    Space space = new Space();
+    space.setPrettyName("test1");
+    space.setDisplayName("test1");
+    when(spaceService.getSpaceByPrettyName("test1")).thenReturn(space);
+    when(spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())).thenReturn(false);
+    exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.getDocumentsSizeStat(1, 2);
+    });
+    assertEquals("Current user with identity id : 2 attempts to get size of documents of space with identity id 1 while it's not a member",
+                 exception.getMessage());
+    when(spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())).thenReturn(true);
+    documentFileService.getDocumentsSizeStat(1, 2);
+    verify(analyticsService, times(1)).retrieveData(any());
+  }
+
+  @Test
+  public void addDocumentsSizeStat() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Exception exception = assertThrows(ObjectNotFoundException.class, () -> {
+      documentFileService.addDocumentsSizeStat(1, 1);
+    });
+    assertEquals("Owner Identity with id : 1 isn't found", exception.getMessage());
+    Identity ownerIdentity = mock(Identity.class);
+    Identity currentUserIdentity = mock(Identity.class);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    when(identityManager.getIdentity("2")).thenReturn(currentUserIdentity);
+    when(ownerIdentity.getRemoteId()).thenReturn("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    when(ownerIdentity.isUser()).thenReturn(true);
+    when(ownerIdentity.isSpace()).thenReturn(false);
+    exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.addDocumentsSizeStat(1, 2);
+    });
+    assertEquals("Current user with identity id : 2 attempts to calculate the size of private documents of user  with identity id  1",
+                 exception.getMessage());
+    when(ownerIdentity.isUser()).thenReturn(false);
+    when(ownerIdentity.isSpace()).thenReturn(true);
+    when(identity.getUserId()).thenReturn("user");
+    when(currentUserIdentity.getRemoteId()).thenReturn("user");
+    when(ownerIdentity.getRemoteId()).thenReturn("test1");
+    Space space = new Space();
+    space.setPrettyName("test1");
+    space.setDisplayName("test1");
+    when(spaceService.getSpaceByPrettyName("test1")).thenReturn(space);
+    when(spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())).thenReturn(false);
+    exception = assertThrows(IllegalAccessException.class, () -> {
+      documentFileService.addDocumentsSizeStat(1, 2);
+    });
+    assertEquals("Current user with identity id : 2 attempts to calculate size of documents of space with identity id 1 while it's not a member",
+                 exception.getMessage());
+    when(spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())).thenReturn(true);
+    documentFileService.addDocumentsSizeStat(1, 2);
+    verify(documentFileStorage, times(1)).calculateFilesSize(1L, identity);
+  }
+
 }

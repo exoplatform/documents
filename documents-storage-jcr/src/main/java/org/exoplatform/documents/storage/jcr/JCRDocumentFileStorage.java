@@ -207,6 +207,32 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public long calculateFilesSize(Long ownerId, Identity aclIdentity) throws ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    if (ownerIdentity == null) {
+      throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+    }
+    SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+    try {
+      Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+      if (identityRootNode == null) {
+        return 0;
+      }
+      Session session = identityRootNode.getSession();
+      String rootPath = identityRootNode.getPath();
+      String workspace = session.getWorkspace().getName();
+      return documentSearchServiceConnector.getTotalSize(aclIdentity, workspace, rootPath);
+    } catch (Exception e) {
+      throw new IllegalStateException("Error when getting the documents size for identity " + ownerId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
   public DocumentGroupsSize getGroupDocumentsCount(DocumentTimelineFilter filter,
                                                    Identity aclIdentity) throws ObjectNotFoundException {
     String username = aclIdentity.getUserId();
