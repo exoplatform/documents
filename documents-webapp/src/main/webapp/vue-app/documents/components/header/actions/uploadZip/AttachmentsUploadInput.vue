@@ -1,10 +1,5 @@
 <template>
   <div class="uploadFiles">
-    <div class="d-flex align-center">
-      <v-subheader class="text-sub-title px-4 mt-n7 d-flex">
-        {{ $t('documents.label.zip.attachments.upload.description') }}
-      </v-subheader>
-    </div>
     <div class="contentUpload d-flex flex-column">
       <div
         id="DropFileBox"
