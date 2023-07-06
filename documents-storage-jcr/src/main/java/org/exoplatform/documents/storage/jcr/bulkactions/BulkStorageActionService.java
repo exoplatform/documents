@@ -27,8 +27,8 @@ import java.util.concurrent.Executors;
 import javax.jcr.Node;
 import javax.jcr.Session;
 
-import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
-import org.exoplatform.upload.UploadService;
+import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.documents.model.ActionType;
 import org.picocontainer.Startable;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -38,9 +38,12 @@ import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.security.Identity;
+import org.exoplatform.upload.UploadService;
 
 public class BulkStorageActionService implements Startable {
 
@@ -55,6 +58,8 @@ public class BulkStorageActionService implements Startable {
   public static final String           TEMP_DOWNLOAD_FOLDER_PREFIX  = "temp_download";
 
   public static final String           TEMP_IMPORT_FOLDER_PREFIX  = "temp_import";
+
+  private long                          DEFAULT_ZIP_UPLOAD_LIMIT    = 3000;
 
   private static final List<ActionData> actionList = new ArrayList<>();
 
@@ -118,6 +123,41 @@ public class BulkStorageActionService implements Startable {
 
   public void removeActionData(ActionData actionData) {
     actionList.remove(actionData);
+    checkTotalUplaodsLimit(actionData.getIdentity(), true);
+  }
+
+  public boolean checkTotalUplaodsLimit(Identity identity, boolean broadcast) {
+    boolean canImport = true;
+    ActionData actionData = new ActionData();
+    actionData.setIdentity(identity);
+    actionData.setActionType(ActionType.IMPORT_ZIP.name());
+    if (actionList.isEmpty()) {
+      actionData.setStatus(ActionStatus.IMPORT_LIMIT_NOT_EXCEEDED.name());
+    } else {
+      long totalUploadsLimit;
+      try {
+        totalUploadsLimit = Long.parseLong(System.getProperty("exo.import.zip.uploads.limit",
+                                                              String.valueOf(DEFAULT_ZIP_UPLOAD_LIMIT)));
+      } catch (Exception e) {
+        totalUploadsLimit = DEFAULT_ZIP_UPLOAD_LIMIT;
+      }
+      double total = actionList.stream().mapToDouble(ActionData::getSize).sum();
+      if (total > totalUploadsLimit * 1024 * 1024) {
+        actionData.setStatus(ActionStatus.IMPORT_LIMIT_EXCEEDED.name());
+        canImport = false;
+      } else {
+        actionData.setStatus(ActionStatus.IMPORT_LIMIT_NOT_EXCEEDED.name());
+      }
+    }
+    if (broadcast) {
+      try {
+        ListenerService listenerService = CommonsUtils.getService(ListenerService.class);
+        listenerService.broadcast("bulk_actions_document_event", actionData.getIdentity(), actionData);
+      } catch (Exception e) {
+        LOG.error("cannot broadcast bulk action event");
+      }
+    }
+    return canImport;
   }
 
 }

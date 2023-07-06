@@ -477,6 +477,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
   }
 
+  public boolean canImport(org.exoplatform.services.security.Identity identity) {
+    return documentFileStorage.canImport(identity);
+  }
+
   @Override
   public DocumentsSize getDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException,
                                                                                ObjectNotFoundException {
