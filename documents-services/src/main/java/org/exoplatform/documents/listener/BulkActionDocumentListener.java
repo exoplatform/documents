@@ -41,10 +41,16 @@ public class BulkActionDocumentListener extends Listener<Identity, ActionData> {
   public void onEvent(Event<Identity, ActionData> event) throws Exception {
     ActionData actionData = event.getData();
     Identity identity = event.getSource();
+    if (!actionData.getStatus().equals(ActionStatus.IMPORT_LIMIT_EXCEEDED.name())
+        && !actionData.getStatus().equals(ActionStatus.IMPORT_LIMIT_NOT_EXCEEDED.name())) {
     documentWebSocketService.sendMessage(actionData.getActionType(), actionData, identity);
+  } else {
+    documentWebSocketService.sendBroadcastMessage(actionData.getActionType(), actionData);
+  }
     if (actionData.getActionType().equals(ActionType.IMPORT_ZIP.name()) && actionData.getStatus().equals(ActionStatus.DONE_SUCCESSFULLY.name())) {
       sendNotification(actionData, identity);
     }
+
   }
 
   private void sendNotification(ActionData importData, Identity identity) {

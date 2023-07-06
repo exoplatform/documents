@@ -62,6 +62,8 @@ public class ActionData {
 
   private long         duration;
 
+  private double       size;
+
   private List<String> createdFiles       = new ArrayList<>();
 
   private List<String> ignoredFiles       = new ArrayList<>();
