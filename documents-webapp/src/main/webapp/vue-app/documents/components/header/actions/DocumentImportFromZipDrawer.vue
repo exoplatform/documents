@@ -7,6 +7,7 @@
       show-overlay
       right>
       <template slot="title">
+        {{ $t('documents.drawer.upload.zip.title') }}
       </template>
       <template slot="content">
         <div v-if="!importing">
@@ -15,9 +16,12 @@
               <v-subheader class="text-header-title pl-0 d-flex">
                 {{ $t('documents.label.upload.zip.choice') }}
               </v-subheader>
-              <v-divider />
             </div>
-            
+            <div class="d-flex align-center">
+              <v-subheader class="caption font-italic font-weight-light px-4 mt-n9 d-flex">
+                {{ $t('documents.label.zip.attachments.upload.description') }}
+              </v-subheader>
+            </div>
             <documents-zip-upload-input
               v-if="value.length === 0"
               :attachments="value" />
@@ -30,10 +34,9 @@
               <v-subheader class="text-header-title pl-0 d-flex">
                 {{ $t('documents.label.upload.zip.rules') }}
               </v-subheader>
-              <v-divider />
             </div>
             <div class="d-flex align-center">
-              <v-subheader class="text-sub-title px-4 mt-n7 d-flex">
+              <v-subheader class="caption font-italic font-weight-light px-4 mt-n9 d-flex">
                 {{ $t('documents.label.upload.zip.rules.description') }}
               </v-subheader>
             </div>
@@ -252,15 +255,8 @@ export default {
     };
   },
   computed: {
-    continueButtonDisabled(){
-      if (this.value && this.value[0] && this.value[0].uploadId){
-        return false;
-      } else {
-        return true;
-      }
-    },
     uploadButtonDisabled(){
-      if (this.selected!=='' &&  this.value && this.value[0] && this.value[0].uploadId && !this.importing)
+      if (this.selected!==''  &&  this.value && this.value[0] && this.value[0].uploadId && this.value[0].uploadProgress === 100 && !this.importing)
       {
         return false;
       } else {
