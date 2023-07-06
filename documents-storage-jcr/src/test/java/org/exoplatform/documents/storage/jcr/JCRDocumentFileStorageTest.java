@@ -61,6 +61,7 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
+import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
@@ -1291,6 +1292,7 @@ public class JCRDocumentFileStorageTest {
   public void importDocuments() throws Exception {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     Identity ownerIdentity = mock(Identity.class);
+    UploadResource uploadResource = mock(UploadResource.class);
     when(identityRegistry.getIdentity("user")).thenReturn(identity);
     ManageableRepository manageableRepository = mock(ManageableRepository.class);
     RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
@@ -1315,6 +1317,9 @@ public class JCRDocumentFileStorageTest {
     when(parentNodeImp.getName()).thenReturn("documents");
     when(parentNodeImp.getPath()).thenReturn("/documents/path");
     when(parentNodeImp.getNode(any())).thenReturn(parentNodeImp);
+    when(uploadService.getUploadResource(any())).thenReturn(uploadResource);
+    when(uploadResource.getEstimatedSize()).thenReturn(123456D);
+    actionData.setSize(123456D);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
                                                                        nodeHierarchyCreator,
                                                                        null,

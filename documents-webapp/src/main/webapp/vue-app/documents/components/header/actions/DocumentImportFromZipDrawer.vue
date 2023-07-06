@@ -33,10 +33,10 @@
               <v-divider />
             </div>
             <div class="d-flex align-center">
-      <v-subheader class="text-sub-title px-4 mt-n7 d-flex">
-        {{ $t('documents.label.upload.zip.rules.description') }}
-      </v-subheader>
-    </div>
+              <v-subheader class="text-sub-title px-4 mt-n7 d-flex">
+                {{ $t('documents.label.upload.zip.rules.description') }}
+              </v-subheader>
+            </div>
             <div class="radio-group-container ps-4">
               <v-radio-group
                 v-model="selected">
