@@ -455,6 +455,7 @@ export default {
               this.selectedView = 'timeline';
             }
             this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
+            this.$root.$emit('enable-import', settings.canImport);
           }
         })
         .finally(() => {
@@ -554,6 +555,12 @@ export default {
         }
       } else if (actionName === 'import_zip'){
         this.$root.$emit('set-import-status', actionData);
+        if (actionStatus==='import_limit_exceeded'){
+          this.$root.$emit('enable-import', false);
+        } 
+        if (actionStatus==='import_limit_not_exceeded'){
+          this.$root.$emit('enable-import', true);
+        }
       } else {
         const treatedItems = this.selectedDocuments.filter(file => actionData.treatedItemsIds.includes(file.id));
         this.resetSelections();
