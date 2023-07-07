@@ -84,7 +84,7 @@
             <v-col cols="11" v-if="status==='creating_documents'">
               {{ importData.importedFilesCount }}/{{ totalNumber }}: {{ importData.documentInProgress }}
             </v-col>
-            <v-col cols="12" v-if="status==='done_successfully' || status==='failed'">
+            <v-col cols="12" v-if="status==='done_successfully' ||status==='done_with_errors' || status==='failed'">
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
@@ -299,7 +299,7 @@ export default {
       this.$refs.documentsUploadZipDrawer.open();
     },
     close() {
-      if (this.uploading || this.status==='done_successfully' || this.status==='failed' || this.status==='cannot_unzip_file'){
+      if (this.uploading || this.status==='done_successfully' || this.status==='done_with_errors' || this.status==='failed' || this.status==='cannot_unzip_file'){
         this.value = [];
         this.selected = 'ignore';
         this.stepper = 1;
@@ -381,7 +381,11 @@ export default {
           this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.import.cannotUnzipFile')});
         }
         if (this.status==='failed'){
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.import.doneWithErrors')});
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.import.message.failed')});
+        }
+        if (this.status==='done_with_errors'){
+          this.$root.$emit('documents-refresh-files');
+          this.$root.$emit('show-alert', {type: 'warning', message: this.$t('documents.import.message.doneWithErrors')});
         }
         if (this.status==='done_successfully'){
           this.$root.$emit('documents-refresh-files');

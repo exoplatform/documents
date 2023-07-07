@@ -449,6 +449,8 @@ public class ActionThread implements Runnable {
     session.save();
     if (actionData.getFailedFiles().size() == actionData.getImportedFilesCount()) {
       actionData.setStatus(ActionStatus.FAILED.name());
+    } else if (actionData.getFailedFiles().size() > 0) {
+      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
     } else {
       actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
     }
