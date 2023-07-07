@@ -114,14 +114,6 @@
                                                                 </ul>
                                                             </p>
 															<% } %>
-															<% if (FILES_UPDATED != "") { %>
-															  <p style="margin: 0 0 10px; color: #333333; font-size: 13px; line-height: 18px;">
-                                                                <strong><%=_ctx.appRes("Notification.import.mail.title.updated")%></strong>:<br>
-                                                                <ul>
-                                                                $FILES_UPDATED
-                                                                </ul>
-                                                            </p>
-															<% } %>
 															<% if (FILES_IGNORED != "") { %>
 															  <p style="margin: 0 0 10px; color: #333333; font-size: 13px; line-height: 18px;">
                                                                 <strong><%=_ctx.appRes("Notification.import.mail.title.ignored")%></strong>:<br>
