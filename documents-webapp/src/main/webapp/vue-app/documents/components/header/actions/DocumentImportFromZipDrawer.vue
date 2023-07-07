@@ -3,6 +3,8 @@
     <exo-drawer
       ref="documentsUploadZipDrawer"
       class="documentsUploadZipDrawer"
+      :confirm-close="uploading"
+      :confirm-close-labels="confirmCloseLabels"
       @closed="close"
       show-overlay
       right>
@@ -212,7 +214,7 @@
           <v-spacer />
           <v-btn
             class="btn me-2"
-            @click="close">
+            @click="cancel">
             <template>
               {{ $t('documents.label.button.close') }}
             </template>
@@ -263,9 +265,25 @@ export default {
         return true;
       }
     },
+    uploading(){
+      if (this.value && this.value[0] && this.value[0].uploadId && !this.importing )
+      {
+        return true;
+      } else {
+        return false;
+      }
+    },
     enableOptionList() {
       return this.showImportOptionsList;
-    }
+    },
+    confirmCloseLabels() {
+      return {
+        title: this.$t('documents.import.confirmCancel.title'),
+        message: this.$t('documents.import.confirmCancel.message'),
+        ok: this.$t('documents.button.yes'),
+        cancel: this.$t('documents.button.no'),
+      };
+    },
   },
   created() {
     this.$root.$on('open-upload-zip-drawer', () => {
@@ -290,7 +308,7 @@ export default {
       this.$refs.documentsUploadZipDrawer.open();
     },
     close() {
-      if (this.status==='done_successfully' || this.status==='failed' || this.status==='cannot_unzip_file'){
+      if (this.uploading || this.status==='done_successfully' || this.status==='failed' || this.status==='cannot_unzip_file'){
         this.value = [];
         this.selected = 'ignore';
         this.stepper = 1;
@@ -307,6 +325,10 @@ export default {
         this.showFailedFiles= false; 
         this.$root.$emit('set-action-loading', false,'import');
       }
+      this.$refs.documentsUploadZipDrawer.close();
+    },
+
+    cancel() {
       this.$refs.documentsUploadZipDrawer.close();
     },
 

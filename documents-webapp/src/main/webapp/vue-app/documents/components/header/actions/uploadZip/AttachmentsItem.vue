@@ -34,9 +34,10 @@
           height="24"
           width="24"
           @click="removeAttachedFile(attachment)">
-          <v-icon
-            small
-            class="fas fa-trash fa-xs colorIcon error--text" />
+          <v-icon v-if="attachment.uploadProgress < 100" size="12"
+            class="mdi mdi-close colorIcon error--text" />
+          <v-icon v-else  size="12"
+            class="fas fa-trash colorIcon error--text" />
         </v-btn>
       </div>
     </v-list-item-action>
