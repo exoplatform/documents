@@ -220,7 +220,7 @@ public class ActionThread implements Runnable {
                                       .toList();
 
     try {
-      String tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
+      tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
 
     boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
     brodcastEvent();
