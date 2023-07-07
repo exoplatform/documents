@@ -16,6 +16,10 @@
  */
 package org.exoplatform.documents.notification.provider;
 
+import java.io.Writer;
+import java.util.Calendar;
+import java.util.Locale;
+
 import org.exoplatform.commons.api.notification.NotificationContext;
 import org.exoplatform.commons.api.notification.NotificationMessageUtils;
 import org.exoplatform.commons.api.notification.annotation.TemplateConfig;
@@ -39,10 +43,6 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.notification.LinkProviderUtils;
 import org.exoplatform.webui.utils.TimeConvertUtils;
-
-import java.io.Writer;
-import java.util.Calendar;
-import java.util.Locale;
 
 @TemplateConfigs(templates = {
     @TemplateConfig(pluginId = AddDocumentCollaboratorPlugin.ID, template = "war:/notification/templates/mail/AddDocumentCollaboratorPlugin.gtmpl"),
@@ -73,6 +73,7 @@ public class MailTemplateProvider extends TemplateProvider {
       String folderName = notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_NAME.getKey());
       String totalNumber = notificationInfo.getValueOwnerParameter(NotificationConstants.TOTAL_NUMBER.getKey());
       String duration = notificationInfo.getValueOwnerParameter(NotificationConstants.DURATION.getKey());
+      String status = notificationInfo.getValueOwnerParameter(NotificationConstants.STATUS.getKey());
       String filesCreated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_CREATED.getKey());
       String filesDuplicated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_DUPLICATED.getKey());
       String filesUpdated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_UPDATED.getKey());
@@ -86,6 +87,7 @@ public class MailTemplateProvider extends TemplateProvider {
       templateContext.put("TOTAL_NUMBER", totalNumber);
       templateContext.put("FOLDER_NAME", folderName);
       templateContext.put("DURATION", duration);
+      templateContext.put("STATUS", status);
       templateContext.put("FILES_CREATED", filesCreated);
       templateContext.put("FILES_DUPLICATED", filesDuplicated);
       templateContext.put("FILES_UPDATED", filesUpdated);

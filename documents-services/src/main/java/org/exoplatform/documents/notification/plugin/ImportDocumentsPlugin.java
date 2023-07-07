@@ -64,6 +64,7 @@ public class ImportDocumentsPlugin extends BaseNotificationPlugin {
     String documentUrl = notificationContext.value(NotificationConstants.FOLDER_URL);
     String folderName = notificationContext.value(NotificationConstants.FOLDER_NAME);
     String duration = notificationContext.value(NotificationConstants.DURATION);
+    String status = notificationContext.value(NotificationConstants.STATUS);
     String total = notificationContext.value(NotificationConstants.TOTAL_NUMBER);
     String filesCreated = notificationContext.value(NotificationConstants.FILES_CREATED);
     String filesDuplicated = notificationContext.value(NotificationConstants.FILES_DUPLICATED);
@@ -77,6 +78,7 @@ public class ImportDocumentsPlugin extends BaseNotificationPlugin {
                            .with(NotificationConstants.FOLDER_URL.getKey(), documentUrl)
                            .with(NotificationConstants.FOLDER_NAME.getKey(), folderName)
                            .with(NotificationConstants.DURATION.getKey(), duration)
+                           .with(NotificationConstants.STATUS.getKey(), status)
                            .with(NotificationConstants.TOTAL_NUMBER.getKey(), total)
                            .with(NotificationConstants.FILES_CREATED.getKey(), filesCreated)
                            .with(NotificationConstants.FILES_DUPLICATED.getKey(), filesDuplicated)
