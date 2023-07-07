@@ -19,8 +19,18 @@
 %>
 <div>
     <div class="contentSmall" data-link="<%= FOLDER_URL %>">
-        <div class="status">
-            <%= _ctx.appRes("Notification.documents.document.imported", TOTAL_NUMBER, FOLDER_NAME) %>
-        </div>
+        <%=
+            String msg = "";
+            if(STATS.equals("DONE_SUCCESSFULLY")){
+              msg = _ctx.appRes("Notification.documents.document.imported.susssfully", TOTAL_NUMBER, FOLDER_NAME);
+            }
+            if(STATS.equals("DONE_WITH_ERRORS")){
+              msg = _ctx.appRes("Notification.documents.document.imported.withErrors");
+            }
+            if(STATS.equals("FAILED")){
+              msg = _ctx.appRes("Notification.documents.document.import.failed");
+            }
+        %>
+        <div class="status"><%=msg%></div>
     </div>
 </div>
