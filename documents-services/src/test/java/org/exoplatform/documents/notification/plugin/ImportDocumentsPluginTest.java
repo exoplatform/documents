@@ -72,6 +72,7 @@ public class ImportDocumentsPluginTest {
     ctx.append(NotificationConstants.FOLDER_NAME, "folder name");
     ctx.append(NotificationConstants.DURATION, "1211");
     ctx.append(NotificationConstants.TOTAL_NUMBER, "10");
+    ctx.append(NotificationConstants.STATUS, "DONE_SUCCESSFULLY");
     ctx.append(NotificationConstants.FILES_CREATED, "7");
     ctx.append(NotificationConstants.FILES_DUPLICATED, "1");
     ctx.append(NotificationConstants.FILES_UPDATED, "1");
@@ -96,6 +97,8 @@ public class ImportDocumentsPluginTest {
     assertEquals("folder name", notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_NAME.getKey()));
     assertEquals("1211", notificationInfo.getValueOwnerParameter(NotificationConstants.DURATION.getKey()));
     assertEquals("10", notificationInfo.getValueOwnerParameter(NotificationConstants.TOTAL_NUMBER.getKey()));
+    assertEquals("10", notificationInfo.getValueOwnerParameter(NotificationConstants.TOTAL_NUMBER.getKey()));
+    assertEquals("DONE_SUCCESSFULLY", notificationInfo.getValueOwnerParameter(NotificationConstants.STATUS.getKey()));
     assertEquals("7", notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_CREATED.getKey()));
     assertEquals("1", notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_DUPLICATED.getKey()));
     assertEquals("1", notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_UPDATED.getKey()));
