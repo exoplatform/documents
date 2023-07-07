@@ -47,7 +47,10 @@ public class BulkActionDocumentListener extends Listener<Identity, ActionData> {
   } else {
     documentWebSocketService.sendBroadcastMessage(actionData.getActionType(), actionData);
   }
-    if (actionData.getActionType().equals(ActionType.IMPORT_ZIP.name()) && actionData.getStatus().equals(ActionStatus.DONE_SUCCESSFULLY.name())) {
+  if (actionData.getActionType().equals(ActionType.IMPORT_ZIP.name())
+      && (actionData.getStatus().equals(ActionStatus.DONE_SUCCESSFULLY.name())
+          || actionData.getStatus().equals(ActionStatus.FAILED.name())
+          || actionData.getStatus().equals(ActionStatus.DONE_WITH_ERRORS.name()))) {
       sendNotification(actionData, identity);
     }
 
@@ -65,6 +68,7 @@ public class BulkActionDocumentListener extends Listener<Identity, ActionData> {
     ctx.append(NotificationConstants.FOLDER_NAME, importData.getParentFolderName());
     ctx.append(NotificationConstants.TOTAL_NUMBER, String.valueOf(importData.getImportedFilesCount()));
     ctx.append(NotificationConstants.DURATION, String.valueOf((int) (importData.getDuration() / 1000)));
+    ctx.append(NotificationConstants.STATUS, importData.getStatus());
     if (!importData.getCreatedFiles().isEmpty()) {
       filesCreated = "<li>" + String.join("</li><li>", importData.getCreatedFiles()) + "</li>";
     }

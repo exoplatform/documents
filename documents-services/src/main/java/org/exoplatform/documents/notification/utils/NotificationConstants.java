@@ -36,6 +36,8 @@ public class NotificationConstants {
 
   public static final ArgumentLiteral<String> DURATION         = new ArgumentLiteral<>(String.class, "DURATION");
 
+  public static final ArgumentLiteral<String> STATUS           = new ArgumentLiteral<>(String.class, "STATUS");
+
   public static final ArgumentLiteral<String> FILES_CREATED    = new ArgumentLiteral<>(String.class, "FILES_CREATED");
 
   public static final ArgumentLiteral<String> FILES_DUPLICATED = new ArgumentLiteral<>(String.class, "FILES_DUPLICATED");
