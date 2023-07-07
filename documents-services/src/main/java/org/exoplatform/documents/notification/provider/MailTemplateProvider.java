@@ -72,6 +72,7 @@ public class MailTemplateProvider extends TemplateProvider {
       String folderName = notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_NAME.getKey());
       String totalNumber = notificationInfo.getValueOwnerParameter(NotificationConstants.TOTAL_NUMBER.getKey());
       String duration = notificationInfo.getValueOwnerParameter(NotificationConstants.DURATION.getKey());
+      String status = notificationInfo.getValueOwnerParameter(NotificationConstants.STATUS.getKey());
       String filesCreated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_CREATED.getKey());
       String filesDuplicated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_DUPLICATED.getKey());
       String filesUpdated = notificationInfo.getValueOwnerParameter(NotificationConstants.FILES_UPDATED.getKey());
@@ -85,6 +86,7 @@ public class MailTemplateProvider extends TemplateProvider {
       templateContext.put("TOTAL_NUMBER", totalNumber);
       templateContext.put("FOLDER_NAME", folderName);
       templateContext.put("DURATION", duration);
+      templateContext.put("STATUS", status);
       templateContext.put("FILES_CREATED", filesCreated);
       templateContext.put("FILES_DUPLICATED", filesDuplicated);
       templateContext.put("FILES_UPDATED", filesUpdated);

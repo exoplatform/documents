@@ -67,6 +67,7 @@ public class WebTemplateProvider extends TemplateProvider {
       String folderUrl = notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_URL.getKey());
       String folderName = notificationInfo.getValueOwnerParameter(NotificationConstants.FOLDER_NAME.getKey());
       String totalNumber = notificationInfo.getValueOwnerParameter(NotificationConstants.TOTAL_NUMBER.getKey());
+      String status = notificationInfo.getValueOwnerParameter(NotificationConstants.STATUS.getKey());
       String language = getLanguage(notificationInfo);
       TemplateContext templateContext = TemplateContext.newChannelInstance(getChannelKey(), pluginId, language);
 
@@ -75,6 +76,7 @@ public class WebTemplateProvider extends TemplateProvider {
       templateContext.put("FOLDER_URL", folderUrl);
       templateContext.put("FOLDER_NAME", folderName);
       templateContext.put("TOTAL_NUMBER", totalNumber);
+      templateContext.put("STATUS", status);
       Profile userProfile = NotificationUtils.getUserProfile(identityManager, fromUser);
       templateContext.put("USER", userProfile.getFullName());
       templateContext.put("PROFILE_URL", userProfile.getUrl());
