@@ -221,6 +221,7 @@
           </v-btn>
           <v-btn
             :disabled="uploadButtonDisabled"
+            :loading="importing"
             class="btn btn-primary"
             @click="uploadDocuments">
             <template>
@@ -258,20 +259,10 @@ export default {
   },
   computed: {
     uploadButtonDisabled(){
-      if (this.selected!==''  &&  this.value && this.value[0] && this.value[0].uploadId && this.value[0].uploadProgress === 100 && !this.importing)
-      {
-        return false;
-      } else {
-        return true;
-      }
+      return !(this.selected!==''  &&  this.value && this.value[0] && this.value[0].uploadId && this.value[0].uploadProgress === 100 && !this.importing);
     },
     uploading(){
-      if (this.value && this.value[0] && this.value[0].uploadId && !this.importing )
-      {
-        return true;
-      } else {
-        return false;
-      }
+      return (this.value && this.value[0] && this.value[0].uploadId && !this.importing);
     },
     enableOptionList() {
       return this.showImportOptionsList;
