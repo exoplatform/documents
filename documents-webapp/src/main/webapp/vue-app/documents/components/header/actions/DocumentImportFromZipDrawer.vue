@@ -100,7 +100,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showCreatedFiles=!showCreatedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showCreatedFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -124,7 +125,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showIgnoredFiles=!showIgnoredFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showIgnoredFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -148,31 +150,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showDuplicatedFiles=!showDuplicatedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
-                      </v-btn>
-                    </template>
-                    <span>
-                      {{ $t('documents.import.show.details') }}
-                    </span>
-                  </v-tooltip>
-                </v-list-item-action>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-content>
-                  <v-list-item-title>
-                    <span>{{ importData.updatedFiles.length }} {{ $t('documents.label.upload.zip.more.updated') }}</span>
-                  </v-list-item-title>
-                  <v-list-item-subtitle v-if="showUpdatedFiles" v-sanitized-html="importData.updatedFiles.join('<br>')" />
-                </v-list-item-content>
-                <v-list-item-action v-if="importData.updatedFiles.length>0">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs }">
-                      <v-btn
-                        icon 
-                        v-bind="attrs"
-                        v-on="on" 
-                        @click="showUpdatedFiles=!showUpdatedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showDuplicatedFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -196,7 +175,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showFailedFiles=!showFailedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showFailedFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -252,7 +232,6 @@ export default {
       showCreatedFiles: false, 
       showIgnoredFiles: false, 
       showDuplicatedFiles: false, 
-      showUpdatedFiles: false,
       showFailedFiles: false, 
       folderId: '', 
     };
@@ -312,7 +291,6 @@ export default {
         this.showCreatedFiles= false;
         this.showIgnoredFiles= false; 
         this.showDuplicatedFiles= false; 
-        this.showUpdatedFiles= false;
         this.showFailedFiles= false; 
         this.$root.$emit('set-action-loading', false,'import');
       }
