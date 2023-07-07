@@ -89,7 +89,6 @@
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
-      <documents-app-reminder :is-mobile="isMobile" />
       <documents-actions-menu-mobile :is-mobile="isMobile" />
       <documents-filter-menu-mobile
         :primary-filter="primaryFilter"
@@ -110,6 +109,7 @@
         @load-more="loadMoreVersions"
         ref="documentVersionHistory" />
       <document-action-context-menu />
+      <public-document-options-drawer />
       <v-file-input
         id="uploadVersionInput"
         class="d-none"
@@ -218,6 +218,8 @@ export default {
     beforDate: null,
     minSize: null,
     maxSize: null,
+    publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`
+
   }),
   computed: {
     progressAlertColor() {
@@ -249,7 +251,7 @@ export default {
     },
     prefixClone(){
       return this.$t('documents.label.prefix.clone');
-    },
+    }
   },
   created() {
     // Ensure that localStorage doesn't contain a deleted document
@@ -339,6 +341,8 @@ export default {
     this.$root.$on('update-selection-documents-list', this.updateSelectionList);
     this.$root.$on('breadcrumb-updated', this.resetSelections);
     this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
+    this.$root.$on('copy-public-access-link', this.getDocumentPublicAccessLink);
+    this.$root.$on('mark-document-as-viewed', this.markDocumentAsViewed);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
@@ -346,6 +350,64 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
+    copyToClipBoard(text) {
+      const inputTemp = $('<input>');
+      $('body').append(inputTemp);
+      inputTemp.val(text).select();
+      return new Promise((resolve) => {
+        document.execCommand('copy');
+        inputTemp.remove();
+        resolve();
+      });
+    },
+    markDocumentAsViewed(file) {
+      document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: file}}));
+    },
+    getDocumentPublicAccessLink(nodeId) {
+      this.$documentFileService.getDocumentPublicAccess(nodeId).then(publicDocumentAccess => {
+        this.copyToClipBoard(`${this.publicLinkUrl}${publicDocumentAccess.nodeId}`).then(() => {
+          this.$root.$emit('show-alert', {
+            type: 'success',
+            message: this.$t('documents.alert.success.label.linkCopied')
+          });
+        }).catch(() => {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('document.public.access.copyLink.error.message')
+          });
+        });
+      }).catch((e) => {
+        if (e.status === 404) {
+          this.copyToClipBoard(`${this.publicLinkUrl}${nodeId}`).then(() => {
+            this.$root.$emit('show-alert', {
+              type: 'warning',
+              message: this.$t('document.visibility.publicAccess.save.message')
+            });
+          }).catch(() => {
+            this.$root.$emit('show-alert', {
+              type: 'error',
+              message: this.$t('document.public.access.copyLink.error.message')
+            });
+          });
+        } else {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('document.visibility.publicAccess.error.message')
+          });
+        }
+      });
+    },
+    createDocumentPublicAccessLink(file, publicAccessOptions) {
+      return this.$documentFileService.createDocumentPublicAccess(file.id, publicAccessOptions)
+        .then(() => {
+          this.refreshFiles();
+        }).catch(() => {
+          this.$root.$emit('show-alert', {
+            type: 'error',
+            message: this.$t('document.visibility.publicAccess.error.message')
+          });
+        });
+    },
     handleOpenFolderToDrop(event) {
       const folderId = event.detail.folder;
       const index = this.files.findIndex(file => file.id === folderId);
@@ -1251,10 +1313,14 @@ export default {
         }
       }));
     },
-    saveVisibility(file){
+    saveVisibility(file, publicAccess, publicOptions) {
       this.$documentFileService.saveVisibility(file)
         .then(() => {
-          this.refreshFiles();
+          if (publicAccess) {
+            this.createDocumentPublicAccessLink(file, publicOptions);
+          } else {
+            this.refreshFiles();
+          }
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
           this.$root.$emit('visibility-saved');
         })

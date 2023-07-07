@@ -328,6 +328,24 @@ public interface DocumentFileService {
   String getDefaultView(Long ownerId, String userIdentityId);
 
   /**
+   * Get the total size of a space or user drive
+   *
+   * @param ownerId Id of the owner Identity
+   * @return the document size object
+   */
+  DocumentsSize getDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
+   * Calculate total size of a space or user drive and store the result in new
+   * analytics entry
+   *
+   * @param ownerId Id of the owner Identity
+   * @param userIdentityId current user identity id
+   * @return the document size object
+   */
+  DocumentsSize addDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
    * Set default View for the current user
    *
    * @param ownerId Id of the owner Identity
@@ -335,4 +353,14 @@ public interface DocumentFileService {
    * @param view the view to store
    */
   void setDefaultView(Long ownerId, String userIdentityId, String view);
+  
+  /**
+   * Checks if user has edit permission on document
+   *
+   * @param nodeId document node id
+   * @param userIdentityId user identity id
+   * @return true if has edit permission or false
+   * @throws IllegalAccessException
+   */
+  boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException;
 }

@@ -186,7 +186,7 @@ export default {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
     },
     documentMultiSelectionActive() {
-      return eXo?.env?.portal?.documentMultiSelection && this.$vuetify.breakpoint.width >= 600;
+      return this.$vuetify.breakpoint.width >= 600;
     },
     title() {
       let docTitle = this.fileName;
@@ -288,7 +288,7 @@ export default {
     },
     openInEditMode(file) {
       const fileId = file.sourceID? file.sourceID: file.id;
-      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}&source=peview`, '_blank');
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}`, '_blank');
     },
     openPreview() {
       this.loading = true;
@@ -329,6 +329,7 @@ export default {
             window.history.pushState('', '', `${window.location.pathname}?documentPreviewId=${this.file.id}`);
             this.loading = false;
           });
+        this.$root.$emit('mark-document-as-viewed', this.file);
       }
     },
     displayActionMenu() {

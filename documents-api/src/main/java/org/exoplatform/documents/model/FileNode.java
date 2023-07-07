@@ -28,5 +28,7 @@ public class FileNode extends AbstractNode {
 
   private long   size;
 
+  private long   views;
+
   private String mimeType;
 }

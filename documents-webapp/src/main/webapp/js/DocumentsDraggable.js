@@ -81,7 +81,7 @@
             } else {
                 document.dispatchEvent(new CustomEvent('document-open-folder-to-drop', event))
             }
-        }, 2000);
+        }, 1000);
     }
 
     function clearElements() {
@@ -262,8 +262,6 @@
                     dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
                     checkDropElements(allowed, onDrop, rowElem, getSourceFiles())
                 }
-            } else {
-                getDocumentsBoyElement().classList.remove('is-body-intersected');
             }
         }
     }

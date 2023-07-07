@@ -18,7 +18,6 @@
  */
 
 import DocumentsMain from './components/DocumentsMain.vue';
-import DocumentsAppReminder from './components/DocumentsAppReminder.vue';
 import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
 import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
@@ -85,6 +84,7 @@ import DocumentsSelectionCell from './components/body/table/cells/DocumentsSelec
 import DocumentActionContextMenu from './components/body/table/DocumentActionContextMenu.vue';
 import DocumentsSizeCell from './components/body/table/cells/DocumentsSizeCell.vue';
 import UploadNewVersionMenuAction from './components/body/actions/UploadNewVersionMenuAction.vue';
+import PublicDocumentOptionsDrawer from './components/body/table/PublicDocumentOptionsDrawer.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -143,7 +143,6 @@ const components = {
   'folder-treeview-drawer': FolderTreeViewDrawer,
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
-  'documents-app-reminder': DocumentsAppReminder,
   'upload-overlay': UploadOverlay,
   'versionHistory-menu-action': VersionHistoryMenuAction,
   'favorite-filter-action': FavoriteFilterActionMobile,
@@ -154,7 +153,8 @@ const components = {
   'documents-selection-cell': DocumentsSelectionCell,
   'document-action-context-menu': DocumentActionContextMenu,
   'documents-size-cell': DocumentsSizeCell,
-  'upload-new-version-menu-action': UploadNewVersionMenuAction
+  'upload-new-version-menu-action': UploadNewVersionMenuAction,
+  'public-document-options-drawer': PublicDocumentOptionsDrawer
 };
 
 for (const key in components) {

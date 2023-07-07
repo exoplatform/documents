@@ -16,10 +16,14 @@
  */
 package org.exoplatform.documents.model;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 public class DocumentTimelineFilter extends DocumentNodeFilter {
 

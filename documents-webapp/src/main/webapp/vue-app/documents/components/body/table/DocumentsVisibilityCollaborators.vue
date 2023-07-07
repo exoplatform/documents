@@ -16,13 +16,13 @@
 -->
 <template>
   <div class="d-flex">
-    <div class="profile-popover user-wrapper pl-4 pt-2 pb-1">
+    <div class="profile-popover user-wrapper pl-4 pt-2 pb-2">
       <a
         class="d-flex not-clickable flex-nowrap flex-grow-1 text-truncate container--fluid align-center">
         <v-icon
           v-if="user.providerId ==='group'"
           size="19"
-          class="fas fa-users" />
+          class="mt-n1 fas fa-users" />
         <v-avatar
           v-else
           size="32"
@@ -45,17 +45,15 @@
     </div>
     <v-spacer />
     <div
-      class="my-auto d-flex pe-2">
+      class="ma-auto d-flex pe-2">
       <v-icon
         v-if="userVisibility && userVisibility === 'edit' || user.permission === 'edit'"
-        class="pb-2"
         color="grey lighten-1"
         :size="16">
         fas fa-edit
       </v-icon>
       <v-icon
         v-else
-        class="pb-2"
         color="grey lighten-1"
         :size="16">
         fas fa-eye

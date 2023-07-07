@@ -2,7 +2,7 @@
   <div>
     <div v-show="isMobile && !showFilter || !isMobile">
       <v-menu
-        v-if="showSelectionsMenu && documentMultiSelectionActive"
+        v-if="showSelectionsMenu"
         v-model="selectionsMenu"
         class="add-menu-btn width-full"
         close-on-click
@@ -153,9 +153,6 @@ export default {
     actionLoadingMessage: null
   }),
   computed: {
-    documentMultiSelectionActive() {
-      return eXo?.env?.portal?.documentMultiSelection;
-    },
     isFolderView() {
       return this.selectedView === 'folder';
     },

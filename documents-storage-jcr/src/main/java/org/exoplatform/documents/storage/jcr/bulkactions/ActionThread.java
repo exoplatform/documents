@@ -19,12 +19,9 @@ package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import java.io.*;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 import javax.jcr.*;
 
@@ -39,7 +36,6 @@ import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
-import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -76,9 +72,7 @@ public class ActionThread implements Runnable {
   private ActionData                     actionData;
 
   private String                         parentPath;
-
-  private String                         tempFolderPath;
-
+  
   private Map<String, Object>            params;
 
 
@@ -164,6 +158,7 @@ public class ActionThread implements Runnable {
   }
 
   private void downloadItems() {
+    String tempFolderPath;
     List<javax.jcr.Node> nodes = items.stream()
                                       .map(document -> JCRDocumentsUtil.getNodeByIdentifier(session, document.getId()))
                                       .toList();
@@ -174,7 +169,7 @@ public class ActionThread implements Runnable {
       log.error("Cannot create temp folder to download documents", e);
       return;
     }
-    boolean hasFolders = items.stream().anyMatch(obj -> obj.isFolder());
+    boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
     try {
       actionData.setStatus(ActionStatus.ZIP_FILE_CREATION.name());
       listenerService.broadcast("bulk_actions_document_event", identity, actionData);
@@ -185,16 +180,16 @@ public class ActionThread implements Runnable {
       for (Node node : nodes) {
         if (checkCanceled()) {
           File folder = new File(tempFolderPath);
-          cleanFiles(folder);
+          JCRDocumentsUtil.cleanFiles(folder);
           break;
         }
         if (StringUtils.isEmpty(parentPath)) {
           parentPath = node.getParent().getPath();
         }
         if (hasFolders) {
-          createTempFilesAndFolders(node, "", "");
+          JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
         } else {
-          createFile(node, "", "", hasFolders);
+          JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentPath);
         }
 
       }
@@ -206,18 +201,18 @@ public class ActionThread implements Runnable {
     String zipName = ZIP_PREFIX + actionData.getActionId() + ZIP_EXTENSION;
     String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
     try {
-      zipFiles(zipPath);
+      JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
       File zipped = new File(zipPath);
       actionData.setDownloadZipPath(zipped.getPath());
       File folder = new File(tempFolderPath);
-      cleanFiles(folder);
+      JCRDocumentsUtil.cleanFiles(folder);
     } catch (Exception e) {
       log.error("Error when creating zip file", e);
       actionData.setStatus(ActionStatus.FAILED.name());
     }
     if (checkCanceled()) {
       File zip = new File(zipPath);
-      zip.delete();
+      deleteFile(zip);
       return;
     }
     if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {
@@ -267,121 +262,7 @@ public class ActionThread implements Runnable {
       log.error("cannot broadcast bulk action event");
     }
   }
-
-  private File createFile(Node node, String symlinkPath, String sourcePath, boolean hasFolders) throws RepositoryException,
-                                                                                                IOException {
-    if (checkCanceled()) {
-      return null;
-    }
-    Node jrcNode = node.getNode("jcr:content");
-    InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
-    String path = "";
-    if (hasFolders) {
-      String nodePath = node.getPath();
-      if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
-        nodePath = symlinkPath + nodePath.replace(sourcePath, "");
-      }
-      path = tempFolderPath + nodePath.replace(parentPath, "");
-    } else {
-      path = tempFolderPath + File.separator + node.getName();
-    }
-    File file = new File(path);
-    try (OutputStream outputStream = new FileOutputStream(file)) {
-      byte[] buffer = new byte[1024];
-      int length;
-      while ((length = inputStream.read(buffer)) > 0) {
-        outputStream.write(buffer, 0, length);
-      }
-      inputStream.close();
-    }
-    return file;
-  }
-
-  private void createTempFilesAndFolders(Node node, String symlinkPath, String sourcePath) throws Exception {
-    if (checkCanceled()) {
-      return;
-    }
-    if (JCRDocumentsUtil.isFolder(node)) {
-      String nodePath = node.getPath();
-      if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
-        nodePath = symlinkPath + nodePath.replace(sourcePath, "");
-      }
-      String path = tempFolderPath + nodePath.replace(parentPath, "");
-      Files.createDirectories(Paths.get(path));
-      NodeIterator nodeIterator = node.getNodes();
-      while (nodeIterator.hasNext()) {
-        Node child = nodeIterator.nextNode();
-        createTempFilesAndFolders(child, symlinkPath, sourcePath);
-      }
-    } else {
-      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-        String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-        Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(session, sourceID);
-        createTempFilesAndFolders(sourceNode, node.getPath(), sourceNode.getPath());
-      } else {
-        createFile(node, symlinkPath, sourcePath, true);
-      }
-    }
-
-  }
-
-  private void zipFiles(String zipFilePath) throws Exception {
-    try (FileOutputStream fos = new FileOutputStream(zipFilePath)) {
-      try (ZipOutputStream zos = new ZipOutputStream(fos)) {
-        File folder = new File(tempFolderPath);
-        zipFolder(folder, "", zos, fos, zipFilePath);
-      }
-    }
-  }
-
-  private void zipFolder(File folder,
-                         String folderName,
-                         ZipOutputStream zos,
-                         FileOutputStream fos,
-                         String zipFilePath) throws Exception {
-    File[] files = folder.listFiles();
-    for (File file : files) {
-      if (checkCanceled()) {
-        zos.close();
-        fos.close();
-        File zip = new File(zipFilePath);
-        zip.delete();
-        return;
-      }
-      if (file.isDirectory()) {
-        if (StringUtils.isNotEmpty(folderName)) {
-          zipFolder(file, folderName + "/" + file.getName(), zos, fos, zipFilePath);
-        } else {
-          zipFolder(file, file.getName(), zos, fos, zipFilePath);
-        }
-      } else {
-        byte[] buffer = new byte[1024];
-        try (FileInputStream fis = new FileInputStream(file)) {
-          if (StringUtils.isNotEmpty(folderName)) {
-            zos.putNextEntry(new ZipEntry(folderName + "/" + file.getName()));
-          } else {
-            zos.putNextEntry(new ZipEntry(file.getName()));
-          }
-          int length;
-          while ((length = fis.read(buffer)) > 0) {
-            zos.write(buffer, 0, length);
-          }
-          zos.closeEntry();
-        }
-      }
-    }
-  }
-
-  private void cleanFiles(File file) {
-    File[] files = file.listFiles();
-    if (files != null) {
-      for (File f : files) {
-        cleanFiles(f);
-      }
-    }
-    file.delete();
-  }
-
+  
   private boolean checkCanceled() {
     actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
     if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
@@ -393,6 +274,14 @@ public class ActionThread implements Runnable {
       return true;
     }
     return false;
+  }
+  
+  private void deleteFile(File file) {
+    try {
+      Files.delete(file.toPath());
+    } catch (IOException e) {
+      log.error("Error while deleting file", e);
+    }
   }
 
 }
