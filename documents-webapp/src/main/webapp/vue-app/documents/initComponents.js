@@ -20,11 +20,7 @@
 import DocumentsMain from './components/DocumentsMain.vue';
 import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
-import DocumentsHeaderRight from './components/header/DocumentsHeaderRight.vue';
-import DocumentsHeaderCenter from './components/header/DocumentsHeaderCenter.vue';
-import DocumentsFilterContainer from './components/header/DocumentsFilterContainer.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
-import DocumentsFilterInput from './components/header/filters/DocumentsFilterInput.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
 import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
 import DocumentsNoBodyFolder from './components/body/DocumentsNoBodyFolder.vue';
@@ -41,11 +37,7 @@ import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavori
 import DocumentsFavoriteAction from './components/body/table/action/DocumentFavoriteAction.vue';
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
-import DocumentsFilter from './components/header/filters/DocumentsFilter.vue';
-import DocumentsPrimaryFilter from './components/header/filters/DocumentsPrimaryFilter.vue';
 import SelectPeriod from './components/header/filters/SelectPeriod.vue';
-import FilterBotton from './components/header/filters/FilterBotton.vue';
-import FilterBackBotton from './components/header/filters/FilterBackBotton.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
@@ -95,15 +87,7 @@ const components = {
   'documents-main': DocumentsMain,
   'documents-header': DocumentsHeader,
   'documents-header-left': DocumentsHeaderLeft,
-  'documents-header-right': DocumentsHeaderRight,
-  'documents-header-center': DocumentsHeaderCenter,
-  'documents-filter-conatiner': DocumentsFilterContainer,
   'documents-add-new-file': DocumentsAddNewFile,
-  'documents-filter-input': DocumentsFilterInput,
-  'documents-filter': DocumentsFilter,
-  'documents-primary-filter': DocumentsPrimaryFilter,
-  'documents-filter-botton': FilterBotton,
-  'documents-filter-back-botton': FilterBackBotton,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
   'documents-no-body-folder': DocumentsNoBodyFolder,
