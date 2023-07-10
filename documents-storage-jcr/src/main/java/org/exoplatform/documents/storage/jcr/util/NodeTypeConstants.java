@@ -34,6 +34,14 @@ public class NodeTypeConstants {
 
   public static final String NT_RESOURCE            = "nt:resource";
 
+  public static final String CSS_FOLDER                = "exo:cssFolder";
+
+  public static final String JS_FOLDER                 = "exo:jsFolder";
+
+  public static final String LINK_FOLDER               = "exo:linkFolder";
+
+  public static final String WEB_FOLDER                = "exo:webFolder";
+
   public static final String NT_VERSIONED_CHILD     = "nt:versionedChild";
 
   public static final String NT_FROZEN_NODE         = "nt:frozenNode";
