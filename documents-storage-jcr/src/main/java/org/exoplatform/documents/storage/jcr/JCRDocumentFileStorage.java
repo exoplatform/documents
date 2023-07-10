@@ -71,7 +71,15 @@ import org.exoplatform.social.metadata.tag.model.TagObject;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
-  private static final String                  COLLABORATION              = "collaboration";
+  private static final String                       COLLABORATION        = "collaboration";
+
+  private static final List<String>                 FOLDER_NODE_TYPES    = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
+                                                                                   NodeTypeConstants.NT_FOLDER,
+                                                                                   NodeTypeConstants.EXO_SYMLINK,
+                                                                                   NodeTypeConstants.CSS_FOLDER,
+                                                                                   NodeTypeConstants.JS_FOLDER,
+                                                                                   NodeTypeConstants.LINK_FOLDER,
+                                                                                   NodeTypeConstants.WEB_FOLDER);
 
   private final SpaceService                   spaceService;
 
@@ -313,7 +321,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
           // Load folders + symlink of folders
-          String statementOfFolders = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, List.of(NodeTypeConstants.NT_UNSTRUCTURED, NodeTypeConstants.NT_FOLDER, NodeTypeConstants.EXO_SYMLINK), includeHiddenFiles);
+          String statementOfFolders = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, FOLDER_NODE_TYPES, includeHiddenFiles);
           Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
           ((QueryImpl)jcrQuery).setOffset(offset);
           ((QueryImpl)jcrQuery).setLimit(limit);
