@@ -1555,15 +1555,8 @@ export default {
       
     },
     redirectTodestinationSpace(destFolder, space) {
-      const folderPath = destFolder.path.split('/Groups/spaces/')[1].replace('/Documents', '/documents');
-      let pathName;
-      const isSpaceLocation = eXo.env.portal.spaceName !== '';
-      //from space to space
-      if (isSpaceLocation) {
-        pathName = window.location.pathname.split(eXo.env.portal.selectedNodeUri)[0].replace(`:spaces:${eXo.env.portal.spaceGroup}`,`:spaces:${space.prettyName}`);
-      }
-      //from personal drive to space
-      pathName = `${eXo.env.portal.context}/g/${space.groupId.replaceAll('/', ':')}/`;
+      const folderPath = destFolder.path.split(`Groups${space.groupId}`)[1].replace('/Documents', '/documents');
+      const pathName = `${eXo.env.portal.context}/g/${space.groupId.replaceAll('/', ':')}/${space.prettyName}`;
       window.location.replace(`${pathName}${folderPath}?view=folder`, window.location.pathname);
     }
   },
