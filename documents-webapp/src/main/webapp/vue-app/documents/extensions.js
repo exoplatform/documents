@@ -23,38 +23,6 @@ extensionRegistry.registerComponent('DocumentsHeaderLeft', 'documents-header-lef
   rank: 20,
 });
 
-extensionRegistry.registerComponent('DocumentsHeaderRight', 'documents-header-right', {
-  id: 'documents-filter-botton',
-  vueComponent: Vue.options.components['documents-filter-botton'],
-  rank: 20,
-});
-
-extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
-  id: 'documents-filter-back-botton',
-  vueComponent: Vue.options.components['documents-filter-back-botton'],
-  rank: 10,
-});
-
-extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
-  id: 'filter-input',
-  vueComponent: Vue.options.components['documents-filter-input'],
-  rank: 20,
-});
-
-extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
-  id: 'documents-filter',
-  cssClass: 'pt-1',
-  vueComponent: Vue.options.components['documents-filter'],
-  rank: 40,
-});
-
-extensionRegistry.registerComponent('DocumentsFilters', 'documents-filters', {
-  id: 'primary-filter',
-  cssClass: 'pt-1',
-  vueComponent: Vue.options.components['documents-primary-filter'],
-  rank: 30,
-});
-
 extensionRegistry.registerExtension('Documents', 'views', {
   id: 'timeline',
   labelKey: 'documents.label.timelineView',
@@ -377,6 +345,7 @@ extensionRegistry.registerExtension('Documents', 'views', {
 
 extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
   id: 'recentView',
+  value: 'timeline',
   viewName: 'timeline',
   icon: 'fas fa-history',
   labelKey: 'documents.label.timelineView',
@@ -386,6 +355,7 @@ extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
 
 extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
   id: 'folderView',
+  value: 'folder',
   viewName: 'folder',
   icon: 'fas fa-folder',
   labelKey: 'documents.label.folderView',
