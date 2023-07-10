@@ -50,16 +50,19 @@
       <depends>
         <module>documentsSnackbarComponent</module>
       </depends>
-      <depends>
-        <module>versionHistoryDrawer</module>
-      </depends>
-      <depends>
-        <module>commons-cometd3</module>
-        <as>cCometd</as>
-      </depends>
-      <depends>
-        <module>DocumentsDraggable</module>
-      </depends>
+        <depends>
+            <module>versionHistoryDrawer</module>
+        </depends>
+        <depends>
+            <module>commons-cometd3</module>
+            <as>cCometd</as>
+        </depends>
+        <depends>
+            <module>DocumentsDraggable</module>
+        </depends>
+        <depends>
+            <module>applicationToolbarComponent</module>
+        </depends>
     </module>
   </portlet>
 
