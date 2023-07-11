@@ -8,7 +8,7 @@
         </div>
         <span>{{ $t('documents.label.zip.no.attachments') }}</span>
       </div>
-      <div class="uploadedFilesItems d-flex flex-row align-center">
+      <div class="uploadedFilesItems">
         <div
           v-for="attachedFile in attachments"
           :key="attachedFile.name"
