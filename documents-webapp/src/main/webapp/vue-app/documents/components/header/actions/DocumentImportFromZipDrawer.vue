@@ -19,11 +19,9 @@
                 {{ $t('documents.label.upload.zip.choice') }}
               </v-subheader>
             </div>
-            <div class="d-flex align-center">
-              <v-subheader class="caption font-italic font-weight-light px-4 mt-n9 d-flex">
+              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
                 {{ $t('documents.label.zip.attachments.upload.description') }}
-              </v-subheader>
-            </div>
+              </div>
             <documents-zip-upload-input
               v-if="value.length === 0"
               :attachments="value" />
@@ -37,12 +35,10 @@
                 {{ $t('documents.label.upload.zip.rules') }}
               </v-subheader>
             </div>
-            <div class="d-flex align-center">
-              <v-subheader class="caption font-italic font-weight-light px-4 mt-n9 d-flex">
+              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
                 {{ $t('documents.label.upload.zip.rules.description') }}
-              </v-subheader>
-            </div>
-            <div class="radio-group-container ps-4">
+              </div>
+            <div class="radio-group-container ps-3">
               <v-radio-group
                 v-model="selected">
                 <v-radio

@@ -1,8 +1,8 @@
 <template>
-  <div class="attachment d-flex clickable">
+  <div class="attachment d-flex clickable ps-1">
     <v-list-item-avatar
       class="border-radius me-3">
-      <div v-if="attachment.uploadProgress < 100" class="fileProgress">
+      <div v-if="attachmentInProgress" class="fileProgress">
         <v-progress-circular
           :rotate="-90"
           :size="40"
@@ -24,22 +24,25 @@
       </v-list-item-title>
     </v-list-item-content>
     <v-list-item-action class="d-flex flex-row align-center">
+
       <div
-        :title="$t('documents.label.zip.attachments.delete')"
-        class="remove-button">
-        <v-btn
-          class="d-flex"
-          outlined
-          x-small
-          height="24"
-          width="24"
-          @click="removeAttachedFile(attachment)">
-          <v-icon v-if="attachment.uploadProgress < 100" size="12"
-            class="mdi mdi-close colorIcon error--text" />
-          <v-icon v-else  size="12"
-            class="fas fa-trash colorIcon error--text" />
-        </v-btn>
-      </div>
+          :title="$t('documents.label.zip.attachments.delete')"
+          class="remove-button">
+          <v-btn
+          class="d-flex align-end"
+          icon
+          small
+            size="24"
+            @click="removeAttachedFile(attachment)">
+            <i v-if="attachmentInProgress" class="uiIconCloseCircled error--text"></i>
+            <v-icon
+            v-else 
+              small
+              class="fas fa-unlink error--text" />
+
+          </v-btn>
+          
+        </div>
     </v-list-item-action>
   </div>
 </template>
