@@ -3,10 +3,13 @@
     <exo-drawer
       ref="documentsUploadZipDrawer"
       class="documentsUploadZipDrawer"
+      :confirm-close="uploading"
+      :confirm-close-labels="confirmCloseLabels"
       @closed="close"
       show-overlay
       right>
       <template slot="title">
+        {{ $t('documents.drawer.upload.zip.title') }}
       </template>
       <template slot="content">
         <div v-if="!importing">
@@ -15,9 +18,10 @@
               <v-subheader class="text-header-title pl-0 d-flex">
                 {{ $t('documents.label.upload.zip.choice') }}
               </v-subheader>
-              <v-divider />
             </div>
-            
+              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
+                {{ $t('documents.label.zip.attachments.upload.description') }}
+              </div>
             <documents-zip-upload-input
               v-if="value.length === 0"
               :attachments="value" />
@@ -30,14 +34,11 @@
               <v-subheader class="text-header-title pl-0 d-flex">
                 {{ $t('documents.label.upload.zip.rules') }}
               </v-subheader>
-              <v-divider />
             </div>
-            <div class="d-flex align-center">
-              <v-subheader class="text-sub-title px-4 mt-n7 d-flex">
+              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
                 {{ $t('documents.label.upload.zip.rules.description') }}
-              </v-subheader>
-            </div>
-            <div class="radio-group-container ps-4">
+              </div>
+            <div class="radio-group-container ps-3">
               <v-radio-group
                 v-model="selected">
                 <v-radio
@@ -79,7 +80,7 @@
             <v-col cols="11" v-if="status==='creating_documents'">
               {{ importData.importedFilesCount }}/{{ totalNumber }}: {{ importData.documentInProgress }}
             </v-col>
-            <v-col cols="12" v-if="status==='done_successfully' || status==='failed'">
+            <v-col cols="12" v-if="status==='done_successfully' ||status==='done_with_errors' || status==='failed'">
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
@@ -95,7 +96,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showCreatedFiles=!showCreatedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showCreatedFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -119,7 +121,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showIgnoredFiles=!showIgnoredFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showIgnoredFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -143,31 +146,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showDuplicatedFiles=!showDuplicatedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
-                      </v-btn>
-                    </template>
-                    <span>
-                      {{ $t('documents.import.show.details') }}
-                    </span>
-                  </v-tooltip>
-                </v-list-item-action>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-content>
-                  <v-list-item-title>
-                    <span>{{ importData.updatedFiles.length }} {{ $t('documents.label.upload.zip.more.updated') }}</span>
-                  </v-list-item-title>
-                  <v-list-item-subtitle v-if="showUpdatedFiles" v-sanitized-html="importData.updatedFiles.join('<br>')" />
-                </v-list-item-content>
-                <v-list-item-action v-if="importData.updatedFiles.length>0">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs }">
-                      <v-btn
-                        icon 
-                        v-bind="attrs"
-                        v-on="on" 
-                        @click="showUpdatedFiles=!showUpdatedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showDuplicatedFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -191,7 +171,8 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showFailedFiles=!showFailedFiles">
-                        <v-icon color="grey lighten-1">mdi-information</v-icon>
+                        <v-icon v-if="showFailedFiles" color="grey" class="fas fa-chevron-up" />
+                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -209,13 +190,14 @@
           <v-spacer />
           <v-btn
             class="btn me-2"
-            @click="close">
+            @click="cancel">
             <template>
               {{ $t('documents.label.button.close') }}
             </template>
           </v-btn>
           <v-btn
             :disabled="uploadButtonDisabled"
+            :loading="importing"
             class="btn btn-primary"
             @click="uploadDocuments">
             <template>
@@ -246,30 +228,28 @@ export default {
       showCreatedFiles: false, 
       showIgnoredFiles: false, 
       showDuplicatedFiles: false, 
-      showUpdatedFiles: false,
       showFailedFiles: false, 
       folderId: '', 
     };
   },
   computed: {
-    continueButtonDisabled(){
-      if (this.value && this.value[0] && this.value[0].uploadId){
-        return false;
-      } else {
-        return true;
-      }
-    },
     uploadButtonDisabled(){
-      if (this.selected!=='' &&  this.value && this.value[0] && this.value[0].uploadId && !this.importing)
-      {
-        return false;
-      } else {
-        return true;
-      }
+      return !(this.selected!==''  &&  this.value && this.value[0] && this.value[0].uploadId && this.value[0].uploadProgress === 100 && !this.importing);
+    },
+    uploading(){
+      return (this.value && this.value[0] && this.value[0].uploadId && !this.importing);
     },
     enableOptionList() {
       return this.showImportOptionsList;
-    }
+    },
+    confirmCloseLabels() {
+      return {
+        title: this.$t('documents.import.confirmCancel.title'),
+        message: this.$t('documents.import.confirmCancel.message'),
+        ok: this.$t('documents.button.yes'),
+        cancel: this.$t('documents.button.no'),
+      };
+    },
   },
   created() {
     this.$root.$on('open-upload-zip-drawer', () => {
@@ -294,7 +274,7 @@ export default {
       this.$refs.documentsUploadZipDrawer.open();
     },
     close() {
-      if (this.status==='done_successfully' || this.status==='failed' || this.status==='cannot_unzip_file'){
+      if (this.uploading || this.status==='done_successfully' || this.status==='done_with_errors' || this.status==='failed' || this.status==='cannot_unzip_file'){
         this.value = [];
         this.selected = 'ignore';
         this.stepper = 1;
@@ -307,10 +287,13 @@ export default {
         this.showCreatedFiles= false;
         this.showIgnoredFiles= false; 
         this.showDuplicatedFiles= false; 
-        this.showUpdatedFiles= false;
         this.showFailedFiles= false; 
         this.$root.$emit('set-action-loading', false,'import');
       }
+      this.$refs.documentsUploadZipDrawer.close();
+    },
+
+    cancel() {
       this.$refs.documentsUploadZipDrawer.close();
     },
 
@@ -372,7 +355,11 @@ export default {
           this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.import.cannotUnzipFile')});
         }
         if (this.status==='failed'){
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.import.doneWithErrors')});
+          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.import.message.failed')});
+        }
+        if (this.status==='done_with_errors'){
+          this.$root.$emit('documents-refresh-files');
+          this.$root.$emit('show-alert', {type: 'warning', message: this.$t('documents.import.message.doneWithErrors')});
         }
         if (this.status==='done_successfully'){
           this.$root.$emit('documents-refresh-files');
