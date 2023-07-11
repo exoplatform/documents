@@ -58,7 +58,7 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 
 public class JCRDocumentsUtil {
   private static final Log                              LOG                           =
-                                                            ExoLogger.getLogger(JCRDocumentsUtil.class);
+      ExoLogger.getLogger(JCRDocumentsUtil.class);
 
   private static final String                           DEFAULT_GROUPS_HOME_PATH      = "/Groups";                             // NOSONAR
 
@@ -243,10 +243,10 @@ public class JCRDocumentsUtil {
   }
 
   public static FolderNode toFolderNode(IdentityManager identityManager,
-                                 Identity aclIdentity,
-                                 Node node,
-                                 String sourceID,
-                                 SpaceService spaceService) {
+                                        Identity aclIdentity,
+                                        Node node,
+                                        String sourceID,
+                                        SpaceService spaceService) {
     try {
       if (node == null) {
         return null;
@@ -305,7 +305,7 @@ public class JCRDocumentsUtil {
     toFileNode(identityManager, aclIdentity, node, fileNode , spaceService);
     return fileNode;
   }
-  
+
   public static void toFileNode(IdentityManager identityManager,
                                 Identity aclIdentity,
                                 Node node,
@@ -331,7 +331,7 @@ public class JCRDocumentsUtil {
       }
     }
   }
-  
+
   private static void retrieveViewsProperty(Node node, FileNode fileNode) throws RepositoryException {
     long views = 0L;
     if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
@@ -342,7 +342,7 @@ public class JCRDocumentsUtil {
     }
     fileNode.setViews(views);
   }
-  
+
   private static void retrieveSymlinkSize(Node node, FileNode fileNode) throws RepositoryException {
     Node source = getNodeByIdentifier(node.getSession(), fileNode.getSourceID());
     if (source != null && source.getNode(NodeTypeConstants.JCR_CONTENT) != null) {
@@ -436,8 +436,8 @@ public class JCRDocumentsUtil {
         }
       }
       long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
-              .getDate()
-              .getTimeInMillis();
+                                      .getDate()
+                                      .getTimeInMillis();
       documentNode.setModifiedDate(modifiedDate);
       String modifier = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
       documentNode.setModifierId(getUserIdentityId(identityManager, modifier));
@@ -596,10 +596,10 @@ public class JCRDocumentsUtil {
       SessionProvider systemSession = SessionProvider.createSystemProvider();
       Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
       String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
-        if (session.itemExists(privatePathNode)) {
-          identityRootNode = (Node) session.getItem(privatePathNode);
-        }
-     }
+      if (session.itemExists(privatePathNode)) {
+        identityRootNode = (Node) session.getItem(privatePathNode);
+      }
+    }
     return identityRootNode;
   }
 
@@ -687,9 +687,9 @@ public class JCRDocumentsUtil {
   public static String getMimeType(Node node) {
     try {
       if (node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE) && node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
-          return node.getNode(NodeTypeConstants.JCR_CONTENT)
-                  .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
-                  .getString();
+        return node.getNode(NodeTypeConstants.JCR_CONTENT)
+                   .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
+                   .getString();
       }
     } catch (RepositoryException e) {
       LOG.error(e.getMessage(), e);
@@ -728,8 +728,9 @@ public class JCRDocumentsUtil {
       versionFileNode.setTitle(node.getName());
     }
     String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
-    Profile profile = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName).getProfile();
-    String[] summary = node.getVersionHistory().getVersionLabels(version);
+    org.exoplatform.social.core.identity.model.Identity
+        identity = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName);
+    Profile profile = identity != null ? identity.getProfile() : null;    String[] summary = node.getVersionHistory().getVersionLabels(version);
     if (summary.length > 0) {
       versionFileNode.setSummary(summary[0]);
     }
@@ -737,7 +738,7 @@ public class JCRDocumentsUtil {
     versionFileNode.setFrozenId(frozen.getUUID());
     versionFileNode.setOriginId(node.getUUID());
     versionFileNode.setAuthor(userName);
-    versionFileNode.setAuthorFullName(profile.getFullName());
+    versionFileNode.setAuthorFullName(profile != null ? profile.getFullName() : userName);
     versionFileNode.setCreatedDate(version.getCreated().getTime());
     versionFileNode.setVersionNumber(Integer.parseInt(version.getName()));
     if (version.getName().equals(currentVersionName)) {
@@ -775,9 +776,9 @@ public class JCRDocumentsUtil {
     return true;
   }
   /*
-  * Build a group to identity model to display it on the manage access drawer collaborators .
-  * Like the built model by the identity suggester for group suggester .
-  */
+   * Build a group to identity model to display it on the manage access drawer collaborators .
+   * Like the built model by the identity suggester for group suggester .
+   */
   public static org.exoplatform.social.core.identity.model.Identity groupToIdentity(String groupId){
 
     OrganizationService organizationService = CommonsUtils.getService(OrganizationService.class);
@@ -795,7 +796,7 @@ public class JCRDocumentsUtil {
       return null ;
     }
   }
-  
+
   public static DownloadItem toDownloadItem(Node node) throws Exception {
     ByteArrayOutputStream byteArrayOutputStream = null;
     String mimeType = null;
@@ -824,10 +825,10 @@ public class JCRDocumentsUtil {
   }
 
   public static void createFile(Node node,
-                                 String symlinkPath,
-                                 String sourcePath,
-                                 String tempFolderPath,
-                                 String parentPath) throws RepositoryException, IOException {
+                                String symlinkPath,
+                                String sourcePath,
+                                String tempFolderPath,
+                                String parentPath) throws RepositoryException, IOException {
     if (node == null) {
       return;
     }
@@ -905,7 +906,7 @@ public class JCRDocumentsUtil {
   private static String getFolderName(File file, String folderName) {
     return StringUtils.isNotEmpty(folderName) ? folderName + "/" + file.getName() : file.getName();
   }
-  
+
   private static void zipFolder(File folder, String folderName, ZipOutputStream zipOutputStream) throws Exception {
     File[] files = folder.listFiles();
     if (files == null) {
