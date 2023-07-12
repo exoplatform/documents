@@ -490,14 +490,20 @@ export default {
       let folderPath ='';
       if (eXo.env.portal.spaceName) {
         let newParentPath = parentFolder.path;
-        newParentPath = newParentPath.replace(`/spaces/${eXo.env.portal.spaceGroup}`, `/spaces/${eXo.env.portal.spaceGroup}/${eXo.env.portal.spaceName}`);
-        const nodeUri = eXo.env.portal.selectedNodeUri.replace('/documents', '/Documents');
-        let pathParts = newParentPath.split(nodeUri);
-        if (pathParts.length>1){
-          folderPath = pathParts[1];
+        if (newParentPath.includes(`/spaces/${eXo.env.portal.spaceGroup}`)) {
+          newParentPath = newParentPath.replace(`/spaces/${eXo.env.portal.spaceGroup}`, `/spaces/${eXo.env.portal.spaceGroup}/${eXo.env.portal.spaceName}`);
+          const nodeUri = eXo.env.portal.selectedNodeUri.replace('/documents', '/Documents');
+          let pathParts = newParentPath.split(nodeUri);
+          if (pathParts.length>1){
+            folderPath = pathParts[1];
+          }
+          pathParts = window.location.pathname.split(eXo.env.portal.selectedNodeUri);
+          window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}?view=folder`);
+        } else {
+          // folder path doesn't contain the space group Id
+          // folder is sub folder of a symlink from another space, we can not build the url from the folder path
+          window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname}/${parentFolder.name}?view=folder`);
         }
-        pathParts = window.location.pathname.split(eXo.env.portal.selectedNodeUri);
-        window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}?view=folder`);
       } else {
         const userName = eXo.env.portal.userName;
         const userPrivatePathPrefix = `${userName}/Private`;
