@@ -24,25 +24,22 @@
       </v-list-item-title>
     </v-list-item-content>
     <v-list-item-action class="d-flex flex-row align-center">
-
       <div
-          :title="$t('documents.label.zip.attachments.delete')"
-          class="remove-button">
-          <v-btn
+        :title="$t('documents.label.zip.attachments.delete')"
+        class="remove-button">
+        <v-btn
           class="d-flex align-end"
           icon
           small
-            size="24"
-            @click="removeAttachedFile(attachment)">
-            <i v-if="attachmentInProgress" class="uiIconCloseCircled error--text"></i>
-            <v-icon
+          size="24"
+          @click="removeAttachedFile(attachment)">
+          <i v-if="attachmentInProgress" class="uiIconCloseCircled error--text"></i>
+          <v-icon
             v-else 
-              small
-              class="fas fa-unlink error--text" />
-
-          </v-btn>
-          
-        </div>
+            small
+            class="fas fa-unlink error--text" />
+        </v-btn>
+      </div>
     </v-list-item-action>
   </div>
 </template>
