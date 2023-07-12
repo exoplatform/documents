@@ -47,8 +47,8 @@ export default {
       fileSizeNullError: false,
       sameFileError: false,
       fileTypes: ['zip','application/zip','application/x-zip','application/x-zip-compressed'],
-      maxFilesCount: eXo.env.portal?.documents?.maxFilesCount?parseInt(`${eXo.env.portal.documents.maxFilesCount}`):1,
-      maxFileSize: eXo.env.portal?.documents?.maxZipSize?parseInt(`${eXo.env.portal.documents.maxZipSize}`):2000
+      maxFilesCount: eXo.env.portal?.documentsMaxZipCount?parseInt(`${eXo.env.portal.documentsMaxZipCount}`):1,
+      maxFileSize: eXo.env.portal?.documentsMaxZipSize?parseInt(`${eXo.env.portal.documentsMaxZipSize}`):parseInt(`${eXo.env.portal.maxFileSize}`)
     };
   },
   computed: {
