@@ -124,7 +124,9 @@ export default {
       handler() {
         const tabsExtensionIds = Object.values(this.tabsExtensions).map(extension => extension.viewName);
         this.tab = tabsExtensionIds.includes(this.selectedView) ? tabsExtensionIds[tabsExtensionIds.indexOf(this.selectedView)] : 'timeline';
-        this.$refs.applicationToolbar.selectToggle(this.tab);
+        if (this.$refs.applicationToolbar) {
+          this.$refs.applicationToolbar?.selectToggle(this.tab);
+        }
       },
     },
     tabsExtensions() {
