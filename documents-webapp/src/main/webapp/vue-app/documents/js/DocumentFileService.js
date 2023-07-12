@@ -83,13 +83,13 @@ export function setUserDefaultView(view) {
   const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/settings/${ownerId}/${view}`, {
     method: 'POST'
-  }).then((resp) => {
-    if (resp && resp.ok) {
-      return resp.json();
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
     } else {
-      throw new Error('Server indicates an error while sending request');
+      return resp.ok;
     }
-  });   
+  });  
 }
 
 export function getBreadCrumbs(folderId,ownerId,folderPath) {
