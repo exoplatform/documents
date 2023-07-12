@@ -19,9 +19,9 @@
                 {{ $t('documents.label.upload.zip.choice') }}
               </v-subheader>
             </div>
-              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
-                {{ $t('documents.label.zip.attachments.upload.description') }}
-              </div>
+            <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
+              {{ $t('documents.label.zip.attachments.upload.description') }}
+            </div>
             <documents-zip-upload-input
               v-if="value.length === 0"
               :attachments="value" />
@@ -35,9 +35,9 @@
                 {{ $t('documents.label.upload.zip.rules') }}
               </v-subheader>
             </div>
-              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
-                {{ $t('documents.label.upload.zip.rules.description') }}
-              </div>
+            <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
+              {{ $t('documents.label.upload.zip.rules.description') }}
+            </div>
             <div class="radio-group-container ps-3">
               <v-radio-group
                 v-model="selected">
@@ -96,8 +96,14 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showCreatedFiles=!showCreatedFiles">
-                        <v-icon v-if="showCreatedFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
+                        <v-icon
+                          v-if="showCreatedFiles"
+                          color="grey"
+                          class="fas fa-chevron-up" />
+                        <v-icon
+                          v-else
+                          color="grey"
+                          class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -121,8 +127,14 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showIgnoredFiles=!showIgnoredFiles">
-                        <v-icon v-if="showIgnoredFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
+                        <v-icon
+                          v-if="showIgnoredFiles"
+                          color="grey"
+                          class="fas fa-chevron-up" />
+                        <v-icon
+                          v-else
+                          color="grey"
+                          class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -146,8 +158,14 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showDuplicatedFiles=!showDuplicatedFiles">
-                        <v-icon v-if="showDuplicatedFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
+                        <v-icon
+                          v-if="showDuplicatedFiles"
+                          color="grey"
+                          class="fas fa-chevron-up" />
+                        <v-icon
+                          v-else
+                          color="grey"
+                          class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>
@@ -171,8 +189,14 @@
                         v-bind="attrs"
                         v-on="on" 
                         @click="showFailedFiles=!showFailedFiles">
-                        <v-icon v-if="showFailedFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
+                        <v-icon
+                          v-if="showFailedFiles"
+                          color="grey"
+                          class="fas fa-chevron-up" />
+                        <v-icon
+                          v-else
+                          color="grey"
+                          class="fas fa-chevron-down" />
                       </v-btn>
                     </template>
                     <span>

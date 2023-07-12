@@ -8,4 +8,5 @@
 
 <script type="text/javascript" id="documentsHeadScripts">
     eXo.env.portal.documentsMaxZipSize = <%=System.getProperty("eXo.documents.import.maxZipSize")%>;
+    eXo.env.portal.uploadLimit = <%=System.getProperty("exo.uploadLimit")%>;
 </script>
