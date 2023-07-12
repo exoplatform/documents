@@ -698,7 +698,9 @@ public class JCRDocumentsUtil {
       versionFileNode.setTitle(node.getName());
     }
     String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
-    Profile profile = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName).getProfile();
+    org.exoplatform.social.core.identity.model.Identity
+        identity = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName);
+    Profile profile = identity != null ? identity.getProfile() : null;
     String[] summary = node.getVersionHistory().getVersionLabels(version);
     if (summary.length > 0) {
       versionFileNode.setSummary(summary[0]);
@@ -707,7 +709,7 @@ public class JCRDocumentsUtil {
     versionFileNode.setFrozenId(frozen.getUUID());
     versionFileNode.setOriginId(node.getUUID());
     versionFileNode.setAuthor(userName);
-    versionFileNode.setAuthorFullName(profile.getFullName());
+    versionFileNode.setAuthorFullName(profile != null ? profile.getFullName() : userName);
     versionFileNode.setCreatedDate(version.getCreated().getTime());
     versionFileNode.setVersionNumber(Integer.parseInt(version.getName()));
     if (version.getName().equals(currentVersionName)) {
