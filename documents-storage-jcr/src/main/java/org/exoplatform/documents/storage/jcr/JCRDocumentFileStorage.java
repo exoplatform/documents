@@ -1412,7 +1412,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         currentNode = getNodeByIdentifier(session, sourceNodeId);
       }
       // add referencable mixin to the node if isn't referencable
-      if (currentNode.isNodeType(NodeTypeConstants.NT_FOLDER ) && !currentNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE ) && currentNode.canAddMixin(NodeTypeConstants.MIX_REFERENCEABLE)) {
+      if (!currentNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE ) && currentNode.canAddMixin(NodeTypeConstants.MIX_REFERENCEABLE)) {
         currentNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
         currentNode.save();
       }
