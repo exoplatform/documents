@@ -1337,6 +1337,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         currentNode = getNodeByIdentifier(session, sourceNodeId);
       }
+      // add referencable mixin to the node if isn't referencable
+      if (!currentNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE ) && currentNode.canAddMixin(NodeTypeConstants.MIX_REFERENCEABLE)) {
+        currentNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
+        currentNode.save();
+      }
       Node linkNode;
       if (currentNode != null && rootNode.hasNode(currentNode.getName())) {
         linkNode = handleShortcutDocConflict(rootNode, currentNode, conflictAction);
