@@ -82,7 +82,21 @@ public class DocumentsSpaceApplicationListener implements SpaceLifeCycleListener
 
   @Override
   public void spaceCreated(SpaceLifeCycleEvent event) {
-    // Not needed
+    Space space = event.getSpace();
+    SpaceTemplate spaceTemplate = getSpaceTemplateService().getSpaceTemplateByName(space.getTemplate());
+    if (spaceTemplate != null && spaceTemplate.getSpaceApplicationList() != null) {
+      boolean documentAppInstalled = spaceTemplate.getSpaceApplicationList()
+                                                .stream()
+                                                .anyMatch(app -> StringUtils.equals(app.getPortletName(),
+                                                                                    DOCUMENTS_DOCUMENTS_PORTLET_ID));
+      if (documentAppInstalled) {
+        try {
+          installDocumentsSizeGadget(space, event.getType());
+        } catch (Exception e) {
+          LOG.warn("Error installing AgendaTimeline widget in space {}", space.getDisplayName(), e);
+        }
+      }
+    }
   }
 
   @Override
