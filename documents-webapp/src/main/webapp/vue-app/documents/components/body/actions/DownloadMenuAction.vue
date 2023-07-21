@@ -40,8 +40,7 @@ export default {
       if (!this.isMultiSelection) {
         this.$attachmentService.getAttachmentById(this.file.id)
           .then(attachment => {
-            const nodeName = attachment.path.substring(attachment.path.lastIndexOf('/') + 1 );
-            this.downloadUrl = attachment.downloadUrl.replace(nodeName, encodeURIComponent(nodeName).replaceAll('%', '%25')) ;
+            this.downloadUrl = attachment.downloadUrl.replaceAll('+', '%2B') ;
           })
           .catch(e => console.error(e))
           .finally(() => {
