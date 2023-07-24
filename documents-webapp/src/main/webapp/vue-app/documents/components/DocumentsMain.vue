@@ -1509,7 +1509,7 @@ export default {
               openUrl: attachment.openUrl,
               breadCrumb: attachment.previewBreadcrumb,
               size: attachment.size,
-              downloadUrl: attachment.downloadUrl,
+              downloadUrl: attachment.downloadUrl.replaceAll('+', '%2B'),
               isCloudDrive: attachment.cloudDrive
             },
             author: attachment.updater,
