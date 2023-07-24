@@ -247,7 +247,6 @@ export default {
         const id = this.file.id;
         this.$attachmentService.getAttachmentById(id)
           .then(attachment => {
-            const nodeName = attachment.path.substring(attachment.path.lastIndexOf('/') + 1 );
             documentPreview.init({
               doc: {
                 id: id,
@@ -255,7 +254,7 @@ export default {
                 workspace: 'collaboration',
                 //concat the file type if attachement title haven't extension on preview mode
                 title: decodeURI(attachment.title).lastIndexOf('.') >= 0 ? decodeURI(attachment.title) : decodeURI(attachment.title).concat(this.fileType),
-                downloadUrl: attachment.downloadUrl.replace(nodeName, encodeURIComponent(nodeName).replaceAll('%', '%25')),
+                downloadUrl: attachment.downloadUrl.replaceAll('+', '%2B'),
                 openUrl: attachment.openUrl,
                 breadCrumb: attachment.previewBreadcrumb,
                 fileInfo: this.fileInfo(),
