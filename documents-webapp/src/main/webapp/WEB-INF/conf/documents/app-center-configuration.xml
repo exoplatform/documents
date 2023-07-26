@@ -68,7 +68,7 @@
               <boolean>false</boolean>
             </field>
             <field name="isMobile">
-              <boolean>false</boolean>
+              <boolean>true</boolean>
             </field>
           </object>
         </object-param>
