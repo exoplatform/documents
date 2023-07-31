@@ -54,8 +54,13 @@ export default {
       .then(file => { 
         this.file = file;
         this.getFileIcon(this.file?.mimetype);
-        this.documentTitle = decodeURI(decodeURI(file.title)) ;
-        const updaterFullName = file && file.updater && file.updater.profile && file.updater.profile.fullname || '';
+        this.documentTitle = file.title;
+        try {
+          decodeURI(decodeURI(file.title));
+        } catch (error) {
+          // No problem, we can use the title as is, it does not need to be decoded and it contains a % character
+        }
+        const updaterFullName = file?.updater?.profile?.fullname || '';
         const updateDate = new Date(file.updated);
         const updateDateInfo = this.$dateUtil.formatDateObjectToDisplay(updateDate, this.dateFormat);
         const fileInfo = `${this.$t('documents.preview.updatedOn')} ${updateDateInfo} ${this.$t('documents.preview.updatedBy')} ${updaterFullName} ${file.size}`;
