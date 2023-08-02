@@ -9,5 +9,5 @@ module.exports = merge(webpackProductionConfig, {
     filename: 'js/[name].bundle.js'
   },
   mode: 'development',
-  devtool: 'eval-source-map'
+devtool: 'eval-source-map'
 });
