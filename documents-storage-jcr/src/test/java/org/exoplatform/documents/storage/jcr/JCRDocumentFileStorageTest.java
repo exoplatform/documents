@@ -190,6 +190,17 @@ public class JCRDocumentFileStorageTest {
     //assert that the linkNode set edit permission
     verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
 
+    when(rootNode.hasNode("Shared")).thenReturn(true);
+    when(rootNode.getNode("Shared")).thenReturn(sharedNode);
+    when(sharedNode.hasNode(currentNode.getName())).thenReturn(true);
+    when(sharedNode.getNode(currentNode.getName())).thenReturn(linkNode);
+    when(linkNode.getACL()).thenReturn(acl);
+
+    jcrDocumentFileStorage.shareDocument("1", 1L);
+    // Assert that the shared document event was not broadcast
+    UTILS.verify(() -> Utils.broadcast(listenerService, "share_document_event", identity, linkNode), atLeast(0));
+    verify(sessionProvider, times(3)).close();
+
   }
 
   @Test
@@ -1355,5 +1366,39 @@ public class JCRDocumentFileStorageTest {
     when(node.getParent()).thenReturn(parentNode);
     String zipPath = jcrDocumentFileStorage.downloadFolder("123");
     assertNotNull(zipPath);
+  }
+  @Test
+  public void isDocumentSharedWithSamePermissionsTest() throws RepositoryException {
+    ExtendedNode currentNode = mock(ExtendedNode.class);
+    ExtendedNode linkNode = mock(ExtendedNode.class);
+    Identity identity = mock(Identity.class);
+    when(identity.getProviderId()).thenReturn("USER");
+    AccessControlEntry accessControlEntry = new AccessControlEntry("john", "edit");
+    AccessControlList acl = new AccessControlList("john", Arrays.asList(accessControlEntry));
+    when(currentNode.getACL()).thenReturn(acl);
+    when(linkNode.getACL()).thenReturn(acl);
+    when(identity.getRemoteId()).thenReturn("john");
+    //
+    assertTrue(jcrDocumentFileStorage.isDocumentSharedWithSamePermissions(currentNode, linkNode, identity));
+
+    when(identity.getProviderId()).thenReturn("space");
+    when(identity.getRemoteId()).thenReturn("spaceTest");
+    Space spaceTest = mock(Space.class);
+    when(spaceService.getSpaceByPrettyName(identity.getRemoteId())).thenReturn(spaceTest);
+    when(spaceTest.getGroupId()).thenReturn("/space/Test");
+    AccessControlEntry accessControlEntry1 = new AccessControlEntry("*:/space/Test", "edit");
+    AccessControlList acl1 = new AccessControlList("*:/space/Test", Arrays.asList(accessControlEntry1));
+    when(currentNode.getACL()).thenReturn(acl1);
+    when(linkNode.getACL()).thenReturn(acl1);
+    //
+    assertTrue(jcrDocumentFileStorage.isDocumentSharedWithSamePermissions(currentNode, linkNode, identity));
+
+    AccessControlEntry accessControlEntry2 = new AccessControlEntry("*:/space/Test", "read");
+    AccessControlList acl2 = new AccessControlList("*:/space/Test", Arrays.asList(accessControlEntry2));
+    when(currentNode.getACL()).thenReturn(acl1);
+    when(linkNode.getACL()).thenReturn(acl2);
+    //
+    assertFalse(jcrDocumentFileStorage.isDocumentSharedWithSamePermissions(currentNode, linkNode, identity));
+
   }
 }
