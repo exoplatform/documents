@@ -1223,7 +1223,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       Node linkNode = null;
       if (shared.hasNode(currentNode.getName())) {
+        // link node already exist
         linkNode = shared.getNode(currentNode.getName());
+        // check if the document is already shared with the same permissions
+        if (isDocumentSharedWithSamePermissions(currentNode, linkNode, destIdentity)) {
+          return;
+        }
       } else {
         linkNode = shared.addNode(currentNode.getName(), NodeTypeConstants.EXO_SYMLINK);
       }
@@ -1275,7 +1280,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
+  public boolean isDocumentSharedWithSamePermissions(Node currentNode, Node linkNode, org.exoplatform.social.core.identity.model.Identity destinationIdentity ) throws RepositoryException {
+    String destinationRemoteId;
+    if (destinationIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
+      destinationRemoteId = "*:" + spaceService.getSpaceByPrettyName(destinationIdentity.getRemoteId()).getGroupId();
+    } else destinationRemoteId = destinationIdentity.getRemoteId();
+    List<AccessControlEntry> currentNodeAcc = ((ExtendedNode) currentNode).getACL().getPermissionEntries()
+            .stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destinationRemoteId)).toList();
 
+    List<AccessControlEntry> linkNodeAcc = ((ExtendedNode) linkNode).getACL().getPermissionEntries()
+            .stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destinationRemoteId)).toList();
+    return currentNodeAcc.equals(linkNodeAcc);
+  }
   public void notifyMember(String documentId, long destId) {
     SessionProvider sessionProvider = null;
     try {
