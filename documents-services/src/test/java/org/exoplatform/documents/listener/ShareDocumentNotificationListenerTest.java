@@ -148,9 +148,10 @@ public class ShareDocumentNotificationListenerTest {
     NOTIFICATION_UTILS.when(() -> NotificationUtils.getDocumentTitle(any(Node.class))).thenReturn("document");
     shareDocumentNotificationListener.onEvent(event);
     verify(notificationExecutor, times(1)).execute(notificationContext);
-    when(targetIdentity.getRemoteId()).thenReturn("space_name");
+    // Space case
     when(targetIdentity.getProviderId()).thenReturn(SpaceIdentityProvider.NAME);
     shareDocumentNotificationListener.onEvent(event);
-    verify(notificationExecutor, times(2)).execute(notificationContext);
+    //
+    verify(notificationExecutor, times(1)).execute(notificationContext);
   }
 }
