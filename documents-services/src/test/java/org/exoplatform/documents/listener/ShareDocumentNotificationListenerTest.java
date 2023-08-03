@@ -151,6 +151,6 @@ public class ShareDocumentNotificationListenerTest {
     when(targetIdentity.getRemoteId()).thenReturn("space_name");
     when(targetIdentity.getProviderId()).thenReturn(SpaceIdentityProvider.NAME);
     shareDocumentNotificationListener.onEvent(event);
-    verify(notificationExecutor, times(2)).execute(notificationContext);
+    verify(notificationExecutor, times(1)).execute(notificationContext);
   }
 }
