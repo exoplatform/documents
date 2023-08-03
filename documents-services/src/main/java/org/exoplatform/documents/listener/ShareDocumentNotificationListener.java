@@ -50,6 +50,10 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
   public void onEvent(Event<Identity, Node> event) throws Exception {
     Node targetNode = event.getData();
     Identity targetIdentity = event.getSource();
+    if (targetIdentity.getProviderId().equals(SpaceIdentityProvider.NAME)) {
+      // Do not notify space members
+      return;
+    }
     String currentUser = ConversationState.getCurrent().getIdentity().getUserId();
     NotificationContext ctx = NotificationContextImpl.cloneInstance();
     String documentLink = null;
@@ -57,11 +61,6 @@ public class ShareDocumentNotificationListener extends Listener<Identity, Node> 
       documentLink = NotificationUtils.getSharedDocumentLink(targetNode, null, null);
     } else {
       documentLink = NotificationUtils.getDocumentLink(targetNode, spaceService, identityManager);
-    }
-    if (targetIdentity.getProviderId().equals(SpaceIdentityProvider.NAME)) {
-      documentLink = NotificationUtils.getSharedDocumentLink(targetNode,
-                                                             spaceService,
-                                                             targetIdentity.getRemoteId());
     }
     ctx.append(NotificationConstants.FROM_USER, currentUser);
     ctx.append(NotificationConstants.DOCUMENT_URL, documentLink);

@@ -122,10 +122,11 @@ public class ShareDocumentNotificationListenerTest {
     shareDocumentNotificationListener.onEvent(event);
     verifyStatic(PluginKey.class, times(1));
     PluginKey.key(AddDocumentCollaboratorPlugin.ID);
-    when(targetIdentity.getRemoteId()).thenReturn("space_name");
+    // Space case
     when(targetIdentity.getProviderId()).thenReturn(SpaceIdentityProvider.NAME);
     shareDocumentNotificationListener.onEvent(event);
-    verifyStatic(PluginKey.class, times(2));
+    //
+    verifyStatic(PluginKey.class, times(1));
     PluginKey.key(AddDocumentCollaboratorPlugin.ID);
   }
 }
