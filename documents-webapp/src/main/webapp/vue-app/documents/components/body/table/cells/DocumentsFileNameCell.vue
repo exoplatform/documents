@@ -247,14 +247,20 @@ export default {
         const id = this.file.id;
         this.$attachmentService.getAttachmentById(id)
           .then(attachment => {
+            let attachmentTitle = attachment.title;
+            try {
+              attachmentTitle = decodeURI(attachment.title);
+            } catch (error) {
+              // Nothing to do ; file title contains a % character
+            }
             documentPreview.init({
               doc: {
                 id: id,
                 repository: 'repository',
                 workspace: 'collaboration',
                 //concat the file type if attachement title haven't extension on preview mode
-                title: decodeURI(attachment.title).lastIndexOf('.') >= 0 ? decodeURI(attachment.title) : decodeURI(attachment.title).concat(this.fileType),
-                downloadUrl: attachment.downloadUrl.replaceAll('+', '%2B'),
+                title: decodeURI().lastIndexOf('.') >= 0 ? attachmentTitle : attachmentTitle.concat(this.fileType),
+                downloadUrl: attachment.downloadUrl.replaceAll('%', '%25').replaceAll('+', '%2B'),
                 openUrl: attachment.openUrl,
                 breadCrumb: attachment.previewBreadcrumb,
                 fileInfo: this.fileInfo(),
