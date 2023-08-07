@@ -39,6 +39,7 @@ import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
@@ -605,7 +606,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       }
     }
-    return folderListNodes.stream().sorted((fullTreeItem1, fullTreeItem2)-> new Utils.NaturalComparator().compare(fullTreeItem1.getName(), fullTreeItem2.getName())).toList();
+    return folderListNodes.stream().sorted((fullTreeItem1, fullTreeItem2)-> new NaturalComparator().compare(fullTreeItem1.getName(), fullTreeItem2.getName())).toList();
   }
   @Override
   public AbstractNode createFolder(long ownerId,
