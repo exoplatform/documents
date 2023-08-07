@@ -1197,7 +1197,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  public void shareDocument(String documentId, long destId) {
+  public void shareDocument(String documentId, long destId, boolean broadcast) {
     Node rootNode = null;
     Node shared = null;
     SessionProvider sessionProvider = null;
@@ -1271,7 +1271,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       ((ExtendedNode) linkNode).setPermissions(permissions);
       systemSession.save();
-      Utils.broadcast(listenerService, "share_document_event", destIdentity, linkNode);
+      if (broadcast) {
+        Utils.broadcast(listenerService, "share_document_event", destIdentity, linkNode);
+      }
     } catch (Exception e) {
       throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
     }finally {
