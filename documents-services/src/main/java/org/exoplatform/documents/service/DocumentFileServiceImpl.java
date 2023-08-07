@@ -263,9 +263,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException {
 
     documentFileStorage.updatePermissions(documentId, nodePermissionEntity, getAclUserIdentity(authenticatedUserId));
+    boolean broadcastShareDocumentEvent = nodePermissionEntity.getToNotify() == null || nodePermissionEntity.getToNotify().isEmpty();
     nodePermissionEntity.getToShare().keySet().forEach(destId-> {
       try {
-        shareDocument(documentId, destId);
+        shareDocument(documentId, destId, broadcastShareDocumentEvent);
       } catch (IllegalAccessException e) {
         throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
       }
@@ -282,9 +283,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public void shareDocument(String documentId, long destId) throws IllegalAccessException {
+  public void shareDocument(String documentId, long destId, boolean broadcast) throws IllegalAccessException {
 
-    documentFileStorage.shareDocument(documentId, destId);
+    documentFileStorage.shareDocument(documentId, destId, broadcast );
   }
 
   @Override

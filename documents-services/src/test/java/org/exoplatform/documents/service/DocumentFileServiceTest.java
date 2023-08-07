@@ -429,7 +429,7 @@ public class DocumentFileServiceTest {
     when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
-    verify(documentFileStorage, times(1)).shareDocument("123", 1L);
+    verify(documentFileStorage, times(1)).shareDocument("123", 1L, true);
   }
 
   @Test
