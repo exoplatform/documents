@@ -1,5 +1,17 @@
 package org.exoplatform.documents.rest.util;
 
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
+import org.exoplatform.documents.model.PermissionRole;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+
 import org.exoplatform.documents.model.NodePermission;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.service.DocumentFileService;
@@ -7,17 +19,9 @@ import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
+
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.util.List;
-
-import static org.junit.Assert.*;
-import static org.powermock.api.mockito.PowerMockito.mock;
-import static org.powermock.api.mockito.PowerMockito.when;
 
 @RunWith(PowerMockRunner.class)
 public class EntityBuilderTest {
@@ -65,6 +69,14 @@ public class EntityBuilderTest {
         nodePermissionEntity.setCollaborators(List.of(permissionEntryEntity));
         NodePermission nodePermission2 = EntityBuilder.toNodePermission(abstractNodeEntity,documentFileService, spaceService, identityManager);
         assertNotNull(nodePermission2);
+        //
+        nodePermissionEntity.setVisibilityChoice(Visibility.SPECIFIC_COLLABORATOR.name());
+        nodePermissionEntity.setAllMembersCanEdit(false);
+        NodePermission specificCollabotratorsNodePermission = EntityBuilder.toNodePermission(abstractNodeEntity,documentFileService, spaceService, identityManager);
+        assertNotNull(specificCollabotratorsNodePermission);
+        assertEquals(PermissionRole.MANAGERS_REDACTORS.name(), specificCollabotratorsNodePermission.getPermissions().get(0).getRole());
+        assertEquals(identity.getRemoteId(), specificCollabotratorsNodePermission.getPermissions().get(0).getIdentity().getRemoteId());
+        assertEquals("edit", specificCollabotratorsNodePermission.getPermissions().get(0).getPermission());
 
         IdentityEntity useridentityEntity = new IdentityEntity();
         useridentityEntity.setId("1");
