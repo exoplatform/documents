@@ -1265,11 +1265,15 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
     org.exoplatform.social.core.identity.model.Identity identity = mock(org.exoplatform.social.core.identity.model.Identity.class);
     org.exoplatform.social.core.identity.model.Identity identity1 = mock(org.exoplatform.social.core.identity.model.Identity.class);
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity = mock(org.exoplatform.social.core.identity.model.Identity.class);
+    Space space = mock(Space.class);
     when(identity.getProviderId()).thenReturn("group");
     when(identity.getRemoteId()).thenReturn("/platform/users");
     when(identity1.getProviderId()).thenReturn("user");
     when(identity1.getRemoteId()).thenReturn("John");
     when(aclIdentity.getUserId()).thenReturn("user");
+    when(spaceIdentity.getProviderId()).thenReturn("space");
+    when(spaceIdentity.getRemoteId()).thenReturn("spaceTest");
     ManageableRepository manageableRepository = mock(ManageableRepository.class);
     lenient().when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
     Session session = mock(Session.class);
@@ -1279,6 +1283,8 @@ public class JCRDocumentFileStorageTest {
     lenient().when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
     ExtendedNode node = mock(ExtendedNode.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    lenient().when(spaceService.getSpaceByPrettyName(spaceIdentity.getRemoteId())).thenReturn(space);
+    lenient().when(space.getGroupId()).thenReturn("/spaces/spaceTest");
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(true);
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(true);
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
@@ -1288,6 +1294,8 @@ public class JCRDocumentFileStorageTest {
     List<PermissionEntry> permissionsList = new ArrayList<>();
     permissionsList.add(new PermissionEntry(identity, "read", null));
     permissionsList.add(new PermissionEntry(identity1, "edit", null));
+    // permissionsList including space manager and redactor permission
+    permissionsList.add(new PermissionEntry(spaceIdentity, "edit", PermissionRole.MANAGERS_REDACTORS.name()));
     when(nodePermission.getPermissions()).thenReturn(permissionsList);
     //When
     jcrDocumentFileStorage.updatePermissions("123",  nodePermission, aclIdentity);
@@ -1295,6 +1303,9 @@ public class JCRDocumentFileStorageTest {
     verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("*:/platform/administrators") && Arrays.equals(map.get("*:/platform/administrators"),PermissionType.ALL)));
     verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("*:/platform/users") && Arrays.equals(map.get("*:/platform/users"),new String[]{"read"})));
     verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("John") && Arrays.equals(map.get("John"),PermissionType.ALL)));
+    //
+    verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("redactor:/spaces/spaceTest") && Arrays.equals(map.get("redactor:/spaces/spaceTest"),PermissionType.ALL)));
+    verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("manager:/spaces/spaceTest") && Arrays.equals(map.get("redactor:/spaces/spaceTest"),PermissionType.ALL)));
   }
   
   private Session getMockedSession(org.exoplatform.services.security.Identity identity) throws RepositoryException {
