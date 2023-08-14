@@ -144,7 +144,7 @@ public interface DocumentFileStorage {
    * @param destId target user or space identity id
    * @throws IllegalAccessException
    */
-  void shareDocument(String documentId, long destId) throws IllegalAccessException;
+  void shareDocument(String documentId, long destId, boolean broadcast) throws IllegalAccessException;
 
   void notifyMember(String documentId, long destId) throws IllegalAccessException;
 

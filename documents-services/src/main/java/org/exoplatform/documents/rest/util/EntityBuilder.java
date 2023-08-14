@@ -343,6 +343,7 @@ public class EntityBuilder {
               //check if the owner is a space and the destination is a member of this space
               if (ownerId.isSpace() && spaceService.isMember(spaceService.getSpaceByPrettyName(ownerId.getRemoteId()), permissionEntryEntity.getIdentity().getRemoteId())) {
                 toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
               } else {
                 toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
               }
