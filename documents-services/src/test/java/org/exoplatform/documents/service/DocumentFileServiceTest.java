@@ -448,6 +448,14 @@ public class DocumentFileServiceTest {
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
     verify(documentFileStorage, times(1)).shareDocument("123", 1L, false);
+    //
+    Map<Long, String> toNotify = new HashMap<>();
+    toNotify.put(1L, "read");
+    nodePermission.setToNotify(toNotify);
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage, atLeast(1)).updatePermissions("123", nodePermission, identity);
+    verify(documentFileStorage, atLeast(1)).shareDocument("123", 1L, true);
+
   }
 
   @Test
