@@ -1198,7 +1198,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  public void shareDocument(String documentId, long destId, boolean broadcast) {
+  public void shareDocument(String documentId, long destId, boolean notifyMember) {
     Node rootNode = null;
     Node shared = null;
     SessionProvider sessionProvider = null;
@@ -1272,7 +1272,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       ((ExtendedNode) linkNode).setPermissions(permissions);
       systemSession.save();
-      if (broadcast) {
+      if (notifyMember) {
+        notifyMember(documentId, destId);
+      } else {
         Utils.broadcast(listenerService, "share_document_event", destIdentity, linkNode);
       }
     } catch (Exception e) {

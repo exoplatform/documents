@@ -172,7 +172,7 @@ public class JCRDocumentFileStorageTest {
     AccessControlList acl1 = new AccessControlList("username", Arrays.asList(accessControlEntry));
     when(((ExtendedNode) currentNode).getACL()).thenReturn(acl1);
     when(linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
-    jcrDocumentFileStorage.shareDocument("1", 1L, true);
+    jcrDocumentFileStorage.shareDocument("1", 1L, false);
 
     UTILS.verify(() -> times(1));
     Utils.broadcast(listenerService, "share_document_event", identity, linkNode);
@@ -185,7 +185,7 @@ public class JCRDocumentFileStorageTest {
     AccessControlEntry accessControlEntry1 = new AccessControlEntry("username", "edit");
     AccessControlList acl = new AccessControlList("username", Arrays.asList(accessControlEntry1));
     when(((ExtendedNode) currentNode).getACL()).thenReturn(acl);
-    jcrDocumentFileStorage.shareDocument("1", 1L, true);
+    jcrDocumentFileStorage.shareDocument("1", 1L, false);
 
     //assert that the linkNode set edit permission
     verify(linkNode).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("username") && Arrays.equals(map.get("username"),new String[]{"edit"})));
@@ -196,7 +196,7 @@ public class JCRDocumentFileStorageTest {
     when(sharedNode.getNode(currentNode.getName())).thenReturn(linkNode);
     when(linkNode.getACL()).thenReturn(acl);
 
-    jcrDocumentFileStorage.shareDocument("1", 1L, true);
+    jcrDocumentFileStorage.shareDocument("1", 1L, false);
     // Assert that the shared document event was not broadcast
     UTILS.verify(() -> Utils.broadcast(listenerService, "share_document_event", identity, linkNode), atLeast(0));
     verify(sessionProvider, times(3)).close();
