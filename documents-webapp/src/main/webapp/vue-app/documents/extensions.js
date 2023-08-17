@@ -114,7 +114,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 2,
   enabled: (file) => {
-    return file && !file.cloudDriveFolder && file.acl.canEdit;
+    return file && !file.cloudDriveFolder
+                && file.acl.canEdit
+                && Vue.prototype?.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file?.mimeType).length > 0;
   },
   enabledForMultiSelection: () => false,
   componentOptions: {

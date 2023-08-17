@@ -292,9 +292,9 @@ export default {
     },
     openPreview() {
       this.loading = true;
-      if (this.file && this.file.folder) {
+      if (this.file?.folder) {
         this.$root.$emit('document-open-folder', this.file);
-      } else if (!this.isMobile && this.isFileEditable && this.file.acl.canEdit)  {
+      } else if (this.isFileEditable && this.file?.acl?.canEdit)  {
         this.openInEditMode(this.file);
         this.loading = false;
       } else {
