@@ -46,6 +46,7 @@ export default {
       fileSizeLimitError: false,
       fileSizeNullError: false,
       sameFileError: false,
+      uploadErrorMassage: this.$t('import.drawer.fileUpload.error'),
       fileTypes: ['zip','application/zip','application/x-zip','application/x-zip-compressed'],
       maxFilesCount: eXo.env.portal?.documentsMaxZipCount?parseInt(`${eXo.env.portal.documentsMaxZipCount}`):1,
       maxFileSize: eXo.env.portal?.documentsMaxZipSize?parseInt(`${eXo.env.portal.documentsMaxZipSize}`):eXo.env.portal?.uploadLimit?parseInt(`${eXo.env.portal.uploadLimit}`):parseInt(`${eXo.env.portal.maxFileSize}`)
@@ -131,14 +132,13 @@ export default {
       }
     },
     sendFileToServer(file) {
-      const uploadErrorMassage = this.$t('import.drawer.fileUpload.error');
       if (!file.aborted) {
         this.uploadingCount++;
         this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal)
           .catch(() => {
             this.removeAttachedFile(file);
             this.$root.$emit('show-alert', {
-              message: uploadErrorMassage,
+              message: this.uploadErrorMassage,
               type: 'error',
             });
           });
@@ -148,7 +148,6 @@ export default {
       }
     },
     controlUpload(file) {
-      const uploadErrorMassage = this.$t('import.drawer.fileUpload.error');
       if (file.aborted) {
         this.uploadingCount--;
         this.processNextQueuedUpload();
@@ -156,22 +155,18 @@ export default {
         window.setTimeout(() => {
           this.$uploadService.getUploadProgress(file.uploadId)
             .then(percent => {
-              if (!percent) {
-                return;
+              file.uploadProgress = Number(percent);
+              if (!file.uploadProgress || file.uploadProgress < 100) {
+                this.controlUpload(file);
               } else {
-                file.uploadProgress = Number(percent);
-                if (!file.uploadProgress || file.uploadProgress < 100) {
-                  this.controlUpload(file);
-                } else {
-                  this.uploadingCount--;
-                  this.processNextQueuedUpload();
-                }
+                this.uploadingCount--;
+                this.processNextQueuedUpload();
               }
             })
             .catch(() => {
               this.removeAttachedFile(file);
               this.$root.$emit('show-alert', {
-                message: uploadErrorMassage,
+                message: this.uploadErrorMassage,
                 type: 'error',
               });
             });
