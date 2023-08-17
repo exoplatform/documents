@@ -1,10 +1,5 @@
 <template>
   <div class="uploadFiles">
-    <div class="d-flex align-center">
-      <v-subheader class="text-sub-title px-4 mt-n7 d-flex">
-        {{ $t('documents.label.zip.attachments.upload.description') }}
-      </v-subheader>
-    </div>
     <div class="contentUpload d-flex flex-column">
       <div
         id="DropFileBox"
@@ -51,20 +46,13 @@ export default {
       fileSizeLimitError: false,
       fileSizeNullError: false,
       sameFileError: false,
+      uploadErrorMassage: this.$t('import.drawer.fileUpload.error'),
       fileTypes: ['zip','application/zip','application/x-zip','application/x-zip-compressed'],
-      maxFilesCount: eXo.env.portal?.documents?.maxFilesCount?parseInt(`${eXo.env.portal.documents.maxFilesCount}`):1,
-      maxFileSize: eXo.env.portal?.documents?.maxZipSize?parseInt(`${eXo.env.portal.documents.maxZipSize}`):2000
+      maxFilesCount: eXo.env.portal?.documentsMaxZipCount?parseInt(`${eXo.env.portal.documentsMaxZipCount}`):1,
+      maxFileSize: eXo.env.portal?.documentsMaxZipSize?parseInt(`${eXo.env.portal.documentsMaxZipSize}`):eXo.env.portal?.uploadLimit?parseInt(`${eXo.env.portal.uploadLimit}`):parseInt(`${eXo.env.portal.maxFileSize}`)
     };
   },
-  computed: {
-    maxFileSizeErrorLabel: function () {
-      return this.$t('import.drawer.maxFileSize.error').replace('{0}', `${this.maxFileSize}`);
-    },
-    fileTypeErrorLabel: function () {
-      return this.$t('import.drawer.fileType.error');
-    },
 
-  },
   methods: {
     uploadFile: function () {
       this.$refs.uploadInput.click();
@@ -109,7 +97,7 @@ export default {
       }
       if ( !this.fileTypes.includes(file.mimetype) ) {
         this.$root.$emit('show-alert', {
-          message: this.fileTypeErrorLabel,
+          message: this.$t('import.drawer.fileType.error'),
           type: 'error',
         });
         return;
@@ -117,7 +105,7 @@ export default {
       const fileSizeInMb = file.size / this.BYTES_IN_MB;
       if (fileSizeInMb > this.maxFileSize) {
         this.$root.$emit('show-alert', {
-          message: this.maxFileSizeErrorLabel,
+          message: this.$t('import.drawer.maxFileSize.error').replace('{0}', `${this.maxFileSize}`),
           type: 'error',
         });
         return;
@@ -144,15 +132,16 @@ export default {
       }
     },
     sendFileToServer(file) {
+      const uploadErrorMassage = this.$t('import.drawer.fileUpload.error');
       if (!file.aborted) {
         this.uploadingCount++;
         this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal)
           .catch(() => {
-            this.$root.$emit('attachments-notification-alert', {
-              message: this.$t('attachments.link.failed'),
+            this.removeAttachedFile(file);
+            this.$root.$emit('show-alert', {
+              message: this.uploadErrorMassage,
               type: 'error',
             });
-            this.removeAttachedFile(file);
           });
         this.controlUpload(file);
       } else {
@@ -160,6 +149,7 @@ export default {
       }
     },
     controlUpload(file) {
+      const uploadErrorMassage = this.$t('import.drawer.fileUpload.error');
       if (file.aborted) {
         this.uploadingCount--;
         this.processNextQueuedUpload();
@@ -167,22 +157,18 @@ export default {
         window.setTimeout(() => {
           this.$uploadService.getUploadProgress(file.uploadId)
             .then(percent => {
-              if (!percent) {
-                return;
+              file.uploadProgress = Number(percent);
+              if (!file.uploadProgress || file.uploadProgress < 100) {
+                this.controlUpload(file);
               } else {
-                file.uploadProgress = Number(percent);
-                if (!file.uploadProgress || file.uploadProgress < 100) {
-                  this.controlUpload(file);
-                } else {
-                  this.uploadingCount--;
-                  this.processNextQueuedUpload();
-                }
+                this.uploadingCount--;
+                this.processNextQueuedUpload();
               }
             })
             .catch(() => {
               this.removeAttachedFile(file);
-              this.$root.$emit('attachments-notification-alert', {
-                message: this.$t('attachments.link.failed'),
+              this.$root.$emit('show-alert', {
+                message: this.uploadErrorMassage,
                 type: 'error',
               });
             });
