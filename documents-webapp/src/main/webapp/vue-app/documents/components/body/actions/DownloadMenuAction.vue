@@ -38,6 +38,11 @@ export default {
   methods: {
     download() {
       if (!this.isMultiSelection) {
+        if (this.file?.folder) {
+          this.$root.$emit('documents-folder-download', this.file);
+          this.$root.$emit('close-file-action-menu');
+          return;
+        }
         this.$attachmentService.getAttachmentById(this.file.id)
           .then(attachment => {
             this.downloadUrl = attachment.downloadUrl.replaceAll('%', '%25').replaceAll('+', '%2B');
