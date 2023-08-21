@@ -353,14 +353,17 @@ export default {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
   methods: {
-    copyToClipBoard(text) {
-      const inputTemp = $('<input>');
-      $('body').append(inputTemp);
-      inputTemp.val(text).select();
-      return new Promise((resolve) => {
-        document.execCommand('copy');
-        inputTemp.remove();
-        resolve();
+    copyPublicLinkToClipBoard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.$root.$emit('show-alert', {
+          type: 'success',
+          message: this.$t('documents.alert.success.label.linkCopied')
+        });
+      }).catch(() => {
+        this.$root.$emit('show-alert', {
+          type: 'error',
+          message: this.$t('document.public.access.copyLink.error.message')
+        });
       });
     },
     downloadFolder(file) {
@@ -371,21 +374,45 @@ export default {
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: file}}));
     },
     getDocumentPublicAccessLink(nodeId) {
-      this.$documentFileService.getDocumentPublicAccess(nodeId).then(publicDocumentAccess => {
-        this.copyToClipBoard(`${this.publicLinkUrl}${publicDocumentAccess.nodeId}`).then(() => {
-          this.$root.$emit('show-alert', {
-            type: 'success',
-            message: this.$t('documents.alert.success.label.linkCopied')
-          });
-        }).catch(() => {
+      if (typeof ClipboardItem && navigator.clipboard.write) {
+        const text = new window.ClipboardItem({
+          'text/plain': this.$documentFileService.getDocumentPublicAccess(nodeId)
+            .then((publicDocumentAccess) => {
+              this.$root.$emit('show-alert', {
+                type: 'success',
+                message: this.$t('documents.alert.success.label.linkCopied')
+              });
+              return new Blob([`${this.publicLinkUrl}${publicDocumentAccess.nodeId}`],
+                { type: 'text/plain' });
+            })
+            .catch((e) => {
+              if (e.status === 404) {
+                this.$root.$emit('show-alert', {
+                  type: 'warning',
+                  message: this.$t('document.visibility.publicAccess.save.message')
+                });
+                return new Blob([`${this.publicLinkUrl}${nodeId}`],
+                  { type: 'text/plain' });
+              }
+            })
+        });
+        navigator.clipboard.write([text]).catch(() => {
           this.$root.$emit('show-alert', {
             type: 'error',
-            message: this.$t('document.public.access.copyLink.error.message')
+            message: this.$t('document.visibility.publicAccess.error.message')
           });
         });
+      }
+      else {
+        this.getAndCopyDocumentPublicAccessLink(nodeId);
+      }
+    },
+    getAndCopyDocumentPublicAccessLink(nodeId) {
+      this.$documentFileService.getDocumentPublicAccess(nodeId).then(publicDocumentAccess => {
+        this.copyPublicLinkToClipBoard(`${this.publicLinkUrl}${publicDocumentAccess.nodeId}`);
       }).catch((e) => {
         if (e.status === 404) {
-          this.copyToClipBoard(`${this.publicLinkUrl}${nodeId}`).then(() => {
+          navigator.clipboard.writeText(`${this.publicLinkUrl}${nodeId}`).then(() => {
             this.$root.$emit('show-alert', {
               type: 'warning',
               message: this.$t('document.visibility.publicAccess.save.message')

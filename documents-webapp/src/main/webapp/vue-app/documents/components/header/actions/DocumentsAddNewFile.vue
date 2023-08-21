@@ -105,7 +105,10 @@
           </v-tooltip>
         </v-list-item>
       </v-menu>
-      <div v-if="actionLoading" @click="openActionDrawer()" class="d-inline">
+      <div
+        v-if="actionLoading"
+        @click="openActionDrawer()"
+        class="d-inline">
         <v-tooltip
           bottom>
           <template #activator="{ on, attrs }">
