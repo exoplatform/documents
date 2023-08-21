@@ -354,14 +354,23 @@ export default {
   },
   methods: {
     copyToClipBoard(text) {
-      const inputTemp = $('<input>');
-      $('body').append(inputTemp);
-      inputTemp.val(text).select();
-      return new Promise((resolve) => {
+      if (!navigator.userAgent.match(/ipad|ipod|iphone/i)) {
+        return navigator.clipboard.writeText(text);
+      } else {
+        const inputTemp = $('<input>');
+        $('body').append(inputTemp);
+        inputTemp.val(text);
+        const range = document.createRange();
+        const element = inputTemp.get(0);
+        range.selectNodeContents(element);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        element.setSelectionRange(0, text.length);
         document.execCommand('copy');
         inputTemp.remove();
-        resolve();
-      });
+        return Promise.resolve(true);
+      }
     },
     downloadFolder(file) {
       this.selectedDocuments.push(file);
