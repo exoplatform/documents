@@ -400,7 +400,7 @@ public class EntityBuilder {
       if (nodePermissionEntity.getVisibilityChoice().equals(Visibility.SPECIFIC_COLLABORATOR.name())) {
         permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS.name()));
       }
-      return new NodePermission(nodePermissionEntity.isCanAccess(),nodePermissionEntity.isCanEdit(),nodePermissionEntity.isCanDelete(),permissions,toShare, toNotify);
+      return new NodePermission(nodePermissionEntity.isCanAccess(),nodePermissionEntity.isCanEdit(),nodePermissionEntity.isCanDelete(),permissions,toShare, toNotify, null);
     }
     return null;
   }

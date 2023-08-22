@@ -38,4 +38,6 @@ public class NodePermission {
 
   private Map<Long,String> toNotify;
 
+  private Map<Long,String> toUnShare;
+
 }

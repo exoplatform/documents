@@ -1296,11 +1296,16 @@ public class JCRDocumentFileStorageTest {
     ExtendedNode node = mock(ExtendedNode.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
     lenient().when(spaceService.getSpaceByPrettyName(spaceIdentity.getRemoteId())).thenReturn(space);
+    lenient().when(spaceService.getSpaceByGroupId(anyString())).thenReturn(space);
+    lenient().when(identityManager.getOrCreateUserIdentity(anyString())).thenReturn(identity1);
+    lenient().when(identity1.getId()).thenReturn("1");
     lenient().when(space.getGroupId()).thenReturn("/spaces/spaceTest");
+    lenient().when(space.getId()).thenReturn("2");
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(true);
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(true);
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
     lenient().when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    lenient().when(node.getACL()).thenReturn(new AccessControlList());
     NodePermission nodePermission = mock(NodePermission.class);
     // permissionsList including group permission
     List<PermissionEntry> permissionsList = new ArrayList<>();

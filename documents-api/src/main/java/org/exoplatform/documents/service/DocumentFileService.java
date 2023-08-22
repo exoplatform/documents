@@ -215,6 +215,8 @@ public interface DocumentFileService {
 
   void notifyMember(String documentId, long destId) throws IllegalAccessException;
 
+  void unShareDocument(String documentId, long destId) throws IllegalAccessException;
+
   AbstractNode createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
   String getNewName(long ownerId, String folderId, String folderPath, String name) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
