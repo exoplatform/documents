@@ -463,7 +463,7 @@ public class DocumentFileRestTest {
     permissionEntries.add(permissionEntry4);
     permissionEntries.add(permissionEntry5);
     permissionEntries.add(permissionEntry6);
-    NodePermission nodePermission = new NodePermission(true,true,true,permissionEntries,null, null);
+    NodePermission nodePermission = new NodePermission(true, true, true, permissionEntries, null, null, null);
     folder1.setAcl(nodePermission);
 
 

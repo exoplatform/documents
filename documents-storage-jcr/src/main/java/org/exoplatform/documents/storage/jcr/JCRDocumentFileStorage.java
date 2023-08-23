@@ -1124,6 +1124,23 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
       node.save();
+      Map<Long,String> toUnShare = new HashMap<>();
+      ((ExtendedNode) node).getACL().getPermissionEntries().forEach(accessControlEntry -> {
+        if (!permissions.containsKey(accessControlEntry.getIdentity())){
+          if (!accessControlEntry.getIdentity().startsWith("*:") && !accessControlEntry.getIdentity().startsWith("redactor:/") && !accessControlEntry.getIdentity().startsWith("manager:/")){
+            org.exoplatform.social.core.identity.model.Identity userIdentity = identityManager.getOrCreateUserIdentity(accessControlEntry.getIdentity());
+            if (userIdentity != null) {
+              toUnShare.put(Long.valueOf(userIdentity.getId()), accessControlEntry.getPermission());
+            }
+          }else if (accessControlEntry.getIdentity().startsWith("*:/spaces")) {
+           Space space = spaceService.getSpaceByGroupId(accessControlEntry.getIdentity().substring(2)) ;
+           if (space != null) {
+             toUnShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(space.getPrettyName()).getId()), accessControlEntry.getPermission());
+           }
+          }
+        }
+      });
+      nodePermissionEntity.setToUnShare(toUnShare);
       ((ExtendedNode) node).setPermissions(permissions);
       session.save();
     } catch (Exception e) {
@@ -1588,5 +1605,43 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     keyValuePermission.put("canEdit", canEdit);
     keyValuePermission.put("canDelete", canDelete);
     return keyValuePermission;
+  }
+
+  @Override
+  public void unShareDocument(String documentId, long destId) {
+    Node rootNode = null;
+    Node shared = null;
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node currentNode = getNodeByIdentifier(systemSession, documentId);
+      org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
+      rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
+      if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
+        rootNode = rootNode.getNode("Documents");
+      }
+      if(!rootNode.hasNode(SHARED_FOLDER_NAME)){
+        return;
+      }else{
+        shared = rootNode.getNode(SHARED_FOLDER_NAME);
+      }
+      if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+        String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
+      }
+      if (shared.hasNode(currentNode.getName()) && shared.getNode(currentNode.getName()).isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        Node link = shared.getNode(currentNode.getName());
+        link.remove();
+        systemSession.save();
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error when unsharing the document " + documentId + "with identity " + destId, e);
+    }finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
   }
 }
