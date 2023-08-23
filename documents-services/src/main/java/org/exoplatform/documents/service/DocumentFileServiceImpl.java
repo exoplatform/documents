@@ -331,7 +331,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public void unShareDocument(String documentId, long destId) throws IllegalAccessException {
+  public void unShareDocument(String documentId, long destId) throws RepositoryException {
     documentFileStorage.unShareDocument(documentId, destId);
   }
 

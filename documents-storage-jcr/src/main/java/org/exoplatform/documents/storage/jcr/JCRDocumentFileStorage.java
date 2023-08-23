@@ -1189,11 +1189,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Map<Long,String> toUnShare = new HashMap<>();
       ((ExtendedNode) node).getACL().getPermissionEntries().forEach(accessControlEntry -> {
         if (!permissions.containsKey(accessControlEntry.getIdentity())){
-          if (!accessControlEntry.getIdentity().startsWith("*:")){
-            toUnShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(accessControlEntry.getIdentity()).getId()), accessControlEntry.getPermission());
+          if (!accessControlEntry.getIdentity().startsWith("*:") && !accessControlEntry.getIdentity().startsWith("redactor:/") && !accessControlEntry.getIdentity().startsWith("manager:/")){
+            org.exoplatform.social.core.identity.model.Identity userIdentity = identityManager.getOrCreateUserIdentity(accessControlEntry.getIdentity());
+            if (userIdentity != null) {
+              toUnShare.put(Long.valueOf(userIdentity.getId()), accessControlEntry.getPermission());
+            }
           }else if (accessControlEntry.getIdentity().startsWith("*:/spaces")) {
            Space space = spaceService.getSpaceByGroupId(accessControlEntry.getIdentity().substring(2)) ;
-            toUnShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(space.getPrettyName()).getId()), accessControlEntry.getPermission());
+           if (space != null) {
+             toUnShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(space.getPrettyName()).getId()), accessControlEntry.getPermission());
+           }
           }
         }
       });
@@ -1874,7 +1879,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return null;
   }
   @Override
-  public void unShareDocument(String documentId, long destId) throws IllegalAccessException {
+  public void unShareDocument(String documentId, long destId) {
     Node rootNode = null;
     Node shared = null;
     SessionProvider sessionProvider = null;
