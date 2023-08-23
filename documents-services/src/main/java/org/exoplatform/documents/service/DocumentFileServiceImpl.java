@@ -319,7 +319,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
         try {
           unShareDocument(documentId, destId);
         } catch (Exception e) {
-          throw new IllegalStateException("Error updating unSharing of document'" + documentId + " to identity " + destId, e);
+          throw new IllegalStateException("Error when unsharing the document {} with identity {}", documentId, destId, e);
         }
       });
     }
