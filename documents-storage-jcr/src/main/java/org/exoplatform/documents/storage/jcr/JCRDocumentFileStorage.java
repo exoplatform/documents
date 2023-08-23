@@ -1908,7 +1908,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         systemSession.save();
       }
     } catch (Exception e) {
-      throw new IllegalStateException("Error updating unSharing of document'" + documentId + " to identity " + destId, e);
+      throw new IllegalStateException("Error when unsharing the document " + documentId + "with identity " + destId, e);
     }finally {
       if (sessionProvider != null) {
         sessionProvider.close();
