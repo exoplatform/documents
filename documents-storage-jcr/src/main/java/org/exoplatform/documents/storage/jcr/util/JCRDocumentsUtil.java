@@ -512,7 +512,7 @@ public class JCRDocumentsUtil {
       }
 
     }
-    documentNode.setAcl(new NodePermission(true, canEdit, canDelete, permissions,null, null));
+    documentNode.setAcl(new NodePermission(true, canEdit, canDelete, permissions,null, null,null));
   }
 
   private static String getPermissionRole (String membershipType){
