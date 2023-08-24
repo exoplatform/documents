@@ -1296,19 +1296,24 @@ public class JCRDocumentFileStorageTest {
     ExtendedNode node = mock(ExtendedNode.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
     lenient().when(spaceService.getSpaceByPrettyName(spaceIdentity.getRemoteId())).thenReturn(space);
+    lenient().when(spaceService.getSpaceByGroupId(anyString())).thenReturn(space);
+    lenient().when(identityManager.getOrCreateUserIdentity(anyString())).thenReturn(identity1);
+    lenient().when(identity1.getId()).thenReturn("1");
     lenient().when(space.getGroupId()).thenReturn("/spaces/spaceTest");
+    lenient().when(space.getId()).thenReturn("2");
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_DATE_MODIFIED)).thenReturn(true);
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(true);
     lenient().when(node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
     lenient().when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
-    NodePermission nodePermission = mock(NodePermission.class);
+    NodePermission nodePermission = new NodePermission();
     // permissionsList including group permission
     List<PermissionEntry> permissionsList = new ArrayList<>();
     permissionsList.add(new PermissionEntry(identity, "read", null));
     permissionsList.add(new PermissionEntry(identity1, "edit", null));
     // permissionsList including space manager and redactor permission
     permissionsList.add(new PermissionEntry(spaceIdentity, "edit", PermissionRole.MANAGERS_REDACTORS.name()));
-    when(nodePermission.getPermissions()).thenReturn(permissionsList);
+    nodePermission.setPermissions(permissionsList);
+    when(node.getACL()).thenReturn(new AccessControlList("root", new ArrayList<>()));
     //When
     jcrDocumentFileStorage.updatePermissions("123",  nodePermission, aclIdentity);
     //Then
@@ -1318,6 +1323,25 @@ public class JCRDocumentFileStorageTest {
     //
     verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("redactor:/spaces/spaceTest") && Arrays.equals(map.get("redactor:/spaces/spaceTest"),PermissionType.ALL)));
     verify(node).setPermissions(argThat((Map<String, String[]> map) -> map.containsKey("manager:/spaces/spaceTest") && Arrays.equals(map.get("redactor:/spaces/spaceTest"),PermissionType.ALL)));
+
+    AccessControlList existingAccessList = new AccessControlList("root", new ArrayList<>());
+    existingAccessList.addPermissions("removedUserCollaborator", new String[]{"read"});
+    String spaceGroupId = "/spaces/removedSpaceCollaborator";
+    existingAccessList.addPermissions("*:" + spaceGroupId, new String[]{"read"});
+    when(node.getACL()).thenReturn(existingAccessList);
+    when(spaceService.getSpaceByGroupId(spaceGroupId)).thenReturn(space);
+    when(space.getPrettyName()).thenReturn("removedSpaceCollaborator");
+    when(identityManager.getOrCreateSpaceIdentity(space.getPrettyName())).thenReturn(spaceIdentity);
+    when(spaceIdentity.getId()).thenReturn("3");
+    Identity userIdentity = mock(Identity.class);
+    when(identityManager.getOrCreateUserIdentity("removedUserCollaborator")).thenReturn(userIdentity);
+    when(userIdentity.getId()).thenReturn("4");
+    //when
+    jcrDocumentFileStorage.updatePermissions("123",  nodePermission, aclIdentity);
+    //
+    assertEquals(2, nodePermission.getToUnShare().size());
+    assertTrue(nodePermission.getToUnShare().containsKey(3L));
+    assertTrue(nodePermission.getToUnShare().containsKey(4L));
   }
   
   private Session getMockedSession(org.exoplatform.services.security.Identity identity) throws RepositoryException {
@@ -1423,5 +1447,49 @@ public class JCRDocumentFileStorageTest {
     //
     assertFalse(jcrDocumentFileStorage.isDocumentSharedWithSamePermissions(currentNode, linkNode, identity));
 
+  }
+
+  @Test
+  public void unShareDocumetTest() throws RepositoryException{
+    Session systemSession = mock(Session.class);
+    Identity identity = mock(Identity.class);
+    Node rootNode = mock(Node.class);
+    Node sharedNode = mock(Node.class);
+    Node currentNode = Mockito.mock(ExtendedNode.class);
+    ExtendedNode linkNode = mock(ExtendedNode.class);
+    when(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(false);
+    when(linkNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+            manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(currentNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService, nodeHierarchyCreator,identity, systemSession)).thenReturn(rootNode);
+    when(identity.getProviderId()).thenReturn("USER");
+    when(rootNode.getNode("Documents")).thenReturn(rootNode);
+    when(identityManager.getIdentity("1")).thenReturn(null);
+
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.unShareDocument("1", 1L));
+
+    when(identityManager.getIdentity("1")).thenReturn(identity);
+    when(rootNode.hasNode("Shared")).thenReturn(false);
+
+    verify(linkNode, times(0)).remove();
+    verify(sessionProvider, times(1)).close();
+
+    when(rootNode.hasNode("Shared")).thenReturn(true);
+    when(rootNode.getNode("Shared")).thenReturn(sharedNode);
+    when(sharedNode.hasNode(currentNode.getName())).thenReturn(true);
+    when(sharedNode.getNode(currentNode.getName())).thenReturn(linkNode);
+
+    jcrDocumentFileStorage.unShareDocument("1", 1L);
+
+    verify(linkNode, times(1)).remove();
+    verify(sessionProvider, atLeast(1)).close();
   }
 }
