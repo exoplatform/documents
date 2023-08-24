@@ -473,6 +473,9 @@ public class DocumentSearchServiceConnector {
     if (StringUtils.isBlank(term)) {
       return "";
     }
+    if (term.startsWith("#")) {
+      term = term.substring(1);
+    }
     String originalTerm = term;
     term = escapeReservedCharacters(term);
     String escapedQueryWithAndOperator = buildEscapedQueryWithAndOperator(term);
