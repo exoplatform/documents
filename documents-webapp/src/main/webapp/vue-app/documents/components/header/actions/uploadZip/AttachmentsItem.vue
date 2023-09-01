@@ -37,7 +37,7 @@
           <v-icon
             v-else 
             small
-            class="fas fa-unlink error--text" />
+            class="fas fa-trash error--text" />
         </v-btn>
       </div>
     </v-list-item-action>
