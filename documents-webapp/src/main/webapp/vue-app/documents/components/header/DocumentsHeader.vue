@@ -202,7 +202,7 @@ export default {
       if (changed) {
         this.tabsExtensions = Object.assign({}, this.tabsExtensions);
         this.tabsList=Object.values(this.tabsExtensions);
-        this.centerBotton.buttons=this.tabsList.map(e => ({...e, text: this.$t(`${e.labelKey}`).toUpperCase()}));
+        this.centerBotton.buttons=this.tabsList.map(e => ({...e, text: this.$t(`${e.labelKey}`)}));
       }
     },
     changeDocumentView(view) {
