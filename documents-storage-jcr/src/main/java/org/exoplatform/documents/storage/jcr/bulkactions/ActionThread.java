@@ -444,7 +444,7 @@ public class ActionThread implements Runnable {
           createFile(folderNode, file, name, title);
           actionData.addCreatedFile(filePath.replace(tempFolderPath, ""));
         } else {
-          handleImportConflict(file, folderNode, name, title, filePath);
+          handleImportConflict(file, folderNode, name, title, filePath, tempFolderPath);
         }
       } catch (Exception e) {
         log.error("Cannot create file {}", filePath.replace(tempFolderPath, ""), e);
@@ -465,11 +465,16 @@ public class ActionThread implements Runnable {
     brodcastEvent();
   }
 
-  public void handleImportConflict(File file, Node folderNode, String name, String title, String filePath) throws Exception {
+  public void handleImportConflict(File file,
+                                   Node folderNode,
+                                   String name,
+                                   String title,
+                                   String filePath,
+                                   String tempFolderPath) throws Exception {
     if (actionData.getConflict().equals("updateAll")) {
       Node existingNode = folderNode.getNode(name);
       createNewVersion(existingNode, file);
-      actionData.addUpdatedFile(filePath.replace(actionData.getTempFolderPath(), ""));
+      actionData.addUpdatedFile(filePath.replace(tempFolderPath, ""));
     } else if (actionData.getConflict().equals("duplicate")) {
       int i = 1;
       String extension = FilenameUtils.getExtension(name);
@@ -483,9 +488,9 @@ public class ActionThread implements Runnable {
         newFileTitle = titleBase + "(" + i + ")." + extension;
       }
       createFile(folderNode, file, newFileName, newFileTitle);
-      actionData.addDuplicatedFile(filePath.replace(actionData.getTempFolderPath(), ""));
+      actionData.addDuplicatedFile(filePath.replace(tempFolderPath, ""));
     } else {
-      actionData.addIgnoredFile(filePath.replace(actionData.getTempFolderPath(), ""));
+      actionData.addIgnoredFile(filePath.replace(tempFolderPath, ""));
     }
   }
 
