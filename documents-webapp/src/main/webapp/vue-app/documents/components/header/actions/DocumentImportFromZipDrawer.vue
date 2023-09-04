@@ -19,9 +19,9 @@
                 {{ $t('documents.label.upload.zip.choice') }}
               </v-subheader>
             </div>
-              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
-                {{ $t('documents.label.zip.attachments.upload.description') }}
-              </div>
+            <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
+              {{ $t('documents.label.zip.attachments.upload.description') }}
+            </div>
             <documents-zip-upload-input
               v-if="value.length === 0"
               :attachments="value" />
@@ -35,9 +35,9 @@
                 {{ $t('documents.label.upload.zip.rules') }}
               </v-subheader>
             </div>
-              <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
-                {{ $t('documents.label.upload.zip.rules.description') }}
-              </div>
+            <div class="caption font-italic font-weight-light grey--text px-4 mt-n5">
+              {{ $t('documents.label.upload.zip.rules.description') }}
+            </div>
             <div class="radio-group-container ps-3">
               <v-radio-group
                 v-model="selected">
@@ -84,102 +84,102 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <span>{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
+                    <div class="d-flex flex-nowrap py-2">
+                      <v-icon
+                        v-if="showCreatedFiles"
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-down pe-2" 
+                        @click="showCreatedFiles=!showCreatedFiles" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-right pe-2"
+                        @click="showCreatedFiles=!showCreatedFiles" />
+                      <span>{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
+                    </div>
                   </v-list-item-title>
-                  <v-list-item-subtitle v-if="showCreatedFiles" v-sanitized-html="importData.createdFiles.join('<br>')" />
+                  <v-list-item-subtitle
+                    v-if="showCreatedFiles"
+                    v-sanitized-html="importData.createdFiles.join('<br>')"
+                    class="ps-6" />
                 </v-list-item-content>
-                <v-list-item-action v-if="importData.createdFiles.length>0">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs }">
-                      <v-btn
-                        icon 
-                        v-bind="attrs"
-                        v-on="on" 
-                        @click="showCreatedFiles=!showCreatedFiles">
-                        <v-icon v-if="showCreatedFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
-                      </v-btn>
-                    </template>
-                    <span>
-                      {{ $t('documents.import.show.details') }}
-                    </span>
-                  </v-tooltip>
-                </v-list-item-action>
               </v-list-item> 
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <span>{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
+                    <div class="d-flex flex-nowrap py-2">
+                      <v-icon
+                        v-if="showIgnoredFiles"
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-down pe-2" 
+                        @click="showIgnoredFiles=!showIgnoredFiles" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-right pe-2"
+                        @click="showIgnoredFiles=!showIgnoredFiles" />
+                      <span>{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
+                    </div>
                   </v-list-item-title>
-                  <v-list-item-subtitle v-if="showIgnoredFiles" v-sanitized-html="importData.ignoredFiles.join('<br>')" />
+                  <v-list-item-subtitle
+                    v-if="showIgnoredFiles"
+                    v-sanitized-html="importData.ignoredFiles.join('<br>')"
+                    class="ps-6" />
                 </v-list-item-content>
-                <v-list-item-action v-if="importData.ignoredFiles.length>0">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs }">
-                      <v-btn
-                        icon 
-                        v-bind="attrs"
-                        v-on="on" 
-                        @click="showIgnoredFiles=!showIgnoredFiles">
-                        <v-icon v-if="showIgnoredFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
-                      </v-btn>
-                    </template>
-                    <span>
-                      {{ $t('documents.import.show.details') }}
-                    </span>
-                  </v-tooltip>
-                </v-list-item-action>
               </v-list-item>
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <span>{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
+                    <div class="d-flex flex-nowrap py-2">
+                      <v-icon
+                        v-if="showDuplicatedFiles"
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-down pe-2"
+                        @click="showDuplicatedFiles=!showDuplicatedFiles" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-right pe-2"
+                        @click="showDuplicatedFiles=!showDuplicatedFiles" />
+                      <span>{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
+                    </div>
                   </v-list-item-title>
-                  <v-list-item-subtitle v-if="showDuplicatedFiles" v-sanitized-html="importData.duplicatedFiles.join('<br>')" />
+                  <v-list-item-subtitle
+                    v-if="showDuplicatedFiles"
+                    v-sanitized-html="importData.duplicatedFiles.join('<br>')"
+                    class="ps-6" />
                 </v-list-item-content>
-                <v-list-item-action v-if="importData.duplicatedFiles.length>0">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs }">
-                      <v-btn
-                        icon 
-                        v-bind="attrs"
-                        v-on="on" 
-                        @click="showDuplicatedFiles=!showDuplicatedFiles">
-                        <v-icon v-if="showDuplicatedFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
-                      </v-btn>
-                    </template>
-                    <span>
-                      {{ $t('documents.import.show.details') }}
-                    </span>
-                  </v-tooltip>
-                </v-list-item-action>
               </v-list-item>
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <span>{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
+                    <div class="d-flex flex-nowrap py-2">
+                      <v-icon
+                        v-if="showFailedFiles"
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-down pe-2"
+                        @click="showFailedFiles=!showFailedFiles" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="18"
+                        class="fas fa-chevron-right pe-2"
+                        @click="showFailedFiles=!showFailedFiles" />
+                      <span>{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
+                    </div>
                   </v-list-item-title>
-                  <v-list-item-subtitle v-if="showFailedFiles" v-sanitized-html="importData.failedFiles.join('<br>')" />
+                  <v-list-item-subtitle
+                    v-if="showFailedFiles"
+                    v-sanitized-html="importData.failedFiles.join('<br>')"
+                    class="ps-6" />
                 </v-list-item-content>
-                <v-list-item-action v-if="importData.failedFiles.length>0">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs }">
-                      <v-btn
-                        icon 
-                        v-bind="attrs"
-                        v-on="on" 
-                        @click="showFailedFiles=!showFailedFiles">
-                        <v-icon v-if="showFailedFiles" color="grey" class="fas fa-chevron-up" />
-                        <v-icon v-else color="grey" class="fas fa-chevron-down" />
-                      </v-btn>
-                    </template>
-                    <span>
-                      {{ $t('documents.import.show.details') }}
-                    </span>
-                  </v-tooltip>
-                </v-list-item-action>
               </v-list-item>
             </v-col>
           </v-row>
@@ -196,6 +196,7 @@
             </template>
           </v-btn>
           <v-btn
+            v-show="status!=='done_successfully' && status!=='done_with_errors' && status!=='failed'"
             :disabled="uploadButtonDisabled"
             :loading="importing"
             class="btn btn-primary"
