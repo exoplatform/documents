@@ -74,6 +74,7 @@ public class BulkStorageActionService implements Startable {
                                 long authenticatedUserId) {
     actionData.setStatus(ActionStatus.STARTED.name());
     actionList.add(actionData);
+    checkTotalUplaodsLimit(actionData.getIdentity(), true);
     bulkActionThreadPool.execute(new ActionThread(documentFileStorage,
                                                   jcrDeleteFileStorage,
                                                   this,
