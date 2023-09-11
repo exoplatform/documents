@@ -26,15 +26,15 @@ import java.util.concurrent.Executors;
 import javax.jcr.Node;
 import javax.jcr.Session;
 
-import org.exoplatform.commons.utils.CommonsUtils;
-import org.exoplatform.documents.model.ActionType;
 import org.picocontainer.Startable;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
+import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
@@ -74,6 +74,7 @@ public class BulkStorageActionService implements Startable {
                                 long authenticatedUserId) {
     actionData.setStatus(ActionStatus.STARTED.name());
     actionList.add(actionData);
+    checkTotalUplaodsLimit(actionData.getIdentity(), true);
     bulkActionThreadPool.execute(new ActionThread(documentFileStorage,
                                                   jcrDeleteFileStorage,
                                                   this,
