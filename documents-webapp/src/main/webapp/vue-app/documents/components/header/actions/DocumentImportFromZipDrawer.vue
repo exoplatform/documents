@@ -84,20 +84,21 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap py-2">
+                    <div class="d-flex flex-nowrap pa-1">
                       <v-icon
                         v-if="showCreatedFiles"
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-down pe-2" 
+                        size="16"
+                        class="fas fa-chevron-up pa-1" 
                         @click="showCreatedFiles=!showCreatedFiles" />
                       <v-icon
                         v-else
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-right pe-2"
+                        size="16"
+                        class="fas fa-chevron-down pa-1"
                         @click="showCreatedFiles=!showCreatedFiles" />
-                      <span>{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
+                      <span class="px-2 my-auto">{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
+                      <v-divider class="my-auto" />
                     </div>
                   </v-list-item-title>
                   <v-list-item-subtitle
@@ -109,20 +110,21 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap py-2">
+                    <div class="d-flex flex-nowrap pa-1">
                       <v-icon
                         v-if="showIgnoredFiles"
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-down pe-2" 
+                        size="16"
+                        class="fas fa-chevron-up pa-1" 
                         @click="showIgnoredFiles=!showIgnoredFiles" />
                       <v-icon
                         v-else
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-right pe-2"
+                        size="16"
+                        class="fas fa-chevron-down pa-1"
                         @click="showIgnoredFiles=!showIgnoredFiles" />
-                      <span>{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
+                      <span class="px-2 my-auto">{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
+                      <v-divider class="my-auto" />
                     </div>
                   </v-list-item-title>
                   <v-list-item-subtitle
@@ -134,20 +136,21 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap py-2">
+                    <div class="d-flex flex-nowrap pa-1">
                       <v-icon
                         v-if="showDuplicatedFiles"
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-down pe-2"
+                        size="16"
+                        class="fas fa-chevron-up pa-1"
                         @click="showDuplicatedFiles=!showDuplicatedFiles" />
                       <v-icon
                         v-else
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-right pe-2"
+                        size="16"
+                        class="fas fa-chevron-down pa-1"
                         @click="showDuplicatedFiles=!showDuplicatedFiles" />
-                      <span>{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
+                      <span class="px-2 my-auto">{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
+                      <v-divider class="my-auto" />
                     </div>
                   </v-list-item-title>
                   <v-list-item-subtitle
@@ -159,20 +162,21 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap py-2">
+                    <div class="d-flex flex-nowrap pa-1">
                       <v-icon
                         v-if="showFailedFiles"
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-down pe-2"
+                        size="16"
+                        class="fas fa-chevron-up pa-1"
                         @click="showFailedFiles=!showFailedFiles" />
                       <v-icon
                         v-else
                         color="grey"
-                        size="18"
-                        class="fas fa-chevron-right pe-2"
+                        size="16"
+                        class="fas fa-chevron-down pa-1"
                         @click="showFailedFiles=!showFailedFiles" />
-                      <span>{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
+                      <span class="px-2 my-auto">{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
+                      <v-divider class="my-auto" />
                     </div>
                   </v-list-item-title>
                   <v-list-item-subtitle
@@ -196,9 +200,8 @@
             </template>
           </v-btn>
           <v-btn
-            v-show="status!=='done_successfully' && status!=='done_with_errors' && status!=='failed'"
+            v-show="status!=='done_successfully' && status!=='done_with_errors' && status!=='failed' && !importing"
             :disabled="uploadButtonDisabled"
-            :loading="importing"
             class="btn btn-primary"
             @click="uploadDocuments">
             <template>
