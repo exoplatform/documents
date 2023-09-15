@@ -133,9 +133,6 @@
           fas fa-arrow-left
         </v-icon>
       </div>
-      <documents-add-new-menu-mobile
-        ref="documentAddItemMenu"
-        :is-mobile="isMobile" />
     </div>
   </div>
 </template>
@@ -271,11 +268,11 @@ export default {
     },
     displayAddMenuMobile() {
       if (this.isMobile){
-        this.$refs.documentAddItemMenu.open();
+        this.$root.$emit('open-add-new-mobile');
       }
     }, 
     hideAddMenuMobile() {
-      this.$refs.documentAddItemMenu.close();
+      this.$root.$emit('close-add-new-mobile');
     },
     setCurrentFolder(folder){
       this.currentFolder =folder;
