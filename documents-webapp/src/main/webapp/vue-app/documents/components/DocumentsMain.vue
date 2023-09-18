@@ -113,6 +113,7 @@
       <public-document-options-drawer />
       <documents-add-new-menu-mobile
         ref="documentAddItemMenu"
+        :selected-view="selectedView"
         :is-mobile="isMobile" />
       <v-file-input
         id="uploadVersionInput"
