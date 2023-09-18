@@ -76,7 +76,7 @@ export default {
 
     importBtnColorClass(){
       if (this.importEnabled) {
-        return 'dark-grey-color';
+        return '';
       } else {
         return 'disabled--text';
       } 
@@ -99,7 +99,7 @@ export default {
       this.close();
     },
     openImportDrawer() {
-      if (!this.importEnabled){
+      if (this.importEnabled){
         this.$root.$emit('open-upload-zip-drawer');
         this.close();
       }
