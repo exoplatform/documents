@@ -34,7 +34,11 @@
             class="clickable pr-2">
             fas fa-upload
           </v-icon>
-          <span :class="importBtnColorClass" class="body-2">{{ $t('documents.label.zip.upload') }}</span>
+          <span 
+            :class="importBtnColorClass" 
+            class="body-2">
+            {{ $t('documents.label.zip.upload') }}
+          </span>
         </v-list-item>
       </v-list>
       <exo-drawer />
@@ -61,7 +65,7 @@ export default {
 
   created() {
     this.$root.$on('enable-import', (importEnabled) => {
-      this.importEnabled=importEnabled;
+      this.importEnabled = importEnabled;
     });
   },
 
