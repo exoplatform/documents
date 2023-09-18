@@ -110,6 +110,9 @@
         ref="documentVersionHistory" />
       <document-action-context-menu />
       <public-document-options-drawer />
+      <documents-add-new-menu-mobile
+        ref="documentAddItemMenu"
+        :is-mobile="isMobile" />
       <v-file-input
         id="uploadVersionInput"
         class="d-none"
@@ -274,6 +277,9 @@ export default {
       this.resetSelections();
       this.cancelBulkAction(actionId);
     });
+    this.$root.$on('open-add-new-mobile', this.displayAddMenuMobile);
+    this.$root.$on('close-add-new-mobile', this.hideAddMenuMobile);
+   
     this.$root.$on('documents-refresh-files', this.refreshFiles);
     this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
 
@@ -1569,7 +1575,13 @@ export default {
       const folderPath = destFolder.path.split(`Groups${space.groupId}`)[1].replace('/Documents', '/documents');
       const pathName = `${eXo.env.portal.context}/g/${space.groupId.replaceAll('/', ':')}/${space.prettyName}`;
       window.location.replace(`${pathName}${folderPath}?view=folder`, window.location.pathname);
-    }
+    },
+    displayAddMenuMobile() {
+      this.$refs.documentAddItemMenu.open();
+    }, 
+    hideAddMenuMobile() {
+      this.$refs.documentAddItemMenu.close();
+    },
   },
 };
 </script>
