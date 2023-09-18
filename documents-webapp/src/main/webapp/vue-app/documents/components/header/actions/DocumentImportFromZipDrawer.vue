@@ -67,13 +67,16 @@
               <v-progress-linear
                 indeterminate
                 rounded
-                height="20" />
+                height="20"
+                class="disable-pointer-event" />
             </v-col>
             <v-col cols="11" v-else>
               <v-progress-linear
+                v-if="status!=='cannot_unzip_file'"
                 v-model="progress"
                 rounded
-                height="20">
+                height="20"
+                class="disable-pointer-event">
                 <strong v-if="status!=='cannot_unzip_file'">{{ Math.ceil(progress) }}%</strong>
               </v-progress-linear>
             </v-col>
@@ -89,13 +92,13 @@
                         v-if="showCreatedFiles"
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-up pa-1" 
+                        class="fas fa-chevron-up pa-1 chevron-icon" 
                         @click="showCreatedFiles=!showCreatedFiles" />
                       <v-icon
                         v-else
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-down pa-1"
+                        class="fas fa-chevron-down pa-1 chevron-icon"
                         @click="showCreatedFiles=!showCreatedFiles" />
                       <span class="px-2 my-auto">{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
                       <v-divider class="my-auto" />
@@ -110,18 +113,18 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1">
+                    <div class="d-flex flex-nowrap pa-1 chevron-icon">
                       <v-icon
                         v-if="showIgnoredFiles"
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-up pa-1" 
+                        class="fas fa-chevron-up pa-1 chevron-icon" 
                         @click="showIgnoredFiles=!showIgnoredFiles" />
                       <v-icon
                         v-else
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-down pa-1"
+                        class="fas fa-chevron-down pa-1 chevron-icon"
                         @click="showIgnoredFiles=!showIgnoredFiles" />
                       <span class="px-2 my-auto">{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
                       <v-divider class="my-auto" />
@@ -136,18 +139,18 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1">
+                    <div class="d-flex flex-nowrap pa-1 chevron-icon">
                       <v-icon
                         v-if="showDuplicatedFiles"
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-up pa-1"
+                        class="fas fa-chevron-up pa-1 chevron-icon"
                         @click="showDuplicatedFiles=!showDuplicatedFiles" />
                       <v-icon
                         v-else
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-down pa-1"
+                        class="fas fa-chevron-down pa-1 chevron-icon"
                         @click="showDuplicatedFiles=!showDuplicatedFiles" />
                       <span class="px-2 my-auto">{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
                       <v-divider class="my-auto" />
@@ -162,18 +165,18 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1">
+                    <div class="d-flex flex-nowrap pa-1 chevron-icon">
                       <v-icon
                         v-if="showFailedFiles"
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-up pa-1"
+                        class="fas fa-chevron-up pa-1 chevron-icon"
                         @click="showFailedFiles=!showFailedFiles" />
                       <v-icon
                         v-else
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-down pa-1"
+                        class="fas fa-chevron-down pa-1 chevron-icon"
                         @click="showFailedFiles=!showFailedFiles" />
                       <span class="px-2 my-auto">{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
                       <v-divider class="my-auto" />
