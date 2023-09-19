@@ -113,7 +113,7 @@
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1 chevron-icon">
+                    <div class="d-flex flex-nowrap pa-1">
                       <v-icon
                         v-if="showIgnoredFiles"
                         color="grey"
@@ -135,16 +135,16 @@
                     v-sanitized-html="importData.ignoredFiles.join('<br>')"
                     class="ps-6" />
                 </v-list-item-content>
-              </v-list-item>
+              </v-list-item>  
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1 chevron-icon">
+                    <div class="d-flex flex-nowrap pa-1">
                       <v-icon
                         v-if="showDuplicatedFiles"
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-up pa-1 chevron-icon"
+                        class="fas fa-chevron-up pa-1 chevron-icon" 
                         @click="showDuplicatedFiles=!showDuplicatedFiles" />
                       <v-icon
                         v-else
@@ -161,16 +161,16 @@
                     v-sanitized-html="importData.duplicatedFiles.join('<br>')"
                     class="ps-6" />
                 </v-list-item-content>
-              </v-list-item>
+              </v-list-item> 
               <v-list-item>
                 <v-list-item-content>
                   <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1 chevron-icon">
+                    <div class="d-flex flex-nowrap pa-1">
                       <v-icon
                         v-if="showFailedFiles"
                         color="grey"
                         size="16"
-                        class="fas fa-chevron-up pa-1 chevron-icon"
+                        class="fas fa-chevron-up pa-1 chevron-icon" 
                         @click="showFailedFiles=!showFailedFiles" />
                       <v-icon
                         v-else
