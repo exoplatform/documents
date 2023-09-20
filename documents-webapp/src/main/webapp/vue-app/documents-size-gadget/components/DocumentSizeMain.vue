@@ -17,7 +17,7 @@
 -->
 <template>
   <v-app class="border-box-sizing" flat>
-    <v-main class="white pa-4">
+    <v-main class="white pa-5">
       <div class="d-flex align-center">
         <a :href="documentsBaseLink" class="body-1 text-uppercase text-sub-title">
           {{ $t('document.size.header.label') }}
