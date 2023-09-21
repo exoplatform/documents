@@ -5,6 +5,7 @@
     <template slot="content">
       <v-list dense>
         <v-list-item
+          v-if="isFolderView"
           @click="addFolder()"
           class="px-2">
           <v-icon
@@ -24,6 +25,21 @@
           </v-icon>
           <span class="body-2 text-color">{{ $t('documents.button.addNewFile') }}</span>
         </v-list-item>
+        <v-list-item
+          @click="openImportDrawer()"
+          class="px-2">
+          <v-icon
+            size="19"
+            :class="importBtnColorClass"
+            class="clickable pr-2">
+            fas fa-upload
+          </v-icon>
+          <span 
+            :class="importBtnColorClass" 
+            class="body-2">
+            {{ $t('documents.label.zip.upload') }}
+          </span>
+        </v-list-item>
       </v-list>
       <exo-drawer />
     </template>
@@ -33,10 +49,38 @@
 
 export default {
   props: {
+    selectedView: {
+      type: String,
+      default: '',
+    },
     isMobile: {
       type: Boolean,
       default: false
     },
+  },
+
+  data: () => ({
+    importEnabled: true,
+  }),
+
+  created() {
+    this.$root.$on('enable-import', (importEnabled) => {
+      this.importEnabled = importEnabled;
+    });
+  },
+
+  computed: {
+    isFolderView() {
+      return this.selectedView === 'folder';
+    },
+
+    importBtnColorClass(){
+      if (this.importEnabled) {
+        return '';
+      } else {
+        return 'disabled--text';
+      } 
+    }
   },
 
   methods: {
@@ -53,6 +97,12 @@ export default {
     addFolder() {
       this.$root.$emit('documents-add-folder');
       this.close();
+    },
+    openImportDrawer() {
+      if (this.importEnabled){
+        this.$root.$emit('open-upload-zip-drawer');
+        this.close();
+      }
     },
   }
 };

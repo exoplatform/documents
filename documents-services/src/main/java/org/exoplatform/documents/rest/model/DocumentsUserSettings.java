@@ -33,4 +33,6 @@ public class DocumentsUserSettings {
   private String cometdContextName = null;
 
   private String view              = null;
+
+  private Boolean canImport;
 }

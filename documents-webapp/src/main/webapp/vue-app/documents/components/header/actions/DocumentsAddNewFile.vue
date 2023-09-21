@@ -14,7 +14,7 @@
             v-on="!isMobile && on"
             @click="openMultiSelectionMenuAction">
             <v-icon
-              class="me-1"
+              class="me-1 dark-grey-color"
               size="13"
               dark>
               fas fa-ellipsis-v
@@ -40,19 +40,6 @@
         </div>
       </v-menu>
       <button
-        v-else-if="!isFolderView"
-        :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
-        class="btn btn-primary primary px-2 py-0"
-        @click="openDrawer()">
-        <v-icon
-          size="13"
-          id="addBtn"
-          dark>
-          mdi-plus
-        </v-icon>
-        {{ !isMobile ? $t('documents.button.addNew') : '' }}
-      </button>
-      <button
         v-else
         :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
         class="btn btn-primary primary px-2 py-0"
@@ -61,14 +48,13 @@
         @click="openAddItemMenu()">
         <v-icon
           size="13"
-          id="addBtn"
+          id="addBtn dark-grey-color"
           dark>
           mdi-plus
         </v-icon>
         {{ !isMobile ? $t('documents.button.addNew') : '' }}
       </button> 
       <v-menu
-        v-if="isFolderView"
         v-model="addMenu"
         :attach="'#addItemMenu'"
         transition="scroll-y-transition"
@@ -76,44 +62,69 @@
         offset-y
         down>
         <v-list-item
+          v-if="isFolderView"
           @click="addFolder()"
           class="px-2 add-menu-list-item">
           <v-icon
             size="13"
-            class="clickable pr-2">
+            class="clickable dark-grey-color pr-2">
             fa-folder
           </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.button.addNewFolder') }}</span>
+          <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFolder') }}</span>
         </v-list-item>
         <v-list-item
           @click="openDrawer()"
           class="px-2 add-menu-list-item">
           <v-icon
             size="13"
-            class="clickable pr-2">
+            class="clickable dark-grey-color pr-2">
             fa-file-alt
           </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color menu-text ps-1">{{ $t('documents.button.addNewFile') }}</span>
+          <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFile') }}</span>
+        </v-list-item>
+
+        <v-list-item
+          @click="openImportDrawer()"
+          class="px-2 add-menu-list-item">
+          <v-tooltip bottom>
+            <template #activator="{ on }">
+              <span v-on="on">
+                <v-icon
+                  size="13"
+                  class="pr-2"
+                  :class="importBtnColorClass">
+                  fas fa-upload
+                </v-icon>
+                <span
+                  v-if="!isMobile"
+                  class="body-2 menu-text dark-grey-color ps-1"
+                  :class="importBtnColorClass">{{ $t('documents.label.zip.upload') }}</span>
+              </span>
+            </template>
+            <span>{{ importTooltipText }}</span>
+          </v-tooltip>
         </v-list-item>
       </v-menu>
-      <v-tooltip
-        v-if="actionLoading"
-        bottom>
-        <template #activator="{ on, attrs }">
-          <v-progress-circular
-            v-bind="attrs"
-            v-on="on"
-            class="ms-2 position-absolute mt-2"
-            :size="20"
-            color="primary"
-            indeterminate />
-        </template>
-        {{ actionLoadingMessage }}
-      </v-tooltip>
+      <div v-if="actionLoading" @click="openActionDrawer()" class="d-inline">
+        <v-tooltip
+          bottom>
+          <template #activator="{ on, attrs }">
+            <v-progress-circular
+              v-bind="attrs"
+              v-on="on"
+              class="ms-2 position-absolute mt-1"
+              color="primary"
+              :indeterminate="action !== 'import'">
+              <span v-if="action === 'import'">{{ Math.ceil(progress) }}</span>
+            </v-progress-circular>
+          </template>
+          {{ actionLoadingMessage }}
+        </v-tooltip>
+      </div>
       <div v-show="isMobile && showFilter || !isMobile">
         <v-icon
           size="20"
-          class="text-sub-title pa-1 my-auto "
+          class="text-sub-title pa-1 my-auto"
           v-show="isMobile && showFilter"
           @click="$root.$emit('mobile-filter')">
           fas fa-arrow-left
@@ -147,7 +158,10 @@ export default {
     selectionsMenu: false,
     selectionsLength: 0,
     actionLoading: false,
-    actionLoadingMessage: null
+    actionLoadingMessage: null,
+    action: '',
+    progress: '',
+    importEnabled: true,
   }),
   computed: {
     isFolderView() {
@@ -155,6 +169,21 @@ export default {
     },
     disableButton(){
       return this.currentFolder && this.currentFolder.accessList && this.currentFolder.accessList.canEdit === false ;
+    },
+    importTooltipText(){
+      if (this.importEnabled) {
+        return this.$t('documents.label.btn.upload.zip.tooltip');
+      } else {
+        return this.$t('documents.label.btn.upload.zip.disabled.tooltip');
+      }
+    },
+
+    importBtnColorClass(){
+      if (this.importEnabled) {
+        return 'dark-grey-color';
+      } else {
+        return 'disabled--text';
+      } 
     }
   },
   created() {
@@ -169,11 +198,17 @@ export default {
     this.$root.$on('show-mobile-filter', data => {
       this.showFilter= data;
     });
+    this.$root.$on('set-progress', (progress) => {
+      this.progress=progress;
+    });
     document.addEventListener('entity-attachments-updated', this.refreshFilesList);
     this.$root.$on('set-current-folder', this.setCurrentFolder);
     this.$root.$on('selection-documents-list-updated', this.handleSelectionListUpdate);
     this.$root.$on('reset-selections', this.handleResetSelections);
     this.$root.$on('set-action-loading', this.setActionLoading);
+    this.$root.$on('enable-import', (importEnabled) => {
+      this.importEnabled=importEnabled;
+    });
   },
   beforeDestroy() {
     this.$root.$off('reset-selections', this.handleResetSelections);
@@ -186,6 +221,10 @@ export default {
     setActionLoading(status, action) {
       this.actionLoading = status;
       this.actionLoadingMessage = this.$t(`document.multiple.${action}.action.message`);
+      this.action=action;
+      if (!this.actionLoading) {
+        this.progress='';
+      }
     },
     openMultiSelectionMenuAction() {
       if (this.isMobile) {
@@ -215,6 +254,11 @@ export default {
       this.$root.$emit('documents-open-drawer');
       this.hideAddMenuMobile();
     },
+    openImportDrawer() {
+      if (this.importEnabled){
+        this.$root.$emit('open-upload-zip-drawer');
+      }
+    },
     addFolder() {
       this.$root.$emit('documents-add-folder');
       this.hideAddMenuMobile();
@@ -229,6 +273,11 @@ export default {
     },
     setCurrentFolder(folder){
       this.currentFolder =folder;
+    },
+    openActionDrawer(){
+      if (this.action === 'import'){
+        this.openImportDrawer();
+      }
     }
   },
 };

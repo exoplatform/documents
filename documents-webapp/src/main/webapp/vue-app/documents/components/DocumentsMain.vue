@@ -83,6 +83,7 @@
       <document-tree-selector-drawer :is-mobile="isMobile" />
       <documents-advanced-filter-drawer />
       <documents-download-drawer />
+      <document-import-from-zip-drawer />
       <documents-info-drawer
         :selected-view="selectedView"
         :is-mobile="isMobile" />
@@ -112,6 +113,7 @@
       <public-document-options-drawer />
       <documents-add-new-menu-mobile
         ref="documentAddItemMenu"
+        :selected-view="selectedView"
         :is-mobile="isMobile" />
       <v-file-input
         id="uploadVersionInput"
@@ -272,6 +274,7 @@ export default {
     this.$root.$on('documents-bulk-delete', this.bulkDeleteDocument);
     this.$root.$on('documents-bulk-download', this.bulkDownloadDocument);
     this.$root.$on('documents-bulk-move', this.bulkMoveDocument);
+    this.$root.$on('documents-zip-import', this.importDocuments);
     this.$root.$on('cancel-bulk-Action', (actionId) => {
       this.setMultiActionLoading(false);
       this.resetSelections();
@@ -453,6 +456,7 @@ export default {
               this.selectedView = 'timeline';
             }
             this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
+            this.$root.$emit('enable-import', settings.canImport);
           }
         })
         .finally(() => {
@@ -542,13 +546,21 @@ export default {
       const actionName = actionData.actionType.toLowerCase();
       const actionStatus = actionData.status.toLowerCase();
       if (actionName === 'download'){
-        if (actionStatus === 'done_succsussfully') {
+        if (actionStatus === 'done_successfully') {
           this.$root.$emit('set-download-status','zip_file_created');
           this.setMultiActionLoading(false);
           this.resetSelections();
           this.getDownloadedZip(actionData);
         } else {
           this.$root.$emit('set-download-status',actionData.status);
+        }
+      } else if (actionName === 'import_zip'){
+        this.$root.$emit('set-import-status', actionData);
+        if (actionStatus==='import_limit_exceeded'){
+          this.$root.$emit('enable-import', false);
+        } 
+        if (actionStatus==='import_limit_not_exceeded'){
+          this.$root.$emit('enable-import', true);
         }
       } else {
         const treatedItems = this.selectedDocuments.filter(file => actionData.treatedItemsIds.includes(file.id));
@@ -560,7 +572,7 @@ export default {
             message: this.$t(`documents.bulk.${actionName}.doneWithErrors`)
           });
         }
-        if (actionStatus === 'done_succsussfully') {
+        if (actionStatus === 'done_successfully') {
           this.setMultiActionLoading(false);
           this.displayMessage({
             type: 'success',
@@ -577,6 +589,10 @@ export default {
       }
 
     },
+
+
+
+
     handleBulkMoveRedirect() {
       const folder = JSON.parse(sessionStorage.getItem('folder'));
       const space = JSON.parse(sessionStorage.getItem('space'));
@@ -603,7 +619,7 @@ export default {
         if (actionData.status==='DONE_WITH_ERRORS'){
           this.$root.$emit('show-alert', {type: 'error', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneWithErrors`)});
         }
-        if (actionData.status==='DONE_SUCCSUSSFULLY'){
+        if (actionData.status.toLowerCase()==='done_successfully'){
           this.$root.$emit('show-alert', {type: 'success', message: this.$t(`documents.bulk.${actionData.actionType.toLowerCase()}.doneSuccessfully`, {0: actionData.numberOfItems})});
         }
       }).catch(e => {
@@ -772,6 +788,20 @@ export default {
         this.selectedView = 'folder';
       }
     },
+
+    importDocuments(uploadId,overrideMode){
+      this.setMultiActionLoading(true,'import');
+      this.$documentFileService.importFilesFromZip(this.ownerId,this.parentFolderId,this.folderPath,uploadId,overrideMode).then().catch(e => {
+        console.error('Error when import documents', e);
+        this.status='failed';
+        this.$root.$emit('show-alert', {
+          type: 'error',
+          message: this.$t('documents.import.status.failed')
+        });
+      });
+    },
+
+
     duplicateDocument(documents){
       this.parentFolderId = documents.id;
       return this.$documentFileService

@@ -57,6 +57,7 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
 import org.exoplatform.services.rest.resource.ResourceContainer;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -130,6 +131,7 @@ public class DocumentFileRest implements ResourceContainer {
       documentsUserSettings.setCometdToken(cometdToken);
       documentsUserSettings.setCometdContextName(documentWebSocketService.getCometdContextName());
       documentsUserSettings.setView(documentFileService.getDefaultView(ownerId, currentUserIdentity.getId()));
+      documentsUserSettings.setCanImport(documentFileService.canImport(ConversationState.getCurrent().getIdentity()));
       return Response.ok(documentsUserSettings).build();
     } catch (Exception e) {
       LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
@@ -764,7 +766,7 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "404", description = "Resource not found") })
   public Response cancelBulkAction(@Parameter(description = "List items", required = true)
   @PathParam("actionId")
-  int actionId) {
+  String actionId) {
     Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
     try {
       documentFileService.cancelBulkAction(actionId, currentUserIdentity.getRemoteId());
@@ -1206,6 +1208,51 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (Exception e) {
       LOG.error("Error while downloading document", e);
       return Response.serverError().build();
+    }
+  }
+
+  @POST
+  @Path("/importzip/{uploadId}")
+  @RolesAllowed("users")
+  @Operation(summary = "Import document from a zip", method = "POST", description = "Import document from a zip")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response importDocuments(@Parameter(description = "upload id", required = true)
+  @PathParam("uploadId")
+  String uploadId,
+                                  @Parameter(description = "the owner id")
+                                  @QueryParam("ownerId")
+                                  String ownerId,
+                                  @Parameter(description = "the folder id, where the documents will be imported")
+                                  @QueryParam("folderId")
+                                  String folderId,
+                                  @Parameter(description = "the folder path, where the documents will be imported")
+                                  @QueryParam("folderPath")
+                                  String folderPath,
+                                  @Parameter(description = "the rule to apply in case of conflict")
+                                  @QueryParam("conflict")
+                                  String conflict) {
+
+    try {
+
+      org.exoplatform.services.security.Identity identity = ConversationState.getCurrent().getIdentity();
+      if (StringUtils.isEmpty(ownerId)) {
+        return Response.status(Response.Status.BAD_REQUEST).build();
+      }
+      if (uploadId == null) {
+        return Response.status(Response.Status.BAD_REQUEST).build();
+      }
+      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+      documentFileService.importFiles(ownerId, folderId, folderPath, uploadId, conflict, identity, userIdentityId);
+      return Response.status(Response.Status.OK).build();
+    } catch (IllegalAccessException e) {
+      LOG.error("User does not have import permissions", e);
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    } catch (Exception ex) {
+      LOG.warn("Failed to import documents ", ex);
+      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
   }
 

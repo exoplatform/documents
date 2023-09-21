@@ -26,26 +26,32 @@
       <scope>provided</scope>
     </dependency>
 
-    <dependency>
-      <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-service</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-notification</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <!-- Test -->
-    <dependency>
-      <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-service</artifactId>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.exoplatform.social</groupId>
-      <artifactId>social-component-notification</artifactId>
+      <dependency>
+          <groupId>org.exoplatform.social</groupId>
+          <artifactId>social-component-service</artifactId>
+          <scope>provided</scope>
+      </dependency>
+      <dependency>
+          <groupId>org.exoplatform.social</groupId>
+          <artifactId>social-component-notification</artifactId>
+          <scope>provided</scope>
+      </dependency>
+      <dependency>
+          <groupId>net.lingala.zip4j</groupId>
+          <artifactId>zip4j</artifactId>
+          <type>jar</type>
+          <scope>provided</scope>
+      </dependency>
+      <!-- Test -->
+      <dependency>
+          <groupId>org.exoplatform.social</groupId>
+          <artifactId>social-component-service</artifactId>
+          <type>test-jar</type>
+          <scope>test</scope>
+      </dependency>
+      <dependency>
+          <groupId>org.exoplatform.social</groupId>
+          <artifactId>social-component-notification</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
