@@ -120,7 +120,7 @@ public class BulkStorageActionService implements Startable {
   }
 
   public ActionData getActionDataById(String id) {
-    return actionList.stream().filter(resource -> id == resource.getActionId()).findFirst().orElse(null);
+    return actionList.stream().filter(resource -> id.equals(resource.getActionId())).findFirst().orElse(null);
   }
 
   public void removeActionData(ActionData actionData) {
