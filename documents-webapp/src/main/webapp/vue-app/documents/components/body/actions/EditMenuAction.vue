@@ -1,11 +1,11 @@
 <template>
   <div
-    class="clickable mx-2"
+    class="clickable mx-2 theme--light"
     @click="editFile()">
     <v-icon
       size="13"
       dark
-      class="pe-1 iconStyle">
+      class="pe-1 iconStyle grey--text text--darken-1">
       fas fa-edit
     </v-icon>
     <span class="ps-1">{{ $t('document.label.edit') }}</span>

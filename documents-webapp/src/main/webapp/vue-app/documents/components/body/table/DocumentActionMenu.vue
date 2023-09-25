@@ -38,7 +38,6 @@ export default {
     menuExtensionApp: 'DocumentMenu',
     menuExtensionType: 'menuActionMenu',
     menuExtensions: [],
-    editExtensions: ['edit'],
     sharedDocumentSuspended: true,
     downloadDocumentSuspended: true,
     supportedDocuments: null
@@ -50,12 +49,6 @@ export default {
   },
   beforeDestroy() {
     this.$root.$off('selection-documents-list-updated', this.refreshMenuExtensions);
-  },
-  computed: {
-    fileCanEdit() {
-      const type = this.file && this.file.mimeType || '';
-      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
-    }
   },
   methods: {
     getParams(extension) {
@@ -71,9 +64,6 @@ export default {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
 
       if (!this.isMultiSelection) {
-        if (!this.fileCanEdit) {
-          extensions = extensions.filter(extension => !this.editExtensions.includes(extension.id));
-        }
         extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile));
 
       } else {
