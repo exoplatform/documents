@@ -408,5 +408,15 @@ public class JCRDocumentsUtilTest {
     assertEquals("__system",fileVersion.getAuthorFullName());
 
   }
+  @Test
+  public void testCleanNameWithAccents(){
+    String fileName = "filName";
+    String fileNameWithAccent = "fileNameWithAccént";
+    assertEquals("filName", JCRDocumentsUtil.cleanNameWithAccents(fileName, NodeTypeConstants.NT_FILE));
+    assertEquals("fileNameWithAccent", JCRDocumentsUtil.cleanNameWithAccents(fileNameWithAccent, NodeTypeConstants.NT_FILE));
+    //folder name with '.' character followed by a accented character
+    String folderNameWithPointFollowedByAccent = "folderName.followedByAccént";
+    assertEquals("folderName.followedByAccent", JCRDocumentsUtil.cleanNameWithAccents(folderNameWithPointFollowedByAccent, NodeTypeConstants.NT_FOLDER));
+  }
 
 }
