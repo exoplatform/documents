@@ -683,6 +683,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node = getNodeByIdentifier(session, documentID);
       }
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), node.getPrimaryNodeType().getName()));
+      name = cleanNameWithAccents(name, node.getPrimaryNodeType().getName());
       //clean node name
       name = URLDecoder.decode(name, "UTF-8");
       if (name.indexOf('.') == -1) {
