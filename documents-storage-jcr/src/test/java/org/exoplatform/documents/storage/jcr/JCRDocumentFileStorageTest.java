@@ -620,6 +620,7 @@ public class JCRDocumentFileStorageTest {
     when(identity.getUserId()).thenReturn("user");
     doCallRealMethod().when(JCRDocumentsUtil.class, "isValidDocumentTitle", anyString());
     doCallRealMethod().when(JCRDocumentsUtil.class, "cleanName", anyString(), anyString());
+    doCallRealMethod().when(JCRDocumentsUtil.class, "cleanNameWithAccents", anyString(), anyString());
     when(node.getName()).thenReturn("oldName");
     when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
     when(node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)).thenReturn(true);
