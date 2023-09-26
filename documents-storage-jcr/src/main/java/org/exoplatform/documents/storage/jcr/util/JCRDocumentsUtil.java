@@ -31,6 +31,7 @@ import java.util.zip.ZipOutputStream;
 import javax.jcr.*;
 import javax.jcr.version.Version;
 
+import com.ibm.icu.text.Transliterator;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
@@ -50,6 +51,7 @@ import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.Group;
@@ -682,6 +684,16 @@ public class JCRDocumentsUtil {
     }
     ret.append(extension);
     return ret.toString();
+  }
+  public static String cleanNameWithAccents(String fileName, String nodeType) {
+    Transliterator accentsconverter = Transliterator.getInstance("Latin; NFD; [:Nonspacing Mark:] Remove; NFC;");
+    if (NodeTypeConstants.NT_FILE.equals(nodeType) && fileName.indexOf('.') > 0) {
+      String ext = fileName.substring(fileName.lastIndexOf('.'));
+      fileName = accentsconverter.transliterate(fileName.substring(0, fileName.lastIndexOf('.'))).concat(ext);
+    } else {
+      fileName = accentsconverter.transliterate(fileName);
+    }
+    return Text.escapeIllegalJcrChars(fileName);
   }
 
   public static boolean isValidDocumentTitle(String name) {
