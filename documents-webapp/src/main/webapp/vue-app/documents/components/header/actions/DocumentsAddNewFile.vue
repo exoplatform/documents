@@ -240,7 +240,7 @@ export default {
       this.selectionsLength = 0;
     },
     handleSelectionListUpdate(selectedList) {
-      this.showSelectionsMenu = selectedList.length > 1;
+      this.showSelectionsMenu = selectedList.length > 0;
       this.selectionsLength = selectedList.length;
     },
     refreshFilesList() {
