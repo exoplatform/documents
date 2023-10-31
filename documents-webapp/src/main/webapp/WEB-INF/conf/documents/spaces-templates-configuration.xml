@@ -56,6 +56,9 @@
                     <field name="uri">
                       <string>documents</string>
                     </field>
+                    <field name="icon">
+                      <string>fas fa-folder-open</string>
+                    </field>
                   </object>
                 </value>
               </collection>
@@ -95,6 +98,9 @@
                     </field>
                     <field name="uri">
                       <string>documents</string>
+                    </field>
+                    <field name="icon">
+                      <string>fas fa-folder-open</string>
                     </field>
                   </object>
                 </value>
@@ -136,6 +142,9 @@
                     <field name="uri">
                       <string>documents</string>
                     </field>
+                    <field name="icon">
+                      <string>fas fa-folder-open</string>
+                    </field>
                   </object>
                 </value>
               </collection>
@@ -175,6 +184,9 @@
                     </field>
                     <field name="uri">
                       <string>documents</string>
+                    </field>
+                    <field name="icon">
+                      <string>fas fa-folder-open</string>
                     </field>
                   </object>
                 </value>
