@@ -56,7 +56,7 @@ public class DocumentSearchServiceConnectorTest {
   private static final String  SEARCH_QUERY_FILE_PATH_PARAM      = "query.file.path";
 
   public static String         SEARCH_QUERY_TERM                 = "\"must\":{" + "    \"query_string\":{"
-      + "    \"fields\": [\"title\"]," + "    \"query\": \"*@term@*\"" + "  }" + "},";
+      + "    \"fields\": [\"title.raw\"]," + "    \"query\": \"@term@\"" + "  }" + "},";
 
   private static String        SEARCH_QUERY;
 
@@ -116,7 +116,7 @@ public class DocumentSearchServiceConnectorTest {
     filter.setIncludeHiddenFiles(false);
     filter.setSortField(DocumentSortField.NAME);
     filter.setAscending(true);
-    filter.setQuery("test");
+    filter.setQuery("(test OR *test*)");
     int limit = 51;
     int offset = 0;
     String path = "/Groups/spaces/test/Documents/";
@@ -192,8 +192,8 @@ public class DocumentSearchServiceConnectorTest {
     // when
     // search term contains ES reserved character
     filter.setQuery("term with reserved - character");
-    String esquipedReservedCharactersTermQuery = "*term* AND *with* AND *reserved* AND \\\\*\\\\-\\\\* AND *character*";
-    String oldSearchedTermQuery = "*test*";
+    String esquipedReservedCharactersTermQuery = "(term OR *term*) AND (*\\\\ *) AND (with OR *with*) AND (reserved OR *reserved*) AND (\\\\- OR *\\\\-*) AND (character OR *character*)";
+    String oldSearchedTermQuery = "(test OR *test*)";
     when(client.sendRequest(expectedQuery.replace(oldSearchedTermQuery, esquipedReservedCharactersTermQuery),
                             ES_INDEX)).thenReturn(searchWithReservedCharacterResult);
     result = documentSearchServiceConnector.search(userIdentity,
