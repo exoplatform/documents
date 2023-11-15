@@ -667,8 +667,8 @@ public class DocumentFileRestTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "", false, new HashMap<>());
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "", false, new HashMap<>());
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "Folder1", "", false, new HashMap<>());
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "Folder1", "", false, new HashMap<>());
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
@@ -1613,5 +1613,37 @@ public class DocumentFileRestTest {
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     response = documentFileRest1.importDocuments("1", "1", null, null, "ignore");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void testGetSettings() {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService,
+            publicDocumentAccessService,
+            externalDownloadService);
+
+    Response response = documentFileRest1.getSettings(1L);
+    assertEquals(500, response.getStatus());
+
+    String userName = "user";
+    Long ownerId = 1L;
+    Identity currentUserIdentity = mock(Identity.class);
+    org.exoplatform.services.security.Identity user = new org.exoplatform.services.security.Identity(userName);
+    ConversationState.setCurrent(new ConversationState(user));
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentUserIdentity);
+    when(identityManager.getIdentity(userName)).thenReturn(currentUserIdentity);
+    when(documentWebSocketService.getUserToken(userName)).thenReturn("this1is2a3cometd4token");
+    when(documentWebSocketService.getCometdContextName()).thenReturn("/rest");
+    when(documentFileService.getDefaultView(ownerId, currentUserIdentity.getId())).thenReturn("CustomView");
+
+    response = documentFileRest1.getSettings(1L);
+    assertEquals(200, response.getStatus());
+    DocumentsUserSettings documentsUserSettings = (DocumentsUserSettings) response.getEntity();
+    assertEquals(documentsUserSettings.getCometdContextName(), "/rest");
   }
 }

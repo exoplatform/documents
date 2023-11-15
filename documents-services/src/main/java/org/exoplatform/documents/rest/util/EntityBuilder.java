@@ -203,14 +203,22 @@ public class EntityBuilder {
   }
 
   public static List<BreadCrumbItemEntity> toBreadCrumbItemEntities(List<BreadCrumbItem> folders) {
-    List<BreadCrumbItemEntity>  brList = new ArrayList<BreadCrumbItemEntity>();
-    brList = folders.stream()
-                    .map(document -> new BreadCrumbItemEntity(document.getId(),
-                                                              document.getName(),
-                                                              document.getPath(),
-                                                              document.isSymlink(),
-                                                              document.getAccessList()))
-                    .collect(Collectors.toList());
+    List<BreadCrumbItemEntity>  brList = new ArrayList<>();
+    for(BreadCrumbItem breadCrumbItem : folders) {
+      BreadCrumbItemEntity breadCrumbItemEntity = new BreadCrumbItemEntity(breadCrumbItem.getId(),
+              breadCrumbItem.getName(),
+              breadCrumbItem.getTechnicalName(),
+              breadCrumbItem.getPath(),
+              breadCrumbItem.isSymlink(),
+              breadCrumbItem.getAccessList());
+
+      brList.add(breadCrumbItemEntity);
+      if(breadCrumbItem.isSymlink()) {
+        for(int i = brList.size() - 1; i > 0 ; i--) {
+          brList.get(i - 1).setPath(brList.get(i).getPath() + "/" + brList.get(i - 1).getTechnicalName());
+        }
+      }
+    }
     Collections.reverse(brList);
     return brList;
   }
@@ -533,7 +541,7 @@ public class EntityBuilder {
     return identityEntity;
   }
   private static boolean isEditPermission(String permission){
-    return  permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove") ? true : false;
+    return  permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove");
   }
 
   public static PublicDocumentAccessEntity toPublicDocumentAccessEntity(PublicDocumentAccess publicDocumentAccess) {

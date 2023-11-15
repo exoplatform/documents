@@ -77,7 +77,7 @@ export default {
       type: Number,
       default: null,
     },
-    beforDate: {
+    beforeDate: {
       type: Number,
       default: null,
     },
@@ -147,7 +147,7 @@ export default {
       if (this.fileType?.length>0) {
         fNum++;
       }
-      if (this.afterDate && this.beforDate) {
+      if (this.afterDate && this.beforeDate) {
         fNum++;
       }
       if (this.minSize) {

@@ -75,23 +75,23 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
 public class DocumentFileRest implements ResourceContainer {
 
-  private static final Log          LOG = ExoLogger.getLogger(DocumentFileRest.class);
+  private static final Log                  LOG                = ExoLogger.getLogger(DocumentFileRest.class);
 
-  private final DocumentFileService documentFileService;
+  private final DocumentFileService         documentFileService;
 
-  private final SpaceService        spaceService;
+  private final SpaceService                spaceService;
 
-  private final MetadataService     metadataService;
+  private final MetadataService             metadataService;
 
-  private final IdentityManager     identityManager;
+  private final IdentityManager             identityManager;
 
-  private final SettingService       settingService;
+  private final SettingService              settingService;
 
-  private final DocumentWebSocketService documentWebSocketService;
+  private final DocumentWebSocketService    documentWebSocketService;
 
   private final PublicDocumentAccessService publicDocumentAccessService;
-  
-  private final ExternalDownloadService        externalDownloadService;
+
+  private final ExternalDownloadService     externalDownloadService;
 
   public static final UserFieldValidator    PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
 
@@ -188,8 +188,8 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getDocumentItems(@Parameter(description = "Identity technical identifier")
-  @QueryParam("ownerId")
-  Long ownerId,
+                                   @QueryParam("ownerId")
+                                   Long ownerId,
                                    @Parameter(description = "Parent folder technical identifier")
                                    @QueryParam("parentFolderId")
                                    String parentFolderId,
@@ -201,13 +201,13 @@ public class DocumentFileRest implements ResourceContainer {
                                    String folderPath,
                                    @Parameter(description = "Listing type of folder. Can be 'TIMELINE' or 'FOLDER'.")
                                    @QueryParam("listingType")
-                                     FileListingType listingType,
+                                   FileListingType listingType,
                                    @Parameter(description = "Search query entered by the user")
-                                     @QueryParam("query")
-                                     String query,
+                                   @QueryParam("query")
+                                   String query,
                                    @Parameter(description = "extendedSearch")
-                                     @QueryParam("extendedSearch")
-                                     boolean extendedSearch,
+                                   @QueryParam("extendedSearch")
+                                   boolean extendedSearch,
                                    @Parameter(description = "userId")
                                    @QueryParam("userId")
                                    String userId,
@@ -238,9 +238,9 @@ public class DocumentFileRest implements ResourceContainer {
                                    @Parameter(description = "afterDate")
                                    @QueryParam("afterDate")
                                    Long afterDate,
-                                   @Parameter(description = "beforDate")
-                                   @QueryParam("beforDate")
-                                   Long beforDate,
+                                   @Parameter(description = "beforeDate")
+                                   @QueryParam("beforeDate")
+                                   Long beforeDate,
                                    @Parameter(description = "minSize")
                                    @QueryParam("minSize")
                                    Long minSize,
@@ -267,7 +267,7 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setUserId(userId);
       filter.setFileTypes(fileType);
       filter.setAfterDate(afterDate);
-      filter.setBeforDate(beforDate);
+      filter.setBeforeDate(beforeDate);
       filter.setMaxSize(maxSize);
       filter.setMinSize(minSize);
       filter.setAscending(ascending);
@@ -277,7 +277,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                        identityManager,
                                                                                        spaceService,
                                                                                        metadataService,
-              publicDocumentAccessService,
+                                                                                       publicDocumentAccessService,
                                                                                        documents,
                                                                                        expand,
                                                                                        userIdentityId);
@@ -349,8 +349,8 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getBreadcrumb(@Parameter(description = "Identity technical identifier", required = false)
-  @QueryParam("ownerId")
-  Long ownerId,
+                                @QueryParam("ownerId")
+                                Long ownerId,
                                 @Parameter(description = "Folder technical identifier")
                                 @QueryParam("folderId")
                                 String folderId,

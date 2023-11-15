@@ -189,7 +189,7 @@ export default {
       type: Number,
       default: null,
     },
-    beforDate: {
+    beforeDate: {
       type: Number,
       default: null,
     },
