@@ -45,7 +45,7 @@ public abstract class DocumentNodeFilter {
 
   private Long              afterDate;
 
-  private Long              beforDate;
+  private Long              beforeDate;
 
   private Long              minSize;
 

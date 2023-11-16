@@ -19,7 +19,7 @@
           :primary-filter="primaryFilter"
           :file-type="fileType"
           :after-date="afterDate"
-          :befor-date="beforDate"
+          :before-date="beforeDate"
           :min-size="minSize"
           :max-size="maxSize"
           :is-mobile="isMobile"
@@ -70,7 +70,7 @@
             :primary-filter="primaryFilter"
             :file-type="fileType"
             :after-date="afterDate"
-            :befor-date="beforDate"
+            :before-date="beforeDate"
             :min-size="minSize"
             :max-size="maxSize"
             :selected-view="selectedView"
@@ -220,7 +220,7 @@ export default {
     newVersionFile: {},
     fileType: [],
     afterDate: null,
-    beforDate: null,
+    beforeDate: null,
     minSize: null,
     maxSize: null,
     publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`
@@ -313,7 +313,7 @@ export default {
     this.$root.$on('set-advanced-filter', advancedFilter => {
       this.fileType = advancedFilter.fileType;
       this.afterDate = advancedFilter.selectedPeriod?.min;
-      this.beforDate = advancedFilter.selectedPeriod?.max;
+      this.beforeDate = advancedFilter.selectedPeriod?.max;
       this.minSize = advancedFilter.minSize;
       this.maxSize = advancedFilter.maxSize;
       this.refreshFiles();
@@ -1081,8 +1081,8 @@ export default {
       if (this.afterDate) {
         filter.afterDate = this.afterDate;
       }      
-      if (this.beforDate) {
-        filter.beforDate = this.beforDate;
+      if (this.beforeDate) {
+        filter.beforeDate = this.beforeDate;
       }     
       if (this.minSize) {
         filter.minSize = this.minSize;

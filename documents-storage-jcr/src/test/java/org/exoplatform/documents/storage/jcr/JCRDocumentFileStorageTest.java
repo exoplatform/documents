@@ -10,6 +10,7 @@ import static org.mockito.Mockito.*;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import javax.jcr.*;
@@ -273,7 +274,7 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     Identity ownerIdentity = mock(Identity.class);
     when(identity.getUserId()).thenReturn("user");
-    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "documents/path", 1L, "");
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", null, 1L, "");
 
     // mock session
     SessionProvider sessionProvider = mock(SessionProvider.class);
@@ -375,11 +376,18 @@ public class JCRDocumentFileStorageTest {
     when(parentNodeImp.getName()).thenReturn("documents");
     when(parentNodeImp.getNode(filter.getFolderPath())).thenReturn(parentNodeImp);
     when(parentNodeImp.getPath()).thenReturn("/documents/path");
+    when(parentNodeImp.getIdentifier()).thenReturn("parentNodeIdentifier");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
-                                              nodeHierarchyCreator,
-                                              "user",
-                                              ownerIdentity,
-                                              sessionProvider)).thenReturn(parentNodeImp);
+                                                                       nodeHierarchyCreator,
+                                                                       "user",
+                                                                       ownerIdentity,
+                                                                       sessionProvider))
+                      .thenReturn(parentNodeImp);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       ownerIdentity,
+                                                                       userSession))
+                      .thenReturn(parentNodeImp); 
     NodeIterator nodeIterator1 = mock(NodeIterator.class);
     when(queryResult.getNodes()).thenReturn(nodeIterator1);
     when(nodeIterator1.hasNext()).thenReturn(true, true, false);
@@ -875,7 +883,7 @@ public class JCRDocumentFileStorageTest {
     Session userSession = mock(Session.class);
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     when(identity.getUserId()).thenReturn("user");
-    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "documents/path", 1L, "");
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "", 1L, "");
 
     // mock session
     SessionProvider sessionProvider = mock(SessionProvider.class);

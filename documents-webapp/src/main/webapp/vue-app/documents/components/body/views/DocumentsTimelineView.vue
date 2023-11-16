@@ -118,7 +118,7 @@
           :primary-filter="primaryFilterFavorite"
           :file-type="fileType"
           :after-date="afterDate"
-          :befor-date="beforDate"
+          :before-date="beforeDate"
           :min-size="minSize" />
       </template>
       <template v-if="hasMore" slot="footer">
@@ -195,7 +195,7 @@ export default {
       type: Number,
       default: null,
     },
-    beforDate: {
+    beforeDate: {
       type: Number,
       default: null,
     },
@@ -251,7 +251,7 @@ export default {
       return this.headers && this.headers.filter(header => header.cellExtension && header.cellExtension.componentOptions);
     },
     grouping() {
-      return !(this.query?.length > 0  || this.primaryFilter !== 'all' || this.fileType?.length>0 || this.afterDate || this.beforDate || this.minSize || this.maxSize) && (!this.sortField || this.sortField === 'lastUpdated') ;
+      return !(this.query?.length > 0  || this.primaryFilter !== 'all' || this.fileType?.length>0 || this.afterDate || this.beforeDate || this.minSize || this.maxSize) && (!this.sortField || this.sortField === 'lastUpdated') ;
     },
     querySearch() {
       return this.query && this.query.length;
