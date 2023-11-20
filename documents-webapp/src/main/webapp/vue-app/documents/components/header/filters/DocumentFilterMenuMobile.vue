@@ -75,7 +75,7 @@ export default {
         extendedSearch: this.extendedSearch,
         fileType: this.fileType,
         afterDate: this.afterDate,
-        beforDate: this.beforDate,
+        beforeDate: this.beforeDate,
         minSize: this.minSize,
         maxSize: this.maxSize,
       };

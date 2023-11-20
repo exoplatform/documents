@@ -27,6 +27,7 @@ import lombok.NoArgsConstructor;
 public class BreadCrumbItem {
   private String                                id;
   private String                                name;
+  private String                                technicalName;
   private String                                path;
   private boolean                               isSymlink;
   private Map<String, Boolean>                  accessList;

@@ -84,67 +84,67 @@ import org.exoplatform.upload.UploadService;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
-  private static final String                       COLLABORATION        = "collaboration";
+  private static final String                       COLLABORATION               = "collaboration";
 
-  private static final List<String>                 FOLDER_NODE_TYPES    = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
-                                                                                   NodeTypeConstants.NT_FOLDER,
-                                                                                   NodeTypeConstants.EXO_SYMLINK,
-                                                                                   NodeTypeConstants.CSS_FOLDER,
-                                                                                   NodeTypeConstants.JS_FOLDER,
-                                                                                   NodeTypeConstants.LINK_FOLDER,
-                                                                                   NodeTypeConstants.WEB_FOLDER);
+  private static final List<String>                 FOLDER_NODE_TYPES           = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
+                                                                                          NodeTypeConstants.NT_FOLDER,
+                                                                                          NodeTypeConstants.EXO_SYMLINK,
+                                                                                          NodeTypeConstants.CSS_FOLDER,
+                                                                                          NodeTypeConstants.JS_FOLDER,
+                                                                                          NodeTypeConstants.LINK_FOLDER,
+                                                                                          NodeTypeConstants.WEB_FOLDER);
 
-  private final SpaceService                   spaceService;
+  private final SpaceService                        spaceService;
 
-  private final RepositoryService              repositoryService;
+  private final RepositoryService                   repositoryService;
 
-  private final IdentityManager                identityManager;
+  private final IdentityManager                     identityManager;
 
-  private final NodeHierarchyCreator           nodeHierarchyCreator;
+  private final NodeHierarchyCreator                nodeHierarchyCreator;
 
-  private final DocumentSearchServiceConnector documentSearchServiceConnector;
+  private final DocumentSearchServiceConnector      documentSearchServiceConnector;
 
-  private final ListenerService                listenerService;
+  private final ListenerService                     listenerService;
 
   private final UploadService                       uploadService;
 
-  private final IdentityRegistry               identityRegistry;
+  private final IdentityRegistry                    identityRegistry;
 
-  private final ActivityManager                activityManager;
+  private final ActivityManager                     activityManager;
 
   private final BulkStorageActionService            bulkStorageActionService;
 
-  private final String                              DATE_FORMAT          = "yyyy-MM-dd";
+  private final String                              DATE_FORMAT                 = "yyyy-MM-dd";
 
-  private final String                              SPACE_PATH_PREFIX    = "/Groups/spaces/";
+  private final String                              SPACE_PATH_PREFIX           = "/Groups/spaces/";
 
-  private final SimpleDateFormat                    formatter            = new SimpleDateFormat(DATE_FORMAT);
+  private final SimpleDateFormat                    formatter                   = new SimpleDateFormat(DATE_FORMAT);
 
-  private static final String                       GROUP_ADMINISTRATORS = "*:/platform/administrators";
+  private static final String                       GROUP_ADMINISTRATORS        = "*:/platform/administrators";
 
-  private static final String                       SPACE_PROVIDER_ID    = "space";
+  private static final String                       SPACE_PROVIDER_ID           = "space";
 
-  private static final String                       SHARED_FOLDER_NAME   = "Shared";
+  private static final String                       SHARED_FOLDER_NAME          = "Shared";
 
-  private static final String                       EOO_COMMENT_ID       = "eoo:commentId";
+  private static final String                       EOO_COMMENT_ID              = "eoo:commentId";
 
-  private static final String                       ADD_TAG_DOCUMENT     = "add_tag_document";
+  private static final String                       ADD_TAG_DOCUMENT            = "add_tag_document";
 
-  private static final String                       KEEP_BOTH            = "keepBoth";
+  private static final String                       KEEP_BOTH                   = "keepBoth";
 
-  private static final String                       CREATE_NEW_VERSION   = "createNewVersion";
+  private static final String                       CREATE_NEW_VERSION          = "createNewVersion";
 
-  private static final String                       ZIP_PREFIX           = "downloadzip";
+  private static final String                       ZIP_PREFIX                  = "downloadzip";
 
   public static final String                        TEMP_DOWNLOAD_FOLDER_PREFIX = "temp_download";
 
   public static final String                        TEMP_IMPORT_FOLDER_PREFIX   = "temp_import";
 
-  private static final String                       ZIP_EXTENSION        = ".zip";
+  private static final String                       ZIP_EXTENSION               = ".zip";
 
-  private static final String                       TEMP_DIRECTORY_PATH  = "java.io.tmpdir";
+  private static final String                       TEMP_DIRECTORY_PATH         = "java.io.tmpdir";
 
-  private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory   = new HashMap<>();
+  private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory          = new HashMap<>();
 
   private static final Log LOG     = ExoLogger.getLogger(JCRDocumentFileStorage.class);
 
@@ -193,7 +193,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
-          && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforDate() == null
+          && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforeDate() == null
           && filter.getMaxSize() == null && filter.getMinSize() == null) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
@@ -227,9 +227,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
-      }
+      sessionProvider.close();
     }
   }
 
@@ -253,9 +251,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error when getting the documents size for identity " + ownerId, e);
     } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
-      }
+      sessionProvider.close();
     }
   }
 
@@ -344,16 +340,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Long ownerId = filter.getOwnerId();
         String userId = filter.getUserId();
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = null;
-        if(StringUtils.isNotEmpty(filter.getUserId())){
-          ownerIdentity = identityManager.getOrCreateUserIdentity(userId);
-        } else{
-          ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        if (StringUtils.isNotBlank(folderPath) && !folderPath.startsWith("/")) {
+          folderPath = SLASH + folderPath;
         }
-        parent = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        if (StringUtils.isNotEmpty(filter.getUserId())) {
+          ownerIdentity = identityManager.getOrCreateUserIdentity(userId);
+          parent = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        } else {
+          ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+          parent = getIdentityRootNode(spaceService, nodeHierarchyCreator, ownerIdentity, session);
+        }
         parentFolderId = ((NodeImpl) parent).getIdentifier();
       } else {
         parent = getNodeByIdentifier(session, parentFolderId);
-        if (parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        if (parent != null && parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           parent = getNodeByIdentifier(session, sourceNodeId);
         }
@@ -372,15 +372,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       if (StringUtils.isNotBlank(folderPath)) {
-        parent = getNodeByPath(parent, folderPath, sessionProvider);
-        if (parent != null && parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-          String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-          parent = getNodeByIdentifier(session, sourceNodeId);
-        }
+        parent = getNodeByPath(parent, folderPath.toLowerCase(), sessionProvider);
       }
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
-            && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforDate() == null
+            && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforeDate() == null
             && filter.getMaxSize() == null && filter.getMinSize() == null) {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
@@ -481,6 +477,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
         parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                        nodeName,
+                                       node.getName(),
                                        node.getPath(),
                                        node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
                                        countNodeAccessList(node,aclIdentity)));
@@ -504,6 +501,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
+                                               node.getName(),
                                                node.getPath(),
                                                node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
                                                countNodeAccessList(node,aclIdentity)));
@@ -522,6 +520,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                 }
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
+                                               node.getName(),
                                                node.getPath(),
                                                node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
                                                countNodeAccessList(node,aclIdentity)));
@@ -1122,8 +1121,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           }
           return null;
         }
-      }
-      if ((node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
+      } else if ((node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE + SLASH)[1];
           return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
@@ -1132,11 +1130,32 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE + SLASH)[1];
           return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
         }
+      } else {
+        String[] splittedNodePath = folderPath.split(SLASH);
+        if(splittedNodePath.length == 0) {
+          return node;
+        }
+        Node currentNode = node;
+        for(String nodeName : splittedNodePath) {
+          if(StringUtils.isNotBlank(nodeName) && currentNode != null) {
+            if (currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+              String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+              currentNode = getNodeByIdentifier(currentNode.getSession(), sourceNodeId);
+            }
+            nodeName = java.net.URLDecoder.decode(nodeName, StandardCharsets.UTF_8).replace("%", "%25");
+            if (currentNode != null && currentNode.hasNode(nodeName)) {
+              currentNode = currentNode.getNode(nodeName);
+            } else {
+              currentNode = currentNode.getNode(nodeName.toLowerCase());
+            }
+          }
+        }
+        return currentNode;
       }
-      return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
     } catch (RepositoryException repositoryException) {
       throw new ObjectNotFoundException("Folder with path : " + parentPath + folderPath + " isn't found");
     }
+    return null;
   }
 
   public void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity){

@@ -83,7 +83,7 @@ export default {
       type: Number,
       default: null,
     },
-    beforDate: {
+    beforeDate: {
       type: Number,
       default: null,
     },
@@ -131,7 +131,7 @@ export default {
         selectedDocuments: this.selectedDocuments,
         fileType: this.fileType,
         afterDate: this.afterDate,
-        beforDate: this.beforDate,
+        beforeDate: this.beforeDate,
         minSize: this.minSize,
         maxSize: this.maxSize,
         primaryFilter: this.primaryFilter,

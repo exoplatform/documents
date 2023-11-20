@@ -138,7 +138,7 @@ public class DocumentSearchServiceConnector {
     }
     if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isFalse(filter.getFavorites())
         && StringUtils.isEmpty(filter.getFileTypes())
-        && filter.getAfterDate() == null && filter.getBeforDate() == null && filter.getMaxSize() == null
+        && filter.getAfterDate() == null && filter.getBeforeDate() == null && filter.getMaxSize() == null
         && filter.getMinSize() == null) {
       throw new IllegalArgumentException("Filter term is mandatory");
     }
@@ -283,13 +283,13 @@ public class DocumentSearchServiceConnector {
   }
 
   private String getDatesQuery(DocumentNodeFilter filter) {
-    if (filter.getAfterDate() != null || filter.getBeforDate() != null) {
+    if (filter.getAfterDate() != null || filter.getBeforeDate() != null) {
       List<String> dates = new ArrayList<>();
       if (filter.getAfterDate() != null) {
         dates.add("\"gte\": " + filter.getAfterDate());
       }
-      if (filter.getBeforDate() != null) {
-        dates.add("\"lte\": " + filter.getBeforDate());
+      if (filter.getBeforeDate() != null) {
+        dates.add("\"lte\": " + filter.getBeforeDate());
       }
       return "{\n" +
               "   \"bool\":{\n" +
