@@ -86,6 +86,9 @@
                         <field name="bundlePath">
                             <string>locale.notification.DocumentsNotification</string>
                         </field>
+                        <field name="mutable">
+                            <boolean>false</boolean>
+                        </field>
                     </object>
                 </object-param>
             </init-params>
@@ -128,26 +131,15 @@
                         <field name="bundlePath">
                             <string>locale.notification.DocumentsNotification</string>
                         </field>
+                        <field name="mutable">
+                            <boolean>false</boolean>
+                        </field>
                     </object>
                 </object-param>
             </init-params>
         </component-plugin>
     </external-component-plugins>
 
-    <external-component-plugins>
-        <target-component>org.exoplatform.commons.api.notification.channel.ChannelManager</target-component>
-        <component-plugin>
-            <name>web.channel.content</name>
-            <set-method>registerTemplateProvider</set-method>
-            <type>org.exoplatform.documents.notification.provider.WebTemplateProvider</type>
-            <init-params>
-                <value-param>
-                    <name>channel-id</name>
-                    <value>WEB_CHANNEL</value>
-                </value-param>
-            </init-params>
-        </component-plugin>
-    </external-component-plugins>
 
     <external-component-plugins>
         <target-component>org.exoplatform.commons.api.notification.channel.ChannelManager</target-component>
@@ -162,10 +154,6 @@
                 </value-param>
             </init-params>
         </component-plugin>
-    </external-component-plugins>
-
-    <external-component-plugins>
-        <target-component>org.exoplatform.commons.api.notification.channel.ChannelManager</target-component>
         <component-plugin>
             <name>push.channel.content</name>
             <set-method>registerTemplateProvider</set-method>
