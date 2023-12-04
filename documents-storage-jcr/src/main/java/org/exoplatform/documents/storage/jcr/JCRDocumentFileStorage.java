@@ -555,7 +555,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public List<FullTreeItem> getFullTreeData(long ownerId,
                                             String folderId,
-                                            Identity aclIdentity) {
+                                            Identity aclIdentity,
+                                            boolean withChildren) {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     List<FullTreeItem> parents = new ArrayList<>();
@@ -573,7 +574,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (node != null) {
         String nodeName = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        List<FullTreeItem> children = getAllFolderInNode(node,session);
+        List<FullTreeItem> children = getAllFolderInNode(node, session, withChildren);
 
         parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children));
       }
@@ -587,7 +588,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
-  private List<FullTreeItem> getAllFolderInNode(Node node, Session session) throws RepositoryException {
+  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, boolean withChildren) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
     while (nodeIter.hasNext()) {
@@ -608,7 +609,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           }
         }
         if (childNode != null) {
-          List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode, session);
+          List<FullTreeItem> folderChildListNodes = new ArrayList<>();
+          if (withChildren) {
+            folderChildListNodes = getAllFolderInNode(childNode, session, withChildren);
+          } else if (!childNode.hasNodes()) {
+            folderChildListNodes = null;
+          }
           folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
                                                nodeName,
                                                childNode.getPath(),
@@ -1321,8 +1327,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String groupId = space.getGroupId();
         List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
         List<String> accessControlEntryPermession = new ArrayList<>();
-        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId)).toList()
-           .forEach(accessControlEntry -> {
+        acc.stream().forEach(accessControlEntry -> {
                       accessControlEntryPermession.add(accessControlEntry.getPermission());
                       permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
                     });
