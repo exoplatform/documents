@@ -17,9 +17,9 @@
 -->
 <template>
   <v-app class="border-box-sizing" flat>
-    <v-main class="white pa-5">
-      <div class="d-flex align-center">
-        <a :href="documentsBaseLink" class="body-1 text-uppercase text-sub-title">
+    <v-main class="white pa-5 card-border-radius">
+      <div class="d-flex align-center mb-5">
+        <a :href="documentsBaseLink" class="widget-text-header text-capitalize-first-letter">
           {{ $t('document.size.header.label') }}
         </a>
         <div v-if="inProgress">
