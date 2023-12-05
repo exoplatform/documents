@@ -58,6 +58,9 @@
             return true;
         }
         const target = getTargetRow(event.target);
+        if (isEditModeActive(target)) {
+            return ;
+        }
         const selections = getSelectedRows();
         parentDragElement = getParentDragElement();
         if (selections.length) {
@@ -166,6 +169,10 @@
 
     function getSelectedRows() {
         return document.querySelectorAll("tr.v-data-table__selected");
+    }
+
+    function isEditModeActive(target) {
+        return target.querySelectorAll(".documentEditName").length;
     }
 
     function getTargetRow(target) {
