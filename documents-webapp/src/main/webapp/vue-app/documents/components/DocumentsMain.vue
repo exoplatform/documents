@@ -7,7 +7,7 @@
     <div @mouseover="hideOverlay">
       <div
         v-show="initialized"
-        class="pa-4 white"
+        class="card-border-radius pa-4 white"
         @dragover.prevent
         @drop.prevent
         @dragstart.prevent>
