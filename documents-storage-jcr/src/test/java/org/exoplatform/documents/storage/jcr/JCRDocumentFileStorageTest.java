@@ -764,6 +764,11 @@ public class JCRDocumentFileStorageTest {
     assertEquals(1, fullTreeItemList.size());
     assertEquals(3, fullTreeItemList.get(0).getChildren().size());
 
+    // withChildren is false, it should return list with just the parent folder children, sub folders should not have children
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, false);
+    assertEquals(1, fullTreeItemList.size());
+    assertEquals(0, fullTreeItemList.get(0).getChildren().size());
+
     // Natural sorted items
     Node folder1 = mock(NodeImpl.class);
     when(folder1.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
