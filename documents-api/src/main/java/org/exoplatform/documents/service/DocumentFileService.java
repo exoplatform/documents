@@ -129,11 +129,12 @@ public interface DocumentFileService {
    * @param folderId Id of the given folder
    * @param authenticatedUserId of the user acessing files
    * @return {@link List} of {@link FullTreeItem}
+   * @param withChildren get all children
    * @throws IllegalAccessException when the user isn't allowed to access
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
-  List<FullTreeItem> getFullTreeData(long ownerId,String folderId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, long authenticatedUserId, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
    * Duplicate the given node.

@@ -390,14 +390,17 @@ public class DocumentFileRest implements ResourceContainer {
                                         Long ownerId,
                                 @Parameter(description = "Folder technical identifier")
                                 @QueryParam("folderId")
-                                        String folderId) {
+                                String folderId,
+                                  @Parameter(description = "Folder technical identifier")
+                                    @QueryParam("withChildren")
+                                    boolean withChildren) {
 
     if (ownerId == null && StringUtils.isBlank(folderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-      return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId, userIdentityId)))
+        return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId, userIdentityId, withChildren)))
               .build();
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();

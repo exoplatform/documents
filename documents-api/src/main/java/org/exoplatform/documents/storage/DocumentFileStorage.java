@@ -100,9 +100,10 @@ public interface DocumentFileStorage {
    *
    * @param folderId Id of the given folder
    * @param aclIdentity {@link Identity} of the user acessing files
+   * @param withChildren get all children
    * @return {@link List} of {@link AbstractNode}
    */
-  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, Identity aclIdentity, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
    * Duplicate the given node.

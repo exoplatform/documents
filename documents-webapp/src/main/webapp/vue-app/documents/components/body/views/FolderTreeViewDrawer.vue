@@ -11,6 +11,7 @@
       <v-treeview
         :open.sync="openLevel"
         :items="items"
+        :load-children="fetchChildren"
         class="treeView-item my-2"
         item-key="id"
         hoverable
@@ -67,7 +68,7 @@ export default {
     sortNestedItems(items) {
       this.sortItems(items);
       items.forEach(item => {
-        if (item.children.length) {
+        if (item.children?.length) {
           this.sortNestedItems(item.children);
         }
       });
@@ -82,6 +83,16 @@ export default {
     },
     openFolder(folder){
       this.$root.$emit('open-folder', folder);
+    },
+    fetchChildren (item) {
+      this.$refs.folderBreadcrumb?.startLoading();
+      this.$documentFileService
+        .getFullTreeData(this.ownerId,item.id).then(data => {
+          if (data) {
+            item.children.push(...data[0].children);
+          }
+          this.$refs.folderBreadcrumb?.endLoading();
+        });
     },
     retrieveDocumentTree(){
       this.items = [];
