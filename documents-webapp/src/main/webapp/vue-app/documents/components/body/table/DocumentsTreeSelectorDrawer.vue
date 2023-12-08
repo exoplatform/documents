@@ -60,6 +60,7 @@
         </span>
         <v-treeview
           :open.sync="openLevel"
+          :load-children="fetchChildren"
           :items="items"
           class="treeView-item my-2"
           item-key="name"
@@ -179,6 +180,14 @@ export default {
     },
   },
   methods: {
+    fetchChildren (item) {
+      this.$documentFileService
+        .getFullTreeData(this.ownerId,item.id).then(data => {
+          if (data) {
+            item.children.push(...data[0].children);
+          }
+        });
+    },
     open(file) {
       this.file = file;
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
