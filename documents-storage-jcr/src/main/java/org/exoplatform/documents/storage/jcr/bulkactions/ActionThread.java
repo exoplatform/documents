@@ -237,9 +237,7 @@ public class ActionThread implements Runnable {
           JCRDocumentsUtil.cleanFiles(folder);
           break;
         }
-        if (StringUtils.isEmpty(parentPath)) {
-          parentPath = node.getParent().getPath();
-        }
+        parentPath = node.getParent().getPath();
         if (hasFolders) {
           JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
         } else {
