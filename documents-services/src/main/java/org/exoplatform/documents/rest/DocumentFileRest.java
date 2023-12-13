@@ -26,7 +26,7 @@ import java.util.Map;
 
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;

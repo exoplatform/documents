@@ -29,7 +29,7 @@ import java.util.*;
 
 import javax.jcr.AccessDeniedException;
 import javax.jcr.RepositoryException;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import javax.ws.rs.core.Response;
 
 import org.junit.After;
