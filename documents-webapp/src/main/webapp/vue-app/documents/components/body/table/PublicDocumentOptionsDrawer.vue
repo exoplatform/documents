@@ -402,7 +402,7 @@ export default {
       const delayDate = new Date(new Date());
       switch (this.delayType) {
       case 'day':
-        return delayDate.setDate(delayDate.getDate() + this.delayTypeTimes);
+        return delayDate.setDate(delayDate.getDate() + parseInt(this.delayTypeTimes));
       case 'week':
         return delayDate.setDate(delayDate.getDate() + this.delayTypeTimes * 7);
       case 'month':
