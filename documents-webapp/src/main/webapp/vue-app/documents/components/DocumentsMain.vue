@@ -603,7 +603,7 @@ export default {
           this.setMultiActionLoading(false);
           this.displayMessage({
             type: 'success',
-            message: this.$t(`documents.bulk.${actionName}.doneSuccessfully`, {0: actionData.numberOfItems})
+            message: this.$t(`documents.bulk.${actionName}.doneSuccessfully`, {0: treatedItems.length})
           });
           if (actionName === 'move') {
             this.handleBulkMoveRedirect();
