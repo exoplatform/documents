@@ -56,8 +56,8 @@ public class DocumentSearchServiceConnector {
 
   public static final String           SEARCH_QUERY_TERM            = "\"must\":{"
           + "    \"query_string\":{"
-          + "    \"fields\": [\"title\"],"
-          + "    \"query\": \"*@term@*\""
+          + "    \"fields\": [\"title.raw\"],"
+          + "    \"query\": \"@term@\""
           + "  }"
           + "},";
 
@@ -68,6 +68,9 @@ public class DocumentSearchServiceConnector {
           + "  }" + "},";
 
   public static final String           QUERY_TAG_TERM           = "@term@";
+
+  public static final String ASTERISK_STR      = "*";
+
   private static final String          IMAGES                   =
                                                   "\"image/bmp\",\"image/jpeg\",\"image/webp\",\"image/png\",\"image/gif\",\"image/avif\",\"image/tiff\"";
 
@@ -483,7 +486,25 @@ public class DocumentSearchServiceConnector {
     boolean isEscapedQueryWithAndOperator = !escapedQueryWithAndOperator.equals(term);
     if (!extendedSearch) {
       // If the reserved characters are escaped we will escape also the * character in the search query term.
-      return isEscapedReservedCharactersTerm && !isEscapedQueryWithAndOperator ? SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, term) : SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator);
+      StringBuilder inputSplittedValue = new StringBuilder();
+      String[] splittedValue = term.split(" ");
+        for (int i = 0; i < splittedValue.length; i++) {
+          if (StringUtils.isNotBlank(splittedValue[i])) {
+            if (i!=0) {
+              inputSplittedValue.append(" AND ");
+            }
+            inputSplittedValue.append("(");
+            String replaceSpecialCharInputValue = replaceSpecialCharInputValue(splittedValue[i]);
+            inputSplittedValue.append(replaceSpecialCharInputValue);
+            String inputWithAsteriskStr = ASTERISK_STR.concat(replaceSpecialCharInputValue).concat(ASTERISK_STR);
+            inputSplittedValue.append(" OR ").append(inputWithAsteriskStr);
+            inputSplittedValue.append(")");
+            if (term.contains(" ") && inputSplittedValue.indexOf(" AND (*\\\\ *)")==-1) {
+              inputSplittedValue.append(" AND (*\\\\ *)");
+            }
+          }
+        }
+      return SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, inputSplittedValue.toString());
     }
     return isEscapedReservedCharactersTerm && ! isEscapedQueryWithAndOperator ? EXTENDED_SEARCH_QUERY_TERM.replace("*", "\\\\*").replace(QUERY_TAG_TERM, term ) : EXTENDED_SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, escapedQueryWithAndOperator);
   }
@@ -549,5 +570,34 @@ public class DocumentSearchServiceConnector {
       return escapedQueryWithAndOperator.toString();
     }
     return term;
+  }
+
+  private String replaceSpecialCharInputValue (String inputValue) {
+    StringBuilder result = new StringBuilder();
+    int i = 0;
+    int j = 0;
+    int numberLetterOrDigit = 0;
+    for (char c : inputValue.toCharArray()) {
+      if (!(Character.isLetterOrDigit(c) || !Character.isWhitespace(c))) {
+        if ( j!=0 ) {
+          result.append("\\\\").append(c);
+        } else if ( i==0 ) {
+          result.append(c);
+          j++;
+        } else {
+          result.append(c);
+          j=0;
+        }
+      } else {
+        result.append(c);
+        numberLetterOrDigit++;
+        j=0;
+      }
+      i++;
+    }
+    if (numberLetterOrDigit == 0) {
+      return "*";
+    }
+    return result.toString();
   }
 }

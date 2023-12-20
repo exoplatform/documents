@@ -372,7 +372,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       if (StringUtils.isNotBlank(folderPath)) {
-        parent = getNodeByPath(parent, folderPath.toLowerCase(), sessionProvider);
+        parent = getNodeByPath(parent, folderPath, sessionProvider);
       }
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
@@ -555,7 +555,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public List<FullTreeItem> getFullTreeData(long ownerId,
                                             String folderId,
-                                            Identity aclIdentity) {
+                                            Identity aclIdentity,
+                                            boolean withChildren) {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     List<FullTreeItem> parents = new ArrayList<>();
@@ -573,7 +574,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (node != null) {
         String nodeName = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        List<FullTreeItem> children = getAllFolderInNode(node,session);
+        List<FullTreeItem> children = getAllFolderInNode(node, session, withChildren);
 
         parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children));
       }
@@ -587,7 +588,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
-  private List<FullTreeItem> getAllFolderInNode(Node node, Session session) throws RepositoryException {
+  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, boolean withChildren) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
     while (nodeIter.hasNext()) {
@@ -608,7 +609,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           }
         }
         if (childNode != null) {
-          List<FullTreeItem> folderChildListNodes = getAllFolderInNode(childNode, session);
+          List<FullTreeItem> folderChildListNodes = new ArrayList<>();
+          if (withChildren) {
+            folderChildListNodes = getAllFolderInNode(childNode, session, withChildren);
+          } else if (!childNode.hasNodes()) {
+            folderChildListNodes = null;
+          }
           folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
                                                nodeName,
                                                childNode.getPath(),
@@ -1106,29 +1112,46 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if ((node.getName().equals(USER_PRIVATE_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH)[1];
-          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
+          folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
+          if(node.hasNode(folderPath)) {
+            return node.getNode(folderPath);
+          } else {
+            return node.getNode(folderPath.toLowerCase());
+          }
         }
         if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
           SessionProvider systemSessionProvides = SessionProvider.createSystemProvider();
           Session systemSession = systemSessionProvides.getSession(sessionProvider.getCurrentWorkspace(),
                                                                    sessionProvider.getCurrentRepository());
-          Node parent = getNodeByIdentifier(systemSession, ((NodeImpl) node).getIdentifier()).getParent();
-          node = parent.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
-          Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(),
-                                                       sessionProvider.getCurrentRepository());
-          if (session.itemExists(parentPath)) {
-            return (Node) session.getItem(parentPath);
+          Node selectedNode = getNodeByIdentifier(systemSession, ((NodeImpl) node).getIdentifier());
+          folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
+          if(selectedNode != null) {
+            Node parent = selectedNode.getParent();
+            if (parent.hasNode(folderPath)) {
+              return parent.getNode(folderPath);
+            } else {
+              return parent.getNode(folderPath.toLowerCase());
+            }
           }
-          return null;
         }
       } else if ((node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE + SLASH)[1];
-          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
+          folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
+          if(node.hasNode(folderPath)) {
+            return node.getNode(folderPath);
+          } else {
+            return node.getNode(folderPath.toLowerCase());
+          }
         }
         if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE + SLASH)[1];
-          return (node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25")));
+          folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
+          if(node.hasNode(folderPath)) {
+            return node.getNode(folderPath);
+          } else {
+            return node.getNode(folderPath.toLowerCase());
+          }
         }
       } else {
         String[] splittedNodePath = folderPath.split(SLASH);
@@ -1143,10 +1166,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
               currentNode = getNodeByIdentifier(currentNode.getSession(), sourceNodeId);
             }
             nodeName = java.net.URLDecoder.decode(nodeName, StandardCharsets.UTF_8).replace("%", "%25");
-            if (currentNode != null && currentNode.hasNode(nodeName)) {
-              currentNode = currentNode.getNode(nodeName);
-            } else {
-              currentNode = currentNode.getNode(nodeName.toLowerCase());
+            if(currentNode != null) {
+              if (currentNode.hasNode(nodeName)) {
+                currentNode = currentNode.getNode(nodeName);
+              } else {
+                currentNode = currentNode.getNode(nodeName.toLowerCase());
+              }
             }
           }
         }
@@ -1302,8 +1327,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String groupId = space.getGroupId();
         List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
         List<String> accessControlEntryPermession = new ArrayList<>();
-        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals("*:" + groupId)).toList()
-           .forEach(accessControlEntry -> {
+        acc.stream().forEach(accessControlEntry -> {
                       accessControlEntryPermession.add(accessControlEntry.getPermission());
                       permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
                     });
