@@ -825,8 +825,8 @@ public class DocumentFileRestTest {
     Response response1 = documentFileRest.renameDocument("11111111", 2L, "renameTest");
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
 
-    when(documentFileStorage.getFullTreeData(2L, "11111111", userID)).thenReturn(children);
-    Response response2 = documentFileRest.getFullTreeData(2L, "11111111");
+    when(documentFileStorage.getFullTreeData(2L, "11111111", userID, true)).thenReturn(children);
+    Response response2 = documentFileRest.getFullTreeData(2L, "11111111", true);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.moveDocument(null, null, "/Groups/spaces/test/Documents/test", null);
@@ -1209,16 +1209,16 @@ public class DocumentFileRestTest {
                                                               documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
-    Response response = documentFileRest1.getFullTreeData(null, null);
+    Response response = documentFileRest1.getFullTreeData(null, null, true);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(IllegalAccessException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123");
+    when(documentFileRest1.getFullTreeData(1L, "123", true)).thenThrow(IllegalAccessException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123", true);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(ObjectNotFoundException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123");
+    when(documentFileRest1.getFullTreeData(1L, "123", true)).thenThrow(ObjectNotFoundException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123", true);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123")).thenThrow(RuntimeException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123");
+    when(documentFileRest1.getFullTreeData(1L, "123", true)).thenThrow(RuntimeException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123", true);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 

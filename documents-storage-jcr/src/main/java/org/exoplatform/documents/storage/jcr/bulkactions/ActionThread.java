@@ -43,6 +43,7 @@ import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
+import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
@@ -237,9 +238,7 @@ public class ActionThread implements Runnable {
           JCRDocumentsUtil.cleanFiles(folder);
           break;
         }
-        if (StringUtils.isEmpty(parentPath)) {
-          parentPath = node.getParent().getPath();
-        }
+        parentPath = node.getParent().getPath();
         if (hasFolders) {
           JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
         } else {
@@ -541,6 +540,7 @@ public class ActionThread implements Runnable {
     String mimeType = mimeTypes.getMimeType(file.getName());
     jcrContent.setProperty(JCR_MIME_TYPE, mimeType);
     folderNode.save();
+    VersionHistoryUtils.createVersion(fileNode);
   }
 }
 
