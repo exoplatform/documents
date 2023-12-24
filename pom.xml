@@ -27,7 +27,7 @@
   </scm>
   <properties>
     <!-- 3rd party libraries versions -->
-    <addon.exo.jcr.version>6.5.x-SNAPSHOT</addon.exo.jcr.version>
+    <addon.exo.jcr.version>6.5.0-20231224</addon.exo.jcr.version>
     <net.lingala.zip4j.version>2.11.5</net.lingala.zip4j.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
