@@ -1109,6 +1109,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String parentPath = "";
     try {
       parentPath = node.getPath();
+      String cleanedFolderPath = java.net.URLDecoder.decode(folderPath.startsWith(SLASH) ? folderPath.substring(1) : folderPath, StandardCharsets.UTF_8).replace("%", "%25");
+      // The node is the personal drive, and the folder path does not start with the user's root node name
+      if ((node.getName().equals(USER_PRIVATE_ROOT_NODE) || node.getName().equals(USER_PUBLIC_ROOT_NODE)) && node.hasNode(cleanedFolderPath)) {
+        return node.getNode(cleanedFolderPath);
+      }
       if ((node.getName().equals(USER_PRIVATE_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH)[1];
