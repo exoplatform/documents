@@ -1099,18 +1099,31 @@ export default {
 
       return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
         .then(files => {
-          files = this.sortField === 'favorite' ? files && files.sort((file1, file2) => {
-            if (file1.favorite === false && file2.favorite === true) {
-              return this.ascending ? -1 : 1;
-            }
-            if (file1.favorite === true && file2.favorite === false) {
-              return this.ascending ? 1 : -1;
-            }
-            return 0;
-          }) || files : files;
           this.files = options?.append ? this.files.concat(files) : files ;
           this.files = [...new Map(this.files.map((item) => [item['id'], item])).values()];
           this.files = options?.deleted ? this.files.filter(this.isDocumentsToBeDeleted) : this.files;
+          if (this.sortField === 'favorite'){
+            this.files.sort((file1, file2) => {
+              if (file1.favorite === false && file2.favorite === true) {
+                return this.ascending ? -1 : 1;
+              }
+              if (file1.favorite === true && file2.favorite === false) {
+                return this.ascending ? 1 : -1;
+              }
+              return 0;
+            });
+          }
+          if (this.sortField === 'visibility'){
+            this.files.sort((file1, file2) => {
+              if (file1.acl.visibilityChoice > file2.acl.visibilityChoice) {
+                return this.ascending ? -1 : 1;
+              }
+              if (file1.acl.visibilityChoice < file2.acl.visibilityChoice) {
+                return this.ascending ? 1 : -1;
+              }
+              return 0;
+            }); 
+          }
           this.hasMore = files && files.length >= this.limit;
           if (this.fileName && !options?.disablePreview) {
             const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
