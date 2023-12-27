@@ -37,7 +37,7 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -783,7 +783,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
-      String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat(SLASH).concat(name);
+      String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang3.StringUtils.EMPTY : parent.getPath()).concat(SLASH).concat(name);
       if (!srcPath.equals(destPath)) {
         node.getSession().getWorkspace().move(srcPath, destPath);
       }

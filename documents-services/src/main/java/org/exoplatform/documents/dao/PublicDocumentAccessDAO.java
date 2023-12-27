@@ -19,8 +19,8 @@ package org.exoplatform.documents.dao;
 import org.exoplatform.commons.persistence.impl.GenericDAOJPAImpl;
 import org.exoplatform.documents.entity.PublicDocumentAccessEntity;
 
-import javax.persistence.NoResultException;
-import javax.persistence.TypedQuery;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.TypedQuery;
 
 public class PublicDocumentAccessDAO extends GenericDAOJPAImpl<PublicDocumentAccessEntity, Long> {
 
