@@ -784,7 +784,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node parent = node.getParent();
       String srcPath = node.getPath();
       String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang.StringUtils.EMPTY : parent.getPath()).concat(SLASH).concat(name);
-      node.getSession().getWorkspace().move(srcPath, destPath);
+      if (!srcPath.equals(destPath)) {
+        node.getSession().getWorkspace().move(srcPath, destPath);
+      }
       if (!node.isNodeType(NodeTypeConstants.EXO_RSS_ENABLE) && node.canAddMixin(NodeTypeConstants.EXO_RSS_ENABLE)) {
         node.addMixin(NodeTypeConstants.EXO_RSS_ENABLE);
       }
