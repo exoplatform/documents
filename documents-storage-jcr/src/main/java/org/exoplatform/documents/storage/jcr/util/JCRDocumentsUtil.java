@@ -19,10 +19,7 @@ package org.exoplatform.documents.storage.jcr.util;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -225,20 +222,24 @@ public class JCRDocumentsUtil {
 
     fileNodes.sort((o1, o2) -> {
       if ((o1.isFolder() && o2.isFolder()) || (!o1.isFolder() && !o2.isFolder())) {
-        if(filter.getSortField().equals(DocumentSortField.MODIFIED_DATE)) {
-          if(filter.isAscending()) {
-            return (int) (o1.getModifiedDate() - o2.getModifiedDate());
-          } else {
-            return (int) (o2.getModifiedDate() - o1.getModifiedDate());
-          }
-        } else if(filter.getSortField().equals(DocumentSortField.CREATED_DATE)) {
+        if (filter.getSortField().equals(DocumentSortField.MODIFIED_DATE)) {
+          Date modifiedDateO1 = new Date(o1.getModifiedDate());
+          Date modifiedDateO2 = new Date(o2.getModifiedDate());
           if (filter.isAscending()) {
-            return (int) (o1.getCreatedDate() - o2.getCreatedDate());
+            return modifiedDateO1.compareTo(modifiedDateO2);
           } else {
-            return (int) (o2.getCreatedDate() - o1.getCreatedDate());
+            return modifiedDateO1.compareTo(modifiedDateO1);
+          }
+        } else if (filter.getSortField().equals(DocumentSortField.CREATED_DATE)) {
+          Date createdDateO1 = new Date(o1.getCreatedDate());
+          Date createdDateO2 = new Date(o2.getCreatedDate());
+          if (filter.isAscending()) {
+            return createdDateO1.compareTo(createdDateO2);
+          } else {
+            return createdDateO2.compareTo(createdDateO1);
           }
         } else {
-          if(filter.isAscending()) {
+          if (filter.isAscending()) {
             return o1.getName().compareTo(o2.getName());
           } else {
             return o2.getName().compareTo(o1.getName());
