@@ -19,7 +19,7 @@ package org.exoplatform.documents.entity;
 import lombok.Data;
 import org.exoplatform.commons.api.persistence.ExoEntity;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.io.Serializable;
 import java.util.Date;
 
