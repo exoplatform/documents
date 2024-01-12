@@ -988,9 +988,9 @@ public class JCRDocumentFileStorageTest {
     filter.setAscending(false);
 
     fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertEquals("Abc", fileNodes.get(2).getName());
-    assertEquals("Xyz", fileNodes.get(1).getName());
-    assertEquals("Efg.lnk", fileNodes.get(0).getName());
+    assertEquals("Efg.lnk", fileNodes.get(2).getName());
+    assertEquals("Abc", fileNodes.get(1).getName());
+    assertEquals("Xyz", fileNodes.get(0).getName());
 
     when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
     when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
