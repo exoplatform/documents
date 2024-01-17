@@ -16,7 +16,7 @@
         <p class="text-light-color">
           <span>{{ noContentFolderLabel }}</span>
         </p>
-        <div>
+        <div v-if="displayNoContentFolderActions">
           <span class="ps-1">{{ addFolderLabel }}</span>
           <v-icon
             size="13"
@@ -51,6 +51,7 @@ export default {
   },
   data: () => ({
     emptyDocs: '/documents-portlet/images/docs.png',
+    currentFolder: null
   }),
   computed: {
     noContentFolderLabel() {
@@ -62,6 +63,12 @@ export default {
     addDocumentLabel() {
       return this.$t && this.$t('documents.label.no-content.addDocument');
     },
+    displayNoContentFolderActions() {
+      return this.currentFolder?.accessList?.canEdit === true;
+    }
+  },
+  created() {
+    this.$root.$on('set-current-folder', (folder) => this.currentFolder = folder);
   },
   methods: {
     addFolder() {
