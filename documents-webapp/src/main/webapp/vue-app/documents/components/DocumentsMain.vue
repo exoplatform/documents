@@ -45,6 +45,7 @@
           @dragover="startDrag">
           <documents-no-body
             :query="query"
+            :can-add="canAdd"
             :is-mobile="isMobile" />
         </div>
         <div
