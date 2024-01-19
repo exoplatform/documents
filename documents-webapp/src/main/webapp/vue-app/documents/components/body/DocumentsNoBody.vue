@@ -23,7 +23,7 @@
           <p> <strong>{{ spaceDisplayName }}</strong></p>
         </div>
 
-        <a @click="openDrawer" class="text-decoration-underline">{{ $t('documents.label.addNewFile') }}</a>
+        <a v-if="canAdd" @click="openDrawer" class="text-decoration-underline">{{ $t('documents.label.addNewFile') }}</a>
       </div>
     </div>
   </div>
@@ -39,6 +39,10 @@ export default {
     query: {
       type: String,
       default: null,
+    },
+    canAdd: {
+      type: Boolean,
+      default: false,
     }
   },
   data: () => ({
