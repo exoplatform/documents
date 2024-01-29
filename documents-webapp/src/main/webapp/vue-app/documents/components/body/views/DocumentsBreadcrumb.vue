@@ -192,7 +192,7 @@ export default {
         this.folderPath = path;
       } else {
         path = window.location.pathname;
-        const pathParts  = path.split( `/${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        const pathParts  = path.toLowerCase().includes('/drives') || path.toLowerCase().includes('/documents')? path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`) : [path];
         if (pathParts.length > 1) {
           this.folderPath = pathParts[1];
         } else {
