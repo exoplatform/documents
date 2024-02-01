@@ -115,7 +115,7 @@
         const allowed = canDropOnListFiles();
         if (bodyIntersected) {
             if (allowed) {
-                dragTooltipElement.style.cursor = 'move';
+                dragTooltipElement.style.cursor = 'default';
                 getDocumentsBoyElement().classList.add('is-drop-active');
                 if (onDrop) {
                     document.dispatchEvent(new CustomEvent('move-dropped-documents', {
@@ -205,7 +205,7 @@
                 detail: {breadcrumb: true}
             }));
             const allowed = getBreadCrumbListElement().dataset.canedit === 'true';
-            dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
+            dragTooltipElement.style.cursor = allowed ? 'default' : 'not-allowed';
             if (onDrop && allowed) {
                 if (getRootFolder().dataset.fileid === parentDragElement.dataset.fileid) {
                     return;
@@ -266,7 +266,7 @@
                 const allowed = !sourceIds.includes(destinationId) && (isFolder && canEdit) || canDropOnListFiles();
                 if (Math.abs(currStartY - rowStartY) < rowSize.height / 2) {
                     rowElem.classList.add('is-dragover', 'grey', 'lighten-3');
-                    dragTooltipElement.style.cursor = allowed ? 'move' : 'not-allowed';
+                    dragTooltipElement.style.cursor = allowed ? 'default' : 'not-allowed';
                     checkDropElements(allowed, onDrop, rowElem, getSourceFiles())
                 }
             }
@@ -346,7 +346,7 @@
         const newTD = document.createElement('div');
         newTD.classList.add('v-application');
         newTD.innerHTML = `<div class="text-center text-tooltip width-full">
-                                      <i class="fa fa-sticky-note white--text"/>
+                                      <i class="fas fa-arrows-alt"/>
                                       <span class="document-title ms-2 font-weight-regular">
                                           ${exoi18n.i18n.t('document.multiple.drag.action.message', {0: selectionsLength})}
                                       </span>
