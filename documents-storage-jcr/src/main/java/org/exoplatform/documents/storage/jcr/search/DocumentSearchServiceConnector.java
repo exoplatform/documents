@@ -56,7 +56,7 @@ public class DocumentSearchServiceConnector {
 
   public static final String           SEARCH_QUERY_TERM            = "\"must\":{"
           + "    \"query_string\":{"
-          + "    \"fields\": [\"title.raw\"],"
+          + "    \"fields\": [\"title.whitespace\"],"
           + "    \"query\": \"@term@\""
           + "  }"
           + "},";
