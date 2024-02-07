@@ -56,7 +56,7 @@ public class DocumentSearchServiceConnectorTest {
   private static final String  SEARCH_QUERY_FILE_PATH_PARAM      = "query.file.path";
 
   public static String         SEARCH_QUERY_TERM                 = "\"must\":{" + "    \"query_string\":{"
-      + "    \"fields\": [\"title.raw\"]," + "    \"query\": \"@term@\"" + "  }" + "},";
+      + "    \"fields\": [\"title.whitespace\"]," + "    \"query\": \"@term@\"" + "  }" + "},";
 
   private static String        SEARCH_QUERY;
 
