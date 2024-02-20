@@ -506,6 +506,7 @@ export default {
         this.newVersionFile = null;
         return;
       }
+      this.loading = true;
       const targetFileId = this.newVersionFile.targetFileId;
       const reader = new FileReader();
       reader.onloadstart = () => {
