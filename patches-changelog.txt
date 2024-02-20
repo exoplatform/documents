@@ -1,0 +1,5 @@
+              2024-02-20 eXo Support <support@exoplatform.org> 
+
+   # 1.2.1 Patches changelog: 
+
+
