@@ -19,6 +19,7 @@
       <div class="mt-auto mb-auto">
         <v-progress-circular
           v-if="loading"
+          color="primary"
           indeterminate
           size="16" />
         <i
