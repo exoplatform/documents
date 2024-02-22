@@ -705,6 +705,7 @@ export default {
         this.$root.$emit('version-description-update-error', version);
         return;
       }
+      summary = summary.replaceAll(':', ' ').replaceAll('*', ' ');
       return this.$documentFileService.updateVersionSummary(version.originId, version.id, summary).then(version => {
         this.$root.$emit('version-description-updated', version);
         this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.summary.added.success')});
