@@ -42,7 +42,7 @@
       <button
         v-else
         :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
-        class="btn btn-primary primary px-2 py-0"
+        class="btn-primary primary px-2 py-0"
         :key="postKey"
         :disabled="disableButton"
         @click="openAddItemMenu()">
