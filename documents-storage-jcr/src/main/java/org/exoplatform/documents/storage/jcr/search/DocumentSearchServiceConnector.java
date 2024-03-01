@@ -499,9 +499,6 @@ public class DocumentSearchServiceConnector {
             String inputWithAsteriskStr = ASTERISK_STR.concat(replaceSpecialCharInputValue).concat(ASTERISK_STR);
             inputSplittedValue.append(" OR ").append(inputWithAsteriskStr);
             inputSplittedValue.append(")");
-            if (term.contains(" ") && inputSplittedValue.indexOf(" AND (*\\\\ *)")==-1) {
-              inputSplittedValue.append(" AND (*\\\\ *)");
-            }
           }
         }
       return SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, inputSplittedValue.toString());
