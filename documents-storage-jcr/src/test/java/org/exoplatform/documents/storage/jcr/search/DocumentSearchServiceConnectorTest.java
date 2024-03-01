@@ -192,7 +192,7 @@ public class DocumentSearchServiceConnectorTest {
     // when
     // search term contains ES reserved character
     filter.setQuery("term with reserved - character");
-    String esquipedReservedCharactersTermQuery = "(term OR *term*) AND (*\\\\ *) AND (with OR *with*) AND (reserved OR *reserved*) AND (\\\\- OR *\\\\-*) AND (character OR *character*)";
+    String esquipedReservedCharactersTermQuery = "(term OR *term*) AND (with OR *with*) AND (reserved OR *reserved*) AND (\\\\- OR *\\\\-*) AND (character OR *character*)";
     String oldSearchedTermQuery = "(test OR *test*)";
     when(client.sendRequest(expectedQuery.replace(oldSearchedTermQuery, esquipedReservedCharactersTermQuery),
                             ES_INDEX)).thenReturn(searchWithReservedCharacterResult);
