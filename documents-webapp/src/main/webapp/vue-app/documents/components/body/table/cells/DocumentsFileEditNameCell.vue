@@ -93,7 +93,7 @@ export default {
       if (e.keyCode === 13 || e === 13) {
         if (this.file.folder && this.file.id === -1) {
           if (this.nameRegex.test(newTitle)) {
-            this.$root.$emit('show-alert', {type: 'warning', message: this.$t('document.valid.name.error.message')});
+            this.$root.$emit('alert-message', this.$t('document.valid.name.error.message'),'warning');
             return;
           }
           this.$root.$emit('documents-create-folder', newTitle);
@@ -107,7 +107,7 @@ export default {
     },
     renameFile(newTitle){
       if (this.nameRegex.test(newTitle)) {
-        this.$root.$emit('show-alert', {type: 'warning', message: this.$t('document.valid.name.error.message')});
+        this.$root.$emit('alert-message',this.$t('document.valid.name.error.message'),'warning');
         return;
       }
       //concat the file type to the new tilte when renaming file
