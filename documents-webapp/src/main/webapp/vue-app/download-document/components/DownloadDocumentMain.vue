@@ -98,8 +98,6 @@
 
 <script>
 
-import {downloadPublicDocument} from '../../documents/js/DocumentFileService.js';
-
 export default {
   data: () => ({
     isDownloading: false,
@@ -143,7 +141,7 @@ export default {
         return;
       }
       this.isDownloading = true;
-      downloadPublicDocument(this.params?.nodeId, this.password).then((response) => {
+      this.$documentFileService.downloadPublicDocument(this.params?.nodeId, this.password).then((response) => {
         return response.blob();
       }).then(blob => {
         const element = document.createElement('a');

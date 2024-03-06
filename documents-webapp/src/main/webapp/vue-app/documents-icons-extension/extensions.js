@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2024 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
 const presentation = {
   class: 'fas fa-file-powerpoint',
   color: '#CB4B32',
@@ -85,10 +102,4 @@ const documentsMapIconsExtensions = new Map([
   ['folder', folder],
 ]);
 
-export function initDocumentsExtensions() {
-  extensionRegistry.registerComponent('favorite-file', 'favorite-drawer-item', {
-    id: 'file',
-    vueComponent: Vue.options.components['documents-favorite-item'],
-  });
-  extensionRegistry.registerExtension('documents', 'documents-icons-extension', documentsMapIconsExtensions);
-}
+extensionRegistry.registerExtension('documents', 'documents-icons-extension', documentsMapIconsExtensions);
