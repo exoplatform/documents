@@ -247,6 +247,7 @@ public class EntityBuilder {
       nodeEntity.setDescription(node.getDescription());
       nodeEntity.setAcl(toNodePermissionEntity(node,identityManager, spaceService, publicDocumentAccessService));
       nodeEntity.setCreatedDate(node.getCreatedDate());
+      nodeEntity.setCreatorUserName(node.getCreatorUserName());
       nodeEntity.setModifiedDate(node.getModifiedDate());
       nodeEntity.setParentFolderId(node.getParentFolderId());
       nodeEntity.setSourceID(node.getSourceID());
