@@ -50,42 +50,18 @@
       <depends>
         <module>documentsSnackbarComponent</module>
       </depends>
-        <depends>
-            <module>versionHistoryDrawer</module>
-        </depends>
-        <depends>
-            <module>commons-cometd3</module>
-            <as>cCometd</as>
-        </depends>
-        <depends>
-            <module>DocumentsDraggable</module>
-        </depends>
-        <depends>
-            <module>applicationToolbarComponent</module>
-        </depends>
-    </module>
-  </portlet>
-
-  <portlet>
-    <name>DocumentsExtensions</name>
-    <module>
-      <script>
-        <path>/js/documentsExtensions.bundle.js</path>
-      </script>
       <depends>
-        <module>extensionRegistry</module>
+        <module>versionHistoryDrawer</module>
       </depends>
       <depends>
-        <module>eXoVueI18n</module>
+        <module>commons-cometd3</module>
+        <as>cCometd</as>
       </depends>
       <depends>
-        <module>vue</module>
+        <module>DocumentsDraggable</module>
       </depends>
       <depends>
-        <module>commonVueComponents</module>
-      </depends>
-      <depends>
-        <module>documentPreview</module>
+        <module>applicationToolbarComponent</module>
       </depends>
     </module>
   </portlet>
@@ -147,6 +123,29 @@
       </depends>
     </module>
   </portlet>
+  
+  <module>
+    <name>DocumentsFavoriteDrawerExtensions</name>
+    <load-group>FavoriteDrawerGRP</load-group>
+    <script>
+      <path>/js/documentsFavoriteDrawerExtensions.bundle.js</path>
+    </script>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>documentPreview</module>
+    </depends>
+  </module>
 
   <module>
     <name>documentsSnackbarComponent</name>
