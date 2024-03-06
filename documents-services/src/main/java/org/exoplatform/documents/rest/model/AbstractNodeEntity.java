@@ -50,6 +50,8 @@ public class AbstractNodeEntity {
 
   private IdentityEntity                        creatorIdentity;
 
+  private String                                creatorUserName;
+
   private IdentityEntity                        modifierIdentity;
 
   private NodePermissionEntity                        acl;

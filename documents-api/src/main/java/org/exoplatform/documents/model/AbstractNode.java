@@ -16,7 +16,9 @@
  */
 package org.exoplatform.documents.model;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
@@ -38,6 +40,8 @@ public abstract class AbstractNode {
   private String         parentFolderId;
 
   private long           creatorId;
+
+  private String         creatorUserName;
 
   private long           createdDate;
 
