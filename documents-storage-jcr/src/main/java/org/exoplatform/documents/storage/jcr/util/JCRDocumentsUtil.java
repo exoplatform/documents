@@ -28,9 +28,10 @@ import java.util.zip.ZipOutputStream;
 import javax.jcr.*;
 import javax.jcr.version.Version;
 
-import com.ibm.icu.text.Transliterator;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+
+import com.ibm.icu.text.Transliterator;
 
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
@@ -432,6 +433,7 @@ public class JCRDocumentsUtil {
     }
     if (node.hasProperty(NodeTypeConstants.EXO_OWNER)) {
       String owner = node.getProperty(NodeTypeConstants.EXO_OWNER).getString();
+      documentNode.setCreatorUserName(owner);
       documentNode.setCreatorId(getUserIdentityId(identityManager, owner));
     }
     if (node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)) {
