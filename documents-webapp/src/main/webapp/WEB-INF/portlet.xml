@@ -4,18 +4,18 @@
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xsi:schemaLocation="http://java.sun.com/xml/ns/portlet/portlet-app_2_0.xsd http://java.sun.com/xml/ns/portlet/portlet-app_2_0.xsd">
 
-   <portlet>
+  <portlet>
     <portlet-name>Documents</portlet-name>
     <display-name xml:lang="EN">Documents Application</display-name>
     <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
     <init-param>
-    <name>portlet-view-dispatched-file-path</name>
-    <value>/html/documents.html</value>
+      <name>portlet-view-dispatched-file-path</name>
+      <value>/html/documents.html</value>
     </init-param>
     <expiration-cache>-1</expiration-cache>
     <cache-scope>PUBLIC</cache-scope>
     <supports>
-    <mime-type>text/html</mime-type>
+      <mime-type>text/html</mime-type>
     </supports>
     <supported-locale>en</supported-locale>
     <resource-bundle>locale.portlet.Documents</resource-bundle>
@@ -23,67 +23,46 @@
       <title>Documents Application</title>
       <keywords>Documents Application</keywords>
     </portlet-info>
-   </portlet>
+  </portlet>
 
-    <portlet>
-        <portlet-name>DownloadDocumentsPublicAccess</portlet-name>
-        <display-name xml:lang="EN">Download Documents Public Access</display-name>
-        <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
-        <init-param>
-            <name>portlet-view-dispatched-file-path</name>
-            <value>/WEB-INF/jsp/download_document.jsp</value>
-        </init-param>
-        <expiration-cache>-1</expiration-cache>
-        <cache-scope>PUBLIC</cache-scope>
-        <supports>
-            <mime-type>text/html</mime-type>
-        </supports>
-        <supported-locale>en</supported-locale>
-        <resource-bundle>locale.portlet.Documents</resource-bundle>
-        <portlet-info>
-            <title>Download Documents Public Access</title>
-            <keywords>Download Documents Public Access</keywords>
-        </portlet-info>
-    </portlet>
-
-    <portlet>
-    <portlet-name>DocumentsExtensions</portlet-name>
-    <display-name>Documents Extensions Application</display-name>
+  <portlet>
+    <portlet-name>DownloadDocumentsPublicAccess</portlet-name>
+    <display-name xml:lang="EN">Download Documents Public Access</display-name>
     <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
     <init-param>
       <name>portlet-view-dispatched-file-path</name>
-      <value>/html/documentsExtensions.html</value>
+      <value>/WEB-INF/jsp/download_document.jsp</value>
     </init-param>
     <expiration-cache>-1</expiration-cache>
     <cache-scope>PUBLIC</cache-scope>
-       <supports>
-           <mime-type>text/html</mime-type>
-       </supports>
-       <supported-locale>en</supported-locale>
-       <portlet-info>
-           <title>Documents Extensions Application</title>
-           <keywords>Documents Extensions Application</keywords>
-       </portlet-info>
-   </portlet>
+    <supports>
+      <mime-type>text/html</mime-type>
+    </supports>
+    <supported-locale>en</supported-locale>
+    <resource-bundle>locale.portlet.Documents</resource-bundle>
+    <portlet-info>
+      <title>Download Documents Public Access</title>
+      <keywords>Download Documents Public Access</keywords>
+    </portlet-info>
+  </portlet>
 
-    <portlet>
-        <portlet-name>DocumentsSizeGadget</portlet-name>
-        <display-name>Documents Size Gadget</display-name>
-        <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
-        <init-param>
-            <name>portlet-view-dispatched-file-path</name>
-            <value>/html/documentsSizeGadget.html</value>
-        </init-param>
-        <expiration-cache>-1</expiration-cache>
-        <cache-scope>PUBLIC</cache-scope>
-        <supports>
-            <mime-type>text/html</mime-type>
-        </supports>
-        <supported-locale>en</supported-locale>
-        <portlet-info>
-            <title>Documents Size Gadget</title>
-            <keywords>Documents Size Gadget</keywords>
-        </portlet-info>
-    </portlet>
-
+  <portlet>
+    <portlet-name>DocumentsSizeGadget</portlet-name>
+    <display-name>Documents Size Gadget</display-name>
+    <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
+    <init-param>
+      <name>portlet-view-dispatched-file-path</name>
+      <value>/html/documentsSizeGadget.html</value>
+    </init-param>
+    <expiration-cache>-1</expiration-cache>
+    <cache-scope>PUBLIC</cache-scope>
+    <supports>
+      <mime-type>text/html</mime-type>
+    </supports>
+    <supported-locale>en</supported-locale>
+    <portlet-info>
+      <title>Documents Size Gadget</title>
+      <keywords>Documents Size Gadget</keywords>
+    </portlet-info>
+  </portlet>
 </portlet-app>
