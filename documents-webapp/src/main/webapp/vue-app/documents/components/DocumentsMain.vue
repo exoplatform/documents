@@ -260,11 +260,6 @@ export default {
     }
   },
   created() {
-    // Ensure that localStorage doesn't contain a deleted document
-    window.setTimeout(() => {
-      localStorage.removeItem('deletedDocument');
-    }, 10000);
-
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
 
     window.addEventListener('popstate', e => {this.onBrowserNavChange(e);});
@@ -330,7 +325,8 @@ export default {
             this.optionsLoaded = true;
             const queryParams = new URLSearchParams(window.location.search);
             const disablePreview = queryParams.has('path');
-            this.refreshFiles({'disablePreview': disablePreview})
+            const options = localStorage.getItem('deletedDocument') !== null ? {'disablePreview': disablePreview, 'deleted': true,'documentId': localStorage.getItem('deletedDocument')} : {'disablePreview': disablePreview};
+            this.refreshFiles(options)
               .then(() => {
                 this.watchDocumentPreview();
                 if (this.selectedView === 'folder') {
@@ -898,6 +894,7 @@ export default {
       const deletedDocument = localStorage.getItem('deletedDocument');
       if (deletedDocument != null) {
         this.refreshFiles();
+        localStorage.removeItem('deletedDocument');
       }
     },
     bulkDownloadDocument(){
