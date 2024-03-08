@@ -16,9 +16,11 @@
  *
 */
 import DocumentSizeMain from './components/DocumentSizeMain.vue';
+import DocumentSizeDrawer from './components/DocumentSizeDrawer.vue';
 
 const components = {
-  'documents-size-main': DocumentSizeMain
+  'documents-size-main': DocumentSizeMain,
+  'documents-size-drawer': DocumentSizeDrawer
 };
 
 for (const key in components) {

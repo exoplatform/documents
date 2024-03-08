@@ -152,6 +152,9 @@ public class DocumentSearchServiceConnector {
       case "title" :
         sortField = "title.raw";
         break;
+      case "fileSizeWithVersions" :
+        sortField = "fileSizeWithVersions";
+        break;
       default:
         sortField = "_score";
     }
