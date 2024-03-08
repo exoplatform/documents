@@ -23,7 +23,10 @@
           <p> <strong>{{ spaceDisplayName }}</strong></p>
         </div>
 
-        <a v-if="canAdd" @click="openDrawer" class="text-decoration-underline">{{ $t('documents.label.addNewFile') }}</a>
+        <a
+          v-if="canAdd"
+          @click="openDrawer"
+          class="text-decoration-underline">{{ $t('documents.label.addNewFile') }}</a>
       </div>
     </div>
   </div>
