@@ -91,7 +91,7 @@
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
-      <documents-actions-menu-mobile :is-mobile="isMobile" />
+      <documents-actions-menu-mobile :is-mobile="isMobile" :current-view="selectedView" />
       <documents-filter-menu-mobile
         :primary-filter="primaryFilter"
         :query="query"
@@ -312,6 +312,17 @@ export default {
       this.beforeDate = advancedFilter.selectedPeriod?.max;
       this.minSize = advancedFilter.minSize;
       this.maxSize = advancedFilter.maxSize;
+      this.refreshFiles();
+    });
+    this.$root.$on('open-folder-by-id', (folderId) => {
+      const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
+      const url = new URL(window.location.href.substring(0, realPageUrlIndex));
+      const params = new URLSearchParams(document.location.search);
+      params.set('folderId', folderId);
+      params.forEach((value, key) => { url.searchParams.append(key, value); });
+      window.history.replaceState('documents', 'Documents', url.toString());
+      this.changeView('folder');
+      this.parentFolderId=folderId;
       this.refreshFiles();
     });
     this.$root.$on('show-alert', (message) => {
@@ -995,7 +1006,9 @@ export default {
     changeView(view) {
       const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
       const url = new URL(window.location.href.substring(0, realPageUrlIndex));
-      url.searchParams.set('view', view);
+      const params = new URLSearchParams(document.location.search);
+      params.set('view', view);
+      params.forEach((value, key) => { url.searchParams.append(key, value); });
       window.history.replaceState('documents', 'Documents', url.toString());
       this.selectedView = view;
       this.$documentFileService.setUserDefaultView(view);
