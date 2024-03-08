@@ -75,7 +75,26 @@ public interface DocumentFileService {
                                   int limit,
                                   long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
 
+  /**
+   * Retrieves a list of accessible files, for a selected user, by applying the
+   * designated filter. The returned results will be of type {@link FileNode}
+   * only. The ownerId of filter object will be used to select the list of
+   * accessible Nodes to retrieve switch a timeline.
 
+   * @param offset Offset of the result list
+   * @param limit Limit of the result list
+   * @param userIdentity {@link Identity} technical identifier of the user
+   *          acessing files
+   * @param ownerId {@link Identity} technical identifier of the where search files
+   * @return {@link List} of {@link FileNode}
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated ownerId
+   * @throws ObjectNotFoundException when ownerId doesn't exisits
+   */
+  List<AbstractNode> getBiggestDocuments(long ownerId,
+                                     Identity userIdentity,
+                                     int offset,
+                                     int limit) throws IllegalAccessException, ObjectNotFoundException;
   /**
    * Retrieves the number of existing files by group.
    *

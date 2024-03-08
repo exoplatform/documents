@@ -43,3 +43,18 @@ export function updateSize() {
     }
   });   
 }
+export function getBiggestDocuments(offset,limit) {
+  const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/biggest/${ownerId}?offset=${offset}&limit=${limit}`, {
+    headers: {
+      'Content-Type': 'text/plain'
+    },
+    method: 'GET'
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.json();
+    } else {
+      throw new Error('Server indicates an error while sending request');
+    }
+  });
+}

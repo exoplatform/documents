@@ -40,6 +40,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import org.apache.commons.math3.analysis.function.Abs;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -81,6 +82,7 @@ import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
 import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
+import org.picketlink.idm.spi.cache.Search;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
@@ -226,6 +228,35 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
+  public List<AbstractNode> getBiggestDocuments(Long ownerId, Identity aclIdentity, int offset, int limit) throws ObjectNotFoundException {
+    String username = aclIdentity.getUserId();
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    if (ownerIdentity == null) {
+      throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+    }
+    SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+    try {
+      Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+      if (identityRootNode == null) {
+        return new ArrayList<> ();
+      }
+      Session session = identityRootNode.getSession();
+      String rootPath = identityRootNode.getPath();
+      String workspace = session.getWorkspace().getName();
+      DocumentTimelineFilter filter = new DocumentTimelineFilter();
+      Collection<SearchResult> results = documentSearchServiceConnector.search(aclIdentity, workspace, rootPath, filter, offset, limit, "fileSizeWithVersions", "DESC");
+      return results.stream()
+                            .map(result -> (AbstractNode)toFileNode(identityManager, session, aclIdentity, result, spaceService))
+                            .filter(Objects::nonNull)
+                            .toList();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error when getting the documents size for identity " + ownerId, e);
     } finally {
       sessionProvider.close();
     }
