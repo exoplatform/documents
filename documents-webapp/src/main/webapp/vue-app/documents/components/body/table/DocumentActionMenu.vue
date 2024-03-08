@@ -33,6 +33,10 @@ export default {
       type: Boolean,
       default: false
     },
+    currentView: {
+      type: String,
+      default: ''
+    },
   },
   data: () => ({
     menuExtensionApp: 'DocumentMenu',
@@ -57,14 +61,15 @@ export default {
         isMobile: this.isMobile,
         selectedDocuments: this.selectedDocuments,
         disabledExtension: extension.disabled,
-        isMultiSelection: this.isMultiSelection
+        isMultiSelection: this.isMultiSelection,
+        currentView: this.currentView
       };
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
 
       if (!this.isMultiSelection) {
-        extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile));
+        extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile, this.currentView));
 
       } else {
         extensions = extensions.filter(extension => extension.enabledForMultiSelection());
