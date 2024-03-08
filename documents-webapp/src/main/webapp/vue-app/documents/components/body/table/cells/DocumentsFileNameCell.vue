@@ -112,6 +112,7 @@
             absolute>
             <documents-actions-menu
               :file="file"
+              :current-view="selectedView"
               :is-mobile="isMobile" />
           </v-menu>
         </template>

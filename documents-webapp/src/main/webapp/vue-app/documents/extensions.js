@@ -104,6 +104,25 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 });
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'goLocation',
+  labelKey: 'documents.label.go.location',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap ',
+  width: '190px',
+  rank: 2,
+  enabled: (file,isMobile,currentView) => {
+    return currentView === 'timeline' 
+            && file 
+            && !file.cloudDriveFolder;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['open-location-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'edit',
   labelKey: 'documents.label.edit',
   align: 'center',
