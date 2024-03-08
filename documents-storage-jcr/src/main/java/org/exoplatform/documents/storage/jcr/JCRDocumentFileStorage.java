@@ -40,6 +40,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import org.apache.commons.math3.analysis.function.Abs;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -81,6 +82,7 @@ import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
 import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
+import org.picketlink.idm.spi.cache.Search;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
