@@ -176,6 +176,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public List<AbstractNode> getBiggestDocuments(long ownerId, Identity userIdentity, int offset, int limit) throws
+                                                                                                     IllegalAccessException,
+                                                                                                     ObjectNotFoundException {
+
+    org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentity.getRemoteId());
+    return documentFileStorage.getBiggestDocuments(ownerId,aclIdentity,offset,limit);
+  }
+
+  @Override
   public DocumentGroupsSize getGroupDocumentsCount(DocumentTimelineFilter filter,
                                          long userIdentityId) throws IllegalAccessException, ObjectNotFoundException {
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);

@@ -27,6 +27,8 @@ import java.util.zip.ZipOutputStream;
 
 import javax.jcr.*;
 import javax.jcr.version.Version;
+import javax.jcr.version.VersionHistory;
+import javax.jcr.version.VersionIterator;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -82,6 +84,9 @@ public class JCRDocumentsUtil {
   public static final String                           USER_PUBLIC_ROOT_NODE           = "Public";
 
   private static final String                          SPACE_PATH_PREFIX = "/Groups/spaces/";
+
+  public static final String MIX_VERSIONABLE  = "mix:versionable";
+
 
   protected static final Map<DocumentSortField, String> SORT_FIELDS_ES_CORRESPONDING  = new EnumMap<>(DocumentSortField.class);
 
@@ -485,7 +490,32 @@ public class JCRDocumentsUtil {
     }
     if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
       fileNode.setSize(content.getProperty(NodeTypeConstants.JCR_DATA).getLength());
+      fileNode.setSizeWithVersions(computeVersionsSize(content.getParent()));
+
     }
+  }
+
+  public static long computeVersionsSize(Node node) {
+    long versionSize=0;
+    try {
+      if (node.isNodeType(MIX_VERSIONABLE)) {
+        VersionHistory versionHistory = node.getVersionHistory();
+        VersionIterator iterator = versionHistory.getAllVersions();
+        while (iterator.hasNext()) {
+          Version version = iterator.nextVersion();
+          if (version.hasNode("jcr:frozenNode")) {
+            Node frozen= version.getNode("jcr:frozenNode");
+            if (frozen.hasNode("jcr:content")) {
+              long currentVersionSize = frozen.getNode("jcr:content").getProperty("jcr:data").getLength();
+              versionSize+=currentVersionSize;
+            }
+          }
+        }
+      }
+    }catch (Exception e) {
+      versionSize=0;
+    }
+    return versionSize;
   }
 
   public static void computeDocumentAcl(Node node, AbstractNode documentNode, Identity aclIdentity, IdentityManager identityManager, SpaceService spaceService) throws RepositoryException {

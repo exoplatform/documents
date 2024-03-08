@@ -28,6 +28,7 @@ public class FileNodeEntity extends AbstractNodeEntity {
   private String             linkedFileId;
 
   private long               size;
+  private long               sizeWithVersions;
 
   private long               views;
 

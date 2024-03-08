@@ -30,6 +30,22 @@
             indeterminate />
           {{ $t('document.size.computing.progress.label') }}
         </div>
+        <v-spacer />
+        <div
+          class="flex-grow-0 flex-shrink-0 text-end">
+          <v-btn
+            @click="openDrawer"
+            title="See more"
+            target="_blank"
+            color="primary"
+            text="true"
+            small>
+            <span
+              class="text-none text-font-size">
+                {{ $t('documents.label.seeMore') }}
+            </span>
+          </v-btn>
+        </div>
       </div>
       <div v-if="initialized" class="d-flex flex-wrap">
         <v-tooltip :disabled="isMobile" top> 
@@ -75,7 +91,8 @@
           </div>
         </div>
       </div>
-    </v-main> 
+    </v-main>
+    <documents-size-drawer />
   </v-app>
 </template>
 
@@ -153,6 +170,13 @@ export default {
           }
         });
     },
+    openDrawer() {
+      window.setTimeout(() => {
+        this.$nextTick().then(() => {
+          this.$root.$emit('documents-size-drawer');
+        });
+      }, 200);
+    }
   },
 
 };
