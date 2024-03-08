@@ -50,6 +50,23 @@ public interface DocumentFileStorage {
                                   int offset,
                                   int limit) throws ObjectNotFoundException;
 
+  /**
+   * Retrieves a list of biggest accessible files, for a selected user.
+   * The returned results will be of type {@link FileNode}
+   * only. The ownerId of filter object will be used to select the list of
+   * accessible Nodes to retrieve.
+   *
+   * @param offset Offset of the result list
+   * @param limit Limit of the result list
+   * @param aclIdentity {@link Identity} of the user acessing files
+   * @param ownerId {@link Identity} of the identity in which search files
+   * @return {@link List} of {@link AbstractNode}
+   * @throws ObjectNotFoundException when parentFolderId doesn't exisits
+   */
+  List<AbstractNode> getBiggestDocuments(Long ownerId,
+                                 Identity aclIdentity,
+                                 int offset,
+                                 int limit) throws ObjectNotFoundException;
 
   long calculateFilesSize(Long ownerId, Identity aclIdentity) throws ObjectNotFoundException;
 

@@ -27,6 +27,8 @@ import java.util.Map;
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
 import jakarta.servlet.http.HttpServletRequest;
+
+import javax.swing.text.DocumentFilter;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -1071,6 +1073,44 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.ok(documentFileService.addDocumentsSizeStat(ownerId, Long.parseLong(currentUserIdentity.getId()))).build();
     } catch (Exception e) {
       LOG.error("Error while calculating documents size", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/biggest/{ownerId}")
+  @Operation(summary = "Get biggest documents", method = "GET")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getBiggestDocuments(@Parameter(description = "Identity technical identifier, required = true")
+                          @PathParam("ownerId")
+                          Long ownerId,
+                          @Parameter(description = "Offset of results to return") @Schema(defaultValue = "0")
+                          @QueryParam("offset")
+                          int offset,
+                          @Parameter(description = "Limit of results to return") @Schema(defaultValue = "10")
+                          @QueryParam("limit")
+                          int limit) {
+    if (ownerId == null || ownerId < 1) {
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
+    Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
+    try {
+      List<AbstractNode> results = documentFileService.getBiggestDocuments(ownerId, currentUserIdentity, offset,limit);
+      List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
+                                                                                       identityManager,
+                                                                                       spaceService,
+                                                                                       metadataService,
+                                                                                       publicDocumentAccessService,
+                                                                                       results,
+                                                                                       "creator,owner",
+                                                                                       Long.parseLong(currentUserIdentity.getId()));
+
+      return Response.ok(documentEntities).build();
+    } catch (Exception e) {
+      LOG.error("Error retrieving documents size", e);
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
