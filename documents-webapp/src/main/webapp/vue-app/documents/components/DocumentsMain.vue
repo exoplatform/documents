@@ -91,7 +91,10 @@
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
-      <documents-actions-menu-mobile :is-mobile="isMobile" :current-view="selectedView" />
+      <documents-actions-menu-mobile
+        :is-mobile="isMobile"
+        :current-view="selectedView"
+        :is-search-result="isSearchResult" />
       <documents-filter-menu-mobile
         :primary-filter="primaryFilter"
         :query="query"
@@ -257,7 +260,10 @@ export default {
     },
     prefixClone(){
       return this.$t('documents.label.prefix.clone');
-    }
+    },
+    isSearchResult(){
+      return ((this.query && this.query.length > 0) || this.minSize || this.maxSize || this.afterDate || this.beforeDate || this.fileType?.length>0 || this.primaryFilter!=='all') ;
+    },
   },
   created() {
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
@@ -322,6 +328,7 @@ export default {
       params.forEach((value, key) => { url.searchParams.append(key, value); });
       window.history.replaceState('documents', 'Documents', url.toString());
       this.changeView('folder');
+      this.$root.$emit('resetSearch');
       this.parentFolderId=folderId;
       this.refreshFiles();
     });
