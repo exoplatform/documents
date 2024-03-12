@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 eXo Platform SAS.
+ * Copyright (C) 2024 eXo Platform SAS.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -13,10 +13,16 @@
  *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
-*/
+ */
 import './initComponents.js';
-import {initDocumentsExtensions} from '../documents-extensions/extensions.js';
+import '../documents-icons-extension/extensions.js';
+import * as documentFileService from '../documents/js/DocumentFileService.js';
+
+if (!Vue.prototype.$documentFileService) {
+  window.Object.defineProperty(Vue.prototype, '$documentFileService', {
+    value: documentFileService,
+  });
+}
 
 // get overrided components if exists
 if (extensionRegistry) {
@@ -44,7 +50,6 @@ const urls = [
 ];
 
 export function init(params) {
-  initDocumentsExtensions();
   exoi18n.loadLanguageAsync(lang, urls).then(i18n => {
     // init Vue app when locale ressources are ready
     Vue.createApp({
