@@ -113,6 +113,7 @@
             <documents-actions-menu
               :file="file"
               :current-view="selectedView"
+              :is-search-result="isSearchResult"
               :is-mobile="isMobile" />
           </v-menu>
         </template>
@@ -147,6 +148,10 @@ export default {
     selectedView: {
       type: String,
       default: null
+    },
+    isSearchResult: {
+      type: Boolean,
+      default: false
     },
     selectedDocuments: {
       type: Array,

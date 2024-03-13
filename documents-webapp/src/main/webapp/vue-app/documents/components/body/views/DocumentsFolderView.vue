@@ -87,6 +87,7 @@
                 :extended-search="extendedSearch"
                 :is-mobile="isMobile"
                 :selected-view="selectedView"
+                :is-search-result="isSearchResult"
                 :selected-documents="selectedDocuments" />
             </td>
           </tr>
@@ -109,6 +110,7 @@
               :extended-search="extendedSearch"
               :is-mobile="isMobile"
               :selected-view="selectedView"
+              :is-search-result="isSearchResult"
               :select-all-checked="selectAll"
               :selected-documents="selectedDocuments"
               :class="header.value === 'name' && isXScreen && 'ms-10'" />
@@ -275,7 +277,10 @@ export default {
     },
     loadingLabel() {
       return `${this.$t('documents.label.loading')}...`;
-    }
+    },
+    isSearchResult(){
+      return ((this.query && this.query.length > 0) || this.minSize || this.maxSize || this.afterDate || this.beforeDate || this.fileType?.length>0 || this.primaryFilter!=='all') ;
+    },
   },
   watch: {
     options() {
@@ -326,7 +331,7 @@ export default {
       this.selectAll = this.items.length === this.selectedDocuments.length;
     },
     openContextMenu(event, file) {
-      this.$root.$emit('open-action-context-menu', event, file, this.selectedDocuments);
+      this.$root.$emit('open-action-context-menu', event, file, this.selectedDocuments,'folder',this.isSearchResult);
     },
     isDocumentSelected(item) {
       return this.selectedDocuments.findIndex(file => file.id === item.id) !== -1;
