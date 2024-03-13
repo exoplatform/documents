@@ -78,7 +78,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 11,
+  rank: 13,
   enabled: (file, isMobile) => {
     return file && !file.folder && !file.cloudDriveFolder && isMobile;
   },
@@ -95,11 +95,29 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 1,
+  rank: 3,
   enabled: () => true,
   enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['copy-link-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'openReadOnly',
+  labelKey: 'documents.label.open.read.only',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap ',
+  width: '190px',
+  rank: 1,
+  enabled: (file) => {
+    return  file && !file.cloudDriveFolder
+                 && Vue.prototype?.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file?.mimeType).length > 0;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['open-read-only-menu-action'],
   },
 });
 
@@ -112,7 +130,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 2,
   enabled: (file,isMobile,currentView,searchResult) => {
-    return (currentView === 'timeline'||searchResult)  
+    return (currentView === 'timeline'||searchResult)
             && file
             && !file.cloudDriveFolder;
   },
@@ -129,7 +147,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap ',
   width: '190px',
-  rank: 3,
+  rank: 4,
   enabled: (file) => {
     return file && !file.cloudDriveFolder
                 && file.acl.canEdit
@@ -149,7 +167,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 4,
+  rank: 5,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },
@@ -166,7 +184,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 5,
+  rank: 6,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },
@@ -183,7 +201,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 6,
+  rank: 7,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },
@@ -200,7 +218,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 7,
+  rank: 8,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system' && !file.sourceID;
   },
@@ -218,7 +236,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 8,
+  rank: 9,
   enabled: (file) => {
     if (Vue.prototype.$shareDocumentSuspended) {
       return false;
@@ -242,7 +260,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 9,
+  rank: 10,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.versionable;
   },
@@ -259,7 +277,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 10,
+  rank: 11,
   enabled: (file) => {
     if (!file.versionable || file.cloudDriveFolder) {
       return false;
@@ -279,7 +297,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 11,
+  rank: 12,
   enabled: (file) => {
     if (Vue.prototype.$downloadDocumentSuspended) {
       return false;
@@ -299,7 +317,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 13,
+  rank: 14,
   enabled: (file, isMobile) => {
     return file && !file.cloudDriveFolder && !file.folder && isMobile;
   },
@@ -316,7 +334,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 14,
+  rank: 15,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },

@@ -8,9 +8,6 @@
       fa-external-link-alt
     </v-icon>
     <span class="ps-1">{{ $t('document.label.go.location') }}</span>
-    <v-divider
-      v-if="!file.cloudDriveFolder"
-      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
