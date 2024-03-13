@@ -31,6 +31,10 @@ export default {
       type: String,
       default: null
     },
+    isSearchResult: {
+      type: Boolean,
+      default: false
+    },
     selectedDocuments: {
       type: Array,
       default: () => []
@@ -49,6 +53,7 @@ export default {
         extension: this.extension,
         isMobile: this.isMobile,
         selectedView: this.selectedView,
+        isSearchResult: this.isSearchResult,
         selectedDocuments: this.selectedDocuments,
         selectAllChecked: this.selectAllChecked
       };
