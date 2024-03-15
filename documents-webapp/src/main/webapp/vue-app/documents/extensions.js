@@ -104,13 +104,32 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 });
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'goLocation',
+  labelKey: 'documents.label.go.location',
+  align: 'center',
+  sortable: true,
+  cssClass: 'font-weight-bold text-no-wrap ',
+  width: '190px',
+  rank: 2,
+  enabled: (file,isMobile,currentView,searchResult) => {
+    return (currentView === 'timeline'||searchResult)  
+            && file
+            && !file.cloudDriveFolder;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['open-location-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'edit',
   labelKey: 'documents.label.edit',
   align: 'center',
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap ',
   width: '190px',
-  rank: 2,
+  rank: 3,
   enabled: (file) => {
     return file && !file.cloudDriveFolder
                 && file.acl.canEdit
@@ -130,7 +149,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 3,
+  rank: 4,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },
@@ -147,7 +166,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 4,
+  rank: 5,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },
@@ -164,7 +183,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 5,
+  rank: 6,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },
@@ -181,7 +200,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 6,
+  rank: 7,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system' && !file.sourceID;
   },
@@ -199,7 +218,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 7,
+  rank: 8,
   enabled: (file) => {
     if (Vue.prototype.$shareDocumentSuspended) {
       return false;
@@ -223,7 +242,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 8,
+  rank: 9,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.versionable;
   },
@@ -240,7 +259,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 8,
+  rank: 10,
   enabled: (file) => {
     if (!file.versionable || file.cloudDriveFolder) {
       return false;
@@ -260,7 +279,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 9,
+  rank: 11,
   enabled: (file) => {
     if (Vue.prototype.$downloadDocumentSuspended) {
       return false;
@@ -280,7 +299,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 12,
+  rank: 13,
   enabled: (file, isMobile) => {
     return file && !file.cloudDriveFolder && !file.folder && isMobile;
   },
@@ -297,7 +316,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'font-weight-bold text-no-wrap',
   width: '190px',
-  rank: 10,
+  rank: 14,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
   },
