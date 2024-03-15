@@ -29,7 +29,15 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
-    }
+    },
+    currentView: {
+      type: String,
+      default: ''
+    },
+    isSearchResult: {
+      type: Boolean,
+      default: false
+    },
   },
   data: () => ({
     file: null,
@@ -51,7 +59,9 @@ export default {
         isMobile: this.isMobile,
         selectedDocuments: this.selectedDocuments,
         disabledExtension: extension.disabled,
-        isMultiSelection: this.isMultiSelection
+        isMultiSelection: this.isMultiSelection,
+        currentView: this.currentView,
+        isSearchResult: this.isSearchResult
       };
     },
     open(file) {
@@ -72,7 +82,7 @@ export default {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
 
       if (!this.isMultiSelection) {
-        extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile));
+        extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile, this.currentView, this.isSearchResult));
 
       } else {
         extensions = extensions.filter(extension => extension.enabledForMultiSelection());

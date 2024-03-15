@@ -24,6 +24,8 @@
     <documents-actions-menu
       v-if="show"
       :file="file"
+      :current-view="currentView"
+      :is-search-result="isSearchResult"
       :selected-documents="selectedDocuments"
       :is-multi-selection="isMultiSelection"
       :is-mobile="false" />
@@ -37,6 +39,8 @@ export default {
     show: false,
     selectedDocuments: [],
     isMultiSelection: false,
+    currentView: '',
+    isSearchResult: false
   }),
   created() {
     document.addEventListener('click', this.handleMenuClose);
@@ -75,12 +79,14 @@ export default {
     handleUpdateSelected() {
       this.show = false;
     },
-    openMenu(event, file, selectedDocuments) {
+    openMenu(event, file, selectedDocuments,view,isSearchResult) {
       event.preventDefault();
       if (event.which === 0) {
         return;
       }
       this.file = file;
+      this.currentView = view;
+      this.isSearchResult = isSearchResult;
       this.selectedDocuments = selectedDocuments;
       this.isMultiSelection = this.selectedDocuments?.length > 1 && this.isSelected ;
       this.$refs.actionContextMenu.style.setProperty('--mouse-x', `${event.clientX  }px`);
