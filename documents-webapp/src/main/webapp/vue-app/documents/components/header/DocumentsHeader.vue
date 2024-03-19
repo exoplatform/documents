@@ -206,15 +206,18 @@ export default {
       }
     },
     changeDocumentView(view) {
-      this.$root.$emit('document-change-view', view);
-      const viewTab = view ==='folder'? 'FOLDER' : 'RECENT';
-      document.dispatchEvent(new CustomEvent('document-change', {
-        detail: {
-          'type': 'document',
-          'spaceId': this.spaceId,
-          'name': `Switch View ${viewTab} Tab`
-        }
-      }));
+      if (this.tab!==view){
+        this.$root.$emit('document-change-view', view);
+        const viewTab = view ==='folder'? 'FOLDER' : 'RECENT';
+        document.dispatchEvent(new CustomEvent('document-change', {
+          detail: {
+            'type': 'document',
+            'spaceId': this.spaceId,
+            'name': `Switch View ${viewTab} Tab`
+          }
+        }));
+      }
+
     },
     openAdvacedDrawer(){
       if (this.isMobile){
