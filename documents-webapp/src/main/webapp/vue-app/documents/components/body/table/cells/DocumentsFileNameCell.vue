@@ -192,6 +192,10 @@ export default {
       const type = this.file && this.file.mimeType || '';
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
     },
+    isFileOnlyReadable() {
+      const type = this.file && this.file.mimeType || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+    },
     documentMultiSelectionActive() {
       return this.$vuetify.breakpoint.width >= 600;
     },
@@ -297,12 +301,19 @@ export default {
       const fileId = file.sourceID? file.sourceID: file.id;
       window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}`, '_blank');
     },
+    openInReadOnlyMode(file) {
+      const fileId = file.sourceID? file.sourceID: file.id;
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view`, '_blank');
+    },
     openPreview() {
       this.loading = true;
       if (this.file?.folder) {
         this.$root.$emit('document-open-folder', this.file);
       } else if (this.isFileEditable && this.file?.acl?.canEdit)  {
         this.openInEditMode(this.file);
+        this.loading = false;
+      } else if (this.isFileOnlyReadable)  {
+        this.openInReadOnlyMode(this.file);
         this.loading = false;
       } else {
         const id = this.file.id;
