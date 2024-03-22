@@ -35,7 +35,7 @@
           class="flex-grow-0 flex-shrink-0 text-end">
           <v-btn
             @click="openDrawer"
-            title="See more"
+            title="{{ $t('documents.label.seeMore') }}"
             target="_blank"
             color="primary"
             text="true"

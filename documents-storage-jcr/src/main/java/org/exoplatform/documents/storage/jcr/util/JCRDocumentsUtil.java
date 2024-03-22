@@ -503,14 +503,18 @@ public class JCRDocumentsUtil {
         VersionIterator iterator = versionHistory.getAllVersions();
         while (iterator.hasNext()) {
           Version version = iterator.nextVersion();
-          if (version.hasNode("jcr:frozenNode")) {
-            Node frozen= version.getNode("jcr:frozenNode");
-            if (frozen.hasNode("jcr:content")) {
-              long currentVersionSize = frozen.getNode("jcr:content").getProperty("jcr:data").getLength();
-              versionSize+=currentVersionSize;
+          try {
+            if (version.hasNode("jcr:frozenNode")) {
+              Node frozen = version.getNode("jcr:frozenNode");
+              if (frozen.hasNode("jcr:content")) {
+                long currentVersionSize = frozen.getNode("jcr:content").getProperty("jcr:data").getLength();
+                versionSize += currentVersionSize;
+              }
             }
+          } catch (Exception e) {
+            LOG.error("Unable to read version {}",version.getPath(),e);
           }
-        }
+         }
       }
     }catch (Exception e) {
       versionSize=0;

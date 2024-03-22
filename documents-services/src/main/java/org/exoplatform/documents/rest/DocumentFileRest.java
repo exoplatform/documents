@@ -28,7 +28,6 @@ import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
 import jakarta.servlet.http.HttpServletRequest;
 
-import javax.swing.text.DocumentFilter;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;

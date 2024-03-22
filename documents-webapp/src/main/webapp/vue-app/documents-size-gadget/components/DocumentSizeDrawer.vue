@@ -51,15 +51,11 @@ export default {
   created() {
     this.$root.$on('documents-size-drawer', this.open);
   },
-  computed: {
-
-  },
   methods: {
     open() {
       this.$documentSizeService.getBiggestDocuments(0,10).then(data => {
         this.documents=data;
         this.$refs.drawer.open();
-        console.log(this.documents);
       });
     },
     close() {
