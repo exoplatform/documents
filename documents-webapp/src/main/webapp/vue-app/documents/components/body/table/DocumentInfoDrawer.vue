@@ -177,6 +177,20 @@
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
+        <v-list-item>
+          <v-list-item-content class="mx-4">
+            <v-list-item-title>
+              <span
+                class="fileDetails not-clickable text-color">
+                <span class="text-center font-weight-bold">{{ $t('documents.details.view.location') }}:</span>
+                <a
+                  class="ms-1 document-location"
+                  :href="fileLocationLink"
+                  @click="openLocation"> {{ fileLocation }} </a>
+              </span>
+            </v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
       </template>
     </template>   
     <template slot="footer">
@@ -267,6 +281,18 @@ export default {
       return this.file?.description && this.file?.description.replace( /(<([^>]+)>)/ig, '').length>1300
       || this.file?.description === this.fileInitialDescription
       || (!this.file?.description && !this.fileInitialDescription);
+    },
+    fileLocation() {
+      const pathParts = this.file.path.split('/Groups/spaces/')[1].split('/');
+      pathParts.shift();
+      pathParts.pop();
+      return pathParts.join('/');
+    },
+    fileLocationLink() {
+      const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
+      const url = new URL(window.location.href.substring(0, realPageUrlIndex));
+      url.searchParams.set('folderId', this.file.parentFolderId);
+      return url.toString();
     },
   },
   created() {
@@ -392,6 +418,9 @@ export default {
           timestamp: Date.now()
         }
       }));
+    },
+    openLocation() {
+      this.$root.$emit('open-folder-by-id', this.file.parentFolderId);
     },
   }
 };
