@@ -27,6 +27,7 @@ public class FileNode extends AbstractNode {
   private String linkedFileId;
 
   private long   size;
+  private long   sizeWithVersions;
 
   private long   views;
 

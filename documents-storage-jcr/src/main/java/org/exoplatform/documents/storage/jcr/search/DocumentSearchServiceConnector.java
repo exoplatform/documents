@@ -152,6 +152,9 @@ public class DocumentSearchServiceConnector {
       case "title" :
         sortField = "title.raw";
         break;
+      case "fileSizeWithVersions" :
+        sortField = "fileSizeWithVersions";
+        break;
       default:
         sortField = "_score";
     }
@@ -313,7 +316,7 @@ public class DocumentSearchServiceConnector {
 
   private String getSizeAgg(boolean getTotalSize) {
     if (getTotalSize) {
-      return "\"aggs\": {\n" + "      \"total_size\": { \"sum\": { \"field\": \"fileSize\" } }\n" + "    },";
+      return "\"aggs\": {\n" + "      \"total_size\": { \"sum\": { \"field\": \"fileSizeWithVersions\" } }\n" + "    },";
     }
     return "";
   }
