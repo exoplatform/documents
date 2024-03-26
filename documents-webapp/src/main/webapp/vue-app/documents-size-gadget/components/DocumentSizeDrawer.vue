@@ -1,6 +1,7 @@
 <template>
   <exo-drawer
     ref="drawer"
+    id="biggestDocumentsDrawer"
     v-model="drawer"
     right>
     <template slot="title">
@@ -8,7 +9,7 @@
     </template>
     <template #content>
       <div class="ma-5">
-        <span class="subtitle-1">
+        <span class="caption text-light-color">
           {{ $t('documents.label.largeDocumentHeader.header') }}
         </span>
       </div>
@@ -31,10 +32,17 @@
         </v-list-item-avatar>
         <v-list-item-content>
           <v-list-item-title class="uploadedFileTitle" :title="document.name">
-            {{ document.name }}
+            <a :href="baseUrl+document.parentFolderId">
+              {{ document.name }}
+            </a>
           </v-list-item-title>
-          <v-list-item-subtitle>
-            {{ getSize(document).value }} {{ $t('document.size.label.unit.'+getSize(document).unit) }}
+          <v-list-item-subtitle
+            class="text-light-color uploadedFileDetails">
+            {{ getSize(document).value }} {{ $t('document.size.label.unit.'+getSize(document).unit) }} - {{ $t('documents.label.lastUpdated') }} -
+            <date-format
+              :value="(document.modifiedDate || document.createdDate) || ''"
+              :format="fullDateFormat"
+              class="document-time text-light-color text-no-wrap" />
           </v-list-item-subtitle>
         </v-list-item-content>
       </div>
@@ -47,8 +55,34 @@
 export default {
   data: () => ({
     documents: [],
+    space: null,
+    fullDateFormat: {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
   }),
+  computed: {
+    baseUrl() {
+      if (eXo.env.portal.spaceId) {
+        if (this.space) {
+          const spaceGroupUri = this.space.groupId.replace(/\//g, ':');
+          return `${eXo.env.portal.context}/g/${spaceGroupUri}/${this.space.prettyName}/documents?folderId=`;
+        } else {
+          return '#';
+        }
+      } else {
+        return `${eXo.env.portal.context}/${eXo.env.portal.defaultPortal}/documents?folderId=`;
+      }
+    },
+  },
   created() {
+    this.$spaceService.getSpaceById(eXo.env.portal.spaceId, 'identity')
+      .then((space) => {
+        this.space=space;
+      });
     this.$root.$on('documents-size-drawer', this.open);
   },
   methods: {
