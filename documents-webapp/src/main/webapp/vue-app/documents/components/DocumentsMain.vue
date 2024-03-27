@@ -1015,6 +1015,9 @@ export default {
       const url = new URL(window.location.href.substring(0, realPageUrlIndex));
       const params = new URLSearchParams(document.location.search);
       params.set('view', view);
+      if (view !== 'folder'){
+        params.delete('folderId');
+      }
       params.forEach((value, key) => { url.searchParams.append(key, value); });
       window.history.replaceState('documents', 'Documents', url.toString());
       this.selectedView = view;
