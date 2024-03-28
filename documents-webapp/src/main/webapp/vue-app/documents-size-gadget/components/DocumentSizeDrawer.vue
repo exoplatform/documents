@@ -20,6 +20,7 @@
     ref="drawer"
     id="biggestDocumentsDrawer"
     v-model="drawer"
+    :loading="loading"
     right>
     <template slot="title">
      {{ $t('documents.label.largeDocumentHeader.title') }}
@@ -72,6 +73,7 @@
 export default {
   data: () => ({
     documents: [],
+    loading: false,
     space: null,
     fullDateFormat: {
       year: 'numeric',
@@ -96,18 +98,20 @@ export default {
     },
   },
   created() {
-    this.$spaceService.getSpaceById(eXo.env.portal.spaceId, 'identity')
-      .then((space) => {
-        this.space=space;
-      });
     this.$root.$on('documents-size-drawer', this.open);
   },
   methods: {
     open() {
+      this.loading=true;
+      this.$spaceService.getSpaceById(eXo.env.portal.spaceId, 'identity')
+        .then((space) => {
+          this.space=space;
+        });
       this.$documentSizeService.getBiggestDocuments(0,10).then(data => {
         this.documents=data;
-        this.$refs.drawer.open();
+        this.loading=false;
       });
+      this.$refs.drawer.open();
     },
     close() {
       return this.$nextTick().then(() => this.$refs.drawer.close());
