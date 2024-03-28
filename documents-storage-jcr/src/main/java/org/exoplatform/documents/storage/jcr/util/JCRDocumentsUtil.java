@@ -489,8 +489,10 @@ public class JCRDocumentsUtil {
       fileNode.setMimeType(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
     }
     if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
-      fileNode.setSize(content.getProperty(NodeTypeConstants.JCR_DATA).getLength());
-      fileNode.setSizeWithVersions(computeVersionsSize(content.getParent()));
+      long fileSize = content.getProperty(NodeTypeConstants.JCR_DATA).getLength();
+      fileNode.setSize(fileSize);
+      long versionsFileSize = computeVersionsSize(content.getParent());
+      fileNode.setSizeWithVersions(fileSize+versionsFileSize);
 
     }
   }
@@ -512,9 +514,9 @@ public class JCRDocumentsUtil {
               }
             }
           } catch (Exception e) {
-            LOG.error("Unable to read version {}",version.getPath(),e);
+            LOG.error("Unable to read version {}", version.getPath(), e);
           }
-         }
+        }
       }
     }catch (Exception e) {
       versionSize=0;

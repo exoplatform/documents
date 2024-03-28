@@ -161,6 +161,22 @@
                 <documents-file-size-cell
                   class="mx-1 text-color"
                   :file="file"
+                  propName="size"
+                  :is-mobile="isMobile" />
+              </span>
+            </v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item>
+          <v-list-item-content class="mx-4">
+            <v-list-item-title>
+              <span
+                class="fileDetails not-clickable text-color d-flex">
+                <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.sizeWithVersions') }}:</span>
+                <documents-file-size-cell
+                  class="mx-1 text-color"
+                  :file="file"
+                  propName="sizeWithVersions"
                   :is-mobile="isMobile" />
               </span>
             </v-list-item-title>
