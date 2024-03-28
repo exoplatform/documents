@@ -34,6 +34,10 @@ export default {
       type: Object,
       default: null,
     },
+    propName: {
+      type: Object,
+      default: null,
+    },
     extension: {
       type: Object,
       default: null,
@@ -54,7 +58,7 @@ export default {
     file: {
       immediate: true,
       handler(file) {
-        if (file && file.size) {
+        if (file && file[this.propName]) {
           this.computeFileSize();
         }
       },
@@ -70,7 +74,7 @@ export default {
       const minGb = this.MIN_GB_UNIT_DISPLAY_IN_MB * this.BYTES_IN_MB; // equals 0.01 GB
       const minMb = this.MIN_MB_UNIT_DISPLAY_IN_KB * this.BYTES_IN_KB; // equals 0.01 MB, which is the smallest number with precision `formattedSizePrecision`
       const minKb = this.MIN_KB_UNIT_DISPLAY_IN_BYTES; // equals 0.01 KB, which is the smallest number with precision `formattedSizePrecision`
-      let size = this.file.size;
+      let size = this.file[this.propName];
       if (size < minKb) {
         this.unit = 'bytes';
       } else if (size < minMb) {
