@@ -161,7 +161,7 @@
                 <documents-file-size-cell
                   class="mx-1 text-color"
                   :file="file"
-                  propName="size"
+                  prop-name="size"
                   :is-mobile="isMobile" />
               </span>
             </v-list-item-title>
@@ -176,7 +176,7 @@
                 <documents-file-size-cell
                   class="mx-1 text-color"
                   :file="file"
-                  propName="sizeWithVersions"
+                  prop-name="sizeWithVersions"
                   :is-mobile="isMobile" />
               </span>
             </v-list-item-title>
