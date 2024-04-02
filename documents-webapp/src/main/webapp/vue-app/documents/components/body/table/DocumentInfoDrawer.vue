@@ -299,7 +299,13 @@ export default {
       || (!this.file?.description && !this.fileInitialDescription);
     },
     fileLocation() {
-      const pathParts = this.file.path.split('/Groups/spaces/')[1].split('/');
+      let pathParts = [];
+      if (this.file.path.includes('/Groups/spaces/')){
+        pathParts = this.file.path.split('/Groups/spaces/')[1].split('/');
+      } else if (this.file.path.includes(eXo.env.portal.userName)){
+        const partToRemove = this.file.path.split(eXo.env.portal.userName)[0];
+        pathParts = this.file.path.replace(partToRemove,'').split('/');
+      }
       pathParts.shift();
       pathParts.pop();
       return pathParts.join('/');
