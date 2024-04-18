@@ -39,71 +39,76 @@
             :is-mobile="isMobile" />
         </div>
       </v-menu>
-      <button
-        v-else
-        :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
-        class="btn-primary primary px-2 py-0"
-        :key="postKey"
-        :disabled="disableButton"
-        @click="openAddItemMenu()">
-        <v-icon
-          size="13"
-          id="addBtn dark-grey-color"
-          dark>
-          mdi-plus
-        </v-icon>
-        {{ !isMobile ? $t('documents.button.addNew') : '' }}
-      </button> 
+
       <v-menu
+        v-else
         v-model="addMenu"
-        :attach="'#addItemMenu'"
         transition="scroll-y-transition"
-        content-class="add-menu-btn width-full"
+        class="add-menu-btn width-full"
         offset-y
         down>
-        <v-list-item
-          v-if="isFolderView"
-          @click="addFolder()"
-          class="px-2 add-menu-list-item">
-          <v-icon
-            size="13"
-            class="clickable dark-grey-color pr-2">
-            fa-folder
-          </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFolder') }}</span>
-        </v-list-item>
-        <v-list-item
-          @click="openDrawer()"
-          class="px-2 add-menu-list-item">
-          <v-icon
-            size="13"
-            class="clickable dark-grey-color pr-2">
-            fa-file-alt
-          </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFile') }}</span>
-        </v-list-item>
-
-        <v-list-item
-          @click="openImportDrawer()"
-          class="px-2 add-menu-list-item">
-          <v-tooltip bottom>
-            <template #activator="{ on }">
-              <span v-on="on">
-                <v-icon
-                  size="13"
-                  class="pr-2"
-                  :class="importBtnColorClass">
-                  fas fa-upload
-                </v-icon>
-                <span
-                  v-if="!isMobile"
-                  class="body-2 menu-text dark-grey-color ps-1"
-                  :class="importBtnColorClass">{{ $t('documents.label.zip.upload') }}</span>
-              </span>
-            </template>
-            <span>{{ importTooltipText }}</span>
-          </v-tooltip>
-        </v-list-item>
+        <template #activator="{ on, attrs }">
+          <button
+            :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
+            class="btn-primary primary px-2 py-0"
+            :key="postKey"
+            :disabled="disableButton"
+            v-bind="attrs"
+            v-on="!isMobile && on"
+            @click="openAddItemMenu()">
+            <v-icon
+              size="13"
+              id="addBtn dark-grey-color"
+              dark>
+              mdi-plus
+            </v-icon>
+            {{ !isMobile ? $t('documents.button.addNew') : '' }}
+          </button>
+        </template>
+        <v-list dense class="pa-0">
+          <v-list-item
+            v-if="isFolderView"
+            @click="addFolder()"
+            class="px-2 py-0 add-menu-list-item">
+            <v-icon
+              size="13"
+              class="clickable dark-grey-color pr-2">
+              fa-folder
+            </v-icon>
+            <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFolder') }}</span>
+          </v-list-item>
+          <v-list-item
+            @click="openDrawer()"
+            class="px-2 py-0 add-menu-list-item">
+            <v-icon
+              size="13"
+              class="clickable dark-grey-color pr-2">
+              fa-file-alt
+            </v-icon>
+            <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFile') }}</span>
+          </v-list-item>
+          <v-list-item
+            @click="openImportDrawer()"
+            class="px-2 py-0 add-menu-list-item">
+            <v-tooltip bottom>
+              <template #activator="{ on }">
+                <span v-on="on">
+                  <v-icon
+                    size="13"
+                    class="pr-2"
+                    :class="importBtnColorClass">
+                    fas fa-upload
+                  </v-icon>
+                  <span
+                    v-if="!isMobile"
+                    class="body-2 menu-text dark-grey-color ps-1"
+                    :class="importBtnColorClass">{{ $t('documents.label.zip.upload') }}</span>
+                </span>
+              </template>
+              <span>{{ importTooltipText }}</span>
+            </v-tooltip>
+          </v-list-item>
+        </v-list>
       </v-menu>
       <div
         v-if="actionLoading"
