@@ -969,6 +969,10 @@ export default {
         if (newParentPath.includes(`/spaces/${eXo.env.portal.spaceGroup}`)) {
           newParentPath = newParentPath.replace(`/spaces/${eXo.env.portal.spaceGroup}`, `/spaces/${eXo.env.portal.spaceGroup}/${eXo.env.portal.spaceName}`);
           const nodeUri = eXo.env.portal.selectedNodeUri.replace('/documents', '/Documents');
+          const appPageName = nodeUri.replace(`/${eXo.env.portal.spaceGroup}`,'');
+          if (appPageName!=='Documents'){
+            newParentPath = newParentPath.replace('Documents', appPageName);
+          }
           let pathParts = newParentPath.split(nodeUri);
           if (pathParts.length>1){
             folderPath = pathParts[1];
