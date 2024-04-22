@@ -977,7 +977,7 @@ export default {
           if (pathParts.length>1){
             folderPath = pathParts[1];
           }
-          pathParts = window.location.pathname.split(eXo.env.portal.selectedNodeUri);
+          pathParts = decodeURI(window.location.pathname).split(eXo.env.portal.selectedNodeUri);
           window.history.pushState(parentFolder.name, parentFolder.title, `${pathParts[0]}${eXo.env.portal.selectedNodeUri}${folderPath}?view=folder`);
         } else {
           // folder path doesn't contain the space group Id
@@ -1015,8 +1015,8 @@ export default {
       this.selectedDocuments = [];
     },
     changeView(view) {
-      const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
-      const url = new URL(window.location.href.substring(0, realPageUrlIndex));
+      const realPageUrlIndex = decodeURI(window.location.href).toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
+      const url = new URL(decodeURI(window.location.href).substring(0, realPageUrlIndex));
       const params = new URLSearchParams(document.location.search);
       params.set('view', view);
       if (view !== 'folder'){
@@ -1457,7 +1457,7 @@ export default {
           name: `.spaces.${eXo.env.portal.spaceGroup}`,
           title: eXo.env.portal.spaceDisplayName,
         };
-        const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+        const pathparts = decodeURI(window.location.pathname).toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathparts.length > 1) {
           attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
         }
@@ -1468,7 +1468,7 @@ export default {
           title: 'Personal Documents'
         };
         attachmentAppConfiguration.defaultFolder = '/';
-        let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
+        let pathparts = decodeURI(window.location.pathname).toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
         if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
           pathparts = pathparts[1].split('Private/');
         }
