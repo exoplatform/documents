@@ -14,7 +14,7 @@
 
         :right-select-box="{
           hide: isMobile,
-          selected:'all', 
+          selected: primaryFilter,
           items: [{
             value: 'all',
             text: $t('documents.filter.all'),
