@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.exoplatform.documents</groupId>
     <artifactId>documents-parent</artifactId>
-    <version>7.0.x-SNAPSHOT</version>
+    <version>7.0.x-security-fix-SNAPSHOT</version>
   </parent>
   <artifactId>documents-api</artifactId>
   <name>eXo Documents - API</name>
