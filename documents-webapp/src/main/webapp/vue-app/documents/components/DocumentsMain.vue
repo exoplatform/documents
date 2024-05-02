@@ -1458,7 +1458,9 @@ export default {
           title: eXo.env.portal.spaceDisplayName,
         };
         const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-        if (pathparts.length > 1) {
+        const currentUrlSearchParams = window.location.search;
+        const queryParams = new URLSearchParams(currentUrlSearchParams);
+        if (pathparts.length > 1 || queryParams.has('folderId')) {
           attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
         }
       } else {
