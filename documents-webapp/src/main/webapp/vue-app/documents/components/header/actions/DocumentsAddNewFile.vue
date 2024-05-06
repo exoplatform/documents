@@ -1,115 +1,15 @@
 <template>
   <div>
-    <div v-show="isMobile && !showFilter || !isMobile">
-      <v-menu
+    <div v-show="isMobile && !showFilter || !isMobile" class="d-flex">
+      <documents-multi-select-menu
         v-if="showSelectionsMenu"
-        v-model="selectionsMenu"
-        class="add-menu-btn width-full"
-        close-on-click
-        offset-y>
-        <template #activator="{ on, attrs }">
-          <v-btn
-            class="btn btn-primary primary"
-            v-bind="attrs"
-            v-on="!isMobile && on"
-            @click="openMultiSelectionMenuAction">
-            <v-icon
-              class="me-1 dark-grey-color"
-              size="13"
-              dark>
-              fas fa-ellipsis-v
-            </v-icon>
-            <span
-              v-if="selectionsLength"
-              class="font-weight-regular me-1">
-              {{ selectionsLength }}
-            </span>
-            <span
-              v-if="!isMobile"
-              class="font-weight-regular">
-              {{ $t('document.multiSelection.selected.elements.label') }}
-            </span>
-          </v-btn>
-        </template>
-        <div class="documentActionMenu">
-          <documents-actions-menu
-            :selected-documents="selectedDocuments"
-            :file="selectedDocuments[0]"
-            :is-multi-selection="true"
-            :is-mobile="isMobile" />
-        </div>
-      </v-menu>
-
-      <v-menu
+        :is-mobile="isMobile"
+        :selected-documents="selectedDocuments"
+        :selected-view="selectedView" />
+      <documents-add-new-file-menu
         v-else
-        v-model="addMenu"
-        transition="scroll-y-transition"
-        class="add-menu-btn width-full"
-        offset-y
-        down>
-        <template #activator="{ on, attrs }">
-          <button
-            :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
-            class="btn-primary primary px-2 py-0"
-            :key="postKey"
-            :disabled="disableButton"
-            v-bind="attrs"
-            v-on="!isMobile && on"
-            @click="openAddItemMenu()">
-            <v-icon
-              size="13"
-              id="addBtn dark-grey-color"
-              dark>
-              mdi-plus
-            </v-icon>
-            {{ !isMobile ? $t('documents.button.addNew') : '' }}
-          </button>
-        </template>
-        <v-list dense class="pa-0">
-          <v-list-item
-            v-if="isFolderView"
-            @click="addFolder()"
-            class="px-2 py-0 add-menu-list-item">
-            <v-icon
-              size="13"
-              class="clickable dark-grey-color pr-2">
-              fa-folder
-            </v-icon>
-            <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFolder') }}</span>
-          </v-list-item>
-          <v-list-item
-            @click="openDrawer()"
-            class="px-2 py-0 add-menu-list-item">
-            <v-icon
-              size="13"
-              class="clickable dark-grey-color pr-2">
-              fa-file-alt
-            </v-icon>
-            <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFile') }}</span>
-          </v-list-item>
-          <v-list-item
-            @click="openImportDrawer()"
-            class="px-2 py-0 add-menu-list-item">
-            <v-tooltip bottom>
-              <template #activator="{ on }">
-                <span v-on="on">
-                  <v-icon
-                    size="13"
-                    class="pr-2"
-                    :class="importBtnColorClass">
-                    fas fa-upload
-                  </v-icon>
-                  <span
-                    v-if="!isMobile"
-                    class="body-2 menu-text dark-grey-color ps-1"
-                    :class="importBtnColorClass">{{ $t('documents.label.zip.upload') }}</span>
-                </span>
-              </template>
-              <span>{{ importTooltipText }}</span>
-            </v-tooltip>
-          </v-list-item>
-        </v-list>
-      </v-menu>
+        :is-mobile="isMobile"
+        :selected-view="selectedView" />
       <div
         v-if="actionLoading"
         @click="openActionDrawer()"
@@ -159,11 +59,8 @@ export default {
   },
   data: () => ({
     showFilter: false,
-    addMenu: false,
-    waitTimeUntilCloseMenu: 200,
     currentFolder: null,
     showSelectionsMenu: false,
-    selectionsMenu: false,
     selectionsLength: 0,
     actionLoading: false,
     actionLoadingMessage: null,
@@ -195,14 +92,6 @@ export default {
     }
   },
   created() {
-    $(document).on('mousedown', () => {
-      if (this.addMenu || this.selectionsMenu) {
-        window.setTimeout(() => {
-          this.addMenu = false;
-          this.selectionsMenu = false;
-        }, this.waitTimeUntilCloseMenu);
-      }
-    });
     this.$root.$on('show-mobile-filter', data => {
       this.showFilter= data;
     });
