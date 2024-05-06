@@ -81,6 +81,10 @@ import DocumentImportFromZipDrawer from './components/header/actions/DocumentImp
 import AttachmentsUploadInput from './components/header/actions/uploadZip/AttachmentsUploadInput.vue';
 import AttachmentsUploaded from './components/header/actions/uploadZip/AttachmentsUploaded.vue';
 import AttachmentsItem from './components/header/actions/uploadZip/AttachmentsItem.vue';
+import DocumentsAddNewFileMenu from './components/header/actions/DocumentsAddNewFileMenu.vue';
+import DocumentsMultiSelectMenu from './components/header/actions/DocumentsMultiSelectMenu.vue';
+
+
 
 const components = {
   'documents-main': DocumentsMain,
@@ -149,6 +153,8 @@ const components = {
   'documents-zip-upload-input': AttachmentsUploadInput,
   'documents-zip-uploaded': AttachmentsUploaded,
   'documents-zip-item': AttachmentsItem,
+  'documents-add-new-file-menu': DocumentsAddNewFileMenu,
+  'documents-multi-select-menu': DocumentsMultiSelectMenu,
 };
 
 for (const key in components) {
