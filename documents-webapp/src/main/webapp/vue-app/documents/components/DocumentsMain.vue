@@ -321,7 +321,7 @@ export default {
       this.refreshFiles();
     });
     this.$root.$on('open-folder-by-id', (folderId) => {
-      const realPageUrlIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
+      const realPageUrlIndex = window.location.href.toLowerCase().indexOf(location.pathname.toLowerCase()) + location.pathname.length;
       const url = new URL(window.location.href.substring(0, realPageUrlIndex));
       const params = new URLSearchParams(document.location.search);
       params.set('folderId', folderId);
@@ -1015,7 +1015,7 @@ export default {
       this.selectedDocuments = [];
     },
     changeView(view) {
-      const realPageUrlIndex = decodeURI(window.location.href).toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase()) + eXo.env.portal.selectedNodeUri.length;
+      const realPageUrlIndex = decodeURI(window.location.href).toLowerCase().indexOf(location.pathname.toLowerCase()) +  location.pathname.length;
       const url = new URL(decodeURI(window.location.href).substring(0, realPageUrlIndex));
       const params = new URLSearchParams(document.location.search);
       params.set('view', view);
