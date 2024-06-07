@@ -1,0 +1,39 @@
+{
+  "descriptors":[
+    {
+      "nameId":"Documents",
+      "categoryNameId":"spaces",
+      "portletName":"Documents",
+      "names":{
+        "en":"layout.portletInstance.Documents.name"
+      },
+      "descriptions":{
+        "en":"layout.portletInstance.Documents.description"
+      },
+      "illustrationPath":"war:/../skin/DefaultSkin/portletIcons/Documents.png",
+      "preferences":[
+        
+      ],
+      "permissions":[
+        "*:/platform/users"
+      ],
+      "system":true
+    },
+    {
+      "nameId":"DocumentsSizeGadget",
+      "categoryNameId":"tools",
+      "portletName":"DocumentsSizeGadget",
+      "names":{
+        "en":"layout.portletInstance.DocumentsSizeGadget.name"
+      },
+      "descriptions":{
+        "en":"layout.portletInstance.DocumentsSizeGadget.description"
+      },
+      "illustrationPath":"war:/../skin/DefaultSkin/portletIcons/DocumentsSizeGadget.png",
+      "permissions":[
+        "*:/platform/users"
+      ],
+      "system":true
+    }
+  ]
+}
