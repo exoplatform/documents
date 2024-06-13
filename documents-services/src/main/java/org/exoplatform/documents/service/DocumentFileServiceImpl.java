@@ -27,10 +27,10 @@ import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
 
-import org.exoplatform.analytics.api.service.AnalyticsService;
-import org.exoplatform.analytics.model.StatisticData;
-import org.exoplatform.analytics.model.filter.AnalyticsFilter;
-import org.exoplatform.analytics.utils.AnalyticsUtils;
+import io.meeds.analytics.api.service.AnalyticsService;
+import io.meeds.analytics.model.StatisticData;
+import io.meeds.analytics.model.filter.AnalyticsFilter;
+import io.meeds.analytics.utils.AnalyticsUtils;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;

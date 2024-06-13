@@ -39,7 +39,7 @@ import org.junit.runner.RunWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
-import org.exoplatform.analytics.api.service.AnalyticsService;
+import io.meeds.analytics.api.service.AnalyticsService;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
