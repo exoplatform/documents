@@ -1,0 +1,22 @@
+{
+    "descriptors": [
+        {
+            "name": "Drives",
+            "imagePath": "war:/../images/Documents.png",
+            "override": false,
+            "enabled": true,
+            "application": {
+                "title": "Drives",
+                "description": "Drives application",
+                "url": "./drives",
+                "active": true,
+                "mandatory": false,
+                "mobile": true,
+                "permissions": [
+                    "*:/platform/users",
+                    "*:/platform/externals"
+                ]
+            }
+        }
+    ]
+}
