@@ -22,22 +22,22 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.exoplatform.ws</groupId>
+      <groupId>io.meeds.ws</groupId>
       <artifactId>exo.ws.rest.core</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.exoplatform.core</groupId>
+      <groupId>io.meeds.core</groupId>
       <artifactId>exo.core.component.security.core</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.exoplatform.commons</groupId>
+      <groupId>io.meeds.commons</groupId>
       <artifactId>commons-component-common</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.exoplatform.social</groupId>
+      <groupId>io.meeds.social</groupId>
       <artifactId>social-component-api</artifactId>
       <scope>provided</scope>
     </dependency>
