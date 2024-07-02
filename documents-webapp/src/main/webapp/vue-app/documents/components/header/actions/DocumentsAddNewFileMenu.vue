@@ -26,17 +26,16 @@
       <template #activator="{ on, attrs }">
         <button
           :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
-          class="btn-primary primary px-2 py-0"
+          class="btn btn-primary"
           :key="postKey"
           :disabled="disableButton"
           v-bind="attrs"
           v-on="!isMobile && on"
           @click="openAddItemMenu()">
           <v-icon
-            size="13"
-            id="addBtn dark-grey-color"
+            size="18"
             dark>
-            mdi-plus
+            fa-plus
           </v-icon>
           {{ !isMobile ? $t('documents.button.addNew') : '' }}
         </button>
@@ -51,39 +50,39 @@
             class="clickable dark-grey-color pr-2">
             fa-folder
           </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFolder') }}</span>
+          <span v-if="!isMobile">{{ $t('documents.button.addNewFolder') }}</span>
         </v-list-item>
         <v-list-item
           @click="openDrawer()"
           class="px-2 py-0 add-menu-list-item">
-          <v-icon
-            size="13"
-            class="clickable dark-grey-color pr-2">
-            fa-file-alt
-          </v-icon>
-          <span v-if="!isMobile" class="body-2 text-color menu-text dark-grey-color ps-1">{{ $t('documents.button.addNewFile') }}</span>
+          <v-list-item-icon class="me-1">
+            <v-icon size="18" class="icon-default-color">fa-file-alt</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content v-if="!isMobile">
+            <v-list-item-title>
+              {{ $t('documents.button.addNewFile') }}
+            </v-list-item-title>
+          </v-list-item-content>
         </v-list-item>
-        <v-list-item
-          @click="openImportDrawer()"
-          class="px-2 py-0 add-menu-list-item">
-          <v-tooltip bottom>
-            <template #activator="{ on }">
-              <span v-on="on">
-                <v-icon
-                  size="13"
-                  class="pr-2"
-                  :class="importBtnColorClass">
-                  fas fa-upload
-                </v-icon>
-                <span
-                  v-if="!isMobile"
-                  class="body-2 menu-text dark-grey-color ps-1"
-                  :class="importBtnColorClass">{{ $t('documents.label.zip.upload') }}</span>
-              </span>
-            </template>
-            <span>{{ importTooltipText }}</span>
-          </v-tooltip>
-        </v-list-item>
+        <v-tooltip bottom>
+          <template #activator="{ on }">
+            <v-list-item
+              v-on="on"
+              :disabled="!importEnabled"
+              class="px-2 py-0 add-menu-list-item"
+              @click="openImportDrawer()">
+              <v-list-item-icon class="me-1">
+                <v-icon size="18" class="icon-default-color">fas fa-upload</v-icon>
+              </v-list-item-icon>
+              <v-list-item-content v-if="!isMobile">
+                <v-list-item-title>
+                  {{ $t('documents.label.zip.upload') }}
+                </v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+          </template>
+          <span>{{ importTooltipText }}</span>
+        </v-tooltip>
       </v-list>
     </v-menu>
   </div>
@@ -129,7 +128,6 @@ export default {
         return this.$t('documents.label.btn.upload.zip.disabled.tooltip');
       }
     },
-
     importBtnColorClass(){
       if (this.importEnabled) {
         return 'dark-grey-color';

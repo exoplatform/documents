@@ -82,14 +82,6 @@ export default {
         return this.$t('documents.label.btn.upload.zip.disabled.tooltip');
       }
     },
-
-    importBtnColorClass(){
-      if (this.importEnabled) {
-        return 'dark-grey-color';
-      } else {
-        return 'disabled--text';
-      } 
-    }
   },
   created() {
     this.$root.$on('show-mobile-filter', data => {
