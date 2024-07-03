@@ -42,7 +42,7 @@
             small>
             <span
               class="text-none text-font-size">
-                {{ $t('documents.label.seeMore') }}
+              {{ $t('documents.label.seeMore') }}
             </span>
           </v-btn>
         </div>

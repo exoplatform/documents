@@ -23,7 +23,7 @@
     :loading="loading"
     right>
     <template slot="title">
-     {{ $t('documents.label.largeDocumentHeader.title') }}
+      {{ $t('documents.label.largeDocumentHeader.title') }}
     </template>
     <template #content>
       <div class="ma-5">
@@ -32,7 +32,10 @@
         </span>
       </div>
 
-      <div v-for="document in documents" :key="document" class="ml-5 d-flex">
+      <div
+        v-for="document in documents"
+        :key="document"
+        class="ml-5 d-flex">
         <v-list-item-avatar
           :class="smallAttachmentIcon ? 'me-0' :'me-3'"
           class="border-radius">
