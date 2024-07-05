@@ -1,9 +1,9 @@
 <template>
   <td
     :colspan="colspan"
-    class="white ps-1">
+    class="transparent ps-1">
     <v-btn
-      class="white no-border no-box-shadow ps-3"
+      class="transparent no-border no-box-shadow ps-3"
       text
       @click="toggleFunction">
       <v-icon class="text-light-color">{{ icon }}</v-icon>

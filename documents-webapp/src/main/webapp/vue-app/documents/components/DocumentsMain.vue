@@ -4,10 +4,10 @@
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
-    <div @mouseover="hideOverlay">
+    <div class="application-body" @mouseover="hideOverlay">
       <div
         v-show="initialized"
-        class="card-border-radius pa-4 white"
+        class="pa-4"
         @dragover.prevent
         @drop.prevent
         @dragstart.prevent>
