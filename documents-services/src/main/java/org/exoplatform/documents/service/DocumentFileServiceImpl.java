@@ -27,10 +27,6 @@ import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
 
-import io.meeds.analytics.api.service.AnalyticsService;
-import io.meeds.analytics.model.StatisticData;
-import io.meeds.analytics.model.filter.AnalyticsFilter;
-import io.meeds.analytics.utils.AnalyticsUtils;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
@@ -51,6 +47,11 @@ import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+
+import io.meeds.analytics.api.service.AnalyticsService;
+import io.meeds.analytics.model.StatisticData;
+import io.meeds.analytics.model.filter.AnalyticsFilter;
+import io.meeds.analytics.utils.AnalyticsUtils;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
@@ -318,7 +319,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     nodePermissionEntity.getToShare().keySet().forEach(destId-> {
       try {
         boolean notifyMember = nodePermissionEntity.getToNotify() != null && nodePermissionEntity.getToNotify().containsKey(destId);
-        shareDocument(documentId, destId, notifyMember);
+        shareDocument(documentId, destId, authenticatedUserId, notifyMember);
       } catch (IllegalAccessException e) {
         throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
       }
@@ -335,8 +336,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public void shareDocument(String documentId, long destId, boolean notifyMember) throws IllegalAccessException {
-    documentFileStorage.shareDocument(documentId, destId, notifyMember );
+  public void shareDocument(String documentId, long destId, long authenticatedUserId, boolean notifyMember) throws IllegalAccessException {
+    documentFileStorage.shareDocument(documentId, destId, getAclUserIdentity(authenticatedUserId), notifyMember );
   }
 
   @Override
