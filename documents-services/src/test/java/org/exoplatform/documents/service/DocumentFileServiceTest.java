@@ -447,14 +447,14 @@ public class DocumentFileServiceTest {
     when(identityManager.getIdentity("1")).thenReturn(socialIdentity);
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
-    verify(documentFileStorage, times(1)).shareDocument("123", 1L, false);
+    verify(documentFileStorage, times(1)).shareDocument("123", 1L,identity, false);
     //
     Map<Long, String> toNotify = new HashMap<>();
     toNotify.put(1L, "read");
     nodePermission.setToNotify(toNotify);
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, atLeast(1)).updatePermissions("123", nodePermission, identity);
-    verify(documentFileStorage, atLeast(1)).shareDocument("123", 1L, true);
+    verify(documentFileStorage, atLeast(1)).shareDocument("123", 1L,identity, true);
 
   }
 
