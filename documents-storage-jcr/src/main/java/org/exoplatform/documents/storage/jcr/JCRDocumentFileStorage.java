@@ -1308,29 +1308,36 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  public void shareDocument(String documentId, long destId, boolean notifyMember) {
+  public void shareDocument(String documentId, long destId, Identity aclIdentity, boolean notifyMember) {
     Node rootNode = null;
     Node shared = null;
     SessionProvider sessionProvider = null;
     try {
       sessionProvider = SessionProvider.createSystemProvider();
       ManageableRepository repository = repositoryService.getCurrentRepository();
-      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      Node currentNode = getNodeByIdentifier(systemSession, documentId);
+      Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node currentNode = getNodeByIdentifier(session, documentId);
       //add symlink to destination user
       org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
-      rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
+      rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, session);
       if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
         rootNode = rootNode.getNode("Documents");
       }
       if(!rootNode.hasNode(SHARED_FOLDER_NAME)){
         shared = rootNode.addNode(SHARED_FOLDER_NAME);
+
       }else{
         shared = rootNode.getNode(SHARED_FOLDER_NAME);
+        session.save();
+      }
+      if(destIdentity.isSpace()){
+        sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+        session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+        shared = getNodeByIdentifier(session, ((ExtendedNode) shared).getIdentifier());
       }
       if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-        currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
+        currentNode = getNodeByIdentifier(session, sourceNodeId);
       }
       Node linkNode = null;
       if (shared.hasNode(currentNode.getName())) {
@@ -1356,7 +1363,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       String nodeMimeType = getMimeType(currentNode);
       linkNode.addMixin(NodeTypeConstants.MIX_FILE_TYPE);
       linkNode.setProperty(NodeTypeConstants.EXO_FILE_TYPE, nodeMimeType);
-      rootNode.save();
+      session.save();
       Map<String, String[]> permissions = new HashMap<>();
       if (destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
         Space space = spaceService.getSpaceByPrettyName(destIdentity.getRemoteId());
@@ -1380,7 +1387,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         linkNode.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
       ((ExtendedNode) linkNode).setPermissions(permissions);
-      systemSession.save();
+      session.save();
       if (notifyMember) {
         notifyMember(documentId, destId);
       } else {
