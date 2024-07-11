@@ -896,7 +896,7 @@ public class JCRDocumentsUtil {
     Node jrcNode = node.getNode("jcr:content");
     InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
     String path = "";
-    String nodePath = getPath(node);
+    String nodePath = node.getPath();
     if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
       nodePath = symlinkPath + nodePath.replace(sourcePath, "");
     }
@@ -921,7 +921,7 @@ public class JCRDocumentsUtil {
       return;
     }
     if (JCRDocumentsUtil.isFolder(node)) {
-      String nodePath = getPath(node);
+      String nodePath = node.getPath();
       if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
         nodePath = symlinkPath + nodePath.replace(sourcePath, "");
       }
@@ -937,32 +937,13 @@ public class JCRDocumentsUtil {
         String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
         if (sourceNode != null) {
-          createTempFilesAndFolders(sourceNode, getPath(node), getPath(sourceNode), tempFolderPath, parentPath);
+          createTempFilesAndFolders(sourceNode, node.getPath(), sourceNode.getPath(), tempFolderPath, parentPath);
         }
       } else {
         createFile(node, symlinkPath, sourcePath, tempFolderPath, parentPath);
       }
     }
   }
-
-  static String getPath(Node node) {
-    Node parent = node;
-    LinkedList<String> parents = new LinkedList<String>();
-    while (parent != null) {
-      try {
-        if (parent.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-          parents.addFirst(Utils.getStringProperty(parent, NodeTypeConstants.EXO_TITLE));
-        } else {
-          parents.addFirst(parent.getName());
-        }
-        parent = parent.getParent();
-      } catch (RepositoryException e) {
-        parent = null;
-      }
-    }
-    return String.join("/", parents);
-  }
-
   public static void cleanFiles(File file) {
     File[] files = file.listFiles();
     if (files != null) {
