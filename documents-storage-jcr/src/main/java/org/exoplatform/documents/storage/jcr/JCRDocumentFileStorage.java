@@ -1296,10 +1296,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if(!rootNode.hasNode(SHARED_FOLDER_NAME)){
         shared = rootNode.addNode(SHARED_FOLDER_NAME);
-
+        rootNode.save();
       }else{
         shared = rootNode.getNode(SHARED_FOLDER_NAME);
-        session.save();
       }
       if(destIdentity.isSpace()){
         sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
