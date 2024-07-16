@@ -153,7 +153,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && !file.cloudDriveFolder
                 && file.acl.canEdit
-                && file.creatorUserName!=='__system'
+                && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system')
                 && Vue.prototype?.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file?.mimeType).length > 0;
   },
   enabledForMultiSelection: () => false,
@@ -171,7 +171,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 5,
   enabled: (file) => {
-    return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system');
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -188,7 +188,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 6,
   enabled: (file) => {
-    return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system');
   },
   enabledForMultiSelection: () => true,
   componentOptions: {
@@ -205,7 +205,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 7,
   enabled: (file) => {
-    return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system');
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -222,7 +222,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 8,
   enabled: (file) => {
-    return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system' && !file.sourceID;
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system') && !file.sourceID;
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -245,7 +245,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
     }
     return file && !file.cloudDriveFolder
                 && file.acl.canEdit
-                && file.creatorUserName!=='__system'
+                && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system')
                 && !file.sourceID
                 && !file.path.includes('News Attachments');
   },
@@ -338,7 +338,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 15,
   enabled: (file) => {
-    return file && !file.cloudDriveFolder && file.acl.canEdit && file.creatorUserName!=='__system';
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system');
   },
   enabledForMultiSelection: () => true,
   componentOptions: {

@@ -172,9 +172,10 @@ public interface DocumentFileStorage {
    *
    * @param documentId document id
    * @param destId target user or space identity id
+   * @param aclIdentity current user Identity
    * @throws IllegalAccessException
    */
-  void shareDocument(String documentId, long destId, boolean broadcast) throws IllegalAccessException;
+  void shareDocument(String documentId, long destId, Identity aclIdentity, boolean broadcast) throws IllegalAccessException;
 
   void unShareDocument(String documentId, long destId) throws RepositoryException;
 
