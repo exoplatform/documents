@@ -1037,7 +1037,13 @@ export default {
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
       this.$root.$emit('set-documents-filter', 'All');
       this.checkDefaultViewOptions();
-      this.refreshFiles({'primaryFilter': this.primaryFilter})
+      const options = {'primaryFilter': this.primaryFilter};
+      const deletedDocument = localStorage.getItem('deletedDocument');
+      if (deletedDocument != null) {
+        options.deleted=true;
+        options.documentId=deletedDocument;
+      }
+      this.refreshFiles(options)
         .finally(() => {
           if (this.selectedView === 'folder') {
             this.$nextTick().then(() => this.$root.$emit('update-breadcrumb'));
