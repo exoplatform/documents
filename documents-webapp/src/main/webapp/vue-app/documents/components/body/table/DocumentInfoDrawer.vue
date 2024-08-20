@@ -301,6 +301,11 @@ export default {
       return url.toString();
     },
   },
+  watch: {
+    showDescription() {
+      this.$refs.activityShareMessage.initCKEditorData(this.file.description);
+    }
+  },
   created() {
     this.$root.$on('open-info-drawer', this.open);
     this.$root.$on('close-info-drawer', this.close);
@@ -342,6 +347,7 @@ export default {
           this.showNoDescription = !this.file.description;
           this.displayEditor=false;
           this.fileInitialDescription = this.file.description;
+          this.$refs.activityShareMessage.initCKEditorData(this.file.description);
         }).catch(() => {
           this.$root.$emit('show-alert', {
             type: 'error',
@@ -360,6 +366,7 @@ export default {
       this.fileInitialDescription = this.file.description;      
       this.$nextTick(()=>{
         this.$refs.documentInfoDrawer.open();
+        this.$refs.activityShareMessage.initCKEditorData(this.file.description);
       });
     },
     openEditor(){
@@ -368,6 +375,9 @@ export default {
       this.showDescription = false;
       this.displayEditor=true;
       this.originDescription = this.file.description;
+      if (!this.originDescription.length) {
+        this.$refs.activityShareMessage.initCKEditorData('');
+      }
     },
     close() {
       this.file.description = this.fileInitialDescription;
