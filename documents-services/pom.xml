@@ -55,6 +55,10 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>io.meeds.pwa</groupId>
+      <artifactId>pwa-service</artifactId>
+    </dependency>
   </dependencies>
   <build>
     <finalName>documents-services</finalName>
