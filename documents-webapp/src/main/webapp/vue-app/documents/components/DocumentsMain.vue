@@ -125,44 +125,6 @@
         accept="*/*"
         @change="handleUploadVersion" />
     </div>
-    <v-alert
-      v-model="alert"
-      :icon="false"
-      :colored-border="isMobile"
-      :border="isMobile && !isAlertActionRunning? 'top' : ''"
-      :color="alertType"
-      :type="!isMobile? alertType: ''"
-      :class="isMobile? 'documents-alert-mobile': 'documents-alert'"
-      :dismissible="!isMobile">
-      <v-progress-linear
-        v-if="isAlertActionRunning"
-        :active="isAlertActionRunning"
-        :height="isMobile? '8px': '4px'"
-        :indeterminate="true"
-        :class="progressAlertClassMobile"
-        :color="progressAlertColor" />
-      {{ message }}
-      <v-btn
-        v-for="action in alertActions"
-        :key="action.event"
-        :disabled="isAlertActionRunning"
-        plain
-        text
-        color="primary"
-        @click="emitAlertAction(action)">
-        {{ $t(`document.conflicts.action.${action.event}`) }}
-      </v-btn>
-      <template #close="{ toggle }">
-        <v-btn
-          v-if="!isMobile"
-          icon
-          @click="handleAlertClose(toggle)">
-          <v-icon>
-            mdi-close-circle
-          </v-icon>
-        </v-btn>
-      </template>
-    </v-alert>
   </v-app>
 </template>
 <script>
@@ -209,12 +171,7 @@ export default {
     selectedView: '',
     previewMode: false,
     primaryFilter: 'all',
-    alert: false,
-    alertType: '',
-    message: '',
-    alertActions: [],
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-    isAlertActionRunning: false,
     documentsToBeDeleted: [],
     showOverlay: false,
     selectedDocuments: [],
@@ -231,12 +188,6 @@ export default {
 
   }),
   computed: {
-    progressAlertColor() {
-      return this.alertType === 'warning' ? 'amber' : this.alertType === 'error' ? 'red' : 'primary';
-    },
-    progressAlertClassMobile() {
-      return this.isMobile && 'position-relative document-mobile-alert-progress' || '';
-    },
     showLoadMoreVersions() {
       return this.versions.length < this.allVersions.length;
     },
@@ -361,7 +312,6 @@ export default {
     this.$root.$on('show-version-history', this.showVersionHistory);
     this.$on('keepBoth', this.handleConflicts);
     this.$on('createNewVersion', this.handleConflicts);
-    this.$root.$on('cancel-alert-actions', this.handleCancelAlertActions);
     this.$root.$on('update-selection-documents-list', this.updateSelectionList);
     this.$root.$on('breadcrumb-updated', this.resetSelections);
     this.$root.$on('upload-new-version-action-invoke', this.uploadNewVersion);
@@ -579,9 +529,6 @@ export default {
       } else if (!selected) {
         this.selectedDocuments.splice(index, 1);
         this.pushOrRemoveIfReadOnly(selectedReadOnly, file);
-        if (!selectedReadOnly.length) {
-          this.hideMessage();
-        }
       }
       this.$root.$emit('selection-documents-list-updated', this.selectedDocuments);
     },
@@ -677,19 +624,7 @@ export default {
         }
       });
     },
-    handleAlertClose() {
-      this.$root.$emit('cancel-action');
-      document.dispatchEvent(new CustomEvent('cancel-action-alert'));
-      this.alert = false;
-    },
-    handleCancelAlertActions() {
-      if (this.alertActions?.length) {
-        this.alert = false;
-        this.alertActions = [];
-      }
-    },
     handleConflicts(action) {
-      this.isAlertActionRunning = true;
       if (action.function.name === 'createShortcut') {
         this.createShortcut(...action.function.params, action.event);
       }
@@ -1313,7 +1248,6 @@ export default {
             this.openFolder(destFolder);
           }
           this.$root.$emit('document-moved');
-          this.isAlertActionRunning = false;
         })
         .catch(e => {
           if (e.status === 409) {
@@ -1354,7 +1288,6 @@ export default {
             }
           }
           this.$root.$emit('shortcut-created');
-          this.isAlertActionRunning = false;
         })
         .catch((e) => {
           if (e.status === 409) {
@@ -1561,18 +1494,7 @@ export default {
         .finally(() => this.$root.$emit('update-breadcrumb', this.folderPath));
     },
     displayMessage(message) {
-      this.message = message.message;
-      this.alertType = message.type;
-      this.alertActions = message.actions;
-      this.alert = true;
-      setTimeout(() => {
-        if (!this.alertActions?.length) {
-          this.alert = false;
-        }
-      }, 5000);
-    },
-    hideMessage() {
-      this.alert = false;
+      this.$root.$emit('alert-message', message.message, message.type);
     },
     selectFile(path) {
       const parentDriveFolder = eXo.env.portal.spaceName && '/Documents/' || '/Private/';
