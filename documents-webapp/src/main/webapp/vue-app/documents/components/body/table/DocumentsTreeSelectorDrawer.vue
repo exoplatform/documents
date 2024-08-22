@@ -208,7 +208,6 @@ export default {
     },
     cancel() {
       this.close();
-      this.$root.$emit('cancel-alert-actions');
     },
     close() {
       this.isLoading = false;
