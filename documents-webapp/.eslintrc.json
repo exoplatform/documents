@@ -3,6 +3,7 @@
     "eslint-config-meedsio"
   ],
   "globals": {
+    "Autolinker": true,
     "documentPreview": true,
     "DocumentsDraggable": true
   },

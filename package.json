@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "autolinker": "^4.0.0",
+    "vuex": "^4.1.0"
+  }
+}
