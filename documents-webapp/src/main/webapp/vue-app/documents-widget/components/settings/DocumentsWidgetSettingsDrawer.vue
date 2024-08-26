@@ -23,7 +23,7 @@
         vertical
         flat>
         <div
-          :class="{
+        :class="{
             'col-6': expanded,
             'flex-grow-1': expanded || stepper === 1,
             'flex-grow-0': !expanded && stepper !== 1,
@@ -43,7 +43,6 @@
                 :title="$t('documentsWidget.label.addDocuments')"
                 :class="{
                   'r-0': !$vuetify.rtl,
-
                   'l-0': $vuetify.rtl,
                 }"
                 class="position-absolute t-0 mt-n1"
@@ -53,6 +52,7 @@
               </v-btn>
             </div>
           </v-stepper-step>
+
           <v-slide-y-transition>
             <div v-show="expanded || stepper === 1">
               <div v-if="hasDocuments" class="d-flex flex-column mt-8">
@@ -78,7 +78,6 @@
                 <v-btn
                   :title="$t('documentsWidget.label.addDocumentsButton')"
                   outlined
-                  border
                   class="flex-grow-0 flex-shrink-0 mx-auto my-8 primary"
                   @click="$root.$emit('documents-widget-form-drawer')">
                   {{ $t('documentsWidget.label.add') }}
@@ -122,7 +121,7 @@
                     </select>
                     <documents-widget-display-preview
                       :settings="settings"
-                      :documents-Widget="documentsWidget"
+                      :documents-widget="documentsWidget"
                       class="pa-4 mb-4" />
                     <div class="mb-2">
                       <div class="d-flex mb-2">
@@ -208,7 +207,7 @@
                           dense />
                       </div>
                     </div>
-                  </div>
+                   </div>
                 </v-form>
               </div>
             </div>
@@ -253,3 +252,229 @@
 </template>
 
 <script>
+
+export default {
+  data: () => ({
+    settings: null,
+    originalSettings: null,
+    links: null,
+    loading: false,
+    saving: false,
+    drawer: false,
+    expanded: false,
+    stepper: 1,
+    showHeader: false,
+    seeMore: false,
+    valid: false,
+    maxHeaderLength: 50,
+    settingsHeader: null,
+  }),
+  computed: {
+    displayTypes() {
+      return [{
+        value: 'ROW',
+        label: this.$t('links.label.configureDisplay.row'),
+      }, {
+        value: 'COLUMN',
+        label: this.$t('links.label.configureDisplay.column'),
+      }, {
+        value: 'CARD',
+        label: this.$t('links.label.configureDisplay.cards'),
+      }];
+    },
+    hasLinks() {
+      return this.links?.length;
+    },
+    hadLinks() {
+      return this.originalSettings?.links?.length;
+    },
+    disabledSecondStep() {
+      return !this.hasLinks && !this.hadLinks;
+    },
+    modified() {
+      return this.originalSettings && JSON.stringify(this.originalSettings) !== JSON.stringify(this.settings && {...this.settings, links: this.links} || {});
+    },
+    disabled() {
+      return !this.valid || !this.modified || (this.showHeader && !this.settings?.header?.[this.$root.defaultLanguage]?.length);
+    },
+    confirmCloseLabels() {
+      return {
+        title: this.$t('links.title.confirmCloseModification'),
+        message: this.$t('links.message.confirmCloseModification'),
+        ok: this.$t('confirm.yes'),
+        cancel: this.$t('confirm.no'),
+      };
+    },
+    rules() {
+      return {
+        header: [
+          v => !!v?.length || ' ',
+          v => (v && v.length < this.maxHeaderLength) || this.$t('links.input.exceedsMaxLength', {
+            0: this.maxHeaderLength,
+          }),
+        ],
+        seeMore: [
+          v => !!v?.length || ' ',
+          v => {
+            try {
+              return !!this.$linkService.toLinkUrl(v)?.length || this.$t('links.input.invalidLink');
+            } catch (e) {
+              return this.$t('links.input.invalidLink');
+            }
+          },
+        ],
+      };
+    },
+  },
+  watch: {
+    showHeader() {
+      if (this.loading) {
+        return;
+      }
+      if (this.showHeader) {
+        if (!this.settings.header?.[this.$root.defaultLanguage]) {
+          this.settings.header = this.settingsHeader || {};
+          if (!this.settingsHeader) {
+            this.settings.header[this.$root.defaultLanguage] = '';
+          }
+          this.settingsHeader = null;
+        }
+      } else {
+        this.settingsHeader = this.settings.header;
+        this.settings.header = null;
+      }
+      this.refreshValidation();
+    },
+    seeMore() {
+      if (!this.seeMore) {
+        this.settings.seeMore = null;
+      }
+      this.refreshValidation();
+    },
+    settings: {
+      deep: true,
+      handler() {
+        this.refreshValidation();
+      },
+    },
+    expanded() {
+      if (this.expanded) {
+        this.stepper = 2;
+      } else {
+        this.stepper = 1;
+      }
+    }
+  },
+  created() {
+    this.$root.$on('links-settings-drawer', this.open);
+  },
+  beforeDestroy() {
+    this.$root.$off('links-settings-drawer', this.open);
+  },
+  mounted() {
+    document.querySelector('#vuetify-apps').appendChild(this.$el);
+  },
+  methods: {
+    open(openForm) {
+      this.reset();
+      this.loading = true;
+      this.$nextTick().then(() => this.$refs?.drawer?.open?.());
+      this.$linkService.getSettings(this.$root.name)
+        .then(settings => {
+          this.settings = settings;
+          this.links = settings?.links || [];
+          this.links.forEach(link => {
+            if (!link.name?.[this.$root.defaultLanguage]) {
+              link.name[this.$root.defaultLanguage] = link.name['en'] || '';
+            }
+            if (!link.description?.[this.$root.defaultLanguage]) {
+              link.description[this.$root.defaultLanguage] = link.description['en'] || '';
+            }
+          });
+          this.showHeader = !!this.settings?.header?.[this.$root.defaultLanguage]?.length;
+          this.seeMore = !!this.settings?.seeMore?.length;
+          if (!this.showHeader) {
+            this.settings.header = null;
+          }
+          this.originalSettings = settings && JSON.parse(JSON.stringify({...settings, links: this.links}));
+        })
+        .finally(() => {
+          this.loading = false;
+          if (openForm) {
+            window.setTimeout(() => {
+              this.$nextTick().then(() => {
+                this.$root.$emit('links-form-drawer');
+              });
+            }, 200);
+          }
+        });
+    },
+    reset() {
+      this.settings = null;
+      this.originalSettings = null;
+      this.links = null;
+      this.loading = false;
+      this.saving = false;
+      this.valid = false;
+    },
+    close() {
+      this.originalSettings = null;
+      return this.$nextTick().then(() => this.$refs.drawer.close());
+    },
+    refreshValidation() {
+      this.$nextTick().then(() => {
+        if (this.$refs.form) {
+          this.valid = this.$refs.form.validate();
+          if (!this.modified) {
+            this.$refs.form.resetValidation();
+          }
+        }
+      });
+    },
+    save() {
+      this.saving = true;
+      const settings = {
+        ...this.settings
+      };
+      this.links.forEach((link, index) => link.order = index);
+      settings.links = this.links && JSON.parse(JSON.stringify(this.links)) || [];
+      settings.links.forEach(l => delete l.iconSrc);
+      this.$linkService.saveSettings(settings)
+        .then(() => {
+          this.$root.$emit('links-refresh');
+          this.close();
+          this.$root.$emit('alert-message', this.$t('links.label.savedSuccessfully'), 'success');
+        })
+        .catch(() => this.$root.$emit('alert-message', this.$t('links.label.errorSaving'), 'error'))
+        .finally(() => this.saving = false);
+    },
+    moveTop(index) {
+      const links = this.links.slice();
+      const linkTmp = links[index - 1];
+      links[index - 1] = links[index];
+      links[index] = linkTmp;
+      this.links = links;
+    },
+    moveDown(index) {
+      const links = this.links.slice();
+      const linkTmp = links[index + 1];
+      links[index + 1] = links[index];
+      links[index] = linkTmp;
+      this.links = links;
+    },
+    edit(link, index) {
+      this.$root.$emit('links-form-drawer', link, true, index);
+    },
+    remove(index) {
+      this.links.splice(index, 1);
+    },
+    addLink(link) {
+      this.links.push(link);
+    },
+    editLink(link, index) {
+      this.links.splice(index, 1, link);
+      this.links = this.links.slice();
+    },
+  },
+};
+</script>
