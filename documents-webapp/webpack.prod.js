@@ -37,6 +37,7 @@ const config = {
     documents: './src/main/webapp/vue-app/documents/main.js',
     documentsSnackbarComponent : './src/main/webapp/vue-app/snackbar/main.js',
     documentsFavoriteDrawerExtensions: './src/main/webapp/vue-app/documents-favorite-drawer-extensions/main.js',
+    documentsWidget: './src/main/webapp/vue-app/documents-widget/main.js',
     documentsSizeGadget: './src/main/webapp/vue-app/documents-size-gadget/main.js',
     downloadDocumentsPublicAccess: './src/main/webapp/vue-app/download-document/main.js',
     notificationExtension: './src/main/webapp/vue-app/notification-extension/main.js',
