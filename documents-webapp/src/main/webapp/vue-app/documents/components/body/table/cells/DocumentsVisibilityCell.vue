@@ -44,6 +44,12 @@ export default {
   }),
   computed: {
     icon() {
+      if (this.file.folder && this.file.creatorUserName === '__system'){
+        return {
+          icon: 'fas fa-lock',
+          title: this.$t('documents.label.visibility.system'),
+        };
+      }
       if (this.file.folder && this.file.id < 0) {
         return {
           icon: 'fas fa-layer-group',
@@ -116,11 +122,11 @@ export default {
     },
     btnClass(){
       return this.isMobile && 'ms-2' || 'me-4' ;
-    },
+    }
   },
   methods: {
     changeVisibility() {
-      if (!this.file.acl.canEdit || this.$shareDocumentSuspended) {
+      if (!this.file.acl.canEdit || this.$shareDocumentSuspended || (this.file.folder && this.file.creatorUserName === '__system')) {
         return;
       }
       this.$root.$emit('open-visibility-drawer', this.file);
