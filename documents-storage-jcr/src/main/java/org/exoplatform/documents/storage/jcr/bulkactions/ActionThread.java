@@ -333,6 +333,7 @@ public class ActionThread implements Runnable {
       startTime = System.currentTimeMillis();
       actionData.setStatus(ActionStatus.UNZIPPING.name());
       brodcastEvent();
+      zip.setCharset(StandardCharsets.UTF_8);
       zip.extractAll(actionData.getTempFolderPath());
       List<String> files = new ArrayList<>();
       listFiles(new File(actionData.getTempFolderPath()), files);
