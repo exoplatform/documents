@@ -331,10 +331,10 @@ public class EntityBuilder {
         continue;
       }
       if(identity != null && permissionEntry.getIdentity().getId().equals(identity.getId())){
-        if (permissionEntry.getPermission().equals("read") && permissionEntry.getRole().equals(PermissionRole.ALL.name())){
+        if (permissionEntry.getPermission().equals("read") && permissionEntry.getRole().equals(PermissionRole.ALL.name()) && identity.isSpace()) {
           allCanRead = true;
         }
-        if (permissionEntry.getRole().equals(PermissionRole.ALL.name()) && isEditPermission(permissionEntry.getPermission())){
+        if (permissionEntry.getRole().equals(PermissionRole.ALL.name()) && isEditPermission(permissionEntry.getPermission()) && identity.isSpace()) {
           allCanEdit = true;
         }
       } else {

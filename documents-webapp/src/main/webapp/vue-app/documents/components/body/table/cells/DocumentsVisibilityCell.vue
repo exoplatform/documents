@@ -44,7 +44,7 @@ export default {
   }),
   computed: {
     icon() {
-      if (this.file.folder && this.file.creatorUserName === '__system'){
+      if (this.file.folder && this.file.creatorUserName === '__system' && eXo.env.portal.spaceIdentityId){
         return {
           icon: 'fas fa-lock',
           title: this.$t('documents.label.visibility.system'),
@@ -126,7 +126,7 @@ export default {
   },
   methods: {
     changeVisibility() {
-      if (!this.file.acl.canEdit || this.$shareDocumentSuspended || (this.file.folder && this.file.creatorUserName === '__system')) {
+      if (!this.file.acl.canEdit || this.$shareDocumentSuspended || (this.file.folder && this.file.creatorUserName === '__system' &&  eXo.env.portal.spaceIdentityId)) {
         return;
       }
       this.$root.$emit('open-visibility-drawer', this.file);
