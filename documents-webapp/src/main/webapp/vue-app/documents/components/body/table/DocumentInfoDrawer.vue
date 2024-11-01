@@ -102,7 +102,7 @@
                 {{ $t('documents.drawer.details.by') }}
                 <exo-user-avatar
                   v-if="identityModifier && !isCurrentUserModifier"
-                  :identity="identityModifier"
+                  :profile-id="identityModifier"
                   avatar-class="me-2"
                   size="42"
                   fullname
@@ -134,7 +134,7 @@
 
                 <exo-user-avatar
                   v-if="identityCreated && !isCurrentUserCreator"
-                  :identity="identityCreated"
+                  :profile-id="identityCreated"
                   avatar-class="me-2"
                   size="42"
                   fullname
@@ -288,10 +288,10 @@ export default {
       return this.currentUser === this.file?.creatorIdentity?.remoteId;
     },
     identityModifier(){
-      return this.file?.modifierIdentity;
+      return this.file?.modifierIdentity?.remoteId;
     },
     identityCreated(){
-      return this.file?.creatorIdentity;
+      return this.file?.creatorIdentity?.remoteId;
     },
     disableButton() {
       return this.file?.description && this.file?.description.replace( /(<([^>]+)>)/ig, '').length>1300
