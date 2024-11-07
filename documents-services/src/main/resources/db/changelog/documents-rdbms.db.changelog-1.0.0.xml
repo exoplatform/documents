@@ -31,19 +31,21 @@
 
 
     <changeSet author="documents" id="1.0.0-0">
+        <validCheckSum>9:ba1bd72e1ff376fff18b081984a04429</validCheckSum>
+        <validCheckSum>9:f2d5e6131b03cb2504e2a4479a0f1f86</validCheckSum>
         <createTable tableName="DOCUMENTS_PUBLIC_ACCESS">
             <column name="ID" type="BIGINT" autoIncrement="${autoIncrement}" startWith="1">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="PK_DOCUMENT_PUBLIC_ACCESS"/>
             </column>
-            <column name="NODE_ID" type="NVARCHAR(250)">
+            <column name="NODE_ID" type="VARCHAR(250)">
                 <constraints nullable="false"/>
             </column>
-            <column name="PASSWORD_HASH_KEY" type="NVARCHAR(2000)" />
-            <column name="ENCODED_PASSWORD" type="NVARCHAR(1000)" />
+            <column name="PASSWORD_HASH_KEY" type="VARCHAR(2000)" />
+            <column name="ENCODED_PASSWORD" type="VARCHAR(1000)" />
             <column name="EXPIRATION_DATE" type="TIMESTAMP"/>
         </createTable>
         <modifySql dbms="mysql">
-            <append value=" ENGINE=INNODB CHARSET=UTF8 COLLATE utf8_general_ci"/>
+            <append value=" ENGINE=INNODB CHARSET=UTF8MB4 COLLATE utf8mb4_0900_ai_ci"/>
         </modifySql>
     </changeSet>
 
@@ -51,4 +53,9 @@
         <createSequence sequenceName="SEQ_DOCUMENT_PUBLIC_ACCESS_ID" startValue="1"/>
     </changeSet>
 
+    <changeSet author="documents" id="1.0.0-2" >
+        <sql dbms="mysql">
+            ALTER TABLE DOCUMENTS_PUBLIC_ACCESS CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+        </sql>
+    </changeSet>
 </databaseChangeLog>
