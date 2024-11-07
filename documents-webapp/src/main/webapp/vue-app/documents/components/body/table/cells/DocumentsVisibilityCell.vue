@@ -44,6 +44,12 @@ export default {
   }),
   computed: {
     icon() {
+      if (this.file.folder && this.file.creatorUserName === '__system' && eXo.env.portal.spaceIdentityId && !eXo.env.portal.isAdministrator){
+        return {
+          icon: 'fas fa-lock',
+          title: this.$t('documents.label.visibility.system'),
+        };
+      }
       if (this.file.folder && this.file.id < 0) {
         return {
           icon: 'fas fa-layer-group',
@@ -120,7 +126,7 @@ export default {
   },
   methods: {
     changeVisibility() {
-      if (!this.file.acl.canEdit || this.$shareDocumentSuspended) {
+      if (!this.file.acl.canEdit || this.$shareDocumentSuspended || (this.file.folder && this.file.creatorUserName === '__system' &&  eXo.env.portal.spaceIdentityId &&  !eXo.env.portal.isAdministrator)) {
         return;
       }
       this.$root.$emit('open-visibility-drawer', this.file);
