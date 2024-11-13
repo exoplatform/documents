@@ -126,7 +126,8 @@ export default {
   },
   methods: {
     handleMoveDroppedOnBreadcrumb(event) {
-      event.detail.currentOpenedFolder =  this.documentsBreadcrumbToDisplay[0];
+      const indexLastItem = this.documentsBreadcrumbToDisplay.length - 1 > 0 ? this.documentsBreadcrumbToDisplay.length - 1 : 0;
+      event.detail.currentOpenedFolder =  this.documentsBreadcrumbToDisplay[indexLastItem];
       document.dispatchEvent(new CustomEvent('move-dropped-documents', event));
     },
     handleOpenRootFolder() {
