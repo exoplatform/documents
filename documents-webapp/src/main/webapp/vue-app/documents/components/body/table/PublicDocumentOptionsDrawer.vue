@@ -197,7 +197,7 @@
                     min-width="auto">
                     <template #activator="{ on, attrs }">
                       <v-text-field
-                        v-model="expirationDate"
+                        v-model="dateFormatted"
                         v-bind="attrs"
                         v-on="on"
                         :placeholder="$t('documents.public.access.choose.date.placeholder')"
@@ -212,6 +212,7 @@
                     <v-date-picker
                       v-model="expirationDate"
                       :min="new Date().toISOString().slice(0,10)"
+                      :locale="lang"
                       required
                       @input="expirationDateMenu = false" />
                   </v-menu>
@@ -338,6 +339,9 @@ export default {
     },
     currentPasswordType() {
       return this.showCurrentPassword && 'text' || 'password';
+    },
+    dateFormatted() {
+      return this.computeDate(this.expirationDate);
     }
   },
   watch: {
@@ -431,6 +435,14 @@ export default {
       this.expirationDate = null;
       this.startCheckPassword = false;
       this.publicDocumentAccess = {};
+    },
+    computeDate(value) {
+      if (value && String(value).trim()) {
+        const dateObj = this.$dateUtil.getDateObjectFromString(String(value).trim(), true);
+        return dateObj.toLocaleDateString(this.lang, this.dateFormat).replaceAll('/','-');
+      } else {
+        return null;
+      }
     }
   }
 };
