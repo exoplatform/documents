@@ -65,4 +65,23 @@
       <keywords>Documents Size Gadget</keywords>
     </portlet-info>
   </portlet>
+
+  <portlet>
+    <portlet-name>trashManagement</portlet-name>
+    <display-name>Trash Management</display-name>
+    <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
+    <init-param>
+      <name>portlet-view-dispatched-file-path</name>
+      <value>/html/trashManagement.html</value>
+    </init-param>
+    <supports>
+      <mime-type>text/html</mime-type>
+    </supports>
+    <supported-locale>en</supported-locale>
+    <resource-bundle>locale.portlet.trashManagement</resource-bundle>
+    <portlet-info>
+      <title>Trash Management</title>
+      <keywords>Trash Management</keywords>
+    </portlet-info>
+  </portlet>
 </portlet-app>
