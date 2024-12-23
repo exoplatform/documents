@@ -1,4 +1,4 @@
-<!--
+/*
  * Copyright (C) 2024 eXo Platform SAS.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -14,18 +14,32 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
--->
-<template>
-  <v-card
-    class="d-flex flex-column"
-    min-height="calc(var(--100vh, 100vh) - 220px)"
-    flat>
-    <div id="documentsTrashListBody" class="flex-grow-1 flex-shrink-1 pt-2">
-    </div>
-  </v-card>
-</template>
-<script>
-export default {
+ */
 
-};
-</script>
+package org.exoplatform.documents.rest.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class TrashElementEntity {
+
+  private String  id;
+
+  private String  name;
+
+  private String  origin;
+
+  private String  originFullPath;
+
+  private long    size;
+
+  private boolean isFolder;
+
+  private long    lastModificationDate;
+
+  private String  mimeType;
+}

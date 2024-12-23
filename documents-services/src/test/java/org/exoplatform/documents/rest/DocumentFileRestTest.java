@@ -32,6 +32,7 @@ import javax.jcr.RepositoryException;
 import jakarta.servlet.http.HttpServletRequest;
 import javax.ws.rs.core.Response;
 
+import org.exoplatform.portal.rest.CollectionEntity;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -1645,5 +1646,38 @@ public class DocumentFileRestTest {
     assertEquals(200, response.getStatus());
     DocumentsUserSettings documentsUserSettings = (DocumentsUserSettings) response.getEntity();
     assertEquals(documentsUserSettings.getCometdContextName(), "/rest");
+  }
+
+  @Test
+  public void testGetDeletedDocuments() throws RepositoryException {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService,
+            publicDocumentAccessService,
+            externalDownloadService);
+
+    Response response = documentFileRest.getDeletedDocuments("name", "asc", -1, 20);
+    assertEquals(400, response.getStatus());
+
+    TrashElementNode trashElementNode = new TrashElementNode();
+    String expectedDeletedElementFullPath = trashElementNode.getRestorePath();
+    List<TrashElementNode> trashElementNodes = new ArrayList<>();
+    trashElementNodes.add(trashElementNode);
+    when(documentFileService.getDeletedDocuments(any(TrashElementNodeFilter.class))).thenReturn(trashElementNodes);
+    when(documentFileService.countDeletedDocuments()).thenReturn(1);
+    TrashElementEntity trashElementEntity = mock(TrashElementEntity.class);
+    when(trashElementEntity.getOriginFullPath()).thenReturn(expectedDeletedElementFullPath);
+    mockEntityBuilder().when(() -> EntityBuilder.toTrashElement(any())).thenReturn(trashElementEntity);
+    response = documentFileRest.getDeletedDocuments("name", "asc", 0, 20);
+    assertEquals(200, response.getStatus());
+    CollectionEntity<TrashElementEntity> collectionEntity = (CollectionEntity<TrashElementEntity>) response.getEntity();
+    TrashElementEntity trashElementEntity1 = collectionEntity.getEntities().get(0);
+    assertEquals(expectedDeletedElementFullPath, trashElementEntity1.getOriginFullPath());
+    assertEquals(1, collectionEntity.getSize());
+
   }
 }

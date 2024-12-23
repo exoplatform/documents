@@ -23,6 +23,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
@@ -53,6 +54,7 @@ import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.DocumentWebSocketService;
 import org.exoplatform.documents.service.ExternalDownloadService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
+import org.exoplatform.portal.rest.CollectionEntity;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -71,6 +73,8 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
+import static org.exoplatform.documents.constant.DocumentSortField.getFromAlias;
 
 @Path("/v1/documents")
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
@@ -272,7 +276,7 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setMaxSize(maxSize);
       filter.setMinSize(minSize);
       filter.setAscending(ascending);
-      filter.setSortField(DocumentSortField.getFromAlias(sortField));
+      filter.setSortField(getFromAlias(sortField));
       List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, offset, limit, userIdentityId,showHiddenFiles);
       List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
                                                                                        identityManager,
@@ -1295,6 +1299,59 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (Exception ex) {
       LOG.warn("Failed to import documents ", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("administrators")
+  @Path("/deleted")
+  @Operation(summary = "Fetch trash documents", method = "GET", description = "Fetch trash document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getDeletedDocuments(@QueryParam("sortField")
+                                      String sortField,
+                                      @Parameter(description = "Sort ascending or descending")
+                                      @QueryParam("sortDirection")
+                                      String sortDirection,
+                                      @Parameter(description = "Offset of results to return")
+                                      @QueryParam("offset")
+                                      int offset,
+                                      @Parameter(description = "Limit of results to return")
+                                      @Schema(defaultValue = "20")
+                                      @QueryParam("limit")
+                                      int limit) {
+    if (limit < 0 || offset < 0) {
+      LOG.error("Invalid offset or limit parameters");
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
+    TrashElementNodeFilter filter = new TrashElementNodeFilter();
+    if (StringUtils.isBlank(sortField)) {
+      sortField = "modifiedDate";
+    }
+    if (StringUtils.isBlank(sortDirection)) {
+      sortDirection = "desc";
+    }
+    filter.setAscending(sortDirection.equalsIgnoreCase("asc"));
+    filter.setOffset(offset);
+    filter.setLimit(limit);
+    filter.setSortField(getFromAlias(sortField));
+    try {
+      List<TrashElementNode> trashElementNodes = documentFileService.getDeletedDocuments(filter);
+      int size = documentFileService.countDeletedDocuments();
+      List<TrashElementEntity> trashElementEntities = trashElementNodes.stream()
+                                                                       .map(EntityBuilder::toTrashElement)
+                                                                       .collect(Collectors.toList());
+      CollectionEntity<TrashElementEntity> collectionEntity = new CollectionEntity<>(trashElementEntities,
+                                                                                     filter.getOffset(),
+                                                                                     filter.getLimit(),
+                                                                                     size);
+      return Response.ok(collectionEntity).build();
+    } catch (Exception ex) {
+      LOG.error("Error while fetching trash documents", ex);
+      return Response.serverError().build();
     }
   }
 

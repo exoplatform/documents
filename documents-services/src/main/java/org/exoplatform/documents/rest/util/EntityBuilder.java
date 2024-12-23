@@ -554,4 +554,20 @@ public class EntityBuilder {
     publicDocumentAccessEntity.setDecodedPassword(publicDocumentAccess.getDecodedPassword());
     return publicDocumentAccessEntity;
   }
+
+  public static TrashElementEntity toTrashElement(TrashElementNode trashElementNode) {
+    TrashElementEntity trashElementEntity = new TrashElementEntity();
+    trashElementEntity.setId(trashElementNode.getId());
+    trashElementEntity.setName(trashElementNode.getName());
+    trashElementEntity.setSize(trashElementNode.getSize());
+    trashElementEntity.setFolder(trashElementNode.isFolder());
+    trashElementEntity.setLastModificationDate(trashElementNode.getModifiedDate());
+    String restorePath = trashElementNode.getRestorePath();
+    String trashElementOriginPart = restorePath.substring(0,restorePath.lastIndexOf("/"));
+    String trashElementOrigin = trashElementOriginPart.substring(trashElementOriginPart.lastIndexOf("/") + 1);
+    trashElementEntity.setOrigin(trashElementOrigin);
+    trashElementEntity.setOriginFullPath(trashElementNode.getRestorePath());
+    trashElementEntity.setMimeType(trashElementNode.getMimeType());
+    return trashElementEntity;
+  }
 }

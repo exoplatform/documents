@@ -16,14 +16,18 @@
  *
 */
 
-import trashManagement from './components/trashManagement.vue';
-import trashManagementToolbar from './components/trashManagementToolbar.vue';
-import documentsTrashList from './components/documentsTrashList.vue';
+import trashManagement from './components/main/TrashManagement.vue';
+import TrashManagementToolbar from './components/main/TrashManagementToolbar.vue';
+import documentsTrashList from './components/main/DocumentsTrashList.vue';
+import DocumentsTrashItem from './components/item/DocumentsTrashItem.vue';
+import DocumentsTrashItemMenu from './components/menu/DocumentsTrashItemMenu.vue';
 
 const components = {
   'trash-management': trashManagement,
-  'trash-management-toolbar': trashManagementToolbar,
-  'documents-trash-list': documentsTrashList
+  'trash-management-toolbar': TrashManagementToolbar,
+  'documents-trash-list': documentsTrashList,
+  'document-trash-item': DocumentsTrashItem,
+  'document-trash-item-menu': DocumentsTrashItemMenu
 };
 
 for (const key in components) {

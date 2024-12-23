@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.storage;
 
+import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 
 import javax.jcr.Node;
@@ -112,11 +113,27 @@ public interface TrashStorage {
    * */
   public Node getNodeByTrashId(String trashId) throws RepositoryException;
 
-  /**
+    /**
    * Get all links
    * @param node
    * @param linkType
    * @return {@link List}  of {@link Node}
    * */
   public List<Node> getAllLinks(Node node, String linkType);
+
+  /**
+   * Retrieves a list of trash elements that match the specified filter.
+   *
+   * @param trashElementNodeFilter the filter used to find trash elements
+   * @return a list of nodes representing the trash elements
+   * @throws RepositoryException if an error occurs while accessing the repository
+   */
+  List<Node> getTrashElements(TrashElementNodeFilter trashElementNodeFilter) throws RepositoryException;
+
+  /**
+   * Counts the total number of deleted documents in the trash.
+   *
+   * @return the total count of deleted documents
+   */
+  int countDeletedDocuments();
 }
