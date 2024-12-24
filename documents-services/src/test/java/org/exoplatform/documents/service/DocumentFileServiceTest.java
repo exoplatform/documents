@@ -24,6 +24,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -761,6 +762,15 @@ public class DocumentFileServiceTest {
       documentFileService.importFiles("1", null, null, "1", "ignore", identity, 1L);
     });
     assertEquals("User user attempts to access documents of space test1 while it's not a member", exception.getMessage());
+  }
+
+  @Test
+  public void getDeletedDocumentsTest() throws Exception {
+    TrashElementNode trashElementNode = mock(TrashElementNode.class);
+    List<TrashElementNode> trashElementNodes = Arrays.asList(trashElementNode);
+    when(jcrDeleteFileStorage.getDeletedDocuments(any(TrashElementNodeFilter.class))).thenReturn(trashElementNodes);
+
+    assertEquals(1, documentFileService.getDeletedDocuments(new TrashElementNodeFilter()).size());
   }
 
 }

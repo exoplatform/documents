@@ -31,6 +31,7 @@ import javax.jcr.nodetype.NodeType;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 
+import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.organization.Group;
@@ -408,6 +409,7 @@ public class JCRDocumentsUtilTest {
     assertEquals("__system",fileVersion.getAuthorFullName());
 
   }
+
   @Test
   public void testCleanNameWithAccents(){
     String fileName = "filName";
@@ -417,6 +419,49 @@ public class JCRDocumentsUtilTest {
     //folder name with '.' character followed by a accented character
     String folderNameWithPointFollowedByAccent = "folderName.followedByAccént";
     assertEquals("folderName.followedByAccent", JCRDocumentsUtil.cleanNameWithAccents(folderNameWithPointFollowedByAccent, NodeTypeConstants.NT_FOLDER));
+  }
+
+  @Test
+  public void testRetrieveTrashElementProperties() throws RepositoryException {
+    NodeImpl mockNode = mock(NodeImpl.class);
+    Node contentNode = mock(Node.class);
+    Property mockProperty = mock(Property.class);
+
+    when(mockNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(mockNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(mockProperty);
+
+    when(mockNode.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(true);
+    when(mockNode.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(mockProperty);
+    Calendar calendar = Calendar.getInstance();
+    calendar.set(2023, Calendar.JANUARY, 1);
+    when(mockProperty.getDate()).thenReturn(calendar);
+
+    when(mockNode.hasProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(true);
+    when(mockNode.getProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(mockProperty);
+
+    when(mockNode.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(mockNode.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
+    when(contentNode.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    when(contentNode.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mockProperty);
+
+    when(contentNode.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    when(contentNode.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(mockProperty);
+    when(mockProperty.getLength()).thenReturn(1234L);
+    when(mockProperty.getString()).thenReturn("Test Title").thenReturn("/restore/path").thenReturn("text/plain");
+    when(mockNode.getName()).thenReturn("Test Node");
+    when(mockNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+
+    // Act
+    TrashElementNode result = new TrashElementNode();
+    JCRDocumentsUtil.retrieveTrashElementProperties(mockNode, result);
+
+    // Assert
+    assertEquals("Test Title", result.getName());
+    assertEquals(calendar.getTimeInMillis(), result.getModifiedDate());
+    assertEquals("/restore/path", result.getRestorePath());
+    assertTrue(result.isFolder()); // Assuming isFolder returns true
+    assertEquals("text/plain", result.getMimeType());
+    assertEquals(1234L, result.getSize());
   }
 
 }

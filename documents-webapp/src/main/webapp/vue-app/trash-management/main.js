@@ -16,9 +16,17 @@
  *
 */
 import './initComponents.js';
+import * as trashManagementService from './js/TrashManagementService';
+import '../documents-icons-extension/extensions.js';
 
 Vue.use(Vuetify);
 const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
+
+if (!Vue.prototype.$trashManagementService) {
+  window.Object.defineProperty(Vue.prototype, '$trashManagementService', {
+    value: trashManagementService,
+  });
+}
 
 const appId = 'TrashManagement';
 
