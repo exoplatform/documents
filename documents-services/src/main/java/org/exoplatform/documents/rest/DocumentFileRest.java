@@ -1311,12 +1311,16 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response getDeletedDocuments(@QueryParam("sortField")
+  public Response getDeletedDocuments(@Parameter(description = "Sort filed")
+                                      @Schema(defaultValue = "modifiedDate")
+                                      @QueryParam("sortField")
                                       String sortField,
                                       @Parameter(description = "Sort ascending or descending")
+                                      @Schema(defaultValue = "desc")
                                       @QueryParam("sortDirection")
                                       String sortDirection,
                                       @Parameter(description = "Offset of results to return")
+                                      @Schema(defaultValue = "0")
                                       @QueryParam("offset")
                                       int offset,
                                       @Parameter(description = "Limit of results to return")
@@ -1328,12 +1332,6 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Response.Status.BAD_REQUEST).build();
     }
     TrashElementNodeFilter filter = new TrashElementNodeFilter();
-    if (StringUtils.isBlank(sortField)) {
-      sortField = "modifiedDate";
-    }
-    if (StringUtils.isBlank(sortDirection)) {
-      sortDirection = "desc";
-    }
     filter.setAscending(sortDirection.equalsIgnoreCase("asc"));
     filter.setOffset(offset);
     filter.setLimit(limit);

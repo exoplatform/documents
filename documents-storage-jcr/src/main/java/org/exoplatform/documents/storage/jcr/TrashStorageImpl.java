@@ -377,7 +377,7 @@ public class TrashStorageImpl implements TrashStorage {
       QueryManager queryManager = session.getWorkspace().getQueryManager();
       Query query = queryManager.createQuery(sb.toString(), Query.SQL);
       QueryResult queryResult = query.execute();
-      return (int) queryResult.getRows().getSize();
+      return (int) queryResult.getNodes().getSize();
     } catch (Exception e) {
       LOG.error("Error occurred when counting trash elements", e.getMessage());
       return 0;
