@@ -1,0 +1,18 @@
+{
+   "descriptors":[
+      {
+         "id":"spaceDocuments",
+         "order":100,
+         "names":{
+            "en":"layout.pageTemplate.spaceDocuments.title"
+         },
+         "descriptions":{
+            "en":"layout.pageTemplate.spaceDocuments.description"
+         },
+         "category": "default",
+         "system": true,
+         "illustrationPath":"war:/../images/spaceDocuments.png",
+         "":"war:/conf/documents/portal/template/pages/spaceDocuments/page.xml"
+      }
+   ]
+}
