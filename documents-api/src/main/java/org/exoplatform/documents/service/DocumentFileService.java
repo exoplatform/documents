@@ -412,4 +412,20 @@ public interface DocumentFileService {
                    String conflict,
                    org.exoplatform.services.security.Identity identity,
                    long authenticatedUserId) throws Exception;
+
+  /**
+   * Retrieves a list of trash elements that match the specified filter.
+   *
+   * @param trashElementNodeFilter the filter used to find trash elements
+   * @return a list of nodes representing the trash elements
+   * @throws RepositoryException if an error occurs while accessing the repository
+   */
+  List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter trashElementNodeFilter) throws RepositoryException;
+
+  /**
+   * Counts the total number of deleted documents in the trash.
+   *
+   * @return the total count of deleted documents
+   */
+  int countDeletedDocuments();
 }

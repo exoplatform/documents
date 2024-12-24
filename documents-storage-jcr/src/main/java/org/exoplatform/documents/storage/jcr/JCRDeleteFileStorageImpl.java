@@ -21,12 +21,15 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import javax.jcr.*;
 import javax.jcr.lock.LockException;
 import javax.jcr.version.VersionException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.documents.model.TrashElementNode;
+import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.picocontainer.Startable;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -201,6 +204,26 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       LOG.error("Error execute bulk delete", e);
     }
 
+  }
+
+  @Override
+  public List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter filter) throws RepositoryException {
+    List<Node> nodes = trashStorage.getTrashElements(filter);
+    List<TrashElementNode> result = nodes.stream().map(node -> {
+      TrashElementNode trashElementNode = new TrashElementNode();
+        try {
+            JCRDocumentsUtil.retrieveTrashElementProperties(node, trashElementNode);
+        } catch (RepositoryException e) {
+            LOG.error("Error retrieving trash element properties with path {}", node, e);
+        }
+        return trashElementNode;
+    }).filter(Objects::nonNull).collect(Collectors.toList());
+    return result;
+  }
+
+  @Override
+  public int countDeletedDocuments() {
+    return trashStorage.countDeletedDocuments();
   }
 
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
