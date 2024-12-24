@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage.jcr;
 import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.xml.InitParams;
+import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -47,25 +48,28 @@ import javax.jcr.query.QueryResult;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_DATE_MODIFIED;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_TITLE;
 
 public class TrashStorageImpl implements TrashStorage {
 
-  private static final String FILE_EXPLORER_PORTLET = "FileExplorerPortlet";
+  private static final String    FILE_EXPLORER_PORTLET   = "FileExplorerPortlet";
 
-  private static final String TRASH_WORKSPACE = "trashWorkspace";
+  private static final String    TRASH_WORKSPACE         = "trashWorkspace";
 
-  private static final String TRASH_HOME_PATH = "trashHomeNodePath";
+  private static final String    TRASH_HOME_PATH         = "trashHomeNodePath";
 
-  private RepositoryService repositoryService;
+  private static final String    SELECT_FROM_TRASH_QUERY = "SELECT * FROM nt:base WHERE exo:restorePath IS NOT NULL";
+
+  private RepositoryService      repositoryService;
 
   private SessionProviderService sessionProviderService;
 
-  private ListenerService listenerService;
+  private ListenerService        listenerService;
 
-  private String trashWorkspace;
+  private String                 trashWorkspace;
 
-  private String trashHome;
+  private String                 trashHome;
 
   /** The log. */
   private static final Log LOG = ExoLogger.getLogger(TrashStorageImpl.class.getName());
@@ -203,7 +207,7 @@ public class TrashStorageImpl implements TrashStorage {
    * {@inheritDoc}
    */
   public List<Node> getAllNodeInTrash(SessionProvider sessionProvider) throws RepositoryException {
-    StringBuilder query = new StringBuilder("SELECT * FROM nt:base WHERE exo:restorePath IS NOT NULL");
+    StringBuilder query = new StringBuilder(SELECT_FROM_TRASH_QUERY);
     return selectNodesByQuery(sessionProvider, query.toString(), Query.SQL);
   }
 
@@ -329,8 +333,55 @@ public class TrashStorageImpl implements TrashStorage {
   }
 
   @Override
+  public List<Node> getTrashElements(TrashElementNodeFilter trashElementNodeFilter) throws RepositoryException {
+    String mappedSortField = switch (trashElementNodeFilter.getSortField()) {
+      case NAME -> EXO_TITLE;
+      default -> EXO_DATE_MODIFIED;
+    };
+    String sortDirection = trashElementNodeFilter.isAscending() ? "ASC" : "DESC";
+    // all trash elements has the property exo:restorePath, it is added during the move te trash
+    StringBuilder sb = new StringBuilder(SELECT_FROM_TRASH_QUERY);
+    sb.append(" ORDER BY ").append(mappedSortField).append(" ").append(sortDirection);
+
+    List<Node> result = new ArrayList<>();
+
+    ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    Session session = sessionProvider.getSession(this.trashWorkspace, manageableRepository);
+    QueryManager queryManager = session.getWorkspace().getQueryManager();
+
+    QueryImpl query = (QueryImpl) queryManager.createQuery(sb.toString(), Query.SQL);
+    query.setLimit(trashElementNodeFilter.getLimit());
+    query.setOffset(trashElementNodeFilter.getOffset());
+    QueryResult queryResult = query.execute();
+
+    NodeIterator iter = queryResult.getNodes();
+    while (iter.hasNext()) {
+      result.add(iter.nextNode());
+    }
+    return result;
+  }
+
+  @Override
   public List<Node> getAllLinks(Node targetNode, String linkType) {
     return getAllLinks(targetNode, linkType, sessionProviderService.getSessionProvider(null));
+  }
+
+  @Override
+  public int countDeletedDocuments() {
+    try {
+      StringBuilder sb = new StringBuilder(SELECT_FROM_TRASH_QUERY);
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+      Session session = sessionProvider.getSession(this.trashWorkspace, manageableRepository);
+      QueryManager queryManager = session.getWorkspace().getQueryManager();
+      Query query = queryManager.createQuery(sb.toString(), Query.SQL);
+      QueryResult queryResult = query.execute();
+      return (int) queryResult.getNodes().getSize();
+    } catch (Exception e) {
+      LOG.error("Error occurred when counting trash elements", e.getMessage());
+      return 0;
+    }
   }
 
   private boolean isDocumentNodeType(Node node) throws RepositoryException {

@@ -21,6 +21,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import org.exoplatform.container.PortalContainer;
+import org.exoplatform.documents.model.TrashElementNode;
+import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
@@ -41,6 +43,7 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.metadata.favorite.FavoriteService;
 
 import org.junit.AfterClass;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -49,8 +52,11 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.jcr.Node;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.nodetype.NodeType;
+import java.util.Arrays;
+import java.util.List;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDeleteFileStorageTest {
@@ -99,6 +105,11 @@ public class JCRDeleteFileStorageTest {
     JCR_DOCUMENTS_UTIL.close();
   }
 
+  @Before
+  public void setUp() throws Exception {
+    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService);
+  }
+
   @Test
   public void testUndoDeleteDocument() {
     String username = "testuser";
@@ -108,9 +119,6 @@ public class JCRDeleteFileStorageTest {
     Profile currentProfile = new Profile();
     currentProfile.setProperty(Profile.FULL_NAME, username);
     currentIdentity.setProfile(currentProfile);
-
-    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService);
-
 
     JCRDeleteFileStorageImpl.documentsToDeleteQueue.put("1", String.valueOf(2));
 
@@ -138,8 +146,6 @@ public class JCRDeleteFileStorageTest {
     currentProfile.setProperty(Profile.FULL_NAME, username);
     currentIdentity.setProfile(currentProfile);
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
-
-    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService);
 
     when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
     when(sessionProviderService.getSessionProvider(any())).thenReturn(sessionProvider);
@@ -190,6 +196,61 @@ public class JCRDeleteFileStorageTest {
 
     verify(node, times(1)).remove();
     verify(node, times(2)).removeMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
+  }
+
+  @Test
+  public void testGetDeletedDocuments() throws RepositoryException {
+    // Mock input
+    TrashElementNodeFilter filter = new TrashElementNodeFilter();
+    Node node1 = mock(Node.class);
+    Node node2 = mock(Node.class);
+
+    when(trashStorage.getTrashElements(filter)).thenReturn(Arrays.asList(node1, node2));
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.retrieveTrashElementProperties(eq(node1), any(TrashElementNode.class)))
+            .thenAnswer(invocation -> {
+              TrashElementNode node = invocation.getArgument(1);
+              node.setName("Document1");
+              return null;
+            });
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.retrieveTrashElementProperties(eq(node2), any(TrashElementNode.class)))
+            .thenAnswer(invocation -> {
+              TrashElementNode node = invocation.getArgument(1);
+              node.setName("Document2");
+              return null;
+            });
+    List<TrashElementNode> result = jcrDeleteFileStorage.getDeletedDocuments(filter);
+
+    // Verify the result
+    assertEquals(2, result.size());
+    assertEquals("Document1", result.get(0).getName());
+    assertEquals("Document2", result.get(1).getName());
+  }
+
+  @Test
+  public void testGetDeletedDocuments_repositoryException() throws RepositoryException {
+    TrashElementNodeFilter filter = new TrashElementNodeFilter();
+    Node node1 = mock(Node.class);
+    Node node2 = mock(Node.class);
+
+    when(trashStorage.getTrashElements(filter)).thenReturn(Arrays.asList(node1, node2));
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.retrieveTrashElementProperties(eq(node1), any(TrashElementNode.class)))
+            .thenThrow(new RepositoryException("Error retrieving properties"));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.retrieveTrashElementProperties(eq(node2), any(TrashElementNode.class)))
+            .thenAnswer(invocation -> {
+              TrashElementNode node = invocation.getArgument(1);
+              node.setName("Document2");
+              return null;
+            });
+
+    List<TrashElementNode> result = jcrDeleteFileStorage.getDeletedDocuments(filter);
+
+    // Verify the result
+    assertEquals(2, result.size());
+    assertEquals(null, result.get(0).getName());
+    assertEquals("Document2", result.get(1).getName());
+
   }
 
 }

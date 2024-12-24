@@ -1008,4 +1008,45 @@ public class JCRDocumentsUtil {
     stringBuilder.append(((NodeImpl) node).getIdentifier());
     return stringBuilder.toString();
   }
+
+  public static void retrieveTrashElementProperties(Node node, TrashElementNode trashElementNode) throws RepositoryException {
+    trashElementNode.setId(((NodeImpl) node).getIdentifier());
+    if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+      trashElementNode.setName(node.getProperty(NodeTypeConstants.EXO_TITLE).getString());
+    } else {
+      trashElementNode.setName(node.getName());
+    }
+    if (node.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)) {
+      Node nodeToModify = node;
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        RepositoryService repositoryService = CommonsUtils.getService(RepositoryService.class);
+        SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+        ManageableRepository repository = repositoryService.getCurrentRepository();
+        Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+        String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        Node sourceNode = getNodeByIdentifier(systemSession, sourceNodeId);
+        if (sourceNode != null && sourceNode.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)
+                                            .getDate()
+                                            .compareTo(node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate()) > 0) {
+          nodeToModify = sourceNode;
+        }
+      }
+      long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate().getTimeInMillis();
+      trashElementNode.setModifiedDate(modifiedDate);
+    }
+    if (node.hasProperty(NodeTypeConstants.RESTORE_PATH)) {
+      trashElementNode.setRestorePath(node.getProperty(NodeTypeConstants.RESTORE_PATH).getString());
+    }
+    trashElementNode.setFolder(isFolder(node));
+    if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+      if (content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
+        trashElementNode.setMimeType(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
+      }
+      if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
+        long fileSize = content.getProperty(NodeTypeConstants.JCR_DATA).getLength();
+        trashElementNode.setSize(fileSize);
+      }
+    }
+  }
 }
