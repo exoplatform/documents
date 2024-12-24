@@ -16,6 +16,7 @@
 */
 package org.exoplatform.documents.storage.jcr;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -31,7 +33,13 @@ import javax.jcr.Property;
 import javax.jcr.Session;
 import javax.jcr.Workspace;
 import javax.jcr.nodetype.NodeType;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
+import javax.jcr.query.QueryResult;
 
+import org.exoplatform.documents.constant.DocumentSortField;
+import org.exoplatform.documents.model.TrashElementNodeFilter;
+import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.gatein.pc.api.PortletInvokerException;
 import org.junit.Before;
 import org.junit.Test;
@@ -57,6 +65,8 @@ import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
+
+import java.util.List;
 
 @RunWith(MockitoJUnitRunner.class)
 public class TrashStorageImplTest {
@@ -235,5 +245,55 @@ public class TrashStorageImplTest {
     params.addParameter(valueParam);
     params.addParameter(valueParam1);
     return params;
+  }
+
+  @Test
+  public void getTrashElementsTest() throws Exception {
+
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(sessionProviderService.getSystemSessionProvider(null)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession(anyString(), eq(repository))).thenReturn(session);
+    Workspace workspace = mock(Workspace.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    org.exoplatform.services.jcr.impl.core.query.QueryImpl query = mock(QueryImpl.class);
+    QueryResult queryResult = mock(QueryResult.class);
+    NodeIterator nodeIterator = mock(NodeIterator.class);
+
+    when(session.getWorkspace()).thenReturn(workspace);
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+
+    // Mock query execution
+    when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenReturn(query);
+    when(query.execute()).thenReturn(queryResult);
+    when(queryResult.getNodes()).thenReturn(nodeIterator);
+
+    // Mock node iterator
+    when(nodeIterator.hasNext()).thenReturn(true, true, false); // 2 nodes
+    when(nodeIterator.nextNode()).thenReturn(mock(Node.class), mock(Node.class));
+
+    TrashElementNodeFilter trashElementNodeFilter = new TrashElementNodeFilter();
+    trashElementNodeFilter.setSortField(DocumentSortField.NAME);
+    trashElementNodeFilter.setAscending(true);
+    trashElementNodeFilter.setLimit(10);
+    trashElementNodeFilter.setOffset(0);
+
+    List<Node> result = trashStorage.getTrashElements(trashElementNodeFilter);
+
+    //
+    verify(repositoryService).getCurrentRepository();
+    verify(sessionProviderService).getSystemSessionProvider(null);
+    verify(sessionProvider).getSession(anyString(), eq(repository));
+    verify(session).getWorkspace();
+    verify(workspace).getQueryManager();
+    verify(queryManager).createQuery(anyString(), eq(Query.SQL));
+    verify(query).setLimit(10);
+    verify(query).setOffset(0);
+    verify(query).execute();
+    verify(queryResult).getNodes();
+    verify(nodeIterator, times(3)).hasNext();
+    verify(nodeIterator, times(2)).nextNode();
+
+    assertNotNull(result);
+    assertEquals(2, result.size());
   }
 }

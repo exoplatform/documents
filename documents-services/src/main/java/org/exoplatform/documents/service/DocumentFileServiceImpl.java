@@ -652,4 +652,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                     authenticatedUserId);
   }
 
+  @Override
+  public List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter filter) throws RepositoryException {
+    return jcrDeleteFileStorage.getDeletedDocuments(filter);
+  }
+
+  @Override
+  public int countDeletedDocuments() {
+    return jcrDeleteFileStorage.countDeletedDocuments();
+  }
+
 }

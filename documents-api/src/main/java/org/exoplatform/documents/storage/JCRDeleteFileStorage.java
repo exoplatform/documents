@@ -24,6 +24,8 @@ import javax.jcr.Session;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.TrashElementNode;
+import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.services.security.Identity;
 
 public interface JCRDeleteFileStorage {
@@ -81,4 +83,20 @@ public interface JCRDeleteFileStorage {
    * @param authenticatedUserId current authenticated user id 
    */
   void deleteDocuments(int actionId, List<AbstractNode> items, Identity identity, long authenticatedUserId);
+
+  /**
+   * Retrieves a list of trash elements that match the specified filter.
+   *
+   * @param trashElementNodeFilter the filter used to find trash elements
+   * @return a list of nodes representing the trash elements
+   * @throws RepositoryException if an error occurs while accessing the repository
+   */
+  List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter trashElementNodeFilter) throws RepositoryException;
+
+  /**
+   * Counts the total number of deleted documents in the trash.
+   *
+   * @return the total count of deleted documents
+   */
+  int countDeletedDocuments();
 }
