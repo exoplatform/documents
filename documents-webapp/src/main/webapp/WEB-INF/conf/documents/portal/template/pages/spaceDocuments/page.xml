@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * Copyright (C) 2024 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ *
+-->
+<container
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.gatein.org/xml/ns/gatein_objects_1_12 http://www.gatein.org/xml/ns/gatein_objects_1_12"
+  xmlns="http://www.gatein.org/xml/ns/gatein_objects_1_12">
+  <container template="system:/groovy/portal/webui/container/UIPageLayout.gtmpl"><!-- To be deleted once WebUI is cleaned from Meeds package -->
+    <section-columns>
+      <column col-span="12">
+        <portlet-application>
+          <portlet>
+            <application-ref>documents</application-ref>
+            <portlet-ref>Documents</portlet-ref>
+          </portlet>
+          <title>Space Documents</title>
+        </portlet-application>
+      </column>
+    </section-columns>
+  </container>
+</container>
