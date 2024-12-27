@@ -566,8 +566,9 @@ public class EntityBuilder {
     String trashElementOriginPart = restorePath.substring(0,restorePath.lastIndexOf("/"));
     String trashElementOrigin = trashElementOriginPart.substring(trashElementOriginPart.lastIndexOf("/") + 1);
     trashElementEntity.setOrigin(trashElementOrigin);
-    trashElementEntity.setOriginFullPath(trashElementNode.getRestorePath());
+    trashElementEntity.setRestorePath(trashElementNode.getRestorePath());
     trashElementEntity.setMimeType(trashElementNode.getMimeType());
+    trashElementEntity.setPath(trashElementNode.getPath());
     return trashElementEntity;
   }
 }

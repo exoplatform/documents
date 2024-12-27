@@ -1670,14 +1670,43 @@ public class DocumentFileRestTest {
     when(documentFileService.getDeletedDocuments(any(TrashElementNodeFilter.class))).thenReturn(trashElementNodes);
     when(documentFileService.countDeletedDocuments()).thenReturn(1);
     TrashElementEntity trashElementEntity = mock(TrashElementEntity.class);
-    when(trashElementEntity.getOriginFullPath()).thenReturn(expectedDeletedElementFullPath);
+    when(trashElementEntity.getRestorePath()).thenReturn(expectedDeletedElementFullPath);
     mockEntityBuilder().when(() -> EntityBuilder.toTrashElement(any())).thenReturn(trashElementEntity);
     response = documentFileRest.getDeletedDocuments("name", "asc", 0, 20);
     assertEquals(200, response.getStatus());
     CollectionEntity<TrashElementEntity> collectionEntity = (CollectionEntity<TrashElementEntity>) response.getEntity();
     TrashElementEntity trashElementEntity1 = collectionEntity.getEntities().get(0);
-    assertEquals(expectedDeletedElementFullPath, trashElementEntity1.getOriginFullPath());
+    assertEquals(expectedDeletedElementFullPath, trashElementEntity1.getRestorePath());
     assertEquals(1, collectionEntity.getSize());
 
+  }
+
+  @Test
+  public void testRestoreDocument() throws RepositoryException {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService,
+            publicDocumentAccessService,
+            externalDownloadService);
+
+    Response response = documentFileRest.restoreDocumentFromTrash(null);
+    assertEquals(400, response.getStatus());
+    //
+    String nodePath = "/Trash/testFileName.text";
+    doThrow(new RepositoryException("Error restoring document"))
+            .when(documentFileService)
+            .restoreDocumentFromTrash(nodePath);
+
+    response = documentFileRest.restoreDocumentFromTrash(nodePath);
+    assertEquals(500, response.getStatus());
+    //
+    doNothing().when(documentFileService).restoreDocumentFromTrash(nodePath);
+    //
+    response = documentFileRest.restoreDocumentFromTrash(nodePath);
+    assertEquals(200, response.getStatus());
   }
 }

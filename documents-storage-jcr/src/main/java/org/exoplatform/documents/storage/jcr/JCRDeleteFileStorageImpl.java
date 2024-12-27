@@ -226,6 +226,12 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     return trashStorage.countDeletedDocuments();
   }
 
+  @Override
+  public void restoreFromTrash(String trashNodePath) throws RepositoryException {
+    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    trashStorage.restoreFromTrash(trashNodePath, sessionProvider);
+  }
+
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
     Node node = null;
     String trashId;

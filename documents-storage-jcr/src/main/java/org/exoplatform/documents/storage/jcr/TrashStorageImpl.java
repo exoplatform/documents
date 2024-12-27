@@ -198,6 +198,8 @@ public class TrashStorageImpl implements TrashStorage {
   /**
    * {@inheritDoc}
    */
+
+  @Override
   public void restoreFromTrash(String trashNodePath,
                                SessionProvider sessionProvider) throws RepositoryException {
     restoreFromTrash(trashNodePath, sessionProvider, 0);

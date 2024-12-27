@@ -662,4 +662,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return jcrDeleteFileStorage.countDeletedDocuments();
   }
 
+  @Override
+  public void restoreDocumentFromTrash(String trashNodePath) throws RepositoryException {
+    jcrDeleteFileStorage.restoreFromTrash(trashNodePath);
+  }
+
 }
