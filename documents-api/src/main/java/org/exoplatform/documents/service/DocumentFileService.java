@@ -428,4 +428,12 @@ public interface DocumentFileService {
    * @return the total count of deleted documents
    */
   int countDeletedDocuments();
+
+  /**
+   * Restores a document from the trash based on the specified trash node path.
+   *
+   * @param trashNodePath the path of the trash node to restore
+   * @throws RepositoryException if an error occurs during the restoration process
+   */
+  void restoreDocumentFromTrash(String trashNodePath) throws RepositoryException;
 }

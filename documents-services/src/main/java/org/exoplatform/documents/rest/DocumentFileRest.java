@@ -1353,5 +1353,29 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
+  @PUT
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("administrators")
+  @Path("/trash/restore")
+  @Operation(summary = "Restores a document from the trash", method = "PUT", description = "Restores a document from the trash based on the specified trash node path")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response restoreDocumentFromTrash(@Parameter(description = "node path", required = true)
+                                           @QueryParam("documentPath")
+                                           String documentPath) {
+    if (StringUtils.isBlank(documentPath)) {
+      return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
+    }
+    try {
+      documentFileService.restoreDocumentFromTrash(documentPath);
+      return Response.ok().build();
+    } catch (Exception e) {
+      LOG.error("Error when restoring the document with path " + documentPath, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+
+  }
+
 }
 

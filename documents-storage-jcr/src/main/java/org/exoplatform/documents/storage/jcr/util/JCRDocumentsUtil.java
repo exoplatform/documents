@@ -1016,6 +1016,7 @@ public class JCRDocumentsUtil {
     } else {
       trashElementNode.setName(node.getName());
     }
+    trashElementNode.setPath(node.getPath());
     if (node.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)) {
       Node nodeToModify = node;
       if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
