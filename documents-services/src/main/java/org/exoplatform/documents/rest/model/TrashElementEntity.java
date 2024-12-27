@@ -35,7 +35,7 @@ public class TrashElementEntity {
 
   private String  origin;
 
-  private String  originFullPath;
+  private String  restorePath;
 
   private long    size;
 

@@ -64,7 +64,7 @@
           <template #activator="{ on, attrs }">
             <span v-bind="attrs" v-on="on">{{ item.origin }}</span>
           </template>
-          {{ item.originFullPath }}
+          {{ item.restorePath }}
         </v-tooltip>
       </div>
     </td>

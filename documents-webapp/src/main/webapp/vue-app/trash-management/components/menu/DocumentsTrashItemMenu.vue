@@ -50,7 +50,6 @@
           <span>{{ $t('trash.element.restore') }}</span>
         </v-list-item-title>
       </v-list-item>
-      <!-- Add other menu items here if needed -->
     </v-list>
   </component>
 </template>
@@ -85,11 +84,9 @@ export default {
   methods: {
     restoreDocument() {
       this.loading = true;
-      this.$trashManagementService.restoreDocument(this.trashElementItem.path).then((resp) => {
-        if (resp.ok) {
-          this.displayAlert(this.$t('trash.element.restore.message.success'));
-          this.$root.$emit('trash-elements-updated');
-        }
+      this.$trashManagementService.restoreDocument(this.trashElementItem.path).then(() => {
+        this.displayAlert(this.$t('trash.element.restore.message.success'));
+        this.$root.$emit('trash-elements-updated');
       }).catch((error) => {
         console.error('Error fetching trash elements:', error);
         this.displayAlert(this.$t('trash.element.restore.message.error'), 'error');

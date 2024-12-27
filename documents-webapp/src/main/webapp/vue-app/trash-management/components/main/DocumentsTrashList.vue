@@ -137,7 +137,7 @@ export default {
   },
   created() {
     this.fetchTrashElements();
-    this.$root.$on('trash-elements-updated', (() => this.updateTrashElements()));
+    this.$root.$on('trash-elements-updated', (() => this.fetchTrashElements()));
   },
   methods: {
     fetchTrashElements() {
@@ -160,9 +160,6 @@ export default {
       this.options = {...newOptions };
       this.fetchTrashElements();
     },
-    updateTrashElements() {
-      this.fetchTrashElements();
-    }
   },
 };
 </script>
