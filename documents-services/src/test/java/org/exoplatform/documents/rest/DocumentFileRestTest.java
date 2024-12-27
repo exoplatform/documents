@@ -1680,4 +1680,33 @@ public class DocumentFileRestTest {
     assertEquals(1, collectionEntity.getSize());
 
   }
+
+  @Test
+  public void testRestoreDocument() throws RepositoryException {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService,
+            publicDocumentAccessService,
+            externalDownloadService);
+
+    Response response = documentFileRest.restoreDocumentFromTrash(null);
+    assertEquals(400, response.getStatus());
+    //
+    String nodePath = "/Trash/testFileName.text";
+    doThrow(new RepositoryException("Error restoring document"))
+            .when(documentFileService)
+            .restoreDocumentFromTrash(nodePath);
+
+    response = documentFileRest.restoreDocumentFromTrash(nodePath);
+    assertEquals(500, response.getStatus());
+    //
+    doNothing().when(documentFileService).restoreDocumentFromTrash(nodePath);
+    //
+    response = documentFileRest.restoreDocumentFromTrash(nodePath);
+    assertEquals(200, response.getStatus());
+  }
 }

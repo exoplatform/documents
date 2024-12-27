@@ -32,7 +32,10 @@
         :show-select="!isMobile"
         must-sort
         @update:options="handleOptionsChange">
-        <template slot="header.data-table-select" slot-scope="{on, props}">
+        <template
+          v-if="!isMobile"
+          slot="header.data-table-select"
+          slot-scope="{on, props}">
           <v-checkbox
             v-on="on"
             v-bind="props"
@@ -134,6 +137,7 @@ export default {
   },
   created() {
     this.fetchTrashElements();
+    this.$root.$on('trash-elements-updated', (() => this.updateTrashElements()));
   },
   methods: {
     fetchTrashElements() {
@@ -156,6 +160,9 @@ export default {
       this.options = {...newOptions };
       this.fetchTrashElements();
     },
+    updateTrashElements() {
+      this.fetchTrashElements();
+    }
   },
 };
 </script>

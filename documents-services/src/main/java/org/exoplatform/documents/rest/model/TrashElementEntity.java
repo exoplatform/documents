@@ -31,6 +31,8 @@ public class TrashElementEntity {
 
   private String  name;
 
+  private String  path;
+
   private String  origin;
 
   private String  originFullPath;

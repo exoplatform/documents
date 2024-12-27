@@ -69,7 +69,7 @@
       </div>
     </td>
     <td align="center" :width="headers[3].width">
-      <document-trash-item-menu />
+      <document-trash-item-menu :trash-element-item="item" />
     </td>
   </tr>
 </template>

@@ -99,4 +99,12 @@ public interface JCRDeleteFileStorage {
    * @return the total count of deleted documents
    */
   int countDeletedDocuments();
+
+  /**
+   * Restores a document from the trash based on the specified trash node path.
+   *
+   * @param trashNodePath the path of the trash node to restore
+   * @throws RepositoryException if an error occurs during the restoration process
+   */
+  void restoreFromTrash(String trashNodePath) throws RepositoryException;
 }

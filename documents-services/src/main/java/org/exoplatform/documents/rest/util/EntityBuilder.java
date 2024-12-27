@@ -568,6 +568,7 @@ public class EntityBuilder {
     trashElementEntity.setOrigin(trashElementOrigin);
     trashElementEntity.setOriginFullPath(trashElementNode.getRestorePath());
     trashElementEntity.setMimeType(trashElementNode.getMimeType());
+    trashElementEntity.setPath(trashElementNode.getPath());
     return trashElementEntity;
   }
 }
