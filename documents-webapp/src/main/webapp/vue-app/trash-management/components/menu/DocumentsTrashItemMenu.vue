@@ -51,15 +51,10 @@
         </v-list-item-title>
       </v-list-item>
       <v-list-item
+        class="action-menu-item d-flex align-center"
         dense
         @click="openConfirmDialog">
-        <v-card
-          class="d-flex full-height justify-center"
-          color="transparent"
-          width="20"
-          flat>
-          <v-icon class="error--text" size="16">fa-trash</v-icon>
-        </v-card>
+        <v-icon class="error--text" size="16">fa-trash</v-icon>
         <v-list-item-title class="ps-2">
           <span class="error--text">{{ $t('trash.element.delete') }}</span>
         </v-list-item-title>
@@ -88,6 +83,7 @@ export default {
     id: Math.random(), // NOSONAR
     menu: false,
     loading: false,
+    dialog: false
   }),
   computed: {
     isMobile() {
@@ -133,7 +129,14 @@ export default {
     },
     closeMenu() {
       this.menu = false;
-    }
+    },
+    openConfirmDialog() {
+      this.dialog = true;
+      this.$nextTick().then(() => window.setTimeout(() => this.$refs.dialog.open(), 200));
+    },
+    close() {
+      window.setTimeout(() => this.dialog = false, 200);
+    },
   }
 };
 </script>

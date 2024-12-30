@@ -1376,32 +1376,32 @@ public class DocumentFileRest implements ResourceContainer {
     }
 
   }
-    @DELETE
-    @Produces(MediaType.APPLICATION_JSON)
-    @RolesAllowed("administrators")
-    @Path("/trash/delete")
-    @Operation(summary = "Restores a document from the trash", method = "PUT", description = "Restores a document from the trash based on the specified trash node path")
-    @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-            @ApiResponse(responseCode = "400", description = "Invalid query input"),
-            @ApiResponse(responseCode = "404", description = "Document not found"),
-            @ApiResponse(responseCode = "500", description = "Internal server error"), })
-    public Response deleteDocumentPermanently(@Parameter(description = "node path", required = true)
-                                             @QueryParam("documentPath")
-                                             String documentPath) {
-        if (StringUtils.isBlank(documentPath)) {
-            return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
-        }
-        try {
-            documentFileService.deleteDocumentPermanently(documentPath);
-            return Response.ok().build();
-        }  catch (ObjectNotFoundException exception) {
-            return Response.status(HTTPStatus.NOT_FOUND).entity(exception.getMessage()).build();
-        } catch (Exception e) {
-            LOG.error("Error when restoring the document with path " + documentPath, e);
-            return Response.serverError().entity(e.getMessage()).build();
-        }
 
+  @DELETE
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("administrators")
+  @Path("/trash/delete")
+  @Operation(summary = "Delete a document from the trash", method = "DELETE", description = "Delete a document from the trash based on the specified trash node path")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "404", description = "Document not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response deleteDocumentPermanently(@Parameter(description = "node path", required = true)
+                                            @QueryParam("documentPath")
+                                            String documentPath) {
+    if (StringUtils.isBlank(documentPath)) {
+      return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
     }
+    try {
+      documentFileService.deleteDocumentPermanently(documentPath);
+      return Response.ok().build();
+    } catch (ObjectNotFoundException exception) {
+      return Response.status(HTTPStatus.NOT_FOUND).entity(exception.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error when restoring the document with path " + documentPath, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
 
 
 }

@@ -238,14 +238,22 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   @Override
   public void deleteDocumentPermanently(String trashNodePath) throws ObjectNotFoundException, RepositoryException {
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-    ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-    Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
-    Node nodeToBeDeleted = JCRDocumentsUtil.getNodeByPath(session,trashNodePath);
-    if (nodeToBeDeleted == null || !trashStorage.isInTrash(nodeToBeDeleted)) {
-      throw new ObjectNotFoundException(trashNodePath);
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+      Node nodeToBeDeleted = JCRDocumentsUtil.getNodeByPath(session,trashNodePath);
+      if (nodeToBeDeleted == null || !trashStorage.isInTrash(nodeToBeDeleted)) {
+        throw new ObjectNotFoundException("No node exist in trash with path " + trashNodePath);
+      }
+      processRemoveNode(nodeToBeDeleted);
+      sessionProvider.close();
+    } catch (RepositoryException | ObjectNotFoundException exception) {
+      throw exception;
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
-    processRemoveNode(nodeToBeDeleted);
-    sessionProvider.close();
   }
 
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {

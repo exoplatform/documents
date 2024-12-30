@@ -440,7 +440,8 @@ public interface DocumentFileService {
   /**
    * Delete a document from the trash based on the specified trash node path.
    *
-   * @param documentPath the path of the trash node to restore
+   * @param documentPath the path of the trash node to delete
+   * @throws ObjectNotFoundException if a document not exist in the trash
    * @throws RepositoryException if an error occurs during the delete process
    */
   void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException;
