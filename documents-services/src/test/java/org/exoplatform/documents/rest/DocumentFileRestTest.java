@@ -1709,4 +1709,36 @@ public class DocumentFileRestTest {
     response = documentFileRest.restoreDocumentFromTrash(nodePath);
     assertEquals(200, response.getStatus());
   }
+
+  @Test
+  public void testDeleteDocumentPermanently() throws RepositoryException, ObjectNotFoundException {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+                                                             spaceService,
+                                                             identityManager,
+                                                             metadataService,
+                                                             settingService,
+                                                             documentWebSocketService,
+                                                             publicDocumentAccessService,
+                                                             externalDownloadService);
+
+    Response response = documentFileRest.deleteDocumentPermanently(null);
+    assertEquals(400, response.getStatus());
+    //
+    String nodePath = "/Trash/testFileName.text";
+    doThrow(new RepositoryException("Error deleting document")).when(documentFileService).deleteDocumentPermanently(nodePath);
+
+    response = documentFileRest.deleteDocumentPermanently(nodePath);
+    assertEquals(500, response.getStatus());
+    //
+    doThrow(new ObjectNotFoundException("Error deleting document")).when(documentFileService).deleteDocumentPermanently(nodePath);
+
+    response = documentFileRest.deleteDocumentPermanently(nodePath);
+    assertEquals(404, response.getStatus());
+    //
+    doNothing().when(documentFileService).restoreDocumentFromTrash(nodePath);
+    //
+    response = documentFileRest.restoreDocumentFromTrash(nodePath);
+    assertEquals(200, response.getStatus());
+  }
 }

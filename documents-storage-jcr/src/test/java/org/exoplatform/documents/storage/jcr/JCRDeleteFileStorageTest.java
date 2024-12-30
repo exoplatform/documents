@@ -20,6 +20,7 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
@@ -251,6 +252,45 @@ public class JCRDeleteFileStorageTest {
     assertEquals(null, result.get(0).getName());
     assertEquals("Document2", result.get(1).getName());
 
+  }
+
+  @Test
+  public void testDeleteDocumentPermanently() throws RepositoryException, ObjectNotFoundException {
+    String trashNodePath = "/node/path";
+
+    when(sessionProviderService.getSystemSessionProvider(null)).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenThrow(RepositoryException.class).thenReturn(repository);
+    //
+    assertThrows(RepositoryException.class, () -> {
+      jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
+    });
+    verify(sessionProvider, times(1)).close();
+    //
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("defaultWorkspace");
+
+    Session session = Mockito.mock(Session.class);
+    when(sessionProvider.getSession("defaultWorkspace", repository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, trashNodePath)).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> {
+      jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
+    });
+    verify(sessionProvider, atLeast(1)).close();
+    //
+    Node node = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, trashNodePath)).thenReturn(node);
+    when(trashStorage.isInTrash(node)).thenReturn(false);
+
+    assertThrows(ObjectNotFoundException.class, () -> {
+      jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
+    });
+    verify(sessionProvider, atLeast(1)).close();
+    //
+    when(trashStorage.isInTrash(node)).thenReturn(true);
+    jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
+    verify(sessionProvider, atLeast(1)).close();
+    verify(node).remove();
   }
 
 }

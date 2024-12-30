@@ -50,6 +50,24 @@
           <span>{{ $t('trash.element.restore') }}</span>
         </v-list-item-title>
       </v-list-item>
+      <v-list-item
+        class="action-menu-item d-flex align-center"
+        dense
+        @click="openConfirmDialog">
+        <v-icon class="error--text" size="16">fa-trash</v-icon>
+        <v-list-item-title class="ps-2">
+          <span class="error--text">{{ $t('trash.element.delete') }}</span>
+        </v-list-item-title>
+        <confirm-dialog
+          v-if="dialog"
+          ref="dialog"
+          :title="$t('trash.element.delete.confirm.title')"
+          :message="$t('trash.element.delete.confirm.message')"
+          :ok-label="$t('trash.element.delete')"
+          :cancel-label="$t('trash.element.delete.cancel')"
+          @ok="deleteDocumentPermanently"
+          @closed="close" />
+      </v-list-item>
     </v-list>
   </component>
 </template>
@@ -65,6 +83,7 @@ export default {
     id: Math.random(), // NOSONAR
     menu: false,
     loading: false,
+    dialog: false
   }),
   computed: {
     isMobile() {
@@ -88,8 +107,18 @@ export default {
         this.displayAlert(this.$t('trash.element.restore.message.success'));
         this.$root.$emit('trash-elements-updated');
       }).catch((error) => {
-        console.error('Error fetching trash elements:', error);
+        console.error('Error restoring trash elements:', error);
         this.displayAlert(this.$t('trash.element.restore.message.error'), 'error');
+      }).finally(() => this.loading = false);
+    },
+    deleteDocumentPermanently() {
+      this.loading = true;
+      this.$trashManagementService.deleteDocumentPermanently(this.trashElementItem.path).then(() => {
+        this.displayAlert(this.$t('trash.element.delete.message.success'));
+        this.$root.$emit('trash-elements-updated');
+      }).catch((error) => {
+        console.error('Error deleting trash elements:', error);
+        this.displayAlert(this.$t('trash.element.delete.message.error'), 'error');
       }).finally(() => this.loading = false);
     },
     displayAlert(message, type) {
@@ -100,7 +129,14 @@ export default {
     },
     closeMenu() {
       this.menu = false;
-    }
+    },
+    openConfirmDialog() {
+      this.dialog = true;
+      this.$nextTick().then(() => window.setTimeout(() => this.$refs.dialog.open(), 200));
+    },
+    close() {
+      window.setTimeout(() => this.dialog = false, 200);
+    },
   }
 };
 </script>
