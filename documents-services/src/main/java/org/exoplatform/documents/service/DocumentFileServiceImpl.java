@@ -667,4 +667,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     jcrDeleteFileStorage.restoreFromTrash(trashNodePath);
   }
 
+  @Override
+  public void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException {
+    jcrDeleteFileStorage.deleteDocumentPermanently(documentPath);
+  }
+
 }

@@ -230,6 +230,22 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   public void restoreFromTrash(String trashNodePath) throws RepositoryException {
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
     trashStorage.restoreFromTrash(trashNodePath, sessionProvider);
+    if (sessionProvider != null) {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
+  public void deleteDocumentPermanently(String trashNodePath) throws ObjectNotFoundException, RepositoryException {
+    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+    Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+    Node nodeToBeDeleted = JCRDocumentsUtil.getNodeByPath(session,trashNodePath);
+    if (nodeToBeDeleted == null || !trashStorage.isInTrash(nodeToBeDeleted)) {
+      throw new ObjectNotFoundException(trashNodePath);
+    }
+    processRemoveNode(nodeToBeDeleted);
+    sessionProvider.close();
   }
 
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {

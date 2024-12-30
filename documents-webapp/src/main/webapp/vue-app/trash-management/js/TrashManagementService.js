@@ -57,3 +57,19 @@ export function restoreDocument(documentPath) {
     }
   });
 }
+
+export function deleteDocumentPermanently(documentPath) {
+  const formData = new FormData();
+  formData.append('documentPath', documentPath);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/trash/delete?${params}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp;
+    }
+  });
+}
