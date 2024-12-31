@@ -38,7 +38,7 @@
       </v-icon>
       <v-tooltip bottom>
         <template #activator="{ on, attrs }">
-          <span v-bind="attrs" v-on="on">{{ item.name }}</span>
+          <span v-bind="attrs" v-on="on" :style="menuItemStyle">{{ item.name }}</span>
         </template>
         {{ item.name }}
       </v-tooltip>
@@ -48,7 +48,8 @@
         <template #activator="{on, attrs}">
           <div
             v-on="on"
-            v-bind="attrs">
+            v-bind="attrs"
+            :style="menuItemStyle">
             <date-format
               class="pe-4"
               :value="item.lastModificationDate"
@@ -62,7 +63,7 @@
       <div class="d-flex justify-center align-center">
         <v-tooltip bottom>
           <template #activator="{ on, attrs }">
-            <span v-bind="attrs" v-on="on">{{ item.origin }}</span>
+            <span v-bind="attrs" v-on="on" :style="menuItemStyle">{{ item.origin }}</span>
           </template>
           {{ item.restorePath }}
         </v-tooltip>
@@ -100,12 +101,22 @@ export default {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
-    }
+    },
+    fullDateFormat: {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+    menuItemStyle: {
+      cursor: 'default',
+    },
   }),
   computed: {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    }
+    },
   },
   created() {
     this.getFileIcon();

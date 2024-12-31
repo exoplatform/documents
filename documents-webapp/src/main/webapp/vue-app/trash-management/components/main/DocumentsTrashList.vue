@@ -141,6 +141,7 @@ export default {
   },
   methods: {
     fetchTrashElements() {
+      this.selectedElements = [];
       this.loading = true;
       const {page, itemsPerPage, sortBy, sortDesc} = this.options;
       const offset = (page - 1) * itemsPerPage;
