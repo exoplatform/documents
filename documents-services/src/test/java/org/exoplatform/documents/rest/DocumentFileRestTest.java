@@ -1736,9 +1736,36 @@ public class DocumentFileRestTest {
     response = documentFileRest.deleteDocumentPermanently(nodePath);
     assertEquals(404, response.getStatus());
     //
-    doNothing().when(documentFileService).restoreDocumentFromTrash(nodePath);
+    doNothing().when(documentFileService).deleteDocumentPermanently(nodePath);
     //
-    response = documentFileRest.restoreDocumentFromTrash(nodePath);
+    response = documentFileRest.deleteDocumentPermanently(nodePath);
+    assertEquals(200, response.getStatus());
+  }
+
+  @Test
+  public void testDeleteDocumentsPermanently() throws IllegalAccessException {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService,
+            publicDocumentAccessService,
+            externalDownloadService);
+    List<TrashElementEntity> trashElementEntities = new ArrayList<>();
+    Response response = documentFileRest.deleteDocumentsPermanently(1, trashElementEntities);
+    assertEquals(400, response.getStatus());
+    //
+    trashElementEntities.add(new TrashElementEntity());
+    doThrow(new IllegalAccessException("Error deleting document")).when(documentFileService).deleteDocumentsPermanently(anyInt(), anyList(), anyLong());
+
+    response = documentFileRest.deleteDocumentsPermanently(1, trashElementEntities);
+    assertEquals(401, response.getStatus());
+    //
+    doNothing().when(documentFileService).deleteDocumentsPermanently(anyInt(), anyList(), anyLong());
+    //
+    response = documentFileRest.deleteDocumentsPermanently(1, trashElementEntities);
     assertEquals(200, response.getStatus());
   }
 }

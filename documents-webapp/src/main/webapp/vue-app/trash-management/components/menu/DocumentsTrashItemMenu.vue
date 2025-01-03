@@ -32,6 +32,7 @@
       <v-btn
         v-bind="attrs"
         v-on="on"
+        :disabled="bulkActionProgress"
         :loading="loading"
         icon>
         <v-icon size="20">fa-ellipsis-v</v-icon>
@@ -78,6 +79,10 @@ export default {
       type: Object,
       default: null,
     },
+    bulkActionProgress: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     id: Math.random(), // NOSONAR
@@ -88,7 +93,7 @@ export default {
   computed: {
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    }
+    },
   },
   watch: {
     menu() {

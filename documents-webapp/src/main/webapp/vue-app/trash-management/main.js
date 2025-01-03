@@ -17,6 +17,8 @@
 */
 import './initComponents.js';
 import * as trashManagementService from './js/TrashManagementService';
+import * as documentFileService from '../documents/js/DocumentFileService';
+import * as documentsWebSocket from '../documents/js/WebSocket';
 import '../documents-icons-extension/extensions.js';
 
 Vue.use(Vuetify);
@@ -25,6 +27,16 @@ const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 if (!Vue.prototype.$trashManagementService) {
   window.Object.defineProperty(Vue.prototype, '$trashManagementService', {
     value: trashManagementService,
+  });
+}
+if (!Vue.prototype.$documentFileService) {
+  window.Object.defineProperty(Vue.prototype, '$documentFileService', {
+    value: documentFileService,
+  });
+}
+if (!Vue.prototype.$documentsWebSocket) {
+  window.Object.defineProperty(Vue.prototype, '$documentsWebSocket', {
+    value: documentsWebSocket,
   });
 }
 

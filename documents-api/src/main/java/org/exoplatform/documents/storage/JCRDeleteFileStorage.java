@@ -116,4 +116,13 @@ public interface JCRDeleteFileStorage {
    * @throws RepositoryException if an error occurs during the delete process
    */
   void deleteDocumentPermanently(String trashNodePath) throws ObjectNotFoundException, RepositoryException;
+
+  /**
+   * Delete a list of documents from the trash.
+   *
+   * @param actionId the delete permanently action identifier
+   * @param trashElementNodes the list of the trash nodes to delete
+   * @param aclUserIdentity the user identity
+   */
+  void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, Identity aclUserIdentity);
 }
