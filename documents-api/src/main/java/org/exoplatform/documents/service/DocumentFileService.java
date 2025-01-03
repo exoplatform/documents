@@ -445,4 +445,13 @@ public interface DocumentFileService {
    * @throws RepositoryException if an error occurs during the delete process
    */
   void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException;
+
+  /**
+   * Delete a list of documents from the trash.
+   *
+   * @param actionId the delete permanently action identifier
+   * @param trashElementNodes the list of the trash nodes to delete
+   * @param userIdentityId the user identity identifier
+   */
+  void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
 }
