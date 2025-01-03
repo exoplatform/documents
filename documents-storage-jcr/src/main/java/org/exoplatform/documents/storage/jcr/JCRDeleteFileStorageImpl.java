@@ -230,30 +230,43 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   public void restoreFromTrash(String trashNodePath) throws RepositoryException {
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
     trashStorage.restoreFromTrash(trashNodePath, sessionProvider);
-    if (sessionProvider != null) {
-      sessionProvider.close();
-    }
   }
 
   @Override
   public void deleteDocumentPermanently(String trashNodePath) throws ObjectNotFoundException, RepositoryException {
-    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = sessionProviderService.getSystemSessionProvider(null);
       Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
       Node nodeToBeDeleted = JCRDocumentsUtil.getNodeByPath(session,trashNodePath);
       if (nodeToBeDeleted == null || !trashStorage.isInTrash(nodeToBeDeleted)) {
         throw new ObjectNotFoundException("No node exist in trash with path " + trashNodePath);
       }
       processRemoveNode(nodeToBeDeleted);
-      sessionProvider.close();
     } catch (RepositoryException | ObjectNotFoundException exception) {
       throw exception;
-    } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
-      }
     }
+  }
+
+  @Override
+  public void deleteDocumentsPermanently(int actionId,
+                                         List<AbstractNode> trashElementNodes,
+                                         Identity aclUserIdentity) {
+    ActionData actionData = new ActionData();
+    actionData.setActionId(String.valueOf(actionId));
+    actionData.setActionType(ActionType.PERMANENTLY_DELETE.name());
+    actionData.setIdentity(aclUserIdentity);
+    bulkStorageActionService.executeBulkAction(null,
+                                               null,
+                                               this,
+                                               listenerService,
+                                               null,
+                                               trashElementNodes,
+                                               actionData,
+                                               null,
+                                               null,
+                                               0);
   }
 
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {

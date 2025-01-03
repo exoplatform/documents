@@ -16,18 +16,20 @@
  *
 */
 
-import trashManagement from './components/main/TrashManagement.vue';
+import TrashManagement from './components/main/TrashManagement.vue';
 import TrashManagementToolbar from './components/main/TrashManagementToolbar.vue';
-import documentsTrashList from './components/main/DocumentsTrashList.vue';
+import DocumentsTrashList from './components/main/DocumentsTrashList.vue';
 import DocumentsTrashItem from './components/item/DocumentsTrashItem.vue';
 import DocumentsTrashItemMenu from './components/menu/DocumentsTrashItemMenu.vue';
+import DocumentsTrashItemsBulkDelete from './components/bulk-action/DocumentsTrashItemsBulkDelete.vue';
 
 const components = {
-  'trash-management': trashManagement,
+  'trash-management': TrashManagement,
   'trash-management-toolbar': TrashManagementToolbar,
-  'documents-trash-list': documentsTrashList,
+  'documents-trash-list': DocumentsTrashList,
   'document-trash-item': DocumentsTrashItem,
-  'document-trash-item-menu': DocumentsTrashItemMenu
+  'document-trash-item-menu': DocumentsTrashItemMenu,
+  'documents-trash-items-bulk-delete': DocumentsTrashItemsBulkDelete
 };
 
 for (const key in components) {

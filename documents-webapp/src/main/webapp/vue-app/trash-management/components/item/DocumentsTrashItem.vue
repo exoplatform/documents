@@ -38,7 +38,10 @@
       </v-icon>
       <v-tooltip bottom>
         <template #activator="{ on, attrs }">
-          <span v-bind="attrs" v-on="on" :style="menuItemStyle">{{ item.name }}</span>
+          <span
+            v-bind="attrs"
+            v-on="on"
+            :style="menuItemStyle">{{ item.name }}</span>
         </template>
         {{ item.name }}
       </v-tooltip>
@@ -63,14 +66,19 @@
       <div class="d-flex justify-center align-center">
         <v-tooltip bottom>
           <template #activator="{ on, attrs }">
-            <span v-bind="attrs" v-on="on" :style="menuItemStyle">{{ item.origin }}</span>
+            <span
+              v-bind="attrs"
+              v-on="on"
+              :style="menuItemStyle">{{ item.origin }}</span>
           </template>
           {{ item.restorePath }}
         </v-tooltip>
       </div>
     </td>
     <td align="center" :width="headers[3].width">
-      <document-trash-item-menu :trash-element-item="item" />
+      <document-trash-item-menu
+        :trash-element-item="item"
+        :bulk-action-progress="bulkActionProgress" />
     </td>
   </tr>
 </template>
@@ -94,6 +102,10 @@ export default {
       type: Object,
       default: null,
     },
+    bulkActionProgress: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     icon: null,

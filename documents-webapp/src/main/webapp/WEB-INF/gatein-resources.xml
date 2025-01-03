@@ -150,6 +150,13 @@
         <module>jquery</module>
         <as>$</as>
       </depends>
+      <depends>
+        <module>applicationToolbarComponent</module>
+      </depends>
+      <depends>
+        <module>commons-cometd3</module>
+        <as>cCometd</as>
+      </depends>
     </module>
   </portlet>
   

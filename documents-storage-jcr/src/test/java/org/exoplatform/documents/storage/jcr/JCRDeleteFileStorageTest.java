@@ -264,7 +264,6 @@ public class JCRDeleteFileStorageTest {
     assertThrows(RepositoryException.class, () -> {
       jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
     });
-    verify(sessionProvider, times(1)).close();
     //
     when(repository.getConfiguration()).thenReturn(repositoryEntry);
     when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("defaultWorkspace");
@@ -276,7 +275,6 @@ public class JCRDeleteFileStorageTest {
     assertThrows(ObjectNotFoundException.class, () -> {
       jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
     });
-    verify(sessionProvider, atLeast(1)).close();
     //
     Node node = mock(Node.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, trashNodePath)).thenReturn(node);
@@ -285,11 +283,9 @@ public class JCRDeleteFileStorageTest {
     assertThrows(ObjectNotFoundException.class, () -> {
       jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
     });
-    verify(sessionProvider, atLeast(1)).close();
     //
     when(trashStorage.isInTrash(node)).thenReturn(true);
     jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
-    verify(sessionProvider, atLeast(1)).close();
     verify(node).remove();
   }
 
