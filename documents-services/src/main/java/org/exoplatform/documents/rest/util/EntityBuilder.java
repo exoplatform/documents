@@ -571,4 +571,14 @@ public class EntityBuilder {
     trashElementEntity.setPath(trashElementNode.getPath());
     return trashElementEntity;
   }
+
+  public static List<AbstractNode> toNodesFromTrashEntities(List<TrashElementEntity> trashElementEntities) {
+    return trashElementEntities.stream().map(trashElementEntity -> {
+      AbstractNode trashElementNode = new TrashElementNode();
+      trashElementNode.setId(trashElementEntity.getId());
+      trashElementNode.setPath(trashElementEntity.getPath());
+      return trashElementNode;
+    }).toList();
+  }
+
 }

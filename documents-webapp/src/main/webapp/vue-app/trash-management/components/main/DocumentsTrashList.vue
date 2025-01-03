@@ -25,7 +25,7 @@
         :headers="headers"
         :items="trashElements"
         v-model="selectedElements"
-        :loading="loading"
+        :loading="isLoading"
         :options.sync="options"
         :server-items-length="totalSize"
         :footer-props="{ itemsPerPageOptions }"
@@ -65,6 +65,7 @@
             :item="props.item"
             :selected="props.isSelected"
             :select="props.select"
+            :bulk-action-progress="bulkActionProgress"
             :headers="headers" />
         </template>
       </v-data-table>
@@ -75,6 +76,12 @@
 <script>
 
 export default {
+  props: {
+    bulkActionProgress: {
+      type: Boolean,
+      default: false
+    }
+  },
   data: () => ({
     loading: false,
     initDone: false,
@@ -133,6 +140,14 @@ export default {
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
+    isLoading() {
+      return this.loading || this.bulkActionProgress;
+    }
+  },
+  watch: {
+    selectedElements() {
+      this.$emit('update-selection', this.selectedElements);
     }
   },
   created() {

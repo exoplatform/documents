@@ -16,10 +16,38 @@
  *
 -->
 <template>
-  <div></div>
+  <application-toolbar v-if="hasSelection">
+    <template v-if="!isMobile" #left>
+      <documents-trash-items-bulk-delete
+        :selection-length="selectionLength"
+        :bulk-action-progress="bulkActionProgress"
+        @delete-items="$emit('delete-items')" />
+    </template>
+  </application-toolbar>
 </template>
 <script>
 export default {
+  props: {
+    selectionLength: {
+      type: Number,
+      default: 0
+    },
+    bulkActionProgress: {
+      type: Boolean,
+      default: false
+    }
 
+  },
+  data: () => ({
+    loading: false,
+  }),
+  computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
+    },
+    hasSelection() {
+      return this.selectionLength > 0;
+    }
+  },
 };
 </script>
