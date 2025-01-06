@@ -186,7 +186,11 @@ public class ActionThread implements Runnable {
     }
     if (actionData.getActionType().equals(ActionType.PERMANENTLY_DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-      PermanentlyDeleteItems();
+      permanentlyDeleteItems();
+    }
+    if (actionData.getActionType().equals(ActionType.RESTORE.name())) {
+      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+      restoreItems();
     }
   }
 
@@ -225,7 +229,7 @@ public class ActionThread implements Runnable {
     brodcastEvent();
   }
 
-  private void PermanentlyDeleteItems() {
+  private void permanentlyDeleteItems() {
     int errors = 0;
     List<String> treatedItemsIds = new ArrayList<>();
     for (AbstractNode item : items) {
@@ -241,6 +245,34 @@ public class ActionThread implements Runnable {
         errors++;
       } catch (Exception e) {
         log.error("Error when deleting the document" + item.getPath(), e);
+        errors++;
+      }
+    }
+    if (errors > 0) {
+      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
+    } else {
+      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
+    }
+    actionData.setTreatedItemsIds(treatedItemsIds);
+    brodcastEvent();
+  }
+
+  private void restoreItems() {
+    int errors = 0;
+    List<String> treatedItemsIds = new ArrayList<>();
+    for (AbstractNode item : items) {
+      if (checkCanceled()) {
+        break;
+      }
+      try {
+        jCrDeleteFileStorage.restoreFromTrash(item.getPath());
+        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+        treatedItemsIds.add(item.getId());
+      } catch (PathNotFoundException path) {
+        log.error("The document with this path is not found" + item.getPath(), path);
+        errors++;
+      } catch (Exception e) {
+        log.error("Error when restoring the document" + item.getPath(), e);
         errors++;
       }
     }

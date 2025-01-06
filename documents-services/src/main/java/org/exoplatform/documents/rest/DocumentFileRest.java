@@ -1410,6 +1410,7 @@ public class DocumentFileRest implements ResourceContainer {
   @Operation(summary = "Delete list of documents permanently", method = "DELETE", description = "This deletes a list of documents permanently")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "400", description = "Invalid request body input"),
       @ApiResponse(responseCode = "500", description = "Internal server error") })
   public Response deleteDocumentsPermanently(@Parameter(description = "action ID", required = true)
                                             @PathParam("actionId")
@@ -1430,6 +1431,36 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
+
+  @PUT
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("administrators")
+  @Path("/trash/bulk/restore/{actionId}")
+  @Operation(summary = "Restore list of documents", method = "PUT", description = "This restore a list of documents")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "400", description = "Invalid request body input"),
+      @ApiResponse(responseCode = "500", description = "Internal server error") })
+  public Response restoreDocuments(@Parameter(description = "action ID", required = true)
+                                   @PathParam("actionId")
+                                   int actionId,
+                                   @RequestBody(description = "documents List", required = true)
+                                   List<TrashElementEntity> documents) {
+    if (documents.isEmpty()) {
+      return Response.status(Status.BAD_REQUEST).entity("documents list is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      documentFileService.restoreDocuments(actionId, EntityBuilder.toNodesFromTrashEntities(documents), userIdentityId);
+      return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error while permanently deleting documents", e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
 
 }
 

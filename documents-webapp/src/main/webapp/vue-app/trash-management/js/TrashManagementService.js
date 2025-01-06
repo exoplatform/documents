@@ -88,3 +88,18 @@ export function deleteDocumentsPermanently(actionId, documents) {
     }
   });
 }
+
+export function restoreDocumentsPermanently(actionId, documents) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/trash/bulk/restore/${actionId}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(documents),
+  }).then((resp) => {
+    if (resp && !resp.ok) {
+      throw new Error('Error when deleting document');
+    }
+  });
+}

@@ -269,6 +269,24 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                0);
   }
 
+  @Override
+  public void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, Identity aclUserIdentity) {
+    ActionData actionData = new ActionData();
+    actionData.setActionId(String.valueOf(actionId));
+    actionData.setActionType(ActionType.RESTORE.name());
+    actionData.setIdentity(aclUserIdentity);
+    bulkStorageActionService.executeBulkAction(null,
+                                               null,
+                                               this,
+                                               listenerService,
+                                               null,
+                                               trashElementNodes,
+                                               actionData,
+                                               null,
+                                               null,
+                                               0);
+  }
+
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
     Node node = null;
     String trashId;
