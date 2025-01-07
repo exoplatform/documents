@@ -16,40 +16,29 @@
  *
 -->
 <template>
-  <application-toolbar v-if="hasSelection">
-    <template v-if="!isMobile" #left>
-      <documents-trash-items-bulk-delete
-        :selection-length="selectionLength"
-        :bulk-action-progress="bulkActionProgress"
-        @delete-items="$emit('delete-items')" />
-      <documents-trash-items-bulk-restore
-        :bulk-action-progress="bulkActionProgress"
-        @restore-items="$emit('restore-items')" />
-    </template>
-  </application-toolbar>
+  <div class="d-inline">
+    <v-btn
+      color="primary"
+      elevation="0"
+      outlined
+      :disabled="isRestoreButtonDisabled"
+      @click="$emit('restore-items')">
+      <v-icon size="16" class="me-2">fa-undo</v-icon>
+      {{ $t('trash.element.restore') }}
+    </v-btn>
+  </div>
 </template>
 <script>
 export default {
   props: {
-    selectionLength: {
-      type: Number,
-      default: 0
-    },
     bulkActionProgress: {
       type: Boolean,
       default: false
     }
-
   },
-  data: () => ({
-    loading: false,
-  }),
   computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'sm';
-    },
-    hasSelection() {
-      return this.selectionLength > 0;
+    isRestoreButtonDisabled() {
+      return this.bulkActionProgress;
     }
   },
 };
