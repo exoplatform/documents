@@ -454,4 +454,13 @@ public interface DocumentFileService {
    * @param userIdentityId the user identity identifier
    */
   void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
+
+  /**
+   * Restore a list of documents from the trash.
+   *
+   * @param actionId the restore action identifier
+   * @param trashElementNodes the list of the trash nodes to restore
+   * @param userIdentityId the user identity identifier
+   */
+  void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
 }

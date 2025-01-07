@@ -677,4 +677,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    jcrDeleteFileStorage.deleteDocumentsPermanently(actionId, trashElementNodes, getAclUserIdentity(userIdentityId));
   }
 
+  @Override
+  public void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException {
+    jcrDeleteFileStorage.restoreDocuments(actionId, trashElementNodes, getAclUserIdentity(userIdentityId));
+  }
+
 }

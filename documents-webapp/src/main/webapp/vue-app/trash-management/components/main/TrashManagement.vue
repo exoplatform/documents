@@ -21,6 +21,7 @@
       <trash-management-toolbar
         :selection-length="selectedElements.length"
         :bulk-action-progress="bulkActionProgress"
+        @restore-items="restoreSelectedItems"
         @delete-items="deleteSelectedItems" />
       <documents-trash-list
         ref="documentsTrashList"
@@ -62,6 +63,15 @@ export default {
         }
         this.bulkActionProgress = false;
       }
+      if (actionName === 'restore'){
+        if (actionStatus === 'done_successfully') {
+          this.$root.$emit('trash-elements-updated');
+          this.displayAlert(this.$t('trash.elements.bulk.restore.success.message', {0: actionData?.treatedItemsIds?.length}));
+        } else {
+          this.$root.$emit('trash-elements-updated');
+        }
+        this.bulkActionProgress = false;
+      }
     },
     updateSelection(items) {
       this.selectedElements = items;
@@ -81,7 +91,7 @@ export default {
       }).catch((error) => {
         console.error('Error deleting trash elements:', error);
         this.displayAlert(this.$t('trash.element.delete.message.error'), 'error');
-      }).finally(() => this.loading = false);
+      });
     },
     deleteMultipleDocuments() {
       const max = Math.floor(9999);
@@ -92,6 +102,35 @@ export default {
         console.error('Error deleting trash elements:', error);
         this.bulkActionProgress = false;
         this.displayAlert(this.$t('trash.element.delete.message.error'), 'error');
+      });
+    },
+    restoreSelectedItems() {
+      if (this.selectedElements.length === 1 ) {
+        const item = this.selectedElements[0];
+        this.restoreSingleDocument(item.path);
+      } else {
+        this.restoreMultipleDocuments();
+      }
+    },
+    restoreSingleDocument(documentPath) {
+      this.loading = true;
+      this.$trashManagementService.restoreDocument(documentPath).then(() => {
+        this.displayAlert(this.$t('trash.element.restore.message.success'));
+        this.$root.$emit('trash-elements-updated');
+      }).catch((error) => {
+        console.error('Error restoring trash elements:', error);
+        this.displayAlert(this.$t('trash.element.restore.message.error'), 'error');
+      });
+    },
+    restoreMultipleDocuments() {
+      const max = Math.floor(9999);
+      const random = crypto.getRandomValues(new Uint32Array(1))[0];
+      const actionId = random % max;
+      this.bulkActionProgress = true;
+      this.$trashManagementService.restoreDocumentsPermanently(actionId, this.selectedElements).catch((error) => {
+        console.error('Error restoring trash elements:', error);
+        this.bulkActionProgress = false;
+        this.displayAlert(this.$t('trash.element.restore.message.error'), 'error');
       });
     },
     displayAlert(message, type) {

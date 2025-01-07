@@ -1746,19 +1746,20 @@ public class DocumentFileRestTest {
   public void testDeleteDocumentsPermanently() throws IllegalAccessException {
     DocumentFileService documentFileService = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
-            spaceService,
-            identityManager,
-            metadataService,
-            settingService,
-            documentWebSocketService,
-            publicDocumentAccessService,
-            externalDownloadService);
+                                                             spaceService,
+                                                             identityManager,
+                                                             metadataService,
+                                                             settingService,
+                                                             documentWebSocketService,
+                                                             publicDocumentAccessService,
+                                                             externalDownloadService);
     List<TrashElementEntity> trashElementEntities = new ArrayList<>();
     Response response = documentFileRest.deleteDocumentsPermanently(1, trashElementEntities);
     assertEquals(400, response.getStatus());
     //
     trashElementEntities.add(new TrashElementEntity());
-    doThrow(new IllegalAccessException("Error deleting document")).when(documentFileService).deleteDocumentsPermanently(anyInt(), anyList(), anyLong());
+    doThrow(new IllegalAccessException("Error deleting document")).when(documentFileService)
+                                                                  .deleteDocumentsPermanently(anyInt(), anyList(), anyLong());
 
     response = documentFileRest.deleteDocumentsPermanently(1, trashElementEntities);
     assertEquals(401, response.getStatus());
@@ -1766,6 +1767,34 @@ public class DocumentFileRestTest {
     doNothing().when(documentFileService).deleteDocumentsPermanently(anyInt(), anyList(), anyLong());
     //
     response = documentFileRest.deleteDocumentsPermanently(1, trashElementEntities);
+    assertEquals(200, response.getStatus());
+  }
+
+  @Test
+  public void testRestoreDocuments() throws IllegalAccessException {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+                                                             spaceService,
+                                                             identityManager,
+                                                             metadataService,
+                                                             settingService,
+                                                             documentWebSocketService,
+                                                             publicDocumentAccessService,
+                                                             externalDownloadService);
+    List<TrashElementEntity> trashElementEntities = new ArrayList<>();
+    Response response = documentFileRest.restoreDocuments(1, trashElementEntities);
+    assertEquals(400, response.getStatus());
+    //
+    trashElementEntities.add(new TrashElementEntity());
+    doThrow(new IllegalAccessException("Error restoring document")).when(documentFileService)
+                                                                   .restoreDocuments(anyInt(), anyList(), anyLong());
+
+    response = documentFileRest.restoreDocuments(1, trashElementEntities);
+    assertEquals(401, response.getStatus());
+    //
+    doNothing().when(documentFileService).restoreDocuments(anyInt(), anyList(), anyLong());
+    //
+    response = documentFileRest.restoreDocuments(1, trashElementEntities);
     assertEquals(200, response.getStatus());
   }
 }

@@ -22,6 +22,7 @@ import DocumentsTrashList from './components/main/DocumentsTrashList.vue';
 import DocumentsTrashItem from './components/item/DocumentsTrashItem.vue';
 import DocumentsTrashItemMenu from './components/menu/DocumentsTrashItemMenu.vue';
 import DocumentsTrashItemsBulkDelete from './components/bulk-action/DocumentsTrashItemsBulkDelete.vue';
+import DocumentsTrashItemsBulkRestore from './components/bulk-action/DocumentsTrashItemsBulkRestore.vue';
 
 const components = {
   'trash-management': TrashManagement,
@@ -29,7 +30,8 @@ const components = {
   'documents-trash-list': DocumentsTrashList,
   'document-trash-item': DocumentsTrashItem,
   'document-trash-item-menu': DocumentsTrashItemMenu,
-  'documents-trash-items-bulk-delete': DocumentsTrashItemsBulkDelete
+  'documents-trash-items-bulk-delete': DocumentsTrashItemsBulkDelete,
+  'documents-trash-items-bulk-restore': DocumentsTrashItemsBulkRestore
 };
 
 for (const key in components) {
