@@ -34,5 +34,16 @@
             <visibility>SYSTEM</visibility>
             <page-reference>portal::global::drives</page-reference>
         </node>
+        <node>
+            <name>home</name>
+            <label>#{portal.global.spaceHome}</label>
+            <visibility>SYSTEM</visibility>
+            <node>
+                <name>documents</name>
+                <label>#{portal.global.documents}</label>
+                <visibility>SYSTEM</visibility>
+                <page-reference>portal::global::drives</page-reference>
+            </node>
+        </node>
     </page-nodes>
 </node-navigation>

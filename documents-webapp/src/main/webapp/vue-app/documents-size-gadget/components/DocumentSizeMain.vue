@@ -140,7 +140,7 @@ export default {
     },
     documentsBaseLink (){
       if (eXo.env.portal.spaceIdentityId){
-        return `${eXo.env.portal.context}/g/:spaces:${eXo.env.portal.spaceGroup}/${eXo.env.portal.spaceName}/documents`;
+        return `${eXo.env.portal.context}/s/${eXo.env.portal.spaceId}/documents`;
       } else {
         return `${eXo.env.portal.context}/${eXo.env.portal.portalName}/drives`;
       }
