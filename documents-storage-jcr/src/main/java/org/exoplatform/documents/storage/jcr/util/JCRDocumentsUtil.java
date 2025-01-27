@@ -999,8 +999,7 @@ public class JCRDocumentsUtil {
     String domain = CommonsUtils.getCurrentDomain();
     stringBuilder.append(domain).append("/").append(LinkProvider.getPortalName(null)).append("/");
     if (space != null) {
-      String groupId = space.getGroupId().replace("/", ":");
-      stringBuilder.append("g/").append(groupId).append("/").append(space.getPrettyName()).append("/documents");
+      stringBuilder.append("s/").append(space.getId()).append("/documents");
     } else {
       stringBuilder.append(portalOwner).append("/documents");
     }
