@@ -16,222 +16,219 @@
 -->
 
 <template>
-  <div>
-    <exo-drawer
-      ref="documentsUploadZipDrawer"
-      class="documentsUploadZipDrawer"
-      :confirm-close="uploading"
-      :confirm-close-labels="confirmCloseLabels"
-      @closed="close"
-      show-overlay
-      right>
-      <template slot="title">
-        {{ $t('documents.drawer.upload.zip.title') }}
-      </template>
-      <template slot="content">
-        <div v-if="!importing">
-          <template>
-            <div class="d-flex align-center px-4 py-2">
-              <v-subheader class="text-header-title pl-0 d-flex">
-                {{ $t('documents.label.upload.zip.choice') }}
-              </v-subheader>
-            </div>
-            <div class="caption font-weight-light grey--text px-4 mt-n5">
-              {{ $t('documents.label.zip.attachments.upload.description') }}
-            </div>
-            <documents-zip-upload-input
-              v-if="value.length === 0"
-              :attachments="value" />
+  <exo-drawer
+    ref="documentsUploadZipDrawer"
+    class="documentsUploadZipDrawer"
+    :confirm-close="uploading"
+    :confirm-close-labels="confirmCloseLabels"
+    @closed="close"
+    right>
+    <template slot="title">
+      {{ $t('documents.drawer.upload.zip.title') }}
+    </template>
+    <template slot="content">
+      <div v-if="!importing">
+        <template>
+          <div class="d-flex align-center px-4 py-2">
+            <v-subheader class="text-header-title pl-0 d-flex">
+              {{ $t('documents.label.upload.zip.choice') }}
+            </v-subheader>
+          </div>
+          <div class="caption font-weight-light grey--text px-4 mt-n5">
+            {{ $t('documents.label.zip.attachments.upload.description') }}
+          </div>
+          <documents-zip-upload-input
+            v-if="value.length === 0"
+            :attachments="value" />
 
-            <documents-zip-uploaded
-              v-else
-              :attachments="value" />
-                  
-            <div class="d-flex align-center px-4 py-2">
-              <v-subheader class="text-header-title pl-0 d-flex">
-                {{ $t('documents.label.upload.zip.rules') }}
-              </v-subheader>
-            </div>
-            <div class="caption font-weight-light grey--text px-4 mt-n5">
-              {{ $t('documents.label.upload.zip.rules.description') }}
-            </div>
-            <div class="radio-group-container ps-3">
-              <v-radio-group
-                v-model="selected">
-                <v-radio
-                  :label="$t('documents.label.upload.zip.rules.duplicate')"
-                  value="duplicate" />
-                <v-radio
-                  :label="$t('documents.label.upload.zip.rules.ignore')"
-                  value="ignore" />
-              </v-radio-group>
-            </div>
+          <documents-zip-uploaded
+            v-else
+            :attachments="value" />
+ 
+          <div class="d-flex align-center px-4 py-2">
+            <v-subheader class="text-header-title pl-0 d-flex">
+              {{ $t('documents.label.upload.zip.rules') }}
+            </v-subheader>
+          </div>
+          <div class="caption font-weight-light grey--text px-4 mt-n5">
+            {{ $t('documents.label.upload.zip.rules.description') }}
+          </div>
+          <div class="radio-group-container ps-3">
+            <v-radio-group
+              v-model="selected">
+              <v-radio
+                :label="$t('documents.label.upload.zip.rules.duplicate')"
+                value="duplicate" />
+              <v-radio
+                :label="$t('documents.label.upload.zip.rules.ignore')"
+                value="ignore" />
+            </v-radio-group>
+          </div>
+        </template>
+      </div>
+      <div v-else>
+        <v-row
+          class="ma-0"
+          align-content="center"
+          justify="center">
+          <v-col
+            v-if="status!==''"
+            class="text-subtitle-1 text-center"
+            :class="status==='cannot_unzip_file'||status==='failed'?'error--text':''"
+            cols="12">
+            {{ $t(`documents.import.status.${status}`) }}
+          </v-col>
+          <v-col cols="9" v-if="status==='unzipping'">
+            <v-progress-linear
+              indeterminate
+              rounded
+              height="20"
+              class="disable-pointer-event" />
+          </v-col>
+          <v-col cols="11" v-else>
+            <v-progress-linear
+              v-if="status!=='cannot_unzip_file'"
+              v-model="progress"
+              rounded
+              height="20"
+              class="disable-pointer-event">
+              <strong v-if="status!=='cannot_unzip_file'">{{ Math.ceil(progress) }}%</strong>
+            </v-progress-linear>
+          </v-col>
+          <v-col cols="11" v-if="status==='creating_documents'">
+            {{ importData.importedFilesCount }}/{{ totalNumber }}: {{ importData.documentInProgress }}
+          </v-col>
+          <v-col cols="12" v-if="status==='done_successfully' ||status==='done_with_errors' || status==='failed'">
+            <v-list-item>
+              <v-list-item-content>
+                <v-list-item-title>
+                  <div class="d-flex flex-nowrap pa-1">
+                    <v-icon
+                      v-if="showCreatedFiles"
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-up pa-1 chevron-icon" 
+                      @click="showCreatedFiles=!showCreatedFiles" />
+                    <v-icon
+                      v-else
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-down pa-1 chevron-icon"
+                      @click="showCreatedFiles=!showCreatedFiles" />
+                    <span class="px-2 my-auto">{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
+                    <v-divider class="my-auto" />
+                  </div>
+                </v-list-item-title>
+                <v-list-item-subtitle
+                  v-if="showCreatedFiles"
+                  v-sanitized-html="importData.createdFiles.join('<br>')"
+                  class="ps-6" />
+              </v-list-item-content>
+            </v-list-item> 
+            <v-list-item>
+              <v-list-item-content>
+                <v-list-item-title>
+                  <div class="d-flex flex-nowrap pa-1">
+                    <v-icon
+                      v-if="showIgnoredFiles"
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-up pa-1 chevron-icon" 
+                      @click="showIgnoredFiles=!showIgnoredFiles" />
+                    <v-icon
+                      v-else
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-down pa-1 chevron-icon"
+                      @click="showIgnoredFiles=!showIgnoredFiles" />
+                    <span class="px-2 my-auto">{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
+                    <v-divider class="my-auto" />
+                  </div>
+                </v-list-item-title>
+                <v-list-item-subtitle
+                  v-if="showIgnoredFiles"
+                  v-sanitized-html="importData.ignoredFiles.join('<br>')"
+                  class="ps-6" />
+              </v-list-item-content>
+            </v-list-item>  
+            <v-list-item>
+              <v-list-item-content>
+                <v-list-item-title>
+                  <div class="d-flex flex-nowrap pa-1">
+                    <v-icon
+                      v-if="showDuplicatedFiles"
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-up pa-1 chevron-icon" 
+                      @click="showDuplicatedFiles=!showDuplicatedFiles" />
+                    <v-icon
+                      v-else
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-down pa-1 chevron-icon"
+                      @click="showDuplicatedFiles=!showDuplicatedFiles" />
+                    <span class="px-2 my-auto">{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
+                    <v-divider class="my-auto" />
+                  </div>
+                </v-list-item-title>
+                <v-list-item-subtitle
+                  v-if="showDuplicatedFiles"
+                  v-sanitized-html="importData.duplicatedFiles.join('<br>')"
+                  class="ps-6" />
+              </v-list-item-content>
+            </v-list-item> 
+            <v-list-item>
+              <v-list-item-content>
+                <v-list-item-title>
+                  <div class="d-flex flex-nowrap pa-1">
+                    <v-icon
+                      v-if="showFailedFiles"
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-up pa-1 chevron-icon" 
+                      @click="showFailedFiles=!showFailedFiles" />
+                    <v-icon
+                      v-else
+                      color="grey"
+                      size="16"
+                      class="fas fa-chevron-down pa-1 chevron-icon"
+                      @click="showFailedFiles=!showFailedFiles" />
+                    <span class="px-2 my-auto">{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
+                    <v-divider class="my-auto" />
+                  </div>
+                </v-list-item-title>
+                <v-list-item-subtitle
+                  v-if="showFailedFiles"
+                  v-sanitized-html="importData.failedFiles.join('<br>')"
+                  class="ps-6" />
+              </v-list-item-content>
+            </v-list-item>
+          </v-col>
+        </v-row>
+      </div>
+    </template>
+    <template slot="footer">
+      <div class="d-flex">
+        <v-spacer />
+        <v-btn
+          class="btn me-2"
+          @click="cancel">
+          <template>
+            {{ $t('documents.label.button.close') }}
           </template>
-        </div>
-        <div v-else>
-          <v-row
-            class="ma-0"
-            align-content="center"
-            justify="center">
-            <v-col
-              v-if="status!==''"
-              class="text-subtitle-1 text-center"
-              :class="status==='cannot_unzip_file'||status==='failed'?'error--text':''"
-              cols="12">
-              {{ $t(`documents.import.status.${status}`) }}
-            </v-col>
-            <v-col cols="9" v-if="status==='unzipping'">
-              <v-progress-linear
-                indeterminate
-                rounded
-                height="20"
-                class="disable-pointer-event" />
-            </v-col>
-            <v-col cols="11" v-else>
-              <v-progress-linear
-                v-if="status!=='cannot_unzip_file'"
-                v-model="progress"
-                rounded
-                height="20"
-                class="disable-pointer-event">
-                <strong v-if="status!=='cannot_unzip_file'">{{ Math.ceil(progress) }}%</strong>
-              </v-progress-linear>
-            </v-col>
-            <v-col cols="11" v-if="status==='creating_documents'">
-              {{ importData.importedFilesCount }}/{{ totalNumber }}: {{ importData.documentInProgress }}
-            </v-col>
-            <v-col cols="12" v-if="status==='done_successfully' ||status==='done_with_errors' || status==='failed'">
-              <v-list-item>
-                <v-list-item-content>
-                  <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1">
-                      <v-icon
-                        v-if="showCreatedFiles"
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-up pa-1 chevron-icon" 
-                        @click="showCreatedFiles=!showCreatedFiles" />
-                      <v-icon
-                        v-else
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-down pa-1 chevron-icon"
-                        @click="showCreatedFiles=!showCreatedFiles" />
-                      <span class="px-2 my-auto">{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
-                      <v-divider class="my-auto" />
-                    </div>
-                  </v-list-item-title>
-                  <v-list-item-subtitle
-                    v-if="showCreatedFiles"
-                    v-sanitized-html="importData.createdFiles.join('<br>')"
-                    class="ps-6" />
-                </v-list-item-content>
-              </v-list-item> 
-              <v-list-item>
-                <v-list-item-content>
-                  <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1">
-                      <v-icon
-                        v-if="showIgnoredFiles"
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-up pa-1 chevron-icon" 
-                        @click="showIgnoredFiles=!showIgnoredFiles" />
-                      <v-icon
-                        v-else
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-down pa-1 chevron-icon"
-                        @click="showIgnoredFiles=!showIgnoredFiles" />
-                      <span class="px-2 my-auto">{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
-                      <v-divider class="my-auto" />
-                    </div>
-                  </v-list-item-title>
-                  <v-list-item-subtitle
-                    v-if="showIgnoredFiles"
-                    v-sanitized-html="importData.ignoredFiles.join('<br>')"
-                    class="ps-6" />
-                </v-list-item-content>
-              </v-list-item>  
-              <v-list-item>
-                <v-list-item-content>
-                  <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1">
-                      <v-icon
-                        v-if="showDuplicatedFiles"
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-up pa-1 chevron-icon" 
-                        @click="showDuplicatedFiles=!showDuplicatedFiles" />
-                      <v-icon
-                        v-else
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-down pa-1 chevron-icon"
-                        @click="showDuplicatedFiles=!showDuplicatedFiles" />
-                      <span class="px-2 my-auto">{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
-                      <v-divider class="my-auto" />
-                    </div>
-                  </v-list-item-title>
-                  <v-list-item-subtitle
-                    v-if="showDuplicatedFiles"
-                    v-sanitized-html="importData.duplicatedFiles.join('<br>')"
-                    class="ps-6" />
-                </v-list-item-content>
-              </v-list-item> 
-              <v-list-item>
-                <v-list-item-content>
-                  <v-list-item-title>
-                    <div class="d-flex flex-nowrap pa-1">
-                      <v-icon
-                        v-if="showFailedFiles"
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-up pa-1 chevron-icon" 
-                        @click="showFailedFiles=!showFailedFiles" />
-                      <v-icon
-                        v-else
-                        color="grey"
-                        size="16"
-                        class="fas fa-chevron-down pa-1 chevron-icon"
-                        @click="showFailedFiles=!showFailedFiles" />
-                      <span class="px-2 my-auto">{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
-                      <v-divider class="my-auto" />
-                    </div>
-                  </v-list-item-title>
-                  <v-list-item-subtitle
-                    v-if="showFailedFiles"
-                    v-sanitized-html="importData.failedFiles.join('<br>')"
-                    class="ps-6" />
-                </v-list-item-content>
-              </v-list-item>
-            </v-col>
-          </v-row>
-        </div>
-      </template>
-      <template slot="footer">
-        <div class="d-flex">
-          <v-spacer />
-          <v-btn
-            class="btn me-2"
-            @click="cancel">
-            <template>
-              {{ $t('documents.label.button.close') }}
-            </template>
-          </v-btn>
-          <v-btn
-            v-show="status!=='done_successfully' && status!=='done_with_errors' && status!=='failed' && !importing"
-            :disabled="uploadButtonDisabled"
-            class="btn btn-primary"
-            @click="uploadDocuments">
-            <template>
-              {{ $t('documents.label.zip.upload') }}
-            </template>
-          </v-btn>
-        </div>
-      </template>
-    </exo-drawer>
-  </div>
+        </v-btn>
+        <v-btn
+          v-show="status!=='done_successfully' && status!=='done_with_errors' && status!=='failed' && !importing"
+          :disabled="uploadButtonDisabled"
+          class="btn btn-primary"
+          @click="uploadDocuments">
+          <template>
+            {{ $t('documents.label.zip.upload') }}
+          </template>
+        </v-btn>
+      </div>
+    </template>
+  </exo-drawer>
 </template>
 <script>
 export default {
