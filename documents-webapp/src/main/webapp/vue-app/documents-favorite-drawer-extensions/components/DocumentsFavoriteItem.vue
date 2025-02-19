@@ -9,7 +9,7 @@
     </v-list-item-icon>
 
     <v-list-item-content>
-      <v-list-item-title class="text-color body-2">{{ documentTitle }}</v-list-item-title>
+      <v-list-item-title class="text-color text-truncate">{{ documentTitle }}</v-list-item-title>
     </v-list-item-content>
 
     <v-list-item-action>
