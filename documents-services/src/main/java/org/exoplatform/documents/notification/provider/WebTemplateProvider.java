@@ -31,6 +31,7 @@ import org.exoplatform.commons.api.notification.model.NotificationInfo;
 import org.exoplatform.commons.api.notification.model.PluginKey;
 import org.exoplatform.commons.api.notification.service.template.TemplateContext;
 import org.exoplatform.commons.notification.template.TemplateUtils;
+import org.exoplatform.commons.utils.TimeConvertUtils;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.notification.plugin.AddDocumentCollaboratorPlugin;
 import org.exoplatform.documents.notification.plugin.ImportDocumentsPlugin;
@@ -38,7 +39,6 @@ import org.exoplatform.documents.notification.utils.NotificationConstants;
 import org.exoplatform.documents.notification.utils.NotificationUtils;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
-import org.exoplatform.webui.utils.TimeConvertUtils;
 
 @TemplateConfigs(templates = {
     @TemplateConfig(pluginId = AddDocumentCollaboratorPlugin.ID, template = "war:/notification/templates/web/AddDocumentCollaboratorPlugin.gtmpl"),
