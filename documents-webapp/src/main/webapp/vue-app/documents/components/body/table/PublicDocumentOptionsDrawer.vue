@@ -34,7 +34,7 @@
           v-model="valid">
           <div class="d-flex flex-row">
             <div class="d-flex flex-column full-width ma-auto">
-              <p>
+              <p class="text-body font-weight-bold">
                 {{ $t('documents.public.access.options.password.label') }}
               </p>
               <p
@@ -49,10 +49,10 @@
               </p>
               <div
                 v-if="showPasswordInput"
-                class="pe-4 ps-4 pt-3 mb-2">
+                class="pt-3 mb-2">
                 <v-label
                   for="documentPassword">
-                  <span class="text-body-2 font-weight-bold">
+                  <span class="text-body">
                     {{ $t('documents.public.link.new.password.message') }}
                   </span>*
                 </v-label>
@@ -80,7 +80,7 @@
                 </p>
                 <v-label
                   for="confirmDocumentPassword">
-                  <span class="text-body-2 font-weight-bold">
+                  <span class="text-body">
                     {{ $t('documents.public.link.confirm.password.message') }}
                   </span>*
                 </v-label>
@@ -157,9 +157,9 @@
               </v-tooltip>
             </div>
           </div>
-          <div class="d-flex flex-row">
+          <div class="d-flex flex-row mt-3">
             <div class="d-flex flex-column full-width ma-auto">
-              <p>
+              <p class="text-body font-weight-bold">
                 {{ $t('documents.public.access.options.expirationDate.label') }}
               </p>
               <p
@@ -174,7 +174,7 @@
               </p>
               <div
                 v-if="showExpirationDateInput"
-                class="pe-4 ps-4 mt-n4 mb-2">
+                class="mt-n4 mb-2">
                 <v-radio-group
                   v-model="expirationDateType"
                   mandatory>
