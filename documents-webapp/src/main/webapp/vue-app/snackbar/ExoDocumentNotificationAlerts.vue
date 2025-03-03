@@ -47,6 +47,7 @@ export default {
           clickMessage,
         });
       }
+      document.addEventListener('document-alert-notification-dismissed', this.handleDocumentDeletionDismissal);
     });
   },
   methods: {
@@ -73,6 +74,12 @@ export default {
           });
         });
     },
+    handleDocumentDeletionDismissal() {
+      setTimeout(() => {
+        localStorage.removeItem('deletedDocument');
+        document.removeEventListener('document-alert-notification-dismissed', this.handleDocumentDeletionDismissal);
+      }, 2000);
+    }
   },
 };
 </script>
