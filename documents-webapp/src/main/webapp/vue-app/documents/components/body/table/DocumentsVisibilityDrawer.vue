@@ -47,8 +47,8 @@
           <v-list-item-content class="my-1">
             <div class="my-4">
               <v-label for="choice">
-                <span v-if="!file.folder" class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
-                <span v-else class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.folders.visibility.choice') + ' :' }}</span>
+                <span v-if="!file.folder" class="font-weight-bold text-start text-body">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
+                <span v-else class="font-weight-bold text-start text-body">{{ $t('documents.label.folders.visibility.choice') + ' :' }}</span>
               </v-label>
               <v-select
                 v-model="visibilityChoice"
@@ -59,20 +59,20 @@
                 class="caption"
                 outlined />
               <p
-                class="text-caption grey--text text--darken-2 caption text-break">
+                class="text-subtitle text-break">
                 {{ choiceInfo }}
               </p>
             </div>
             <div
               v-if="showPublicAccessOption"
               class="d-block">
-              <div class="d-flex flex-row my-4 ms-4 mt-n1">
-                <div class="d-flex flex-column full-width">
+              <div class="d-flex flex-row">
+                <div class="d-flex flex-column full-width pb-4">
                   <v-label for="publicAccess">
-                    <span class="text-color body-2 mr-6">
+                    <span class="text-body mr-6">
                       {{ $t('document.visibility.publicAccess.message') }}
                     </span>
-                    <p class="caption pe-8"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
+                    <p class="text-subtitle pe-8"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
                   </v-label>
                 </div>
                 <div class="d-flex flex-column">
@@ -95,13 +95,13 @@
                   </v-tooltip>
                 </div>
               </div>
-              <div class="d-flex flex-row my-4 ms-4 mt-n1">
+              <div class="d-flex flex-row pb-4">
                 <div class="d-flex flex-column full-width">
                   <v-label for="publicAccessOptions">
-                    <span class="text-color body-2 mr-6">
+                    <span class="text-body mr-6">
                       {{ $t('documents.public.access.options.message') }}
                     </span>
-                    <p class="caption">
+                    <p class="text-subtitle">
                       <span v-if="!hasPublicAccessPassword">
                         {{ $t('documents.public.access.options.undefined.password') }}
                       </span>
@@ -148,15 +148,15 @@
             <div
               v-if="showSwitch"
               class="mt-4">
-              <p class="font-weight-bold text-start text-color body-2">
+              <p class="font-weight-bold text-start text-body">
                 {{ $t(`document.visibility.who.canEdit.${fileGenderLabel}.message`) }}
               </p>
               <div class="d-flex flex-row my-4">
                 <v-label for="visibility">
-                  <span class="text-color body-2 mr-6">
+                  <span class="text-body mr-6">
                     {{ $t('documents.label.visibility.allowEveryone') }}
                   </span>
-                  <p class="caption"> {{ infoMessage }} </p>
+                  <p class="text-subtitle"> {{ infoMessage }} </p>
                 </v-label>
                 <v-spacer />
                 <v-switch
@@ -173,7 +173,7 @@
           <v-list-item-content class="my-1">
             <div class="d-flex">
               <v-label for="collaborator">
-                <span class="font-weight-bold text-start text-color body-2">{{ $t('documents.label.visibility.collaborator') }}</span>
+                <span class="font-weight-bold text-start text-body">{{ $t('documents.label.visibility.collaborator') }}</span>
               </v-label>
               <v-tooltip bottom v-if="!isMobile">
                 <template #activator="{ on, attrs }">
