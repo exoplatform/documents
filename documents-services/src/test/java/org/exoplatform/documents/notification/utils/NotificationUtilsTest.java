@@ -5,13 +5,13 @@ import static org.exoplatform.documents.notification.utils.NotificationUtils.NT_
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-import javax.jcr.*;
+import javax.jcr.Node;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+import javax.jcr.Value;
 
-import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,8 +24,8 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.services.jcr.core.ExtendedNode;
-import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -67,8 +67,9 @@ public class NotificationUtilsTest {
   public void getDocumentLink() throws RepositoryException {
     Identity identity = mock(Identity.class);
     Space space = new Space();
-    space.setGroupId("/spaces/spacex");
+    space.setId("1");
     space.setPrettyName("spacex");
+    space.setGroupId("/spaces/spacex");
     when(identity.getRemoteId()).thenReturn("spacex");
     Node node = Mockito.mock(ExtendedNode.class);
     when(((ExtendedNode) node).getIdentifier()).thenReturn("123");
@@ -78,7 +79,7 @@ public class NotificationUtilsTest {
     ENTITY_BUILDER.when(() -> EntityBuilder.getOwnerIdentityFromNodePath(any(), any(), any())).thenReturn(identity);
 
     String link = NotificationUtils.getDocumentLink(node, spaceService, identityManager);
-    assertEquals("http://domain/portal/g/:spaces:spacex/spacex/documents?documentPreviewId=123", link);
+    assertEquals("http://domain/portal/s/1/documents?documentPreviewId=123", link);
   }
 
   @Test
