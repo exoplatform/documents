@@ -69,6 +69,7 @@ export default {
     displayAlert() {
       if (!this.displayAlert) {
         this.$emit('dismissed');
+        document.dispatchEvent(new CustomEvent('document-alert-notification-dismissed'));
       }
     },
   },
