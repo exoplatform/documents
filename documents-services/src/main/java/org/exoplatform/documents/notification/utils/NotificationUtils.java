@@ -16,6 +16,10 @@
  */
 package org.exoplatform.documents.notification.utils;
 
+import javax.jcr.Node;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
+
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.services.jcr.core.ExtendedNode;
@@ -27,10 +31,6 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-
-import javax.jcr.Node;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
 
 public class NotificationUtils {
 
@@ -44,10 +44,9 @@ public class NotificationUtils {
     StringBuilder stringBuilder = new StringBuilder();
     Identity identity = EntityBuilder.getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
     Space space = spaceService.getSpaceByPrettyName(identity.getRemoteId());
-    String groupId = space.getGroupId().replace("/", ":");
     String domain = CommonsUtils.getCurrentDomain();
     stringBuilder.append(domain).append("/").append(LinkProvider.getPortalName(null)).append("/");
-    stringBuilder.append("g/").append(groupId).append("/").append(space.getPrettyName());
+    stringBuilder.append("s/").append(space.getId());
     if (node.hasNode(JCR_CONTENT)) {
       stringBuilder.append("/documents?documentPreviewId=");
     } else {
