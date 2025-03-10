@@ -40,31 +40,46 @@
           <span class="ps-1">{{ !isMobile ? $t('documents.button.addNew') : '' }}</span>
         </v-btn>
       </template>
-      <v-list dense class="pa-0 text-no-wrap width-fit-content add-document-menu-items">
+      <v-list class="pa-0" dense>
         <v-list-item
           v-if="isFolderView"
-          @click="addFolder()"
-          class="ps-2 pe-4 action-menu-item d-flex align-center">
+          class="text-body menu-text-color"
+          @click="addFolder()">
+          <v-list-item-icon class="me-1">
           <v-icon
             size="16"
-            class="clickable icon-menu icon-default-color">
+            class="pe-1">
             fa-folder
           </v-icon>
-          <span v-if="!isMobile" class="text-body">{{ $t('documents.button.addNewFolder') }}</span>
+          </v-list-item-icon>
+          <v-list-item-title
+            class="text-body menu-text-color">
+            <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFolder') }}</span>
+        </v-list-item-title>
         </v-list-item>
         <v-list-item
-          @click="openDrawer()"
-          class="ps-2 pe-4 action-menu-item d-flex align-center">
-          <v-icon size="16" class="clickable icon-menu icon-default-color">fa-file-alt</v-icon>
-          <span v-if="!isMobile" class="text-body">{{ $t('documents.button.addNewFile') }}</span>
+          class="text-body menu-text-color"
+          @click="openDrawer()">
+          <v-list-item-icon class="me-1">
+          <v-icon size="16" class="pe-1">fa-file-alt</v-icon>
+          </v-list-item-icon>
+          <v-list-item-title
+              class="text-body menu-text-color">
+          <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFile') }}</span>
+          </v-list-item-title>
         </v-list-item>
         <v-list-item
           v-on="on"
           :disabled="!importEnabled"
-          class="ps-2 pe-4 action-menu-item d-flex align-center"
+          class="text-body menu-text-color"
           @click="openImportDrawer()">
-          <v-icon size="16" class="clickable icon-menu icon-default-color">fas fa-upload</v-icon>
-          <span v-if="!isMobile" class="text-body">{{ $t('documents.label.zip.upload') }}</span>
+          <v-list-item-icon class="me-1">
+          <v-icon size="16" class="pe-1">fas fa-upload</v-icon>
+          </v-list-item-icon>
+          <v-list-item-title
+              class="text-body menu-text-color">
+          <span v-if="!isMobile" class="ps-1">{{ $t('documents.label.zip.upload') }}</span>
+          </v-list-item-title>
         </v-list-item>
       </v-list>
     </v-menu>
