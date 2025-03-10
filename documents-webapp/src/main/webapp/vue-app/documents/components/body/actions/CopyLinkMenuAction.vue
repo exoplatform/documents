@@ -33,7 +33,7 @@ export default {
       if (this.file.folder){
         path = `${path}?folderId=${this.file.id}`;
       } else {
-        path = `${path}?documentPreviewId=${this.file.id}`;
+        path = `${window.location.host}${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.file.id}&mode=view`;
       }
       $('body').append(inputTemp);
       inputTemp.val(path).select();
