@@ -46,7 +46,7 @@
       </div>
       <v-hover>
         <div slot-scope="{ hover }">
-          <v-row class="col-12 py-4 pl-8">
+          <v-row class="col-12">
             <v-col class="col-11 px-0 py-0">
               <div
                 v-show="showDescription"
