@@ -24,7 +24,7 @@
       offset-y
       down>
       <template #activator="{ on, attrs }">
-        <button
+        <v-btn
           :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
           class="btn btn-primary"
           :key="postKey"
@@ -37,52 +37,50 @@
             dark>
             fa-plus
           </v-icon>
-          {{ !isMobile ? $t('documents.button.addNew') : '' }}
-        </button>
+          <span class="ps-1">{{ !isMobile ? $t('documents.button.addNew') : '' }}</span>
+        </v-btn>
       </template>
-      <v-list dense class="pa-0">
+      <v-list class="pa-0" dense>
         <v-list-item
           v-if="isFolderView"
-          @click="addFolder()"
-          class="px-2 py-0 add-menu-list-item">
+          class="text-body menu-text-color"
+          @click="addFolder()">
+          <v-list-item-icon class="me-1">
           <v-icon
-            size="13"
-            class="clickable dark-grey-color pr-2">
+            size="16"
+            class="pe-1">
             fa-folder
           </v-icon>
-          <span v-if="!isMobile">{{ $t('documents.button.addNewFolder') }}</span>
+          </v-list-item-icon>
+          <v-list-item-title
+            class="text-body menu-text-color">
+            <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFolder') }}</span>
+        </v-list-item-title>
         </v-list-item>
         <v-list-item
-          @click="openDrawer()"
-          class="px-2 py-0 add-menu-list-item">
+          class="text-body menu-text-color"
+          @click="openDrawer()">
           <v-list-item-icon class="me-1">
-            <v-icon size="18" class="icon-default-color">fa-file-alt</v-icon>
+          <v-icon size="16" class="pe-1">fa-file-alt</v-icon>
           </v-list-item-icon>
-          <v-list-item-content v-if="!isMobile">
-            <v-list-item-title>
-              {{ $t('documents.button.addNewFile') }}
-            </v-list-item-title>
-          </v-list-item-content>
+          <v-list-item-title
+              class="text-body menu-text-color">
+          <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFile') }}</span>
+          </v-list-item-title>
         </v-list-item>
-        <v-tooltip bottom>
-          <template #activator="{ on }">
-            <v-list-item
-              v-on="on"
-              :disabled="!importEnabled"
-              class="px-2 py-0 add-menu-list-item"
-              @click="openImportDrawer()">
-              <v-list-item-icon class="me-1">
-                <v-icon size="18" class="icon-default-color">fas fa-upload</v-icon>
-              </v-list-item-icon>
-              <v-list-item-content v-if="!isMobile">
-                <v-list-item-title>
-                  {{ $t('documents.label.zip.upload') }}
-                </v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-          </template>
-          <span>{{ importTooltipText }}</span>
-        </v-tooltip>
+        <v-list-item
+          v-on="on"
+          :disabled="!importEnabled"
+          class="text-body menu-text-color"
+          @click="openImportDrawer()">
+          <v-list-item-icon class="me-1">
+          <v-icon size="16" class="pe-1">fas fa-upload</v-icon>
+          </v-list-item-icon>
+          <v-list-item-title
+              class="text-body menu-text-color">
+          <span v-if="!isMobile" class="ps-1">{{ $t('documents.label.zip.upload') }}</span>
+          </v-list-item-title>
+        </v-list-item>
       </v-list>
     </v-menu>
   </div>
@@ -121,20 +119,6 @@ export default {
     disableButton(){
       return this.currentFolder && this.currentFolder.accessList && this.currentFolder.accessList.canEdit === false ;
     },
-    importTooltipText(){
-      if (this.importEnabled) {
-        return this.$t('documents.label.btn.upload.zip.tooltip');
-      } else {
-        return this.$t('documents.label.btn.upload.zip.disabled.tooltip');
-      }
-    },
-    importBtnColorClass(){
-      if (this.importEnabled) {
-        return 'dark-grey-color';
-      } else {
-        return 'disabled--text';
-      } 
-    }
   },
   created() {
     $(document).on('mousedown', () => {
