@@ -28,12 +28,20 @@ export default {
   methods: {
     copyLink() {
       const inputTemp = $('<input>');
-      const pathParts = window.location.href.toLowerCase().split(eXo.env.portal.selectedNodeUri.toLowerCase());
-      let path = `${pathParts[0]}${eXo.env.portal.selectedNodeUri}`;
+      let path = `${window.location.host}${eXo.env.portal.context}`;
+      if (eXo.env.portal.spaceId){
+        const pathParts = eXo.env.portal.selectedNodeUri.split('home');
+        const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri;
+        path = `${path}/s/${eXo.env.portal.spaceId}${nodeUri}`;
+      } else {
+        path = `${path}/${eXo.env.portal.metaPortalName}/${eXo.env.portal.selectedNodeUri}`;
+      }
       if (this.file.folder){
         path = `${path}?folderId=${this.file.id}`;
-      } else {
+      } else if (Vue.prototype?.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === this.file?.mimeType).length > 0){
         path = `${window.location.host}${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.file.id}&mode=view`;
+      } else {
+        path = `${path}?documentPreviewId=${this.file.id}`;
       }
       $('body').append(inputTemp);
       inputTemp.val(path).select();
