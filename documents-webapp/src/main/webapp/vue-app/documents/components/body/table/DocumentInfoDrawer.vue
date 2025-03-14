@@ -8,31 +8,28 @@
       {{ $t('documents.drawer.details.title') }}
     </template>
     <template v-if="file" slot="content">
-      <v-list-item>
-        <v-list-item-content class="ma-1">
-          <a class="text-center not-clickable d-flex align-center">
-            <v-spacer />
-            <v-icon :color="iconColor">{{ iconClass }}</v-icon>
-            <span
-              class="fileName font-weight-bold text-color ms-2 px-2">
-              {{ file.name }}
-            </span>
-            <div class="d-flex align-center pb-1">
-              <span
-                v-if="file.versionNumber"
-                @click="showVersionHistory"
-                class="item-version text-caption border-radius primary pa-0 px-1 clickable">
-                V{{ file.versionNumber }}
-              </span>
-              <documents-favorite-action
-                v-if="!file.folder"
-                :file="file"
-                :is-mobile="isMobile" />
-            </div>
-            <v-spacer />
-          </a>
-        </v-list-item-content>
-      </v-list-item>
+      <div class="d-flex align-center justify-center flex-grow-1 text-center pt-2">
+        <v-icon v-if="icon" :color="iconColor">{{ iconClass }}</v-icon>
+        <span class="fileName font-weight-bold text-body text-truncate ms-2 px-2">
+          {{ file.name }}
+        </span>
+        <div class="d-flex align-center">
+          <v-chip
+            v-if="file.versionNumber"
+            class="text-body clickable pa-2"
+            color="primary"
+            x-small
+            label
+            @click="showVersionHistory">
+            V{{ file.versionNumber }}
+          </v-chip>
+          <documents-favorite-action
+            v-if="!file.folder"
+            :file="file"
+            :is-mobile="isMobile" />
+        </div>
+      </div>
+
       <div v-if="showNoDescription">
         <div class="d-flex flex-row justify-center text-center pt-8">
           <v-icon size="40" class="descriptionIcon"> mdi-message-text-outline </v-icon>
@@ -49,7 +46,7 @@
       </div>
       <v-hover>
         <div slot-scope="{ hover }">
-          <v-row class="col-12 py-4 pl-8">
+          <v-row class="col-12">
             <v-col class="col-11 px-0 py-0">
               <div
                 v-show="showDescription"
@@ -91,120 +88,107 @@
       <template>
         <v-list-item>
           <v-list-item-content class="mt-4 mx-4">
-            <v-list-item-title>
-              <span
-                class="fileDetails text-color d-flex">
-                <span class="text-center not-clickable font-weight-bold">{{ $t('documents.drawer.details.modified') }}:</span>
-                <date-format
-                  :value="lastUpdated"
-                  :format="fullDateFormat"
-                  class="document-date not-clickable text-no-wrap mx-1" />
-                {{ $t('documents.drawer.details.by') }}
-                <exo-user-avatar
-                  v-if="identityModifier && !isCurrentUserModifier"
-                  :profile-id="identityModifier"
-                  avatar-class="me-2"
-                  size="42"
-                  fullname
-                  popover
-                  bold-title
-                  link-style
-                  class="text-decoration-underline text-truncate font-weight-bold mx-1"
-                  username-class />
-                <p v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
-                  {{ infoDrawerModifierLabel }}
-                </p>
-              </span>
-            </v-list-item-title>
+            <div class="d-flex text-truncate">
+              <span class="text-body font-weight-bold">{{ $t('documents.drawer.details.modified') }}:</span>
+              <date-format
+                :value="lastUpdated"
+                :format="fullDateFormat"
+                class="text-body not-clickable text-no-wrap mx-1" />
+              {{ $t('documents.drawer.details.by') }}
+              <exo-user-avatar
+                v-if="identityModifier && !isCurrentUserModifier"
+                :profile-id="identityModifier"
+                avatar-class="me-2"
+                size="42"
+                fullname
+                popover
+                bold-title
+                link-style
+                class="text-decoration-underline text-body text-truncate font-weight-bold mt-0 mx-1"
+                username-class />
+              <p v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
+                {{ infoDrawerModifierLabel }}
+              </p>
+            </div>
           </v-list-item-content>
         </v-list-item>
 
         <v-list-item>
           <v-list-item-content class="mx-4">
-            <v-list-item-title>
-              <span
-                class="fileDetails text-color d-flex ">
-                <span class="text-center not-clickable font-weight-bold">
-                  {{ $t('documents.drawer.details.created') }}:</span>
-                <date-format
-                  :value="fileCreated"
-                  :format="fullDateFormat"
-                  class="document-date not-clickable text-no-wrap mx-1" />
-                {{ $t('documents.drawer.details.by') }}
+            <div
+              class="d-flex text-truncate">
+              <span class="text-body font-weight-bold">
+                {{ $t('documents.drawer.details.created') }}:</span>
+              <date-format
+                :value="fileCreated"
+                :format="fullDateFormat"
+                class="text-body text-no-wrap mx-1" />
+              {{ $t('documents.drawer.details.by') }}
 
-                <exo-user-avatar
-                  v-if="identityCreated && !isCurrentUserCreator"
-                  :profile-id="identityCreated"
-                  avatar-class="me-2"
-                  size="42"
-                  fullname
-                  popover
-                  bold-title
-                  link-style
-                  extra-class="text-decoration-underline"
-                  class="text-decoration-underline text-truncate font-weight-bold mx-1"
-                  username-class />
-                <p v-else class="text-decoration-underline not-clickable primary--text font-weight-bold mx-1">
-                  {{ infoDrawerCreatorLabel }}
-                </p>
-              </span>
-            </v-list-item-title>
+              <exo-user-avatar
+                v-if="identityCreated && !isCurrentUserCreator"
+                :profile-id="identityCreated"
+                avatar-class="me-2"
+                size="42"
+                fullname
+                popover
+                bold-title
+                link-style
+                extra-class="text-decoration-underline"
+                class="text-decoration-underline text-body text-truncate font-weight-bold mt-0 mx-1"
+                username-class />
+              <p v-else class="text-decoration-underline not-clickable primary--text font-weight-bold mx-1">
+                {{ infoDrawerCreatorLabel }}
+              </p>
+            </div>
           </v-list-item-content>
         </v-list-item>
 
         <v-list-item>
           <v-list-item-content class="mx-4">
-            <v-list-item-title>
-              <span
-                class="fileDetails not-clickable text-color d-flex">
-                <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
-                <documents-file-size-cell
-                  class="mx-1 text-color"
-                  :file="file"
-                  prop-name="size"
-                  :is-mobile="isMobile" />
-              </span>
-            </v-list-item-title>
+            <div
+              class="d-flex">
+              <span class="text-center text-body font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
+              <documents-file-size-cell
+                class="mx-1 text-body"
+                :file="file"
+                prop-name="size"
+                :is-mobile="isMobile" />
+            </div>
           </v-list-item-content>
         </v-list-item>
         <v-list-item>
           <v-list-item-content class="mx-4">
-            <v-list-item-title>
-              <span
-                class="fileDetails not-clickable text-color d-flex">
-                <span class="text-center font-weight-bold">{{ $t('documents.drawer.details.sizeWithVersions') }}:</span>
-                <documents-file-size-cell
-                  class="mx-1 text-color"
-                  :file="file"
-                  prop-name="sizeWithVersions"
-                  :is-mobile="isMobile" />
-              </span>
-            </v-list-item-title>
+            <div
+              class="d-flex">
+              <span class="text-center text-body font-weight-bold">{{ $t('documents.drawer.details.sizeWithVersions') }}:</span>
+              <documents-file-size-cell
+                class="mx-1 text-body"
+                :file="file"
+                prop-name="sizeWithVersions"
+                :is-mobile="isMobile" />
+            </div>
           </v-list-item-content>
         </v-list-item>
         <v-list-item v-if="!file.folder">
           <v-list-item-content class="mx-4">
-            <v-list-item-title>
-              <span
-                class="fileDetails not-clickable text-color d-flex">
-                <span class="text-center font-weight-bold">{{ $t('documents.details.view.label') }}:</span>
-                <span class="ms-1">{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</span>
-              </span>
-            </v-list-item-title>
+            <div
+              class="d-flex">
+              <span class="text-center text-body font-weight-bold">{{ $t('documents.details.view.label') }}:</span>
+              <span class="ms-1">{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</span>
+            </div>
           </v-list-item-content>
         </v-list-item>
         <v-list-item>
           <v-list-item-content class="mx-4">
-            <v-list-item-title>
-              <span
-                class="fileDetails not-clickable text-color">
-                <span class="text-center font-weight-bold">{{ $t('documents.details.view.location') }}:</span>
-                <a
-                  class="ms-1 document-location"
-                  :href="fileLocationLink"
-                  @click="openLocation"> {{ fileLocation }} </a>
-              </span>
-            </v-list-item-title>
+            <div
+              class="d-flex">
+              <span class="text-center text-body font-weight-bold">{{ $t('documents.details.view.location') }}:</span>
+              <a
+                class="ms-1 document-location"
+                :href="fileLocationLink"
+                @click="openLocation"> {{ fileLocation }} </a>
+            </div>
           </v-list-item-content>
         </v-list-item>
       </template>
