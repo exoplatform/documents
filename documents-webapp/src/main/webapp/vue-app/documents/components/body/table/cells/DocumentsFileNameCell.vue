@@ -316,36 +316,8 @@ export default {
         this.openInReadOnlyMode(this.file);
         this.loading = false;
       } else {
-        const id = this.file.id;
-        this.$attachmentService.getAttachmentById(id)
-          .then(attachment => {
-            documentPreview.init({
-              doc: {
-                id: id,
-                repository: 'repository',
-                workspace: 'collaboration',
-                //concat the file type if attachement title haven't extension on preview mode
-                title: decodeURI(attachment.title).lastIndexOf('.') >= 0 ? decodeURI(attachment.title) : decodeURI(attachment.title).concat(this.fileType),
-                downloadUrl: attachment.downloadUrl.replaceAll('+', '%2B'),
-                openUrl: attachment.openUrl,
-                breadCrumb: attachment.previewBreadcrumb,
-                fileInfo: this.fileInfo(),
-                size: attachment.size,
-                isCloudDrive: attachment.cloudDrive
-              },
-              author: attachment.updater,
-              version: {
-                number: attachment.version
-              },
-              showComments: false,
-              showOpenInFolderButton: false,
-            });
-          })
-          .catch(e => console.error(e))
-          .finally(() => {
-            window.history.pushState('', '', `${window.location.pathname}?documentPreviewId=${this.file.id}`);
-            this.loading = false;
-          });
+        this.$root.$emit('documents-preview', this.file);
+        this.loading = false;
         this.$root.$emit('mark-document-as-viewed', this.file);
       }
     },
