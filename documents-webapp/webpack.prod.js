@@ -41,6 +41,7 @@ const config = {
     trashManagement: './src/main/webapp/vue-app/trash-management/main.js',
     downloadDocumentsPublicAccess: './src/main/webapp/vue-app/download-document/main.js',
     notificationExtension: './src/main/webapp/vue-app/notification-extension/main.js',
+    documentsPreviewExtension: './src/main/webapp/vue-app/preview-extension/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
