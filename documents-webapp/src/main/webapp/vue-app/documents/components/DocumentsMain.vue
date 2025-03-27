@@ -124,6 +124,7 @@
         class="d-none"
         accept="*/*"
         @change="handleUploadVersion" />
+      <attachments-preview-dialog />
     </div>
   </v-app>
 </template>
@@ -180,6 +181,7 @@ export default {
     uploadVersionInput: null,
     newVersionFile: {},
     fileType: [],
+    iconExtensions: [],
     afterDate: null,
     beforeDate: null,
     minSize: null,
@@ -318,6 +320,7 @@ export default {
     this.$root.$on('copy-public-access-link', this.getDocumentPublicAccessLink);
     this.$root.$on('mark-document-as-viewed', this.markDocumentAsViewed);
     this.$root.$on('documents-folder-download', this.downloadFolder);
+    this.$root.$on('documents-preview', this.previewDocument);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
@@ -1609,6 +1612,30 @@ export default {
     hideAddMenuMobile() {
       this.$refs.documentAddItemMenu.close();
     },
+    previewDocument(file) {
+      const files = [];
+      this.files.forEach((item) => {
+        if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
+          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'downloadUrl': `/rest/jcr/repository/collaboration${item.path}`, 'icon': this.getFileIcon(file)});}
+      }
+      );
+      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
+    },
+    getFileIcon(file) {
+      if (this.iconExtensions.length === 0){
+        this.iconExtensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+      }
+      if (file?.folder) {
+        return this.iconExtensions[0].get('folder');
+      } else {
+        let extension = this.iconExtensions[0].get(file?.mimeType);
+        if (!extension) {
+          extension = this.iconExtensions[0].get('file');
+        }
+        return extension;
+      }
+    },
+
   },
 };
 </script>
