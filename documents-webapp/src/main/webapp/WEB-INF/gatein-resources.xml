@@ -44,6 +44,12 @@
         <module>documentPreview</module>
       </depends>
       <depends>
+        <module>attachImage</module>
+      </depends>
+      <depends>
+        <module>documentsPreviewExtension</module>
+      </depends>
+      <depends>
         <module>jquery</module>
         <as>$</as>
       </depends>
@@ -107,6 +113,9 @@
       </script>
       <depends>
         <module>commonVueComponents</module>
+      </depends>
+      <depends>
+        <module>documentsPreviewExtension</module>
       </depends>
       <depends>
         <module>vue</module>
@@ -228,4 +237,25 @@
       <module>extensionRegistry</module>
     </depends>
   </module>
+
+  <module>
+    <name>documentsPreviewExtension</name>
+    <load-group>ActivityStreamGRP</load-group>
+    <script>
+      <path>/js/documentsPreviewExtension.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+  </module>
 </gatein-resources>
+
