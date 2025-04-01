@@ -491,8 +491,15 @@ public class JCRDocumentsUtil {
     if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
       long fileSize = content.getProperty(NodeTypeConstants.JCR_DATA).getLength();
       fileNode.setSize(fileSize);
-      long versionsFileSize = computeVersionsSize(content.getParent());
-      fileNode.setSizeWithVersions(fileSize+versionsFileSize);
+
+      boolean computeVersionSize = Boolean.parseBoolean(System.getProperty("documents.content.compute.version.size","true"));
+
+      if (computeVersionSize) {
+        long versionsFileSize = computeVersionsSize(content.getParent());
+        fileNode.setSizeWithVersions(fileSize+versionsFileSize);
+      } else {
+        fileNode.setSizeWithVersions(fileSize);
+      }
 
     }
   }
