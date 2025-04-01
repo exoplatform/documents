@@ -42,6 +42,10 @@ const config = {
     downloadDocumentsPublicAccess: './src/main/webapp/vue-app/download-document/main.js',
     notificationExtension: './src/main/webapp/vue-app/notification-extension/main.js',
     documentsPreviewExtension: './src/main/webapp/vue-app/preview-extension/main.js',
+    attachmentApp: './src/main/webapp/vue-app/attachment/main.js',
+    attachmentIntegration: './src/main/webapp/vue-app/attachment-integration/main.js',
+    legacyComposerAttachments: './src/main/webapp/vue-app/legacy-composer-attachments/main.js',
+
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
