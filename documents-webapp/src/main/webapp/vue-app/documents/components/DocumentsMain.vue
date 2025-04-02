@@ -124,7 +124,6 @@
         class="d-none"
         accept="*/*"
         @change="handleUploadVersion" />
-      <attachments-preview-dialog />
     </div>
   </v-app>
 </template>
