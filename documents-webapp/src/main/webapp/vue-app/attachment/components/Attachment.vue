@@ -24,7 +24,6 @@
         :supported-documents="supportedDocuments"
         :attachments="attachments"
         :open-attachments-in-editor="openAttachmentsInEditor" />
-      <attachments-preview-dialog />
     </div>
   </v-app>
 </template>
