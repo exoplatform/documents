@@ -56,7 +56,7 @@ export default {
           mimetype,
           icon: this.getFileIcon(attachment),
           editable: this.isFileEditable(attachment),
-          onlyReadable: this.isFileOnlyReadable(attachment),
+          readable: this.isFileReadable(attachment),
         });
       });
       return attachments;
@@ -72,8 +72,8 @@ export default {
     isFileEditable(file) {
       return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file.mimeType ).length > 0;
     },
-    isFileOnlyReadable(file) {
-      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === file.mimeType).length > 0;
+    isFileReadable(file) {
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimeType).length > 0;
     },
   }
 };

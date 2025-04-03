@@ -196,26 +196,27 @@ export default {
         this.$attachmentService.getDocumentDetails(this.attachment.id)
           .then(document => {
             if (document?.acl?.canEdit){
-              this.openInEditMode();
+              this.openFileInEditor();
             } else {
-              this.openInReadOnlyMode();
+              this.openFileInEditor('view');
             }
-            this.markDocumentAsViewed();
           });
-      } else if (this.attachment.onlyReadable)  {
-        this.openInReadOnlyMode();
-        this.markDocumentAsViewed();
+      } else if (this.attachment.readable)  {
+        this.openFileInEditor('view');
       } else {
-        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': this.attachments,'id': this.attachment.id }}));
-        this.markDocumentAsViewed();
+        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': this.attachments.filter(doc => !doc.readable),'id': this.attachment.id }}));
       }
+      this.markDocumentAsViewed();
       this.loading = false;
     },
-    openInEditMode() {
-      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.attachment.id}`, '_blank');
-    },
-    openInReadOnlyMode() {
-      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.attachment.id}&mode=view`, '_blank');
+    openFileInEditor(mode) {
+      if (this.attachment && this.attachment.id) {
+        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${this.attachment.id}&backTo=${window.location.pathname}`;
+        if (mode) {
+          url += `&mode=${mode}`;
+        }
+        window.open(url, '_blank');
+      }
     },
   },
 };
