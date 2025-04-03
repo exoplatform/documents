@@ -1,5 +1,6 @@
 import './initComponents.js';
 import {installExtensions} from './extensions.js';
+import '../documents-icons-extension/extensions.js';
 
 Vue.use(Vuetify);
 
@@ -26,14 +27,19 @@ exoi18n.loadLanguageAsync(lang, url).then(i18n => {
   new Vue({i18n});
 });
 
+Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
+document.addEventListener('documents-supported-document-types-updated', () => {
+  Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
+});
+Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+document.addEventListener('documents-documents-icons-extension-updated', () => {
+  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+});
+
 const appId = 'attachment';
 let attachmentApp;
 export function init(entityId, entityType, defaultDrive, defaultFolder, spaceId) {
   installExtensions();
-  Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
-  document.addEventListener('documents-supported-document-types-updated', () => {
-    Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
-  });
   // getting locale resources
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale resources are ready

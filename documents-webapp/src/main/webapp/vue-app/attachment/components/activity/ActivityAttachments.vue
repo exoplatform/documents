@@ -35,30 +35,28 @@ export default {
       if (!this.activity.files) {
         return [];
       }
-
       const attachments = [];
       this.activity.files.forEach(attachment => {
-        const mimeType = attachment.mimeType;
-        const icon = mimeType && `primary--text uiIconFileType${mimeType.replaceAll(/[/.\\]/g, '')}` || '';
+        const mimetype = attachment.mimeType;
         let name = attachment.name;
         try {
           name = decodeURIComponent(name.replace(/%25/g, '%').replace(/%([^2][^5])/g, '%25$1'));
         } catch (e) {
           // could happen, but ignore it
         }
-        const repository = attachment.repository;
         const workspace = attachment.workspace;
-        const imageURL = mimeType.includes('image/') && `${eXo.env.portal.context}/${eXo.env.portal.rest}/thumbnailImage/custom/250x250/${workspace}/${attachment.id}` || null;
+        const imageURL = mimetype.includes('image/') && `${eXo.env.portal.context}/${eXo.env.portal.rest}/thumbnailImage/custom/250x250/${workspace}/${attachment.id}` || null;
 
         attachments.push({
           id: attachment.id,
           image: imageURL,
-          path: attachment.docPath,
+          downloadUrl: `/rest/jcr/repository/collaboration${attachment.docPath}`,
           name,
-          repository,
-          workspace,
-          mimeType,
-          icon: `uiIconPLFFont ${icon} uiIconFileTypeDefault`,
+          filename: name,
+          mimetype,
+          icon: this.getFileIcon(attachment),
+          editable: this.isFileEditable(attachment),
+          onlyReadable: this.isFileOnlyReadable(attachment),
         });
       });
       return attachments;
@@ -67,5 +65,16 @@ export default {
       return this.attachments.length;
     },
   },
+  methods: {
+    getFileIcon(file) {
+      return Vue.prototype.$documentsIconsExtension[0]?.get(file?.mimeType);
+    },
+    isFileEditable(file) {
+      return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file.mimeType ).length > 0;
+    },
+    isFileOnlyReadable(file) {
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === file.mimeType).length > 0;
+    },
+  }
 };
 </script>

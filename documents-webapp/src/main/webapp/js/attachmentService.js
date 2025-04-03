@@ -509,3 +509,19 @@ export function markAttachmentAsViewed(nodeId, viewer) {
     }
   });
 }
+
+export function getDocumentDetails(documentId) {
+  const formData = new FormData();
+  formData.append('documentId', documentId);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/details?${params}`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error');
+    } else {
+      return resp.json();
+    }
+  });
+}

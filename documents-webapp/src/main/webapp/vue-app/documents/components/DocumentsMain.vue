@@ -180,7 +180,6 @@ export default {
     uploadVersionInput: null,
     newVersionFile: {},
     fileType: [],
-    iconExtensions: [],
     afterDate: null,
     beforeDate: null,
     minSize: null,
@@ -1621,15 +1620,13 @@ export default {
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
     getFileIcon(file) {
-      if (this.iconExtensions.length === 0){
-        this.iconExtensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
-      }
+      const extensions = Vue.prototype.$documentsIconsExtension;
       if (file?.folder) {
-        return this.iconExtensions[0].get('folder');
+        return extensions[0].get('folder');
       } else {
-        let extension = this.iconExtensions[0].get(file?.mimeType);
+        let extension = extensions[0].get(file?.mimeType);
         if (!extension) {
-          extension = this.iconExtensions[0].get('file');
+          extension = extensions[0].get('file');
         }
         return extension;
       }
