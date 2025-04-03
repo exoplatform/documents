@@ -49,9 +49,13 @@
                 v-for="attachment in attachments.slice(0, 2)"
                 :key="attachment.id"
                 :attachment="attachment"
+                :attachments="attachments"
                 :can-access="attachment.acl && attachment.acl.canAccess"
                 :allow-to-detach="false"
                 :allow-to-edit="false"
+                :is-file-editable="isFileEditable(attachment)"
+                :is-file-readable="isFileReadable(attachment)"
+                open-in-editor
                 allow-to-preview
                 small-attachment-icon />
             </v-list-item-group>
@@ -118,7 +122,6 @@ export default {
     document.addEventListener('entity-attachments-updated', () => {
       this.initEntityAttachmentsList();
     });
-    document.addEventListener('preview-attachment', this.previewAttachment);
   },
   methods: {
     openAttachmentsAppDrawer() {
@@ -137,14 +140,16 @@ export default {
         });
       }
     },
-    previewAttachment(event) {
-      const file = event?.detail;
-      const files = [];
-      this.attachments.forEach((item) => {
-        files.push({'id': item.id,'filename': item.title,'mimetype': item.mimetype,'downloadUrl': item.downloadUrl});}
-      );
-      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
-    }
+    isFileEditable(attachment) {
+      const type = attachment && attachment.mimetype || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type
+                                                                                    && !attachment.cloudDriveFile).length > 0;
+    },
+    isFileReadable(attachment) {
+      const type = attachment && attachment.mimetype || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === type && !attachment.cloudDriveFile).length > 0;
+    },
+
   }
 };
 </script>

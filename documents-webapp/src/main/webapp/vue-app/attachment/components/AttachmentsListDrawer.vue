@@ -41,8 +41,10 @@
               :open-in-editor="openAttachmentsInEditor"
               :is-file-editable="isFileEditable(attachment)"
               :is-file-fillable="isFileFillable(attachment)"
+              :is-file-readable="isFileReadable(attachment)"
               :allow-to-edit="false"
               :attachment="attachment"
+              :attachments="attachments"
               :allow-to-detach="allowToDetach"
               :can-access="attachment.acl && attachment.acl.canAccess"
               allow-to-preview />
@@ -74,7 +76,7 @@ export default {
     },
     openAttachmentsInEditor: {
       type: Boolean,
-      default: () => false
+      default: () => true
     },
     allowToDetach: {
       type: Boolean,
@@ -97,6 +99,10 @@ export default {
     isFileFillable(attachment) {
       const type = attachment && attachment.mimetype || '';
       return type === 'application/pdf';
+    },
+    isFileReadable(attachment) {
+      const type = attachment && attachment.mimetype || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === type && !attachment.cloudDriveFile).length > 0;
     },
     startLoading() {
       this.$refs.attachmentsListDrawer.startLoading();

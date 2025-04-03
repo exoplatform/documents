@@ -53,6 +53,10 @@ if (extensionRegistry) {
   document.addEventListener('documents-supported-document-types-updated', () => {
     Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
   });
+  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  document.addEventListener('documents-documents-icons-extension-updated', () => {
+    Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  });
 }
 
 Vue.use(Vuetify);

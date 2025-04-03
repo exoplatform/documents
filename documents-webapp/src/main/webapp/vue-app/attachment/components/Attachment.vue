@@ -44,7 +44,7 @@ export default {
       drawerList: false,
       attachToEntity: true,
       supportedDocuments: null,
-      openAttachmentsInEditor: false,
+      openAttachmentsInEditor: true,
       displayUploadedFiles: false,
       createEntityTypeFolder: true,
       showCustomDrawerOverlay: false,
@@ -150,7 +150,7 @@ export default {
       }
       this.entityType = config.entityType;
       this.entityId = config.entityId;
-      this.openAttachmentsInEditor = config.openAttachmentsInEditor || false;
+      this.openAttachmentsInEditor = config.openAttachmentsInEditor || true;
       this.displayUploadedFiles = config.displayUploadedFiles;
       this.createEntityTypeFolder = config.createEntityTypeFolder;
       this.showCustomDrawerOverlay = config.showCustomDrawerOverlay;

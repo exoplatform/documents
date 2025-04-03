@@ -199,6 +199,9 @@
       <depends>
         <module>LegacyComposerAttachments</module>
       </depends>
+      <depends>
+        <module>documentsPreviewExtension</module>
+      </depends>
     </module>
   </portlet>
 

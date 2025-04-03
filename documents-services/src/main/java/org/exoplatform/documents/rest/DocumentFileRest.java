@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.rest;
 
+import static org.exoplatform.documents.constant.DocumentSortField.getFromAlias;
+
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -27,8 +29,6 @@ import java.util.stream.Collectors;
 
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
-import jakarta.servlet.http.HttpServletRequest;
-
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -44,7 +44,6 @@ import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
@@ -73,8 +72,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-
-import static org.exoplatform.documents.constant.DocumentSortField.getFromAlias;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Path("/v1/documents")
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
@@ -1468,6 +1466,45 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @RolesAllowed("users")
+    @Path("/details")
+    @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
+    @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+            @ApiResponse(responseCode = "400", description = "Invalid query input"),
+            @ApiResponse(responseCode = "404", description = "Not found"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+            @ApiResponse(responseCode = "500", description = "Internal server error"), })
+    public Response getDocument(@Parameter(description = "Document identifier", required = true)
+                                    @QueryParam("documentId") String documentId) {
+
+        if (StringUtils.isBlank(documentId)) {
+            return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
+        }
+        long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+        if (userIdentityId == 0) {
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        try {
+            AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
+                    identityManager,
+                    spaceService,
+                    metadataService,
+                    publicDocumentAccessService,
+                    documentFileService.getDocumentById(documentId, RestUtils.getCurrentUser()),
+                    null,
+                    userIdentityId);
+            return Response.ok(abstractNodeEntity).build();
+
+        } catch (IllegalArgumentException e) {
+            return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+        } catch (Exception e) {
+            LOG.warn("Error retrieving a the file with id = {}", documentId,  e);
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
 
 
 }

@@ -20,7 +20,8 @@
           @error="image = null">
         <v-icon
           v-else
-          :class="attachment.icon"
+          :class="fileIconClass"
+          :color="fileIconColor"
           class="ma-auto d-flex"
           size="80px" />
       </v-card-text>
@@ -141,8 +142,12 @@ export default {
         profileUrl: this.profileUrl,
       };
     },
-    icon() {
-      return this.attachment.icon;
+
+    fileIconClass() {
+      return this.attachment.icon?.class || 'fas fa-file';
+    },
+    fileIconColor() {
+      return this.attachment.icon?.color || 'secondary';
     },
     previewActivity() {
       return this.activity && this.activity.parentActivity || this.activity;
@@ -187,13 +192,30 @@ export default {
         return;
       }
       this.loading = true;
-      const files = [];
-      this.attachments.forEach((item) => {
-        files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'downloadUrl': `/rest/jcr/repository/collaboration${item.path}`});}
-      );
-      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': this.attachment.id }}));
-      this.markDocumentAsViewed();
+      if (this.attachment.editable)  {
+        this.$attachmentService.getDocumentDetails(this.attachment.id)
+          .then(document => {
+            if (document?.acl?.canEdit){
+              this.openInEditMode();
+            } else {
+              this.openInReadOnlyMode();
+            }
+            this.markDocumentAsViewed();
+          });
+      } else if (this.attachment.onlyReadable)  {
+        this.openInReadOnlyMode();
+        this.markDocumentAsViewed();
+      } else {
+        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': this.attachments,'id': this.attachment.id }}));
+        this.markDocumentAsViewed();
+      }
       this.loading = false;
+    },
+    openInEditMode() {
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.attachment.id}`, '_blank');
+    },
+    openInReadOnlyMode() {
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.attachment.id}&mode=view`, '_blank');
     },
   },
 };

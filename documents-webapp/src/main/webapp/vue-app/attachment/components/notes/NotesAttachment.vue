@@ -15,7 +15,7 @@
       :attachments="attachments"
       :allow-to-detach="false"
       :display-open-attachment-drawer-button="false"
-      :open-attachments-in-editor="false" />
+      :open-attachments-in-editor="true" />
   </span>
 </template>
 <script>
@@ -100,22 +100,15 @@ export default {
     }
     document.addEventListener('open-notes-attachments', this.openAttachmentDrawer);
     document.addEventListener('attachments-app-drawer-closed', this.handleDrawerClosedEvent);
-    document.addEventListener('note-draft-auto-save-done', (event) => {
-      if (this.attachmentListUpdated && event.detail.draftId) {
-        this.updateLinkedAttachmentsToEntity(event.detail.draftId);
-      }
-    });
-    document.addEventListener('article-draft-auto-save-done', (event) => {
-      if (this.attachmentListUpdated && event.detail.draftId) {
-        this.updateLinkedAttachmentsToEntity(event.detail.draftId);
-      }
-    });
+    document.addEventListener('note-draft-auto-save-done', this.handleDraftAutoSave);
+    document.addEventListener('article-draft-auto-save-done', this.handleDraftAutoSave);
     document.addEventListener('preview-attachment', this.previewAttachment);
   },
   beforeDestroy() {
     document.removeEventListener('open-notes-attachments', this.openAttachmentDrawer);
     document.removeEventListener('attachments-app-drawer-closed', this.handleDrawerClosedEvent);
-    document.removeEventListener('article-draft-auto-save-done');
+    document.removeEventListener('article-draft-auto-save-done', this.handleDraftAutoSave);
+    document.removeEventListener('note-draft-auto-save-done', this.handleDraftAutoSave);
     document.removeEventListener('preview-attachment', this.previewAttachment);
   },
   methods: {
@@ -204,14 +197,27 @@ export default {
           });
       }
     },
+    handleDraftAutoSave(event) {
+      if (this.attachmentListUpdated && event.detail.draftId) {
+        this.updateLinkedAttachmentsToEntity(event.detail.draftId);
+      }
+    },
     previewAttachment(event) {
       const file = event?.detail;
       const files = [];
       this.attachments.forEach((item) => {
-        files.push({'id': item.id,'filename': item.title,'mimetype': item.mimetype,'downloadUrl': item.downloadUrl});}
+        files.push({'id': item.id,'filename': item.title,'mimetype': item.mimetype,'downloadUrl': item.downloadUrl,'icon': this.getFileIcon(item)});}
       );
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
-    }
+    },
+    getFileIcon(attachment) {
+      const extensions = Vue.prototype.$documentsIconsExtension;
+      let extension = extensions[0].get(attachment?.mimeType);
+      if (!extension) {
+        extension = extensions[0].get('file');
+      }
+      return extension;
+    },
   }
 };
 </script>
