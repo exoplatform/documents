@@ -403,6 +403,9 @@ export default {
       this.$refs.publicDocumentOptionsDrawer.close();
     },
     getExpirationDelayDate() {
+      if (!this.showExpirationDateInput) {
+        return null;
+      }
       const delayDate = new Date(new Date());
       switch (this.delayType) {
       case 'day':
