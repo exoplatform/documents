@@ -35,6 +35,10 @@ const video = {
   class: 'fas fa-file-video',
   color: '#79577A',
 };
+const audio = {
+  class: 'fas fa-file-audio',
+  color: '#79577A',
+};
 const archive = {
   class: 'fas fa-file-archive',
   color: '#717272',
@@ -91,6 +95,10 @@ const documentsMapIconsExtensions = new Map([
   ['video/ogg', video],
   ['video/webm', video],
   ['video/3gpp', video],
+  ['video/quicktime', video],
+  ['audio/mpeg', audio],
+  ['audio/ogg', audio],
+  ['audio/wav', audio],
   ['application/zip', archive],
   ['application/vnd.rar', archive],
   ['application/rar', archive],
