@@ -27,7 +27,6 @@ export default {
   }),
   methods: {
     copyLink() {
-      const inputTemp = $('<input>');
       let path = `${window.location.host}${eXo.env.portal.context}`;
       if (eXo.env.portal.spaceId){
         const pathParts = eXo.env.portal.selectedNodeUri.split('home');
@@ -43,10 +42,14 @@ export default {
       } else {
         path = `${path}?documentPreviewId=${this.file.id}`;
       }
-      $('body').append(inputTemp);
-      inputTemp.val(path).select();
-      document.execCommand('copy');
-      inputTemp.remove();
+      path = `${window.location.protocol}//${path}`;
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(path).catch(() => {
+          this.copy(path);
+        });
+      } else {
+        this.copy(path);
+      }
       this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.alert.success.label.linkCopied')});
       this.getDocumentView();
       document.dispatchEvent(new CustomEvent('document-change', {
@@ -67,6 +70,14 @@ export default {
         this.viewTab = view.toLowerCase() === 'folder' ? 'Folder' : 'RECENT';
       }
     },
+    copy(path) {
+      const input = document.createElement('input');
+      input.value = path;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
   },
 };
 </script>
