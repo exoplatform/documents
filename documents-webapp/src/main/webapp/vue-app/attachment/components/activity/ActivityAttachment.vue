@@ -14,10 +14,10 @@
       <v-card-text class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0">
         <img
           v-if="image"
-          :src="attachment.image"
+          :src="image"
           class="ma-auto"
           loading="lazy"
-          @error="image = null">
+          @error="image = image!==attachment.downloadUrl?attachment.downloadUrl:null">
         <v-icon
           v-else
           :class="fileIconClass"

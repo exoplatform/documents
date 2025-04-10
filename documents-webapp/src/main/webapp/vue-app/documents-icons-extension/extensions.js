@@ -89,6 +89,7 @@ const documentsMapIconsExtensions = new Map([
   ['image/jpeg', image],
   ['image/png', image],
   ['image/tiff', image],
+  ['image/svg+xml', image],
   ['video/x-msvideo', video],
   ['video/mp4', video],
   ['video/mpeg', video],
