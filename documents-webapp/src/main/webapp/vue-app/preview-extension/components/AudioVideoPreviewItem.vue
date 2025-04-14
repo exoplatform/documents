@@ -19,7 +19,7 @@
   <video
     :src="`${thumbnailUrl}#t=0.001`"
     controls="controls"
-    class="mx-auto full-height full-width position-absolute">
+    class="black mx-auto full-height full-width position-absolute">
   </video>
 </template>
 <script>
