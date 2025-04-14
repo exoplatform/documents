@@ -2,7 +2,7 @@
   <div class="create-new-document">
     <div class="d-flex align-center">
       <v-subheader class="text-sub-title pl-0 d-flex">
-        {{ $t('documents.label.new') }}
+        {{ $t('attachments.new.document') }}
       </v-subheader>
       <v-divider />
     </div>
@@ -26,7 +26,7 @@
         ref="NewDocInputHidden"
         v-model="newDocTitleInput"
         :rules="documentTitleRules"
-        :placeholder="$t('documents.untitledDocument')"
+        :placeholder="$t('attachment.untitledDocument')"
         class="pt-2"
         outlined
         dense
@@ -105,7 +105,7 @@ export default {
       return this.newDocumentTitle && this.newDocumentTitle.length > this.MAX_DOCUMENT_TITLE_LENGTH;
     },
     untitledNewDoc() {
-      return `${this.$t('documents.untitledDocument')}${this.selectedDocType.extension}`;
+      return `${this.$t('attachment.untitledDocument')}${this.selectedDocType.extension}`;
     },
     maxFileCountErrorLabel() {
       return this.$t('attachments.drawer.maxFileCount.error').replace('{0}', `<b> ${this.maxFilesCount} </b>`);
