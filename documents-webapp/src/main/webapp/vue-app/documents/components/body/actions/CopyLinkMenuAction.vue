@@ -33,7 +33,7 @@ export default {
         const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri;
         path = `${path}/s/${eXo.env.portal.spaceId}${nodeUri}`;
       } else {
-        path = `${path}/${eXo.env.portal.metaPortalName}/${eXo.env.portal.selectedNodeUri}`;
+        path = `${path}/${eXo.env.portal.portalName}/${eXo.env.portal.selectedNodeUri}`;
       }
       if (this.file.folder){
         path = `${path}?folderId=${this.file.id}`;

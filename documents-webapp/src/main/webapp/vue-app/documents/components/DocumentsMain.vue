@@ -1538,30 +1538,33 @@ export default {
     showPreview(documentPreviewId) {
       return this.$attachmentService.getAttachmentById(documentPreviewId)
         .then(attachment => {
-          documentPreview.init({
-            doc: {
-              id: documentPreviewId,
-              repository: 'repository',
-              workspace: 'collaboration',
-              path: attachment.path,
-              title: attachment.title,
-              openUrl: attachment.openUrl,
-              breadCrumb: attachment.previewBreadcrumb,
-              size: attachment.size,
-              downloadUrl: attachment.downloadUrl.replaceAll('+', '%2B'),
-              isCloudDrive: attachment.cloudDrive
-            },
-            author: attachment.updater,
-            version: {
-              number: attachment.version
-            },
-            showComments: false,
-            showOpenInFolderButton: false,
-          });
-          return attachment;
+          if (this.isFileReadable(attachment)){
+            if (attachment?.acl?.canEdit && this.isFileEditable(attachment)){
+              this.openFileInEditor(attachment,'edit','_self');
+            } else {
+              this.openFileInEditor(attachment,'view','_self');
+
+            } } else {
+            document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [attachment],'id': documentPreviewId }}));
+            return attachment;}
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
+    },
+    isFileEditable(file) {
+      return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file.mimetype ).length > 0;
+    },
+    isFileReadable(file) {
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimetype).length > 0;
+    },
+    openFileInEditor(attachment,mode,tab) {
+      if (attachment && attachment.id) {
+        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${attachment.id}&backTo=${window.location.pathname}`;
+        if (mode) {
+          url += `&mode=${mode}`;
+        }
+        window.open(url,tab ? tab:'_blank');
+      }
     },
     dragFile(e){     
       const item = e.dataTransfer.items[0];
