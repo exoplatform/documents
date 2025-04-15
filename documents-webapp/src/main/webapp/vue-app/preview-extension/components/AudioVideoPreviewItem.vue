@@ -17,10 +17,16 @@
 
 <template>
   <video
+    v-if="supported"
     :src="`${thumbnailUrl}#t=0.001`"
     controls="controls"
-    class="black mx-auto full-height full-width position-absolute">
+    class="black mx-auto full-height full-width position-absolute"
+    @error="supported = false">
   </video>
+  <attachments-default-preview
+    v-else
+    :attachment="attachment"
+  />
 </template>
 <script>
 export default {
@@ -38,6 +44,9 @@ export default {
       default: null,
     },
   },
+  data: () => ({
+    supported: true,
+  }),
   computed: {
     thumbnailUrl() {
       return this.attachment.downloadUrl?`${eXo.env.portal.context}${this.attachment.downloadUrl}`:`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/attachments/${this.objectType}/${this.objectId}/${this.attachment.id}`;
