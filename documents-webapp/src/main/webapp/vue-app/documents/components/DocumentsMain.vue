@@ -1510,27 +1510,19 @@ export default {
     showVersionPreview(version) {
       return this.$attachmentService.getAttachmentById(version.originId)
         .then(attachment => {
-          documentPreview.init({
-            doc: {
-              id: version.frozenId,
-              repository: 'repository',
-              workspace: 'collaboration',
-              path: attachment.path,
-              title: attachment.title,
-              openUrl: `${attachment.openUrl}?version=${version.versionNumber}`,
-              breadCrumb: null,
-              size: attachment.size,
-              downloadUrl: `${attachment.downloadUrl}?version=${version.versionNumber}`,
-              isCloudDrive: attachment.cloudDrive
-            },
-            author: attachment.updater,
-            version: {
-              number: attachment.version
-            },
-            showComments: false,
-            showOpenInFolderButton: false,
-          });
-          return attachment;
+          return this.$attachmentService.getAttachmentById(version.frozenId)
+            .then(file => {
+              file.downloadUrl =`${attachment.downloadUrl}?version=${version.versionNumber}`;
+              file.path = attachment.path;
+              file.mimetype = attachment.mimetype;
+              file.filename = file.title;
+              if (this.isFileReadable(attachment)){
+                this.openFileInEditor(file,'view','_self');
+              } else {
+                document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': file.id }}));
+              }
+              return attachment;
+            });
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
