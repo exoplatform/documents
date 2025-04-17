@@ -22,6 +22,7 @@ import '../documents-icons-extension/extensions.js';
 import * as documentFileService from './js/DocumentFileService.js';
 import * as documentsUtils from '../../js/DocumentsUtils.js';
 import * as documentsWebSocket from './js/WebSocket.js';
+import * as transferRulesService from '../../js/transferRulesService.js';
 
 if (!Vue.prototype.$documentFileService) {
   window.Object.defineProperty(Vue.prototype, '$documentFileService', {
@@ -38,6 +39,11 @@ if (!Vue.prototype.$documentsUtils) {
 if (!Vue.prototype.$documentsWebSocket) {
   window.Object.defineProperty(Vue.prototype, '$documentsWebSocket', {
     value: documentsWebSocket,
+  });
+}
+if (!Vue.prototype.$transferRulesService) {
+  window.Object.defineProperty(Vue.prototype, '$transferRulesService', {
+    value: transferRulesService,
   });
 }
 
