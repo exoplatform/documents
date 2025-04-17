@@ -30,7 +30,7 @@ export default {
       let path = `${window.location.host}${eXo.env.portal.context}`;
       if (eXo.env.portal.spaceId){
         const pathParts = eXo.env.portal.selectedNodeUri.split('home');
-        const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri;
+        const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri.substring(eXo.env.portal.selectedNodeUri.indexOf('/documents'));
         path = `${path}/s/${eXo.env.portal.spaceId}${nodeUri}`;
       } else {
         path = `${path}/${eXo.env.portal.metaPortalName}/${eXo.env.portal.selectedNodeUri}`;
