@@ -1661,6 +1661,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     fileVersions.sort(Collections.reverseOrder());
     return fileVersions;
+  }  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public AbstractNode getDocumentById(String documentId, String aclIdentity) {
+    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      Node node = session.getNodeByUUID(documentId);
+      return toFileNode(identityManager, identity, node, "", spaceService);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error while getting file versions", e);
+    }
   }
 
   private static String addVersionLabel(Node node, String label, Version version) throws RepositoryException {

@@ -140,6 +140,7 @@ export default {
       }
     },
     openDrawer() {
+      console('openDrawer()');
       this.$root.$emit('documents-open-drawer');
       this.hideAddMenuMobile();
     },

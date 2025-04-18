@@ -318,6 +318,7 @@ export default {
     this.$root.$on('copy-public-access-link', this.getDocumentPublicAccessLink);
     this.$root.$on('mark-document-as-viewed', this.markDocumentAsViewed);
     this.$root.$on('documents-folder-download', this.downloadFolder);
+    this.$root.$on('documents-preview', this.previewDocument);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
@@ -1509,27 +1510,19 @@ export default {
     showVersionPreview(version) {
       return this.$attachmentService.getAttachmentById(version.originId)
         .then(attachment => {
-          documentPreview.init({
-            doc: {
-              id: version.frozenId,
-              repository: 'repository',
-              workspace: 'collaboration',
-              path: attachment.path,
-              title: attachment.title,
-              openUrl: `${attachment.openUrl}?version=${version.versionNumber}`,
-              breadCrumb: null,
-              size: attachment.size,
-              downloadUrl: `${attachment.downloadUrl}?version=${version.versionNumber}`,
-              isCloudDrive: attachment.cloudDrive
-            },
-            author: attachment.updater,
-            version: {
-              number: attachment.version
-            },
-            showComments: false,
-            showOpenInFolderButton: false,
-          });
-          return attachment;
+          return this.$attachmentService.getAttachmentById(version.frozenId)
+            .then(file => {
+              file.downloadUrl =`${attachment.downloadUrl}?version=${version.versionNumber}`;
+              file.path = attachment.path;
+              file.mimetype = attachment.mimetype;
+              file.filename = file.title;
+              if (this.isFileReadable(attachment)){
+                this.openFileInEditor(file,'view','_self');
+              } else {
+                document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': file.id }}));
+              }
+              return attachment;
+            });
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
@@ -1537,30 +1530,33 @@ export default {
     showPreview(documentPreviewId) {
       return this.$attachmentService.getAttachmentById(documentPreviewId)
         .then(attachment => {
-          documentPreview.init({
-            doc: {
-              id: documentPreviewId,
-              repository: 'repository',
-              workspace: 'collaboration',
-              path: attachment.path,
-              title: attachment.title,
-              openUrl: attachment.openUrl,
-              breadCrumb: attachment.previewBreadcrumb,
-              size: attachment.size,
-              downloadUrl: attachment.downloadUrl.replaceAll('+', '%2B'),
-              isCloudDrive: attachment.cloudDrive
-            },
-            author: attachment.updater,
-            version: {
-              number: attachment.version
-            },
-            showComments: false,
-            showOpenInFolderButton: false,
-          });
-          return attachment;
+          if (this.isFileReadable(attachment)){
+            if (attachment?.acl?.canEdit && this.isFileEditable(attachment)){
+              this.openFileInEditor(attachment,'edit','_self');
+            } else {
+              this.openFileInEditor(attachment,'view','_self');
+
+            } } else {
+            document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [attachment],'id': documentPreviewId }}));
+            return attachment;}
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
+    },
+    isFileEditable(file) {
+      return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file.mimetype ).length > 0;
+    },
+    isFileReadable(file) {
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimetype).length > 0;
+    },
+    openFileInEditor(attachment,mode,tab) {
+      if (attachment && attachment.id) {
+        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${attachment.id}&backTo=${window.location.pathname}`;
+        if (mode) {
+          url += `&mode=${mode}`;
+        }
+        window.open(url,tab ? tab:'_blank');
+      }
     },
     dragFile(e){     
       const item = e.dataTransfer.items[0];
@@ -1609,6 +1605,28 @@ export default {
     hideAddMenuMobile() {
       this.$refs.documentAddItemMenu.close();
     },
+    previewDocument(file) {
+      const files = [];
+      this.files.forEach((item) => {
+        if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
+          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'downloadUrl': `/rest/jcr/repository/collaboration${item.path}`, 'icon': this.getFileIcon(item)});}
+      }
+      );
+      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
+    },
+    getFileIcon(file) {
+      const extensions = Vue.prototype.$documentsIconsExtension;
+      if (file?.folder) {
+        return extensions[0].get('folder');
+      } else {
+        let extension = extensions[0].get(file?.mimeType);
+        if (!extension) {
+          extension = extensions[0].get('file');
+        }
+        return extension;
+      }
+    },
+
   },
 };
 </script>

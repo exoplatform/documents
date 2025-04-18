@@ -46,26 +46,26 @@
           class="text-body menu-text-color"
           @click="addFolder()">
           <v-list-item-icon class="me-1">
-          <v-icon
-            size="16"
-            class="pe-1">
-            fa-folder
-          </v-icon>
+            <v-icon
+              size="16"
+              class="pe-1">
+              fa-folder
+            </v-icon>
           </v-list-item-icon>
           <v-list-item-title
             class="text-body menu-text-color">
             <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFolder') }}</span>
-        </v-list-item-title>
+          </v-list-item-title>
         </v-list-item>
         <v-list-item
           class="text-body menu-text-color"
           @click="openDrawer()">
           <v-list-item-icon class="me-1">
-          <v-icon size="16" class="pe-1">fa-file-alt</v-icon>
+            <v-icon size="16" class="pe-1">fa-file-alt</v-icon>
           </v-list-item-icon>
           <v-list-item-title
-              class="text-body menu-text-color">
-          <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFile') }}</span>
+            class="text-body menu-text-color">
+            <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFile') }}</span>
           </v-list-item-title>
         </v-list-item>
         <v-list-item
@@ -74,11 +74,11 @@
           class="text-body menu-text-color"
           @click="openImportDrawer()">
           <v-list-item-icon class="me-1">
-          <v-icon size="16" class="pe-1">fas fa-upload</v-icon>
+            <v-icon size="16" class="pe-1">fas fa-upload</v-icon>
           </v-list-item-icon>
           <v-list-item-title
-              class="text-body menu-text-color">
-          <span v-if="!isMobile" class="ps-1">{{ $t('documents.label.zip.upload') }}</span>
+            class="text-body menu-text-color">
+            <span v-if="!isMobile" class="ps-1">{{ $t('documents.label.zip.upload') }}</span>
           </v-list-item-title>
         </v-list-item>
       </v-list>

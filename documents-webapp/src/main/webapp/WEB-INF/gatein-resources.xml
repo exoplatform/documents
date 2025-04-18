@@ -18,6 +18,15 @@
     <css-priority>2</css-priority>
   </portal-skin>
 
+  <!-- AttachmentsPortlet skins -->
+  <portlet-skin>
+    <application-name>documents</application-name>
+    <portlet-name>AttachmentApp</portlet-name>
+    <skin-name>Enterprise</skin-name>
+    <css-path>/skin/css/attachmentsApp.css</css-path>
+    <overwrite>true</overwrite>
+  </portlet-skin>
+
   <portlet>
     <name>Documents</name>
     <module>
@@ -39,9 +48,6 @@
       </depends>
       <depends>
         <module>eXoVueI18n</module>
-      </depends>
-      <depends>
-        <module>documentPreview</module>
       </depends>
       <depends>
         <module>jquery</module>
@@ -159,6 +165,101 @@
       </depends>
     </module>
   </portlet>
+
+  <portlet>
+    <name>AttachmentApp</name>
+    <module>
+      <load-group>AttachmentIntegrationGRP</load-group>
+      <script>
+        <minify>false</minify>
+        <path>/js/attachmentApp.bundle.js</path>
+      </script>
+      <depends>
+        <module>vue</module>
+      </depends>
+      <depends>
+        <module>eXoVueI18n</module>
+      </depends>
+      <depends>
+        <module>vuetify</module>
+      </depends>
+      <depends>
+        <module>jquery</module>
+        <as>$</as>
+      </depends>
+      <depends>
+        <module>extensionRegistry</module>
+      </depends>
+      <depends>
+        <module>commonVueComponents</module>
+      </depends>
+      <depends>
+        <module>AttachmentIntegration</module>
+      </depends>
+      <depends>
+        <module>LegacyComposerAttachments</module>
+      </depends>
+      <depends>
+        <module>documentsPreviewExtension</module>
+      </depends>
+    </module>
+  </portlet>
+
+  <module>
+    <name>AttachmentIntegration</name>
+    <load-group>AttachmentIntegrationGRP</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/attachmentIntegration.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>jquery</module>
+      <as>$</as>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+  </module>
+
+  <module>
+    <name>LegacyComposerAttachments</name>
+    <load-group>AttachmentIntegrationGRP</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/legacyComposerAttachments.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>jquery</module>
+      <as>$</as>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+  </module>
   
   <module>
     <name>DocumentsFavoriteDrawerExtensions</name>
@@ -228,4 +329,25 @@
       <module>extensionRegistry</module>
     </depends>
   </module>
+
+  <module>
+    <name>documentsPreviewExtension</name>
+    <load-group>ActivityStreamGRP</load-group>
+    <script>
+      <path>/js/documentsPreviewExtension.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+  </module>
 </gatein-resources>
+
