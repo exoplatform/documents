@@ -229,6 +229,15 @@ public interface DocumentFileStorage {
   List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity);
 
   /**
+   * Retrieves a document By Id
+   *
+   * @param documentId target file node id
+   * @param aclIdentity user identity id
+   * @return {@link AbstractNode}
+   */
+  AbstractNode getDocumentById(String documentId, String aclIdentity);
+
+  /**
    * update or add a version summary
    *
    * @param originFileId original file id

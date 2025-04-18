@@ -682,4 +682,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     jcrDeleteFileStorage.restoreDocuments(actionId, trashElementNodes, getAclUserIdentity(userIdentityId));
   }
 
+  @Override
+  public AbstractNode getDocumentById(String documentId, String aclIdentity){
+    return documentFileStorage.getDocumentById(documentId, aclIdentity);
+  }
 }

@@ -135,7 +135,7 @@ export default {
   },
   methods: {
     getFileIcon() {
-      const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+      const extensions = Vue.prototype.$documentsIconsExtension;
       if (this.item?.folder) {
         this.icon = extensions[0].get('folder');
       } else {

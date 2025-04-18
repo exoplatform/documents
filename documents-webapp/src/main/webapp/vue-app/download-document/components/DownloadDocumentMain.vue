@@ -163,7 +163,7 @@ export default {
       this.showPassword = !this.showPassword;
     },
     getFileIcon(mimeType) {
-      const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+      const extensions = Vue.prototype.$documentsIconsExtension;
       let extension;
       if (!mimeType) {
         extension = extensions[0].get('folder');
