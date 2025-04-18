@@ -1470,6 +1470,7 @@ public class DocumentFileRest implements ResourceContainer {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     @RolesAllowed("users")
+    @Path("/{documentId}")
     @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
     @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
             @ApiResponse(responseCode = "400", description = "Invalid query input"),
@@ -1477,7 +1478,7 @@ public class DocumentFileRest implements ResourceContainer {
             @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
             @ApiResponse(responseCode = "500", description = "Internal server error"), })
     public Response getDocument(@Parameter(description = "Document identifier", required = true)
-                                    @QueryParam("documentId") String documentId) {
+                                    @PathParam("documentId") String documentId) {
 
         if (StringUtils.isBlank(documentId)) {
             return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
