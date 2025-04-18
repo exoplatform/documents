@@ -514,7 +514,7 @@ export function getDocumentDetails(documentId) {
   const formData = new FormData();
   formData.append('documentId', documentId);
   const params = new URLSearchParams(formData).toString();
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/details?${params}`, {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents?${params}`, {
     method: 'GET',
     credentials: 'include',
   }).then(resp => {

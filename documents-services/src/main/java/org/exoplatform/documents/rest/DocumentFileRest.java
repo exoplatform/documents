@@ -1470,7 +1470,6 @@ public class DocumentFileRest implements ResourceContainer {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     @RolesAllowed("users")
-    @Path("/details")
     @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
     @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
             @ApiResponse(responseCode = "400", description = "Invalid query input"),
