@@ -49,7 +49,7 @@ export default {
   }),
   computed: {
     thumbnailUrl() {
-      return this.attachment.downloadUrl?`${eXo.env.portal.context}${this.attachment.downloadUrl}`:`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/attachments/${this.objectType}/${this.objectId}/${this.attachment.id}`;
+      return this.attachment.downloadUrl || `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/attachments/${this.objectType}/${this.objectId}/${this.attachment.id}`;
     },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'sm' || this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'md';
