@@ -410,7 +410,15 @@ public class EntityBuilder {
       if (nodePermissionEntity.getVisibilityChoice().equals(Visibility.SPECIFIC_COLLABORATOR.name())) {
         permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS.name()));
       }
-      return new NodePermission(nodePermissionEntity.isCanAccess(),nodePermissionEntity.isCanEdit(),nodePermissionEntity.isCanDelete(),permissions,toShare, toNotify, null);
+      return new NodePermission(nodePermissionEntity.isCanAccess(),
+                                nodePermissionEntity.isCanEdit(),
+                                nodePermissionEntity.isCanDelete(),
+                                nodePermissionEntity.getVisibilityChoice()
+                                                    .equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name()),
+                                permissions,
+                                toShare,
+                                toNotify,
+                                null);
     }
     return null;
   }
