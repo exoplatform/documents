@@ -1233,6 +1233,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         permissions.put(owner, PermissionType.ALL);
       }
       permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
+      if (nodePermissionEntity.isPublic()) {
+        permissions.put("any", new String[] {PermissionType.READ});
+      }
       for(PermissionEntry permission : permissionsList){
         if(permission.getIdentity().getProviderId().equals(SPACE_PROVIDER_ID)) {
           Space space = spaceService.getSpaceByPrettyName(permission.getIdentity().getRemoteId());

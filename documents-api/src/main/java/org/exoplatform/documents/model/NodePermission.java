@@ -32,6 +32,8 @@ public class NodePermission {
 
   private boolean canDelete;
 
+  private boolean isPublic;
+
   private List<PermissionEntry> permissions;
 
   private Map<Long,String> toShare;
