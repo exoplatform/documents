@@ -534,6 +534,7 @@ public class JCRDocumentsUtil {
   public static void computeDocumentAcl(Node node, AbstractNode documentNode, Identity aclIdentity, IdentityManager identityManager, SpaceService spaceService) throws RepositoryException {
     boolean canEdit = false;
     boolean canDelete = false;
+    boolean isPublic = false;
     List<PermissionEntry> permissions = new ArrayList<>();
     String userId = aclIdentity.getUserId();
     ExtendedNode extendedNode = (ExtendedNode) node;
@@ -541,6 +542,7 @@ public class JCRDocumentsUtil {
     for (AccessControlEntry accessControlEntry : permsList) {
       String nodeAclIdentity = accessControlEntry.getIdentity();
       MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
+      isPublic = StringUtils.equals(IdentityConstants.ANY, nodeAclIdentity);
       if (StringUtils.equals(nodeAclIdentity, userId)
           || StringUtils.equals(IdentityConstants.ANY, userId)
           || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
@@ -569,7 +571,7 @@ public class JCRDocumentsUtil {
       }
 
     }
-    documentNode.setAcl(new NodePermission(true, canEdit, canDelete, permissions,null, null,null));
+    documentNode.setAcl(new NodePermission(true, canEdit, canDelete, isPublic, permissions,null, null,null));
   }
 
   private static String getPermissionRole (String membershipType){
