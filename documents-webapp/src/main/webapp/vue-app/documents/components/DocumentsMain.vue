@@ -1609,7 +1609,7 @@ export default {
       const files = [];
       this.files.forEach((item) => {
         if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
-          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'downloadUrl': `/rest/jcr/repository/collaboration${item.path}`, 'icon': this.getFileIcon(item)});}
+          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'downloadUrl': `/portal/rest/jcr/repository/collaboration${item.path}`, 'icon': this.getFileIcon(item)});}
       }
       );
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
