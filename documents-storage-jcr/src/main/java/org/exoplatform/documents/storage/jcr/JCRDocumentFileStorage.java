@@ -1676,6 +1676,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while getting file versions", e);
     }
   }
+  @Override
+  public FileContent getDocumentContent(String documentId, String aclIdentity) {
+    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      Node node = session.getNodeByUUID(documentId);
+      Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+      return new FileContent(documentId,node.getProperty(NodeTypeConstants.EXO_TITLE).getString(),content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(),content.getProperty(NodeTypeConstants.JCR_DATA).getStream());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error while getting file versions", e);
+    }
+  }
 
   private static String addVersionLabel(Node node, String label, Version version) throws RepositoryException {
     String[] olLabels = node.getVersionHistory().getVersionLabels(version);

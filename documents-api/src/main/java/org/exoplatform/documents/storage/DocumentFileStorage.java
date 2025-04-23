@@ -238,6 +238,15 @@ public interface DocumentFileStorage {
   AbstractNode getDocumentById(String documentId, String aclIdentity);
 
   /**
+   * Retrieves a document content By its Id
+   *
+   * @param documentId target file node id
+   * @param aclIdentity user identity id
+   * @return {@link FileContent}
+   */
+  FileContent getDocumentContent(String documentId, String aclIdentity);
+
+  /**
    * update or add a version summary
    *
    * @param originFileId original file id

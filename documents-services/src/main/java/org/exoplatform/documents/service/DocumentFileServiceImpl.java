@@ -686,4 +686,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public AbstractNode getDocumentById(String documentId, String aclIdentity){
     return documentFileStorage.getDocumentById(documentId, aclIdentity);
   }
+
+  @Override
+  public FileContent getDocumentContent(String documentId, String aclIdentity){
+    return documentFileStorage.getDocumentContent(documentId, aclIdentity);
+  }
 }
