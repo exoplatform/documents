@@ -22,7 +22,6 @@ import '../documents-icons-extension/extensions.js';
 import * as documentFileService from './js/DocumentFileService.js';
 import * as documentsUtils from '../../js/DocumentsUtils.js';
 import * as documentsWebSocket from './js/WebSocket.js';
-import * as transferRulesService from '../../js/transferRulesService.js';
 
 if (!Vue.prototype.$documentFileService) {
   window.Object.defineProperty(Vue.prototype, '$documentFileService', {
@@ -41,11 +40,6 @@ if (!Vue.prototype.$documentsWebSocket) {
     value: documentsWebSocket,
   });
 }
-if (!Vue.prototype.$transferRulesService) {
-  window.Object.defineProperty(Vue.prototype, '$transferRulesService', {
-    value: transferRulesService,
-  });
-}
 
 // get overrided components if exists
 if (extensionRegistry) {
@@ -58,10 +52,6 @@ if (extensionRegistry) {
   Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
   document.addEventListener('documents-supported-document-types-updated', () => {
     Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
-  });
-  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
-  document.addEventListener('documents-documents-icons-extension-updated', () => {
-    Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
   });
 }
 

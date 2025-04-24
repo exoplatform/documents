@@ -52,15 +52,6 @@ public interface DocumentFileService {
                                       int limit,
                                       long userIdentityId,
                                       boolean showHiddenFiles) throws IllegalAccessException, ObjectNotFoundException;
-  /**
-   * Retrieves a file by its identifier.
-   *
-   *  @param documentId Id of the given document
-   *  @param aclIdentity user identity id
-   *  @return {@link AbstractNode}
-   */
-  AbstractNode getDocumentById(String documentId, String aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
-
 
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the
