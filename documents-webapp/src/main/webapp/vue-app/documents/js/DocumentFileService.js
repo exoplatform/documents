@@ -535,9 +535,6 @@ export function bulkMoveDocuments(actionId, documents, ownerId, destPath) {
 }
 
 export function createDocumentPublicAccess(nodeId, publicAccessOptions) {
-  if (!publicAccessOptions) {
-    return getDocumentPublicAccess(nodeId);
-  }
   const formData = new FormData();
   if (nodeId) {
     formData.append('nodeId', nodeId);

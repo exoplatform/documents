@@ -1143,39 +1143,30 @@ public class DocumentFileRest implements ResourceContainer {
     if (userIdentityId == 0) {
       return Response.status(Response.Status.UNAUTHORIZED).build();
     }
-
-    //publicDocumentAccessOptionsEntity = null means no change
-    if (publicDocumentAccessOptionsEntity != null) {
-      //publicDocumentAccessOptionsEntity = {} with noPassword means delete password
-      String password = publicDocumentAccessOptionsEntity.getPassword();
-      Long expirationDate = publicDocumentAccessOptionsEntity.getExpirationDate();
-      boolean hasPassword = publicDocumentAccessOptionsEntity.isHasPassword();
-      if (password != null) {
-        String errorMessage = PASSWORD_VALIDATOR.validate(locale, publicDocumentAccessOptionsEntity.getPassword());
-        if (StringUtils.isNotBlank(errorMessage)) {
+    String password = publicDocumentAccessOptionsEntity != null ? publicDocumentAccessOptionsEntity.getPassword() : null;
+    Long expirationDate = publicDocumentAccessOptionsEntity != null ? publicDocumentAccessOptionsEntity.getExpirationDate() : 0L;
+    boolean hasPassword = publicDocumentAccessOptionsEntity != null && publicDocumentAccessOptionsEntity.isHasPassword();
+    if (password != null) {
+      String errorMessage = PASSWORD_VALIDATOR.validate(locale, publicDocumentAccessOptionsEntity.getPassword());
+      if (StringUtils.isNotBlank(errorMessage)) {
           return Response.status(Response.Status.BAD_REQUEST).entity(errorMessage).build();
-        }
       }
-      try {
-        boolean hasEditPermission = documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId);
-        if (!hasEditPermission) {
+    }
+    try {
+      boolean hasEditPermission = documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId);
+      if (!hasEditPermission) {
           return Response.status(Response.Status.UNAUTHORIZED).build();
-        }
-
-        return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccessService.createPublicDocumentAccess(
-                           userIdentityId,
-                           nodeId,
-                           password,
-                           expirationDate,
-                           hasPassword)))
-                       .build();
-      } catch (Exception e) {
-        LOG.error("Error while creating a document public access for document: {}", nodeId, e);
-        return Response.serverError().build();
       }
+      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccessService.createPublicDocumentAccess(userIdentityId,
+                      nodeId,
+                      password,
+                      expirationDate,
+                      hasPassword)))
+              .build();
 
-    } else {
-      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccessService.getPublicDocumentAccess(nodeId))).build();
+    } catch (Exception e) {
+      LOG.error("Error while creating a document public access for document: {}", nodeId, e);
+      return Response.serverError().build();
     }
   }
 
