@@ -35,10 +35,6 @@ const video = {
   class: 'fas fa-file-video',
   color: '#79577A',
 };
-const audio = {
-  class: 'fas fa-file-audio',
-  color: '#79577A',
-};
 const archive = {
   class: 'fas fa-file-archive',
   color: '#717272',
@@ -89,22 +85,14 @@ const documentsMapIconsExtensions = new Map([
   ['image/jpeg', image],
   ['image/png', image],
   ['image/tiff', image],
-  ['image/svg+xml', image],
   ['video/x-msvideo', video],
   ['video/mp4', video],
   ['video/mpeg', video],
   ['video/ogg', video],
   ['video/webm', video],
   ['video/3gpp', video],
-  ['video/quicktime', video],
-  ['audio/mpeg', audio],
-  ['audio/ogg', audio],
-  ['audio/wav', audio],
   ['application/zip', archive],
   ['application/vnd.rar', archive],
-  ['application/rar', archive],
-  ['application/x-zip', archive],
-  ['application/java-archive', archive],
   ['application/postscript', illustration],
   ['text/html', code],
   ['text/xml', code],

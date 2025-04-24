@@ -88,7 +88,7 @@ export default {
   },
   methods: {
     getFileIcon(mimeType) {
-      const extensions = Vue.prototype.$documentsIconsExtension;
+      const extensions = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
       let extension = extensions[0].get(mimeType);
       if (!extension) {
         extension = extensions[0].get('file');
