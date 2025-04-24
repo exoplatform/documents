@@ -373,7 +373,7 @@ export default {
     },
     checkPasswordValid() {
       this.startCheckPassword = this.showPasswordInput;
-      const passwordValue = this.publicDocumentAccessOptionsObject?.password;
+      const passwordValue = this.publicDocumentAccessOptionsObject?.decodedPassword;
       return passwordValue && this.passwordRegex.test(passwordValue);
     },
     toggleShowPassword() {
@@ -403,9 +403,6 @@ export default {
       this.$refs.publicDocumentOptionsDrawer.close();
     },
     getExpirationDelayDate() {
-      if (!this.showExpirationDateInput) {
-        return null;
-      }
       const delayDate = new Date(new Date());
       switch (this.delayType) {
       case 'day':
@@ -423,11 +420,19 @@ export default {
         return;
       }
       this.publicDocumentAccessOptionsObject.expirationDate = 0;
-      if (this.expirationDate && this.expirationDateType === 'specificDate') {
-        const date = new Date(this.expirationDate).setHours(23, 59, 59, 0o00);
-        this.publicDocumentAccessOptionsObject.expirationDate = new Date(date).getTime();
-      } else if (this.expirationDateType === 'delayDate') {
-        this.publicDocumentAccessOptionsObject.expirationDate = this.getExpirationDelayDate();
+      if (this.showExpirationDateInput) {
+        if (this.expirationDate && this.expirationDateType === 'specificDate') {
+          const date = new Date(this.expirationDate).setHours(23, 59, 59, 0o00);
+          this.publicDocumentAccessOptionsObject.expirationDate = new Date(date).getTime();
+        } else if (this.expirationDateType === 'delayDate') {
+          this.publicDocumentAccessOptionsObject.expirationDate = this.getExpirationDelayDate();
+        }
+      }
+      if (this.hasPassword) {
+        this.publicDocumentAccessOptionsObject.decodedPassword = this.publicDocumentAccessOptionsObject.password 
+          ? this.publicDocumentAccessOptionsObject.password : this.publicDocumentAccess.decodedPassword;
+      } else {
+        this.publicDocumentAccessOptionsObject.decodedPassword = null;
       }
       this.publicDocumentAccessOptionsObject.hasPassword = this.hasPassword;
       this.$root.$emit('set-document-public-access-options', this.publicDocumentAccessOptionsObject);

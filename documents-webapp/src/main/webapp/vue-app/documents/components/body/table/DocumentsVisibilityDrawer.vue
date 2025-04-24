@@ -160,7 +160,7 @@
                 </v-label>
                 <v-spacer />
                 <v-switch
-                  v-model="file.acl.allMembersCanEdit"
+                  v-model="allMembersCanEdit"
                   class="mt-0 me-1" />
               </div>
             </div>
@@ -237,6 +237,7 @@
           </v-btn>
           <v-btn
             class="btn btn-primary"
+            :disabled="isDisabled"
             :loading="loading"
             @click="saveVisibility()">
             {{ $t('documents.label.visibility.save') }}
@@ -281,11 +282,32 @@ export default {
     searchOptions: {
       currentUser: '',
     },
+    originalFileProperties: {
+      visibilityChoice: '',
+      publicDocumentAccess: {
+        decodedPassword: null,
+        expirationDate: 0,
+        hasPassword: false,
+      },
+      allMembersCanEdit: false,
+      collaborators: '',
+    },
+    actualFileProperties: {
+      visibilityChoice: '',
+      publicDocumentAccess: {
+        decodedPassword: null,
+        expirationDate: 0,
+        hasPassword: false,
+      },
+      allMembersCanEdit: false,
+      collaborators: '',
+    },
     users: [],
     publicDocumentAccess: null,
     publicDocumentAccessOptions: null,
     isEditingPublicAccessOptions: false,
-    visibilityChoice: null
+    visibilityChoice: null,
+    allMembersCanEdit: false,
   }),
   computed: {
     publicAccessExpirationDate() {
@@ -400,6 +422,9 @@ export default {
     showMoreUsersNumber() {
       return `${this.users.length - this.maxUsersToShow  } ${  this.$t('documents.label.visibility.others')}`;
     },
+    isDisabled() {
+      return JSON.stringify(this.originalFileProperties) === JSON.stringify(this.actualFileProperties);
+    },
   },
   watch: {
     collaborators() {
@@ -418,6 +443,36 @@ export default {
       }
       this.collaborators = null;
     },
+    originalFileProperties() {
+      this.actualFileProperties = { ...this.originalFileProperties};
+    },
+    visibilityChoice() {
+      this.actualFileProperties = { ...this.actualFileProperties,visibilityChoice: this.visibilityChoice};
+    },
+    allMembersCanEdit(newVal) {
+      this.file.acl.allMembersCanEdit = newVal;
+      this.actualFileProperties = { ...this.actualFileProperties,allMembersCanEdit: newVal };
+    },
+    showPublicAccessOption() {
+      if (!this.showPublicAccessOption) {
+        this.actualFileProperties = {
+          ...this.actualFileProperties,
+          publicDocumentAccess: {
+            ...this.actualFileProperties.publicDocumentAccess,
+            decodedPassword: this.originalFileProperties.publicDocumentAccess.decodedPassword,
+            expirationDate: this.originalFileProperties.publicDocumentAccess.expirationDate,
+            hasPassword: this.originalFileProperties.publicDocumentAccess.hasPassword
+          }
+        };
+      } 
+    },
+    showSwitch() {
+      this.actualFileProperties = this.showSwitch ? { ...this.actualFileProperties,allMembersCanEdit: this.file.acl.allMembersCanEdit }
+        : { ...this.actualFileProperties,allMembersCanEdit: this.originalFileProperties.allMembersCanEdit };
+    },
+    usersToDisplay() {
+      this.actualFileProperties = { ... this.actualFileProperties, collaborators: this.stringifyArray(this.usersToDisplay) };
+    }
   },
   created() {
     this.$root.$on('set-document-public-access-options', this.setDocumentPublicAccessOptions);
@@ -432,13 +487,29 @@ export default {
   },
   methods: {
     setDocumentPublicAccessOptions(options) {
+      this.actualFileProperties = {
+        ...this.actualFileProperties,
+        publicDocumentAccess: {
+          ...this.actualFileProperties.publicDocumentAccess,
+          decodedPassword: options.decodedPassword ? options.decodedPassword : null,
+          expirationDate: options.expirationDate === null ? 0 : options.expirationDate,
+          hasPassword: options.hasPassword
+        }
+      };
       this.isEditingPublicAccessOptions = true;
-      this.publicDocumentAccessOptions = options;
-      this.publicDocumentAccess.hasPassword = options.hasPassword;
-      this.publicDocumentAccess.expirationDate = options.expirationDate;
+      this.publicDocumentAccessOptions = this.publicDocumentAccess = options;
     },
     getDocumentPublicAccessInfo() {
       this.$documentFileService.getDocumentPublicAccess(this.file.id).then(publicDocumentAccess => {
+        this.originalFileProperties = {
+          ...this.originalFileProperties,
+          publicDocumentAccess: {
+            ...this.originalFileProperties.publicDocumentAccess,
+            decodedPassword: publicDocumentAccess.decodedPassword ? publicDocumentAccess.decodedPassword : null,
+            expirationDate: publicDocumentAccess.expirationDate === null ? 0 : publicDocumentAccess.expirationDate.time,
+            hasPassword: publicDocumentAccess.hasPassword
+          }
+        };
         this.publicDocumentAccess = publicDocumentAccess;
       });
     },
@@ -480,7 +551,9 @@ export default {
       this.visibilityChoice = this.file.acl.visibilityChoice;
       this.publicDocumentAccess = null;
       this.publicDocumentAccessOptions = null;
-      this.getDocumentPublicAccessInfo();
+      if (this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS'){
+        this.getDocumentPublicAccessInfo();
+      }
       if (this.file?.creatorIdentity?.remoteId){
         this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
           this.ownerIdentity = user;
@@ -492,11 +565,17 @@ export default {
         user.permission = collaborator.permission;
         this.users.push(user);
       }
+      this.originalFileProperties = { ...this.originalFileProperties, 
+        visibilityChoice: this.file.acl.visibilityChoice,
+        allMembersCanEdit: this.file.acl.allMembersCanEdit,
+        collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users)))
+      };
       this.$refs.documentVisibilityDrawer.open();
     },
     close() {
       this.isEditingPublicAccessOptions = false;
       this.publicDocumentAccessOptions = {};
+      this.originalFileProperties.publicDocumentAccess = {};
       this.$refs.documentVisibilityDrawer.close();
 
     },
@@ -529,7 +608,7 @@ export default {
       if (this.visibilityChoice==='SPECIFIC_COLLABORATOR'){
         this.file.acl.allMembersCanEdit=false;
       }
-      const publicAccess = this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
+      const publicAccess = this.isPublicAccess();
       this.file.acl.visibilityChoice = this.visibilityChoice;
       this.$root.$emit('save-visibility',this.file, publicAccess, this.publicDocumentAccessOptions);
     },
@@ -548,7 +627,26 @@ export default {
       if (index >= 0) {
         this.users[index].permission=user.permission;
       }
+      this.actualFileProperties = { ... this.actualFileProperties, collaborators: this.stringifyArray(this.usersToDisplay) };
     },
+    stringifyArray(collaborators) {
+      if (!collaborators) {
+        return '';
+      }
+      collaborators = JSON.parse(JSON.stringify(collaborators));
+      collaborators = collaborators
+        .map(c => {
+          const { id, permission, remoteId, providerId } = c;
+          return JSON.stringify({ id, permission, remoteId, providerId });
+        });
+      
+      return JSON.stringify(collaborators.sort());
+    },
+    isPublicAccess() {
+      return this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS' 
+              && (JSON.stringify(this.originalFileProperties.publicDocumentAccess) !== JSON.stringify(this.actualFileProperties.publicDocumentAccess)
+              || this.originalFileProperties.visibilityChoice !== this.actualFileProperties.visibilityChoice);
+    }
   }
 };
 </script>
