@@ -24,6 +24,7 @@ export default {
   data: () => ({
     viewTab: 'RECENT',
     spaceId: eXo.env.portal.spaceId,
+    publicAccessVisibilityChoice: 'COLLABORATORS_AND_PUBLIC_ACCESS'
   }),
   methods: {
     copyLink() {
@@ -38,7 +39,8 @@ export default {
       if (this.file.folder){
         path = `${path}?folderId=${this.file.id}`;
       } else if (Vue.prototype?.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === this.file?.mimeType).length > 0){
-        path = `${window.location.host}${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.file.id}&mode=view`;
+        const portalName = this.file?.acl?.visibilityChoice === this.publicAccessVisibilityChoice ? 'public' : eXo.env.portal.metaPortalName;
+        path = `${window.location.host}${eXo.env.portal.context}/${portalName}/oeditor?docId=${this.file.id}&mode=view`;
       } else {
         path = `${path}?documentPreviewId=${this.file.id}`;
       }
