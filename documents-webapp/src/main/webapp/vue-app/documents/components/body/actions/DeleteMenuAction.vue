@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable mx-2"
+    class="clickable my-10px mx-2"
     @click="deleteAction()">
     <v-icon
-      size="13"
-      class="pe-1 iconStyle">
+      size="16"
+      class="pe-1 error-color">
       fas fa-trash
     </v-icon>
-    <span class="ps-1">{{ $t('documents.label.delete') }}</span>
+    <span class="ps-1 ml-n2px text-body menu-text-color">{{ $t('documents.label.delete') }}</span>
   </div>
 </template>
 <script>
