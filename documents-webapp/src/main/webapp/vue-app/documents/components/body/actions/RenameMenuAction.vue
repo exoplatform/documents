@@ -1,13 +1,15 @@
 <template>
-  <div
-    class="clickable pt-1 mx-2"
-    @click="editNameMode()">
-    <v-icon
-      size="13"
-      class="pe-1 iconStyle">
-      mdi-form-textbox
-    </v-icon>
-    <span class="ps-1">{{ $t('document.label.rename') }}</span>
+  <div>
+    <div
+      class="clickable my-10px mx-2"
+      @click="editNameMode()">
+      <v-icon
+        size="16"
+        class="pe-1">
+        fas fa-pen
+      </v-icon>
+      <span class="text-body menu-text-color ps-1">{{ $t('document.label.rename') }}</span>
+    </div>
     <v-divider
       v-if="!isMobile"
       class="mt-1 dividerStyle" />
