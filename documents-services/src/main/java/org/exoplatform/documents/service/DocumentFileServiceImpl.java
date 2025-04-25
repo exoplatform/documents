@@ -52,6 +52,7 @@ import io.meeds.analytics.api.service.AnalyticsService;
 import io.meeds.analytics.model.StatisticData;
 import io.meeds.analytics.model.filter.AnalyticsFilter;
 import io.meeds.analytics.utils.AnalyticsUtils;
+import io.meeds.portal.thumbnail.model.FileContent;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
@@ -685,5 +686,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public AbstractNode getDocumentById(String documentId, String aclIdentity){
     return documentFileStorage.getDocumentById(documentId, aclIdentity);
+  }
+
+  @Override
+  public FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException {
+    return documentFileStorage.getDocumentContent(documentId, aclIdentity);
   }
 }
