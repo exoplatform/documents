@@ -1,13 +1,13 @@
 <template>
   <div
-    class="downloadDocumentNewApp clickable mx-2"
+    class=" clickable my-10px mx-2"
     @click="download()">
     <v-icon
-      size="13"
-      class="pe-1 iconStyle">
+      size="16"
+      class="pe-1">
       fas fa-download
     </v-icon>
-    <span class="ps-1">{{ $t('documents.label.download') }}</span>
+    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.download') }}</span>
   </div>
 </template>
 <script>

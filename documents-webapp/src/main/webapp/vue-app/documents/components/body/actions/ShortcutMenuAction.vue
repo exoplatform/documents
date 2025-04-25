@@ -15,15 +15,17 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div
-    class="clickable mx-2"
-    @click="addShortcut()">
-    <v-icon
-      size="13"
-      class="pe-1 iconStyle">
-      fas fa-share-square
-    </v-icon>
-    <span class="ps-1">{{ $t('documents.label.shortcut') }}</span>
+  <div>
+    <div
+      class="clickable my-10px mx-2"
+      @click="addShortcut()">
+      <v-icon
+        size="16"
+        class="pe-1">
+        fas fa-share-square
+      </v-icon>
+      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.shortcut') }}</span>
+    </div>
     <v-divider
       class="mt-1 dividerStyle" />
   </div>
