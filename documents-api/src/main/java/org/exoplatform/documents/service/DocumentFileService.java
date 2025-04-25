@@ -28,6 +28,8 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.social.core.identity.model.Identity;
 
+import io.meeds.portal.thumbnail.model.FileContent;
+
 public interface DocumentFileService {
 
   /**
@@ -59,7 +61,18 @@ public interface DocumentFileService {
    *  @param aclIdentity user identity id
    *  @return {@link AbstractNode}
    */
-  AbstractNode getDocumentById(String documentId, String aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
+  AbstractNode getDocumentById(String documentId, String aclIdentity);
+
+
+  /**
+   * Retrieves a file content by its identifier.
+   *
+   * @param documentId  Id of the given document
+   * @param aclIdentity user identity id
+   * @return {@link InputStream}
+   */
+  public FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException;
+
 
 
   /**

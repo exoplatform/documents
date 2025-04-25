@@ -118,4 +118,13 @@
     </component-plugin>
   </external-component-plugins>
 
+  <external-component-plugins>
+    <target-component>org.exoplatform.services.thumbnail.ImageThumbnailService</target-component>
+    <component-plugin>
+      <name>documents-images</name>
+      <set-method>addPlugin</set-method>
+      <type>org.exoplatform.documents.plugins.DocumentsImageThumbnailPlugin</type>
+    </component-plugin>
+  </external-component-plugins>
+
 </configuration>
