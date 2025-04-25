@@ -15,18 +15,20 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div
-    class="clickable pt-1 mx-2"
-    @click="moveDocument()">
-    <v-icon
-      size="13"
-      class="pe-1 iconStyle">
-      fa-arrows-alt
-    </v-icon>
-    <span class="ps-1">{{ $t('document.label.move') }}</span>
+  <div>
+    <div
+      class="clickable my-10px mx-2"
+      @click="moveDocument()">
+      <v-icon
+        size="16"
+        class="pe-1">
+        fa-arrows-alt
+      </v-icon>
+      <span class="ps-1 text-body menu-text-color">{{ $t('document.label.move') }}</span>
+    </div>
     <v-divider
       v-if="isMultiSelection"
-      class="mt-1 dividerStyle" />
+      class="mt-1" />
   </div>
 </template>
 <script>

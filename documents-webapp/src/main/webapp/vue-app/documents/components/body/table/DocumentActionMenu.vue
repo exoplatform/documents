@@ -1,5 +1,7 @@
 <template>
-  <v-list dense>
+  <v-list 
+    class="py-0"
+    dense>
     <v-list-item
       v-for="(extension, i) in menuExtensions"
       :key="i"

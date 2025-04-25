@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable pt-1 mx-2"
+    class="clickable my-10px mx-2"
     @click="duplicate()">
     <v-icon
-      size="13"
-      class="pe-1 iconStyle">
+      size="16"
+      class="pe-1">
       fas fa-clone
     </v-icon>
-    <span class="ps-1">{{ $t('documents.label.duplicate') }}</span>
+    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.duplicate') }}</span>
   </div>
 </template>
 <script>
