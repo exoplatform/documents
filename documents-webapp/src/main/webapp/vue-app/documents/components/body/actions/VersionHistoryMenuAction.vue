@@ -16,14 +16,14 @@
 -->
 <template>
   <div
-    class="clickable ma-auto pt-1 mx-2"
+    class="clickable my-10px mx-2"
     @click="showVersionHistory">
     <v-icon
-      size="13"
-      class="pe-1 iconStyle">
+      size="16"
+      class="pe-1">
       fa fa-history
     </v-icon>
-    <span class="ps-1">{{ $t('documents.label.showVersionHistory') }}</span>
+    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.showVersionHistory') }}</span>
   </div>
 </template>
 

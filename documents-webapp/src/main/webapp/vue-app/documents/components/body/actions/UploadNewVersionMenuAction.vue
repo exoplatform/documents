@@ -15,15 +15,17 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div
-    class="clickable pt-1 mx-2"
-    @click="uploadVersion">
-    <v-icon
-      size="13"
-      class="pe-1 iconStyle">
-      fas fa-upload
-    </v-icon>
-    {{ $t('documents.label.upload.newVersion') }}
+  <div>
+    <div
+      class="clickable my-10px mx-2"
+      @click="uploadVersion">
+      <v-icon
+        size="16"
+        class="pe-1">
+        fas fa-upload
+      </v-icon>
+      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.upload.newVersion') }}</span>
+    </div>
     <v-divider
       class="mt-1 dividerStyle" />
   </div>

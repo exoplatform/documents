@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable mx-2"
+    class="clickable my-10px mx-2"
     @click="displayDetails()">
     <v-icon
-      size="13"
-      class="pe-1 iconStyle">
+      size="16"
+      class="pe-1">
       fa-info-circle
     </v-icon>
-    <span class="ps-1">{{ $t('documents.drawer.details.title') }}</span>
+    <span class="ps-1 text-body menu-text-color">{{ $t('documents.drawer.details.title') }}</span>
   </div>
 </template>
 <script>

@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable ma-auto pt-1 mx-2"
+    class="clickable ma-auto my-10px mx-2"
     @click="changeVisibility()">
     <v-icon
-      size="13"
-      class="pe-1 iconStyle">
+      size="16"
+      class="pe-1">
       fas fa-eye
     </v-icon>
-    <span class="ps-1">{{ $t('documents.label.visibility') }}</span>
+    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.visibility') }}</span>
   </div>
 </template>
 <script>
