@@ -30,8 +30,7 @@ import java.util.stream.Collectors;
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
 import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
+import javax.ws.rs.core.*;
 import javax.ws.rs.core.Response.Status;
 
 import org.apache.commons.lang3.StringUtils;
@@ -44,6 +43,7 @@ import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
@@ -60,6 +60,8 @@ import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
 import org.exoplatform.services.rest.resource.ResourceContainer;
 import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.services.thumbnail.ImageThumbnailService;
+import org.exoplatform.social.common.Utils;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -78,8 +80,15 @@ import jakarta.servlet.http.HttpServletRequest;
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
 public class DocumentFileRest implements ResourceContainer {
 
-  private static final Log                  LOG                = ExoLogger.getLogger(DocumentFileRest.class);
+    public static final UserFieldValidator PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
 
+    private static final Log LOG = ExoLogger.getLogger(DocumentFileRest.class);
+
+    private static final CacheControl CACHE_CONTROL = new CacheControl();
+
+    private static final int CACHE_IN_SECONDS = 7 * 86400;
+
+    private static final int CACHE_IN_MILLI_SECONDS = CACHE_IN_SECONDS * 1000;
   private final DocumentFileService         documentFileService;
 
   private final SpaceService                spaceService;
@@ -96,7 +105,7 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final ExternalDownloadService     externalDownloadService;
 
-  public static final UserFieldValidator    PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
+    private final ImageThumbnailService imageThumbnailService;
 
   public DocumentFileRest(DocumentFileService documentFileService,
                           SpaceService spaceService,
@@ -105,7 +114,8 @@ public class DocumentFileRest implements ResourceContainer {
                           SettingService settingService,
                           DocumentWebSocketService documentWebSocketService,
                           PublicDocumentAccessService publicDocumentAccessService,
-                          ExternalDownloadService externalDownloadService) {
+                          ExternalDownloadService externalDownloadService,
+                          ImageThumbnailService imageThumbnailService) {
     this.documentFileService = documentFileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
@@ -114,6 +124,7 @@ public class DocumentFileRest implements ResourceContainer {
     this.documentWebSocketService = documentWebSocketService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.externalDownloadService = externalDownloadService;
+      this.imageThumbnailService = imageThumbnailService;
   }
 
   @GET
@@ -1479,24 +1490,92 @@ public class DocumentFileRest implements ResourceContainer {
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
         try {
-            AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
-                    identityManager,
-                    spaceService,
-                    metadataService,
-                    publicDocumentAccessService,
-                    documentFileService.getDocumentById(documentId, RestUtils.getCurrentUser()),
-                    null,
-                    userIdentityId);
+            AbstractNodeEntity abstractNodeEntity =
+                    EntityBuilder.toDocumentItemEntity(documentFileService,
+                            identityManager,
+                            spaceService,
+                            metadataService,
+                            publicDocumentAccessService,
+                            documentFileService.getDocumentById(documentId,
+                                    RestUtils.getCurrentUser()),
+                            null,
+                            userIdentityId);
             return Response.ok(abstractNodeEntity).build();
 
         } catch (IllegalArgumentException e) {
             return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
         } catch (Exception e) {
-            LOG.warn("Error retrieving a the file with id = {}", documentId,  e);
+            LOG.warn("Error retrieving a the file with id = {}", documentId, e);
             return Response.serverError().entity(e.getMessage()).build();
         }
     }
 
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @RolesAllowed("users")
+    @Path("/{fileType}/{documentId}")
+    @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
+    @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
+            @ApiResponse(responseCode = "400", description = "Invalid query input"),
+            @ApiResponse(responseCode = "404", description = "Not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error"),})
+    public Response getDocumentThumb(@javax.ws.rs.core.Context
+                                     UriInfo uriInfo, @javax.ws.rs.core.Context
+                                     Request request,
+                                     @Parameter(description = "Document identifier", required = true)
+                                     @PathParam("documentId")
+                                     String documentId,
+                                     @Parameter(description = "Document type to be able to get the content")
+                                     @PathParam("fileType")
+                                     String fileType,
+                                     @Parameter(description = "The value of lastModified parameter will determine whether the query should be cached by browser or not. If not set, no 'expires HTTP Header will be sent'")
+                                     @QueryParam("lastModified")
+                                     String lastModified,
+                                     @Parameter(description = "Resized image size. Use 100x100 as default size.")
+                                     @DefaultValue("250x250")
+                                     @QueryParam("size")
+                                     String size) {
+
+        if (StringUtils.isBlank(documentId)) {
+            return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
+        }
+        if (StringUtils.isBlank(fileType)) {
+            return Response.status(Status.BAD_REQUEST).entity("file Type  is mandatory").build();
+        }
+        try {
+            int[] dimension = Utils.parseDimension(size);
+            FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType,
+                    documentId,
+                    ConversationState.getCurrent().getIdentity().getUserId(),
+                    dimension[0],
+                    dimension[1]);
+            if (image == null) {
+                return Response.status(Status.NOT_FOUND).build();
+            }
+            long lastUpdated = image.getFileInfo().getUpdatedDate().getTime();
+            EntityTag eTag = new EntityTag(Long.hashCode(lastUpdated) + "-" + size);
+            Response.ResponseBuilder builder = request.evaluatePreconditions(eTag);
+            if (builder == null) {
+                InputStream inputStream = image.getAsStream();
+                String mimeType = image.getFileInfo().getMimetype();
+                if (StringUtils.isBlank(mimeType)) {
+                    mimeType = MediaType.APPLICATION_OCTET_STREAM;
+                }
+                builder = Response.ok(inputStream).type(mimeType);
+                builder.cacheControl(CACHE_CONTROL);
+                builder.lastModified(new Date(lastUpdated));
+                builder.tag(eTag);
+            }
+            String fileName = URLEncoder.encode(image.getFileInfo().getName(), StandardCharsets.UTF_8).replace("+", "%20");
+            builder.header("Content-Disposition", "filename=\"" + fileName + "\"; filename*=UTF-8''" + fileName);
+            if (StringUtils.isNotBlank(lastModified)) {
+                builder.expires(new Date(System.currentTimeMillis() + CACHE_IN_MILLI_SECONDS));
+            }
+            return builder.build();
+        } catch (Exception e) {
+            LOG.error("Error getting documents thumbnail with Id {}", documentId, e);
+            return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+        }
+    }
 
 }
-

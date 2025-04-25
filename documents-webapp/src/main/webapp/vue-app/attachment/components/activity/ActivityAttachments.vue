@@ -44,9 +44,7 @@ export default {
         } catch (e) {
           // could happen, but ignore it
         }
-        const workspace = attachment.workspace;
-        const imageURL = mimetype.includes('image/') && `${eXo.env.portal.context}/${eXo.env.portal.rest}/thumbnailImage/custom/250x250/${workspace}/${attachment.id}` || null;
-
+        const imageURL = this.getImageUrl(attachment);
         attachments.push({
           id: attachment.id,
           image: imageURL,
@@ -74,6 +72,21 @@ export default {
     },
     isFileReadable(file) {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimeType).length > 0;
+    },
+    getImageUrl(file) {
+      const formData = new FormData();
+      formData.append('size', '250x250');
+      if (file.lastModified && file.lastModified>0) {
+        formData.append('lastModified', file.lastModified);
+      }
+      const params = new URLSearchParams(formData).toString();
+      if (this.isFileReadable(file)){
+        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/documentsOffice/${file.id}?${params}`;
+      }
+      if (file.mimeType.includes('image/')){
+        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/documentsImage/${file.id}?${params}`;
+      }
+      return null;
     },
   }
 };
