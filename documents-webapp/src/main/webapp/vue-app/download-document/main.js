@@ -16,7 +16,7 @@
  */
 import './initComponents.js';
 import '../documents-icons-extension/extensions.js';
-import * as documentFileService from '../documents/js/DocumentFileService.js';
+import * as documentFileService from '../../js/DocumentFileService.js';
 
 if (!Vue.prototype.$documentFileService) {
   window.Object.defineProperty(Vue.prototype, '$documentFileService', {

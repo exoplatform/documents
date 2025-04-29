@@ -85,9 +85,6 @@
       <documents-advanced-filter-drawer />
       <documents-download-drawer />
       <document-import-from-zip-drawer />
-      <documents-info-drawer
-        :selected-view="selectedView"
-        :is-mobile="isMobile" />
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />

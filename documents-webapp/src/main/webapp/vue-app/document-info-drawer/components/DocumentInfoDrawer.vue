@@ -10,7 +10,7 @@
     <template v-if="file" slot="content">
       <div class="d-flex align-center justify-center flex-grow-1 text-center pt-2">
         <v-icon v-if="icon" :color="iconColor">{{ iconClass }}</v-icon>
-        <span class="fileName font-weight-bold text-body text-truncate ms-2 px-2">
+        <span class="font-weight-bold text-body text-truncate ms-2 px-2">
           {{ file.name }}
         </span>
         <div class="d-flex align-center">
@@ -46,8 +46,8 @@
       </div>
       <v-hover>
         <div slot-scope="{ hover }">
-          <v-row class="col-12">
-            <v-col class="col-11 px-0 py-0">
+          <v-row class="py-4 px-8">
+            <v-col class="px-0 py-0">
               <div
                 v-show="showDescription"
                 :data-text="placeholder"
@@ -234,7 +234,6 @@ export default {
     currentUser: eXo.env.portal.userName,
     file: null,
     fileName: null,
-    fileType: null,
     icon: null,
     displayEditor: false,
     showNoDescription: false,
@@ -303,12 +302,11 @@ export default {
   },
   watch: {
     showDescription() {
-      this.$refs.activityShareMessage.initCKEditorData(this.file.description);
+      this.$refs.activityShareMessage?.initCKEditorData(this.file.description);
     }
   },
   created() {
-    this.$root.$on('open-info-drawer', this.open);
-    this.$root.$on('close-info-drawer', this.close);
+    document.addEventListener('open-info-drawer', this.open);
     this.$root.$on('version-number-updated', (fileId) => {
       if (this.file && this.file.id === fileId) {
         this.file.versionNumber++;
@@ -347,7 +345,7 @@ export default {
           this.showNoDescription = !this.file.description;
           this.displayEditor=false;
           this.fileInitialDescription = this.file.description;
-          this.$refs.activityShareMessage.initCKEditorData(this.file.description);
+          this.$refs.activityShareMessage?.initCKEditorData(this.file.description);
         }).catch(() => {
           this.$root.$emit('show-alert', {
             type: 'error',
@@ -355,19 +353,22 @@ export default {
           });
         });
     },
-    open(file, fileName, fileType, icon) {
-      this.file = file;
-      this.fileName = fileName;
-      this.fileType = fileType;
-      this.icon = icon;
-      this.displayEditor = false;
-      this.showNoDescription = !this.file.description && !this.displayEditor;
-      this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
-      this.fileInitialDescription = this.file.description;      
-      this.$nextTick(()=>{
-        this.$refs.documentInfoDrawer.open();
-        this.$refs.activityShareMessage.initCKEditorData(this.file.description);
-      });
+    open(event) {
+      const fileId = event?.detail;
+      this.$attachmentService.getDocumentDetails(fileId)
+        .then(file => {
+          this.file = file;
+          this.icon = file.icon;
+          this.displayEditor = false;
+          this.showNoDescription = !this.file.description && !this.displayEditor;
+          this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
+          this.fileInitialDescription = this.file.description;      
+          this.$nextTick(()=>{
+            this.$refs.documentInfoDrawer.open();
+            this.$refs.activityShareMessage?.initCKEditorData(this.file.description);
+          });
+        });
+      
     },
     openEditor(){
       this.firstCreateDescription = this.showNoDescription;
@@ -376,7 +377,7 @@ export default {
       this.displayEditor=true;
       this.originDescription = this.file.description;
       if (!this.originDescription.length) {
-        this.$refs.activityShareMessage.initCKEditorData('');
+        this.$refs.activityShareMessage?.initCKEditorData('');
       }
     },
     close() {

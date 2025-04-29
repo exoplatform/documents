@@ -25,8 +25,7 @@
   </video>
   <attachments-default-preview
     v-else
-    :attachment="attachment"
-  />
+    :attachment="attachment" />
 </template>
 <script>
 export default {
