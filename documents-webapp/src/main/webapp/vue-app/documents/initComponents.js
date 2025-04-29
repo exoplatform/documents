@@ -38,7 +38,6 @@ import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFi
 import SelectPeriod from './components/header/filters/SelectPeriod.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
-import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
 import DocumentDownloadDrawer from './components/body/table/DocumentDownloadDrawer.vue';
 import DocumentsTreeSelectorDrawer from './components/body/table/DocumentsTreeSelectorDrawer.vue';
 import DocumentsMoveSpaces from './components/body/table/DocumentsMoveSpaces.vue';
@@ -112,7 +111,6 @@ const components = {
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-advanced-filter-drawer': DocumentAdvancedFilterDrawer,
   'documents-filter-menu-mobile': DocumentFilterMenuMobile,
-  'documents-info-drawer': DocumentInfoDrawer,
   'documents-download-drawer': DocumentDownloadDrawer,
   'documents-select-period': SelectPeriod,
   'document-tree-selector-drawer': DocumentsTreeSelectorDrawer,

@@ -19,7 +19,7 @@ import './initComponents.js';
 import './extensions.js';
 import '../documents-icons-extension/extensions.js';
 
-import * as documentFileService from './js/DocumentFileService.js';
+import * as documentFileService from '../../js/DocumentFileService.js';
 import * as documentsUtils from '../../js/DocumentsUtils.js';
 import * as documentsWebSocket from './js/WebSocket.js';
 import * as transferRulesService from '../../js/transferRulesService.js';

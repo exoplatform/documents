@@ -12,7 +12,7 @@
             v-on="on"
             class="text-sub-title d-none mx-0 px-0"
             size="16"
-            @click="$root.$emit('open-info-drawer', file)">
+            @click="displayDetails">
             fa-info-circle
           </v-icon>
         </v-btn>
@@ -43,6 +43,12 @@ export default {
     documentInfoActionTooltip() {
       return this.$t('documents.label.show.details');
     },
+  },
+
+  methods: {
+    displayDetails(){
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.fileId}));
+    }
   },
 };
 </script>
