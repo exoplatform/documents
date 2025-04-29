@@ -74,11 +74,17 @@ export default {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimeType).length > 0;
     },
     getImageUrl(file) {
+      const formData = new FormData();
+      formData.append('size', '250x250');
+      if (file.lastModified && file.lastModified>0) {
+        formData.append('lastModified', file.lastModified);
+      }
+      const params = new URLSearchParams(formData).toString();
       if (this.isFileReadable(file)){
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/documentsOffice/${file.id}`;
+        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/documentsOffice/${file.id}?${params}`;
       }
       if (file.mimeType.includes('image/')){
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/documentsImage/${file.id}`;
+        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/documentsImage/${file.id}?${params}`;
       }
       return null;
     },
