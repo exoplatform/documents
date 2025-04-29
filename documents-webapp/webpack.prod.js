@@ -45,7 +45,7 @@ const config = {
     attachmentApp: './src/main/webapp/vue-app/attachment/main.js',
     attachmentIntegration: './src/main/webapp/vue-app/attachment-integration/main.js',
     legacyComposerAttachments: './src/main/webapp/vue-app/legacy-composer-attachments/main.js',
-
+    documentsInfoDrawer: './src/main/webapp/vue-app/document-info-drawer/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),

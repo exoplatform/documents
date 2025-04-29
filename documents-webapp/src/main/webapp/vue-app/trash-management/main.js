@@ -17,7 +17,7 @@
 */
 import './initComponents.js';
 import * as trashManagementService from './js/TrashManagementService';
-import * as documentFileService from '../documents/js/DocumentFileService';
+import * as documentFileService from '../../js/DocumentFileService.js';
 import * as documentsWebSocket from '../documents/js/WebSocket';
 import '../documents-icons-extension/extensions.js';
 

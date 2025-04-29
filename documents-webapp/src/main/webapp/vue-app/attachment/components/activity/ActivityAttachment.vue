@@ -9,9 +9,8 @@
       max-height="210px"
       width="252px"
       max-width="100%"
-      class="activity-attachment overflow-hidden d-flex flex-column border-box-sizing"
-      @click="openPreview">
-      <v-card-text class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0">
+      class="activity-attachment overflow-hidden d-flex flex-column border-box-sizing">
+      <v-card-text class="activity-attachment-thumbnail clickable d-flex flex-grow-1 pa-0" @click="openPreview">
         <img
           v-if="image"
           :src="image"
@@ -25,12 +24,48 @@
           class="ma-auto d-flex"
           size="80px" />
       </v-card-text>
-      <v-card-text v-if="!image" class="activity-attachment-title d-flex font-weight-bold border-top-color py-2">
+      <v-card-text v-if="!image && !hover" class="activity-attachment-title d-flex font-weight-bold border-top-color py-2">
         <div
           :title="attachment.name"
           class="text-color text-wrap text-break mx-0 my-auto text-truncate-2"
           v-text="attachment.name"></div>
       </v-card-text>
+      <v-expand-transition>
+        <v-card
+          v-if="hover && !loading && !invalid"
+          class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal"
+          elevation="0"
+          style="height: 30%;">
+          <v-card-text class="activity-attachment-title d-flex font-weight-bold  py-2">
+            <div
+              :title="attachment.name"
+              class="white--text text-wrap text-break mx-0 my-auto text-truncate-2"
+              v-text="attachment.name">
+            </div>
+          </v-card-text>
+          <v-card-actions class="pt-0 position-absolute b-0 r-0  ma-0 pa-0">
+            <v-btn
+              id="attachment-info"
+              @click="showInfo()"
+              :title="$t('attachments.label.details')"
+              small
+              icon
+              class="white--text ma-0 pa-0">
+              <v-icon size="16">fa-info-circle</v-icon>
+            </v-btn>
+            <v-btn
+              id="attachment-download"
+              :href="attachment.downloadUrl"
+              :download="attachment.name"
+              :title="$t('attachments.label.download')"
+              small
+              icon
+              class="white--text ma-0 pa-0">
+              <v-icon size="16">fa-download</v-icon>
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-expand-transition>
       <v-expand-transition>
         <v-card
           v-if="invalid"
@@ -217,6 +252,13 @@ export default {
         }
         window.open(url, '_blank');
       }
+    },
+    showInfo(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.attachment.id}));
     },
   },
 };
