@@ -12,8 +12,10 @@
       <v-layout column class="mt-2">
         <v-list-item>
           <div class="d-flex align-center flex-grow-1">
-            <div class="pr-4 d-flex flex-grow-1">
-              <span class="font-weight-bold text-color text-no-wrap">{{ $t('documents.move.drawer.space') }}</span>
+            <div class="d-flex flex-grow-1">
+              <span class="d-flex align-center body font-weight-bold text-color text-no-wrap me-6">
+                {{ $t('documents.move.drawer.space') }}
+              </span>
               <div class="flex-grow-1">
                 <documents-move-spaces
                   :space="space"
@@ -24,7 +26,7 @@
         </v-list-item>
         <v-list-item v-if="showCurrentLocation">
           <div class="py-2 width-full">
-            <span class="font-weight-bold text-color text-no-wrap pb-2">{{
+            <span class="body font-weight-bold text-color text-no-wrap pb-2">{{
               $t('documents.move.drawer.currentPosition')
             }}</span>
             <documents-breadcrumb
@@ -37,7 +39,7 @@
         </v-list-item>
         <v-list-item>
           <div class="py-2  width-full">
-            <span class="font-weight-bold text-color text-no-wrap pb-2">{{
+            <span class="body font-weight-bold text-color text-no-wrap pb-2">{{
               $t('documents.move.drawer.destination')
             }}</span>
             <documents-breadcrumb
@@ -50,12 +52,12 @@
         </v-list-item>
         <v-list-item class="position-title">
           <div class="py-2">
-            <span class="font-weight-bold text-no-wrap text-color">{{ $t('documents.move.drawer.position') }}</span>
+            <span class="body font-weight-bold text-no-wrap text-color">{{ $t('documents.move.drawer.position') }}</span>
           </div>
         </v-list-item>
       </v-layout>
       <template>
-        <span class="text-color body-2 text-no-wrap px-4">
+        <span class="text-color body text-no-wrap px-4">
           {{ $t('documents.move.drawer.folder') }}
         </span>
         <v-treeview
@@ -72,7 +74,7 @@
               <v-icon size="24" class="primary--text">
                 {{ 'fas fa-folder' }}
               </v-icon>
-              <v-list-item-title class="body-2 mx-2 mt-1">
+              <v-list-item-title class="body mx-2 mt-1">
                 {{ item.name }}
               </v-list-item-title>
             </div>
