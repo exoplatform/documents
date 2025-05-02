@@ -522,3 +522,28 @@ export function getDocumentDetails(documentId) {
     }
   });
 }
+
+export function createThumbnail(fileType, documentId, data) {
+  if (!documentId) {
+    throw new Error('document Id can\'t be empty');
+  }
+  if (!data) {
+    throw new Error('contant data can\'t be empty');
+  }
+
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${fileType}/${documentId}`, {
+    credentials: 'include',
+
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  }).then((resp) => {
+    if (!resp || !resp.ok) {
+      throw new Error('Error creating thumbnail');
+    } else {
+      return resp;
+    }
+  });
+}

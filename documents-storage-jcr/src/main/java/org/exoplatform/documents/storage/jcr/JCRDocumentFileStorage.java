@@ -1690,7 +1690,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(documentId);
       Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
-      return new FileContent(documentId, node.getProperty(NodeTypeConstants.EXO_TITLE).getString(), content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(), content.getProperty(NodeTypeConstants.JCR_DATA).getStream());
+      return new FileContent(documentId, node.getProperty(NodeTypeConstants.EXO_TITLE).getString(), content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(), content.getProperty(NodeTypeConstants.JCR_DATA).getStream(), node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().getTime());
     } catch (ItemNotFoundException e) {
       throw new ObjectNotFoundException("Document with id : " + documentId + " isn't found");
     } catch (RepositoryException e) {

@@ -26,7 +26,7 @@ import io.meeds.portal.thumbnail.plugin.ImageThumbnailPlugin;
 
 public class DocumentsImageThumbnailPlugin extends ImageThumbnailPlugin {
 
-  public static final String DOCUMENTS_IMAGE = "documentsImage";
+  public static final String DOCUMENTS_IMAGE = "imageThumbnail";
 
   @Override
   public String getFileType() {

@@ -94,6 +94,7 @@ export default {
     document.addEventListener('documents-supported-document-types-updated', this.refreshSupportedDocumentExtensions);
     this.refreshSupportedDocumentExtensions();
     document.addEventListener('mark-attachment-as-viewed', this.markAttachmentAsViewed);
+    document.addEventListener('create-video-thumbnail', this.createVideoThumbnail);
   },
   mounted() {
     this.$root.$applicationLoaded();
@@ -257,6 +258,27 @@ export default {
           }
         });
       }
+    },
+    createVideoThumbnail(event) {
+      const file = event.detail;
+      let video = document.getElementById('video');
+      let canvas = document.getElementById('canvas');
+      if (!video){
+        video = document.createElement('video');
+      } 
+      if (!canvas){
+        canvas = document.createElement('canvas');
+      }
+      video.src = `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/content/${file.id}`;
+      const context = canvas.getContext('2d');
+      video.currentTime = 5;
+      video.onseeked = function() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = canvas.toDataURL('image/jpeg').split(',')[1];
+        this.$attachmentService.createThumbnail('videoThumbnail',file.id, imageData);
+      }.bind(this);
     }
   }
 };

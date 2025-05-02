@@ -24,6 +24,7 @@ import javax.jcr.RepositoryException;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -485,4 +486,8 @@ public interface DocumentFileService {
    * @param userIdentityId the user identity identifier
    */
   void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
+
+  FileContent getImageThumbnailContent(String fileType, String documentId, String userName, int width, int height) throws Exception;
+
+  FileItem createThumbnail(String fileType, FileContent file, String userName, int width, int height) throws Exception;
 }
