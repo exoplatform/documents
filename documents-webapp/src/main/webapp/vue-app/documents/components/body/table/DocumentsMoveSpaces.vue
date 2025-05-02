@@ -26,39 +26,41 @@
         :items="spaces"
         :filter="filterSpaces"
         attach
-        class="pt-0 ps-2 mb-0 inputSpaceName"
+        class="inputSpaceName pa-0"
         solo
         @change="deleteSpace()">
         <template #selection="{ attrs, item, parent, selected }">
-          <div class="identitySuggester no-border mt-0">
+          <div class="identitySuggester no-border ma-0">
             <v-chip
               v-if="item === Object(item)"
               v-bind="attrs"
               :input-value="selected"
               close
-              class="identitySuggesterItem me-2 mt-2"
+              class="identitySuggesterItem d-flex align-center"
               @click:close="deleteSpace">
               <v-avatar left>
                 <v-img :src="item.avatarUrl" />
               </v-avatar>
-              <span
-                class="body-2 text-truncate"
+              <div
+                class="body-2 text-truncate flex-grow-1"
                 @click="parent.selectItem(item)">
                 {{ item.displayName }}
-              </span>
+              </div>
             </v-chip>
           </div>
         </template>
         <template #item="{ item }">
-          <v-list-item @click="updateSpace(item)">
-            <div class="identitySuggester width-fit-content no-border mt-0">
+          <v-list-item
+            class="px-3"
+            @click="updateSpace(item)">
+            <div class="identitySuggester no-border ma-0 no-border">
               <v-chip
-                class="identitySuggesterItem me-2 mt-2"
+                class="identitySuggesterItem d-flex align-center"
                 close>
                 <v-avatar left>
                   <v-img :src="item.avatarUrl" />
                 </v-avatar>
-                <span class="text-truncate">
+                <span class="text-truncate flex-grow-1">
                   {{ item.displayName }}
                 </span>
               </v-chip>
