@@ -36,9 +36,14 @@
                 :disabled="disabledIconTree"
                 @click="openFolder(documents)">
                 <a
-                  class="caption text-truncate"
+                  class="text-truncate"
                   :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
-                  :class="index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable'">{{ getName(documents.name) }}</a>
+                  :class="[
+                    index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable',
+                    !move && 'caption'
+                  ]">
+                    {{ getName(documents.name) }}
+                </a>
                 <v-icon
                   v-if="documents.symlink"
                   size="10"
