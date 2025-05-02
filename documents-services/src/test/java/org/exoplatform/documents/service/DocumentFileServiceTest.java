@@ -23,11 +23,7 @@ import static org.mockito.Mockito.*;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -47,6 +43,7 @@ import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
+import org.exoplatform.services.thumbnail.ImageThumbnailService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -81,6 +78,8 @@ public class DocumentFileServiceTest {
 
   private SettingService          settingService;
 
+  private ImageThumbnailService imageThumbnailService;
+
   private CachedActivityStorage   cachedActivityStorage;
 
   private AnalyticsService        analyticsService;
@@ -104,6 +103,7 @@ public class DocumentFileServiceTest {
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     cachedActivityStorage = mock(CachedActivityStorage.class);
     analyticsService = mock(AnalyticsService.class);
+    imageThumbnailService = mock(ImageThumbnailService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
@@ -112,7 +112,8 @@ public class DocumentFileServiceTest {
                                                       identityRegistry,
                                                       listenerService,
                                                       settingService,
-                                                      analyticsService);
+                                                      analyticsService,
+                                                      imageThumbnailService);
 
     currentIdentity = new Identity(OrganizationIdentityProvider.NAME, userName);
     currentIdentity.setId(String.valueOf(currentOwnerId));

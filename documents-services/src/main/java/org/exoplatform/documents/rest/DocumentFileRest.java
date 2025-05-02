@@ -18,13 +18,11 @@ package org.exoplatform.documents.rest;
 
 import static org.exoplatform.documents.constant.DocumentSortField.getFromAlias;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import javax.annotation.security.RolesAllowed;
@@ -60,13 +58,13 @@ import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.http.PATCH;
 import org.exoplatform.services.rest.resource.ResourceContainer;
 import org.exoplatform.services.security.ConversationState;
-import org.exoplatform.services.thumbnail.ImageThumbnailService;
 import org.exoplatform.social.common.Utils;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.MetadataService;
 
+import io.meeds.portal.thumbnail.model.FileContent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -105,7 +103,6 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final ExternalDownloadService     externalDownloadService;
 
-    private final ImageThumbnailService imageThumbnailService;
 
   public DocumentFileRest(DocumentFileService documentFileService,
                           SpaceService spaceService,
@@ -114,8 +111,7 @@ public class DocumentFileRest implements ResourceContainer {
                           SettingService settingService,
                           DocumentWebSocketService documentWebSocketService,
                           PublicDocumentAccessService publicDocumentAccessService,
-                          ExternalDownloadService externalDownloadService,
-                          ImageThumbnailService imageThumbnailService) {
+                          ExternalDownloadService externalDownloadService) {
     this.documentFileService = documentFileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
@@ -124,7 +120,6 @@ public class DocumentFileRest implements ResourceContainer {
     this.documentWebSocketService = documentWebSocketService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.externalDownloadService = externalDownloadService;
-      this.imageThumbnailService = imageThumbnailService;
   }
 
   @GET
@@ -1469,59 +1464,60 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
-    @GET
-    @Produces(MediaType.APPLICATION_JSON)
-    @RolesAllowed("users")
-    @Path("/{documentId}")
-    @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
-    @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-            @ApiResponse(responseCode = "400", description = "Invalid query input"),
-            @ApiResponse(responseCode = "404", description = "Not found"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
-            @ApiResponse(responseCode = "500", description = "Internal server error"), })
-    public Response getDocument(@Parameter(description = "Document identifier", required = true)
-                                    @PathParam("documentId") String documentId) {
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/{documentId}")
+  @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "404", description = "Not found"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getDocument(@Parameter(description = "Document identifier", required = true)
+  @PathParam("documentId")
+  String documentId) {
 
-        if (StringUtils.isBlank(documentId)) {
-            return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
-        }
-        long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-        if (userIdentityId == 0) {
-            return Response.status(Response.Status.UNAUTHORIZED).build();
-        }
-        try {
-            AbstractNodeEntity abstractNodeEntity =
-                    EntityBuilder.toDocumentItemEntity(documentFileService,
-                            identityManager,
-                            spaceService,
-                            metadataService,
-                            publicDocumentAccessService,
-                            documentFileService.getDocumentById(documentId,
-                                    RestUtils.getCurrentUser()),
-                            null,
-                            userIdentityId);
-            return Response.ok(abstractNodeEntity).build();
-
-        } catch (IllegalArgumentException e) {
-            return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
-        } catch (Exception e) {
-            LOG.warn("Error retrieving a the file with id = {}", documentId, e);
-            return Response.serverError().entity(e.getMessage()).build();
-        }
+    if (StringUtils.isBlank(documentId)) {
+      return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
     }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      AbstractNodeEntity abstractNodeEntity =
+                                            EntityBuilder.toDocumentItemEntity(documentFileService,
+                                                                               identityManager,
+                                                                               spaceService,
+                                                                               metadataService,
+                                                                               publicDocumentAccessService,
+                                                                               documentFileService.getDocumentById(documentId,
+                                                                                                                   RestUtils.getCurrentUser()),
+                                                                               null,
+                                                                               userIdentityId);
+      return Response.ok(abstractNodeEntity).build();
 
-    @GET
-    @Produces(MediaType.APPLICATION_JSON)
-    @RolesAllowed("users")
-    @Path("/{fileType}/{documentId}")
-    @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
-    @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
-            @ApiResponse(responseCode = "400", description = "Invalid query input"),
-            @ApiResponse(responseCode = "404", description = "Not found"),
-            @ApiResponse(responseCode = "500", description = "Internal server error"),})
-    public Response getDocumentThumb(@javax.ws.rs.core.Context
-                                     UriInfo uriInfo, @javax.ws.rs.core.Context
-                                     Request request,
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving a the file with id = {}", documentId, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/{fileType}/{documentId}")
+  @Operation(summary = "Get content of a given document", method = "GET", description = "Get content a a given document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "404", description = "Not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getDocumentContent(@javax.ws.rs.core.Context
+  UriInfo uriInfo, @javax.ws.rs.core.Context
+  Request request,
                                      @Parameter(description = "Document identifier", required = true)
                                      @PathParam("documentId")
                                      String documentId,
@@ -1531,51 +1527,110 @@ public class DocumentFileRest implements ResourceContainer {
                                      @Parameter(description = "The value of lastModified parameter will determine whether the query should be cached by browser or not. If not set, no 'expires HTTP Header will be sent'")
                                      @QueryParam("lastModified")
                                      String lastModified,
-                                     @Parameter(description = "Resized image size. Use 100x100 as default size.")
-                                     @DefaultValue("250x250")
+                                     @Parameter(description = "Resized image size. Use 250x250 as default size.")
+                                     @DefaultValue("0x0")
                                      @QueryParam("size")
                                      String size) {
 
-        if (StringUtils.isBlank(documentId)) {
-            return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
-        }
-        if (StringUtils.isBlank(fileType)) {
-            return Response.status(Status.BAD_REQUEST).entity("file Type  is mandatory").build();
-        }
-        try {
-            int[] dimension = Utils.parseDimension(size);
-            FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType,
-                    documentId,
-                    ConversationState.getCurrent().getIdentity().getUserId(),
-                    dimension[0],
-                    dimension[1]);
-            if (image == null) {
-                return Response.status(Status.NOT_FOUND).build();
-            }
-            long lastUpdated = image.getFileInfo().getUpdatedDate().getTime();
-            EntityTag eTag = new EntityTag(Long.hashCode(lastUpdated) + "-" + size);
-            Response.ResponseBuilder builder = request.evaluatePreconditions(eTag);
-            if (builder == null) {
-                InputStream inputStream = image.getAsStream();
-                String mimeType = image.getFileInfo().getMimetype();
-                if (StringUtils.isBlank(mimeType)) {
-                    mimeType = MediaType.APPLICATION_OCTET_STREAM;
-                }
-                builder = Response.ok(inputStream).type(mimeType);
-                builder.cacheControl(CACHE_CONTROL);
-                builder.lastModified(new Date(lastUpdated));
-                builder.tag(eTag);
-            }
-            String fileName = URLEncoder.encode(image.getFileInfo().getName(), StandardCharsets.UTF_8).replace("+", "%20");
-            builder.header("Content-Disposition", "filename=\"" + fileName + "\"; filename*=UTF-8''" + fileName);
-            if (StringUtils.isNotBlank(lastModified)) {
-                builder.expires(new Date(System.currentTimeMillis() + CACHE_IN_MILLI_SECONDS));
-            }
-            return builder.build();
-        } catch (Exception e) {
-            LOG.error("Error getting documents thumbnail with Id {}", documentId, e);
-            return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
-        }
+    if (StringUtils.isBlank(documentId)) {
+      return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
     }
+    if (StringUtils.isBlank(fileType)) {
+      return Response.status(Status.BAD_REQUEST).entity("file Type  is mandatory").build();
+    }
+    try {
+      FileContent file = null;
+      if (fileType.equals("content")) {
+        file = documentFileService.getDocumentContent(documentId, ConversationState.getCurrent().getIdentity().getUserId());
+      } else {
+        int[] dimension = Utils.parseDimension(size);
+        file = documentFileService.getImageThumbnailContent(fileType,
+                                                            documentId,
+                                                            ConversationState.getCurrent().getIdentity().getUserId(),
+                                                            dimension[0],
+                                                            dimension[1]);
+      }
+      if (file == null) {
+        return Response.status(Status.NOT_FOUND).build();
+      }
+      long lastUpdated = file.getUpdatedDate().getTime();
+      EntityTag eTag = new EntityTag(Long.hashCode(lastUpdated) + "-" + size);
+      Response.ResponseBuilder builder = request.evaluatePreconditions(eTag);
+      if (builder == null) {
+        InputStream inputStream = file.getContent();
+        String mimeType = file.getMimeType();
+        if (StringUtils.isBlank(mimeType)) {
+          mimeType = MediaType.APPLICATION_OCTET_STREAM;
+        }
+        builder = Response.ok(inputStream).type(mimeType);
+        builder.cacheControl(CACHE_CONTROL);
+        builder.lastModified(new Date(lastUpdated));
+        builder.tag(eTag);
+      }
+      String fileName = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20");
+      builder.header("Content-Disposition", "filename=\"" + fileName + "\"; filename*=UTF-8''" + fileName);
+      if (StringUtils.isNotBlank(lastModified)) {
+        builder.expires(new Date(System.currentTimeMillis() + CACHE_IN_MILLI_SECONDS));
+      }
+      return builder.build();
+    } catch (Exception e) {
+      if (LOG.isDebugEnabled()) {
+        LOG.error("Error getting document content with Id {}", documentId, e);
+      }
+      return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+    }
+  }
 
+  @POST
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/{fileType}/{documentId}")
+  @Operation(summary = "Create a thumbnail with provided content", method = "POST", description = "Create a thumbnail with provided content")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response createVideoThumbnail(@javax.ws.rs.core.Context
+  HttpServletRequest request,
+                                       @Parameter(description = "Document identifier", required = true)
+                                       @PathParam("documentId")
+                                       String documentId,
+                                       @Parameter(description = "Document type for created thumb")
+                                       @PathParam("fileType")
+                                       String fileType,
+                                       @Parameter(description = "Resized image size. Use 250x250 as default size.")
+                                       @DefaultValue("250x250")
+                                       @QueryParam("size")
+                                       String size,
+                                       @RequestBody(description = "image content", required = true)
+                                       String data) {
+
+    if (StringUtils.isBlank(documentId)) {
+      return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
+    }
+    if (StringUtils.isBlank(fileType)) {
+      return Response.status(Status.BAD_REQUEST).entity("fileType id is mandatory").build();
+    }
+    if (StringUtils.isBlank(data)) {
+      return Response.status(Status.BAD_REQUEST).entity("data is mandatory").build();
+    }
+    try {
+      int[] dimension = Utils.parseDimension(size);
+      byte[] imageBytes = Base64.getDecoder().decode(data.replaceAll("^\"|\"$", ""));
+      FileContent file = new FileContent(documentId, documentId, "image/jpeg", new ByteArrayInputStream(imageBytes));
+
+      FileItem image = documentFileService.createThumbnail(fileType,
+                                                           file,
+                                                           ConversationState.getCurrent().getIdentity().getUserId(),
+                                                           dimension[0],
+                                                           dimension[1]);
+      if (image == null) {
+        return Response.status(Status.NOT_MODIFIED).build();
+      }
+      return Response.status(Status.OK).build();
+    } catch (Exception e) {
+      LOG.error("Error creating video thumbnail with Id {}", documentId, e);
+      return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+    }
+  }
 }

@@ -23,7 +23,7 @@
           @error="playError($event)">
         </video>
         <div
-          v-else-if="isMediaFile"
+          v-else-if="isAudioFile"
           class="ma-auto black"></div>
         <img
           v-else-if="image"
@@ -53,7 +53,7 @@
           @click="openPreview">
           <v-card-text class="pb-0 d-flex flex-row">
             <div class="absolute-all-center align-center" @click="playMedia($event)">
-              <v-icon color="white" size="60px">mdi-play-circle-outline</v-icon>
+              <v-icon color="white" size="60px">far fa-play-circle</v-icon>
             </div>
           </v-card-text>
         </v-card>
@@ -102,12 +102,12 @@
           style="height: 100%;">
           <v-card-text class="pb-0 d-flex flex-row">
             <v-icon color="error">fa-exclamation-circle</v-icon>
-            <p class="my-auto ms-2 font-weight-bold text-truncate-2">
+            <p class="my-auto ms-2 font-weight-bold text-truncate-3">
               {{ playErrorLabel }}
             </p>
           </v-card-text>
           <v-card-text class="flex-grow-1">
-            <p class="text-truncate-2">{{ playErrorDescription }}</p>
+            <p class="text-truncate-3">{{ playErrorDescription }}</p>
           </v-card-text>
           <v-card-actions>
             <v-btn
@@ -120,7 +120,7 @@
               class="my-auto">
               <v-icon size="20">fa-download</v-icon>
             </v-btn>
-            <v-spacer/>
+            <v-spacer />
             <v-btn
               text
               color="primary"
@@ -249,7 +249,10 @@ export default {
       return this.activity && this.activity.activityId;
     },
     isMediaFile() {
-      return this.attachment && this.attachment.mimetype && (this.attachment.mimetype.includes('video/')|| this.attachment.mimetype.includes('audio/'));
+      return this.attachment && this.attachment.mimetype && (this.attachment.mimetype.startsWith('video/')|| this.attachment.mimetype.startsWith('audio/'));
+    },
+    isAudioFile() {
+      return this.attachment && this.attachment.mimetype &&  this.attachment.mimetype.startsWith('audio/');
     }
   },
   created() {
