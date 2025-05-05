@@ -55,6 +55,7 @@ export default {
           icon: this.getFileIcon(attachment),
           editable: this.isFileEditable(attachment),
           readable: this.isFileReadable(attachment),
+          path: attachment.docPath,
         });
       });
       return attachments;

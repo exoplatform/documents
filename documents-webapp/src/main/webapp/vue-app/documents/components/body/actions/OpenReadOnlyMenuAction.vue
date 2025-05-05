@@ -30,7 +30,7 @@ export default {
   methods: {
     openReadOnlyFile() {
       if (this.fileId) {
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.fileId}&mode=view`, '_blank');
+        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
       }
     },
   },

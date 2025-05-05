@@ -61,7 +61,7 @@
       <v-expand-transition>
         <v-card
           v-if="hover && !loading && !invalid && !showPlayer"
-          class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal"
+          class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius"
           elevation="0"
           style="height: 30%;">
           <v-card-text class="activity-attachment-title d-flex font-weight-bold  py-2">
@@ -296,7 +296,23 @@ export default {
     },
     openFileInEditor(mode) {
       if (this.attachment && this.attachment.id) {
-        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${this.attachment.id}&backTo=${window.location.pathname}`;
+        let folderPath = window.location.pathname;
+        const pathParts = this.attachment.path.split('/');
+        const spaceIndex = pathParts.indexOf('spaces');
+        if (spaceIndex !== -1){
+          if (pathParts[spaceIndex+2]=== 'Documents'){
+            pathParts[spaceIndex+2] = 'documents';
+          }
+          folderPath = pathParts.slice(spaceIndex + 1, pathParts.length - 1).join('/');
+          folderPath = `${eXo.env.portal.context}/g/:spaces:${folderPath}`;          
+        } else if (pathParts.indexOf('Users') !== -1){
+          const parentIndex = pathParts.indexOf('Private');
+          if (parentIndex!== -1){
+            folderPath = pathParts.slice(parentIndex, pathParts.length - 1).join('/');
+            folderPath = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/drives/${folderPath}`;   
+          }
+        }
+        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${this.attachment.id}&backTo=${folderPath}`;
         if (mode) {
           url += `&mode=${mode}`;
         }
