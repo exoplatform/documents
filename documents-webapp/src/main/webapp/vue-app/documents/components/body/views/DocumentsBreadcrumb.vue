@@ -42,7 +42,7 @@
                     index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable',
                     !move && 'caption'
                   ]">
-                    {{ getName(documents.name) }}
+                  {{ getName(documents.name) }}
                 </a>
                 <v-icon
                   v-if="documents.symlink"

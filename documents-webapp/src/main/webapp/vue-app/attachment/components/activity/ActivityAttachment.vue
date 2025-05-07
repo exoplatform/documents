@@ -29,7 +29,7 @@
           v-else-if="image"
           :src="image"
           class="ma-auto"
-          loading="lazy"
+          @load="loading = false"
           @error="image = image!==attachment.downloadUrl?attachment.downloadUrl:null">
         <v-icon
           v-else
@@ -38,22 +38,16 @@
           class="ma-auto d-flex"
           size="80px" />
       </v-card-text>
-      <v-card-text v-if="!image && !isMediaFile && !hover" class="activity-attachment-title d-flex font-weight-bold border-top-color py-2">
-        <div
-          :title="attachment.name"
-          class="text-color text-wrap text-break mx-0 my-auto text-truncate-2"
-          v-text="attachment.name"></div>
-      </v-card-text>
       <v-expand-transition>
         <v-card
           v-if="isMediaFile && !showPlayer"
-          class="d-flex flex-column transition-fast-in-fast-out light-grey-background v-card--reveal"
+          class="d-flex flex-column transition-fast-in-fast-out light-grey-background-opacity-3 v-card--reveal"
           elevation="0"
           style="height: 100%;"
-          @click="openPreview">
+          @click="playMedia($event)">
           <v-card-text class="pb-0 d-flex flex-row">
-            <div class="absolute-all-center align-center" @click="playMedia($event)">
-              <v-icon color="white" size="60px">far fa-play-circle</v-icon>
+            <div class="absolute-all-center align-center">
+              <v-icon class="playIcon" size="60px">far fa-play-circle</v-icon>
             </div>
           </v-card-text>
         </v-card>
@@ -61,37 +55,31 @@
       <v-expand-transition>
         <v-card
           v-if="hover && !loading && !invalid && !showPlayer"
-          class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius"
+          class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
           elevation="0"
-          style="height: 30%;">
-          <v-card-text class="activity-attachment-title d-flex font-weight-bold  py-2">
-            <div
+          style="height: 36px;">
+          <v-card-text class="d-flex font-weight-bold pa-0 my-auto">
+            <v-icon
+              size="16"
+              :class="fileIconClass"
+              :color="fileIconColor"
+              class="my-auto ps-2" />
+            <div              
               :title="attachment.name"
-              class="white--text text-wrap text-break mx-0 my-auto text-truncate-2"
+              class="white--text text-wrap text-break me-1 ms-3 my-auto text-truncate"
               v-text="attachment.name">
             </div>
-          </v-card-text>
-          <v-card-actions class="pt-0 position-absolute b-0 r-0  ma-0 pa-0">
+            <v-spacer />
             <v-btn
               id="attachment-info"
               @click="showInfo()"
               :title="$t('attachments.label.details')"
               small
               icon
-              class="white--text ma-0 pa-0">
+              class="white--text my-auto mx-0">
               <v-icon size="16">fa-info-circle</v-icon>
             </v-btn>
-            <v-btn
-              id="attachment-download"
-              :href="attachment.downloadUrl"
-              :download="attachment.name"
-              :title="$t('attachments.label.download')"
-              small
-              icon
-              class="white--text ma-0 pa-0">
-              <v-icon size="16">fa-download</v-icon>
-            </v-btn>
-          </v-card-actions>
+          </v-card-text>
         </v-card>
       </v-expand-transition>
       <v-expand-transition>
@@ -167,7 +155,7 @@ export default {
     },
   },
   data: () => ({
-    loading: false,
+    loading: true,
     invalid: false,
     showPlayer: false,
     showDownloadButton: false,
@@ -258,6 +246,11 @@ export default {
   created() {
     this.image = this.attachment && this.attachment.image;
   },
+  watch: {
+    image(newVal) {
+      this.loading = newVal?true:false;
+    },
+  },
   methods: {
     markDocumentAsViewed() {
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: this.attachment}}));
@@ -273,7 +266,7 @@ export default {
       this.showDownloadButton = false;
     },
     openPreview() {
-      if (this.invalid) {
+      if (this.invalid || this.showPlayer) {
         return;
       }
       this.loading = true;
