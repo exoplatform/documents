@@ -56,6 +56,7 @@ export default {
           editable: this.isFileEditable(attachment),
           readable: this.isFileReadable(attachment),
           path: attachment.docPath,
+          source: 'documents'
         });
       });
       return attachments;

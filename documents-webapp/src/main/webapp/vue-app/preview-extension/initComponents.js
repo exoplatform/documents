@@ -17,12 +17,14 @@
 
 
 import AudioVideoPreviewItem from './components/AudioVideoPreviewItem.vue';
+import AttachmentsPreviewInfoAction from './components/AttachmentsPreviewInfoAction.vue';
 
 
 
 const components = {
 
   'documents-audio-video-preview': AudioVideoPreviewItem,
+  'attachment-preview-info-action': AttachmentsPreviewInfoAction,
 };
 
 for (const key in components) {

@@ -318,6 +318,10 @@ export default {
     });
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('.documentInfoDrawer')) {return;}
+      this.close();
+    });
   },
   methods: {
     handleUpdateViews(event) {
