@@ -32,3 +32,9 @@ extensionRegistry.registerExtension('Preview', 'previewExtensions', {
     vueComponent: Vue.options.components['documents-audio-video-preview'],
   },
 });
+
+extensionRegistry.registerComponent('PreviewAction', 'previewActionExtensions', {
+  id: 'preview-info-action',
+  vueComponent: Vue.options.components['attachment-preview-info-action'],
+  rank: 30,
+});
