@@ -54,7 +54,7 @@
       </v-expand-transition>
       <v-expand-transition>
         <v-card
-          v-if="hover && !loading && !invalid && !showPlayer"
+          v-if="(hover || isMobile ) && !loading && !invalid && !showPlayer"
           class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
           elevation="0"
           style="height: 36px;">
@@ -241,6 +241,9 @@ export default {
     },
     isAudioFile() {
       return this.attachment && this.attachment.mimetype &&  this.attachment.mimetype.startsWith('audio/');
+    },
+    isMobile() {
+      return this.$root.isMobile;
     }
   },
   created() {
