@@ -29,7 +29,6 @@ import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimel
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
 import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
 import DocumentsVisibilityCell from './components/body/table/cells/DocumentsVisibilityCell.vue';
-import DocumentsFileSizeCell from './components/body/table/cells/DocumentsFileSizeCell.vue';
 import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
 import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
 import DocumentsFavoriteAction from './components/body/table/action/DocumentFavoriteAction.vue';
@@ -100,7 +99,6 @@ const components = {
   'documents-table-cell': DocumentsTableCell,
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
   'documents-visibility-cell': DocumentsVisibilityCell,
-  'documents-file-size-cell': DocumentsFileSizeCell,
   'documents-last-activity-cell': DocumentsLastActivityCell,
   'documents-favorite-cell': DocumentsFavoriteCell,
   'documents-favorite-action': DocumentsFavoriteAction,
