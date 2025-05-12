@@ -1476,7 +1476,11 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getDocument(@Parameter(description = "Document identifier", required = true)
   @PathParam("documentId")
-  String documentId) {
+  String documentId,
+
+    @Parameter(description = "File properties to expand.")
+    @QueryParam("expand")
+    String expand) {
 
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
@@ -1494,7 +1498,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                publicDocumentAccessService,
                                                                                documentFileService.getDocumentById(documentId,
                                                                                                                    RestUtils.getCurrentUser()),
-                                                                               null,
+                                                                               expand,
                                                                                userIdentityId);
       return Response.ok(abstractNodeEntity).build();
 

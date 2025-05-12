@@ -283,10 +283,7 @@ export default {
     },
     openFileInEditor(mode) {
       if (this.attachment && this.attachment.id) {
-        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${this.attachment.id}&backTo=${window.location.pathname}`;
-        if (mode) {
-          url += `&mode=${mode}`;
-        }
+        const url = this.$documentsUtils.getEditorUrl(this.attachment,mode);
         window.open(url, '_blank');
       }
     },

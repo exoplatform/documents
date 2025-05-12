@@ -7,124 +7,116 @@
     <template slot="title">
       {{ $t('documents.drawer.details.title') }}
     </template>
+    <template #titleIcons>
+      <favorite-button
+        :id="file.id"
+        :space-id="spaceId"
+        :favorite="isFavorite"
+        type="file"
+        type-label="Documents"
+        :small="false"
+        @removed="favoriteRemoved"
+        @remove-error="removeFavoriteError"
+        @added="favoriteAdded"
+        @add-error="addFavoriteError" />
+      <v-tooltip bottom>
+        <template #activator="{on, bind}">
+          <div v-on="on" v-bind="bind">
+            <v-btn
+              icon
+              @click="copyLink">
+              <v-icon size="18">fas fa-link</v-icon>
+            </v-btn>
+          </div>
+        </template>
+        <span>$t('documents.label.copy.link')</span>
+      </v-tooltip>
+      <v-tooltip bottom>
+        <template #activator="{on, bind}">
+          <v-btn
+            :href="downloadUrl"
+            icon
+            v-on="on"
+            v-bind="bind"
+            download>
+            <v-icon size="18">fas fa-download</v-icon>
+          </v-btn>
+        </template>
+        <span>{{ $t('documents.label.download') }}</span>
+      </v-tooltip>
+    </template>
     <template v-if="file" slot="content">
-      <div class="d-flex align-center justify-center flex-grow-1 text-center pt-2">
-        <v-icon v-if="icon" :color="iconColor">{{ iconClass }}</v-icon>
-        <span class="font-weight-bold text-body text-truncate ms-2 px-2">
-          {{ file.name }}
-        </span>
-        <div class="d-flex align-center">
-          <v-chip
-            v-if="file.versionNumber"
-            class="text-body clickable pa-2"
-            color="primary"
-            x-small
-            label
-            @click="showVersionHistory">
-            V{{ file.versionNumber }}
-          </v-chip>
-          <documents-favorite-action
-            v-if="!file.folder"
-            :file="file"
-            :is-mobile="isMobile" />
-        </div>
-      </div>
-
-      <div v-if="showNoDescription">
-        <div class="d-flex flex-row justify-center text-center pt-8">
-          <v-icon size="40" class="descriptionIcon"> mdi-message-text-outline </v-icon>
-        </div>
-        <div class="d-flex flex-column justify-center text-center pb-8">
-          <span class="descriptionText">{{ $t('documents.message.noDescription') }}</span>
-          <a
-            v-if="file.acl.canEdit"
-            class="align-center"
-            @click="openEditor">
-            <span>{{ $t('documents.message.addYourDescription') }}</span>
-          </a>
-        </div>
-      </div>
-      <v-hover>
-        <div slot-scope="{ hover }">
-          <v-row class="py-4 px-8">
-            <v-col class="px-0 py-0">
-              <div
-                v-show="showDescription"
-                :data-text="placeholder"
-                class="infoDescriptionToShow"
-                :hover="hover"
-                v-sanitized-html="file.description">
-                {{ placeholder }}
-              </div>
-            </v-col>
-            <v-col class="col-1 px-0 py-0">
-              <v-tooltip :disabled="isMobile" bottom> 
-                <template #activator="{ on, attrs }">
-                  <v-icon
-                    v-show="showDescription && (hover || isMobile)"
-                    v-bind="attrs"
-                    v-on="on"
-                    class="primary--text"
-                    size="16"
-                    @click="openEditor">
-                    {{ 'fa fa-edit' }}
-                  </v-icon>
-                </template>
-                <span> {{ $t('documents.drawer.details.description.edit') }} </span>
-              </v-tooltip>
-            </v-col>
-          </v-row>
-        </div>
-      </v-hover>
-      <div v-show="displayEditor" class="py-4 px-8">
-        <exo-activity-rich-editor
-          ref="activityShareMessage"
-          v-model="file.description"
-          max-length="1300"
-          :placeholder="$t('documents.alert.descriptionLimit')"
-          class="flex" />
-      </div>
-      <v-divider dark />
-      <template>
+      <v-card
+        class="d-flex flex-column elevation-0 pt-2">
+        <v-card
+          class="d-flex flex-column"
+          elevation="0">
+          <v-card-text class="font-weight-bold pb-4 pt-0 py-auto">
+            <v-icon
+              size="20"
+              :class="icon.class"
+              :color="icon.color" />
+            <span>{{ file.name }}</span>
+          </v-card-text>
+        </v-card>
+        <v-hover v-slot="{hover}">
+          <v-card
+            :id="id"
+            :elevation="hover ? 4 : 0"
+            :class="{ 'border-color': !hover }"
+            :loading="loading"
+            max-height="250px"
+            max-width="250px"
+            class="overflow-hidden d-flex flex-column clickable border-box-sizing mx-auto no-border-radius mb-3"
+            @click="openPreview">
+            <v-card-text
+              class="d-flex flex-grow-1 pa-0">
+              <img
+                v-if="!showIcon"
+                :src="thumbnailUrl"
+                class="ma-auto"
+                alt="No thumbnail"
+                @load="loading = false"
+                @error="loading = false; showIcon = true">
+                <v-icon
+                v-else
+                size="80px"
+                :class="icon.class"
+                :color="icon.color"
+                class="ma-auto" />  
+            </v-card-text>
+          </v-card>
+        </v-hover>
+        <v-divider dark />
         <v-list-item>
-          <v-list-item-content class="mt-4 mx-4">
-            <div class="d-flex text-truncate">
-              <span class="text-body font-weight-bold">{{ $t('documents.drawer.details.modified') }}:</span>
-              <date-format
-                :value="lastUpdated"
-                :format="fullDateFormat"
-                class="text-body not-clickable text-no-wrap mx-1" />
-              {{ $t('documents.drawer.details.by') }}
-              <exo-user-avatar
-                v-if="identityModifier && !isCurrentUserModifier"
-                :profile-id="identityModifier"
-                avatar-class="me-2"
-                size="42"
-                fullname
-                popover
-                bold-title
-                link-style
-                class="text-decoration-underline text-body text-truncate font-weight-bold mt-0 mx-1"
-                username-class />
-              <p v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
-                {{ infoDrawerModifierLabel }}
-              </p>
-            </div>
+          <v-list-item-content class="py-1">
+            <v-list-item-title class="text-title py-0">
+              {{ $t('documents.drawer.details.details') }}
+            </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
-
-        <v-list-item>
-          <v-list-item-content class="mx-4">
-            <div
-              class="d-flex text-truncate">
-              <span class="text-body font-weight-bold">
-                {{ $t('documents.drawer.details.created') }}:</span>
+        <v-list-item dense two-line>
+          <v-list-item-content class="pt-0 pb-2">
+            <v-list-item-title>{{ $t('documents.drawer.details.type') }}</v-list-item-title>
+            <v-list-item-subtitle> {{ $t(`documents.label.type.${icon.type}`) }} </v-list-item-subtitle>
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item dense two-line>
+          <v-list-item-content class="pt-0 pb-2">
+            <v-list-item-title>{{ $t('documents.drawer.details.size') }}</v-list-item-title>
+            <v-list-item-subtitle>
+              {{ fileSize.value }} {{ $t(`document.size.label.unit.${fileSize.unit}`) }} ({{ fileWithVersionsSize.value }} {{ $t(`document.size.label.unit.${fileWithVersionsSize.unit}`) }} {{ $t('documents.drawer.details.sizeWithVersions') }})              
+            </v-list-item-subtitle>
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item dense two-line>
+          <v-list-item-content class="pt-0 pb-2">
+            <v-list-item-title>{{ $t('documents.drawer.details.created') }}</v-list-item-title>
+            <v-list-item-subtitle class="d-flex flex-row">
               <date-format
-                :value="fileCreated"
-                :format="fullDateFormat"
-                class="text-body text-no-wrap mx-1" />
-              {{ $t('documents.drawer.details.by') }}
-
+                :value="lastUpdated"
+                :format="fullDateFormat" />
+              <span class="mx-1">{{ $t('documents.drawer.details.by') }}</span>
               <exo-user-avatar
                 v-if="identityCreated && !isCurrentUserCreator"
                 :profile-id="identityCreated"
@@ -134,64 +126,121 @@
                 popover
                 bold-title
                 link-style
-                extra-class="text-decoration-underline"
-                class="text-decoration-underline text-body text-truncate font-weight-bold mt-0 mx-1"
+                class="text-decoration-underline text-truncate font-weight-bold mt-0"
                 username-class />
-              <p v-else class="text-decoration-underline not-clickable primary--text font-weight-bold mx-1">
+              <span v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
                 {{ infoDrawerCreatorLabel }}
-              </p>
-            </div>
+              </span>
+            </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
-
-        <v-list-item>
-          <v-list-item-content class="mx-4">
-            <div
-              class="d-flex">
-              <span class="text-center text-body font-weight-bold">{{ $t('documents.drawer.details.size') }}:</span>
-              <documents-file-size-cell
-                class="mx-1 text-body"
-                :file="file"
-                prop-name="size"
-                :is-mobile="isMobile" />
-            </div>
+        <v-list-item dense two-line>
+          <v-list-item-content class="pt-0 pb-2">
+            <v-list-item-title>{{ $t('documents.drawer.details.modified') }}</v-list-item-title>
+            <v-list-item-subtitle class="d-flex flex-row">
+              <date-format
+                :value="lastUpdated"
+                :format="fullDateFormat" />
+              <span class="mx-1">{{ $t('documents.drawer.details.by') }}</span>
+              <exo-user-avatar
+                v-if="identityModifier && !isCurrentUserModifier"
+                :profile-id="identityModifier"
+                avatar-class="me-2"
+                size="42"
+                fullname
+                popover
+                bold-title
+                link-style
+                class="text-decoration-underline text-truncate font-weight-bold mt-0"
+                username-class />
+              <span v-else class="text-decoration-underline primary--text font-weight-bold mx-1">
+                {{ infoDrawerModifierLabel }}
+              </span>
+            </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item>
-          <v-list-item-content class="mx-4">
-            <div
-              class="d-flex">
-              <span class="text-center text-body font-weight-bold">{{ $t('documents.drawer.details.sizeWithVersions') }}:</span>
-              <documents-file-size-cell
-                class="mx-1 text-body"
-                :file="file"
-                prop-name="sizeWithVersions"
-                :is-mobile="isMobile" />
-            </div>
+        <v-list-item dense two-line>
+          <v-list-item-content class="pt-0 pb-2">
+            <v-list-item-title>{{ $t('documents.details.view.label') }}</v-list-item-title>
+            <v-list-item-subtitle>{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item v-if="!file.folder">
-          <v-list-item-content class="mx-4">
-            <div
-              class="d-flex">
-              <span class="text-center text-body font-weight-bold">{{ $t('documents.details.view.label') }}:</span>
-              <span class="ms-1">{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</span>
-            </div>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content class="mx-4">
-            <div
-              class="d-flex">
-              <span class="text-center text-body font-weight-bold">{{ $t('documents.details.view.location') }}:</span>
+        <v-list-item dense two-line>
+          <v-list-item-content class="pt-0 pb-2">
+            <v-list-item-title>{{ $t('documents.drawer.details.location') }}</v-list-item-title>
+            <v-list-item-subtitle>
               <a
-                class="ms-1 document-location"
+                class="document-location"
                 :href="fileLocationLink"
                 @click="openLocation"> {{ fileLocation }} </a>
+            </v-list-item-subtitle>
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item>
+          <v-list-item-content class="py-1">
+            <v-list-item-title class="text-title py-0">
+              {{ $t('documents.drawer.details.description') }}
+            </v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item>
+          <v-list-item-content class="pt-0 pb-4">
+            <div v-if="showNoDescription" class="documentNoDescription">
+              <div class="d-flex flex-row justify-center text-center pt-4">
+                <v-icon size="40" class="descriptionIcon"> fas fa-file-alt </v-icon>
+              </div>
+              <div class="d-flex flex-column justify-center text-center pt-2 pb-8">
+                <a
+                  v-if="file.acl.canEdit"
+                  class="align-center font-weight-bold"
+                  @click="openEditor">
+                  <span>{{ $t('documents.message.addYourDescription') }}</span>
+                </a>
+              </div>
+            </div>
+            <v-hover>
+              <div slot-scope="{ hover }">
+                <v-row class="px-4">
+                  <v-col class="px-0 py-0">
+                    <div
+                      v-show="showDescription"
+                      :data-text="placeholder"
+                      class="infoDescriptionToShow"
+                      :hover="hover"
+                      v-sanitized-html="file.description">
+                      {{ placeholder }}
+                    </div>
+                  </v-col>
+                  <v-col class="col-1 px-0 py-0">
+                    <v-tooltip :disabled="isMobile" bottom> 
+                      <template #activator="{ on, attrs }">
+                        <v-icon
+                          v-show="showDescription && (hover || isMobile)"
+                          v-bind="attrs"
+                          v-on="on"
+                          class="primary--text"
+                          size="16"
+                          @click="openEditor">
+                          {{ 'fa fa-edit' }}
+                        </v-icon>
+                      </template>
+                      <span> {{ $t('documents.drawer.details.description.edit') }} </span>
+                    </v-tooltip>
+                  </v-col>
+                </v-row>
+              </div>
+            </v-hover>
+            <div v-show="displayEditor">
+              <exo-activity-rich-editor
+                ref="activityShareMessage"
+                v-model="file.description"
+                max-length="1300"
+                :placeholder="$t('documents.alert.descriptionLimit')"
+                class="flex" />
             </div>
           </v-list-item-content>
         </v-list-item>
-      </template>
+      </v-card>
     </template>   
     <template slot="footer">
       <div class="d-flex">
@@ -234,19 +283,22 @@ export default {
     currentUser: eXo.env.portal.userName,
     file: null,
     fileName: null,
-    icon: null,
     displayEditor: false,
     showNoDescription: false,
     showDescription: false,
+    loading: true,
     firstCreateDescription: false,
     fileInitialDescription: '',
+    isFavorite: false,
+    showIcon: false,
   }),
   computed: {
-    iconColor(){
-      return this.icon && this.icon.color;
+    
+    spaceId() {
+      return eXo.env.portal.spaceId || 0;
     },
-    iconClass(){
-      return this.icon && this.icon.class;
+    icon(){
+      return Vue.prototype.$documentsIconsExtension[0]?.get(this.file?.mimeType);
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
@@ -303,6 +355,26 @@ export default {
       url.searchParams.set('folderId', this.file.parentFolderId);
       return url.toString();
     },
+    isFileEditable() {
+      return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === this.file.mimeType ).length > 0;
+    },
+    isFileReadable() {
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === this.file.mimeType).length > 0;
+    },
+    downloadUrl() {
+      return this.$documentsUtils.getDownloadUrl(this.file.id,this.file.modifiedDate);
+    },
+    thumbnailUrl() {
+      const file = this.file;
+      file.readable = this.isFileReadable;
+      return this.$documentsUtils.getThumbnailUrl(file,'250x250',this.lastUpdated);
+    },
+    fileSize() {
+      return this.$documentsUtils.getSize(this.file.size);
+    },
+    fileWithVersionsSize() {
+      return this.$documentsUtils.getSize(this.file.sizeWithVersions);
+    },
   },
   watch: {
     showDescription() {
@@ -311,15 +383,10 @@ export default {
   },
   created() {
     document.addEventListener('open-info-drawer', this.open);
-    this.$root.$on('version-number-updated', (fileId) => {
-      if (this.file && this.file.id === fileId) {
-        this.file.versionNumber++;
-      }
-    });
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
     document.addEventListener('click', (event) => {
-      if (event.target.closest('.documentInfoDrawer')) {return;}
+      if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentNoDescription')) {return;}
       this.close();
     });
   },
@@ -328,9 +395,6 @@ export default {
       if (this.file?.id === event.detail?.file?.id) {
         this.file.views = event.detail?.views;
       }
-    },
-    showVersionHistory() {
-      this.$root.$emit('show-version-history', this.file);
     },
     updateDescription(){
       if (this.firstCreateDescription){
@@ -363,14 +427,16 @@ export default {
     },
     open(event) {
       const fileId = event?.detail;
-      this.$attachmentService.getDocumentDetails(fileId)
+      const expand =  'modifier,creator,owner,metadatas';
+      this.$attachmentService.getDocumentDetails(fileId,expand)
         .then(file => {
           this.file = file;
           this.icon = file.icon;
           this.displayEditor = false;
           this.showNoDescription = !this.file.description && !this.displayEditor;
           this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
-          this.fileInitialDescription = this.file.description;      
+          this.fileInitialDescription = this.file.description;    
+          this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;  
           this.$nextTick(()=>{
             this.$refs.documentInfoDrawer.open();
             this.$refs.activityShareMessage?.initCKEditorData(this.file.description);
@@ -445,8 +511,81 @@ export default {
       }));
     },
     openLocation() {
-      this.$root.$emit('open-folder-by-id', this.file.parentFolderId);
+      const url = this.$documentsUtils.getParentFolderUrl(this.file);
+      window.open(url,'_self');
     },
+    openPreview() {
+      this.loading = true;
+      this.close();
+      if (this.isFileEditable)  {
+        if (this.file?.acl?.canEdit){
+          this.openFileInEditor();
+        } else {
+          this.openFileInEditor('view');
+        }
+      } else if (this.isFileReadable)  {
+        this.openFileInEditor('view');
+      } else {
+        const attachments = [];
+        attachments.push({
+          id: this.file.id,
+          downloadUrl: this.downloadUrl,
+          name: this.file.name,
+          filename: this.file.name,
+          mimetype: this.file.mimeType,
+          icon: this.icon,
+          editable: this.isFileEditable,
+          readable: this.isFileReadable,
+          path: this.file.path,
+          source: 'documents'
+        });
+        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': attachments,'id': this.file.id }}));
+      }
+      document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: this.file}}));
+      this.loading = false;
+    },
+    openFileInEditor(mode) {
+      if (this.file && this.file.id) {
+        const url = this.$documentsUtils.getEditorUrl(this.file,mode);
+        window.open(url,'_self');
+      }
+    },
+    favoriteRemoved() {
+      this.isFavorite = !this.isFavorite;
+      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyDeletedFavorite', {0: this.$t('file.label')}));
+    },
+    removeFavoriteError() {
+      this.displayAlert(this.$t('Favorite.tooltip.ErrorDeletingFavorite', {0: this.$t('file.label')}), 'error');
+    },
+    favoriteAdded() {
+      this.isFavorite = !this.isFavorite;
+      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyAddedAsFavorite', {0: this.$t('file.label')}));
+    },
+    addFavoriteError() {
+      this.displayAlert(this.$t('Favorite.tooltip.ErrorAddingAsFavorite', {0: this.$t('file.label')}), 'error');
+    },
+    copyLink() {
+      this.loading = true;
+      let path;
+      if (this.isFileEditable)  {
+        if (this.file?.acl?.canEdit){
+          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
+        } else {
+          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+        }
+      } else if (this.isFileReadable)  {
+        path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+      } else {
+        path = `${window.location.host}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
+      }
+      const input = document.createElement('input');
+      input.value = path;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      this.loading = false;
+    }
   }
 };
 </script>

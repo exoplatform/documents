@@ -19,6 +19,8 @@
 import './initComponents.js';
 import * as attachmentService from '../../js/attachmentService.js';
 import * as documentFileService from '../../js/DocumentFileService.js';
+import * as documentsUtils from '../../js/DocumentsUtils.js';
+import '../documents-icons-extension/extensions.js';
 
 if (!Vue.prototype.$documentFileService) {
   window.Object.defineProperty(Vue.prototype, '$documentFileService', {
@@ -32,6 +34,17 @@ if (!Vue.prototype.$attachmentService) {
   });
 }
 
+if (!Vue.prototype.$documentsUtils) {
+  window.Object.defineProperty(Vue.prototype, '$documentsUtils', {
+    value: documentsUtils,
+  });
+}
+
+
+Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+document.addEventListener('documents-documents-icons-extension-updated', () => {
+  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+});
 
 Vue.use(Vuetify);
 const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);

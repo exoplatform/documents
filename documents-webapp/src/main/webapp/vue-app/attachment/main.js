@@ -1,8 +1,15 @@
 import './initComponents.js';
 import {installExtensions} from './extensions.js';
 import '../documents-icons-extension/extensions.js';
+import * as documentsUtils from '../../js/DocumentsUtils.js';
 
 Vue.use(Vuetify);
+
+if (!Vue.prototype.$documentsUtils) {
+  window.Object.defineProperty(Vue.prototype, '$documentsUtils', {
+    value: documentsUtils,
+  });
+}
 
 const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 

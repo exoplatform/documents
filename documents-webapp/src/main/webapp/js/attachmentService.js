@@ -510,8 +510,13 @@ export function markAttachmentAsViewed(nodeId, viewer) {
   });
 }
 
-export function getDocumentDetails(documentId) {
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${documentId}`, {
+export function getDocumentDetails(documentId,expand) {
+  const formData = new FormData();
+  if (expand) {
+    formData.append('expand', expand);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${documentId}?${params}`, {
     method: 'GET',
     credentials: 'include',
   }).then(resp => {

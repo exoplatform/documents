@@ -18,54 +18,68 @@
 const presentation = {
   class: 'fas fa-file-powerpoint',
   color: '#CB4B32',
+  type: 'presentation',
 };
 const sheet = {
   class: 'fas fa-file-excel',
   color: '#217345',
+  type: 'spreadsheet',
 };
 const word = {
+
   class: 'fas fa-file-word',
   color: '#2A5699',
+  type: 'document',  
 };
 const image = {
   class: 'fas fa-file-image',
   color: '#999999',
+  type: 'image',
 };
 const video = {
   class: 'fas fa-file-video',
   color: '#79577A',
+  type: 'video',
 };
 const audio = {
   class: 'fas fa-file-audio',
   color: '#79577A',
+  type: 'audio',
 };
 const archive = {
   class: 'fas fa-file-archive',
   color: '#717272',
+  type: 'archive',
 };
 const code = {
   class: 'fas fa-file-code',
   color: '#6cf500',
+  type: 'code',
 };
 const pdf = {
   class: 'fas fa-file-pdf',
-  color: '#FF0000'
+  color: '#FF0000',
+  type: 'pdf',
 };
 const text = {
   class: 'fas fa-file-alt',
   color: '#385989',
+  type: 'text',
 };
 const illustration = {
   class: 'fas fa-file-contract',
   color: '#E79E24',
+  type: 'illustration',
 };
 const file = {
   class: 'fas fa-file',
   color: '#476A9C',
+  type: 'file',
 };
 const folder = {
   class: 'fas fa-folder',
   color: '#476A9C',
+  type: 'folder',
 };
 const documentsMapIconsExtensions = new Map([
   ['application/pdf', pdf],
