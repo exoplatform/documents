@@ -76,31 +76,11 @@ export default {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimeType).length > 0;
     },
     getImageUrl(file) {
-      const formData = new FormData();
-      formData.append('size', '250x250');
-      if (file.lastModified && file.lastModified>0) {
-        formData.append('lastModified', file.lastModified);
-      }
-      const params = new URLSearchParams(formData).toString();
-      if (this.isFileReadable(file)){
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/officeThumbnail/${file.id}?${params}`;
-      }
-      if (file.mimeType.includes('image/')){
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/imageThumbnail/${file.id}?${params}`;
-      }
-      if (file.mimeType.includes('video/')){
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/videoThumbnail/${file.id}?${params}`;
-      }
-      return null;
+      file.readable = this.isFileReadable(file);
+      return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
     },
     getDownloadUrl(file) {
-      const formData = new FormData();
-      if (file.lastModified && file.lastModified>0) {
-        formData.append('lastModified', file.lastModified);
-      }
-      const params = new URLSearchParams(formData).toString();
-      return `/${eXo.env.portal.rest}/v1/documents/content/${file.id}?${params}`;
-
+      return this.$documentsUtils.getDownloadUrl(file.id,file.lastModified);
     },
   }
 };

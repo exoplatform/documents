@@ -289,26 +289,7 @@ export default {
     },
     openFileInEditor(mode) {
       if (this.attachment && this.attachment.id) {
-        let folderPath = window.location.pathname;
-        const pathParts = this.attachment.path.split('/');
-        const spaceIndex = pathParts.indexOf('spaces');
-        if (spaceIndex !== -1){
-          if (pathParts[spaceIndex+2]=== 'Documents'){
-            pathParts[spaceIndex+2] = 'documents';
-          }
-          folderPath = pathParts.slice(spaceIndex + 1, pathParts.length - 1).join('/');
-          folderPath = `${eXo.env.portal.context}/g/:spaces:${folderPath}`;          
-        } else if (pathParts.indexOf('Users') !== -1){
-          const parentIndex = pathParts.indexOf('Private');
-          if (parentIndex!== -1){
-            folderPath = pathParts.slice(parentIndex, pathParts.length - 1).join('/');
-            folderPath = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/drives/${folderPath}`;   
-          }
-        }
-        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${this.attachment.id}&backTo=${folderPath}`;
-        if (mode) {
-          url += `&mode=${mode}`;
-        }
+        const url = this.$documentsUtils.getEditorUrl(this.attachment,mode);
         window.open(url, '_blank');
       }
     },
