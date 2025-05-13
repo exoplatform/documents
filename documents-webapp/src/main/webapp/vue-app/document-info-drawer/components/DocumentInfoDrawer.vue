@@ -65,8 +65,10 @@
             :elevation="hover ? 4 : 0"
             :class="{ 'border-color': !hover }"
             :loading="loading"
-            max-height="250px"
-            max-width="250px"
+            height="210px"
+            max-height="210px"
+            width="252px"
+            max-width="100%"
             class="overflow-hidden d-flex flex-column clickable border-box-sizing mx-auto no-border-radius mb-3"
             @click="openPreview">
             <v-card-text
@@ -77,8 +79,8 @@
                 class="ma-auto"
                 alt="No thumbnail"
                 @load="loading = false"
-                @error="loading = false; showIcon = true">
-                <v-icon
+                @error="handleError">
+              <v-icon
                 v-else
                 size="80px"
                 :class="icon.class"
@@ -126,9 +128,9 @@
                 popover
                 bold-title
                 link-style
-                class="text-decoration-underline text-truncate font-weight-bold mt-0"
+                class="text-truncate font-weight-bold mt-0"
                 username-class />
-              <span v-else class="text-decoration-underline primary--text not-clickable font-weight-bold mx-1">
+              <span v-else class="primary--text not-clickable font-weight-bold mx-1">
                 {{ infoDrawerCreatorLabel }}
               </span>
             </v-list-item-subtitle>
@@ -151,9 +153,9 @@
                 popover
                 bold-title
                 link-style
-                class="text-decoration-underline text-truncate font-weight-bold mt-0"
+                class="text-truncate font-weight-bold mt-0"
                 username-class />
-              <span v-else class="text-decoration-underline primary--text font-weight-bold mx-1">
+              <span v-else class="primary--text font-weight-bold mx-1">
                 {{ infoDrawerModifierLabel }}
               </span>
             </v-list-item-subtitle>
@@ -185,11 +187,11 @@
         </v-list-item>
         <v-list-item>
           <v-list-item-content class="pt-0 pb-4">
-            <div v-if="showNoDescription" class="documentNoDescription">
+            <div v-if="showNoDescription">
               <div class="d-flex flex-row justify-center text-center pt-4">
                 <v-icon size="40" class="descriptionIcon"> fas fa-file-alt </v-icon>
               </div>
-              <div class="d-flex flex-column justify-center text-center pt-2 pb-8">
+              <div class="documentDescription d-flex flex-column justify-center text-center pt-2 pb-8">
                 <a
                   v-if="file.acl.canEdit"
                   class="align-center font-weight-bold"
@@ -199,7 +201,7 @@
               </div>
             </div>
             <v-hover>
-              <div slot-scope="{ hover }">
+              <div class="documentDescription" slot-scope="{ hover }">
                 <v-row class="px-4">
                   <v-col class="px-0 py-0">
                     <div
@@ -230,12 +232,14 @@
                 </v-row>
               </div>
             </v-hover>
-            <div v-show="displayEditor">
-              <exo-activity-rich-editor
-                ref="activityShareMessage"
+            <div v-if="displayEditor" class="documentDescription d-flex flex-row">
+              <rich-editor
+                id="descriptionMessageInput"
+                ref="descriptionMessage"
                 v-model="file.description"
-                max-length="1300"
+                :max-length="1300"
                 :placeholder="$t('documents.alert.descriptionLimit')"
+                autofocus
                 class="flex" />
             </div>
           </v-list-item-content>
@@ -243,10 +247,9 @@
       </v-card>
     </template>   
     <template slot="footer">
-      <div class="d-flex">
+      <div v-if="displayEditor" class="d-flex">
         <v-spacer />
         <v-btn
-          v-show="displayEditor"
           id="saveDescriptionButton"
           :loading="savingDescription"
           :disabled="disableButton"
@@ -378,7 +381,10 @@ export default {
   },
   watch: {
     showDescription() {
-      this.$refs.activityShareMessage?.initCKEditorData(this.file.description);
+      this.$refs.descriptionMessage?.initCKEditorData(this.file.description);
+    },
+    displayEditor() {
+      this.$refs.descriptionMessage?.initCKEditorData(this.file.description);
     }
   },
   created() {
@@ -386,11 +392,15 @@ export default {
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
     document.addEventListener('click', (event) => {
-      if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentNoDescription')) {return;}
+      if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentDescription')) {return;}
       this.close();
     });
   },
   methods: {
+    handleError() {
+      this.showIcon=true;
+      this.loading = false;
+    },
     handleUpdateViews(event) {
       if (this.file?.id === event.detail?.file?.id) {
         this.file.views = event.detail?.views;
@@ -417,7 +427,7 @@ export default {
           this.showNoDescription = !this.file.description;
           this.displayEditor=false;
           this.fileInitialDescription = this.file.description;
-          this.$refs.activityShareMessage?.initCKEditorData(this.file.description);
+          this.$refs.descriptionMessage?.initCKEditorData(this.file.description);
         }).catch(() => {
           this.$root.$emit('show-alert', {
             type: 'error',
@@ -433,13 +443,13 @@ export default {
           this.file = file;
           this.icon = file.icon;
           this.displayEditor = false;
+          this.showIcon = false;
           this.showNoDescription = !this.file.description && !this.displayEditor;
           this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
           this.fileInitialDescription = this.file.description;    
           this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;  
           this.$nextTick(()=>{
             this.$refs.documentInfoDrawer.open();
-            this.$refs.activityShareMessage?.initCKEditorData(this.file.description);
           });
         });
       
@@ -450,17 +460,19 @@ export default {
       this.showDescription = false;
       this.displayEditor=true;
       this.originDescription = this.file.description;
-      if (!this.originDescription.length) {
-        this.$refs.activityShareMessage?.initCKEditorData('');
-      }
+      this.$nextTick(()=>{
+        this.$refs.descriptionMessage?.initCKEditorData(this.file.description);
+        document.getElementById('descriptionMessageInput').scrollIntoView();
+      });
     },
     close() {
       this.file.description = this.fileInitialDescription;
       this.displayEditor = false;
       this.showNoDescription = false;
       this.showDescription = true;
+      this.showIcon = false;
+      this.loading = true;
       this.$refs.documentInfoDrawer.close();
-
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
