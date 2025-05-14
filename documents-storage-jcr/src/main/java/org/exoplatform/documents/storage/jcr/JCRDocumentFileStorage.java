@@ -1675,10 +1675,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
-      Node node = session.getNodeByUUID(documentId);
+      Node node = getNodeByIdentifier(session, documentId);
+      if(node != null && (node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) ||  node.isNodeType(NodeTypeConstants.NT_FOLDER))) {
+        return toFolderNode(identityManager, identity, node, "", spaceService);
+      }
       return toFileNode(identityManager, identity, node, "", spaceService);
     } catch (RepositoryException e) {
-      throw new IllegalStateException("Error while getting file versions", e);
+      throw new IllegalStateException("Error while getting file details", e);
     }
   }
 
@@ -1688,7 +1691,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
-      Node node = session.getNodeByUUID(documentId);
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null) {
+        return null;
+      }
       Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
       return new FileContent(documentId, node.getProperty(NodeTypeConstants.EXO_TITLE).getString(), content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(), content.getProperty(NodeTypeConstants.JCR_DATA).getStream(), node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().getTime());
     } catch (ItemNotFoundException e) {

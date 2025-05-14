@@ -18,9 +18,11 @@
  */
 
 import DocumentInfoDrawer from './components/DocumentInfoDrawer.vue';
+import Breadcrumb from './components/Breadcrumb.vue';
 
 const components = {
   'document-info-drawer': DocumentInfoDrawer,
+  'breadcrumb': Breadcrumb,
 };
 
 for (const key in components) {
