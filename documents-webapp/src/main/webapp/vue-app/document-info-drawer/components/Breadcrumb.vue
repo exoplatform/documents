@@ -4,7 +4,6 @@
       <div
         id="breadcrumb-list-items"
         data-isfolder="true"
-        :data-fileId="documentsBreadcrumbToDisplay[0].id"
         class="pa-1 d-flex width-fit-content">
         <div
           v-for="(folder, index) in documentsBreadcrumbToDisplay"
@@ -86,7 +85,6 @@ export default {
   data: () => ({
     documentsBreadcrumb: [],
     documentsBreadcrumbToDisplay: [],
-    id: Math.random().toString(16),
     folderPath: '',
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
   }),
