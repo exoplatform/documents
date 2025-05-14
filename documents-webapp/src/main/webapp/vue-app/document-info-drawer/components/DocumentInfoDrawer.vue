@@ -69,13 +69,13 @@
             max-height="210px"
             width="252px"
             max-width="100%"
-            class="overflow-hidden d-flex flex-column clickable border-box-sizing mx-auto no-border-radius mb-3"
+            class="overflow-hidden d-flex flex-column  border-box-sizing mx-auto no-border-radius mb-3"
             @click="openPreview">
             <v-card-text
               class="d-flex flex-grow-1 pa-0">
               <img
                 v-if="!showIcon"
-                :src="thumbnailUrl"
+                :src="getThumbnailUrl()"
                 class="ma-auto"
                 alt="No thumbnail"
                 @load="loading = false"
@@ -103,7 +103,7 @@
             <v-list-item-subtitle> {{ $t(`documents.label.type.${icon.type}`) }} </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item dense two-line>
+        <v-list-item v-if="!file.folder" dense two-line>
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-title>{{ $t('documents.drawer.details.size') }}</v-list-item-title>
             <v-list-item-subtitle>
@@ -161,7 +161,7 @@
             </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item dense two-line>
+        <v-list-item  v-if="!file.folder" dense two-line>
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-title>{{ $t('documents.details.view.label') }}</v-list-item-title>
             <v-list-item-subtitle>{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</v-list-item-subtitle>
@@ -171,10 +171,7 @@
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-title>{{ $t('documents.drawer.details.location') }}</v-list-item-title>
             <v-list-item-subtitle>
-              <a
-                class="document-location"
-                :href="fileLocationLink"
-                @click="openLocation"> {{ fileLocation }} </a>
+              <breadcrumb :folder-id="file.parentFolderId" :is-mobile="isMobile"/>
             </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
@@ -296,12 +293,12 @@ export default {
     showIcon: false,
   }),
   computed: {
-    
     spaceId() {
       return eXo.env.portal.spaceId || 0;
     },
     icon(){
-      return Vue.prototype.$documentsIconsExtension[0]?.get(this.file?.mimeType);
+      const fileIcon =  Vue.prototype.$documentsIconsExtension[0]?.get(this.file?.mimeType);
+      return fileIcon ? fileIcon : this.file.folder ? Vue.prototype.$documentsIconsExtension[0]?.get('folder') : Vue.prototype.$documentsIconsExtension[0]?.get('file');
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
@@ -367,11 +364,6 @@ export default {
     downloadUrl() {
       return this.$documentsUtils.getDownloadUrl(this.file.id,this.file.modifiedDate);
     },
-    thumbnailUrl() {
-      const file = this.file;
-      file.readable = this.isFileReadable;
-      return this.$documentsUtils.getThumbnailUrl(file,'250x250',this.lastUpdated);
-    },
     fileSize() {
       return this.$documentsUtils.getSize(this.file.size);
     },
@@ -388,6 +380,7 @@ export default {
     }
   },
   created() {
+    this.$root.$on('open-folder', this.openFolder);
     document.addEventListener('open-info-drawer', this.open);
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
@@ -400,6 +393,17 @@ export default {
     handleError() {
       this.showIcon=true;
       this.loading = false;
+    },
+    getThumbnailUrl() {
+      if (this.file.folder) {return null;}
+      const file = this.file;
+      file.readable = this.isFileReadable;
+      const thumb = this.$documentsUtils.getThumbnailUrl(file,'250x250',this.lastUpdated);
+      if (!thumb) {
+        this.loading = false;
+        this.showIcon = true;
+      }
+      return thumb;
     },
     handleUpdateViews(event) {
       if (this.file?.id === event.detail?.file?.id) {
@@ -418,10 +422,7 @@ export default {
           if (this.isMobile){
             this.displayAlert(this.$t('documents.alert.success.description.updated'));
           } else {
-            this.$root.$emit('show-alert', {
-              type: 'success',
-              message: this.$t('documents.alert.success.description.updated')
-            });
+            this.$root.$emit('alert-message',  this.$t('documents.alert.success.description.updated'), 'success');
           }
           this.showDescription = this.file.description && this.file.description.length;
           this.showNoDescription = !this.file.description;
@@ -429,10 +430,7 @@ export default {
           this.fileInitialDescription = this.file.description;
           this.$refs.descriptionMessage?.initCKEditorData(this.file.description);
         }).catch(() => {
-          this.$root.$emit('show-alert', {
-            type: 'error',
-            message: this.$t('documents.alert.error.description.updated')
-          });
+          this.$root.$emit('alert-message',  this.$t('documents.alert.error.description.updated'), 'error');
         });
     },
     open(event) {
@@ -447,7 +445,13 @@ export default {
           this.showNoDescription = !this.file.description && !this.displayEditor;
           this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
           this.fileInitialDescription = this.file.description;    
-          this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;  
+          this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length; 
+          if (file.folder){
+            this.file.mimeType = 'folder';
+            this.showIcon = true;
+            this.loading = false;
+          } 
+          this.$root.$emit('update-breadcrumb', this.file.parentFolderId);
           this.$nextTick(()=>{
             this.$refs.documentInfoDrawer.open();
           });
@@ -522,11 +526,30 @@ export default {
         }
       }));
     },
-    openLocation() {
-      const url = this.$documentsUtils.getParentFolderUrl(this.file);
-      window.open(url,'_self');
+    openFolder(folder) {
+      let folderPath = '';
+      const pathParts = folder.path.split('/');
+      const spaceIndex = pathParts.indexOf('spaces');
+      if (spaceIndex !== -1){
+        if (pathParts[spaceIndex+2]=== 'Documents'){
+          pathParts[spaceIndex+2] = 'documents';
+        }
+        folderPath = pathParts.slice(spaceIndex + 1, pathParts.length ).join('/');
+        folderPath = `${eXo.env.portal.context}/g/:spaces:${folderPath}`;          
+      } else if (pathParts.indexOf('Users') !== -1){
+        const parentIndex = pathParts.indexOf('Private');
+        if (parentIndex!== -1){
+          folderPath = pathParts.slice(parentIndex, pathParts.length ).join('/');
+          folderPath = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/drives/${folderPath}`;   
+        }
+      }
+      window.open(folderPath,'_self');
     },
     openPreview() {
+      if (this.file.folder) {
+        this.openFolder(this.file);
+        return;
+      }
       this.loading = true;
       this.close();
       if (this.isFileEditable)  {

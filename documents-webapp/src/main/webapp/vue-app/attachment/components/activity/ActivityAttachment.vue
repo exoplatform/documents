@@ -251,7 +251,7 @@ export default {
   },
   watch: {
     image(newVal) {
-      this.loading = newVal?true:false;
+      this.loading = newVal;
     },
   },
   methods: {
