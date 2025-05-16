@@ -58,17 +58,21 @@
           class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
           elevation="0"
           style="height: 36px;">
-          <v-card-text class="d-flex font-weight-bold pa-0 my-auto">
-            <v-icon
-              size="16"
-              :class="fileIconClass"
-              :color="fileIconColor"
-              class="my-auto ps-2" />
-            <div              
-              :title="attachment.name"
-              class="white--text text-wrap text-break me-1 ms-3 my-auto text-truncate"
-              v-text="attachment.name">
-            </div>
+          <v-card-text class="d-flex font-weight-bold ps-1 pe-0 py-0 my-auto">
+            <v-avatar
+              color="white"
+              class=" my-auto"
+              size="20">
+              <v-icon size="12" :color="fileIconColor">{{ fileIconClass }}</v-icon>
+            </v-avatar>
+            <v-card             
+              max-width="198px"
+              class="d-flex  px-1 my-auto  no-border elevation-0">
+              <v-card-text
+                :title="attachment.name"
+                class="pa-0  my-auto white--text text-wrap text-break text-truncate"
+                v-text="attachment.name" />
+            </v-card>
             <v-spacer />
             <v-btn
               id="attachment-info"
@@ -77,7 +81,7 @@
               small
               icon
               class="white--text my-auto mx-0">
-              <v-icon size="16">fa-info-circle</v-icon>
+              <v-icon size="20">fa-info-circle</v-icon>
             </v-btn>
           </v-card-text>
         </v-card>
