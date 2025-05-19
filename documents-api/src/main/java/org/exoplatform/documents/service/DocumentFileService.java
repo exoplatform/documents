@@ -27,6 +27,7 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.social.core.identity.model.Identity;
 
 import io.meeds.portal.thumbnail.model.FileContent;
@@ -55,15 +56,34 @@ public interface DocumentFileService {
                                       int limit,
                                       long userIdentityId,
                                       boolean showHiddenFiles) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
+   * @param keyword Search term
+   * @param identity User ACL {@link org.exoplatform.services.security.Identity}
+   *          which can be retrieved by {@link UserACL#getUserIdentity(String)}
+   * @param offset search offset
+   * @param limit search limit
+   * @return {@link List} of found {@link FileNode} available for user
+   */
+  List<FileNode> search(String keyword, org.exoplatform.services.security.Identity identity, int offset, int limit);
+
   /**
    * Retrieves a file by its identifier.
    *
    *  @param documentId Id of the given document
    *  @param aclIdentity user identity id
    *  @return {@link AbstractNode}
+   * @throws ObjectNotFoundException when document doesn't exisits
+   * @throws IllegalAccessException when document isn't accessible for user
    */
-  AbstractNode getDocumentById(String documentId, String aclIdentity);
+  AbstractNode getDocumentById(String documentId, String aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
+  /**
+   * Retrieves a file by its identifier.
+   *
+   *  @param documentId Id of the given document
+   */
+  AbstractNode getDocumentById(String documentId);
 
   /**
    * Retrieves a file content by its identifier.
@@ -73,8 +93,6 @@ public interface DocumentFileService {
    * @return {@link InputStream}
    */
   public FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException;
-
-
 
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the
@@ -267,7 +285,7 @@ public interface DocumentFileService {
 
   void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
-  boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity) throws RepositoryException;
+  boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity);
 
   org.exoplatform.services.security.Identity getAclUserIdentity(String userName) throws IllegalAccessException;
   
@@ -416,6 +434,14 @@ public interface DocumentFileService {
    * @throws IllegalAccessException
    */
   boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException;
+
+  /**
+   * @param nodeId {@link AbstractNode} technical identifier
+   * @param aclIdentity User {@link org.exoplatform.services.security.Identity}
+   * @return true if has edit permission, else false
+   */
+  boolean hasEditPermissionOnDocument(String nodeId,
+                                      org.exoplatform.services.security.Identity aclIdentity);
 
   /**
    * Import list of documents from an uploaded zip

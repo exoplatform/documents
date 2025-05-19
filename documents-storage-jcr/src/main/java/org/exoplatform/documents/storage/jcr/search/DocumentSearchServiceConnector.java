@@ -236,8 +236,8 @@ public class DocumentSearchServiceConnector {
 
   private String getFileTypesQuery(DocumentNodeFilter filter) {
 
-    if (StringUtils.isNotEmpty(filter.getFileTypes())) {
-      List<String> types = new ArrayList<>();
+    List<String> types = filter.getMimeTypes();
+    if (CollectionUtils.isEmpty(types) && StringUtils.isNotEmpty(filter.getFileTypes())) {
       for (String type : filter.getFileTypes().split(",")) {
         try {
           types.add((String) this.getClass().getDeclaredField(type.toUpperCase()).get(0));
@@ -245,21 +245,24 @@ public class DocumentSearchServiceConnector {
           LOG.warn("Cannot get list of mimeTypes related to type {}", type, e);
         }
       }
-      return "{\n" +
-              "   \"bool\":{\n" +
-              "      \"should\":[\n" +
-              "          {\n" +
-              "           \"terms\":{\n" +
-              "               \"fileType\":[\n" +
-              types.stream().collect(Collectors.joining(",")) +
-              "]\n" +
-              "            }\n" +
-              "         }\n" +
-              "      ]\n" +
-              "   }\n" +
-              "},\n";
     }
-    return "";
+    if (CollectionUtils.isNotEmpty(types)) {
+      return "{\n" +
+          "   \"bool\":{\n" +
+          "      \"should\":[\n" +
+          "          {\n" +
+          "           \"terms\":{\n" +
+          "               \"fileType\":[\n" +
+          String.format("\"%s\"", StringUtils.join(types, "\",\"")) +
+          "]\n" +
+          "            }\n" +
+          "         }\n" +
+          "      ]\n" +
+          "   }\n" +
+          "},\n";
+    } else {
+      return "";
+    }
   }
 
   private String getSizeQuery(DocumentNodeFilter filter) {
