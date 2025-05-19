@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.model;
 
+import java.util.List;
+
 import org.exoplatform.documents.constant.DocumentSortField;
 
 import lombok.AllArgsConstructor;
@@ -42,6 +44,8 @@ public abstract class DocumentNodeFilter {
   private boolean           includeHiddenFiles;
 
   private String            fileTypes;
+
+  private List<String>      mimeTypes;
 
   private Long              afterDate;
 

@@ -10,6 +10,12 @@
   <name>eXo Documents - Application</name>
   <dependencies>
     <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
       <groupId>io.meeds.platform-ui</groupId>
       <artifactId>platform-ui-skin</artifactId>
       <classifier>sources</classifier>
