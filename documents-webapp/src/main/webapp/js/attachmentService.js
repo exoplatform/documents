@@ -510,8 +510,13 @@ export function markAttachmentAsViewed(nodeId, viewer) {
   });
 }
 
-export function getDocumentDetails(documentId) {
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${documentId}`, {
+export function getDocumentDetails(documentId,expand) {
+  const formData = new FormData();
+  if (expand) {
+    formData.append('expand', expand);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${documentId}?${params}`, {
     method: 'GET',
     credentials: 'include',
   }).then(resp => {
@@ -519,6 +524,31 @@ export function getDocumentDetails(documentId) {
       throw new Error('Response code indicates a server error');
     } else {
       return resp.json();
+    }
+  });
+}
+
+export function createThumbnail(fileType, documentId, data) {
+  if (!documentId) {
+    throw new Error('document Id can\'t be empty');
+  }
+  if (!data) {
+    throw new Error('contant data can\'t be empty');
+  }
+
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${fileType}/${documentId}`, {
+    credentials: 'include',
+
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  }).then((resp) => {
+    if (!resp || !resp.ok) {
+      throw new Error('Error creating thumbnail');
+    } else {
+      return resp;
     }
   });
 }

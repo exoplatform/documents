@@ -29,10 +29,10 @@ import java.util.*;
 
 import javax.jcr.AccessDeniedException;
 import javax.jcr.RepositoryException;
-import jakarta.servlet.http.HttpServletRequest;
+import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
 
-import org.exoplatform.portal.rest.CollectionEntity;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,7 +40,6 @@ import org.junit.runner.RunWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
-import io.meeds.analytics.api.service.AnalyticsService;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
@@ -56,10 +55,12 @@ import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.portal.rest.CollectionEntity;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityRegistry;
+import org.exoplatform.services.thumbnail.ImageThumbnailService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -71,6 +72,10 @@ import org.exoplatform.social.metadata.model.Metadata;
 import org.exoplatform.social.metadata.model.MetadataItem;
 import org.exoplatform.social.metadata.model.MetadataObject;
 import org.exoplatform.social.metadata.model.MetadataType;
+
+import io.meeds.analytics.api.service.AnalyticsService;
+import io.meeds.portal.thumbnail.model.FileContent;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class DocumentFileRestTest {
@@ -107,6 +112,8 @@ public class DocumentFileRestTest {
 
   private ExternalDownloadService            externalDownloadService;
 
+  private ImageThumbnailService              imageThumbnailService;
+
   private AnalyticsService                   analyticsService;
 
   @Before
@@ -123,6 +130,7 @@ public class DocumentFileRestTest {
     documentWebSocketService = mock(DocumentWebSocketService.class);
     publicDocumentAccessService = mock(PublicDocumentAccessService.class);
     externalDownloadService = mock(ExternalDownloadService.class);
+    imageThumbnailService = mock(ImageThumbnailService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
@@ -131,7 +139,8 @@ public class DocumentFileRestTest {
                                                       identityRegistry,
                                                       listenerService,
                                                       settingService,
-                                                      analyticsService);
+                                                      analyticsService,
+                                                      imageThumbnailService);
     documentFileRest = new DocumentFileRest(documentFileService,
                                             spaceService,
                                             identityManager,
@@ -1697,9 +1706,7 @@ public class DocumentFileRestTest {
     assertEquals(400, response.getStatus());
     //
     String nodePath = "/Trash/testFileName.text";
-    doThrow(new RepositoryException("Error restoring document"))
-            .when(documentFileService)
-            .restoreDocumentFromTrash(nodePath);
+    doThrow(new RepositoryException("Error restoring document")).when(documentFileService).restoreDocumentFromTrash(nodePath);
 
     response = documentFileRest.restoreDocumentFromTrash(nodePath);
     assertEquals(500, response.getStatus());
@@ -1795,6 +1802,37 @@ public class DocumentFileRestTest {
     doNothing().when(documentFileService).restoreDocuments(anyInt(), anyList(), anyLong());
     //
     response = documentFileRest.restoreDocuments(1, trashElementEntities);
+    assertEquals(200, response.getStatus());
+  }
+
+  @Test
+  public void testGetDocumentsThumb() throws Exception {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            documentWebSocketService,
+            publicDocumentAccessService,
+            externalDownloadService);
+    Request request = mock(Request.class);
+    UriInfo uriInfo = mock(UriInfo.class);
+    Response response = documentFileRest.getDocumentContent(uriInfo, request, null, "imageThumbnail", null, null);
+    assertEquals(400, response.getStatus());
+    documentFileRest.getDocumentContent(uriInfo, request, "docId", null, null, null);
+    assertEquals(400, response.getStatus());
+    FileContent fileThumbnail = new FileContent(null, "testThumbnail", "image/mpeg", null, new Date());
+    String userName = "user";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(userName);
+    ConversationState.setCurrent(new ConversationState(root));
+    when(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", userName, 250, 250)).thenReturn(fileThumbnail);
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", null, "250x250");
+    assertEquals(200, response.getStatus());
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
+    assertEquals(404, response.getStatus());
+    when(documentFileService.getDocumentContent("docId", userName)).thenReturn(fileThumbnail);
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
     assertEquals(200, response.getStatus());
   }
 }

@@ -44,19 +44,19 @@ export default {
         } catch (e) {
           // could happen, but ignore it
         }
-        const workspace = attachment.workspace;
-        const imageURL = mimetype.includes('image/') && `${eXo.env.portal.context}/${eXo.env.portal.rest}/thumbnailImage/custom/250x250/${workspace}/${attachment.id}` || null;
-
+        const imageURL = this.getImageUrl(attachment);
         attachments.push({
           id: attachment.id,
           image: imageURL,
-          downloadUrl: `/rest/jcr/repository/collaboration${attachment.docPath}`,
+          downloadUrl: this.getDownloadUrl(attachment),
           name,
           filename: name,
           mimetype,
           icon: this.getFileIcon(attachment),
           editable: this.isFileEditable(attachment),
           readable: this.isFileReadable(attachment),
+          path: attachment.docPath,
+          source: 'documents'
         });
       });
       return attachments;
@@ -74,6 +74,13 @@ export default {
     },
     isFileReadable(file) {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimeType).length > 0;
+    },
+    getImageUrl(file) {
+      file.readable = this.isFileReadable(file);
+      return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
+    },
+    getDownloadUrl(file) {
+      return this.$documentsUtils.getDownloadUrl(file.id,file.lastModified);
     },
   }
 };

@@ -82,6 +82,8 @@ import org.exoplatform.social.metadata.tag.model.TagObject;
 import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 
+import io.meeds.portal.thumbnail.model.FileContent;
+
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       COLLABORATION               = "collaboration";
@@ -1673,10 +1675,32 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
-      Node node = session.getNodeByUUID(documentId);
+      Node node = getNodeByIdentifier(session, documentId);
+      if(node != null && (node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) ||  node.isNodeType(NodeTypeConstants.NT_FOLDER))) {
+        return toFolderNode(identityManager, identity, node, "", spaceService);
+      }
       return toFileNode(identityManager, identity, node, "", spaceService);
     } catch (RepositoryException e) {
-      throw new IllegalStateException("Error while getting file versions", e);
+      throw new IllegalStateException("Error while getting file details", e);
+    }
+  }
+
+  @Override
+  public FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException {
+    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null) {
+        return null;
+      }
+      Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+      return new FileContent(documentId, node.getProperty(NodeTypeConstants.EXO_TITLE).getString(), content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(), content.getProperty(NodeTypeConstants.JCR_DATA).getStream(), node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().getTime());
+    } catch (ItemNotFoundException e) {
+      throw new ObjectNotFoundException("Document with id : " + documentId + " isn't found");
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Cannot get content from document with id : " + documentId, e);
     }
   }
 

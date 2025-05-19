@@ -9,14 +9,27 @@
       max-height="210px"
       width="252px"
       max-width="100%"
-      class="activity-attachment overflow-hidden d-flex flex-column border-box-sizing"
-      @click="openPreview">
-      <v-card-text class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0">
+      class="activity-attachment overflow-hidden d-flex flex-column clickable border-box-sizing">
+      <v-card-text
+        class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0"
+        :class="isMediaFile && 'black'"
+        @click="openPreview">
+        <video
+          v-if="showPlayer"
+          :src="`${attachment.downloadUrl}#t=0.001`"
+          controls="controls"
+          autoplay
+          class="black mx-auto full-height full-width position-absolute"
+          @error="playError($event)">
+        </video>
+        <div
+          v-else-if="isAudioFile"
+          class="ma-auto black"></div>
         <img
-          v-if="image"
+          v-else-if="image"
           :src="image"
           class="ma-auto"
-          loading="lazy"
+          @load="loading = false"
           @error="image = image!==attachment.downloadUrl?attachment.downloadUrl:null">
         <v-icon
           v-else
@@ -25,28 +38,81 @@
           class="ma-auto d-flex"
           size="80px" />
       </v-card-text>
-      <v-card-text v-if="!image" class="activity-attachment-title d-flex font-weight-bold border-top-color py-2">
-        <div
-          :title="attachment.name"
-          class="text-color text-wrap text-break mx-0 my-auto text-truncate-2"
-          v-text="attachment.name"></div>
-      </v-card-text>
+      <v-expand-transition>
+        <v-card
+          v-if="isMediaFile && !showPlayer"
+          class="d-flex flex-column transition-fast-in-fast-out light-grey-background-opacity-3 v-card--reveal"
+          elevation="0"
+          style="height: 100%;"
+          @click="playMedia($event)">
+          <v-card-text class="pb-0 d-flex flex-row">
+            <div class="absolute-all-center align-center">
+              <v-icon class="playIcon" size="60px">far fa-play-circle</v-icon>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-expand-transition>
+      <v-expand-transition>
+        <v-card
+          v-if="(hover || isMobile ) && !loading && !invalid && !showPlayer"
+          class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
+          elevation="0"
+          style="height: 36px;">
+          <v-card-text class="d-flex font-weight-bold ps-1 pe-0 py-0 my-auto">
+            <v-avatar
+              color="white"
+              class=" my-auto"
+              size="20">
+              <v-icon size="12" :color="fileIconColor">{{ fileIconClass }}</v-icon>
+            </v-avatar>
+            <v-card             
+              max-width="198px"
+              class="d-flex  px-1 my-auto  no-border elevation-0">
+              <v-card-text
+                :title="attachment.name"
+                class="pa-0  my-auto white--text text-wrap text-break text-truncate"
+                v-text="attachment.name" />
+            </v-card>
+            <v-spacer />
+            <v-btn
+              id="attachment-info"
+              @click="showInfo()"
+              :title="$t('attachments.label.details')"
+              small
+              icon
+              class="white--text my-auto mx-0">
+              <v-icon size="20">fa-info-circle</v-icon>
+            </v-btn>
+          </v-card-text>
+        </v-card>
+      </v-expand-transition>
       <v-expand-transition>
         <v-card
           v-if="invalid"
-          class="d-flex flex-column transition-fast-in-fast-out v-card--reveal"
+          class="d-flex flex-column transition-fast-in-fast-out disabled-background v-card--reveal"
           elevation="0"
           style="height: 100%;">
           <v-card-text class="pb-0 d-flex flex-row">
             <v-icon color="error">fa-exclamation-circle</v-icon>
-            <p class="my-auto ms-2 font-weight-bold">
-              {{ $t('attachments.errorAccessingFile') }}
+            <p class="my-auto ms-2 font-weight-bold text-truncate-3">
+              {{ playErrorLabel }}
             </p>
           </v-card-text>
           <v-card-text class="flex-grow-1">
-            <p>{{ $t('attachments.alert.unableToAccessFile') }}</p>
+            <p class="text-truncate-3">{{ playErrorDescription }}</p>
           </v-card-text>
-          <v-card-actions class="pt-0">
+          <v-card-actions>
+            <v-btn
+              v-if="showDownloadButton"
+              :href="attachment.downloadUrl"
+              :download="attachment.name"
+              :title="$t('attachments.label.download')"
+              medium
+              icon
+              class="my-auto">
+              <v-icon size="20">fa-download</v-icon>
+            </v-btn>
+            <v-spacer />
             <v-btn
               text
               color="primary"
@@ -93,9 +159,13 @@ export default {
     },
   },
   data: () => ({
-    loading: false,
+    loading: true,
     invalid: false,
+    showPlayer: false,
+    showDownloadButton: false,
     image: false,
+    playErrorLabel: '',
+    playErrorDescription: '',
     dateFormat: {
       year: 'numeric',
       month: 'long',
@@ -169,10 +239,24 @@ export default {
     },
     isCommentActivity() {
       return this.activity && this.activity.activityId;
+    },
+    isMediaFile() {
+      return this.attachment && this.attachment.mimetype && (this.attachment.mimetype.startsWith('video/')|| this.attachment.mimetype.startsWith('audio/'));
+    },
+    isAudioFile() {
+      return this.attachment && this.attachment.mimetype &&  this.attachment.mimetype.startsWith('audio/');
+    },
+    isMobile() {
+      return this.$root.isMobile;
     }
   },
   created() {
     this.image = this.attachment && this.attachment.image;
+  },
+  watch: {
+    image(newVal) {
+      this.loading = newVal;
+    },
   },
   methods: {
     markDocumentAsViewed() {
@@ -186,9 +270,10 @@ export default {
       window.setTimeout(() => {
         this.invalid = false;
       }, 50);
+      this.showDownloadButton = false;
     },
     openPreview() {
-      if (this.invalid) {
+      if (this.invalid || this.showPlayer) {
         return;
       }
       this.loading = true;
@@ -211,13 +296,37 @@ export default {
     },
     openFileInEditor(mode) {
       if (this.attachment && this.attachment.id) {
-        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${this.attachment.id}&backTo=${window.location.pathname}`;
-        if (mode) {
-          url += `&mode=${mode}`;
-        }
+        const url = this.$documentsUtils.getEditorUrl(this.attachment,mode);
         window.open(url, '_blank');
       }
     },
+    showInfo(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.attachment.id}));
+    },
+    playMedia(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      this.showPlayer = true;
+    },
+    playError(event){
+      const video = event.target;
+      if (video.error && video.error.code === 3 || video.error.code === 4) {
+        this.playErrorLabel= this.$t('attachments.errorVideoFormatNotSupported');
+        this.playErrorDescription=this.$t('attachments.alert.videoFormatNotSupported');
+        this.showDownloadButton = true;
+      } else {
+        this.playErrorLabel= this.$t('attachments.errorAccessingFile');
+        this.playErrorDescription=this.$t('attachments.alert.unableToAccessFile');
+      }
+      this.invalid = true;
+      this.showPlayer = false;
+    }
   },
 };
 </script>

@@ -33,6 +33,8 @@ import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.file.model.FileInfo;
+import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
@@ -43,6 +45,7 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.IdentityRegistry;
+import org.exoplatform.services.thumbnail.ImageThumbnailService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
@@ -52,6 +55,7 @@ import io.meeds.analytics.api.service.AnalyticsService;
 import io.meeds.analytics.model.StatisticData;
 import io.meeds.analytics.model.filter.AnalyticsFilter;
 import io.meeds.analytics.utils.AnalyticsUtils;
+import io.meeds.portal.thumbnail.model.FileContent;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
@@ -77,6 +81,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private AnalyticsService     analyticsService;
 
+  private ImageThumbnailService imageThumbnailService;
+
   private static final Scope   DOCUMENTS_USER_SETTING_SCOPE = Scope.APPLICATION.id("Documents");
 
   private static final String  DOCUMENTS_USER_SETTING_KEY   = "DocumentsSettings";
@@ -93,7 +99,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                  IdentityRegistry identityRegistry,
                                  ListenerService listenerService,
                                  SettingService settingService,
-                                 AnalyticsService analyticsService) {
+                                 AnalyticsService analyticsService,
+                                 ImageThumbnailService imageThumbnailService) {
     this.documentFileStorage = documentFileStorage;
     this.jcrDeleteFileStorage = jcrDeleteFileStorage;
     this.spaceService = spaceService;
@@ -103,6 +110,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     this.listenerService = listenerService;
     this.settingService = settingService;
     this.analyticsService = analyticsService;
+    this.imageThumbnailService = imageThumbnailService;
   }
 
   @Override
@@ -683,7 +691,40 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public AbstractNode getDocumentById(String documentId, String aclIdentity){
+  public AbstractNode getDocumentById(String documentId, String aclIdentity) {
     return documentFileStorage.getDocumentById(documentId, aclIdentity);
   }
+
+  @Override
+  public FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException {
+    return documentFileStorage.getDocumentContent(documentId, aclIdentity);
+  }
+
+  @Override
+  public FileContent getImageThumbnailContent(String fileType,
+                                              String documentId,
+                                              String userName,
+                                              int width,
+                                              int height) throws Exception {
+    FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType, documentId, userName, width, height);
+    if (image != null) {
+      FileInfo imageInfo = image.getFileInfo();
+      return new FileContent(String.valueOf(imageInfo.getId()),
+                             imageInfo.getName(),
+                             imageInfo.getMimetype(),
+                             image.getAsStream(),
+                             imageInfo.getUpdatedDate());
+    } else
+      throw new ObjectNotFoundException("Image with id : " + documentId + " isn't found");
+  }
+
+  @Override
+  public FileItem createThumbnail(String fileType, FileContent file, String userName, int width, int height) throws Exception {
+    FileItem image = imageThumbnailService.getThumbnail(fileType + file.getId(), width, height);
+    if (image != null) {
+      imageThumbnailService.deleteThumbnails(fileType, file.getId());
+    }
+    return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, width, height);
+  }
+
 }

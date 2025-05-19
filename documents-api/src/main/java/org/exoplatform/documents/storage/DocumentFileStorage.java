@@ -29,6 +29,8 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.space.model.Space;
 
+import io.meeds.portal.thumbnail.model.FileContent;
+
 public interface DocumentFileStorage {
 
   /**
@@ -236,6 +238,15 @@ public interface DocumentFileStorage {
    * @return {@link AbstractNode}
    */
   AbstractNode getDocumentById(String documentId, String aclIdentity);
+
+  /**
+   * Retrieves a document content By its Id
+   *
+   * @param documentId  target file node id
+   * @param aclIdentity user identity id
+   * @return {@link FileContent}
+   */
+  FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException;
 
   /**
    * update or add a version summary

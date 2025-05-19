@@ -29,7 +29,6 @@ import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimel
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
 import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
 import DocumentsVisibilityCell from './components/body/table/cells/DocumentsVisibilityCell.vue';
-import DocumentsFileSizeCell from './components/body/table/cells/DocumentsFileSizeCell.vue';
 import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
 import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
 import DocumentsFavoriteAction from './components/body/table/action/DocumentFavoriteAction.vue';
@@ -38,7 +37,6 @@ import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFi
 import SelectPeriod from './components/header/filters/SelectPeriod.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
-import DocumentInfoDrawer from './components/body/table/DocumentInfoDrawer.vue';
 import DocumentDownloadDrawer from './components/body/table/DocumentDownloadDrawer.vue';
 import DocumentsTreeSelectorDrawer from './components/body/table/DocumentsTreeSelectorDrawer.vue';
 import DocumentsMoveSpaces from './components/body/table/DocumentsMoveSpaces.vue';
@@ -101,7 +99,6 @@ const components = {
   'documents-table-cell': DocumentsTableCell,
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
   'documents-visibility-cell': DocumentsVisibilityCell,
-  'documents-file-size-cell': DocumentsFileSizeCell,
   'documents-last-activity-cell': DocumentsLastActivityCell,
   'documents-favorite-cell': DocumentsFavoriteCell,
   'documents-favorite-action': DocumentsFavoriteAction,
@@ -112,7 +109,6 @@ const components = {
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-advanced-filter-drawer': DocumentAdvancedFilterDrawer,
   'documents-filter-menu-mobile': DocumentFilterMenuMobile,
-  'documents-info-drawer': DocumentInfoDrawer,
   'documents-download-drawer': DocumentDownloadDrawer,
   'documents-select-period': SelectPeriod,
   'document-tree-selector-drawer': DocumentsTreeSelectorDrawer,

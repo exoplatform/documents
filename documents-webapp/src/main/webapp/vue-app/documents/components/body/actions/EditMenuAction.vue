@@ -30,7 +30,7 @@ export default {
   methods: {
     editFile() {
       if (this.fileId) {
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.fileId}`, '_blank');
+        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.fileId}&backTo=${window.location.pathname}`, '_blank');
       }
     },
   },

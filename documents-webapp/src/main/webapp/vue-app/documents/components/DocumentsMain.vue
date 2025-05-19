@@ -85,9 +85,6 @@
       <documents-advanced-filter-drawer />
       <documents-download-drawer />
       <document-import-from-zip-drawer />
-      <documents-info-drawer
-        :selected-view="selectedView"
-        :is-mobile="isMobile" />
       <folder-treeview-drawer
         ref="folderTreeDrawer"
         :is-mobile="isMobile" />
@@ -1516,6 +1513,7 @@ export default {
               file.path = attachment.path;
               file.mimetype = attachment.mimetype;
               file.filename = file.title;
+              file.source = 'documents';
               if (this.isFileReadable(attachment)){
                 this.openFileInEditor(file,'view','_self');
               } else {
@@ -1537,6 +1535,7 @@ export default {
               this.openFileInEditor(attachment,'view','_self');
 
             } } else {
+            attachment.source = 'documents';
             document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [attachment],'id': documentPreviewId }}));
             return attachment;}
         })
@@ -1609,7 +1608,7 @@ export default {
       const files = [];
       this.files.forEach((item) => {
         if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
-          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'downloadUrl': `/portal/rest/jcr/repository/collaboration${item.path}`, 'icon': this.getFileIcon(item)});}
+          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.getFileIcon(item)});}
       }
       );
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));

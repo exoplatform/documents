@@ -150,10 +150,6 @@ export default {
           document.addEventListener('drop', function () {
             this.$refs.dropFileBox?.classList.remove('dragStart');
           }.bind(this));
-
-          window.require(['SHARED/jquery'], function ($) {
-            $('#exoAttachmentsApp *[rel="tooltip"]').tooltip();
-          });
           this.dragAndDropEventListenerInitialized = true;
         }
       });

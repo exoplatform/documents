@@ -21,12 +21,12 @@
     :src="`${thumbnailUrl}#t=0.001`"
     controls="controls"
     class="black mx-auto full-height full-width position-absolute"
-    @error="supported = false">
+    @error="playError($event)">
   </video>
   <attachments-default-preview
     v-else
     :attachment="attachment"
-  />
+    :error-message="playErrorDescription" />
 </template>
 <script>
 export default {
@@ -46,6 +46,7 @@ export default {
   },
   data: () => ({
     supported: true,
+    playErrorDescription: ''
   }),
   computed: {
     thumbnailUrl() {
@@ -55,6 +56,18 @@ export default {
       return this.$vuetify.breakpoint.name === 'sm' || this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'md';
     }
   },
+
+  methods: {
+    playError(event){
+      const video = event.target;
+      if (video.error && video.error.code === 3 || video.error.code === 4) {
+        this.playErrorDescription=this.$t('attachment.alert.videoFormatNotSupported');
+      } else {
+        this.playErrorDescription=this.$t('attachment.alert.unableToAccessFile');
+      }
+      this.supported = false;
+    }
+  }
 };
 </script>
 

@@ -122,6 +122,9 @@ export default {
     },
     addAttachment(file) {
       this.attachedFiles.push(file.attachment);
+      if (file.attachment.mimetype.startsWith('video/')) {
+        document.dispatchEvent(new CustomEvent('create-video-thumbnail', {detail: file.attachment}));
+      } 
       document.dispatchEvent(new CustomEvent('activity-composer-edited', {detail: this.attachedFiles}));
     },
     removeAttachment(file) {
@@ -142,7 +145,7 @@ export default {
         .then(() => {
           document.dispatchEvent(new CustomEvent('changes-reminder-open'));
         });
-    },
+    }
   },
 };
 </script>
