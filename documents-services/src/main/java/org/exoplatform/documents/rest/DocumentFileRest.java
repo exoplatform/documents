@@ -78,15 +78,16 @@ import jakarta.servlet.http.HttpServletRequest;
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
 public class DocumentFileRest implements ResourceContainer {
 
-    public static final UserFieldValidator PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
+  public static final UserFieldValidator    PASSWORD_VALIDATOR     = new UserFieldValidator("password", false, false, 9, 255);
 
-    private static final Log LOG = ExoLogger.getLogger(DocumentFileRest.class);
+  private static final Log                  LOG                    = ExoLogger.getLogger(DocumentFileRest.class);
 
-    private static final CacheControl CACHE_CONTROL = new CacheControl();
+  private static final CacheControl         CACHE_CONTROL          = new CacheControl();
 
-    private static final int CACHE_IN_SECONDS = 7 * 86400;
+  private static final int                  CACHE_IN_SECONDS       = 7 * 86400;
 
-    private static final int CACHE_IN_MILLI_SECONDS = CACHE_IN_SECONDS * 1000;
+  private static final int                  CACHE_IN_MILLI_SECONDS = CACHE_IN_SECONDS * 1000;
+
   private final DocumentFileService         documentFileService;
 
   private final SpaceService                spaceService;
@@ -1478,9 +1479,9 @@ public class DocumentFileRest implements ResourceContainer {
   @PathParam("documentId")
   String documentId,
 
-    @Parameter(description = "File properties to expand.")
-    @QueryParam("expand")
-    String expand) {
+                              @Parameter(description = "File properties to expand.")
+                              @QueryParam("expand")
+                              String expand) {
 
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();

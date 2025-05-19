@@ -691,7 +691,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public AbstractNode getDocumentById(String documentId, String aclIdentity){
+  public AbstractNode getDocumentById(String documentId, String aclIdentity) {
     return documentFileStorage.getDocumentById(documentId, aclIdentity);
   }
 
@@ -699,31 +699,32 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException {
     return documentFileStorage.getDocumentContent(documentId, aclIdentity);
   }
+
   @Override
-  public FileContent getImageThumbnailContent(String fileType, String documentId, String userName, int width, int height) throws Exception {
-    FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType,
-            documentId, userName,
-            width,
-            height);
-    if(image!=null) {
+  public FileContent getImageThumbnailContent(String fileType,
+                                              String documentId,
+                                              String userName,
+                                              int width,
+                                              int height) throws Exception {
+    FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType, documentId, userName, width, height);
+    if (image != null) {
       FileInfo imageInfo = image.getFileInfo();
       return new FileContent(String.valueOf(imageInfo.getId()),
-              imageInfo.getName(),
-              imageInfo.getMimetype(),
-              image.getAsStream(),
-              imageInfo.getUpdatedDate());
-    } else throw new ObjectNotFoundException("Image with id : " + documentId + " isn't found");
+                             imageInfo.getName(),
+                             imageInfo.getMimetype(),
+                             image.getAsStream(),
+                             imageInfo.getUpdatedDate());
+    } else
+      throw new ObjectNotFoundException("Image with id : " + documentId + " isn't found");
   }
 
-
-@Override
+  @Override
   public FileItem createThumbnail(String fileType, FileContent file, String userName, int width, int height) throws Exception {
-  FileItem image =imageThumbnailService.getThumbnail(fileType + file.getId(), width, height);
-  if (image != null) {
-    imageThumbnailService.deleteThumbnails(fileType,file.getId());
-  }
-
-  return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, width, height);
+    FileItem image = imageThumbnailService.getThumbnail(fileType + file.getId(), width, height);
+    if (image != null) {
+      imageThumbnailService.deleteThumbnails(fileType, file.getId());
+    }
+    return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, width, height);
   }
 
 }

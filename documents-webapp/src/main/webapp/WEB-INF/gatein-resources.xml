@@ -353,7 +353,7 @@
   
   <module>
     <name>DocumentsInfoDrawerListener</name>
-    <load-group>baseGRP</load-group>
+    <load-group>DocumentsListenerGRP</load-group>
     <script>
       <path>/js/documentInfoDrawerListener.js</path>
     </script>
