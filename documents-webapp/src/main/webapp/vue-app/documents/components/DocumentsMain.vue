@@ -6,7 +6,6 @@
     flat>
     <div class="application-body" @mouseover="hideOverlay">
       <div
-        v-show="initialized"
         class="pa-4"
         @dragover.prevent
         @drop.prevent
@@ -25,14 +24,14 @@
           :is-mobile="isMobile"
           :selected-documents="selectedDocuments"
           class="py-2" />
-        <div v-if="searchResult && !loading">
+        <div v-if="searchResult && !loading && initialized">
           <documents-no-result-body
             :is-mobile="isMobile"
             :show-extend-filter="showExtendFilter"
             :query="query" />
         </div>
         <div
-          v-else-if="!filesLoad && !loading && selectedView === 'folder' "
+          v-else-if="!filesLoad && !loading && selectedView === 'folder'  && initialized"
           @drop="dragFile"
           @dragover="startDrag">
           <documents-no-body-folder
@@ -40,7 +39,7 @@
             :is-mobile="isMobile" />
         </div>
         <div
-          v-else-if="!filesLoad && !loading"
+          v-else-if="!filesLoad && !loading && initialized"
           @drop="dragFile"
           @dragover="startDrag">
           <documents-no-body
