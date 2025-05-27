@@ -31,7 +31,7 @@
             :query="query" />
         </div>
         <div
-          v-else-if="!filesLoad && !loading && selectedView === 'folder'  && initialized"
+          v-else-if="!filesLoad && !loading && selectedView === 'folder' && initialized"
           @drop="dragFile"
           @dragover="startDrag">
           <documents-no-body-folder
@@ -180,8 +180,8 @@ export default {
     beforeDate: null,
     minSize: null,
     maxSize: null,
+    showHidden: false,
     publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`
-
   }),
   computed: {
     showLoadMoreVersions() {
@@ -265,6 +265,7 @@ export default {
       this.beforeDate = advancedFilter.selectedPeriod?.max;
       this.minSize = advancedFilter.minSize;
       this.maxSize = advancedFilter.maxSize;
+      this.showHidden = advancedFilter.showHidden;
       this.refreshFiles();
     });
     this.$root.$on('open-folder-by-id', (folderId) => {
@@ -1054,6 +1055,9 @@ export default {
       }  
       if (this.maxSize) {
         filter.maxSize = this.maxSize;
+      } 
+      if (this.showHidden) {
+        filter.showHiddenFiles = this.showHidden;
       }
       filter.favorites = this.isFavorites;
       const expand = this.selectedViewExtension.filePropertiesExpand || 'modifier,creator,owner,metadatas';

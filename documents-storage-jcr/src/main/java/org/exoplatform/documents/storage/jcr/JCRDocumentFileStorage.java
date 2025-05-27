@@ -276,7 +276,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           && filter.getMaxSize() == null && filter.getMinSize() == null) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
-        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection);
+        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection, showHiddenFiles);
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         ((QueryImpl)jcrQuery).setOffset(offset);
         ((QueryImpl)jcrQuery).setLimit(limit);
@@ -300,7 +300,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                             sortDirection);
         return filesSearchList.stream()
                               .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
-                              .filter(Objects::nonNull)
+                              .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
                               .collect(Collectors.toList());
       }
     } catch (Exception e) {
@@ -362,7 +362,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Collection<SearchResult> results = documentSearchServiceConnector.search(aclIdentity, workspace, rootPath, filter, offset, limit, "fileSizeWithVersions", "DESC");
       return results.stream()
                             .map(result -> (AbstractNode)toFileNode(identityManager, session, aclIdentity, result, spaceService))
-                            .filter(Objects::nonNull)
+                            .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
                             .toList();
     } catch (Exception e) {
       throw new IllegalStateException("Error when getting the documents size for identity " + ownerId, e);
@@ -573,7 +573,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                               sortDirection);
           return filesSearchList.stream()
                                 .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
-                                .filter(Objects::nonNull)
+                                .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
                                 .collect(Collectors.toList());
         }
 
@@ -944,6 +944,59 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  @Override
+  public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, Identity aclIdentity) throws ObjectAlreadyExistsException {
+
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(documentID) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        documentID = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, documentID);
+      }
+      boolean isAlreadyHidden = node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE);
+      if (hidden && !isAlreadyHidden) {
+        node.addMixin(NodeTypeConstants.EXO_HIDDENABLE);
+      } else if (hidden) {
+        LOG.warn("current element is aleady hidden, nothing to do");
+        return;
+      } else if (isAlreadyHidden) {
+        node.removeMixin(NodeTypeConstants.EXO_HIDDENABLE);
+      } else {
+        LOG.warn("current element is not hidden, nothing to do");
+        return;
+      }
+      if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
+        node.addMixin(NodeTypeConstants.EXO_MODIFY);
+      }
+      Calendar now = Calendar.getInstance();
+      node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
+      node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIER, username);
+      node.save();
+      try {
+        listenerService.broadcast("hide_folder_event", node, hidden);
+      } catch (Exception e) {
+        LOG.error("cannot broadcast hide folder event");
+      }
+    } catch (ObjectAlreadyExistsException e) {
+      throw new ObjectAlreadyExistsException(e);
+    } catch (Exception e) {
+      throw new IllegalStateException("Error hiding document'" + documentID, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
   private void checkNodeExistence(Session session, Node node, String title) throws RepositoryException,
                                                                             ObjectAlreadyExistsException {
     Node current = node;
@@ -1190,13 +1243,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection) {
+  private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection, boolean includeHiddenFiles) {
+    String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable'";
     return new StringBuilder().append("SELECT * FROM ")
                               .append("nt:base")
                               .append(" WHERE jcr:path LIKE '")
                               .append(rootPath)
                               .append("/%' ")
-                              .append(" AND ( jcr:primaryType='exo:symlink' OR jcr:primaryType='nt:file') AND NOT jcr:mixinTypes LIKE 'exo:hiddenable' ")
+            .append(" AND ( jcr:primaryType='exo:symlink' OR jcr:primaryType='nt:file')")
+            .append(hiddenableQuery)
                               .append(" ORDER BY ")
                               .append(sortField)
                               .append(" ")

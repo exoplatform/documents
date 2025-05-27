@@ -211,12 +211,12 @@ public class JCRDocumentsUtil {
           }
         }
         if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
-            && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
+            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
           FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
           fileNodes.add(folderNode);
         }
         if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE))
-            && (!(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles))) {
+            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
           FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
           fileNode.setMimeType(getMimeType(sourceNode));
           fileNodes.add(fileNode);
@@ -420,6 +420,11 @@ public class JCRDocumentsUtil {
       if (sourceNode != null) {
         versionNode = sourceNode;
       }
+    }
+    if (node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)) {
+      documentNode.setHidden(true);
+    } else {
+      documentNode.setHidden(false);
     }
     if (versionNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && versionNode.getBaseVersion() != null) {
       documentNode.setVersionable(true);

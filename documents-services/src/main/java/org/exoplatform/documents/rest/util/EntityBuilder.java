@@ -88,12 +88,14 @@ public class EntityBuilder {
       node.setId(document.getId());
       node.setPath(document.getPath());
       node.setName(document.getName());
+      node.setHidden(document.isHidden());
       return node;
     } else {
       AbstractNode node = new FileNode();
       node.setId(document.getId());
       node.setPath(document.getPath());
       node.setName(document.getName());
+      node.setHidden(document.isHidden());
       return node;
     }
   }
@@ -156,6 +158,7 @@ public class EntityBuilder {
     fileEntity.setSize(file.getSize());
     fileEntity.setSizeWithVersions(file.getSizeWithVersions());
     fileEntity.setViews(file.getViews());
+    fileEntity.setHidden(file.isHidden());
     if (expandProperties.contains("versions")) {
       fileEntity.setVersions(toVersionEntities(documentFileService.getFileVersions(file.getId(), RestUtils.getCurrentUser())));
     }
@@ -256,6 +259,7 @@ public class EntityBuilder {
       nodeEntity.setCloudDriveFile(node.isCloudDriveFile());
       nodeEntity.setVersionNumber(node.getVersionNumber());
       nodeEntity.setVersionable(node.isVersionable());
+      nodeEntity.setHidden(node.isHidden());
       if ((node instanceof FolderNode)) {
         ((FolderNodeEntity)nodeEntity).setPath(((FolderNode)node).getPath());
       }
