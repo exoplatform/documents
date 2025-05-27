@@ -43,12 +43,14 @@
                   class="pe-1 not-clickable">
                   fas fa-ellipsis-h
                 </v-icon>
-                <v-card v-else-if="index>0" :max-width=" breadcrumbLength < 3 ? '320px' : breadcrumbLength === 3 ? '155px' : '130px'" class="no-border elevation-0">
+                <v-card
+                  v-else-if="index>0"
+                  :max-width=" breadcrumbLength < 3 ? '320px' : breadcrumbLength === 3 ? '155px' : '130px'"
+                  class="no-border elevation-0">
                   <a  
-                  class="text-truncate text-wrap text-break clickable font-weight-bold show hover-underline" 
-                  >
-                  {{ folder.name }}
-                </a>
+                    class="text-truncate text-wrap text-break clickable font-weight-bold show hover-underline">
+                    {{ folder.name }}
+                  </a>
                 </v-card>
                 <v-icon
                   v-else

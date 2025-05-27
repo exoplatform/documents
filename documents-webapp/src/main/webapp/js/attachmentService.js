@@ -9,7 +9,7 @@ export function fetchFoldersAndFiles(currentDrive, workspace, parentPath) {
   } else {
     parentPath = '';
   }
-  return fetch(`/portal/rest/managedocument/getFoldersAndFiles/?driveName=${currentDrive}&workspaceName=${workspace}&currentFolder=${parentPath}`,
+  return fetch(`/portal/rest/managedocument/getFoldersAndFiles/?driveName=${currentDrive}&workspaceName=${workspace}&currentFolder=${parentPath}&showHidden=true`,
     {})
     .then(response => {
       if (response.ok) {

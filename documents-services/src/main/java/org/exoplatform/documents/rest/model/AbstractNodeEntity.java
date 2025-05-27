@@ -78,4 +78,6 @@ public class AbstractNodeEntity {
 
   private boolean                               cloudDriveFile;
 
+  private boolean                               hidden;
+
 }

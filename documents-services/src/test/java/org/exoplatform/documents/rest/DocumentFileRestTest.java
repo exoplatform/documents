@@ -823,16 +823,16 @@ public class DocumentFileRestTest {
     response = documentFileRest.createFolder("11111111", null, 2L, "test");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
-    response = documentFileRest.renameDocument(null, null, "");
+    response = documentFileRest.updateDocument("rename", null, null, "","", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("either_ownerId_or_documentID_is_mandatory", response.getEntity());
 
-    response = documentFileRest.renameDocument("11111111", 2L, "");
+    response = documentFileRest.updateDocument("rename","11111111", 2L, "", "", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("Document Name should not be empty", response.getEntity());
 
     doNothing().when(documentFileStorage).renameDocument(2L, "11111111", "renameTest", userID);
-    Response response1 = documentFileRest.renameDocument("11111111", 2L, "renameTest");
+    Response response1 = documentFileRest.updateDocument("rename","11111111", 2L, "renameTest", "", null);
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
 
     when(documentFileStorage.getFullTreeData(2L, "11111111", userID, true)).thenReturn(children);
@@ -843,12 +843,12 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response3.getStatus());
     assertEquals("either_ownerId_or_documentID_is_mandatory", response3.getEntity());
 
-    Response response4 = documentFileRest.moveDocument("11111111", 2L, null, null);
-    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response4.getStatus());
+    Response response5 = documentFileRest.moveDocument("11111111", 2L, null, null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response5.getStatus());
 
     doNothing().when(documentFileStorage).moveDocument(2L, "11111111", "/Groups/spaces/test/Documents/test", userID, "keepBoth");
-    Response response5 = documentFileRest.moveDocument("11111111", 2L, "/Groups/spaces/test/Documents/test", "keepBoth");
-    assertEquals(Response.Status.OK.getStatusCode(), response5.getStatus());
+    Response response6 = documentFileRest.moveDocument("11111111", 2L, "/Groups/spaces/test/Documents/test", "keepBoth");
+    assertEquals(Response.Status.OK.getStatusCode(), response6.getStatus());
 
     when(documentFileRest.moveDocument("11111111",
                                        2L,
@@ -1198,14 +1198,46 @@ public class DocumentFileRestTest {
                                                               externalDownloadService);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
     doNothing().when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
-    Response response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
-    assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+    Response response = documentFileRest1.updateDocument("description", "123", 1L,  "", "hello", null);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     doThrow(new AccessDeniedException()).when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
-    response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
+    response = documentFileRest1.updateDocument("description", "123", 1L, "", "hello", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     doThrow(new RuntimeException()).when(documentFileService1).updateDocumentDescription(1L, "123", "hello", 1L);
-    response = documentFileRest1.updateDocumentDescription(1L, "123", "hello");
+    response = documentFileRest1.updateDocument("description", "123", 1L, "", "hello", null);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+  @Test
+  public void testUpdateDocumentVisibility() throws ObjectAlreadyExistsException {
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              documentWebSocketService,
+                                                              publicDocumentAccessService,
+                                                              externalDownloadService);
+    String username = "testuser";
+    org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(root));
+    long currentOwnerId = 1;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    Response response = documentFileRest.updateDocument("visibility", null, null, "","", null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("either_ownerId_or_documentID_is_mandatory", response.getEntity());
+    response = documentFileRest.updateDocument("visibility","11111111", 1L, "", "", null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertEquals("Document hidden value should not be empty", response.getEntity());
+    doNothing().when(documentFileStorage).setDocumentVisibility(2L, "11111111", true, userID);
+    response = documentFileRest.updateDocument("visibility","11111111", 1L, "", "", true);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
   }
 
   @Test
@@ -1343,7 +1375,7 @@ public class DocumentFileRestTest {
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).renameDocument(1L, "123", "test", 2L);
-    Response response = documentFileRest1.renameDocument("123", 1L, "test");
+    Response response = documentFileRest1.updateDocument("rename", "123", 1L, "test","", null);
     assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
   }
 
