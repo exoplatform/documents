@@ -52,6 +52,7 @@ import MoveMenuAction from './components/body/actions/MoveMenuAction.vue';
 import DuplicateMenuAction from './components/body/actions/DuplicateMenuAction.vue';
 import VisibilityMenuAction from './components/body/actions/VisibilityMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
+import HideMenuAction from './components/body/actions/HideMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
 import CopyLinkMenuAction from './components/body/actions/CopyLinkMenuAction.vue';
 import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue';
@@ -119,6 +120,7 @@ const components = {
   'documents-visibility-menu': DocumentsVisibilityMenu,
   'edit-menu-action': EditMenuAction,
   'rename-menu-action': RenameMenuAction,
+  'hide-menu-action': HideMenuAction,
   'download-menu-action': DownloadMenuAction,
   'open-location-menu-action': OpenLocationMenuAction,
   'open-read-only-menu-action': OpenReadOnlyMenuAction,

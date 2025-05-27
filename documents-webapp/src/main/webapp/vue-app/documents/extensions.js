@@ -177,6 +177,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'move',
   labelKey: 'documents.label.move',
@@ -252,6 +253,24 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
     vueComponent: Vue.options.components['visibility-menu-action'],
   },
 });
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'rename',
+  labelKey: 'documents.label.hide',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 10,
+  enabled: (file,isMobile,currentView) => {
+    return file && currentView === 'folder' && file.folder && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['hide-menu-action'],
+  },
+});
+
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'versionHistory',
