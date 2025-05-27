@@ -37,7 +37,8 @@
         <div
           v-if="!editNameMode"
           class="document-title clickable hover-underline d-inline-flex"
-          :title="title"
+          :class="file.hidden ? 'text-light-color' : ''"
+          :title="file.hidden ? `${file.name} (${$t('documents.label.hidden')})`: `${file.name}`"
           @click="openPreview()">
           <div
             v-sanitized-html="title"
@@ -53,6 +54,12 @@
             size="13"
             class="pe-1 iconStyle ms-1">
             mdi-link-variant
+          </v-icon>
+          <v-icon
+            v-if="file.hidden"
+            size="13"
+            class="pe-1 iconStyle ms-1">
+            fas fa-eye-slash
           </v-icon>
         </div>
         <documents-file-edit-name-cell
