@@ -946,7 +946,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   @Override
   public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, Identity aclIdentity) throws ObjectAlreadyExistsException {
-
+    if (hidden == null) {
+      throw new IllegalArgumentException("Hidden value should not be null");
+    }
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     try {

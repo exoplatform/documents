@@ -673,6 +673,43 @@ public class JCRDocumentFileStorageTest {
     assertThrows(ObjectAlreadyExistsException.class,
             () -> this.jcrDocumentFileStorage.renameDocument(1L, "123", "exist", identity));
   }
+  @Test
+  public void hideDocument() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Throwable exception = assertThrows(IllegalArgumentException.class,
+                                       () -> this.jcrDocumentFileStorage.setDocumentVisibility(1L, "123", null, identity));
+    assertEquals("Hidden value should not be null", exception.getMessage());
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService,identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node node = mock(Node.class);
+    NodeType nodeType = mock(NodeType.class);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(getNodeByIdentifier(session, "123")).thenReturn(node);
+    when(identity.getUserId()).thenReturn("user");
+    when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
+    when(node.canAddMixin(NodeTypeConstants.EXO_SORTABLE)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    Node parentNode = mock(Node.class);
+    when(node.getParent()).thenReturn(parentNode);
+    when(node.getPath()).thenReturn("nodePath");
+    when(parentNode.getPath()).thenReturn("parentNodePath");
+    when(node.getSession()).thenReturn(session);
+    Workspace workspace = mock(Workspace.class);
+    when(session.getWorkspace()).thenReturn(workspace);
+    when(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)).thenReturn(true);
+    this.jcrDocumentFileStorage.setDocumentVisibility(1L, "123", true, identity);
+    verify(node, times(0)).save();
+    when(node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)).thenReturn(false);
+    this.jcrDocumentFileStorage.setDocumentVisibility(1L, "123", true, identity);
+    verify(node, times(1)).save();
+    verify(sessionProvider, times(2)).close();
+  }
 
   @Test
   public void testGetFullTreeData() throws Exception {
