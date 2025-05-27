@@ -299,8 +299,12 @@ public class JCRDocumentsUtil {
     try {
       FileNode fileNode = new FileNode();
       Node node = getNode(session, fileNode, fileSearchResult);
-      toFileNode(identityManager, aclIdentity, node, fileNode, spaceService);
-      return fileNode;
+      if (node == null) {
+        return null;
+      } else {
+        toFileNode(identityManager, aclIdentity, node, fileNode, spaceService);
+        return fileNode;
+      }
     } catch (Exception e) {
       LOG.warn("Error computing File Node for search result with id {}", fileSearchResult.getId(), e);
       return null;
@@ -477,7 +481,9 @@ public class JCRDocumentsUtil {
     if (node.isNodeType(NodeTypeConstants.DC_DESCRIPTION)) {
       documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());
     }
-    computeDocumentAcl(node, documentNode, aclIdentity,identityManager, spaceService);
+    if (aclIdentity != null) {
+      computeDocumentAcl(node, documentNode, aclIdentity,identityManager, spaceService);
+    }
   }
 
   public static void retrieveFileContentProperties(Node content, FileNode fileNode) throws RepositoryException {

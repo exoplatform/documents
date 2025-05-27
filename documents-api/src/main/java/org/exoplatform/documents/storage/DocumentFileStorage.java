@@ -53,6 +53,15 @@ public interface DocumentFileStorage {
                                   int limit) throws ObjectNotFoundException;
 
   /**
+   * @param keyword Search term
+   * @param identity User ACL {@link org.exoplatform.services.security.Identity}
+   * @param offset search offset
+   * @param limit search limit
+   * @return {@link List} of found {@link FileNode} available for user
+   */
+  List<FileNode> search(String keyword, Identity identity, int offset, int limit);
+
+  /**
    * Retrieves a list of biggest accessible files, for a selected user.
    * The returned results will be of type {@link FileNode}
    * only. The ownerId of filter object will be used to select the list of
@@ -200,7 +209,7 @@ public interface DocumentFileStorage {
 
   void notifyMember(String documentId, long destId) throws IllegalAccessException;
 
-  boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException;
+  boolean canAccess(String documentID, Identity aclIdentity);
   
   default void updateDocumentDescription(long ownerId,
                                          String documentID,
@@ -236,8 +245,16 @@ public interface DocumentFileStorage {
    * @param documentId target file node id
    * @param aclIdentity user identity id
    * @return {@link AbstractNode}
+   * @throws ObjectNotFoundException when document doesn't exists
+   * @throws IllegalAccessException when user can't access document
    */
-  AbstractNode getDocumentById(String documentId, String aclIdentity);
+  AbstractNode getDocumentById(String documentId, String aclIdentity) throws ObjectNotFoundException, IllegalAccessException;
+
+  /**
+   * @param documentId target file node id
+   * @return {@link AbstractNode}
+   */
+  AbstractNode getDocumentById(String documentId);
 
   /**
    * Retrieves a document content By its Id
@@ -354,4 +371,5 @@ public interface DocumentFileStorage {
                    long authenticatedUserId) throws Exception;
 
   boolean canImport(Identity identity);
+
 }

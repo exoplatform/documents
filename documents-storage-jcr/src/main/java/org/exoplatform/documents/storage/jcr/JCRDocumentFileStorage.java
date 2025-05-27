@@ -16,7 +16,26 @@
  */
 package org.exoplatform.documents.storage.jcr;
 
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanName;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanNameWithAccents;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getFolderLink;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getMimeType;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNewIndexedName;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getOwnerIdentityFromNodePath;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getSortDirection;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getSortField;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getUserSessionProvider;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.increaseNameIndex;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toDownloadItem;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFileNode;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFileNodes;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFolderNode;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toNodes;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles;
 import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.File;
@@ -27,10 +46,27 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.jcr.*;
+import javax.jcr.AccessDeniedException;
+import javax.jcr.ItemExistsException;
+import javax.jcr.ItemNotFoundException;
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
+import javax.jcr.ValueFormatException;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
@@ -45,7 +81,22 @@ import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
-import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.ActionData;
+import org.exoplatform.documents.model.ActionStatus;
+import org.exoplatform.documents.model.ActionType;
+import org.exoplatform.documents.model.BreadCrumbItem;
+import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentGroupsSize;
+import org.exoplatform.documents.model.DocumentTimelineFilter;
+import org.exoplatform.documents.model.DownloadItem;
+import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.FileVersion;
+import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.documents.model.PermissionEntry;
+import org.exoplatform.documents.model.PermissionRole;
+import org.exoplatform.documents.model.SymlinkNavigation;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -83,11 +134,12 @@ import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 
 import io.meeds.portal.thumbnail.model.FileContent;
+import lombok.SneakyThrows;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       COLLABORATION               = "collaboration";
-
+  
   private static final List<String>                 FOLDER_NODE_TYPES           = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
                                                                                           NodeTypeConstants.NT_FOLDER,
                                                                                           NodeTypeConstants.EXO_SYMLINK,
@@ -95,6 +147,31 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                           NodeTypeConstants.JS_FOLDER,
                                                                                           NodeTypeConstants.LINK_FOLDER,
                                                                                           NodeTypeConstants.WEB_FOLDER);
+
+  private static final List<String>                 FILE_MIME_TYPES             = List.of("image/bmp",
+                                                                                          "image/jpeg",
+                                                                                          "image/webp",
+                                                                                          "image/png",
+                                                                                          "image/gif",
+                                                                                          "image/avif",
+                                                                                          "image/tiff",
+                                                                                          "application/pdf",
+                                                                                          "application/zip",
+                                                                                          "application/vnd.rar",
+                                                                                          "video/mp4",
+                                                                                          "video/mpeg",
+                                                                                          "video/ogg",
+                                                                                          "video/webm",
+                                                                                          "video/3gpp",
+                                                                                          "video/x-msvideo",
+                                                                                          "text/plain",
+                                                                                          "application/rtf",
+                                                                                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                                                                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document.form",
+                                                                                          "application/vnd.oasis.opendocument.text",
+                                                                                          "application/vnd.ms-excel",
+                                                                                          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                                                                          "application/vnd.openxmlformats-officedocument.presentationml.presentation");
 
   private final SpaceService                        spaceService;
 
@@ -230,6 +307,38 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
       sessionProvider.close();
+    }
+  }
+
+  @Override
+  @SneakyThrows
+  public List<FileNode> search(String keyword, Identity identity, int offset, int limit) {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, identity);
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      DocumentTimelineFilter filter = new DocumentTimelineFilter();
+      filter.setQuery(keyword);
+      filter.setMimeTypes(FILE_MIME_TYPES);
+      Collection<SearchResult> results = documentSearchServiceConnector.search(identity,
+                                                                               COLLABORATION,
+                                                                               "/",
+                                                                               filter,
+                                                                               offset,
+                                                                               limit,
+                                                                               "_score",
+                                                                               "DESC");
+      return results.stream()
+                    .map(result -> (AbstractNode) toFileNode(identityManager, session, identity, result, spaceService))
+                    .filter(Objects::nonNull)
+                    .filter(FileNode.class::isInstance)
+                    .map(FileNode.class::cast)
+                    .toList();
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -1435,9 +1544,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  public boolean canAccess(String documentID, Identity aclIdentity) throws RepositoryException {
+  public boolean canAccess(String documentID, Identity aclIdentity) {
     SessionProvider sessionProvider = null;
-    boolean canAccess = false;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
@@ -1447,6 +1555,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       String userId = aclIdentity.getUserId();
       List<AccessControlEntry> permsList = ((ExtendedNode) node).getACL().getPermissionEntries();
+      boolean canAccess = false;
       for (AccessControlEntry accessControlEntry : permsList) {
         String nodeAclIdentity = accessControlEntry.getIdentity();
         MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
@@ -1455,6 +1564,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       return canAccess;
+    } catch (AccessDeniedException | ItemNotFoundException e) {
+      return false;
     } catch (Exception e) {
       throw new IllegalStateException("Error checking access rights for on document'" + documentID + " fro user " + aclIdentity.getUserId(), e);
     } finally {
@@ -1666,22 +1777,44 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     fileVersions.sort(Collections.reverseOrder());
     return fileVersions;
-  }  /**
+  }
+
+  /**
    * {@inheritDoc}
    */
   @Override
-  public AbstractNode getDocumentById(String documentId, String aclIdentity) {
-    Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+  public AbstractNode getDocumentById(String documentId, String username) throws ObjectNotFoundException, IllegalAccessException {
+    Identity identity = identityRegistry.getIdentity(String.valueOf(username));
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
       Node node = getNodeByIdentifier(session, documentId);
-      if(node != null && (node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) ||  node.isNodeType(NodeTypeConstants.NT_FOLDER))) {
+      if (node == null) {
+        throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
+      } else if (node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || node.isNodeType(NodeTypeConstants.NT_FOLDER)) {
         return toFolderNode(identityManager, identity, node, "", spaceService);
       }
       return toFileNode(identityManager, identity, node, "", spaceService);
+    } catch (ItemNotFoundException e) {
+      throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
     } catch (RepositoryException e) {
-      throw new IllegalStateException("Error while getting file details", e);
+      throw new IllegalAccessException(String.format("Node with id %s not accessible to user %s", documentId, username));
+    }
+  }
+
+  public AbstractNode getDocumentById(String documentId) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node node = session.getNodeByUUID(documentId);
+      return node == null ? null : toFileNode(identityManager, null, node, "", spaceService);
+    } catch (RepositoryException e) {
+      return null;
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 

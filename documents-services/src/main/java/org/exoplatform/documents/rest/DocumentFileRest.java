@@ -1505,6 +1505,10 @@ public class DocumentFileRest implements ResourceContainer {
 
     } catch (IllegalArgumentException e) {
       return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.FORBIDDEN).entity(e.getMessage()).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.warn("Error retrieving a the file with id = {}", documentId, e);
       return Response.serverError().entity(e.getMessage()).build();

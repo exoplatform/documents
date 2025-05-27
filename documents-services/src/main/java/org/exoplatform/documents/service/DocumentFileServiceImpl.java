@@ -156,6 +156,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public List<FileNode> search(String keyword, org.exoplatform.services.security.Identity identity, int offset, int limit) {
+    return documentFileStorage.search(keyword, identity, offset, limit);
+  }
+
+  @Override
   public List<FileNode> getFilesTimeline(DocumentTimelineFilter filter,
                                          int offset,
                                          int limit,
@@ -359,8 +364,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity) throws RepositoryException {
-   return documentFileStorage.canAccess(documentID, aclIdentity);
+  public boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity) {
+    return documentFileStorage.canAccess(documentID, aclIdentity);
   }
 
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
@@ -618,7 +623,12 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    */
   @Override
   public boolean hasEditPermissionOnDocument(String nodeId, long userIdentityId) throws IllegalAccessException {
-    return documentFileStorage.hasEditPermissions(nodeId, getAclUserIdentity(userIdentityId));
+    return hasEditPermissionOnDocument(nodeId, getAclUserIdentity(userIdentityId));
+  }
+
+  @Override
+  public boolean hasEditPermissionOnDocument(String nodeId, org.exoplatform.services.security.Identity aclIdentity) {
+    return documentFileStorage.hasEditPermissions(nodeId, aclIdentity);
   }
 
   @Override
@@ -691,7 +701,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public AbstractNode getDocumentById(String documentId, String aclIdentity) {
+  public AbstractNode getDocumentById(String documentId, String aclIdentity) throws IllegalAccessException, ObjectNotFoundException{
     return documentFileStorage.getDocumentById(documentId, aclIdentity);
   }
 
@@ -727,4 +737,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, width, height);
   }
 
+  public AbstractNode getDocumentById(String documentId) {
+    return documentFileStorage.getDocumentById(documentId);
+  }
 }

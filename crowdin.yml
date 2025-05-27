@@ -74,4 +74,14 @@ files: [
     "escape_special_characters": 0,
     "escape_quotes" : 0,
   },
+  {
+    "source" : "/documents-webapp/src/main/resources/locale/portlet/ContentLink_en.properties",
+
+    "translation" : "%original_path%/%file_name%!_%locale_with_underscore%.%file_extension%",
+    "translation_replace" : {YML_CROWDIN_LANGUAGES_ARG},
+    "dest" : "add__ons/documents/ContentLink.properties",
+    "update_option" : "update_as_unapproved",
+    "escape_special_characters": 0,
+    "escape_quotes" : 0,
+  },
 ]
