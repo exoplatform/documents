@@ -5,7 +5,7 @@
     <v-icon
       size="16"
       class="pe-1">
-      fas fa-eye
+      fas fa-shield-alt
     </v-icon>
     <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.visibility') }}</span>
   </div>
