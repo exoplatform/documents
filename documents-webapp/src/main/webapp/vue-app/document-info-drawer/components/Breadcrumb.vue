@@ -64,7 +64,6 @@
                   class="pe-1">
                   mdi-link-variant
                 </v-icon>
-                
               </v-btn>
             </template>
             <span class="caption">

@@ -316,6 +316,7 @@ export default {
     this.$root.$on('mark-document-as-viewed', this.markDocumentAsViewed);
     this.$root.$on('documents-folder-download', this.downloadFolder);
     this.$root.$on('documents-preview', this.previewDocument);
+    this.$root.$on('hide-element', this.hideElement);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
   },
@@ -339,6 +340,11 @@ export default {
     downloadFolder(file) {
       this.selectedDocuments.push(file);
       this.bulkDownloadDocument();
+    },
+    hideElement(element) {
+      if (!this.showHidden){
+        this.files = this.files.filter(file => file.id !== element.id);
+      }
     },
     markDocumentAsViewed(file) {
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: file}}));

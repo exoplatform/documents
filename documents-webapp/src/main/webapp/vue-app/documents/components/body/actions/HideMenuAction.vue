@@ -35,6 +35,7 @@ export default {
       this.file.hidden = hidden;
       return this.$documentFileService.updateVisibility(ownerId,this.file)
         .then(() => {
+          this.$root.$emit('hide-element',  this.file);
           const message = this.file.hidden ? this.$t('documents.alert.success.document.hidden') : this.$t('documents.alert.success.document.unhidden');
           if (this.isMobile){
             this.displayAlert(message);
