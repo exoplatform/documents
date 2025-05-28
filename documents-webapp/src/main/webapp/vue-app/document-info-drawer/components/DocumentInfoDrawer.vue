@@ -582,7 +582,7 @@ export default {
     openFileInEditor(mode) {
       if (this.file && this.file.id) {
         const url = this.$documentsUtils.getEditorUrl(this.file,mode);
-        window.open(url,'_self');
+        window.open(url,'_blank');
       }
     },
     favoriteRemoved() {
