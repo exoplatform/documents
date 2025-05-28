@@ -255,7 +255,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 });
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
-  id: 'rename',
+  id: 'hide',
   labelKey: 'documents.label.hide',
   align: 'center',
   sortable: true,
