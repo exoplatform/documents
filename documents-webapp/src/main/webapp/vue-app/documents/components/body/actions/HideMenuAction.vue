@@ -16,26 +16,24 @@
  */
 
 <template>
-  <div>
-    <div
-      class="clickable my-10px mx-2"
-      @click="hide(!file.hidden)">
-      <v-icon
-        v-if="file.hidden"
-        size="16"
-        class="pe-1">
-        fas fa-eye-slash
-      </v-icon>
-      <v-icon
-        v-else
-        size="16"
-        class="pe-1">
-        fas fa-eye
-      </v-icon>
-      <span v-if="file.hidden" class="ps-1 text-body menu-text-color">{{ $t('documents.label.unhide') }}</span>
-      <span v-else class="ps-1 text-body menu-text-color">{{ $t('documents.label.hide') }}</span>
-    </div>
-  </div>  
+  <div
+    class="clickable d-flex  mx-2"
+    @click="hide(!file.hidden)">
+    <v-icon
+      v-if="file.hidden"
+      size="16"
+      class="pe-1">
+      fas fa-eye-slash
+    </v-icon>
+    <v-icon
+      v-else
+      size="16"
+      class="pe-1">
+      fas fa-eye
+    </v-icon>
+    <span v-if="file.hidden" class="ps-1 text-body menu-text-color">{{ $t('documents.label.unhide') }}</span>
+    <span v-else class="ps-1 text-body menu-text-color">{{ $t('documents.label.hide') }}</span>
+  </div>
 </template>
 <script>
 export default {

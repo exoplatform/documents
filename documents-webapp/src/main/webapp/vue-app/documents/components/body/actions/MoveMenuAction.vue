@@ -17,18 +17,18 @@
 <template>
   <div>
     <div
-      class="clickable my-10px mx-2"
+      class="clickable d-flex  mx-2"
       @click="moveDocument()">
       <v-icon
         size="16"
         class="pe-1">
         fa-arrows-alt
       </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('document.label.move') }}</span>
+      <div class="ps-1 pt-1 text-body menu-text-color">{{ $t('document.label.move') }}</div>
     </div>
     <v-divider
       v-if="isMultiSelection"
-      class="mt-1" />
+      class="mt-2" />
   </div>
 </template>
 <script>

@@ -17,17 +17,17 @@
 <template>
   <div>
     <div
-      class="clickable my-10px mx-2"
+      class="clickable d-flex  mx-2"
       @click="uploadVersion">
       <v-icon
         size="16"
         class="pe-1">
         fas fa-upload
       </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.upload.newVersion') }}</span>
+      <div class="ps-1 pt-1 text-body menu-text-color">{{ $t('documents.label.upload.newVersion') }}</div>
     </div>
     <v-divider
-      class="mt-1 dividerStyle" />
+      class="mt-2 dividerStyle" />
   </div>
 </template>
 

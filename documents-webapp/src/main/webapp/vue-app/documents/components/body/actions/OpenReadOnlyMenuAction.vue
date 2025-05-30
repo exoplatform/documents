@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable ma-auto my-10px mx-2"
+    class="clickable d-flex  mx-2"
     @click="openReadOnlyFile()">
     <v-icon
       size="16"
       class="pe-1">
       fab fa-readme
     </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('document.label.open.read.only') }}</span>
+    <div class="ps-1 text-body menu-text-color">{{ $t('document.label.open.read.only') }}</div>
   </div>
 </template>
 <script>
