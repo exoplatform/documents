@@ -165,6 +165,24 @@
             type="number"
             min="0" />
         </div>
+
+        <div class="font-weight-bold text-start text-color body-2  px-2 py-3">{{ $t('documents.advanced.filter.drawer.advanced.options') }}</div>
+
+        <v-list>
+          <v-list-item class="">
+            <v-list-item-action class="mx-3 my-0">
+              <v-checkbox
+                ripple="false"
+                v-model="tempAdvancedFilter.showHidden"
+                class="ma-auto typeCheckbox" />
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-row class="ma-auto pa-0">
+                <div class="my-auto px-0">{{ $t('documents.advanced.filter.drawer.show.hidden') }}</div>
+              </v-row>
+            </v-list-item-content>        
+          </v-list-item>
+        </v-list>
       </v-card> 
     </template>
     <template slot="footer">
@@ -200,6 +218,7 @@ export default {
         selectedPeriod: null,
         minSize: null,
         maxSize: null,
+        showHidden: false,
       },
       docIcon: {},
       prezIcon: {},
@@ -212,6 +231,7 @@ export default {
         selectedPeriod: null,
         minSize: null,
         maxSize: null,
+        showHidden: false,
       },
     }
   ),

@@ -192,15 +192,15 @@ export function renameDocument(ownerId,documentID,newName) {
     formData.append('ownerId', ownerId);
   }
   if (documentID) {
-    formData.append('documentID', documentID);
+    formData.append('documentId', documentID);
   }
   if (newName) {
     formData.append('newName', newName);
   }
   const params = new URLSearchParams(formData).toString();
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/rename?${params}`, {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/name?${params}`, {
     credentials: 'include',
-    method: 'PUT',
+    method: 'PATCH',
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
@@ -376,7 +376,7 @@ export function updateDescription(ownerId,document) {
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/description?${params}`, {
     credentials: 'include',
-    method: 'PUT',
+    method: 'PATCH',
   }).then((resp) => {
     if (resp && resp.ok) {
       return resp.ok;
@@ -385,6 +385,26 @@ export function updateDescription(ownerId,document) {
     }
   }).catch(e => {
     throw new Error(`Error when trying to update document description ${e}`);
+  });
+}
+
+export function updateVisibility(ownerId,document) {
+  const formData = new FormData();
+  formData.append('ownerId', ownerId);
+  formData.append('documentId', document.id);
+  formData.append('hidden', document.hidden);
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/visibility?${params}`, {
+    credentials: 'include',
+    method: 'PATCH',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.ok;
+    } else {
+      throw resp;
+    }
+  }).catch(e => {
+    throw new Error(`Error when trying to update document visibility ${e}`);
   });
 }
 

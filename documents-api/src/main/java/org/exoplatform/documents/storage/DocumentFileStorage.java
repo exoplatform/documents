@@ -133,7 +133,18 @@ public interface DocumentFileStorage {
    */
   List<FullTreeItem> getFullTreeData(long ownerId, String folderId, Identity aclIdentity, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException;
 
+
   /**
+   * Set the document visibility.
+   *
+   * @param ownerId the owner Id
+   * @param documentID theDocument Id
+   * @param hidden the hidden value
+   * @param aclIdentity user Identuty
+   */
+    void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, Identity aclIdentity) throws ObjectAlreadyExistsException;
+
+    /**
    * Duplicate the given node.
    *
    * @param fileId Id of the given file

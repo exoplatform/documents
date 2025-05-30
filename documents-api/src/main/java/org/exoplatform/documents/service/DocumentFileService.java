@@ -513,7 +513,36 @@ public interface DocumentFileService {
    */
   void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
 
+
+  /**
+   * Get image thumbnail content.
+   *
+   * @param fileType the file type
+   * @param documentId the document Id
+   * @param userName the user name
+   * @param width the width of the thumbnail
+   * @param height the height of the thumbnail
+   */
   FileContent getImageThumbnailContent(String fileType, String documentId, String userName, int width, int height) throws Exception;
 
-  FileItem createThumbnail(String fileType, FileContent file, String userName, int width, int height) throws Exception;
+  /**
+   * Create  thumbnail for given image.
+   *
+   * @param fileType the file type
+   * @param fileContent the FileContent object
+   * @param userName the user name
+   * @param width the width of the thumbnail
+   * @param height the height of the thumbnail
+   */
+  FileItem createThumbnail(String fileType, FileContent fileContent, String userName, int width, int height) throws Exception;
+
+  /**
+   * Set the document visibility.
+   *
+   * @param ownerId the owner Id
+   * @param documentID theDocument Id
+   * @param hidden the hidden value
+   * @param authenticatedUserId userId
+   */
+  void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId)  throws Exception;
 }

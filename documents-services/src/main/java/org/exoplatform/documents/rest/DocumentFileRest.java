@@ -282,6 +282,7 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setMinSize(minSize);
       filter.setAscending(ascending);
       filter.setSortField(getFromAlias(sortField));
+      filter.setIncludeHiddenFiles(showHiddenFiles);
       List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, offset, limit, userIdentityId,showHiddenFiles);
       List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
                                                                                        identityManager,
@@ -475,7 +476,7 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("/move")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @Operation(summary = "Move documents", method = "POST", description = "This rename a giving document.")
+  @Operation(summary = "Move documents", method = "POST", description = "This move a giving document.")
   @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
@@ -501,7 +502,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                  .type(MediaType.APPLICATION_JSON)
                                                  .build();
     } catch (Exception ex) {
-      LOG.warn("Failed to rename Document", ex);
+      LOG.warn("Failed to move Document", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
   }
@@ -585,36 +586,83 @@ public class DocumentFileRest implements ResourceContainer {
       }
     }
 
-  @PUT
-  @Path("/rename")
-  @RolesAllowed("users")
-  @Operation(summary = "Rename documents", method = "POST", description = "This rename a giving document.")
-  @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
-          @ApiResponse(responseCode = "400", description = "Invalid query input"),
-          @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
-          @ApiResponse(responseCode = "404", description = "Resource not found")})
-  public Response renameDocument (@Parameter(description = "document id") @QueryParam("documentID") String documentID,
-                                @Parameter(description = "ownerId") @QueryParam("ownerId") Long ownerId,
-                                @Parameter(description = "new name") @QueryParam("newName") String newName) {
-
-    if (ownerId == null && StringUtils.isBlank(documentID)) {
-      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
+    @PATCH
+    @Path("/{property}")
+    @RolesAllowed("users")
+    @Operation(summary = "Update a document property", method = "PATCH", description = "This updates a document prperty.")
+    @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+        @ApiResponse(responseCode = "400", description = "Invalid query input"),
+        @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
+        @ApiResponse(responseCode = "404", description = "Resource not found") })
+    public Response updateDocument(@Parameter(description = "Property to update", required = true)
+                                   @PathParam("property")
+                                   String property,
+                                   @Parameter(description = "document id", required = true)
+                                   @QueryParam("documentId")
+                                   String documentId,
+                                   @Parameter(description = "ownerId")
+                                   @QueryParam("ownerId")
+                                   Long ownerId,
+                                   @Parameter(description = "new name")
+                                   @QueryParam("newName")
+                                   String newName,
+                                   @Parameter(description = "new description")
+                                   @QueryParam("description")
+                                   String description,
+                                   @Parameter(description = "new document hidden value")
+                                   @QueryParam("hidden")
+                                   Boolean hidden) {
+      if (ownerId == null && StringUtils.isBlank(documentId)) {
+        return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
+      }
+      if (StringUtils.equals(property, "name")) {
+        if (StringUtils.isEmpty(newName)) {
+          return Response.status(Response.Status.BAD_REQUEST).entity("Document Name should not be empty").build();
+        }
+        try {
+          long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+          documentFileService.renameDocument(ownerId, documentId, newName, userIdentityId);
+          return Response.ok().build();
+        } catch (ObjectAlreadyExistsException ex) {
+          LOG.warn("Document with same name already exists", ex);
+          return Response.status(HTTPStatus.CONFLICT).build();
+        } catch (Exception ex) {
+          LOG.warn("Failed to rename Document", ex);
+          return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+        }
+      }
+      if (StringUtils.equals(property, "description")) {
+        if (StringUtils.isEmpty(description)) {
+          return Response.status(Response.Status.BAD_REQUEST).entity("Document description should not be empty").build();
+        }
+        try {
+          long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+          documentFileService.updateDocumentDescription(ownerId, documentId, description, userIdentityId);
+          return Response.ok().build();
+        } catch (AccessDeniedException e) {
+          return Response.status(HTTPStatus.UNAUTHORIZED).build();
+        } catch (Exception ex) {
+          LOG.warn("Failed to update document description", ex);
+          return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+        }
+      }
+      if (StringUtils.equals(property, "visibility")) {
+        if (hidden == null) {
+          return Response.status(Response.Status.BAD_REQUEST).entity("Document hidden value should not be empty").build();
+        }
+        try {
+          long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+          documentFileService.setDocumentVisibility(ownerId, documentId, hidden, userIdentityId);
+          return Response.ok().build();
+        } catch (AccessDeniedException e) {
+          return Response.status(HTTPStatus.UNAUTHORIZED).build();
+        } catch (Exception ex) {
+          LOG.warn("Failed to update document visibility", ex);
+          return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+        }
+      }
+      return Response.status(Status.NOT_MODIFIED).build();
     }
-    if (StringUtils.isEmpty(newName)) {
-      return Response.status(Response.Status.BAD_REQUEST).entity("Document Name should not be empty").build();
-    }
-    try {
-      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-      documentFileService.renameDocument(ownerId, documentID, newName, userIdentityId);
-      return Response.ok().build();
-    } catch (ObjectAlreadyExistsException ex) {
-      LOG.warn("Document with same name already exists", ex);
-      return Response.status(HTTPStatus.CONFLICT).build();
-    } catch (Exception ex) {
-      LOG.warn("Failed to rename Document", ex);
-      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
-    }
-  }
 
   @DELETE
   @Path("{documentId}")
@@ -841,36 +889,6 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     }
     return Response.noContent().build();
-  }
-
-  @PUT
-  @Path("/description")
-  @RolesAllowed("users")
-  @Operation(summary = "update or create a document's description", method = "PUT", description = "This creates or updates a given document's description.")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "400", description = "Invalid query input"),
-      @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
-      @ApiResponse(responseCode = "404", description = "Resource not found") })
-  public Response updateDocumentDescription(@Parameter(description = "owner id", required = true)
-  @QueryParam("ownerId")
-  long ownerId,
-                                            @Parameter(description = "document id", required = true)
-                                            @QueryParam("documentId")
-                                            String documentId,
-                                            @Parameter(description = "document id", required = true)
-                                            @QueryParam("description")
-                                            String description) {
-    try {
-      long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-      documentFileService.updateDocumentDescription(ownerId, documentId, description, userIdentityId);
-      return Response.noContent().build();
-    } catch (AccessDeniedException e) {
-      return Response.status(HTTPStatus.UNAUTHORIZED).build();
-    } catch (Exception ex) {
-      LOG.warn("Failed to update document description", ex);
-      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
-    }
-
   }
 
   @POST

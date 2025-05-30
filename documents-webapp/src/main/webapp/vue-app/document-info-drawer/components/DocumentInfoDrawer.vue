@@ -103,7 +103,10 @@
             <v-list-item-subtitle> {{ $t(`documents.label.type.${icon.type}`) }} </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item v-if="!file.folder" dense two-line>
+        <v-list-item
+          v-if="!file.folder"
+          dense
+          two-line>
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-title>{{ $t('documents.drawer.details.size') }}</v-list-item-title>
             <v-list-item-subtitle>
@@ -161,7 +164,10 @@
             </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item  v-if="!file.folder" dense two-line>
+        <v-list-item
+          v-if="!file.folder"
+          dense
+          two-line>
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-title>{{ $t('documents.details.view.label') }}</v-list-item-title>
             <v-list-item-subtitle>{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</v-list-item-subtitle>
@@ -171,7 +177,7 @@
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-title>{{ $t('documents.drawer.details.location') }}</v-list-item-title>
             <v-list-item-subtitle>
-              <breadcrumb :folder-id="file.parentFolderId" :is-mobile="isMobile"/>
+              <breadcrumb :folder-id="file.parentFolderId" :is-mobile="isMobile" />
             </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>

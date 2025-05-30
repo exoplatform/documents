@@ -48,4 +48,13 @@
     </init-params>
   </component>
 
+  <external-component-plugins>
+    <target-component>org.exoplatform.services.listener.ListenerService</target-component>
+    <component-plugin>
+      <name>hide_folder_event</name>
+      <set-method>addListener</set-method>
+      <type>org.exoplatform.documents.storage.jcr.listener.HideFolderListener</type>
+    </component-plugin>
+  </external-component-plugins>
+
 </configuration>

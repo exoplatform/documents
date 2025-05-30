@@ -740,4 +740,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public AbstractNode getDocumentById(String documentId) {
     return documentFileStorage.getDocumentById(documentId);
   }
+  @Override
+  public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId)   throws Exception {
+      documentFileStorage.setDocumentVisibility(ownerId, documentID, hidden, getAclUserIdentity(authenticatedUserId));
+    }
+
+
+
 }
