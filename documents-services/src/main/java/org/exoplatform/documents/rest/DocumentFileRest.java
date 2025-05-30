@@ -587,16 +587,16 @@ public class DocumentFileRest implements ResourceContainer {
     }
 
     @PATCH
-    @Path("/{operation}")
+    @Path("/{property}")
     @RolesAllowed("users")
     @Operation(summary = "Rename documents", method = "PATCH", description = "This updates document.")
     @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
         @ApiResponse(responseCode = "400", description = "Invalid query input"),
         @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
         @ApiResponse(responseCode = "404", description = "Resource not found") })
-    public Response updateDocument(@Parameter(description = "Update operation to perform", required = true)
-                                   @PathParam("operation")
-                                   String operation,
+    public Response updateDocument(@Parameter(description = "Property to update", required = true)
+                                   @PathParam("property")
+                                   String property,
                                    @Parameter(description = "document id", required = true)
                                    @QueryParam("documentId")
                                    String documentId,
@@ -615,7 +615,7 @@ public class DocumentFileRest implements ResourceContainer {
       if (ownerId == null && StringUtils.isBlank(documentId)) {
         return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_documentID_is_mandatory").build();
       }
-      if (StringUtils.equals(operation, "rename")) {
+      if (StringUtils.equals(property, "name")) {
         if (StringUtils.isEmpty(newName)) {
           return Response.status(Response.Status.BAD_REQUEST).entity("Document Name should not be empty").build();
         }
@@ -631,7 +631,7 @@ public class DocumentFileRest implements ResourceContainer {
           return Response.status(HTTPStatus.INTERNAL_ERROR).build();
         }
       }
-      if (StringUtils.equals(operation, "description")) {
+      if (StringUtils.equals(property, "description")) {
         if (StringUtils.isEmpty(description)) {
           return Response.status(Response.Status.BAD_REQUEST).entity("Document description should not be empty").build();
         }
@@ -646,7 +646,7 @@ public class DocumentFileRest implements ResourceContainer {
           return Response.status(HTTPStatus.INTERNAL_ERROR).build();
         }
       }
-      if (StringUtils.equals(operation, "visibility")) {
+      if (StringUtils.equals(property, "visibility")) {
         if (hidden == null) {
           return Response.status(Response.Status.BAD_REQUEST).entity("Document hidden value should not be empty").build();
         }

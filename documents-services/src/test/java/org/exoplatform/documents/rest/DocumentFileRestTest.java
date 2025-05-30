@@ -823,16 +823,16 @@ public class DocumentFileRestTest {
     response = documentFileRest.createFolder("11111111", null, 2L, "test");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
-    response = documentFileRest.updateDocument("rename", null, null, "","", null);
+    response = documentFileRest.updateDocument("name", null, null, "","", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("either_ownerId_or_documentID_is_mandatory", response.getEntity());
 
-    response = documentFileRest.updateDocument("rename","11111111", 2L, "", "", null);
+    response = documentFileRest.updateDocument("name","11111111", 2L, "", "", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertEquals("Document Name should not be empty", response.getEntity());
 
     doNothing().when(documentFileStorage).renameDocument(2L, "11111111", "renameTest", userID);
-    Response response1 = documentFileRest.updateDocument("rename","11111111", 2L, "renameTest", "", null);
+    Response response1 = documentFileRest.updateDocument("name","11111111", 2L, "renameTest", "", null);
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
 
     when(documentFileStorage.getFullTreeData(2L, "11111111", userID, true)).thenReturn(children);
@@ -1375,7 +1375,7 @@ public class DocumentFileRestTest {
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).renameDocument(1L, "123", "test", 2L);
-    Response response = documentFileRest1.updateDocument("rename", "123", 1L, "test","", null);
+    Response response = documentFileRest1.updateDocument("name", "123", 1L, "test","", null);
     assertEquals(Response.Status.CONFLICT.getStatusCode(), response.getStatus());
   }
 

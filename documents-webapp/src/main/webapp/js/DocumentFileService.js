@@ -198,7 +198,7 @@ export function renameDocument(ownerId,documentID,newName) {
     formData.append('newName', newName);
   }
   const params = new URLSearchParams(formData).toString();
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/rename?${params}`, {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/name?${params}`, {
     credentials: 'include',
     method: 'PATCH',
   }).then((resp) => {
