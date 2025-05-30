@@ -476,7 +476,7 @@ public class DocumentFileRest implements ResourceContainer {
   @Path("/move")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @Operation(summary = "Move documents", method = "POST", description = "This rename a giving document.")
+  @Operation(summary = "Move documents", method = "POST", description = "This move a giving document.")
   @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Request fulfilled"),
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
@@ -502,7 +502,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                  .type(MediaType.APPLICATION_JSON)
                                                  .build();
     } catch (Exception ex) {
-      LOG.warn("Failed to rename Document", ex);
+      LOG.warn("Failed to move Document", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
     }
   }
@@ -589,7 +589,7 @@ public class DocumentFileRest implements ResourceContainer {
     @PATCH
     @Path("/{property}")
     @RolesAllowed("users")
-    @Operation(summary = "Rename documents", method = "PATCH", description = "This updates document.")
+    @Operation(summary = "Update a document property", method = "PATCH", description = "This updates a document prperty.")
     @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
         @ApiResponse(responseCode = "400", description = "Invalid query input"),
         @ApiResponse(responseCode = "403", description = "Unauthorized operation"),
