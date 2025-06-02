@@ -1,12 +1,12 @@
 <template>
   <v-list 
-    class="py-1"
+    class="py-0"
     dense>
     <v-list-item
       v-for="(extension, i) in menuExtensions"
       :key="i"
       :disabled="isMultiSelection && extension.disabled"
-      class="text-caption my-1 px-2 text-left action-menu-item">
+      class="text-caption px-2 text-left action-menu-item">
       <extension-registry-component
         :component="extension"
         :params="getParams(extension)"

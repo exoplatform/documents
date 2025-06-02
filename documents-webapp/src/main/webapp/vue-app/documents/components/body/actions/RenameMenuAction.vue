@@ -1,18 +1,18 @@
 <template>
   <div>
     <div
-      class="clickable d-flex  mx-2"
+      class="clickable my-10px mx-2"
       @click="editNameMode()">
       <v-icon
         size="16"
         class="pe-1">
         fas fa-pen
       </v-icon>
-      <div class="ps-1 pt-1 text-body menu-text-color">{{ $t('document.label.rename') }}</div>
+      <span class="text-body menu-text-color ps-1">{{ $t('document.label.rename') }}</span>
     </div>
     <v-divider
       v-if="!isMobile"
-      class="mt-2 dividerStyle" />
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>

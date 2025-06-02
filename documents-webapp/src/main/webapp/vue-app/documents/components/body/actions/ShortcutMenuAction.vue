@@ -17,17 +17,17 @@
 <template>
   <div>
     <div
-      class="clickable d-flex  mx-2"
+      class="clickable my-10px mx-2"
       @click="addShortcut()">
       <v-icon
         size="16"
         class="pe-1">
         fas fa-share-square
       </v-icon>
-      <div class="ps-1 pt-1 text-body menu-text-color">{{ $t('documents.label.shortcut') }}</div>
+      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.shortcut') }}</span>
     </div>
     <v-divider
-      class="mt-2 dividerStyle" />
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>

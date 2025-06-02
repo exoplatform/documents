@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable d-flex  mx-2"
+    class="clickable my-10px mx-2"
     @click="openLocation()">
     <v-icon
       size="16"
       class="pe-1">
       fa-external-link-alt
     </v-icon>
-    <div class="ps-1 pt-1 text-body menu-text-color">{{ $t('document.label.go.location') }}</div>
+    <span class="ps-1 text-body menu-text-color">{{ $t('document.label.go.location') }}</span>
   </div>
 </template>
 <script>

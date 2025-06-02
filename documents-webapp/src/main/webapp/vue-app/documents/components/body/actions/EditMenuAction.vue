@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable d-flex  mx-2"
+    class="clickable my-10px mx-2"
     @click="editFile()">
     <v-icon
       size="16"
       class="pe-1">
       fas fa-edit
     </v-icon>
-    <div class="ps-1 pt-1 text-body menu-text-color">{{ $t('document.label.edit') }}</div>
+    <span class="ps-1 text-body menu-text-color">{{ $t('document.label.edit') }}</span>
   </div>
 </template>
 <script>

@@ -1,18 +1,18 @@
 <template>
   <div>
     <div
-      class="clickable d-flex  mx-2"
+      class="clickable my-10px mx-2"
       @click="copyLink()">
       <v-icon
         size="16"
         class="pe-1">
         fas fa-link
       </v-icon>
-      <div class="ps-1 pt-1 text-body menu-text-color">{{ $t('documents.label.copy.link') }}</div>
+      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.copy.link') }}</span>
     </div>
     <v-divider
       v-if="!file.cloudDriveFolder"
-      class="mt-2" />
+      class="mt-1" />
   </div>  
 </template>
 <script>
