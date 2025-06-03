@@ -33,7 +33,7 @@
         :title="rangeDateTimeTitle"
         height="36"
         prepend-inner-icon="fa-calendar-alt fa-lg"
-        class="selected-period-input pt-0 mt-0 mx-8 full-height"
+        class="selected-period-input pt-0 mt-0 mx-2 full-height"
         rel="tooltip"
         :placeholder="$t('documents.advanced.filter.drawer.range.placeholder')"
         readonly
