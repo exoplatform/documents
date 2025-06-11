@@ -17,35 +17,8 @@
 
 import './initComponents.js';
 import './extensions.js';
+import './services.js';
 import '../documents-icons-extension/extensions.js';
-
-import * as documentFileService from '../../js/DocumentFileService.js';
-import * as documentsUtils from '../../js/DocumentsUtils.js';
-import * as documentsWebSocket from './js/WebSocket.js';
-import * as transferRulesService from '../../js/transferRulesService.js';
-
-if (!Vue.prototype.$documentFileService) {
-  window.Object.defineProperty(Vue.prototype, '$documentFileService', {
-    value: documentFileService,
-  });
-}
-
-if (!Vue.prototype.$documentsUtils) {
-  window.Object.defineProperty(Vue.prototype, '$documentsUtils', {
-    value: documentsUtils,
-  });
-}
-
-if (!Vue.prototype.$documentsWebSocket) {
-  window.Object.defineProperty(Vue.prototype, '$documentsWebSocket', {
-    value: documentsWebSocket,
-  });
-}
-if (!Vue.prototype.$transferRulesService) {
-  window.Object.defineProperty(Vue.prototype, '$transferRulesService', {
-    value: transferRulesService,
-  });
-}
 
 // get overrided components if exists
 if (extensionRegistry) {
@@ -65,16 +38,13 @@ if (extensionRegistry) {
   });
 }
 
-Vue.use(Vuetify);
-const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
-
 const appId = 'DocumentsApplication';
 
 //getting language of the PLF
 const lang = eXo && eXo.env.portal.language || 'en';
 
 //should expose the locale ressources as REST API 
-const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.portlet.Documents-${lang}.json`;
+const url = `/documents-portlet/i18n/bundle/locale.portlet.Documents-${lang}.json`;
 
 Vue.prototype.$nextTick(() => {
   Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
@@ -82,12 +52,34 @@ Vue.prototype.$nextTick(() => {
     Vue.prototype.$downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
   });
 });
+
 export function init() {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale ressources are ready
     Vue.createApp({
+      data: {
+        DB_NAME: 'favoriteDocuments',
+        DB_VERSION: '1',
+        DB_OBJECT_STORE: 'handles',
+        DB_KEY: 'favorite',
+        localDatabase: null,
+        handle: null,
+      },
+      computed: {
+        isFavoritesSynchronized() {
+          return !!this.handle;
+        },
+      },
+      created() {
+        this.init();
+      },
+      methods: {
+        async init() {
+          this.handle = await this.$documentOfflineService.getDirectoryHandle();
+        },
+      },
       template: `<documents-main id="${appId}" />`,
-      vuetify,
+      vuetify: Vue.prototype.vuetifyOptions,
       i18n
     }, `#${appId}`, 'Documents');
   });
