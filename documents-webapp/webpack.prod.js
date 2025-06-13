@@ -2,7 +2,7 @@ const path = require('path');
 const ESLintPlugin = require('eslint-webpack-plugin');
 const { VueLoaderPlugin } = require('vue-loader')
 
-const config = {
+module.exports = {
   mode: 'production',
   context: path.resolve(__dirname, '.'),
   module: {
@@ -59,5 +59,3 @@ const config = {
     jquery: '$',
   },
 };
-
-module.exports = config;

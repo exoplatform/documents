@@ -32,10 +32,6 @@ if (extensionRegistry) {
   document.addEventListener('documents-supported-document-types-updated', () => {
     Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
   });
-  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
-  document.addEventListener('documents-documents-icons-extension-updated', () => {
-    Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
-  });
 }
 
 const appId = 'DocumentsApplication';
@@ -44,7 +40,7 @@ const appId = 'DocumentsApplication';
 const lang = eXo && eXo.env.portal.language || 'en';
 
 //should expose the locale ressources as REST API 
-const url = `/documents-portlet/i18n/bundle/locale.portlet.Documents-${lang}.json`;
+const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
 
 Vue.prototype.$nextTick(() => {
   Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {

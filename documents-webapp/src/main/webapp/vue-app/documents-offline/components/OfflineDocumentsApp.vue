@@ -15,14 +15,36 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <div>
-    Offline documents
-  </div>
+  <v-card
+    class="px-4"
+    flat>
+    <div class="text-header my-5">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
+    <template v-if="hasOfflineFiles">
+      <documents-offline-item
+        v-for="file in offlineFiles"
+        :key="file.id"
+        :file="file"
+        class="mb-4 me-4" />
+    </template>
+  </v-card>
 </template>
 <script>
 export default {
   data: () => ({
     offlineFiles: [],
   }),
+  computed: {
+    hasOfflineFiles() {
+      return !!this.offlineFiles?.length;
+    },
+  },
+  created() {
+    this.init();
+  },
+  methods: {
+    async init() {
+      this.offlineFiles = await this.$documentOfflineService.getFiles();
+    },
+  },
 };
 </script>

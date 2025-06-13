@@ -15,7 +15,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import './initComponents.js';
-import './extensions.js';
-import './services.js';
-import '../documents-icons-extension/extensions.js';
+import * as documentOfflineService from '../../js/DocumentOfflineService.js';
+
+if (!Vue.prototype.$documentOfflineService) {
+  window.Object.defineProperty(Vue.prototype, '$documentOfflineService', {
+    value: documentOfflineService,
+  });
+}
