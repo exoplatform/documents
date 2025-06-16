@@ -1623,7 +1623,7 @@ export default {
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
     getFileIcon(file) {
-      const extensions = Vue.prototype.$documentsIconsExtension;
+      const extensions = this.$documentsIconsExtension;
       if (file?.folder) {
         return extensions[0].get('folder');
       } else {
