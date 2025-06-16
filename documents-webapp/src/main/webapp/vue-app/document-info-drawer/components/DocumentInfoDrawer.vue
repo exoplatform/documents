@@ -303,8 +303,8 @@ export default {
       return eXo.env.portal.spaceId || 0;
     },
     icon(){
-      const fileIcon =  Vue.prototype.$documentsIconsExtension[0]?.get(this.file?.mimeType);
-      return fileIcon ? fileIcon : this.file.folder ? Vue.prototype.$documentsIconsExtension[0]?.get('folder') : Vue.prototype.$documentsIconsExtension[0]?.get('file');
+      const fileIcon =  this.$documentsIconsExtension[0]?.get(this.file?.mimeType);
+      return fileIcon ? fileIcon : this.file.folder ? this.$documentsIconsExtension[0]?.get('folder') : this.$documentsIconsExtension[0]?.get('file');
     },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
