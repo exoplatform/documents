@@ -27,6 +27,10 @@ export default {
       type: Boolean,
       default: false
     },
+    hover: {
+      type: Boolean,
+      default: false
+    },
     selectedView: {
       type: String,
       default: null
@@ -55,7 +59,8 @@ export default {
         selectedView: this.selectedView,
         isSearchResult: this.isSearchResult,
         selectedDocuments: this.selectedDocuments,
-        selectAllChecked: this.selectAllChecked
+        selectAllChecked: this.selectAllChecked,
+        hover: this.hover,
       };
     },
   },

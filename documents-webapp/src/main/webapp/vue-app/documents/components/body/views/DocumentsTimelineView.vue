@@ -53,34 +53,37 @@
       <template
         v-if="!isMobile"
         #item="{item}">
-        <tr
-          :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
-          @mouseover="showSelectionInput(item)"
-          @mouseleave="hideSelectionInput(item)"
-          @contextmenu="openContextMenu($event, item)">
-          <td>
-            <documents-selection-cell
-              :file="item"
-              :files="items"
-              :select-all-checked="selectAll"
-              :selected-documents="selectedDocuments"
-              @document-selected="handleDocumentSelection"
-              @document-unselected="handleDocumentSelection" />
-          </td>
-          <td
-            v-for="header in extendedCells"
-            :key="header.value + item.id">
-            <documents-table-cell
-              :extension="header.cellExtension"
-              :file="item"
-              :query="query"
-              :extended-search="extendedSearch"
-              :is-mobile="isMobile"
-              :selected-view="selectedView"
-              :is-search-result="isSearchResult"
-              :selected-documents="selectedDocuments" />
-          </td>
-        </tr>
+        <v-hover v-slot="{ hover }">
+          <tr
+            :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+            @mouseover="showSelectionInput(item)"
+            @mouseleave="hideSelectionInput(item)"
+            @contextmenu="openContextMenu($event, item)">
+            <td>
+              <documents-selection-cell
+                :file="item"
+                :files="items"
+                :select-all-checked="selectAll"
+                :selected-documents="selectedDocuments"
+                @document-selected="handleDocumentSelection"
+                @document-unselected="handleDocumentSelection" />
+            </td>
+            <td
+              v-for="header in extendedCells"
+              :key="header.value + item.id">
+              <documents-table-cell
+                :extension="header.cellExtension"
+                :file="item"
+                :query="query"
+                :extended-search="extendedSearch"
+                :is-mobile="isMobile"
+                :hover="hover"
+                :selected-view="selectedView"
+                :is-search-result="isSearchResult"
+                :selected-documents="selectedDocuments" />
+            </td>
+          </tr>
+        </v-hover>
       </template>
       <template
         v-else

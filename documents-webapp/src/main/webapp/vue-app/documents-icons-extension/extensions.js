@@ -129,3 +129,10 @@ const documentsMapIconsExtensions = new Map([
 ]);
 
 extensionRegistry.registerExtension('documents', 'documents-icons-extension', documentsMapIconsExtensions);
+
+if (!Vue.prototype.$documentsIconsExtension) {
+  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  document.addEventListener('documents-documents-icons-extension-updated', () => {
+    Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  });
+}
