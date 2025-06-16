@@ -1,17 +1,15 @@
 <template>
   <div
     class="align-center"
-    v-show="isFavorite && !file.folder"
+    v-show="display"
     :id="`favorite-cell-file-${fileId}`">
-    <div
-      v-if="!isMobile">
-      <documents-favorite-action
-        :file="file"
-        :is-mobile="isMobile" />
-    </div>
+    <documents-favorite-action
+      :file="file"
+      :is-mobile="isMobile"
+      @added="handleFavoriteDocumentAdded"
+      @removed="handleFavoriteDocumentRemoved" />
   </div>
 </template>
-
 <script>
 export default {
   props: {
@@ -26,8 +24,15 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
-    }
+    },
+    hover: {
+      type: Boolean,
+      default: false
+    },
   },
+  data: () => ({
+    handle: null,
+  }),
   computed: {
     fileId() {
       return this.file && this.file.id;
@@ -37,29 +42,48 @@ export default {
     },
     isFavorite() {
       return this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
-    }
+    },
+    display() {
+      return !this.isMobile && !this.file?.folder && (this.isFavorite || this.hover);
+    },
   },
   created() {
-    this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
-  },
-  mounted() {
-    // show favorite button when hovering over the corresponding row.
-    if (!this.isMobile) {
-      const self = this;
-      $(`#favorite-cell-file-${this.fileId}`).parent().parent().parent().hover(function () {
-        if (!self.isFavorite && !self.file.folder) {
-          $(`#favorite-cell-file-${self.fileId}`).show();
-        }
-      }, function () {
-        if (!self.isFavorite) {
-          $(`#favorite-cell-file-${self.fileId}`).hide();
-        }
-      });
-    }
+    this.init();
   },
   methods: {
-    hitFavoriteButton() {
-      $(`#FavoriteLink_file_${this.fileId}`).click();
+    init() {
+      this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
+    },
+    async handleFavoriteDocumentRemoved() {
+      document.dispatchEvent(new CustomEvent('alert-message', {detail: {
+        alertType: 'success',
+        alertMessage: this.$t('documents.favoriteRemoved'),
+      }}));
+      await this.$documentOfflineService.removeFile(this.file);
+    },
+    async syncFavoriteDocument() {
+      await this.$documentOfflineService.saveFile(this.file);
+    },
+    async handleSyncFavoriteDocument() {
+      await this.syncFavoriteDocument();
+      this.$root.isFavoritesSynchronized = true;
+      this.$root.$emit('alert-message', this.$t('documents.file.synchronizationProcessInitialized'), 'success');
+    },
+    handleFavoriteDocumentAdded() {
+      if (this.$root.isFavoritesSynchronized) {
+        document.dispatchEvent(new CustomEvent('alert-message', {detail: {
+          alertType: 'success',
+          alertMessage: this.$t('documents.favoriteAdded'),
+        }}));
+        this.syncFavoriteDocument();
+      } else {
+        document.dispatchEvent(new CustomEvent('alert-message', {detail: {
+          alertType: 'success',
+          alertMessage: this.$t('documents.favoriteAddedWithSyncChoice'),
+          alertLinkCallback: this.handleSyncFavoriteDocument,
+          alertLinkText: this.$t('documents.file.synchronizeLocally'),
+        }}));
+      }
     },
   },
 };

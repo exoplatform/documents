@@ -276,7 +276,7 @@ export default {
       clearTimeout(this.touchTimer);
     },
     getFileIcon() {
-      const extensions = Vue.prototype.$documentsIconsExtension;
+      const extensions = this.$documentsIconsExtension;
       if (this.file?.folder) {
         this.icon = extensions[0].get('folder');
       } else {
