@@ -62,7 +62,7 @@ public class EntityBuilder {
                                                                 SpaceService spaceService,
                                                                 MetadataService metadataService,
                                                                 PublicDocumentAccessService publicDocumentAccessService,
-                                                                List<AbstractNode> documents,
+                                                                List<? extends AbstractNode> documents,
                                                                 String expand,
                                                                 long authenticatedUserId) {
     return documents.stream()
@@ -508,11 +508,11 @@ public class EntityBuilder {
     } catch (ObjectNotFoundException e) {
       LOG.error("Cannot get folder breadcrumb, node folder not found");
     }
-    return new ArrayList<BreadCrumbItemEntity>();
+    return new ArrayList<>();
   }
 
   public static IdentityEntity toIdentityEntity(IdentityManager identityManager, SpaceService spaceService, long identityId) {
-    Identity identity = identityManager.getIdentity(String.valueOf(identityId));
+    Identity identity = identityManager.getIdentity(identityId);
     if (identity == null) {
       return null;
     }

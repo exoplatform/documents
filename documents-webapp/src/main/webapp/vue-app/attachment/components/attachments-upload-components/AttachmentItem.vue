@@ -311,7 +311,7 @@ export default {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === type).length > 0;
     },
     getFileIcon(attachment) {
-      const extensions = Vue.prototype.$documentsIconsExtension;
+      const extensions = this.$documentsIconsExtension;
       let extension = extensions[0].get(attachment?.mimetype);
       if (!extension) {
         extension = extensions[0].get('file');

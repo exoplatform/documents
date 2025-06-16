@@ -138,7 +138,6 @@ public class DocumentFileRestTest {
                                                       identityManager,
                                                       identityRegistry,
                                                       listenerService,
-                                                      settingService,
                                                       analyticsService,
                                                       imageThumbnailService);
     documentFileRest = new DocumentFileRest(documentFileService,
@@ -181,7 +180,7 @@ public class DocumentFileRestTest {
     filter.setFileTypes("");
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
-    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
     when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     String spacePrettyName = "spacetest";
@@ -294,13 +293,12 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,
-                                                  filter,
-                                                  0,
-                                                  0,
-                                                  Long.valueOf(currentIdentity.getId()),
-                                                  false);
+    List<? extends AbstractNode> files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,
+                                                                               filter,
+                                                                               0,
+                                                                               0,
+                                                                               Long.valueOf(currentIdentity.getId()),
+                                                                               false);
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     nodeEntity.setLinkedFileId("1");
@@ -386,7 +384,7 @@ public class DocumentFileRestTest {
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
 
-    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
     when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(username))).thenReturn(currentIdentity);
 
     String spacePrettyName = "spacetest";
@@ -454,12 +452,12 @@ public class DocumentFileRestTest {
     space.setPrettyName(spacePrettyName);
     org.exoplatform.services.security.Identity spaceID = new org.exoplatform.services.security.Identity(spacePrettyName);
     when(identityRegistry.getIdentity(spacePrettyName)).thenReturn(spaceID);
-    when(spaceService.getSpaceByPrettyName(eq(spacePrettyName))).thenReturn(space);
+    when(spaceService.getSpaceByPrettyName(spacePrettyName)).thenReturn(space);
     when(spaceService.getSpaceByGroupId(groupId)).thenReturn(space);
     when(spaceService.hasAccessPermission(space, username)).thenReturn(true);
 
-    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
-    when(identityManager.getIdentity(String.valueOf(userId))).thenReturn(userIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(userId)).thenReturn(userIdentity);
     when(identityManager.getOrCreateSpaceIdentity(spacePrettyName)).thenReturn(currentIdentity);
 
     DocumentFolderFilter filter = null;
@@ -650,7 +648,7 @@ public class DocumentFileRestTest {
     assertNotNull(foldersNodeEntity.get(0).hashCode());
     assertNotNull(foldersNodeEntity.get(0).toString());
     assertEquals(foldersNodeEntity.get(0).getName(), "folder1");
-    assertEquals(foldersNodeEntity.get(0).getCreatorIdentity(), identity1);
+    assertEquals(identity1, foldersNodeEntity.get(0).getCreatorIdentity());
     assertEquals(foldersNodeEntity.get(0).getDatasource(), "datasource");
     assertEquals(foldersNodeEntity.get(0).getDescription(), "description");
     assertEquals(foldersNodeEntity.get(0).getCreatedDate(), 11111);
@@ -681,7 +679,7 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
     BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "Folder1", "", false, new HashMap<>());
     BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "Folder1", "", false, new HashMap<>());
@@ -740,7 +738,7 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
     FileNode file1 = new FileNode();
     file1.setId("1");
@@ -801,7 +799,7 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
 
@@ -880,7 +878,7 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     FileNode file1 = new FileNode();
@@ -915,7 +913,7 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
@@ -973,7 +971,7 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
@@ -1027,7 +1025,7 @@ public class DocumentFileRestTest {
     currentIdentity.setProfile(currentProfile);
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
     when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(new byte[0]);
@@ -1053,7 +1051,7 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity((String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     FileNode file1 = new FileNode();
@@ -1229,7 +1227,7 @@ public class DocumentFileRestTest {
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
-    when(identityManager.getIdentity(eq(String.valueOf(currentOwnerId)))).thenReturn(currentIdentity);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
     Response response = documentFileRest.updateDocument("visibility", null, null, "","", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
@@ -1662,7 +1660,6 @@ public class DocumentFileRestTest {
     org.exoplatform.services.security.Identity user = new org.exoplatform.services.security.Identity(userName);
     ConversationState.setCurrent(new ConversationState(user));
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentUserIdentity);
-    when(identityManager.getIdentity(userName)).thenReturn(currentUserIdentity);
     when(documentFileService.canImport(user)).thenReturn(true);
 
     Response response = documentFileRest1.getSettings(1L);

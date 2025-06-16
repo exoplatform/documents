@@ -38,9 +38,12 @@
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
         </template>
-        <template v-if="$root.canEdit && $root.hover && !filterDispalyed" #right>
-          <div class="ms-auto">
-            <v-tooltip max-width="300" bottom>
+        <template #right>
+          <div v-if="!filterDispalyed" class="d-flex ms-auto">
+            <v-tooltip
+              v-if="$root.canEdit && $root.hover"
+              max-width="300"
+              bottom>
               <template #activator="{ on, attrs }">
                 <v-btn
                   id="documentSettingsButton"
@@ -56,6 +59,12 @@
                 {{ $t('documents.settings.button.tooltip') }}
               </span>
             </v-tooltip>
+            <documents-offline-button
+              v-if="!spaceId"
+              btn-class="ms-4"
+              no-go-back-button
+              tooltip
+              small />
           </div>
         </template>
       </application-toolbar>
@@ -124,6 +133,7 @@ export default {
     desktopOnlyTabsExtensions: [],
     tabsList: [],
     tab: 'timeline',
+    spaceId: eXo.env.portal.spaceId,
     selectAllChecked: false,
     showFilter: false,
     filterDispalyed: false,
@@ -185,13 +195,20 @@ export default {
   created() {
     this.$root.$on('resetSearch', this.cancelSearch);
     this.$root.$on('filer-query', this.filterQuery);
-    this.$root.$on('show-mobile-filter', data => {
-      this.showFilter= data;
-    });
+    this.$root.$on('show-mobile-filter', this.handleShowFilter);
     document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
   },
+  beforeDestroy() {
+    this.$root.$off('resetSearch', this.cancelSearch);
+    this.$root.$off('filer-query', this.filterQuery);
+    this.$root.$off('show-mobile-filter', this.handleShowFilter);
+    document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
+  },
   methods: {
+    handleShowFilter(data) {
+      this.showFilter = data;
+    },
     filterQuery(query){
       if (this.query === query){
         return;

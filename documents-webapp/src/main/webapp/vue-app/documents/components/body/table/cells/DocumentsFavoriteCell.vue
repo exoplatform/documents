@@ -1,17 +1,14 @@
 <template>
   <div
     class="align-center"
-    v-show="isFavorite && !file.folder"
+    v-show="display"
     :id="`favorite-cell-file-${fileId}`">
-    <div
-      v-if="!isMobile">
-      <documents-favorite-action
-        :file="file"
-        :is-mobile="isMobile" />
-    </div>
+    <documents-favorite-button
+      :file="file"
+      @added="favoriteAdded"
+      @removed="favoriteRemoved" />
   </div>
 </template>
-
 <script>
 export default {
   props: {
@@ -26,40 +23,35 @@ export default {
     isMobile: {
       type: Boolean,
       default: false
-    }
+    },
+    hover: {
+      type: Boolean,
+      default: false
+    },
   },
+  data: () => ({
+    isFavorite: false,
+  }),
   computed: {
     fileId() {
-      return this.file && this.file.id;
+      return this.file?.id;
     },
-    spaceId() {
-      return eXo.env.portal.spaceId || 0;
+    display() {
+      return !this.isMobile && !this.file?.folder && (this.isFavorite || this.hover);
     },
-    isFavorite() {
-      return this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
-    }
   },
   created() {
-    this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
-  },
-  mounted() {
-    // show favorite button when hovering over the corresponding row.
-    if (!this.isMobile) {
-      const self = this;
-      $(`#favorite-cell-file-${this.fileId}`).parent().parent().parent().hover(function () {
-        if (!self.isFavorite && !self.file.folder) {
-          $(`#favorite-cell-file-${self.fileId}`).show();
-        }
-      }, function () {
-        if (!self.isFavorite) {
-          $(`#favorite-cell-file-${self.fileId}`).hide();
-        }
-      });
-    }
+    this.init();
   },
   methods: {
-    hitFavoriteButton() {
-      $(`#FavoriteLink_file_${this.fileId}`).click();
+    init() {
+      this.isFavorite = !!this.file?.metadatas?.favorites?.length;
+    },
+    favoriteAdded() {
+      this.isFavorite = true;
+    },
+    favoriteRemoved() {
+      this.isFavorite = false;
     },
   },
 };
