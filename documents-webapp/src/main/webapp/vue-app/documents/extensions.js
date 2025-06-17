@@ -26,10 +26,27 @@ extensionRegistry.registerExtension('Documents', 'views', {
   labelKey: 'documents.label.timelineView',
   listingType: 'TIMELINE',
   filePropertiesExpand: 'creator,modifier,owner,metadatas',
+  value: 'timeline',
+  viewName: 'timeline',
+  icon: 'fas fa-history',
   componentOptions: {
     vueComponent: Vue.options.components['documents-timeline-view'],
   },
   rank: 20,
+});
+
+extensionRegistry.registerExtension('Documents', 'views', {
+  id: 'folder',
+  labelKey: 'documents.label.folderView',
+  listingType: 'FOLDER',
+  filePropertiesExpand: 'creator,modifier,owner,metadatas',
+  value: 'folder',
+  viewName: 'folder',
+  icon: 'fas fa-folder',
+  componentOptions: {
+    vueComponent: Vue.options.components['documents-folder-view'],
+  },
+  rank: 30,
 });
 
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
@@ -387,37 +404,6 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   componentOptions: {
     vueComponent: Vue.options.components['documents-favorite-cell'],
   },
-});
-
-extensionRegistry.registerExtension('Documents', 'views', {
-  id: 'folder',
-  labelKey: 'documents.label.folderView',
-  listingType: 'FOLDER',
-  filePropertiesExpand: 'creator,modifier,owner,metadatas',
-  componentOptions: {
-    vueComponent: Vue.options.components['documents-folder-view'],
-  },
-  rank: 30,
-});
-
-
-extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
-  id: 'recentView',
-  value: 'timeline',
-  viewName: 'timeline',
-  icon: 'fas fa-history',
-  labelKey: 'documents.label.timelineView',
-  rank: 10,
-});
-
-
-extensionRegistry.registerExtension('DocumentTabs', 'documentsHeaderTab', {
-  id: 'folderView',
-  value: 'folder',
-  viewName: 'folder',
-  icon: 'fas fa-folder',
-  labelKey: 'documents.label.folderView',
-  rank: 20,
 });
 
 extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilterMenu', {
