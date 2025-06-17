@@ -9,7 +9,12 @@
 
   <display-name>documents-portlet</display-name>
   <absolute-ordering />
-
+  <jsp-config>
+    <taglib>
+      <taglib-uri>http://java.sun.com/portlet_2_0</taglib-uri>
+      <taglib-location>/tld/portlet_2_0.tld</taglib-location>
+    </taglib>
+  </jsp-config>
   <listener>
     <listener-class>org.exoplatform.container.web.PortalContainerConfigOwner</listener-class>
   </listener>
