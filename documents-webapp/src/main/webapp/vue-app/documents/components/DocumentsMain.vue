@@ -4,123 +4,126 @@
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
-    <div class="application-body" @mouseover="hideOverlay">
-      <div
-        class="pa-4"
-        @dragover.prevent
-        @drop.prevent
-        @dragstart.prevent>
-        <documents-header
-          :files-size="files.length"
-          :selected-view="selectedView"
-          :can-add="canAdd"
-          :query="query"
-          :primary-filter="primaryFilter"
-          :file-type="fileType"
-          :after-date="afterDate"
-          :before-date="beforeDate"
-          :min-size="minSize"
-          :max-size="maxSize"
-          :is-mobile="isMobile"
-          :selected-documents="selectedDocuments"
-          class="py-2" />
-        <div v-if="searchResult && !loading && initialized">
-          <documents-no-result-body
-            :is-mobile="isMobile"
-            :show-extend-filter="showExtendFilter"
-            :query="query" />
-        </div>
+    <v-hover v-model="$root.hover">
+      <div class="application-body" @mouseover="hideOverlay">
         <div
-          v-else-if="!filesLoad && !loading && selectedView === 'folder' && initialized"
-          @drop="dragFile"
-          @dragover="startDrag">
-          <documents-no-body-folder
-            :query="query"
-            :is-mobile="isMobile" />
-        </div>
-        <div
-          v-else-if="!filesLoad && !loading && initialized"
-          @drop="dragFile"
-          @dragover="startDrag">
-          <documents-no-body
-            :query="query"
+          class="pa-4"
+          @dragover.prevent
+          @drop.prevent
+          @dragstart.prevent>
+          <documents-header
+            :files-size="files.length"
+            :selected-view="selectedView"
             :can-add="canAdd"
-            :is-mobile="isMobile" />
-        </div>
-        <div
-          v-else
-          @drop="dragFile"
-          @dragover="startDrag">
-          <documents-body
-            v-if="optionsLoaded"
-            :view-extension="selectedViewExtension"
-            :files="files"
-            :groups-sizes="groupsSizes"
-            :page-size="pageSize"
-            :offset="offset"
-            :limit="limit"
-            :has-more="hasMore"
-            :sort-field="sortField"
-            :ascending="ascending"
-            :initialized="initialized"
-            :loading="loading"
             :query="query"
-            :extended-search="extendedSearch"
-            :show-extend-filter="showExtendFilter"
             :primary-filter="primaryFilter"
             :file-type="fileType"
             :after-date="afterDate"
             :before-date="beforeDate"
             :min-size="minSize"
             :max-size="maxSize"
-            :selected-view="selectedView"
+            :is-mobile="isMobile"
             :selected-documents="selectedDocuments"
-            :is-mobile="isMobile" />
-          <exo-document-notification-alerts />
+            class="py-2" />
+          <div v-if="searchResult && !loading && initialized">
+            <documents-no-result-body
+              :is-mobile="isMobile"
+              :show-extend-filter="showExtendFilter"
+              :query="query" />
+          </div>
+          <div
+            v-else-if="!filesLoad && !loading && selectedView === 'folder' && initialized"
+            @drop="dragFile"
+            @dragover="startDrag">
+            <documents-no-body-folder
+              :query="query"
+              :is-mobile="isMobile" />
+          </div>
+          <div
+            v-else-if="!filesLoad && !loading && initialized"
+            @drop="dragFile"
+            @dragover="startDrag">
+            <documents-no-body
+              :query="query"
+              :can-add="canAdd"
+              :is-mobile="isMobile" />
+          </div>
+          <div
+            v-else
+            @drop="dragFile"
+            @dragover="startDrag">
+            <documents-body
+              v-if="optionsLoaded"
+              :view-extension="selectedViewExtension"
+              :files="files"
+              :groups-sizes="groupsSizes"
+              :page-size="pageSize"
+              :offset="offset"
+              :limit="limit"
+              :has-more="hasMore"
+              :sort-field="sortField"
+              :ascending="ascending"
+              :initialized="initialized"
+              :loading="loading"
+              :query="query"
+              :extended-search="extendedSearch"
+              :show-extend-filter="showExtendFilter"
+              :primary-filter="primaryFilter"
+              :file-type="fileType"
+              :after-date="afterDate"
+              :before-date="beforeDate"
+              :min-size="minSize"
+              :max-size="maxSize"
+              :selected-view="selectedView"
+              :selected-documents="selectedDocuments"
+              :is-mobile="isMobile" />
+            <exo-document-notification-alerts />
+          </div>
         </div>
+      
+        <documents-visibility-drawer :is-mobile="isMobile" />
+        <document-tree-selector-drawer :is-mobile="isMobile" />
+        <documents-advanced-filter-drawer />
+        <documents-download-drawer />
+        <document-import-from-zip-drawer />
+        <folder-treeview-drawer
+          ref="folderTreeDrawer"
+          :is-mobile="isMobile" />
+        <documents-actions-menu-mobile
+          :is-mobile="isMobile"
+          :current-view="selectedView"
+          :is-search-result="isSearchResult" />
+        <documents-filter-menu-mobile
+          :primary-filter="primaryFilter"
+          :query="query"
+          :extended-search="extendedSearch"
+          :is-mobile="isMobile" />
+        <version-history-drawer
+          :can-manage="canManageVersions"
+          :enable-edit-description="true"
+          :versions="versions"
+          :is-loading="isLoadingVersions"
+          :show-load-more="showLoadMoreVersions"
+          :is-mobile="isMobile" 
+          @drawer-closed="versionsDrawerClosed"
+          @open-version="showVersionPreview"
+          @restore-version="restoreVersion"
+          @version-update-description="updateVersionSummary"
+          @load-more="loadMoreVersions"
+          ref="documentVersionHistory" />
+        <document-action-context-menu />
+        <public-document-options-drawer />
+        <documents-add-new-menu-mobile
+          ref="documentAddItemMenu"
+          :selected-view="selectedView"
+          :is-mobile="isMobile" />
+        <v-file-input
+          id="uploadVersionInput"
+          class="d-none"
+          accept="*/*"
+          @change="handleUploadVersion" />
       </div>
-      <documents-visibility-drawer :is-mobile="isMobile" />
-      <document-tree-selector-drawer :is-mobile="isMobile" />
-      <documents-advanced-filter-drawer />
-      <documents-download-drawer />
-      <document-import-from-zip-drawer />
-      <folder-treeview-drawer
-        ref="folderTreeDrawer"
-        :is-mobile="isMobile" />
-      <documents-actions-menu-mobile
-        :is-mobile="isMobile"
-        :current-view="selectedView"
-        :is-search-result="isSearchResult" />
-      <documents-filter-menu-mobile
-        :primary-filter="primaryFilter"
-        :query="query"
-        :extended-search="extendedSearch"
-        :is-mobile="isMobile" />
-      <version-history-drawer
-        :can-manage="canManageVersions"
-        :enable-edit-description="true"
-        :versions="versions"
-        :is-loading="isLoadingVersions"
-        :show-load-more="showLoadMoreVersions"
-        :is-mobile="isMobile" 
-        @drawer-closed="versionsDrawerClosed"
-        @open-version="showVersionPreview"
-        @restore-version="restoreVersion"
-        @version-update-description="updateVersionSummary"
-        @load-more="loadMoreVersions"
-        ref="documentVersionHistory" />
-      <document-action-context-menu />
-      <public-document-options-drawer />
-      <documents-add-new-menu-mobile
-        ref="documentAddItemMenu"
-        :selected-view="selectedView"
-        :is-mobile="isMobile" />
-      <v-file-input
-        id="uploadVersionInput"
-        class="d-none"
-        accept="*/*"
-        @change="handleUploadVersion" />
-    </div>
+    </v-hover>
   </v-app>
 </template>
 <script>
@@ -443,16 +446,16 @@ export default {
     },
     initSettings() {
       return this.$documentFileService.getUserSettings()
-        .then(settings => {
-          if (settings) {
-            this.settings = settings;
-            if (settings.view && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === settings.view)) {
-              this.selectedView = settings.view;
+        .then(userSettings => {
+          if (userSettings) {
+            this.userSettings = userSettings;
+            if (userSettings.view && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === userSettings.view)) {
+              this.selectedView = userSettings.view;
             } else {
               this.selectedView = 'timeline';
             }
-            this.$documentsWebSocket.initCometd(this.settings.cometdContextName, this.settings.cometdToken, this.handleBulkActionNotif);
-            this.$root.$emit('enable-import', settings.canImport);
+            this.$documentsWebSocket.initCometd(this.userSettings.cometdContextName, this.userSettings.cometdToken, this.handleBulkActionNotif);
+            this.$root.$emit('enable-import', userSettings.canImport);
           }
         })
         .finally(() => {
@@ -1124,9 +1127,16 @@ export default {
         this.ascending = false;
       }
     },
-    refreshViewExtensions() {
-      const extensions = extensionRegistry.loadExtensions(this.extensionApp, this.extensionType);
+    refreshViewExtensions(event) {
+      let extensions = extensionRegistry.loadExtensions(this.extensionApp, this.extensionType);
       let changed = false;
+      if (event?.detail?.forceUpdate) {
+        this.viewExtensions = {};
+      }
+      if (!this.$root.settings.enabledViewList || this.$root.settings.enabledViewList.length > 0)
+      {
+        extensions = extensions.filter(item => this.$root.settings.enabledViewList.includes(item.id));
+      }
       extensions.forEach(extension => {
         if (extension.id && (!this.viewExtensions[extension.id] || this.viewExtensions[extension.id] !== extension)) {
           this.viewExtensions[extension.id] = extension;
@@ -1136,6 +1146,13 @@ export default {
       // force update of attribute to re-render switch new extension id
       if (changed) {
         this.viewExtensions = Object.assign({}, this.viewExtensions);
+        if (this.selectedView && !this.viewExtensions[this.selectedView]) {
+          if (this.viewExtensions[this.userSettings.view]){
+            this.changeView(this.userSettings.view) ;
+          } else {
+            this.changeView(this.$root.settings.defaultView);
+          }
+        }
       }
     },
     watchDocumentPreview() {
