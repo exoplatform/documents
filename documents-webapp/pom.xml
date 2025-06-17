@@ -14,13 +14,22 @@
       <artifactId>social-component-api</artifactId>
       <scope>provided</scope>
     </dependency>
-
     <dependency>
       <groupId>io.meeds.platform-ui</groupId>
       <artifactId>platform-ui-skin</artifactId>
       <classifier>sources</classifier>
       <scope>provided</scope>
     </dependency>
+      <dependency>
+          <groupId>io.meeds.social</groupId>
+          <artifactId>social-component-core</artifactId>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+          <groupId>org.exoplatform.documents</groupId>
+          <artifactId>documents-api</artifactId>
+          <scope>provided</scope>
+      </dependency>
   </dependencies>
   <build>
     <finalName>documents-portlet</finalName>

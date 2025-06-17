@@ -36,6 +36,17 @@
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
         </template>
+        <template v-if="$root.canEdit && $root.hover" #right>
+          <div class="ms-auto">
+            <v-btn
+              id="documentSettingsButton"
+              small
+              icon
+              @click="$root.$emit('open-document-settings')">
+              <v-icon size="20">fa-cog</v-icon>
+            </v-btn>
+          </div>
+        </template>
       </application-toolbar>
     </div>
     <documents-breadcrumb
@@ -43,6 +54,7 @@
       v-show="showBreadcrumb"
       :is-mobile="isMobile"
       class="pt-4 px-1" />
+    <documents-setting-drawer :view-list="viewList" />  
   </div>
 </template>
 
@@ -99,8 +111,8 @@ export default {
     }
   },
   data: () => ({
-    tabsExtensionApp: 'DocumentTabs',
-    tabsExtensionType: 'documentsHeaderTab',
+    tabsExtensionApp: 'Documents',
+    tabsExtensionType: 'views',
     tabsExtensions: {},
     mobileOnlyTabsExtensions: [],
     desktopOnlyTabsExtensions: [],
@@ -112,7 +124,8 @@ export default {
       selected: 'timeline',
       hide: false,
       buttons: []
-    }
+    },
+    viewList: []
   }),
   watch: {
     query() {  
@@ -171,7 +184,7 @@ export default {
     this.$root.$on('show-mobile-filter', data => {
       this.showFilter= data;
     });
-    document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshTabExtensions);
+    document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
   },
   methods: {
@@ -186,9 +199,17 @@ export default {
       this.query = null;
       this.$refs.applicationToolbar.setTerm(null);
     },
-    refreshTabExtensions() {
-      const extensions = extensionRegistry.loadExtensions(this.tabsExtensionApp, this.tabsExtensionType);
-      let changed = false;
+    refreshTabExtensions(event) {
+      let extensions = extensionRegistry.loadExtensions(this.tabsExtensionApp, this.tabsExtensionType);
+      this.viewList = [];
+      let changed =false;
+      if (event?.detail?.forceUpdate) {
+        this.tabsExtensions= {};
+      }
+      extensions.forEach(extension => {
+        this.viewList.push({'id': extension.id, 'name': extension.labelKey, 'enabled': !(this.$root.settings?.enabledViewList?.length !== 0) || this.$root.settings.enabledViewList.includes(extension.id)});
+      });
+      extensions = extensions.filter(item => this.$root.settings.enabledViewList.includes(item.id));
       extensions.forEach(extension => {
         if (extension.id && (!this.tabsExtensions[extension.id] || this.tabsExtensions[extension.id] !== extension)) {
           if ( (!this.isMobile && !this.mobileOnlyTabsExtensions.includes(extension.id))
@@ -221,8 +242,10 @@ export default {
         this.$root.$emit('open-mobile-filter-menu',true);
       } else {
         this.$root.$emit('open-advanced-filter-drawer');
-      }
-      
+      }     
+    },
+    openSettingsDrawer(){
+      this.$root.$emit('open-advanced-filter-drawer');    
     },  
     changeDocumentsFilter(primaryFilter){
       this.$root.$emit('documents-filter', primaryFilter);
