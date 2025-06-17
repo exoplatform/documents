@@ -68,8 +68,6 @@ if (extensionRegistry) {
 Vue.use(Vuetify);
 const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 
-const appId = 'DocumentsApplication';
-
 //getting language of the PLF
 const lang = eXo && eXo.env.portal.language || 'en';
 
@@ -82,10 +80,36 @@ Vue.prototype.$nextTick(() => {
     Vue.prototype.$downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
   });
 });
-export function init() {
+
+export function init(appId, canEdit,  settings, settingsSaveUrl) {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale ressources are ready
     Vue.createApp({
+      data: {
+        DB_NAME: 'favoriteDocuments',
+        DB_VERSION: '1',
+        DB_OBJECT_STORE: 'handles',
+        DB_KEY: 'favorite',
+        localDatabase: null,
+        handle: null,
+        canEdit,
+        settings,
+        settingsSaveUrl,
+        hover: false,
+      },
+      computed: {
+        isFavoritesSynchronized() {
+          return !!this.handle;
+        },
+      },
+      created() {
+        this.init();
+      },
+      methods: {
+        async init() {
+          this.handle = await this.$documentOfflineService.getDirectoryHandle();
+        },
+      },
       template: `<documents-main id="${appId}" />`,
       vuetify,
       i18n
