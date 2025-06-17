@@ -63,6 +63,7 @@ import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
 import DocumentAdvancedFilterDrawer from './components/header/filters/DocumentAdvancedFilterDrawer.vue';
+import DocumentSettingsDrawer from './components/header/setting/DocumentSettingsDrawer.vue';
 import DocumentFilterMenuMobile from './components/header/filters/DocumentFilterMenuMobile.vue';
 import FavoriteFilterActionMobile from './components/header/filters/FavoriteFilterActionMobile.vue';
 import AllFilterActionMobile from './components/header/filters/AllFilterActionMobile.vue';
@@ -109,6 +110,7 @@ const components = {
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-advanced-filter-drawer': DocumentAdvancedFilterDrawer,
+  'documents-setting-drawer': DocumentSettingsDrawer,
   'documents-filter-menu-mobile': DocumentFilterMenuMobile,
   'documents-download-drawer': DocumentDownloadDrawer,
   'documents-select-period': SelectPeriod,
