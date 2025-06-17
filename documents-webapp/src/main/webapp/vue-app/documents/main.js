@@ -34,8 +34,6 @@ if (extensionRegistry) {
   });
 }
 
-const appId = 'DocumentsApplication';
-
 //getting language of the PLF
 const lang = eXo && eXo.env.portal.language || 'en';
 
@@ -49,7 +47,7 @@ Vue.prototype.$nextTick(() => {
   });
 });
 
-export function init() {
+export function init(appId, canEdit,  settings, settingsSaveUrl) {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale ressources are ready
     Vue.createApp({
@@ -60,6 +58,10 @@ export function init() {
         DB_KEY: 'favorite',
         localDatabase: null,
         handle: null,
+        canEdit,
+        settings,
+        settingsSaveUrl,
+        hover: false,
       },
       computed: {
         isFavoritesSynchronized() {
