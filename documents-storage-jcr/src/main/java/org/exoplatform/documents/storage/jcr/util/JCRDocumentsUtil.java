@@ -22,6 +22,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -66,6 +67,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
 
 public class JCRDocumentsUtil {
   private static final Log                              LOG                           =
@@ -341,6 +344,7 @@ public class JCRDocumentsUtil {
         retrieveSymlinkSize(node, fileNode);
       }
       retrieveViewsProperty(node, fileNode);
+      retrieveCategoryIdsProperty(node, fileNode);
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
         retrieveFileContentProperties(content, fileNode);
@@ -363,6 +367,19 @@ public class JCRDocumentsUtil {
       views = node.getProperty(NodeTypeConstants.DOCUMENT_VIEWS_PROPERTY).getLong();
     }
     fileNode.setViews(views);
+  }
+
+  private static void retrieveCategoryIdsProperty(Node node, FileNode fileNode) throws RepositoryException {
+    List<Long> idsList = new ArrayList<>();
+    if (node != null && node.hasProperty(NodeTypeConstants.DOCUMENT_CATEGORY_IDS)) {
+      String categoryIds = node.getProperty(DOCUMENT_CATEGORY_IDS).getString();
+      idsList = Arrays.stream(categoryIds.split(","))
+                      .map(String::trim)
+                      .filter(s -> !s.isEmpty())
+                      .map(Long::parseLong)
+                      .collect(Collectors.toList());
+    }
+    fileNode.setCategoryIds(idsList);
   }
   
   private static void retrieveSymlinkSize(Node node, FileNode fileNode) throws RepositoryException {
