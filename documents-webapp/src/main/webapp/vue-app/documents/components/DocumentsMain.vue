@@ -113,6 +113,7 @@
           ref="documentVersionHistory" />
         <document-action-context-menu />
         <public-document-options-drawer />
+        <category-form-drawer />
         <documents-add-new-menu-mobile
           ref="documentAddItemMenu"
           :selected-view="selectedView"
@@ -216,6 +217,8 @@ export default {
     },
   },
   created() {
+    document.addEventListener('categories-updated', this.refreshDocument);
+
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
 
     window.addEventListener('popstate', e => {this.onBrowserNavChange(e);});
@@ -1651,7 +1654,18 @@ export default {
         return extension;
       }
     },
-
+    refreshDocument(event) {
+      const detail = event.detail;
+      if (detail?.objectType === 'document' && this.files.some(file => file.id === detail?.objectId)) {
+        return this.$documentFileService.getDocumentById(detail?.objectId)
+          .then(file => {
+            const index = this.files.findIndex(f => f.id === file.id);
+            if (index !== -1) {
+              this.files.splice(index, 1, file);
+            }
+          });
+      }
+    }
   },
 };
 </script>

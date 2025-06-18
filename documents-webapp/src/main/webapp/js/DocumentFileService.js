@@ -48,6 +48,19 @@ export function getDocumentItems(itemsFilter, offset, limit, expand) {
 
 }
 
+export function getDocumentById(documentId) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${documentId}`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then((resp) => {
+    if (resp?.ok) {
+      return resp.json();
+    } else {
+      throw new Error('Error when getting document');
+    }
+  });
+}
+
 export function canAddDocument(spaceId) {
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/canAddDocument?spaceId=${spaceId}`, {
     headers: {

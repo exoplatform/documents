@@ -19,6 +19,8 @@ package org.exoplatform.documents.rest.model;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class FileNodeEntity extends AbstractNodeEntity {
@@ -28,6 +30,7 @@ public class FileNodeEntity extends AbstractNodeEntity {
   private String             linkedFileId;
 
   private long               size;
+
   private long               sizeWithVersions;
 
   private long               views;
@@ -35,6 +38,8 @@ public class FileNodeEntity extends AbstractNodeEntity {
   private String             mimeType;
 
   private FileVersionsEntity versions;
+
+  private List<Long>         categoryIds;
 
   public FileNodeEntity() {
     super(false);
