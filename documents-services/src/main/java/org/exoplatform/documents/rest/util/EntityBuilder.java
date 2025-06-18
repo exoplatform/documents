@@ -158,6 +158,7 @@ public class EntityBuilder {
     fileEntity.setSize(file.getSize());
     fileEntity.setSizeWithVersions(file.getSizeWithVersions());
     fileEntity.setViews(file.getViews());
+    fileEntity.setCategoryIds(file.getCategoryIds());
     fileEntity.setHidden(file.isHidden());
     if (expandProperties.contains("versions")) {
       fileEntity.setVersions(toVersionEntities(documentFileService.getFileVersions(file.getId(), RestUtils.getCurrentUser())));

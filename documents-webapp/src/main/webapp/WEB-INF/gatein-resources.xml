@@ -69,6 +69,9 @@
       <depends>
         <module>applicationToolbarComponent</module>
       </depends>
+      <depends>
+        <module>categoryVueComponents</module>
+      </depends>
     </module>
   </portlet>
 
