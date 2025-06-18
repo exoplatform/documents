@@ -145,5 +145,9 @@ public class NodeTypeConstants {
   public static final String DOCUMENT_VIEWS_PROPERTY   = "exo:documentViews";
 
   public static final String DOCUMENT_VIEWERS_PROPERTY = "exo:documentViewers";
+  
+  public static final String MIX_DOCUMENT_CATEGORY     = "mix:documentsCategory";
+  
+  public static final String DOCUMENT_CATEGORY_IDS     = "exo:categoryIds";
 
 }
