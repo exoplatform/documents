@@ -213,6 +213,23 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 });
 
 extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'addCategory',
+  labelKey: 'documents.label.addCategories',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 5,
+  enabled: (file) => {
+    return file && file.acl.canEdit && !file.folder;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['add-category-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   id: 'duplicate',
   labelKey: 'documents.label.duplicate',
   align: 'center',

@@ -530,4 +530,15 @@ public interface DocumentFileService {
    * @param authenticatedUserId userId
    */
   void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId)  throws Exception;
+
+  /**
+   * @param documentId Document identifier
+   * @return {@link List} of linked category identifiers
+   */
+  List<Long> getDocumentCategoryIds(String documentId);
+
+  /**
+   * @return {@link List} of linked category identifiers to documents
+   */
+  List<Long> getDocumentCategoryIds();
 }

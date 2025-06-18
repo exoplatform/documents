@@ -18,6 +18,8 @@ package org.exoplatform.documents.model;
 
 import lombok.*;
 
+import java.util.List;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class FileNode extends AbstractNode {
@@ -27,9 +29,12 @@ public class FileNode extends AbstractNode {
   private String linkedFileId;
 
   private long   size;
+
   private long   sizeWithVersions;
 
   private long   views;
 
   private String mimeType;
+
+  private List<Long> categoryIds;
 }
