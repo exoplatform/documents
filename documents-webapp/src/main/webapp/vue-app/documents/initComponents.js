@@ -49,6 +49,7 @@ import DownloadMenuAction from './components/body/actions/DownloadMenuAction.vue
 import OpenLocationMenuAction from './components/body/actions/OpenLocationMenuAction.vue';
 import OpenReadOnlyMenuAction from './components/body/actions/OpenReadOnlyMenuAction.vue';
 import MoveMenuAction from './components/body/actions/MoveMenuAction.vue';
+import AddCategoryMenuAction from './components/body/actions/AddCategoryMenuAction.vue';
 import DuplicateMenuAction from './components/body/actions/DuplicateMenuAction.vue';
 import VisibilityMenuAction from './components/body/actions/VisibilityMenuAction.vue';
 import FavoriteMenuAction from './components/body/actions/FavoriteMenuAction.vue';
@@ -127,6 +128,7 @@ const components = {
   'open-location-menu-action': OpenLocationMenuAction,
   'open-read-only-menu-action': OpenReadOnlyMenuAction,
   'move-menu-action': MoveMenuAction,
+  'add-category-menu-action': AddCategoryMenuAction,
   'duplicate-menu-action': DuplicateMenuAction,
   'visibility-menu-action': VisibilityMenuAction,
   'copy-link-menu-action': CopyLinkMenuAction,
