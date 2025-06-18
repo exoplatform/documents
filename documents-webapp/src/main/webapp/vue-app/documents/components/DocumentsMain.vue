@@ -454,6 +454,8 @@ export default {
             this.userSettings = userSettings;
             if (userSettings.view && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === userSettings.view)) {
               this.selectedView = userSettings.view;
+            } else if (this.$root.settings?.defaultView  && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === this.$root.settings.defaultView)) {
+              this.selectedView =  this.$root.settings.defaultView;
             } else {
               this.selectedView = 'timeline';
             }
