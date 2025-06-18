@@ -25,7 +25,7 @@
       <column col-span="12">
         <portlet-application>
           <portlet>
-            <application-ref>documents</application-ref>
+            <application-ref>documents-portlet</application-ref>
             <portlet-ref>Documents</portlet-ref>
           </portlet>
           <title>Space Documents</title>
