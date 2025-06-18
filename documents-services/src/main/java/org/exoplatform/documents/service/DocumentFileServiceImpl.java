@@ -25,6 +25,8 @@ import java.util.*;
 
 import javax.jcr.RepositoryException;
 
+import io.meeds.social.category.model.CategoryObject;
+import io.meeds.social.category.service.CategoryLinkService;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -35,9 +37,11 @@ import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.plugins.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.ListenerService;
@@ -59,37 +63,39 @@ import io.meeds.portal.thumbnail.model.FileContent;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
-  private static final Log    LOG     = ExoLogger.getLogger(DocumentFileServiceImpl.class);
+  private static final Log      LOG                          = ExoLogger.getLogger(DocumentFileServiceImpl.class);
 
-  public static String RENAME_FILE_EVENT = "rename_file_event";
+  public static String          RENAME_FILE_EVENT            = "rename_file_event";
 
-  private DocumentFileStorage documentFileStorage;
+  private DocumentFileStorage   documentFileStorage;
 
-  private IdentityManager     identityManager;
+  private IdentityManager       identityManager;
 
-  private SpaceService        spaceService;
+  private SpaceService          spaceService;
 
-  private IdentityRegistry    identityRegistry;
+  private IdentityRegistry      identityRegistry;
 
-  private Authenticator       authenticator;
+  private Authenticator         authenticator;
 
-  private JCRDeleteFileStorage jcrDeleteFileStorage;
+  private JCRDeleteFileStorage  jcrDeleteFileStorage;
 
-  private ListenerService listenerService;
+  private ListenerService       listenerService;
 
-  private SettingService       settingService;
+  private SettingService        settingService;
 
-  private AnalyticsService     analyticsService;
+  private AnalyticsService      analyticsService;
 
   private ImageThumbnailService imageThumbnailService;
 
-  private static final Scope   DOCUMENTS_USER_SETTING_SCOPE = Scope.APPLICATION.id("Documents");
+  private CategoryLinkService   categoryLinkService;
 
-  private static final String  DOCUMENTS_USER_SETTING_KEY   = "DocumentsSettings";
+  private static final Scope    DOCUMENTS_USER_SETTING_SCOPE = Scope.APPLICATION.id("Documents");
 
-  String                       dateFormat                   = "MM-dd-yyyy";
+  private static final String   DOCUMENTS_USER_SETTING_KEY   = "DocumentsSettings";
 
-  SimpleDateFormat             simpleDateFormat             = new SimpleDateFormat(dateFormat);
+  String                        dateFormat                   = "MM-dd-yyyy";
+
+  SimpleDateFormat              simpleDateFormat             = new SimpleDateFormat(dateFormat);
 
   public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage,
                                  JCRDeleteFileStorage jcrDeleteFileStorage,
@@ -740,11 +746,26 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public AbstractNode getDocumentById(String documentId) {
     return documentFileStorage.getDocumentById(documentId);
   }
+
   @Override
-  public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId)   throws Exception {
-      documentFileStorage.setDocumentVisibility(ownerId, documentID, hidden, getAclUserIdentity(authenticatedUserId));
+  public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId) throws Exception {
+    documentFileStorage.setDocumentVisibility(ownerId, documentID, hidden, getAclUserIdentity(authenticatedUserId));
+  }
+  
+  public List<Long> getDocumentCategoryIds(String documentId) {
+    return getCategoryLinkService().getLinkedIds(new CategoryObject(DocumentCategoryPlugin.OBJECT_TYPE,
+            String.valueOf(documentId),
+            0L));
+  }
+  
+  public List<Long> getDocumentCategoryIds() {
+    return getCategoryLinkService().getLinkedIds(DocumentCategoryPlugin.OBJECT_TYPE);
+   }
+
+  private CategoryLinkService getCategoryLinkService() {
+    if (categoryLinkService == null) {
+      categoryLinkService = CommonsUtils.getService(CategoryLinkService.class);
     }
-
-
-
+    return categoryLinkService;
+  }
 }
