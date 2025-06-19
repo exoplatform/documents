@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-export function getDocumentItems(itemsFilter, offset, limit, expand) {
+export function getDocumentItems(itemsFilter, selectedCategoryIds, offset, limit, expand) {
   const formData = new FormData();
   if (itemsFilter) {
     Object.keys(itemsFilter).forEach(key => {
@@ -33,6 +33,9 @@ export function getDocumentItems(itemsFilter, offset, limit, expand) {
   }
   if (limit) {
     formData.append('limit', limit);
+  }
+  if (selectedCategoryIds?.length) {
+    selectedCategoryIds.forEach(c => formData.append('categoryId', c));
   }
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents?${params}`, {

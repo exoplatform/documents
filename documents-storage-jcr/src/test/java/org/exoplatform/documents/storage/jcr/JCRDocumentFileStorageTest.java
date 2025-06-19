@@ -1171,7 +1171,8 @@ public class JCRDocumentFileStorageTest {
   public void tearDown() throws Exception {
     JCR_DOCUMENTS_UTIL.reset();
   }
-  
+
+  @Test
   public void countNodeAccessListTest() throws RepositoryException {
     ExtendedNode extendedNode = mock(ExtendedNode.class);
     org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
