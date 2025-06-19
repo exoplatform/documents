@@ -86,6 +86,7 @@
         <documents-advanced-filter-drawer />
         <documents-download-drawer />
         <document-import-from-zip-drawer />
+        <documents-offline-settings-drawer />
         <folder-treeview-drawer
           ref="folderTreeDrawer"
           :is-mobile="isMobile" />

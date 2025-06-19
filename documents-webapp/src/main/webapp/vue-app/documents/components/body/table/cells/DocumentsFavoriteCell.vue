@@ -31,6 +31,7 @@ export default {
     },
   },
   data: () => ({
+    fileToDownload: false,
     handle: null,
   }),
   computed: {
@@ -48,34 +49,48 @@ export default {
     },
   },
   created() {
+    this.$root.$on('documents-offline-favorite-sync-clear', this.setNoDownload);
+    this.$root.$on('documents-offline-settings-updated', this.downloadFile);
     this.init();
+  },
+  beforeDestroy() {
+    this.$root.$off('documents-offline-favorite-sync-clear', this.setNoDownload);
+    this.$root.$off('documents-offline-settings-updated', this.downloadFile);
   },
   methods: {
     init() {
       this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length;
+    },
+    setNoDownload() {
+      this.fileToDownload = true;
+    },
+    downloadFile() {
+      if (this.fileToDownload) {
+        if (this.$root.isFavoritesSynchronized) {
+          this.handleFavoriteDocumentAdded();
+        } else {
+          window.setTimeout(() => this.handleFavoriteDocumentAdded(), 200);
+        }
+      }
     },
     async handleFavoriteDocumentRemoved() {
       document.dispatchEvent(new CustomEvent('alert-message', {detail: {
         alertType: 'success',
         alertMessage: this.$t('documents.favoriteRemoved'),
       }}));
-      await this.$documentOfflineService.removeFile(this.file);
-    },
-    async syncFavoriteDocument() {
-      await this.$documentOfflineService.saveFile(this.file);
-    },
-    async handleSyncFavoriteDocument() {
-      await this.syncFavoriteDocument();
-      this.$root.init();
-      this.$root.$emit('alert-message', this.$t('documents.file.synchronizationProcessInitialized'), 'success');
-    },
-    handleFavoriteDocumentAdded() {
       if (this.$root.isFavoritesSynchronized) {
+        await this.$documentOfflineService.removeFile(this.file);
+      }
+    },
+    async handleFavoriteDocumentAdded() {
+      if (this.$root.isFavoritesSynchronized || !this.$root.pwaEnabled) {
         document.dispatchEvent(new CustomEvent('alert-message', {detail: {
           alertType: 'success',
           alertMessage: this.$t('documents.favoriteAdded'),
         }}));
-        this.syncFavoriteDocument();
+        if (this.$root.isFavoritesSynchronized) {
+          await this.$documentOfflineService.saveFile(this.file);
+        }
       } else {
         document.dispatchEvent(new CustomEvent('alert-message', {detail: {
           alertType: 'success',
@@ -84,6 +99,12 @@ export default {
           alertLinkText: this.$t('documents.file.synchronizeLocally'),
         }}));
       }
+    },
+    handleSyncFavoriteDocument() {
+      this.$root.$emit('documents-offline-favorite-sync-clear');
+      this.$root.$emit('documents-offline-settings-open');
+      this.$root.$emit('close-alert-message');
+      this.fileToDownload = true;
     },
   },
 };

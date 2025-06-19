@@ -38,7 +38,10 @@ if (extensionRegistry) {
 const lang = eXo && eXo.env.portal.language || 'en';
 
 //should expose the locale ressources as REST API 
-const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
+const urls = [
+  `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`,
+  `/social/i18n/locale.portlet.social.UserSettings?lang=${lang}`
+];
 
 Vue.prototype.$nextTick(() => {
   Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
@@ -49,7 +52,7 @@ Vue.prototype.$nextTick(() => {
 
 export async function init(appId, canEdit,  settings, settingsSaveUrl) {
 
-  const i18n = await exoi18n.loadLanguageAsync(lang, url);
+  const i18n = await exoi18n.loadLanguageAsync(lang, urls);
 
   // init Vue app when locale ressources are ready
   let settingsSubcategoryIds;
@@ -58,10 +61,6 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
   }
   await Vue.createApp({
     data: {
-      DB_NAME: 'favoriteDocuments',
-      DB_VERSION: '1',
-      DB_OBJECT_STORE: 'handles',
-      DB_KEY: 'favorite',
       localDatabase: null,
       handle: null,
       canEdit,
@@ -70,13 +69,14 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       hover: false,
       selectedCategoryId: null,
       settingsSubcategoryIds,
+      pwaEnabled: false,
     },
     computed: {
       categoryIds() {
         return this.settingsSubcategoryIds || this.settings.categoryIds;
       },
       isFavoritesSynchronized() {
-        return !!this.handle;
+        return this.pwaEnabled && !!this.handle;
       },
       allowFilteringPerCategory() {
         return this.settings.allowFilteringPerCategory;
@@ -97,12 +97,19 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       },
     },
     created() {
+      this.$root.$on('documents-offline-settings-updated', this.init);
       this.$root.$on('documents-settings-updated', this.handleSettingsUpdate);
       this.init();
+    },
+    beforeDestroy() {
+      this.$root.$off('documents-offline-settings-updated', this.init);
+      this.$root.$off('documents-settings-updated', this.handleSettingsUpdate);
     },
     methods: {
       async init() {
         this.handle = await this.$documentOfflineService.getDirectoryHandle();
+        const registration = await navigator?.serviceWorker?.getRegistration?.();
+        this.pwaEnabled = !!registration;
       },
       async handleSettingsUpdate() {
         this.settings = JSON.parse(JSON.stringify(this.settings)); // Force update
