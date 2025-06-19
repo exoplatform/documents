@@ -22,8 +22,7 @@
             :min-size="minSize"
             :max-size="maxSize"
             :is-mobile="isMobile"
-            :selected-documents="selectedDocuments"
-            />
+            :selected-documents="selectedDocuments" />
           <div v-if="searchResult && !loading && initialized">
             <documents-no-result-body
               :is-mobile="isMobile"
@@ -204,6 +203,16 @@ export default {
     },
     isSearchResult(){
       return ((this.query && this.query.length > 0) || this.minSize || this.maxSize || this.afterDate || this.beforeDate || this.fileType?.length>0 || this.primaryFilter!=='all') ;
+    },
+    selectedCategoryIds() {
+      return this.$root.selectedCategoryIds?.length ? this.$root.selectedCategoryIds : this.$root.categoryIds;
+    },
+  },
+  watch: {
+    selectedCategoryIds() {
+      if (this.initialized) {
+        this.refreshFiles();
+      }
     },
   },
   created() {
@@ -1065,7 +1074,7 @@ export default {
       this.$root.$emit('loading-documents', true);
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
 
-      return this.$documentFileService.getDocumentItems(filter, this.offset, this.limit + 1, expand)
+      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.offset, this.limit + 1, expand)
         .then(files => {
           this.files = options?.append ? this.files.concat(files) : files ;
           this.files = [...new Map(this.files.map((item) => [item['id'], item])).values()];
@@ -1650,13 +1659,17 @@ export default {
     refreshDocument(event) {
       const detail = event.detail;
       if (detail?.objectType === 'document' && this.files.some(file => file.id === detail?.objectId)) {
-        return this.$documentFileService.getDocumentById(detail?.objectId)
-          .then(file => {
-            const index = this.files.findIndex(f => f.id === file.id);
-            if (index !== -1) {
-              this.files.splice(index, 1, file);
-            }
-          });
+        if (this.selectedCategoryIds.length) {
+          this.refreshFiles();
+        } else {
+          return this.$documentFileService.getDocumentById(detail?.objectId)
+            .then(file => {
+              const index = this.files.findIndex(f => f.id === file.id);
+              if (index !== -1) {
+                this.files.splice(index, 1, file);
+              }
+            });
+        }
       }
     }
   },
