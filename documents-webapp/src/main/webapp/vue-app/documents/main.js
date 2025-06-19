@@ -15,37 +15,15 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import '../documents-offline-common/main.js';
+
 import './initComponents.js';
+import '../documents-favorite-action/initComponents.js';
+
+import './services.js';
+
 import './extensions.js';
 import '../documents-icons-extension/extensions.js';
-
-import * as documentFileService from '../../js/DocumentFileService.js';
-import * as documentsUtils from '../../js/DocumentsUtils.js';
-import * as documentsWebSocket from './js/WebSocket.js';
-import * as transferRulesService from '../../js/transferRulesService.js';
-
-if (!Vue.prototype.$documentFileService) {
-  window.Object.defineProperty(Vue.prototype, '$documentFileService', {
-    value: documentFileService,
-  });
-}
-
-if (!Vue.prototype.$documentsUtils) {
-  window.Object.defineProperty(Vue.prototype, '$documentsUtils', {
-    value: documentsUtils,
-  });
-}
-
-if (!Vue.prototype.$documentsWebSocket) {
-  window.Object.defineProperty(Vue.prototype, '$documentsWebSocket', {
-    value: documentsWebSocket,
-  });
-}
-if (!Vue.prototype.$transferRulesService) {
-  window.Object.defineProperty(Vue.prototype, '$transferRulesService', {
-    value: transferRulesService,
-  });
-}
 
 // get overrided components if exists
 if (extensionRegistry) {
@@ -59,21 +37,17 @@ if (extensionRegistry) {
   document.addEventListener('documents-supported-document-types-updated', () => {
     Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
   });
-  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
-  document.addEventListener('documents-documents-icons-extension-updated', () => {
-    Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
-  });
 }
-
-Vue.use(Vuetify);
-const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 
 //getting language of the PLF
 const lang = eXo && eXo.env.portal.language || 'en';
 
-//should expose the locale ressources as REST API 
-
-const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
+//should expose the locale ressources as REST API
+const urls = [
+  `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`,
+  `/pwa/i18n/locale.portlet.OfflineApplication?lang=${lang}`,
+  `/social/i18n/locale.portlet.social.UserSettings?lang=${lang}`
+];
 
 Vue.prototype.$nextTick(() => {
   Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
@@ -82,19 +56,86 @@ Vue.prototype.$nextTick(() => {
   });
 });
 
-export function init(appId, canEdit,  settings, settingsSaveUrl) {
-  exoi18n.loadLanguageAsync(lang, url).then(i18n => {
-    // init Vue app when locale ressources are ready
-    Vue.createApp({
-      data: {
-        canEdit,
-        settings,
-        settingsSaveUrl,
-        hover: false,
+export async function init(appId, canEdit,  settings, settingsSaveUrl) {
+
+  const i18n = await exoi18n.loadLanguageAsync(lang, urls);
+
+  // init Vue app when locale ressources are ready
+  let settingsSubcategoryIds;
+  if (settings?.categoryIds?.length) {
+    settingsSubcategoryIds = await getSubcategoryIds(settings.categoryIds, 1);
+  }
+  await Vue.createApp({
+    data: {
+      canEdit,
+      settings,
+      settingsSaveUrl,
+      hover: false,
+      selectedCategoryId: null,
+      selectedCategoryIds: null,
+      settingsSubcategoryIds,
+      isFavoritesSynchronized: false,
+      pwaEnabled: false,
+      ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+    },
+    computed: {
+      categoryIds() {
+        return this.settingsSubcategoryIds || this.settings.categoryIds;
       },
-      template: `<documents-main id="${appId}" />`,
-      vuetify,
-      i18n
-    }, `#${appId}`, 'Documents');
-  });
+      allowFilteringPerCategory() {
+        return this.settings.allowFilteringPerCategory;
+      },
+      categoryDepth() {
+        return this.settings.categoryDepth || 4;
+      },
+    },
+    watch: {
+      async selectedCategoryId() {
+        if (this.selectedCategoryId) {
+          this.selectedCategoryIds = await getSubcategoryIds([this.selectedCategoryId], -1);
+        } else {
+          this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
+        }
+      },
+    },
+    created() {
+      this.$root.$on('documents-offline-settings-updated', this.init);
+      this.$root.$on('documents-settings-updated', this.handleSettingsUpdate);
+      this.init();
+    },
+    beforeDestroy() {
+      this.$root.$off('documents-offline-settings-updated', this.init);
+      this.$root.$off('documents-settings-updated', this.handleSettingsUpdate);
+    },
+    methods: {
+      async init() {
+        const registration = await navigator?.serviceWorker?.getRegistration?.();
+        this.pwaEnabled = !!registration;
+        this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isOfflineDocumentsEnabled());
+      },
+      async handleSettingsUpdate() {
+        this.settings = JSON.parse(JSON.stringify(this.settings)); // Force update
+        this.settingsSubcategoryIds = await getSubcategoryIds(this.settings.categoryIds, 1);
+        this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
+      },
+    },
+    template: `<documents-main id="${appId}" />`,
+    vuetify: Vue.prototype.vuetifyOptions,
+    i18n
+  }, `#${appId}`, 'Documents');
+
+}
+
+async function getSubcategoryIds(categoryIds, depth) {
+  if (!categoryIds?.length) {
+    return [];
+  }
+  const subcategoyIds = await Promise.all(categoryIds.map(id => Vue.prototype.$categoryService.getSubcategoryIds(id, {
+    offset: 0,
+    limit: -1,
+    depth,
+  })));
+  const subcategoyIdsFlat = subcategoyIds.flatMap(s => s);
+  subcategoyIdsFlat.push(...categoryIds);
+  return [...new Set(subcategoyIdsFlat)];
 }
