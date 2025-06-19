@@ -15,8 +15,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import '../documents-offline-common/main.js';
+import OfflineDocumentsSettings from './components/OfflineDocumentsSettings.vue';
 
-import './initComponents.js';
-import './extensions.js';
-import '../documents-icons-extension/extensions.js';
+const components = {
+  'documents-offline-settings': OfflineDocumentsSettings,
+};
+
+for (const key in components) {
+  Vue.component(key, components[key]);
+}
