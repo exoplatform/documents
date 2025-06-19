@@ -244,6 +244,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            null,
                                                            null,
+                                                           null,
                                                            null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
@@ -266,6 +267,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            null,
                                                            null,
+                                                           null,
                                                            null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response2.getStatus());
 
@@ -285,6 +287,7 @@ public class DocumentFileRestTest {
                                                            0,
                                                            false,
                                                            "",
+                                                           null,
                                                            null,
                                                            null,
                                                            null,
@@ -343,6 +346,7 @@ public class DocumentFileRestTest {
                                                            0,
                                                            false,
                                                            "",
+                                                           null,
                                                            null,
                                                            null,
                                                            null,
@@ -591,6 +595,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            null,
                                                            null,
+                                                           null,
                                                            null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
@@ -613,6 +618,7 @@ public class DocumentFileRestTest {
                                                            null,
                                                            null,
                                                            null,
+                                                           null,
                                                            null);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
@@ -632,6 +638,7 @@ public class DocumentFileRestTest {
                                                            0,
                                                            false,
                                                            "",
+                                                           null,
                                                            null,
                                                            null,
                                                            null,
