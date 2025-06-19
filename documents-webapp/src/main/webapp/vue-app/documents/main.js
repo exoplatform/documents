@@ -47,38 +47,86 @@ Vue.prototype.$nextTick(() => {
   });
 });
 
-export function init(appId, canEdit,  settings, settingsSaveUrl) {
-  exoi18n.loadLanguageAsync(lang, url).then(i18n => {
-    // init Vue app when locale ressources are ready
-    Vue.createApp({
-      data: {
-        DB_NAME: 'favoriteDocuments',
-        DB_VERSION: '1',
-        DB_OBJECT_STORE: 'handles',
-        DB_KEY: 'favorite',
-        localDatabase: null,
-        handle: null,
-        canEdit,
-        settings,
-        settingsSaveUrl,
-        hover: false,
+export async function init(appId, canEdit,  settings, settingsSaveUrl) {
+
+  const i18n = await exoi18n.loadLanguageAsync(lang, url);
+
+  // init Vue app when locale ressources are ready
+  let settingsSubcategoryIds;
+  if (settings?.categoryIds?.length) {
+    settingsSubcategoryIds = await getSubcategoryIds(settings.categoryIds, 1);
+  }
+  await Vue.createApp({
+    data: {
+      DB_NAME: 'favoriteDocuments',
+      DB_VERSION: '1',
+      DB_OBJECT_STORE: 'handles',
+      DB_KEY: 'favorite',
+      localDatabase: null,
+      handle: null,
+      canEdit,
+      settings,
+      settingsSaveUrl,
+      hover: false,
+      selectedCategoryId: null,
+      settingsSubcategoryIds,
+    },
+    computed: {
+      categoryIds() {
+        return this.settingsSubcategoryIds || this.settings.categoryIds;
       },
-      computed: {
-        isFavoritesSynchronized() {
-          return !!this.handle;
-        },
+      isFavoritesSynchronized() {
+        return !!this.handle;
       },
-      created() {
-        this.init();
+      allowFilteringPerCategory() {
+        return this.settings.allowFilteringPerCategory;
       },
-      methods: {
-        async init() {
-          this.handle = await this.$documentOfflineService.getDirectoryHandle();
-        },
+      categoryDepth() {
+        return this.settings.categoryDepth || 4;
       },
-      template: `<documents-main id="${appId}" />`,
-      vuetify: Vue.prototype.vuetifyOptions,
-      i18n
-    }, `#${appId}`, 'Documents');
-  });
+    },
+    watch: {
+      async selectedCategoryId() {
+        if (this.selectedCategoryId) {
+          this.selectedCategoryIds = await getSubcategoryIds([this.selectedCategoryId], -1);
+        } else if (this.filterType === 'category') {
+          this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
+        } else {
+          this.selectedCategoryIds = [];
+        }
+      },
+    },
+    created() {
+      this.$root.$on('documents-settings-updated', this.handleSettingsUpdate);
+      this.init();
+    },
+    methods: {
+      async init() {
+        this.handle = await this.$documentOfflineService.getDirectoryHandle();
+      },
+      async handleSettingsUpdate() {
+        this.settings = JSON.parse(JSON.stringify(this.settings)); // Force update
+        this.settingsSubcategoryIds = await getSubcategoryIds(this.settings.categoryIds, 1);
+        this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
+      },
+    },
+    template: `<documents-main id="${appId}" />`,
+    vuetify: Vue.prototype.vuetifyOptions,
+    i18n
+  }, `#${appId}`, 'Documents');
+
+}
+
+async function getSubcategoryIds(categoryIds, depth) {
+  if (!categoryIds?.length) {
+    return [];
+  }
+  const subcategoyIds = await Promise.all(categoryIds.map(id => Vue.prototype.$categoryService.getSubcategoryIds(id, {
+    offset: 0,
+    limit: -1,
+    depth,
+  })));
+  const subcategoyIdsFlat = subcategoyIds.flatMap(s => s);
+  subcategoyIdsFlat.push(...categoryIds);
+  return [...new Set(subcategoyIdsFlat)];
 }

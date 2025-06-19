@@ -28,6 +28,9 @@
           {
           "enabledViewList":[],
           "defaultView":"timeline",
+          "allowFilteringPerCategory":true,
+          "categoryDepth":4,
+          "categoryIds": [],
           }
         </value>
       </preference>
