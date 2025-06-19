@@ -55,4 +55,6 @@ public abstract class DocumentNodeFilter {
 
   private Long              maxSize;
 
+  private List<Long>        categoryIds;
+
 }
