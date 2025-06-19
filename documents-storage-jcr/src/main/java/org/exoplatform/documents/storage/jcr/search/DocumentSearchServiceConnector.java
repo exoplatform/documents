@@ -238,9 +238,12 @@ public class DocumentSearchServiceConnector {
 
     List<String> types = filter.getMimeTypes();
     if (CollectionUtils.isEmpty(types) && StringUtils.isNotEmpty(filter.getFileTypes())) {
+      types = new ArrayList<>();
       for (String type : filter.getFileTypes().split(",")) {
         try {
-          types.add((String) this.getClass().getDeclaredField(type.toUpperCase()).get(0));
+          String fileType = this.getClass().getDeclaredField(type.toUpperCase()).get(0).toString();
+          fileType = fileType.replaceAll("^\"|\"$", "").toString();
+          types.add(fileType);
         } catch (Exception e) {
           LOG.warn("Cannot get list of mimeTypes related to type {}", type, e);
         }
