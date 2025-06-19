@@ -17,6 +17,9 @@
 <template>
   <v-hover v-slot="{ hover }">
     <v-card
+      v-on="!href && {
+        click: openFile,
+      }"
       :id="id"
       :elevation="hover ? 4 : 0"
       :class="{
@@ -24,29 +27,37 @@
         'border-color': !hover,
       }"
       :loading="loading"
-      :title="file.name"
+      :href="href"
       max-height="210px"
       max-width="100%"
       height="160px"
       width="180px"
-      class="overflow-hidden d-flex flex-column content-box-sizing"
-      @click="openFile">
+      class="overflow-hidden d-flex flex-column content-box-sizing">
       <div class="d-flex flex-grow-0 flex-shrink-0 align-center justify-center">
         <v-icon
           :color="fileIconColor"
           class="mt-5"
           size="80">
-          {{ fileIconClass }}
+          {{ fileIcon }}
         </v-icon>
       </div>
-      <v-card
-        class="d-flex flex-grow-1 flex-shrink-1 flex-column no-border-radius align-center justify-center"
-        height="36"
-        flat>
-        <div class="font-weight-bold text-truncate-2">
-          {{ file.name }}
-        </div>
-      </v-card>
+      <v-tooltip bottom>
+        <template #activator="{on, attrs}">
+          <v-card
+            v-on="on"
+            v-bind="attrs"
+            class="d-flex flex-grow-1 flex-shrink-1 flex-column no-border-radius align-center justify-center"
+            height="36"
+            flat>
+            <div
+              class="d-flex justify-center font-weight-bold text-truncate-2 full-width border-box-sizing px-5">
+              <div class="text-truncate">{{ fileName }}</div>
+              <div>{{ fileExtension }}</div>
+            </div>
+          </v-card>
+        </template>
+        <span>{{ file.name }}</span>
+      </v-tooltip>
     </v-card>
   </v-hover>
 </template>
@@ -56,25 +67,59 @@ export default {
     file: {
       type: Object,
       default: null,
-    }
+    },
+    localFolderPath: {
+      type: Object,
+      default: null,
+    },
+    officeLink: {
+      type: Boolean,
+      default: false,
+    },
   },
+  data: () => ({
+    fileProtocol: 'file:///',
+  }),
   computed: {
-    icon() {
+    extension() {
       return this.$documentsIconsExtension?.[0]?.get?.(this.file?.mimeType);
     },
-    fileIconClass() {
-      return this.icon?.class || 'fas fa-file';
+    canPreview() {
+      return this.extension?.canPreview;
+    },
+    fileIcon() {
+      return this.extension?.class || 'fas fa-file';
     },
     fileIconColor() {
-      return this.icon?.color || 'secondary';
+      return this.extension?.color || 'secondary';
+    },
+    fileNameParts() {
+      return this.file?.name?.split?.('.') || [];
+    },
+    fileName() {
+      return this.fileNameParts.length > 1 ? this.fileNameParts.slice(0, this.fileNameParts.length - 1).join('.') : this.file?.name;
+    },
+    fileExtension() {
+      return this.fileNameParts.length > 1 ? `.${this.fileNameParts.slice(this.fileNameParts.length - 1)}` : '';
     },
     isMobile() {
       return this.$vuetify.breakpoint.smAndDown;
     },
+    href() {
+      if (this.officeLink && this.extension?.protocol) {
+        return `${this.extension?.protocol}${this.fileProtocol}${this.localFolderPath}/${this.file.id}-${this.file.name}`;
+      } else {
+        return null;
+      }
+    },
   },
   methods: {
     openFile() {
-      // TODO Open File System
+      if (this.canPreview) {
+        this.$emit('preview', this.file, this.extension);
+      } else {
+        this.$emit('download', this.file, this.extension);
+      }
     },
   },
 };

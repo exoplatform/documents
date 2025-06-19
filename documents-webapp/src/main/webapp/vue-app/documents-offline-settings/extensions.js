@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import '../documents-offline-common/main.js';
-
-import './initComponents.js';
-import './extensions.js';
-import '../documents-icons-extension/extensions.js';
+extensionRegistry.registerComponent('PwaUserSettings', 'pwa-user-settings', {
+  id: 'documents-offline-settings',
+  vueComponent: Vue.options.components['documents-offline-settings'],
+  rank: 20,
+});
