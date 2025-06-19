@@ -43,12 +43,68 @@
             :disabled="!view.enabled" />
         </v-radio-group>
         <div class="d-flex align-center text-start">
-                  <div>{{ $t('documents.settings.collapsedTreeView') }}</div>
-                  <v-spacer />
-                  <v-switch
-                    v-model="settings.collapsedTreeView"
-                    class="ma-0 width-fit-content" />
-                </div>
+          <div>{{ $t('documents.settings.collapsedTreeView') }}</div>
+          <v-spacer />
+          <v-switch
+            v-model="settings.collapsedTreeView"
+            class="ma-0 width-fit-content" />
+        </div>
+        <div class="mt-4 mb-2 text-header">{{ $t('documents.settings.filterOptions') }}</div>
+        <div class="d-flex full-width align-center text-start">
+          <div>{{ $t('documents.settings.filterOptions.title') }}</div>
+          <v-spacer />
+          <v-switch
+            v-model="settings.allowFilteringPerCategory"
+            class="ma-0 pt-2 width-fit-content" />
+        </div>
+        <div v-if="settings.allowFilteringPerCategory" class="d-flex full-width align-center text-start">
+          <div>{{ $t('documents.settings.setMaximumSubcategoryDepth') }}</div>
+          <v-spacer />
+          <number-input
+            v-model="settings.categoryDepth"
+            :step="1"
+            :min="0"
+            :max="50" />
+        </div>
+        <div class="mt-4 mb-2 text-header">{{ $t('documents.settings.filterList') }}</div>
+        <div class="d-flex align-center text-start">
+          <div>{{ $t('documents.settings.filterListPerCategory') }}</div>
+          <v-spacer />
+          <v-switch
+            v-model="filterPerCategories"
+            class="ma-0 width-fit-content" />
+        </div>
+        <div v-if="filterPerCategories" class="mt-4">
+          <category-suggester
+            v-model="categoryId"
+            class="mt-n2 mb-4 mx-0 pa-0"
+            label=""
+            access-permission />
+          <v-list class="pa-0" dense>
+            <v-list-item
+              v-for="(c, index) in selectedCategories"
+              :key="c.id"
+              class="pa-0"
+              dense>
+              <v-list-item-icon class="me-2 my-auto">
+                <v-icon size="24">{{ c.icon }}</v-icon>
+              </v-list-item-icon>
+              <v-list-item-content class="me-2 pa-0 text-truncate">
+                <v-list-item-title class="text-truncate">
+                  {{ c.name }}
+                </v-list-item-title>
+              </v-list-item-content>
+              <v-list-item-action class="mx-0 my-auto">
+                <v-btn
+                  :title="$t('documents.settings.deleteCategory')"
+                  icon
+                  @click="removeItem(index, settings.categoryIds)">
+                  <v-icon size="18" color="error">fa-trash</v-icon>
+                </v-btn>
+              </v-list-item-action>
+            </v-list-item>
+          </v-list>
+        </div>
       </div>
     </template>
     <template #footer>
@@ -60,7 +116,7 @@
           {{ $t('documents.button.cancel') }}
         </v-btn>
         <v-btn
-          :disabled="disabled"
+          :disabled="!modified"
           :loading="saving"
           class="btn btn-primary"
           elevation="0"
@@ -83,8 +139,42 @@ export default {
     drawer: false,
     saving: false,
     settings: {},
+    originalSettings: {},
+    categoryId: null,
+    selectedCategories: [],
+    filterPerCategories: false,
   }),
-
+  computed: {
+    modified() {
+      return JSON.stringify(this.settings) !== JSON.stringify(this.originalSettings);
+    },
+    categoryIds() {
+      return this.settings.categoryIds;
+    },
+  },
+  watch: {
+    async categoryId() {
+      if (this.categoryId) {
+        if (this.settings.categoryIds.indexOf(this.categoryId) < 0) {
+          this.settings.categoryIds.push(this.categoryId);
+        }
+        await this.$nextTick();
+        this.categoryId = null;
+      }
+    },
+    async categoryIds() {
+      if (!this.categoryIds?.length) {
+        this.selectedCategories = [];
+      } else {
+        this.selectedCategories = await Promise.all(this.categoryIds.map(id => this.$categoryService.getCategory(id)));
+      }
+    },
+    filterPerCategories() {
+      if (this.drawer && !this.filterPerCategories) {
+        this.settings.categoryIds = [];
+      }
+    },
+  },
   created() {
     this.$root.$on('open-document-settings', this.open);
   },
@@ -94,6 +184,11 @@ export default {
   methods: {
     open() {
       this.settings = Object.assign({}, this.$root.settings);
+      this.originalSettings = JSON.parse(JSON.stringify(this.$root.settings));
+      this.filterPerCategories = !!this.categoryIds?.length;
+      if (!this.settings.enabledViewList || this.settings.enabledViewList.length === 0) {
+        this.settings.enabledViewList = this.viewList.map(item => item.id);
+      }
       this.settings.defaultView = this.$root.settings.defaultView || this.settings.enabledViewList[0]?.id;
       this.settings.collapsedTreeView = this.$root.settings.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true;
       this.$refs.drawer.open();
@@ -135,7 +230,11 @@ export default {
       } finally {
         this.saving = false;
       }
-    }
+    },
+    removeItem(index, array) {
+      array.splice(index, 1);
+      this.settings = JSON.parse(JSON.stringify(this.settings));
+    },
   },
 };
 </script>

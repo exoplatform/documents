@@ -29,6 +29,9 @@
           "enabledViewList":[],
           "defaultView":"timeline",
           "collapsedTreeView":true,
+          "allowFilteringPerCategory":true,
+          "categoryDepth":4,
+          "categoryIds": [],
           }
         </value>
       </preference>
