@@ -72,6 +72,7 @@ import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
 
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -276,7 +277,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           && filter.getMaxSize() == null && filter.getMinSize() == null) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
-        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection, showHiddenFiles);
+        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection, filter.getCategoryIds(), showHiddenFiles);
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         ((QueryImpl)jcrQuery).setOffset(offset);
         ((QueryImpl)jcrQuery).setLimit(limit);
@@ -1245,15 +1246,45 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private String getTimeLineQueryStatement(String rootPath, String sortField, String sortDirection, boolean includeHiddenFiles) {
+  private String getTimeLineQueryStatement(String rootPath,
+                                           String sortField,
+                                           String sortDirection,
+                                           List<Long> categoryIds,
+                                           boolean includeHiddenFiles) {
     String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable'";
+
+    StringBuilder categoryFilter = new StringBuilder();
+    if (CollectionUtils.isNotEmpty(categoryIds)) {
+      categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (");
+      for (int i = 0; i < categoryIds.size(); i++) {
+        if (i > 0) {
+          categoryFilter.append(" OR ");
+        }
+        String id = String.valueOf(categoryIds.get(i));
+        categoryFilter.append("exo:categoryIds = '")
+                      .append(id)
+                      .append("'")
+                      .append(" OR exo:categoryIds LIKE '")
+                      .append(id)
+                      .append(",%'")
+                      .append(" OR exo:categoryIds LIKE '%,")
+                      .append(id)
+                      .append(",%'")
+                      .append(" OR exo:categoryIds LIKE '%,")
+                      .append(id)
+                      .append("'");
+      }
+      categoryFilter.append(")");
+    }
+
     return new StringBuilder().append("SELECT * FROM ")
                               .append("nt:base")
                               .append(" WHERE jcr:path LIKE '")
                               .append(rootPath)
                               .append("/%' ")
-            .append(" AND ( jcr:primaryType='exo:symlink' OR jcr:primaryType='nt:file')")
-            .append(hiddenableQuery)
+                              .append(" AND ( jcr:primaryType='exo:symlink' OR jcr:primaryType='nt:file')")
+                              .append(hiddenableQuery)
+                              .append(categoryFilter)
                               .append(" ORDER BY ")
                               .append(sortField)
                               .append(" ")
