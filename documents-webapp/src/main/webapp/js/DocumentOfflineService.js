@@ -19,7 +19,9 @@ export const DB_NAME = 'favoriteDocuments';
 export const DB_VERSION = '1';
 export const DB_OBJECT_STORE = 'handles';
 export const DB_FILES_OBJECT_STORE = 'files';
-export const DB_KEY = 'favorite';
+export const DB_DIRECTORY_KEY = 'favorite';
+export const DB_LINK_TYPE_KEY = 'linkType';
+export const DB_LOCAL_FOLDER_KEY = 'localFolderPath';
 
 /* File Item Operations */
 export async function saveFile(file) {
@@ -72,7 +74,10 @@ export async function getFiles() {
     transaction.objectStore(DB_FILES_OBJECT_STORE).openCursor().onsuccess = e => {
       const cursor = e.target.result;
       if (cursor) {
-        files.push(cursor.value);
+        const file = cursor.value;
+        file.handle?.getFile?.()
+          ?.then?.(() => files.push(file))
+          ?.catch?.(() => removeFileFromDB(file.id));
         cursor.continue();
       }
     };
@@ -118,6 +123,15 @@ async function addFileToDB(file, fileHandle) {
 }
 
 /* Directory Handle Operations */
+export async function isDirectoryHandleExists() {
+  if (await isDatabaseExists()) {
+    let handle = await getDirectoryHandle();
+    return !!handle;
+  } else {
+    return false;
+  }
+}
+
 export async function openDirectoryHandle() {
   let handle = await getDirectoryHandle();
   if (!handle) {
@@ -142,7 +156,7 @@ export async function removeDirectoryHandle() {
       directoryHandle = null;
       resolve();
     };
-    transaction.objectStore(DB_OBJECT_STORE).delete(DB_KEY);
+    transaction.objectStore(DB_OBJECT_STORE).delete(DB_DIRECTORY_KEY);
   });
 }
 
@@ -154,7 +168,7 @@ export async function setDirectoryHandle(handle) {
       directoryHandle = handle;
       resolve();
     };
-    transaction.objectStore(DB_OBJECT_STORE).put(handle, DB_KEY);
+    transaction.objectStore(DB_OBJECT_STORE).put(handle, DB_DIRECTORY_KEY);
   });
 }
 
@@ -163,7 +177,7 @@ export async function getDirectoryHandle() {
     const database = await getDatabase();
     directoryHandle = await new Promise(resolve => {
       const transaction = database.transaction([DB_OBJECT_STORE], 'readonly');
-      const request = transaction.objectStore(DB_OBJECT_STORE).get(DB_KEY);
+      const request = transaction.objectStore(DB_OBJECT_STORE).get(DB_DIRECTORY_KEY);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => resolve(null);
     });
@@ -180,8 +194,65 @@ export async function getDirectoryHandle() {
   return directoryHandle;
 }
 
+let linkType;
+export async function setLinkType(l) {
+  const database = await getDatabase();
+  return new Promise(resolve => {
+    const transaction = database.transaction([DB_OBJECT_STORE], 'readwrite');
+    transaction.oncomplete = () => {
+      linkType = l;
+      resolve();
+    };
+    transaction.objectStore(DB_OBJECT_STORE).put(l, DB_LINK_TYPE_KEY);
+  });
+}
+
+export async function getLinkType() {
+  if (!linkType) {
+    const database = await getDatabase();
+    linkType = await new Promise(resolve => {
+      const transaction = database.transaction([DB_OBJECT_STORE], 'readonly');
+      const request = transaction.objectStore(DB_OBJECT_STORE).get(DB_LINK_TYPE_KEY);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+  }
+  return linkType;
+}
+
+let localFolderPath;
+export async function setLocalFolderPath(p) {
+  const database = await getDatabase();
+  return new Promise(resolve => {
+    const transaction = database.transaction([DB_OBJECT_STORE], 'readwrite');
+    transaction.oncomplete = () => {
+      localFolderPath = p;
+      resolve();
+    };
+    transaction.objectStore(DB_OBJECT_STORE).put(p, DB_LOCAL_FOLDER_KEY);
+  });
+}
+
+export async function getLocalFolderPath() {
+  if (!localFolderPath) {
+    const database = await getDatabase();
+    localFolderPath = await new Promise(resolve => {
+      const transaction = database.transaction([DB_OBJECT_STORE], 'readonly');
+      const request = transaction.objectStore(DB_OBJECT_STORE).get(DB_LOCAL_FOLDER_KEY);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
+  }
+  return localFolderPath;
+}
+
 /* Database Operations */
 let localDatabase;
+async function isDatabaseExists() {
+  const dbs = await window.indexedDB.databases()
+  return !!dbs?.find?.(db => db.name === DB_NAME);
+}
+
 async function getDatabase() {
   if (!localDatabase) {
     localDatabase = await new Promise((resolve, reject) => {

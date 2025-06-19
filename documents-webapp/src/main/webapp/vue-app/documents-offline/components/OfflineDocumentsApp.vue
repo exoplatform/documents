@@ -24,18 +24,30 @@
         v-for="file in offlineFiles"
         :key="file.id"
         :file="file"
-        class="mb-4 me-4" />
+        :local-folder-path="localFolderPath"
+        :office-link="isLink"
+        class="mb-4 me-4"
+        @download="download"
+        @preview="openPreview" />
     </div>
+    <documents-offline-preview-dialog
+      ref="preview"
+      @download="download" />
   </v-card>
 </template>
 <script>
 export default {
   data: () => ({
+    linkType: null,
+    localFolderPath: null,
     offlineFiles: [],
   }),
   computed: {
     hasOfflineFiles() {
       return !!this.offlineFiles?.length;
+    },
+    isLink() {
+      return this.linkType === 'LINK';
     },
   },
   created() {
@@ -44,6 +56,22 @@ export default {
   methods: {
     async init() {
       this.offlineFiles = await this.$documentOfflineService.getFiles();
+      this.linkType = await this.$documentOfflineService.getLinkType();
+      if (this.isLink) {
+        this.localFolderPath = await this.$documentOfflineService.getLocalFolderPath();
+      }
+    },
+    async download(file) {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: `${file.id}-${file.name}`,
+        id: 'FavoriteDocuments',
+      });
+      const writable = await fileHandle.createWritable();
+      await writable.write(await file.handle.getFile());
+      await writable.close();
+    },
+    openPreview(file, extension) {
+      this.$refs.preview.open(file, extension);
     },
   },
 };
