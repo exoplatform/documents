@@ -728,7 +728,7 @@ public class JCRDocumentFileStorageTest {
     when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
     when(identityManager.getIdentity(String.valueOf(ownerId))).thenReturn(ownerIdentity);
 
-    List<FullTreeItem> fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, true);
+    List<FullTreeItem> fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, null, identity, true);
     assertTrue("When node is null, return empty list", fullTreeItemList.isEmpty());
 
     Node folderNode = mock(NodeImpl.class);
@@ -742,7 +742,7 @@ public class JCRDocumentFileStorageTest {
     when(getNodeByIdentifier(session, folderId)).thenReturn(folderNode);
 
     // return list with just the parent folder when the node has no child nodes
-    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, true);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, null, identity, true);
     assertEquals(1, fullTreeItemList.size());
 
     // when current folder is hidden
@@ -760,7 +760,7 @@ public class JCRDocumentFileStorageTest {
 
 
     // return list with just the parent folder when it contains just a hidden folder
-    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, true);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, null, identity, true);
     assertEquals(1, fullTreeItemList.size());
 
     Node folderNTFolder = mock(NodeImpl.class);
@@ -798,12 +798,12 @@ public class JCRDocumentFileStorageTest {
     when(nodeIterator.nextNode()).thenReturn(folderNTFolder, folderNTUnstructured, symlinkFolder);
     when(folderNode.getNodes()).thenReturn(nodeIterator);
 
-    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, true);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, null, identity, true);
     assertEquals(1, fullTreeItemList.size());
     assertEquals(3, fullTreeItemList.get(0).getChildren().size());
 
     // withChildren is false, it should return list with just the parent folder children, sub folders should not have children
-    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, false);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, null, identity, false);
     assertEquals(1, fullTreeItemList.size());
     assertEquals(0, fullTreeItemList.get(0).getChildren().size());
 
@@ -834,7 +834,7 @@ public class JCRDocumentFileStorageTest {
     when(nodeIterator.nextNode()).thenReturn(folder1, folder10, folder2);
     when(folderNode.getNodes()).thenReturn(nodeIterator);
 
-    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, true);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, null, identity, true);
     assertEquals(1, fullTreeItemList.size());
     assertEquals(3, fullTreeItemList.get(0).getChildren().size());
     //assert that the folder1 on the first position
@@ -854,7 +854,7 @@ public class JCRDocumentFileStorageTest {
     when(userHome.getNodes()).thenReturn(nodeIterator);
     when(getIdentityRootNode(spaceService, nodeHierarchyCreator, userName, ownerIdentity, sessionProvider)).thenReturn(userHome);
 
-    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, null, identity, true);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, null, "", identity, true);
 
     assertEquals(1, fullTreeItemList.size());
     assertEquals(2, fullTreeItemList.get(0).getChildren().size());
@@ -868,7 +868,7 @@ public class JCRDocumentFileStorageTest {
     when(folderNode.getNodes()).thenReturn(nodeIterator);
 
 
-    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, identity, true);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, folderId, null, identity, true);
     assertEquals(1, fullTreeItemList.size());
     assertTrue(fullTreeItemList.get(0).getChildren().isEmpty());
 

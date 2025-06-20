@@ -107,6 +107,10 @@ export default {
       type: String,
       default: null
     },
+    folderPath: {
+      type: String,
+      default: null
+    },
     selectedDocuments: {
       type: Array,
       default: () => []
@@ -135,6 +139,7 @@ export default {
         minSize: this.minSize,
         maxSize: this.maxSize,
         primaryFilter: this.primaryFilter,
+        folderPath: this.folderPath,
       };
     },
     showExtend(){

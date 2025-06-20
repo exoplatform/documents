@@ -28,6 +28,7 @@
           {
           "enabledViewList":[],
           "defaultView":"timeline",
+          "collapsedTreeView":true,
           }
         </value>
       </preference>

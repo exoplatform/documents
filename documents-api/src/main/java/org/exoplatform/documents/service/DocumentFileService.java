@@ -184,17 +184,18 @@ public interface DocumentFileService {
   List<BreadCrumbItem> getBreadcrumb(long ownerId,String folderId, String folderPath, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
-   * Retrieves breadcrumb of the given node.
+   * Retrieves tree of the given node.
    *
    * @param folderId Id of the given folder
    * @param authenticatedUserId of the user acessing files
-   * @return {@link List} of {@link FullTreeItem}
+   * @param destinationFolderPath destination folder to add to the tree
    * @param withChildren get all children
+   * @return {@link List} of {@link FullTreeItem}
    * @throws IllegalAccessException when the user isn't allowed to access
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
-  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, long authenticatedUserId, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException;
+  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, long authenticatedUserId, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
    * Duplicate the given node.
@@ -382,14 +383,6 @@ public interface DocumentFileService {
    */
   void moveDocuments(int actionId, long ownerId, List<AbstractNode>documents, String destPath, long userIdentityId) throws IllegalAccessException;
 
-  /**
-   * Get Stored default View for the current user
-   *
-   * @param ownerId Id of the owner Identity
-   * @param userIdentityId user identity id
-   * @return the stored view
-   */
-  String getDefaultView(Long ownerId, String userIdentityId);
 
   /**
    * Check if the current user can import documents from zip
@@ -416,14 +409,6 @@ public interface DocumentFileService {
    */
   DocumentsSize addDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
 
-  /**
-   * Set default View for the current user
-   *
-   * @param ownerId Id of the owner Identity
-   * @param userIdentityId user identity id
-   * @param view the view to store
-   */
-  void setDefaultView(Long ownerId, String userIdentityId, String view);
 
   /**
    * Checks if user has edit permission on document
