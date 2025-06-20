@@ -1,7 +1,11 @@
 <template>
   <div class="d-flex">
-    <folder-tree-view :tree-view-collapsed="treeViewCollapsed" :folder-path="folderPath" />
-    <v-card
+    <folder-tree-view
+      v-if="!isMobile"
+      :tree-view-collapsed="treeViewCollapsed"
+      :is-mobile="isMobile"
+      :folder-path="folderPath" />
+    <v-card 
       flat
       class="width-full">
       <documents-breadcrumb
