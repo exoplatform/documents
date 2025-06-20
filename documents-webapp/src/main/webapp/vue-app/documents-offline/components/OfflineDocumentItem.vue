@@ -79,6 +79,7 @@ export default {
   },
   data: () => ({
     fileProtocol: 'file:///',
+    href: null,
   }),
   computed: {
     extension() {
@@ -105,15 +106,25 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.smAndDown;
     },
-    href() {
-      if (this.officeLink && this.extension?.protocol) {
-        return `${this.extension?.protocol}${this.fileProtocol}${this.localFolderPath}/${this.file.name}`;
-      } else {
-        return null;
-      }
+  },
+  watch: {
+    officeLink() {
+      this.initHref();
+    },
+    extension() {
+      this.initHref();
     },
   },
+  created() {
+    this.initHref();
+  },
   methods: {
+    async initHref() {
+      if (this.officeLink && this.extension?.protocol) {
+        const fileLocalPath = await this.$documentOfflineService.getLocalFilePath(this.file);
+        this.href = `${this.extension?.protocol}${this.fileProtocol}${this.localFolderPath}/${fileLocalPath}`;
+      }
+    },
     openFile() {
       if (this.canPreview) {
         this.$emit('preview', this.file, this.extension);

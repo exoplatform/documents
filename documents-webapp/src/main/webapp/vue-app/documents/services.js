@@ -18,7 +18,7 @@
 import * as documentFileService from '../../js/DocumentFileService.js';
 import * as documentsUtils from '../../js/DocumentsUtils.js';
 import * as documentsWebSocket from './js/WebSocket.js';
-import * as documentOfflineService from '../../js/DocumentOfflineService.js';
+import * as documentOfflineService from '../documents-offline-common/js/DocumentOfflineService.js';
 import * as transferRulesService from '../../js/transferRulesService.js';
 
 if (!Vue.prototype.$documentFileService) {

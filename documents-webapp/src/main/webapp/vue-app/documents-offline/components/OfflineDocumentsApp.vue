@@ -63,7 +63,7 @@ export default {
     },
     async download(file) {
       const fileHandle = await window.showSaveFilePicker({
-        suggestedName: `${file.id}-${file.name}`,
+        suggestedName: file.name,
         id: 'FavoriteDocuments',
       });
       const writable = await fileHandle.createWritable();
