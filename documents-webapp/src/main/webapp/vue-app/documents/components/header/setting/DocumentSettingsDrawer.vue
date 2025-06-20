@@ -54,7 +54,7 @@
             :label="$t(`${getLabel(view.id)}`)"
             :value="view.id"
             :disabled="!view.enabled" />
-        </v-radio-group>        
+        </v-radio-group>
       </div>
     </template>
     <template #footer>
@@ -104,6 +104,7 @@ export default {
         this.settings.enabledViewList = this.viewList.map(item => item.id);
       }
       this.settings.defaultView = this.$root.settings.defaultView || this.settings.enabledViewList[0]?.id;
+      this.settings.collapsedTreeView = this.$root.settings.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true;
       this.$refs.drawer.open();
     },
     close() {

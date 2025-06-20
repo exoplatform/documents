@@ -16,26 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr;
 
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.USER_PUBLIC_ROOT_NODE;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanName;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanNameWithAccents;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getFolderLink;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getMimeType;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNewIndexedName;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getOwnerIdentityFromNodePath;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getSortDirection;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getSortField;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getUserSessionProvider;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.increaseNameIndex;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toDownloadItem;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFileNode;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFileNodes;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toFolderNode;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.toNodes;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.File;
@@ -46,27 +27,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import javax.jcr.AccessDeniedException;
-import javax.jcr.ItemExistsException;
-import javax.jcr.ItemNotFoundException;
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
-import javax.jcr.ValueFormatException;
+import javax.jcr.*;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
@@ -81,22 +45,7 @@ import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
-import org.exoplatform.documents.model.AbstractNode;
-import org.exoplatform.documents.model.ActionData;
-import org.exoplatform.documents.model.ActionStatus;
-import org.exoplatform.documents.model.ActionType;
-import org.exoplatform.documents.model.BreadCrumbItem;
-import org.exoplatform.documents.model.DocumentFolderFilter;
-import org.exoplatform.documents.model.DocumentGroupsSize;
-import org.exoplatform.documents.model.DocumentTimelineFilter;
-import org.exoplatform.documents.model.DownloadItem;
-import org.exoplatform.documents.model.FileNode;
-import org.exoplatform.documents.model.FileVersion;
-import org.exoplatform.documents.model.FullTreeItem;
-import org.exoplatform.documents.model.NodePermission;
-import org.exoplatform.documents.model.PermissionEntry;
-import org.exoplatform.documents.model.PermissionRole;
-import org.exoplatform.documents.model.SymlinkNavigation;
+import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -695,6 +644,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public List<FullTreeItem> getFullTreeData(long ownerId,
                                             String folderId,
+                                            String destinationFolderPath,
                                             Identity aclIdentity,
                                             boolean withChildren) {
     String username = aclIdentity.getUserId();
@@ -702,6 +652,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     List<FullTreeItem> parents = new ArrayList<>();
     try {
       Node node = null;
+      Node destinationNode = null;
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
@@ -709,12 +660,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
         node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
         folderId = ((NodeImpl) node).getIdentifier();
+        if (StringUtils.isNotEmpty(destinationFolderPath)) {
+          if (destinationFolderPath.contains(node.getName()) && !destinationFolderPath.endsWith(node.getName())) {
+            destinationFolderPath = destinationFolderPath.split(node.getName())[1];
+          }
+          if (node.hasNode(destinationFolderPath)){
+            destinationNode = node.getNode(destinationFolderPath);
+          }
+        }
       } else {
         node = getNodeByIdentifier(session, folderId);
       }
       if (node != null) {
         String nodeName = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        List<FullTreeItem> children = getAllFolderInNode(node, session, withChildren);
+        List<FullTreeItem> children = getAllFolderInNode(node, session, destinationNode, withChildren);
 
         parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children));
       }
@@ -728,7 +687,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
-  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, boolean withChildren) throws RepositoryException {
+  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, Node destinationNode, boolean withChildren) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
     while (nodeIter.hasNext()) {
@@ -750,8 +709,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
         if (childNode != null) {
           List<FullTreeItem> folderChildListNodes = new ArrayList<>();
-          if (withChildren) {
-            folderChildListNodes = getAllFolderInNode(childNode, session, withChildren);
+          if (withChildren || (destinationNode != null && destinationNode.getPath().contains(childNode.getPath()))) {
+            folderChildListNodes = getAllFolderInNode(childNode, session, destinationNode, withChildren);
           } else if (!childNode.hasNodes()) {
             folderChildListNodes = null;
           }

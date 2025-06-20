@@ -77,18 +77,6 @@ export function getUserSettings() {
     }
   });   
 }
-export function setUserDefaultView(view) {
-  const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/settings/${ownerId}/${view}`, {
-    method: 'POST'
-  }).then(resp => {
-    if (!resp || !resp.ok) {
-      throw new Error('Response code indicates a server error', resp);
-    } else {
-      return resp.ok;
-    }
-  });  
-}
 
 export function getBreadCrumbs(folderId,ownerId,folderPath) {
   const formData = new FormData();
@@ -116,13 +104,16 @@ export function getBreadCrumbs(folderId,ownerId,folderPath) {
 
 }
 
-export function getFullTreeData(ownerId, folderId) {
+export function getFullTreeData(ownerId, folderId, destinationFolderPath) {
   const formData = new FormData();
   if (folderId) {
     formData.append('folderId', folderId);
   }
   if (ownerId) {
     formData.append('ownerId', ownerId);
+  }
+  if (destinationFolderPath) {
+    formData.append('destinationFolderPath', destinationFolderPath);
   }
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/fullTree?${params}`, {
