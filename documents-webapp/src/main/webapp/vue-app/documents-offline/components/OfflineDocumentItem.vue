@@ -107,7 +107,7 @@ export default {
     },
     href() {
       if (this.officeLink && this.extension?.protocol) {
-        return `${this.extension?.protocol}${this.fileProtocol}${this.localFolderPath}/${this.file.id}-${this.file.name}`;
+        return `${this.extension?.protocol}${this.fileProtocol}${this.localFolderPath}/${this.file.name}`;
       } else {
         return null;
       }
