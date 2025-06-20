@@ -17,6 +17,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import './initComponents.js';
+import '../documents-favorite-action/initComponents.js';
 import * as attachmentService from '../../js/attachmentService.js';
 import * as documentFileService from '../../js/DocumentFileService.js';
 import * as documentsUtils from '../../js/DocumentsUtils.js';
@@ -58,14 +59,31 @@ export function init(event) {
     parent.id = appId;
     document.querySelector('#vuetify-apps').appendChild(parent);
     exoi18n.loadLanguageAsync(lang, url).then(i18n => {
-    // init Vue app when locale ressources are ready
       Vue.createApp({
-        template: `<document-info-drawer id="${appId}"/>`,
-        vuetify,
-        i18n,
+        data: {
+          pwaEnabled: false,
+          isFavoritesSynchronized: false,
+        },
+        created() {
+          this.$root.$on('documents-offline-settings-updated', this.init);
+          this.init();
+        },
         mounted() {
           document.dispatchEvent(new CustomEvent('open-info-drawer', event));
         },
+        beforeDestroy() {
+          this.$root.$off('documents-offline-settings-updated', this.init);
+        },
+        methods: {
+          async init() {
+            const registration = await navigator?.serviceWorker?.getRegistration?.();
+            this.pwaEnabled = !!registration;
+            this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDirectoryHandleExists());
+          },
+        },
+        template: `<document-info-drawer id="${appId}"/>`,
+        vuetify,
+        i18n,
       }, `#${appId}`, 'Documents Info drawer application');
 
     });

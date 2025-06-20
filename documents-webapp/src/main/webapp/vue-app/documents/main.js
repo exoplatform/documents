@@ -16,8 +16,11 @@
  */
 
 import './initComponents.js';
-import './extensions.js';
+import '../documents-favorite-action/initComponents.js';
+
 import './services.js';
+
+import './extensions.js';
 import '../documents-icons-extension/extensions.js';
 
 // get overrided components if exists
@@ -61,22 +64,18 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
   }
   await Vue.createApp({
     data: {
-      localDatabase: null,
-      handle: null,
       canEdit,
       settings,
       settingsSaveUrl,
       hover: false,
       selectedCategoryId: null,
       settingsSubcategoryIds,
+      isFavoritesSynchronized: false,
       pwaEnabled: false,
     },
     computed: {
       categoryIds() {
         return this.settingsSubcategoryIds || this.settings.categoryIds;
-      },
-      isFavoritesSynchronized() {
-        return this.pwaEnabled && !!this.handle;
       },
       allowFilteringPerCategory() {
         return this.settings.allowFilteringPerCategory;
@@ -107,9 +106,9 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
     },
     methods: {
       async init() {
-        this.handle = await this.$documentOfflineService.getDirectoryHandle();
         const registration = await navigator?.serviceWorker?.getRegistration?.();
         this.pwaEnabled = !!registration;
+        this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDirectoryHandleExists());
       },
       async handleSettingsUpdate() {
         this.settings = JSON.parse(JSON.stringify(this.settings)); // Force update
