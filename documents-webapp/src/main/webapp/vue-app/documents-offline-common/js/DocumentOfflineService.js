@@ -28,26 +28,26 @@ export const DB_LOCAL_VALUES = {};
 
 /* Link Type */
 
-export async function getLinkType() {
+export function getLinkType() {
   return getValue(DB_LINK_TYPE_KEY);
 }
 
-export async function setLinkType(link) {
-  setValue(DB_LINK_TYPE_KEY, link);
+export function setLinkType(link) {
+  return setValue(DB_LINK_TYPE_KEY, link);
 }
 
 /* Local Folder Path */
 
-export async function getLocalFolderPath() {
+export function getLocalFolderPath() {
   return getValue(DB_LOCAL_FOLDER_KEY);
 }
 
-export async function setLocalFolderPath(path) {
-  setValue(DB_LOCAL_FOLDER_KEY, path);
+export function setLocalFolderPath(path) {
+  return setValue(DB_LOCAL_FOLDER_KEY, path);
 }
 
-export async function removeLocalFolderPath() {
-  removeValue(DB_LOCAL_FOLDER_KEY);
+export function removeLocalFolderPath() {
+  return removeValue(DB_LOCAL_FOLDER_KEY);
 }
 
 /* Directory Handle Operations */
@@ -67,12 +67,12 @@ export async function openDirectoryHandle() {
   return handle;
 }
 
-export async function removeDirectoryHandle() {
-  removeValue(DB_DIRECTORY_KEY);
+export function removeDirectoryHandle() {
+  return removeValue(DB_DIRECTORY_KEY);
 }
 
-export async function setDirectoryHandle(handle) {
-  setValue(DB_DIRECTORY_KEY, handle);
+export function setDirectoryHandle(handle) {
+  return setValue(DB_DIRECTORY_KEY, handle);
 }
 
 export async function getDirectoryHandle() {
@@ -83,7 +83,7 @@ export async function getDirectoryHandle() {
     });
     if (response !== 'granted') {
       await removeDirectoryHandle();
-      directoryHandle = null;
+      await setValue(DB_DIRECTORY_KEY, null);
     }
   }
   return directoryHandle;
@@ -100,8 +100,6 @@ export async function isDirectoryHandleExists() {
 /* File Item Operations */
 
 export async function saveFile(file) {
-  const handle = await openDirectoryHandle();
-
   const fileAttachment = await Vue.prototype.$attachmentService.getAttachmentById(file.id);
   if (fileAttachment?.downloadUrl?.length) {
     const downloadUrl = fileAttachment.downloadUrl.replaceAll('%', '%25').replaceAll('[', '%5b').replaceAll(']', '%5d').replaceAll('+', '%2B');
@@ -141,6 +139,7 @@ export async function removeFile(file) {
       }
     }
   } catch (e) {
+    // eslint-disable-next-line no-console
     console.debug(`File '${file.name}' not synchronized locally`, e);
   }
 }
@@ -174,6 +173,26 @@ export async function getFiles() {
   });
 }
 
+export async function getLocalFilePath(file) {
+  if (file.path?.startsWith?.('/Groups/spaces') && file.path?.includes?.('/Documents/')) {
+    const path = file.path.substring(file.path.indexOf('/Documents/'), file.path.length);
+    const spacePrettyName = file.path.substring(0, file.path.indexOf('/Documents/')).split('/').pop();
+
+    const paths = path.split('/').filter(p => !!p?.length);
+    paths.splice(paths.length - 1, 1);
+    const rootPath = await getSpaceFolderName(spacePrettyName);
+    return [rootPath, ...paths].join('/');
+  } else if (file.path?.startsWith?.('/Users') && file.path?.includes?.('/Private/')) {
+    const path = file.path.substring(file.path.indexOf('/Private/') + '/Private/'.length, file.path.length);
+    const username = file.path.substring(0, file.path.indexOf('/Private/')).split('/').pop();
+
+    const paths = path.split('/').filter(p => !!p?.length);
+    const rootPath = await getUserFolderName(username);
+    return [rootPath, ...paths].join('/');
+  }
+  return file.name;
+}
+
 /* Utils */
 
 export async function getValue(paramName) {
@@ -191,7 +210,7 @@ export async function getValue(paramName) {
 
 export async function setValue(paramName, paramValue) {
   const database = await getDatabase();
-  return new Promise(resolve => {
+  await new Promise(resolve => {
     const transaction = database.transaction([DB_OBJECT_STORE], 'readwrite');
     transaction.oncomplete = () => {
       DB_LOCAL_VALUES[paramName] = paramValue;
@@ -245,42 +264,38 @@ async function addFileToDB(file, fileHandle) {
 }
 
 async function createFileHandle(file) {
-  let parentDirectoryHandle = await getParentDirectoryHandle(file)
+  const parentDirectoryHandle = await getParentDirectoryHandle(file);
   return parentDirectoryHandle.getFileHandle(file.name, {
     create: true
   });
 }
 
 async function getParentDirectoryHandle(file) {
-  let parentDirectoryHandle = await getDirectoryHandle()
+  let parentDirectoryHandle = await getDirectoryHandle();
   if (!parentDirectoryHandle) {
     return null;
   }
   if (file.path?.startsWith?.('/Groups/spaces') && file.path?.includes?.('/Documents/')) {
+    const spacePrettyName = file.path.substring(0, file.path.indexOf('/Documents/')).split('/').pop();
+    const spaceLocalFolderName = await getSpaceFolderName(spacePrettyName);
     const path = file.path.substring(file.path.indexOf('/Documents/'), file.path.length);
-    parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, [await getSpaceFolderName()]);
-
     const paths = path.split('/').filter(p => !!p?.length);
     paths.splice(paths.length - 1, 1);
-    if (paths.length) {
-      parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, paths);
-    }
+    parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, [spaceLocalFolderName, ...paths]);
   } else if (file.path?.startsWith?.('/Users') && file.path?.includes?.('/Private/')) {
     const path = file.path.substring(file.path.indexOf('/Private/') + '/Private/'.length, file.path.length);
-    parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, [await getUserFolderName()]);
-
+    const username = file.path.substring(0, file.path.indexOf('/Private/')).split('/').pop();
+    const userLocalFolderName = await getUserFolderName(username);
     const paths = path.split('/').filter(p => !!p?.length);
     paths.splice(paths.length - 1, 1);
-    if (paths.length) {
-      parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, paths);
-    }
+    parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, [userLocalFolderName, ...paths]);
   }
   return parentDirectoryHandle;
 }
 
 async function createFolderHandle(handle, paths) {
   if (paths.length) {
-    const folderPath = paths.pop();
+    const folderPath = paths.shift();
     if (folderPath?.length) {
       handle = await handle.getDirectoryHandle(folderPath, {
         create: true
@@ -291,18 +306,18 @@ async function createFolderHandle(handle, paths) {
   return handle;
 }
 
-async function getUserFolderName() {
-  const key = `${DB_USER_LOCAL_FOLDER_KEY}-${eXo.env.portal.userIdentityId}`;
+async function getUserFolderName(username) {
+  const key = `${DB_USER_LOCAL_FOLDER_KEY}-${username}`;
   const folderName = await getValue(key);
   if (folderName) {
     return folderName;
   } else {
-    return await setValue(key, Vue.prototype?.$currentUserIdentity?.profile?.fullname || eXo.env.portal.userName);
+    return await setValue(key, Vue.prototype?.$currentUserIdentity?.profile?.fullname || username);
   }
 }
 
-async function getSpaceFolderName() {
-  const key = `${DB_USER_LOCAL_FOLDER_KEY}-${eXo.env.portal.spaceId}`;
+async function getSpaceFolderName(spacePrettyName) {
+  const key = `${DB_USER_LOCAL_FOLDER_KEY}-${spacePrettyName}`;
   const folderName = await getValue(key);
   if (folderName) {
     return folderName;
@@ -314,7 +329,7 @@ async function getSpaceFolderName() {
 /* Database Operations */
 let localDatabase;
 async function isDatabaseExists() {
-  const dbs = await window.indexedDB.databases()
+  const dbs = await window.indexedDB.databases();
   return !!dbs?.find?.(db => db.name === DB_NAME);
 }
 
