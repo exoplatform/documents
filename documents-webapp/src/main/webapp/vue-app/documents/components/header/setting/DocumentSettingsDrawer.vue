@@ -55,6 +55,13 @@
             :value="view.id"
             :disabled="!view.enabled" />
         </v-radio-group>
+        <div class="d-flex align-center text-start">
+          <div>{{ $t('documents.settings.collapsedTreeView') }}</div>
+          <v-spacer />
+          <v-switch
+            v-model="settings.collapsedTreeView"
+            class="ma-0 width-fit-content" />
+        </div>
         <div class="mt-4 mb-2 text-header">{{ $t('documents.settings.filterOptions') }}</div>
         <div class="d-flex full-width align-center text-start">
           <div>{{ $t('documents.settings.filterOptions.title') }}</div>
@@ -196,6 +203,7 @@ export default {
         this.settings.enabledViewList = this.viewList.map(item => item.id);
       }
       this.settings.defaultView = this.$root.settings.defaultView || this.settings.enabledViewList[0]?.id;
+      this.settings.collapsedTreeView = this.$root.settings.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true;
       this.$refs.drawer.open();
     },
     close() {
