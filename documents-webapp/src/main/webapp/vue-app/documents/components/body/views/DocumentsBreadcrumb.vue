@@ -1,22 +1,30 @@
 <template>
   <div v-if="documentsBreadcrumbToDisplay.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-btn
-        icon
-        small
-        class="me-2"
-        :disabled="disabledIconTree"
-        @click="openTreeFolderDrawer()">
-        <v-icon class="text-sub-title" size="16">
-          fas fa-sitemap
-        </v-icon>
-      </v-btn>
+      <v-tooltip v-if="!treeViewCollapsed" bottom>
+        <template #activator="{ on, attrs }">
+          <v-btn
+            icon
+            v-bind="attrs"
+            v-on="on"
+            @click.stop.prevent="$root.$emit('tree-view-expand', true)">
+            <img
+              src="/social/images/sidebar.svg"
+              class="icon-default-color pb-1"
+              height="20px"
+              width="20px">
+          </v-btn>
+        </template>
+        <span class="caption">
+          {{ $t('documents.tooltip.open.tree') }}
+        </span>
+      </v-tooltip>
       <div
         id="breadcrumb-list-items"
         data-isfolder="true"
         :data-fileId="documentsBreadcrumbToDisplay[0].id"
         :data-canEdit="canEditFile(documentsBreadcrumbToDisplay[0])? 'true': 'false'"
-        class="pa-1 d-flex width-fit-content">
+        class="pa-1 mb-1 d-flex width-fit-content">
         <div
           v-for="(documents, index) in documentsBreadcrumbToDisplay"
           :key="index"
@@ -88,9 +96,9 @@ export default {
       type: Boolean,
       default: false,
     },
-    disabledIconTree: {
-      type: Boolean,
-      default: false,
+    treeViewCollapsed: {
+      type: String,
+      default: null,
     },
   },
   data: () => ({

@@ -57,7 +57,7 @@ import HideMenuAction from './components/body/actions/HideMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
 import CopyLinkMenuAction from './components/body/actions/CopyLinkMenuAction.vue';
 import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue';
-import FolderTreeViewDrawer from './components/body/views/FolderTreeViewDrawer.vue';
+import FolderTreeView from './components/body/views/FolderTreeView.vue';
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
 import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
@@ -136,7 +136,7 @@ const components = {
   'delete-menu-action': DeleteMenuAction,
   'shortcut-menu-action': ShortcutMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
-  'folder-treeview-drawer': FolderTreeViewDrawer,
+  'folder-tree-view': FolderTreeView,
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
   'upload-overlay': UploadOverlay,

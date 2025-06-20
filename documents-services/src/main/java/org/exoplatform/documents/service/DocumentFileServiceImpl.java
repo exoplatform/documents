@@ -25,15 +25,10 @@ import java.util.*;
 
 import javax.jcr.RepositoryException;
 
-import io.meeds.social.category.model.CategoryObject;
-import io.meeds.social.category.service.CategoryLinkService;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.api.settings.SettingService;
-import org.exoplatform.commons.api.settings.SettingValue;
-import org.exoplatform.commons.api.settings.data.Context;
-import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
@@ -60,6 +55,8 @@ import io.meeds.analytics.model.StatisticData;
 import io.meeds.analytics.model.filter.AnalyticsFilter;
 import io.meeds.analytics.utils.AnalyticsUtils;
 import io.meeds.portal.thumbnail.model.FileContent;
+import io.meeds.social.category.model.CategoryObject;
+import io.meeds.social.category.service.CategoryLinkService;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
@@ -81,17 +78,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private ListenerService       listenerService;
 
-  private SettingService        settingService;
-
   private AnalyticsService      analyticsService;
 
   private ImageThumbnailService imageThumbnailService;
 
   private CategoryLinkService   categoryLinkService;
-
-  private static final Scope    DOCUMENTS_USER_SETTING_SCOPE = Scope.APPLICATION.id("Documents");
-
-  private static final String   DOCUMENTS_USER_SETTING_KEY   = "DocumentsSettings";
 
   String                        dateFormat                   = "MM-dd-yyyy";
 
@@ -114,7 +105,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     this.identityRegistry = identityRegistry;
     this.authenticator = authenticator;
     this.listenerService = listenerService;
-    this.settingService = settingService;
     this.analyticsService = analyticsService;
     this.imageThumbnailService = imageThumbnailService;
   }
@@ -272,8 +262,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getBreadcrumb(ownerId, folderId, folderPath, getAclUserIdentity(authenticatedUserId));
   }
   @Override
-  public List<FullTreeItem> getFullTreeData(long ownerId, String folderId, long authenticatedUserId, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileStorage.getFullTreeData(ownerId, folderId, getAclUserIdentity(authenticatedUserId), withChildren);
+  public List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, long authenticatedUserId, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getFullTreeData(ownerId, folderId, destinationFolderPath, getAclUserIdentity(authenticatedUserId), withChildren);
   }
 
   @Override
@@ -496,20 +486,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     documentFileStorage.moveDocuments(actionId, ownerId, documents, destPath, getAclUserIdentity(userIdentityId), userIdentityId);
   }
 
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public String getDefaultView(Long ownerId, String userIdentityId) {
-    SettingValue<?> settingValue = settingService.get(Context.USER.id(userIdentityId),
-                                                      DOCUMENTS_USER_SETTING_SCOPE,
-                                                      DOCUMENTS_USER_SETTING_KEY + "_" + ownerId);
-    if (settingValue == null || settingValue.getValue() == null || StringUtils.isBlank(settingValue.getValue().toString())) {
-      return null;
-    } else {
-      return settingValue.getValue().toString();
-    }
-  }
 
   public boolean canImport(org.exoplatform.services.security.Identity identity) {
     return documentFileStorage.canImport(identity);
@@ -607,22 +583,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentsSize;
   }
 
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public void setDefaultView(Long ownerId, String userIdentityId, String view) {
-    if (Long.parseLong(userIdentityId) <= 0) {
-      throw new IllegalArgumentException("User identity id is mandatory");
-    }
-    if (ownerId <= 0) {
-      throw new IllegalArgumentException("Owner id is mandatory");
-    }
-    this.settingService.set(Context.USER.id(userIdentityId),
-                            DOCUMENTS_USER_SETTING_SCOPE,
-                            DOCUMENTS_USER_SETTING_KEY + "_" + ownerId,
-                            SettingValue.create(view));
-  }
 
   /**
    * {@inheritDoc}
@@ -751,13 +711,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId) throws Exception {
     documentFileStorage.setDocumentVisibility(ownerId, documentID, hidden, getAclUserIdentity(authenticatedUserId));
   }
-  
+
   public List<Long> getDocumentCategoryIds(String documentId) {
     return getCategoryLinkService().getLinkedIds(new CategoryObject(DocumentCategoryPlugin.OBJECT_TYPE,
             String.valueOf(documentId),
             0L));
   }
-  
+
   public List<Long> getDocumentCategoryIds() {
     return getCategoryLinkService().getLinkedIds(DocumentCategoryPlugin.OBJECT_TYPE);
    }

@@ -59,12 +59,7 @@
         </template>
       </application-toolbar>
     </div>
-    <documents-breadcrumb
-      v-if="selectedView === 'folder'"
-      v-show="showBreadcrumb"
-      :is-mobile="isMobile"
-      class="pt-4 px-1" />
-    <documents-setting-drawer :view-list="viewList" />  
+    <documents-setting-drawer :view-list="viewList" />
   </div>
 </template>
 
@@ -184,9 +179,6 @@ export default {
     },
     canShowMobileFilter() {
       return this.isMobile && this.showFilter;
-    },
-    showBreadcrumb(){
-      return !this.query;
     }
   },
   created() {
