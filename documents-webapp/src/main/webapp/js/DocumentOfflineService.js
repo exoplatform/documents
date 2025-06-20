@@ -76,7 +76,7 @@ export async function setDirectoryHandle(handle) {
 }
 
 export async function getDirectoryHandle() {
-  const directoryHandle = getValue(DB_DIRECTORY_KEY);
+  const directoryHandle = await getValue(DB_DIRECTORY_KEY);
   if (directoryHandle?.queryPermission) {
     const response = await directoryHandle.queryPermission({
       mode: 'readwrite',
@@ -91,8 +91,7 @@ export async function getDirectoryHandle() {
 
 export async function isDirectoryHandleExists() {
   if (await isDatabaseExists()) {
-    let handle = await getDirectoryHandle();
-    return !!handle;
+    return !!(await getValue(DB_DIRECTORY_KEY));
   } else {
     return false;
   }
@@ -129,14 +128,17 @@ export async function saveFile(file) {
 
 export async function removeFile(file) {
   try {
-    const handle = await getParentDirectoryHandle(file)
-    if (handle) {
-      if (file.handle?.remove) {
-        await file.handle.remove();
-      } else {
-        await handle.removeEntry(file.name);
+    const storedFile = await getFile(file.id);
+    if (storedFile) {
+      const directoryHandle = await getParentDirectoryHandle(storedFile);
+      if (directoryHandle) {
+        if (storedFile?.handle?.remove) {
+          await storedFile.handle.remove();
+        } else {
+          await directoryHandle.removeEntry(storedFile.name);
+        }
+        await removeFileFromDB(storedFile.id);
       }
-      await removeFileFromDB(file.id);
     }
   } catch (e) {
     console.debug(`File '${file.name}' not synchronized locally`, e);
