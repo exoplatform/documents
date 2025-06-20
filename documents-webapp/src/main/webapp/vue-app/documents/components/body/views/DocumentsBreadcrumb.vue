@@ -1,7 +1,18 @@
 <template>
   <div v-if="documentsBreadcrumbToDisplay.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-tooltip v-if="!treeViewCollapsed" bottom>
+      <v-btn
+        v-if="isMobile"
+        icon
+        small
+        class="me-2"
+        :disabled="disabledIconTree"
+        @click="openTreeFolderDrawer()">
+        <v-icon class="text-header" size="16">
+          fas fa-sitemap
+        </v-icon>
+      </v-btn>
+      <v-tooltip v-else-if="!treeViewCollapsed" bottom>
         <template #activator="{ on, attrs }">
           <v-btn
             icon
@@ -47,8 +58,8 @@
                   class="text-truncate"
                   :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
                   :class="[
-                    index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable',
-                    !move && 'caption'
+                    index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-header' || 'text-header text-color not-clickable',
+                    move && 'caption'
                   ]">
                   {{ getName(documents.name) }}
                 </a>
@@ -100,6 +111,10 @@ export default {
       type: String,
       default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     id: Math.random().toString(16),
