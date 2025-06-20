@@ -32,15 +32,7 @@
               :query="query" />
           </div>
           <div
-            v-else-if="!filesLoad && !loading && selectedView === 'folder' && initialized"
-            @drop="dragFile"
-            @dragover="startDrag">
-            <documents-no-body-folder
-              :query="query"
-              :is-mobile="isMobile" />
-          </div>
-          <div
-            v-else-if="!filesLoad && !loading && initialized"
+            v-else-if="!filesLoad && selectedView !== 'folder' && !loading && initialized"
             @drop="dragFile"
             @dragover="startDrag">
             <documents-no-body
@@ -76,6 +68,7 @@
               :max-size="maxSize"
               :selected-view="selectedView"
               :selected-documents="selectedDocuments"
+              :folder-path="folderPath"
               :is-mobile="isMobile" />
             <exo-document-notification-alerts />
           </div>
@@ -87,9 +80,6 @@
         <documents-download-drawer />
         <document-import-from-zip-drawer />
         <documents-offline-settings-drawer />
-        <folder-treeview-drawer
-          ref="folderTreeDrawer"
-          :is-mobile="isMobile" />
         <documents-actions-menu-mobile
           :is-mobile="isMobile"
           :current-view="selectedView"
@@ -248,10 +238,7 @@ export default {
     });
     this.$root.$on('open-add-new-mobile', this.displayAddMenuMobile);
     this.$root.$on('close-add-new-mobile', this.hideAddMenuMobile);
-   
     this.$root.$on('documents-refresh-files', this.refreshFiles);
-    this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
-
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
@@ -459,18 +446,19 @@ export default {
       }
     },
     initSettings() {
+      const lastView = localStorage.getItem('lastView');            
+      if (lastView && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === lastView)) {
+        this.selectedView = lastView;
+      } else if (this.$root.settings?.defaultView  && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === this.$root.settings.defaultView)) {
+        this.selectedView =  this.$root.settings.defaultView;
+      } else {
+        this.selectedView = 'timeline';
+      }
+      this.$documentsWebSocket.initCometd(eXo.env.portal.cometdContext, eXo.env.portal.cometdToken, this.handleBulkActionNotif);
       return this.$documentFileService.getUserSettings()
         .then(userSettings => {
+          this.userSettings = userSettings;
           if (userSettings) {
-            this.userSettings = userSettings;
-            if (userSettings.view && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === userSettings.view)) {
-              this.selectedView = userSettings.view;
-            } else if (this.$root.settings?.defaultView  && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === this.$root.settings.defaultView)) {
-              this.selectedView =  this.$root.settings.defaultView;
-            } else {
-              this.selectedView = 'timeline';
-            }
-            this.$documentsWebSocket.initCometd(this.userSettings.cometdContextName, this.userSettings.cometdToken, this.handleBulkActionNotif);
             this.$root.$emit('enable-import', userSettings.canImport);
           }
         })
@@ -737,11 +725,7 @@ export default {
         }
       }));
     },
-    folderTreeDrawer(){
-      if (this.$refs.folderTreeDrawer){
-        this.$refs.folderTreeDrawer.open();
-      }
-    },
+
     sort(sortField, ascending) {
       this.sortField = sortField;
       this.ascending = ascending;
@@ -983,7 +967,7 @@ export default {
       params.forEach((value, key) => { url.searchParams.append(key, value); });
       window.history.replaceState('documents', 'Documents', url.toString());
       this.selectedView = view;
-      this.$documentFileService.setUserDefaultView(view);
+      localStorage.setItem('lastView', view);
       this.parentFolderId = null;
       this.folderPath = null;
       this.files = [];
@@ -1089,6 +1073,7 @@ export default {
       this.offset = options?.append ? this.offset + this.pageSize : 0 ;
       this.limit = options?.append ? this.limit + this.pageSize : this.pageSize ;
       this.loading = true;
+      this.$root.$emit('loading-documents', true);
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
 
       return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.offset, this.limit + 1, expand)
@@ -1129,7 +1114,11 @@ export default {
             file.canAdd = this.canAdd;
           });
         })
-        .finally(() => this.loading = false);
+        .finally(() => {
+          this.loading = false;
+          this.$root.$emit('loading-documents', false);
+        });
+          
     },
     isDocumentsToBeDeleted(doc) {
       return this.documentsToBeDeleted.find(documentId => documentId === doc.id) ? false : true;
@@ -1163,8 +1152,9 @@ export default {
       if (changed) {
         this.viewExtensions = Object.assign({}, this.viewExtensions);
         if (this.selectedView && !this.viewExtensions[this.selectedView]) {
-          if (this.viewExtensions[this.userSettings.view]){
-            this.changeView(this.userSettings.view) ;
+          const lastView = localStorage.getItem('lastView');
+          if (lastView!=null && this.viewExtensions[lastView]){
+            this.changeView(lastView) ;
           } else {
             this.changeView(this.$root.settings.defaultView);
           }
@@ -1198,7 +1188,7 @@ export default {
     },
     addFolder(){
       const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      const i18nName = this.$t('Folder.label.newfolder');
+      const i18nName = this.$t('documents.label.newfolder');
       this.$documentFileService.getNewName(ownerId, this.parentFolderId, this.folderPath, i18nName)
         .then( newName => {
           const newFolder = {
@@ -1219,6 +1209,7 @@ export default {
           createdFolder.canAdd = this.canAdd;
           this.files.shift();
           this.files.unshift(createdFolder);
+          this.$root.$emit('folder-created',createdFolder);
         }).catch(e => {
           if (e.status === 409) {
             this.$root.$emit('show-alert', {

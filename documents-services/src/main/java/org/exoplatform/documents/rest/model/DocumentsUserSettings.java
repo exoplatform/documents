@@ -17,22 +17,15 @@
 
 package org.exoplatform.documents.rest.model;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 @Data
 @EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor
 public class DocumentsUserSettings {
-  @ToString.Exclude
-  @lombok.EqualsAndHashCode.Exclude
-  private String cometdToken       = null;
-
-  @ToString.Exclude
-  @lombok.EqualsAndHashCode.Exclude
-  private String cometdContextName = null;
-
-  private String view              = null;
-
   private Boolean canImport;
 }

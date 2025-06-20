@@ -48,7 +48,6 @@ import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
-import org.exoplatform.documents.service.DocumentWebSocketService;
 import org.exoplatform.documents.service.ExternalDownloadService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.portal.rest.CollectionEntity;
@@ -98,8 +97,6 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final SettingService              settingService;
 
-  private final DocumentWebSocketService    documentWebSocketService;
-
   private final PublicDocumentAccessService publicDocumentAccessService;
 
   private final ExternalDownloadService     externalDownloadService;
@@ -110,7 +107,6 @@ public class DocumentFileRest implements ResourceContainer {
                           IdentityManager identityManager,
                           MetadataService metadataService,
                           SettingService settingService,
-                          DocumentWebSocketService documentWebSocketService,
                           PublicDocumentAccessService publicDocumentAccessService,
                           ExternalDownloadService externalDownloadService) {
     this.documentFileService = documentFileService;
@@ -118,7 +114,6 @@ public class DocumentFileRest implements ResourceContainer {
     this.spaceService = spaceService;
     this.metadataService = metadataService;
     this.settingService = settingService;
-    this.documentWebSocketService = documentWebSocketService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.externalDownloadService = externalDownloadService;
   }
@@ -137,10 +132,6 @@ public class DocumentFileRest implements ResourceContainer {
     Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
     try {
       DocumentsUserSettings documentsUserSettings = new DocumentsUserSettings();
-      String cometdToken = documentWebSocketService.getUserToken(currentUserIdentity.getRemoteId());
-      documentsUserSettings.setCometdToken(cometdToken);
-      documentsUserSettings.setCometdContextName(documentWebSocketService.getCometdContextName());
-      documentsUserSettings.setView(documentFileService.getDefaultView(ownerId, currentUserIdentity.getId()));
       documentsUserSettings.setCanImport(documentFileService.canImport(ConversationState.getCurrent().getIdentity()));
       return Response.ok(documentsUserSettings).build();
     } catch (Exception e) {
@@ -148,29 +139,6 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.serverError().entity(e.getMessage()).build();
     }
   }
-
-  @POST
-  @RolesAllowed("users")
-  @Path("/settings/{ownerId}/{view}")
-  @Operation(summary = "Set the user default view settings", method = "GET")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response setDefaultView(@Parameter(description = "view", required = true)
-  @PathParam("view")
-  String view,
-                                 @Parameter(description = "Identity technical identifier", required = true)
-                                 @PathParam("ownerId")
-                                 Long ownerId) {
-    Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
-    try {
-      documentFileService.setDefaultView(ownerId, currentUserIdentity.getId(), view);
-      return Response.ok().build();
-    } catch (Exception e) {
-      LOG.warn("Error retrieving documents settings for user with id '{}'", currentUserIdentity, e);
-      return Response.serverError().entity(e.getMessage()).build();
-    }
-  }
-
   @GET
   @Produces(MediaType.TEXT_PLAIN)
   @RolesAllowed("users")
@@ -406,7 +374,10 @@ public class DocumentFileRest implements ResourceContainer {
                                 @Parameter(description = "Folder technical identifier")
                                 @QueryParam("folderId")
                                 String folderId,
-                                  @Parameter(description = "Folder technical identifier")
+                                  @Parameter(description = "include children")
+                                    @QueryParam("destinationFolderPath")
+                                    String destinationFolderPath,
+                                  @Parameter(description = "destination folder path")
                                     @QueryParam("withChildren")
                                     boolean withChildren) {
 
@@ -415,7 +386,7 @@ public class DocumentFileRest implements ResourceContainer {
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-        return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId, userIdentityId, withChildren)))
+        return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId,destinationFolderPath, userIdentityId, withChildren)))
               .build();
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();

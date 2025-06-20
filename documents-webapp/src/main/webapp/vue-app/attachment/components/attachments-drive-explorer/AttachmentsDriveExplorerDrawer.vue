@@ -905,7 +905,7 @@ export default {
     addNewFolder() {
       if (!this.creatingNewFolder) {
         this.creatingNewFolder = true;
-        this.newFolderName = this.$t('Folder.label.newfolder');
+        this.newFolderName = this.$t('documents.label.newfolder');
         this.folders.unshift({
           id: 'new_folder',
           type: 'new_folder',

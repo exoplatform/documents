@@ -1,6 +1,5 @@
 <template>
-  <div class="documents-body">
-    <upload-overlay />
+  <div v-if="!loading" class="documents-body">
     <div class="ma-4 d-flex documents-no-body flex-column justify-center text-center text-color">
       <v-img
         :src="emptyDocs"
@@ -51,7 +50,8 @@ export default {
   },
   data: () => ({
     emptyDocs: '/documents-portlet/images/docs.png',
-    currentFolder: null
+    currentFolder: null,
+    loading: true
   }),
   computed: {
     noContentFolderLabel() {
@@ -69,6 +69,9 @@ export default {
   },
   created() {
     this.$root.$on('set-current-folder', (folder) => this.currentFolder = folder);
+    this.$root.$on('loading-documents', (value) => {
+      this.loading = value;
+    });
   },
   methods: {
     addFolder() {
