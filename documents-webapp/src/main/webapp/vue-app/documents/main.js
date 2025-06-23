@@ -69,6 +69,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       settingsSaveUrl,
       hover: false,
       selectedCategoryId: null,
+      selectedCategoryIds: null,
       settingsSubcategoryIds,
       isFavoritesSynchronized: false,
       pwaEnabled: false,
@@ -88,10 +89,8 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       async selectedCategoryId() {
         if (this.selectedCategoryId) {
           this.selectedCategoryIds = await getSubcategoryIds([this.selectedCategoryId], -1);
-        } else if (this.filterType === 'category') {
-          this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
         } else {
-          this.selectedCategoryIds = [];
+          this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
         }
       },
     },
