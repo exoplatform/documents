@@ -377,6 +377,7 @@ export default {
     document.addEventListener('open-info-drawer', this.open);
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
+    document.addEventListener('document-category-selected', this.close);
     document.addEventListener('click', (event) => {
       if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentDescription')) {return;}
       this.close();
