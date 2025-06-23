@@ -1,24 +1,15 @@
 <template>
   <div v-if="documentsBreadcrumbToDisplay.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-btn
-        v-if="isMobile"
-        icon
-        small
-        class="me-2"
-        :disabled="disabledIconTree"
-        @click="openTreeFolderDrawer()">
-        <v-icon class="text-header" size="16">
-          fas fa-sitemap
-        </v-icon>
-      </v-btn>
-      <v-tooltip v-else-if="!treeViewCollapsed" bottom>
+      <v-tooltip v-if="!treeViewCollapsed || isMobile" bottom>
         <template #activator="{ on, attrs }">
           <v-btn
             icon
             v-bind="attrs"
             v-on="on"
-            @click.stop.prevent="$root.$emit('tree-view-expand', true)">
+            class="me-2"
+            :disabled="disabledIconTree"
+            @click.stop.prevent="openTreeView()">
             <img
               src="/social/images/sidebar.svg"
               class="icon-default-color pb-1"
@@ -188,10 +179,6 @@ export default {
       }
       this.$root.$emit('breadcrumb-updated');
     },
-    openTreeFolderDrawer(){
-      this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
-      this.$root.$emit('openTreeFolderDrawer');
-    },
     getName(name){
       if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
@@ -263,6 +250,14 @@ export default {
         this.getFolderPath(folderPath);
       } else {
         this.getDocumentDataFromUrl();
+      }
+    },
+    openTreeView() {
+      if (this.isMobile) {
+        this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
+        this.$root.$emit('openTreeFolderDrawer');
+      } else {
+        this.$root.$emit('tree-view-expand', true);
       }
     },
   }
