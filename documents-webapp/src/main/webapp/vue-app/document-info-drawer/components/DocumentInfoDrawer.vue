@@ -176,6 +176,14 @@
             </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
+        <v-list-item dense two-line>
+          <v-list-item-content class="pt-0 pb-2">
+            <v-list-item-title>{{ $t('documents.drawer.details.category') }}</v-list-item-title>
+            <v-list-item-subtitle>
+              <document-categories :file="file" />
+            </v-list-item-subtitle>
+          </v-list-item-content>
+        </v-list-item>
         <v-list-item>
           <v-list-item-content class="py-1">
             <v-list-item-title class="text-title py-0">
