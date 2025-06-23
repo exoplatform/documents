@@ -27,6 +27,7 @@ import javax.jcr.RepositoryException;
 
 import io.meeds.social.category.model.CategoryObject;
 import io.meeds.social.category.service.CategoryLinkService;
+import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -717,10 +718,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
             String.valueOf(documentId),
             0L));
   }
-  
-  public List<Long> getDocumentCategoryIds() {
-    return getCategoryLinkService().getLinkedIds(DocumentCategoryPlugin.OBJECT_TYPE);
-   }
+
+  @SneakyThrows
+  public List<Long> getDocumentCategoryIds(long spaceIdentityId, String userName) {
+    return documentFileStorage.getDocumentCategoryIds(spaceIdentityId, getAclUserIdentity(userName));
+  }
 
   private CategoryLinkService getCategoryLinkService() {
     if (categoryLinkService == null) {
