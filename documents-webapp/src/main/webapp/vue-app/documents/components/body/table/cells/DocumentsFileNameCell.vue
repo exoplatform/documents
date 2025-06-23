@@ -318,15 +318,13 @@ export default {
         this.$root.$emit('document-open-folder', this.file);
       } else if (this.isFileEditable && this.file?.acl?.canEdit)  {
         this.openInEditMode(this.file);
-        this.loading = false;
-      } else if (this.isFileOnlyReadable)  {
+      } else if (this.isFileOnlyReadable || !this.file?.acl?.canEdit)  {
         this.openInReadOnlyMode(this.file);
-        this.loading = false;
       } else {
         this.$root.$emit('documents-preview', this.file);
-        this.loading = false;
-        this.$root.$emit('mark-document-as-viewed', this.file);
       }
+      this.loading = false;
+      this.$root.$emit('mark-document-as-viewed', this.file);
     },
     displayActionMenu() {
       if (this.isMobile){
