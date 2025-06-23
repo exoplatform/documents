@@ -340,6 +340,15 @@ export default {
     this.$root.$on('hide-element', this.hideElement);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
+    document.addEventListener('document-category-selected', (event) => {
+      if (event && event.detail) {
+        if (this.$root.selectedCategoryId === event.detail.categoryId) {
+          this.$root.selectedCategoryId = null;
+        } else {
+          this.$root.selectedCategoryId = event.detail.categoryId;
+        }
+      }
+    });
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
