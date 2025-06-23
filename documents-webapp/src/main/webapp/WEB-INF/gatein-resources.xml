@@ -374,6 +374,9 @@
       <module>commonVueComponents</module>
     </depends>
     <depends>
+      <module>categoryVueComponents</module>
+    </depends>
+    <depends>
       <module>vuetify</module>
     </depends>
     <depends>
