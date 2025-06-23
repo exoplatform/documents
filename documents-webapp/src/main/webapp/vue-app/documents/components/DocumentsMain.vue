@@ -7,7 +7,6 @@
     <v-hover v-model="$root.hover">
       <div class="application-body" @mouseover="hideOverlay">
         <div
-          class="pa-4"
           @dragover.prevent
           @drop.prevent
           @dragstart.prevent>
@@ -24,7 +23,7 @@
             :max-size="maxSize"
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments"
-            class="py-2" />
+             />
           <categories-filter
             v-if="$root.allowFilteringPerCategory && recentViewSelected"
             v-show="hasDocuments"
@@ -79,7 +78,8 @@
               :selected-view="selectedView"
               :selected-documents="selectedDocuments"
               :folder-path="folderPath"
-              :is-mobile="isMobile" />
+              :is-mobile="isMobile"
+              class="px-4" />
             <exo-document-notification-alerts />
           </div>
         </div>
