@@ -45,6 +45,12 @@ export default {
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     items: []
   }),
+  created(){
+    this.$root.$on('openTreeFolderDrawer', this.open);
+  },
+  beforeDestroy() {
+    this.$root.$off('openTreeFolderDrawer', this.open);
+  },
   methods: {
     open() {
       this.retrieveDocumentTree();

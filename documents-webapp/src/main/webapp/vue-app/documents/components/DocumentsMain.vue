@@ -79,11 +79,6 @@
         <documents-advanced-filter-drawer />
         <documents-download-drawer />
         <document-import-from-zip-drawer />
-        <folder-treeview-drawer
-          v-if="isMobile"
-          ref="folderTreeDrawer"
-          :folder-path="folderPath"
-          :is-mobile="isMobile" />
         <documents-actions-menu-mobile
           :is-mobile="isMobile"
           :current-view="selectedView"
@@ -231,7 +226,6 @@ export default {
     this.$root.$on('close-add-new-mobile', this.hideAddMenuMobile);
     this.$root.$on('documents-refresh-files', this.refreshFiles);
     this.$root.$on('document-load-more', this.loadMore);
-    this.$root.$on('openTreeFolderDrawer', this.folderTreeDrawer);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
     this.$root.$on('document-open-home', this.openHome);
@@ -717,11 +711,7 @@ export default {
         }
       }));
     },
-    folderTreeDrawer(){
-      if (this.$refs.folderTreeDrawer){
-        this.$refs.folderTreeDrawer.open();
-      }
-    },
+
     sort(sortField, ascending) {
       this.sortField = sortField;
       this.ascending = ascending;

@@ -1,7 +1,7 @@
 <template>
   <div class="d-flex">
-    <folder-tree-view
-      v-if="!isMobile"
+    <component
+      :is="isMobile ? 'folder-treeview-drawer' : 'folder-tree-view'"
       :tree-view-collapsed="treeViewCollapsed"
       :is-mobile="isMobile"
       :folder-path="folderPath" />
@@ -346,6 +346,7 @@ export default {
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
     this.$root.$off('tree-view-expand', this.collapseTreeView);
+    this.$root.$off('openTreeFolderDrawer', this.folderTreeDrawer);
   },
   methods: {
     collapseTreeView(value) {
