@@ -93,7 +93,7 @@ export default {
     async init() {
       const registration = await navigator?.serviceWorker?.getRegistration?.();
       this.pwaEnabled = !!registration;
-      this.favoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDirectoryHandleExists());
+      this.favoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDatabaseExists());
     },
     // Begin: API to use by parent component
     changeFavorite() {
@@ -133,7 +133,7 @@ export default {
           alertMessage: this.$t('documents.favoriteAdded'),
         }}));
         if (this.isFavoritesSynchronized) {
-          await this.$documentOfflineService.saveFile(this.file);
+          await this.$documentOfflineService.saveFile(this.file.id);
         }
       } else {
         document.dispatchEvent(new CustomEvent('alert-message', {detail: {

@@ -112,7 +112,7 @@ export default {
       this.extension = extension;
       this.src = null;
       this.dialog = true;
-      this.src = URL.createObjectURL(await this.file.handle.getFile());
+      this.src = URL.createObjectURL(await this.$documentOfflineService.getFileBlob(this.file.id));
     },
     closeOnEscape(event) {
       if (this.$refs.attachmentsCarousel) {

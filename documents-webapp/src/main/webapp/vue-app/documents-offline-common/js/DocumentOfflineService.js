@@ -15,91 +15,25 @@
  * along with this program. If not, see <gnu.org/licenses>.
  */
 
-export const DB_NAME = 'favoriteDocuments';
-export const DB_VERSION = '1';
-export const DB_OBJECT_STORE = 'handles';
+export const DB_NAME = 'FavoriteDocuments';
+export const DB_VERSION = '2';
 export const DB_FILES_OBJECT_STORE = 'files';
-export const DB_DIRECTORY_KEY = 'favorite';
-export const DB_LINK_TYPE_KEY = 'linkType';
-export const DB_LOCAL_FOLDER_KEY = 'localFolderPath';
-export const DB_USER_LOCAL_FOLDER_KEY = 'userLocalFolderPath';
-export const DB_SPACE_LOCAL_FOLDER_KEY = 'spaceLocalFolderPath';
-export const DB_LOCAL_VALUES = {};
-
-/* Link Type */
-
-export function getLinkType() {
-  return getValue(DB_LINK_TYPE_KEY);
-}
-
-export function setLinkType(link) {
-  return setValue(DB_LINK_TYPE_KEY, link);
-}
-
-/* Local Folder Path */
-
-export function getLocalFolderPath() {
-  return getValue(DB_LOCAL_FOLDER_KEY);
-}
-
-export function setLocalFolderPath(path) {
-  return setValue(DB_LOCAL_FOLDER_KEY, path);
-}
-
-export function removeLocalFolderPath() {
-  return removeValue(DB_LOCAL_FOLDER_KEY);
-}
-
-/* Directory Handle Operations */
-
-export async function openDirectoryHandle() {
-  let handle = await getDirectoryHandle();
-  if (!handle) {
-    handle = await window.showDirectoryPicker({
-      id: 'FavoriteDocuments',
-      mode: 'readwrite',
-      startIn: 'documents',
-    });
-    if (handle) {
-      await setDirectoryHandle(handle);
-    }
-  }
-  return handle;
-}
-
-export function removeDirectoryHandle() {
-  return removeValue(DB_DIRECTORY_KEY);
-}
-
-export function setDirectoryHandle(handle) {
-  return setValue(DB_DIRECTORY_KEY, handle);
-}
-
-export async function getDirectoryHandle() {
-  const directoryHandle = await getValue(DB_DIRECTORY_KEY);
-  if (directoryHandle?.queryPermission) {
-    const response = await directoryHandle.queryPermission({
-      mode: 'readwrite',
-    });
-    if (response !== 'granted') {
-      await removeDirectoryHandle();
-      await setValue(DB_DIRECTORY_KEY, null);
-    }
-  }
-  return directoryHandle;
-}
-
-export async function isDirectoryHandleExists() {
-  if (await isDatabaseExists()) {
-    return !!(await getValue(DB_DIRECTORY_KEY));
-  } else {
-    return false;
-  }
-}
+export const DB_FILE_BLOBS_OBJECT_STORE = 'file-blobs';
 
 /* File Item Operations */
 
-export async function saveFile(file) {
+export async function downloadFavorites(offset, limit, size) {
+  const favoriteData = await Vue.prototype.$favoriteService.getFavorites(offset || 0, limit || 10, !offset || !size, 'file');
+  const items = favoriteData?.favoritesItem || [];
+  size = favoriteData?.size || size || 0;
+  await Promise.all(items.map(item => saveFile(item.objectId)));
+  if (size && size > favoriteData.offset + favoriteData.limit) {
+    await downloadFavorites(favoriteData.offset + favoriteData.limit, favoriteData.limit, size);
+  }
+}
+
+export async function saveFile(fileId) {
+  const file = await retrieveFileById(fileId);
   const fileAttachment = await Vue.prototype.$attachmentService.getAttachmentById(file.id);
   if (fileAttachment?.downloadUrl?.length) {
     const downloadUrl = fileAttachment.downloadUrl.replaceAll('%', '%25').replaceAll('[', '%5b').replaceAll(']', '%5d').replaceAll('+', '%2B');
@@ -112,32 +46,24 @@ export async function saveFile(file) {
         throw new Error(`Unable to download file with URL '${downloadUrl}', response status: ${resp.status}`);
       }
     });
-    const fileHandle = await createFileHandle(file);
-    const writable = await fileHandle.createWritable();
-    await writable.write({
-      type: 'write',
-      data: blob,
-      position: 0,
-    });
-    await writable.close();
-    await addFileToDB(file, fileHandle);
+    await addFileToDB(file, blob);
   }
+}
+
+export function retrieveFileById(fileId) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/${fileId}`)
+    .then(resp => {
+      if (resp?.ok) {
+        return resp.json();
+      } else {
+        throw new Error('Server indicates an error while sending request');
+      }
+    });   
 }
 
 export async function removeFile(file) {
   try {
-    const storedFile = await getFile(file.id);
-    if (storedFile) {
-      const directoryHandle = await getParentDirectoryHandle(storedFile);
-      if (directoryHandle) {
-        if (storedFile?.handle?.remove) {
-          await storedFile.handle.remove();
-        } else {
-          await directoryHandle.removeEntry(storedFile.name);
-        }
-        await removeFileFromDB(storedFile.id);
-      }
-    }
+    await removeFileFromDB(file.id);
   } catch (e) {
     // eslint-disable-next-line no-console
     console.debug(`File '${file.name}' not synchronized locally`, e);
@@ -154,82 +80,29 @@ export async function getFile(fileId) {
   });
 }
 
+export async function getFileBlob(fileId) {
+  const database = await getDatabase();
+  return new Promise(resolve => {
+    const transaction = database.transaction([DB_FILE_BLOBS_OBJECT_STORE], 'readonly');
+    const request = transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).get(fileId);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+}
+
 export async function getFiles() {
   const database = await getDatabase();
   return new Promise(resolve => {
     const files = [];
-    const transaction = database.transaction([DB_FILES_OBJECT_STORE],'readonly');
+    const transaction = database.transaction([DB_FILES_OBJECT_STORE], 'readonly');
     transaction.oncomplete = () => resolve(files);
     transaction.objectStore(DB_FILES_OBJECT_STORE).openCursor().onsuccess = e => {
       const cursor = e.target.result;
-      if (cursor) {
-        const file = cursor.value;
-        file.handle?.getFile?.()
-          ?.then?.(() => files.push(file))
-          ?.catch?.(() => removeFileFromDB(file.id));
-        cursor.continue();
+      if (cursor?.value) {
+        files.push(cursor.value);
       }
+      cursor?.continue?.();
     };
-  });
-}
-
-export async function getLocalFilePath(file) {
-  if (file.path?.startsWith?.('/Groups/spaces') && file.path?.includes?.('/Documents/')) {
-    const path = file.path.substring(file.path.indexOf('/Documents/'), file.path.length);
-    const spacePrettyName = file.path.substring(0, file.path.indexOf('/Documents/')).split('/').pop();
-
-    const paths = path.split('/').filter(p => !!p?.length);
-    paths.splice(paths.length - 1, 1);
-    const rootPath = await getSpaceFolderName(spacePrettyName);
-    return [rootPath, ...paths].join('/');
-  } else if (file.path?.startsWith?.('/Users') && file.path?.includes?.('/Private/')) {
-    const path = file.path.substring(file.path.indexOf('/Private/') + '/Private/'.length, file.path.length);
-    const username = file.path.substring(0, file.path.indexOf('/Private/')).split('/').pop();
-
-    const paths = path.split('/').filter(p => !!p?.length);
-    const rootPath = await getUserFolderName(username);
-    return [rootPath, ...paths].join('/');
-  }
-  return file.name;
-}
-
-/* Utils */
-
-export async function getValue(paramName) {
-  if (!DB_LOCAL_VALUES[paramName]) {
-    const database = await getDatabase();
-    DB_LOCAL_VALUES[paramName] = await new Promise(resolve => {
-      const transaction = database.transaction([DB_OBJECT_STORE], 'readonly');
-      const request = transaction.objectStore(DB_OBJECT_STORE).get(paramName);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-    });
-  }
-  return DB_LOCAL_VALUES[paramName];
-}
-
-export async function setValue(paramName, paramValue) {
-  const database = await getDatabase();
-  await new Promise(resolve => {
-    const transaction = database.transaction([DB_OBJECT_STORE], 'readwrite');
-    transaction.oncomplete = () => {
-      DB_LOCAL_VALUES[paramName] = paramValue;
-      resolve();
-    };
-    transaction.objectStore(DB_OBJECT_STORE).put(paramValue, paramName);
-  });
-  return paramValue;
-}
-
-export async function removeValue(paramName) {
-  const database = await getDatabase();
-  return new Promise(resolve => {
-    const transaction = database.transaction([DB_OBJECT_STORE], 'readwrite');
-    transaction.oncomplete =  () => {
-      DB_LOCAL_VALUES[paramName] = null;
-      resolve();
-    };
-    transaction.objectStore(DB_OBJECT_STORE).delete(paramName);
   });
 }
 
@@ -238,112 +111,78 @@ export async function removeValue(paramName) {
 async function removeFileFromDB(fileId) {
   const database = await getDatabase();
   return new Promise(resolve => {
-    const transaction = database.transaction([DB_FILES_OBJECT_STORE], 'readwrite');
+    const transaction = database.transaction([DB_FILES_OBJECT_STORE, DB_FILE_BLOBS_OBJECT_STORE], 'readwrite');
     transaction.oncomplete = resolve;
     transaction.objectStore(DB_FILES_OBJECT_STORE).delete(fileId);
+    transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).delete(fileId);
   });
 }
 
-async function addFileToDB(file, fileHandle) {
+async function addFileToDB(file, blob) {
   const database = await getDatabase();
   return new Promise(resolve => {
-    const transaction = database.transaction([DB_FILES_OBJECT_STORE], 'readwrite');
+    const transaction = database.transaction([DB_FILES_OBJECT_STORE, DB_FILE_BLOBS_OBJECT_STORE], 'readwrite');
     transaction.oncomplete = resolve;
-    transaction.objectStore(DB_FILES_OBJECT_STORE).put({
-      id: file.id,
-      name: file.name,
-      path: file.path,
-      mimeType: file.mimeType,
-      datasource: file.datasource,
-      canEdit: file.acl?.canEdit,
-      size: file.size,
-      versionNumber: file.versionNumber,
-      handle: fileHandle,
-    }, file.id);
+    const fileToStore = {
+      ...file,
+      downloadTime: Date.now(),
+    };
+    transaction.objectStore(DB_FILES_OBJECT_STORE).put(fileToStore, file.id);
+    transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).put(blob, file.id);
   });
-}
-
-async function createFileHandle(file) {
-  const parentDirectoryHandle = await getParentDirectoryHandle(file);
-  return parentDirectoryHandle.getFileHandle(file.name, {
-    create: true
-  });
-}
-
-async function getParentDirectoryHandle(file) {
-  let parentDirectoryHandle = await getDirectoryHandle();
-  if (!parentDirectoryHandle) {
-    return null;
-  }
-  if (file.path?.startsWith?.('/Groups/spaces') && file.path?.includes?.('/Documents/')) {
-    const spacePrettyName = file.path.substring(0, file.path.indexOf('/Documents/')).split('/').pop();
-    const spaceLocalFolderName = await getSpaceFolderName(spacePrettyName);
-    const path = file.path.substring(file.path.indexOf('/Documents/'), file.path.length);
-    const paths = path.split('/').filter(p => !!p?.length);
-    paths.splice(paths.length - 1, 1);
-    parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, [spaceLocalFolderName, ...paths]);
-  } else if (file.path?.startsWith?.('/Users') && file.path?.includes?.('/Private/')) {
-    const path = file.path.substring(file.path.indexOf('/Private/') + '/Private/'.length, file.path.length);
-    const username = file.path.substring(0, file.path.indexOf('/Private/')).split('/').pop();
-    const userLocalFolderName = await getUserFolderName(username);
-    const paths = path.split('/').filter(p => !!p?.length);
-    paths.splice(paths.length - 1, 1);
-    parentDirectoryHandle = await createFolderHandle(parentDirectoryHandle, [userLocalFolderName, ...paths]);
-  }
-  return parentDirectoryHandle;
-}
-
-async function createFolderHandle(handle, paths) {
-  if (paths.length) {
-    const folderPath = paths.shift();
-    if (folderPath?.length) {
-      handle = await handle.getDirectoryHandle(folderPath, {
-        create: true
-      });
-    }
-    return await createFolderHandle(handle, paths);
-  }
-  return handle;
-}
-
-async function getUserFolderName(username) {
-  const key = `${DB_USER_LOCAL_FOLDER_KEY}-${username}`;
-  const folderName = await getValue(key);
-  if (folderName) {
-    return folderName;
-  } else {
-    return await setValue(key, Vue.prototype?.$currentUserIdentity?.profile?.fullname || username);
-  }
-}
-
-async function getSpaceFolderName(spacePrettyName) {
-  const key = `${DB_USER_LOCAL_FOLDER_KEY}-${spacePrettyName}`;
-  const folderName = await getValue(key);
-  if (folderName) {
-    return folderName;
-  } else {
-    return await setValue(key, eXo.env.portal.spaceDisplayName);
-  }
 }
 
 /* Database Operations */
 let localDatabase;
-async function isDatabaseExists() {
+export async function isDatabaseExists() {
   const dbs = await window.indexedDB.databases();
   return !!dbs?.find?.(db => db.name === DB_NAME);
 }
 
+export async function deleteDatabase() {
+  if (await isDatabaseExists()) {
+    const db = retrieveDatabase('1');
+    localDatabase = null;
+    if (db) {
+      return new Promise((resolve, reject) => {
+        const request = window.indexedDB.deleteDatabase(DB_NAME);
+        request.onerror = e => reject(String(e));
+        request.onsuccess = resolve;
+      });
+    }
+  }
+}
+
+export function createDatabase() {
+  return retrieveDatabase();
+}
+
 async function getDatabase() {
-  if (!localDatabase) {
-    localDatabase = await new Promise((resolve, reject) => {
-      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-      request.onerror = e => reject(String(e));
-      request.onsuccess = e => resolve(e.target.result);
-      request.onupgradeneeded = e => {
-        e.target.result.createObjectStore(DB_OBJECT_STORE);
-        e.target.result.createObjectStore(DB_FILES_OBJECT_STORE);
-      };
-    });
+  if (!(await isDatabaseExists())) {
+    return null;
+  } else if (!localDatabase) {
+    localDatabase = await retrieveDatabase();
   }
   return localDatabase;
+}
+
+async function retrieveDatabase(version) {
+  const request = await window.indexedDB.open(DB_NAME, version || DB_VERSION);
+  return new Promise((resolve, reject) => {
+    request.onerror = e => reject(String(e));
+    request.onsuccess = e => resolve(e.target.result);
+    request.onupgradeneeded = e => {
+      try {
+        if (version === '1') {
+          e.target.result.deleteObjectStore(DB_FILE_BLOBS_OBJECT_STORE);
+          e.target.result.deleteObjectStore(DB_FILES_OBJECT_STORE);
+        } else {
+          e.target.result.createObjectStore(DB_FILE_BLOBS_OBJECT_STORE);
+          e.target.result.createObjectStore(DB_FILES_OBJECT_STORE);
+        }
+      } catch (e) {
+        console.debug('Error upgrading database version', e);
+      }
+    };
+  });
 }
