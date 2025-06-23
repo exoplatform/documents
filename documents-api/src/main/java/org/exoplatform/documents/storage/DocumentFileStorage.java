@@ -383,4 +383,11 @@ public interface DocumentFileStorage {
 
   boolean canImport(Identity identity);
 
+  /**
+   * @param spaceIdentityId Space {@link org.exoplatform.social.core.identity.model.Identity} Identifier
+   * @return {@link List} of Category Ids used in Documents
+   */
+  default List<Long> getDocumentCategoryIds(long spaceIdentityId, Identity aclIdentity) {
+    throw new UnsupportedOperationException();
+  }
 }
