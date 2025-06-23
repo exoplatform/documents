@@ -9,7 +9,7 @@
     </template>
     <template #titleIcons>
       <documents-favorite-button
-        :id="file.id"
+        :id="fileId"
         :file="file"
         :small="false"
         @added="favoriteAdded"
@@ -180,7 +180,7 @@
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-title>{{ $t('documents.drawer.details.category') }}</v-list-item-title>
             <v-list-item-subtitle>
-              <document-categories :file="file" />
+              <document-categories v-if="file" :file="file" />
             </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
@@ -302,6 +302,12 @@ export default {
     showIcon: false,
   }),
   computed: {
+    fileId() {
+      return this.file?.id;
+    },
+    modifiedDate() {
+      return this.file?.modifiedDate;
+    },
     spaceId() {
       return eXo.env.portal.spaceId || 0;
     },
@@ -310,7 +316,7 @@ export default {
       return fileIcon ? fileIcon : this.file.folder ? this.$documentsIconsExtension[0]?.get('folder') : this.$documentsIconsExtension[0]?.get('file');
     },
     lastUpdated() {
-      return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
+      return this.file && (this.modifiedDate || this.file.createdDate) || '';
     },
     fileCreated() {
       return this.file && this.file.createdDate || '';
@@ -342,28 +348,6 @@ export default {
       || this.file?.description === this.fileInitialDescription
       || (!this.file?.description && !this.fileInitialDescription);
     },
-    fileLocation() {
-      let pathParts = [];
-      if (this.file.path.includes('/Groups/spaces/')){
-        pathParts = this.file.path.split('/Groups/spaces/')[1].split('/');
-      } else if (this.file.path.includes(eXo.env.portal.userName)){
-        const partToRemove = this.file.path.split(eXo.env.portal.userName)[0];
-        pathParts = this.file.path.replace(partToRemove,'').split('/');
-      }
-      pathParts.shift();
-      pathParts.pop();
-      return pathParts.join('/');
-    },
-    fileLocationLink() {
-      let url = new URL(window.location.href);
-      const nodeUriIndex = window.location.href.toLowerCase().indexOf(eXo.env.portal.selectedNodeUri.toLowerCase());
-      if (nodeUriIndex !== -1) {
-        const realPageUrlIndex = nodeUriIndex + eXo.env.portal.selectedNodeUri.length;
-        url = new URL(window.location.href.substring(0, realPageUrlIndex));
-      }
-      url.searchParams.set('folderId', this.file.parentFolderId);
-      return url.toString();
-    },
     isFileEditable() {
       return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === this.file.mimeType ).length > 0;
     },
@@ -371,7 +355,7 @@ export default {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === this.file.mimeType).length > 0;
     },
     downloadUrl() {
-      return this.$documentsUtils.getDownloadUrl(this.file.id,this.file.modifiedDate);
+      return this.$documentsUtils.getDownloadUrl(this.fileId, this.modifiedDate);
     },
     fileSize() {
       return this.$documentsUtils.getSize(this.file.size);
@@ -472,14 +456,13 @@ export default {
       this.showNoDescription = false;
       this.showDescription = false;
       this.displayEditor=true;
-      this.originDescription = this.file.description;
       this.$nextTick(()=>{
         this.$refs.descriptionMessage?.initCKEditorData(this.file.description);
         document.getElementById('descriptionMessageInput').scrollIntoView();
       });
     },
     close() {
-      this.file.description = this.fileInitialDescription;
+      this.file = null;
       this.displayEditor = false;
       this.showNoDescription = false;
       this.showDescription = true;
@@ -572,7 +555,7 @@ export default {
       } else {
         const attachments = [];
         attachments.push({
-          id: this.file.id,
+          id: this.fileId,
           downloadUrl: this.downloadUrl,
           name: this.file.name,
           filename: this.file.name,
@@ -583,13 +566,13 @@ export default {
           path: this.file.path,
           source: 'documents'
         });
-        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': attachments,'id': this.file.id }}));
+        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': attachments,'id': this.fileId }}));
       }
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: this.file}}));
       this.loading = false;
     },
     openFileInEditor(mode) {
-      if (this.file && this.file.id) {
+      if (this.file && this.fileId) {
         const url = this.$documentsUtils.getEditorUrl(this.file,mode);
         window.open(url,'_blank');
       }
@@ -612,7 +595,7 @@ export default {
       } else if (this.isFileReadable)  {
         path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
       } else {
-        path = `${window.location.host}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
+        path = `${window.location.host}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.fileId}`;
       }
       const input = document.createElement('input');
       input.value = path;

@@ -26,7 +26,7 @@
             :selected-documents="selectedDocuments"
             class="py-2" />
           <categories-filter
-            v-if="$root.allowFilteringPerCategory"
+            v-if="$root.allowFilteringPerCategory && recentViewSelected"
             v-show="hasDocuments"
             v-model="$root.selectedCategoryId"
             :category-depth="$root.categoryDepth"
@@ -196,6 +196,9 @@ export default {
   computed: {
     hasDocuments() {
       return !!this.files.length;
+    },
+    recentViewSelected() {
+      return this.selectedView === 'timeline';
     },
     showLoadMoreVersions() {
       return this.versions.length < this.allVersions.length;
@@ -738,7 +741,7 @@ export default {
           operation: 'accessVersionHistory',
           parameters: {
             spaceId: eXo.env.portal.spaceId,
-            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            view: this.recentViewSelected ? 'recentView': 'folderView',
           },
           timestamp: Date.now()
         }
@@ -844,7 +847,7 @@ export default {
             fileMimeType: file.mimeType,
             origin: 'Portlet document',
             spaceId: eXo.env.portal.spaceId,
-            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            view: this.recentViewSelected ? 'recentView': 'folderView',
             deletionType: multi? 'massDeletion': 'individualDeletion'
           },
           timestamp: Date.now()
@@ -1150,7 +1153,7 @@ export default {
       if (this.selectedView === 'folder') {
         this.sortField = 'name';
         this.ascending = true;
-      } else if (this.selectedView === 'timeline') {
+      } else if (this.recentViewSelected) {
         this.sortField = 'lastUpdated';
         this.ascending = false;
       }
@@ -1293,7 +1296,7 @@ export default {
             type: 'success',
             message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
           });
-          if (this.selectedView === 'timeline') {
+          if (this.recentViewSelected) {
             const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : destFolder.path.substring(destFolder.path.indexOf('Private/'));
             window.setTimeout(() => {
               window.location.href = `${window.location.pathname}/${folderPath}?view=folder`;
@@ -1327,7 +1330,7 @@ export default {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('document.shortcut.creationSuccess')});
           this.createShortcutStatistics(file,space);
           const isShortcutToDifferentSpace = space?.id && eXo.env.portal.spaceId !== space.id;
-          if (this.selectedView === 'timeline') {
+          if (this.recentViewSelected) {
             if (isShortcutToDifferentSpace) {
               this.redirectTodestinationSpace(destFolder,space);
             } else {
@@ -1377,7 +1380,7 @@ export default {
             origin: 'Portlet document',
             category: file.folder ? 'folderCategory' : 'documentCategory',
             spaceId: space ? space.id : eXo.env.portal.spaceId,
-            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            view: this.recentViewSelected ? 'recentView': 'folderView',
           },
           timestamp: Date.now()
         }
@@ -1396,7 +1399,7 @@ export default {
           parameters: {
             spaceId: eXo.env.portal.spaceId,
             origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
-            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            view: this.recentViewSelected ? 'recentView': 'folderView',
           },
           timestamp: Date.now()
         }
@@ -1414,7 +1417,7 @@ export default {
           parameters: {
             spaceId: eXo.env.portal.spaceId,
             origin: eXo.env.portal.spaceId ? 'Document':'Personal document',
-            view: this.selectedView === 'timeline' ? 'recentView': 'folderView',
+            view: this.recentViewSelected ? 'recentView': 'folderView',
           },
           timestamp: Date.now()
         }
@@ -1528,7 +1531,7 @@ export default {
           if (view.toLowerCase() === 'folder'){
             this.selectedView = 'folder';
           } else {
-            if (this.selectedView === 'timeline'){
+            if (this.recentViewSelected){
               this.parentFolderId = null;
               this.folderPath = null;
             }
