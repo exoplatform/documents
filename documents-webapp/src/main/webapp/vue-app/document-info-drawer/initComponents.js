@@ -19,9 +19,11 @@
 
 import DocumentInfoDrawer from './components/DocumentInfoDrawer.vue';
 import Breadcrumb from './components/Breadcrumb.vue';
+import DocumentCategories from './components/DocumentCategories.vue';
 
 const components = {
   'document-info-drawer': DocumentInfoDrawer,
+  'document-categories': DocumentCategories,
   'breadcrumb': Breadcrumb,
 };
 
