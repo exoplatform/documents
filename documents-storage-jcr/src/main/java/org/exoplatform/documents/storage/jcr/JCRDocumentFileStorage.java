@@ -712,7 +712,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           List<FullTreeItem> folderChildListNodes = new ArrayList<>();
           if (withChildren || (destinationNode != null && destinationNode.getPath().contains(childNode.getPath()))) {
             folderChildListNodes = getAllFolderInNode(childNode, session, destinationNode, withChildren);
-          } else if (!childNode.hasNodes()) {
+          } else if (!hasFolderNodes(childNode)) {
             folderChildListNodes = null;
           }
           folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
@@ -1254,6 +1254,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection, List<String> types, boolean includeHiddenFiles) {
     String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable' ";
     String typesStatement =" and (jcr:primaryType ='" + String.join("' OR jcr:primaryType ='", types) + "') ";
+    String sortQuery = StringUtils.isEmpty(sortField) && StringUtils.isEmpty(sortDirection) ? " " : " ORDER BY " + sortField + " " + sortDirection;
     return new StringBuilder().append("SELECT * FROM nt:base")
             .append(" WHERE jcr:path LIKE '")
             .append(folderPath)
@@ -1263,10 +1264,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             .append("/%/%' ")
             .append(typesStatement)
             .append(hiddenableQuery)
-            .append(" ORDER BY ")
-            .append(sortField)
-            .append(" ")
-            .append(sortDirection)
+            .append(sortQuery)
             .toString();
   }
 
@@ -2300,6 +2298,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public boolean canImport(Identity identity) {
     return bulkStorageActionService.checkTotalUplaodsLimit(identity, false);
+  }
+
+  public boolean hasFolderNodes(Node node) throws RepositoryException {
+    String statementOfFolders = getFolderDocumentsQuery(node.getPath(), "", "", FOLDER_NODE_TYPES, false);
+    Query jcrQuery = node.getSession().getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
+    QueryResult queryResult = jcrQuery.execute();
+    return queryResult.getNodes().getSize() > 0;
   }
 
 }
