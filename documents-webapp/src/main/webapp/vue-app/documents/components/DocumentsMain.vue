@@ -23,6 +23,16 @@
             :max-size="maxSize"
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
+          <categories-filter
+            v-if="displayCategoriesFilter"
+            v-show="hasDocuments"
+            v-model="$root.selectedCategoryId"
+            :category-depth="$root.categoryDepth"
+            :category-ids="$root.settings.categoryIds"
+            :space-id="$root.ownerId"
+            class="full-width border-box-sizing application-background-color application-border application-border-radius py-2 px-3 mb-5"
+            object-type="document"
+            hide-on-empty />
           <div v-if="searchResult && !loading && initialized">
             <documents-no-result-body
               :is-mobile="isMobile"
@@ -177,6 +187,12 @@ export default {
     publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`
   }),
   computed: {
+    displayCategoriesFilter() {
+      return this.$root.allowFilteringPerCategory && this.recentViewSelected;
+    },
+    hasDocuments() {
+      return !!this.files.length;
+    },
     showLoadMoreVersions() {
       return this.versions.length < this.allVersions.length;
     },

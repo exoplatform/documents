@@ -17,6 +17,7 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
 import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.File;
@@ -1080,6 +1081,49 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  @Override
+  public List<Long> getDocumentCategoryIds(long ownerId, Identity aclIdentity) {
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
+    SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+    try {
+      Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, ownerIdentity.getRemoteId(), ownerIdentity, sessionProvider);
+      if (identityRootNode == null) {
+        return Collections.emptyList();
+      }
+      Session session = identityRootNode.getSession();
+      String rootPath = identityRootNode.getPath();
+      String query = "SELECT exo:categoryIds FROM nt:base " +
+              "WHERE 'mix:documentsCategory' IN jcr:mixinTypes " +
+              "AND jcr:path LIKE '" + rootPath + "/%' " +
+              "AND (jcr:primaryType = 'nt:file' OR jcr:primaryType = 'exo:symlink')";
+
+      Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(query, Query.SQL);
+      QueryResult result = jcrQuery.execute();
+
+      Set<Long> ids = new HashSet<>();
+      NodeIterator nodes = result.getNodes();
+      while (nodes.hasNext()) {
+        Node node = nodes.nextNode();
+        if (node.hasProperty(DOCUMENT_CATEGORY_IDS)) {
+          String raw = node.getProperty(DOCUMENT_CATEGORY_IDS).getString();
+          String[] parts = raw.split(",");
+          for (String part : parts) {
+            try {
+              ids.add(Long.parseLong(part.trim()));
+            } catch (NumberFormatException ignored) {
+              // skip invalid entries
+            }
+          }
+        }
+      }
+      return new ArrayList<>(ids);
+    } catch (Exception e) {
+      throw new IllegalStateException("Error retrieving associated document category ids", e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
   private void handleMoveDocConflict(Session session,
                                      Node node,
                                      String srcPath,
@@ -1216,24 +1260,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     StringBuilder categoryFilter = new StringBuilder();
     if (CollectionUtils.isNotEmpty(categoryIds)) {
       categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (");
-      for (int i = 0; i < categoryIds.size(); i++) {
-        if (i > 0) {
-          categoryFilter.append(" OR ");
-        }
-        String id = String.valueOf(categoryIds.get(i));
-        categoryFilter.append("exo:categoryIds = '")
-                      .append(id)
-                      .append("'")
-                      .append(" OR exo:categoryIds LIKE '")
-                      .append(id)
-                      .append(",%'")
-                      .append(" OR exo:categoryIds LIKE '%,")
-                      .append(id)
-                      .append(",%'")
-                      .append(" OR exo:categoryIds LIKE '%,")
-                      .append(id)
-                      .append("'");
-      }
+      String joinedConditions = categoryIds.stream()
+              .map(String::valueOf)
+              .map(id -> String.join(" OR ",
+                      "exo:categoryIds = '" + id + "'",
+                      "exo:categoryIds LIKE '" + id + ",%'",
+                      "exo:categoryIds LIKE '%," + id + ",%'",
+                      "exo:categoryIds LIKE '%," + id + "'"
+              ))
+              .collect(Collectors.joining(" OR "));
+      categoryFilter.append(joinedConditions);
       categoryFilter.append(")");
     }
 
