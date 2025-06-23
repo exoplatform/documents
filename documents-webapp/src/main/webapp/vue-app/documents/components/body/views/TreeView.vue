@@ -118,6 +118,7 @@ export default {
               ));
             });
             item.children.push(...newItems[0].children);
+            this.currentFolderPathTab.push(item.id);
           }
           this.$root.$emit('tree-loading', false);
         });
