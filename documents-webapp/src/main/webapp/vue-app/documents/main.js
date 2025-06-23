@@ -107,7 +107,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       async init() {
         const registration = await navigator?.serviceWorker?.getRegistration?.();
         this.pwaEnabled = !!registration;
-        this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDirectoryHandleExists());
+        this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDatabaseExists());
       },
       async handleSettingsUpdate() {
         this.settings = JSON.parse(JSON.stringify(this.settings)); // Force update
