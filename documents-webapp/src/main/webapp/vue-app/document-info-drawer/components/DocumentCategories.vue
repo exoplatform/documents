@@ -98,15 +98,17 @@ export default {
         this.categories.forEach(c => this.$set(this.loadedCategories, c.id, true));
       }
     },
-    selectCategory(category) {
-      if (this.$root.selectedCategoryId === category.id) {
-        this.$root.selectedCategoryId = null;
-      } else {
-        this.$root.selectedCategoryId = category.id;
-      }
+    async selectCategory(category) {
+      this.$refs?.drawer?.close();
+      await this.$nextTick();
+      document.dispatchEvent(new CustomEvent('document-category-selected', {detail: {
+        categoryId: category.id
+      }}));
     },
-    openMoreDrawer() {
-      this.$root.$emit('open-more-drawer', this.categories);
+    async openMoreDrawer() {
+      this.moreDrawer = true;
+      await this.$nextTick();
+      this.$refs?.drawer?.open?.(this.categories);
     },
   },
 };
