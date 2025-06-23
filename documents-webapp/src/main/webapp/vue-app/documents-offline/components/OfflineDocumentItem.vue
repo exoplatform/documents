@@ -15,51 +15,45 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <v-hover v-slot="{ hover }">
-    <v-card
-      v-on="!href && {
-        click: openFile,
-      }"
-      :id="id"
-      :elevation="hover ? 4 : 0"
-      :class="{
-        'border-color-transparent': hover,
-        'border-color': !hover,
-      }"
-      :loading="loading"
-      :href="href"
-      max-height="210px"
-      max-width="100%"
-      height="160px"
-      width="180px"
-      class="overflow-hidden d-flex flex-column content-box-sizing">
-      <div class="d-flex flex-grow-0 flex-shrink-0 align-center justify-center">
+  <tr>
+    <td>
+      <v-card
+        class="d-flex align-center text-truncate"
+        color="transparent"
+        flat
+        @click="openFile">
         <v-icon
           :color="fileIconColor"
-          class="mt-5"
-          size="80">
+          size="24">
           {{ fileIcon }}
         </v-icon>
+        <div
+          :title="file.name"
+          class="d-flex text-truncate px-5">
+          {{ file.name }}
+        </div>
+      </v-card>
+    </td>
+    <td>
+      <date-format
+        :value="file.modifiedDate"
+        :format="dateFormat" />
+    </td>
+    <td>
+      <date-format
+        :value="file.downloadTime"
+        :format="dateFormat" />
+    </td>
+    <td>
+      <div class="d-flex justify-center align-center">
+        <v-btn
+          icon
+          @click="openFile">
+          <v-icon>{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
+        </v-btn>
       </div>
-      <v-tooltip bottom>
-        <template #activator="{on, attrs}">
-          <v-card
-            v-on="on"
-            v-bind="attrs"
-            class="d-flex flex-grow-1 flex-shrink-1 flex-column no-border-radius align-center justify-center"
-            height="36"
-            flat>
-            <div
-              class="d-flex justify-center font-weight-bold text-truncate-2 full-width border-box-sizing px-5">
-              <div class="text-truncate">{{ fileName }}</div>
-              <div>{{ fileExtension }}</div>
-            </div>
-          </v-card>
-        </template>
-        <span>{{ file.name }}</span>
-      </v-tooltip>
-    </v-card>
-  </v-hover>
+    </td>
+  </tr>
 </template>
 <script>
 export default {
@@ -68,18 +62,15 @@ export default {
       type: Object,
       default: null,
     },
-    localFolderPath: {
-      type: Object,
-      default: null,
-    },
-    officeLink: {
-      type: Boolean,
-      default: false,
-    },
   },
   data: () => ({
-    fileProtocol: 'file:///',
-    href: null,
+    dateFormat: {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+    },
   }),
   computed: {
     extension() {
@@ -94,37 +85,8 @@ export default {
     fileIconColor() {
       return this.extension?.color || 'secondary';
     },
-    fileNameParts() {
-      return this.file?.name?.split?.('.') || [];
-    },
-    fileName() {
-      return this.fileNameParts.length > 1 ? this.fileNameParts.slice(0, this.fileNameParts.length - 1).join('.') : this.file?.name;
-    },
-    fileExtension() {
-      return this.fileNameParts.length > 1 ? `.${this.fileNameParts.slice(this.fileNameParts.length - 1)}` : '';
-    },
-    isMobile() {
-      return this.$vuetify.breakpoint.smAndDown;
-    },
-  },
-  watch: {
-    officeLink() {
-      this.initHref();
-    },
-    extension() {
-      this.initHref();
-    },
-  },
-  created() {
-    this.initHref();
   },
   methods: {
-    async initHref() {
-      if (this.officeLink && this.extension?.protocol) {
-        const fileLocalPath = await this.$documentOfflineService.getLocalFilePath(this.file);
-        this.href = `${this.extension?.protocol}${this.fileProtocol}${this.localFolderPath}/${fileLocalPath}`;
-      }
-    },
     openFile() {
       if (this.canPreview) {
         this.$emit('preview', this.file, this.extension);

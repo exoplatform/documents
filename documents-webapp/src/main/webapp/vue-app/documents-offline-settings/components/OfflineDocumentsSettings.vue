@@ -24,34 +24,13 @@
         {{ $t('UserSettings.pwa.documentsOffline.description') }}
       </v-list-item-subtitle>
     </v-list-item-content>
-    <v-list-item-action v-if="initialized" class="mt-0 mb-auto">
-      <template v-if="installed">
-        <v-card
-          v-if="offlinePermission === 'granted'"
-          class="border-color py-2 px-3"
-          disabled
-          flat>
-          <v-icon class="success--text me-2" size="18">fa-check</v-icon>
-          {{ $t('UserSettings.pwa.documentsOffline.granted') }}
-        </v-card>
-        <v-card
-          v-else-if="offlinePermission === 'denied'"
-          class="border-color py-2 px-3"
-          disabled
-          flat>
-          <v-icon class="error--text me-2" size="18">fa-times</v-icon>
-          {{ $t('UserSettings.pwa.documentsOffline.denied') }}
-        </v-card>
-        <v-btn
-          v-else
-          :aria-label="$t('UserSettings.pwa.documentsOffline.configure')"
-          :loading="offlineLoading"
-          class="btn"
-          text
-          @click="openDrawer">
-          {{ $t('UserSettings.pwa.documentsOffline.configure') }}
-        </v-btn>
-      </template>
+    <v-list-item-action class="mt-0 mb-auto">
+      <v-switch
+        v-if="installed"
+        v-model="enabled"
+        :loading="loading"
+        class="py-2 px-3"
+        @click="toogle" />
       <v-tooltip
         v-else
         bottom>
@@ -59,12 +38,9 @@
           <div
             v-on="on"
             v-bind="attrs">
-            <v-btn
+            <v-switch
               :aria-label="$t('UserSettings.pwa.documentsOffline.configure')"
-              disabled
-              class="btn">
-              {{ $t('UserSettings.pwa.documentsOffline.configure') }}
-            </v-btn>
+              disabled />
           </div>
         </template>
         <span v-if="!pwaSupported">
@@ -78,7 +54,6 @@
         </span>
       </v-tooltip>
     </v-list-item-action>
-    <documents-offline-settings-drawer ref="drawer" />
   </v-list-item>
 </template>
 <script>
@@ -100,34 +75,39 @@ export default {
       type: Boolean,
       default: false,
     },
-    loading: {
-      type: Boolean,
-      default: false,
-    },
   },
   data: () => ({
-    offlinePermission: null,
-    initialized: false,
-    offlineLoading: true,
+    enabled: false,
+    loading: true,
   }),
   created() {
     this.init();
   },
   methods: {
     async init() {
-      this.offlineLoading = true;
+      this.loading = true;
       try {
-        const hasDirectory = await this.$documentOfflineService.isDirectoryHandleExists();
-        if (hasDirectory) {
-          return 'granted';
+        this.enabled = await this.$documentOfflineService.isDatabaseExists();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        this.loading = false;
+      }
+    },
+    async toogle() {
+      this.loading = true;
+      try {
+        await this.$nextTick();
+        if (this.enabled) {
+          await this.$documentOfflineService.createDatabase();
+          await this.$documentOfflineService.downloadFavorites();
         } else {
-          return null;
+          await this.$documentOfflineService.deleteDatabase();
         }
       } catch (e) {
         console.error(e);
       } finally {
-        this.offlineLoading = false;
-        this.initialized = true;
+        this.loading = false;
       }
     },
     openDrawer() {

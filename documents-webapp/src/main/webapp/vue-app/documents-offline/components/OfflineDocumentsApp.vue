@@ -16,20 +16,35 @@
 -->
 <template>
   <v-card
-    class="px-4"
+    v-if="hasOfflineFiles"
     flat>
-    <div class="text-header my-5">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
-    <div v-if="hasOfflineFiles" class="d-flex flex-wrap">
-      <documents-offline-item
-        v-for="file in offlineFiles"
-        :key="file.id"
-        :file="file"
-        :local-folder-path="localFolderPath"
-        :office-link="isLink"
-        class="mb-4 me-4"
-        @download="download"
-        @preview="openPreview" />
+    <div class="d-flex align-center mt-5 mb-2 mx-4">
+      <div class="text-header">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
+      <v-spacer />
+      <v-text-field
+        v-model="search"
+        :label="$t('OfflineApp.pwa.header.search')"
+        :prepend-inner-icon="term && 'fa-filter primary--text' || 'fa-filter icon-default-color'"
+        height="24"
+        class="full-height pa-0 my-0 ms-4"
+        single-line
+        hide-details />
     </div>
+    <v-data-table
+      :items="offlineFiles"
+      :headers="headers"
+      :search="search"
+      class="d-flex flex-wrap"
+      hide-default-footer
+      disable-pagination>
+      <template #item="{item}">
+        <documents-offline-item
+          :file="item"
+          class="mb-4 me-4"
+          @download="download"
+          @preview="openPreview" />
+      </template>
+    </v-data-table>
     <documents-offline-preview-dialog
       ref="preview"
       @download="download" />
@@ -38,16 +53,38 @@
 <script>
 export default {
   data: () => ({
-    linkType: null,
-    localFolderPath: null,
     offlineFiles: [],
+    search: '',
   }),
   computed: {
     hasOfflineFiles() {
       return !!this.offlineFiles?.length;
     },
-    isLink() {
-      return this.linkType === 'LINK';
+    headers() {
+      return [{
+        text: this.$t('OfflineApp.pwa.header.name'),
+        align: 'left',
+        sortable: true,
+        value: 'name'
+      }, {
+        text: this.$t('OfflineApp.pwa.header.lastModified'),
+        align: 'center',
+        sortable: true,
+        value: 'modifiedDate',
+        width: '150px',
+      }, {
+        text: this.$t('OfflineApp.pwa.header.downloadTime'),
+        align: 'center',
+        sortable: true,
+        value: 'downloadTime',
+        width: '150px',
+      }, {
+        text: this.$t('OfflineApp.pwa.header.actions'),
+        align: 'center',
+        sortable: false,
+        value: 'name',
+        width: '75px',
+      }];
     },
   },
   created() {
@@ -56,18 +93,15 @@ export default {
   methods: {
     async init() {
       this.offlineFiles = await this.$documentOfflineService.getFiles();
-      this.linkType = await this.$documentOfflineService.getLinkType();
-      if (this.isLink) {
-        this.localFolderPath = await this.$documentOfflineService.getLocalFolderPath();
-      }
     },
     async download(file) {
-      const fileHandle = await window.showSaveFilePicker({
+      const destination = await window.showSaveFilePicker({
         suggestedName: file.name,
         id: 'FavoriteDocuments',
+        startIn: 'documents',
       });
-      const writable = await fileHandle.createWritable();
-      await writable.write(await file.handle.getFile());
+      const writable = await destination.createWritable();
+      await writable.write(await this.$documentOfflineService.getFileBlob(file.id));
       await writable.close();
     },
     openPreview(file, extension) {
