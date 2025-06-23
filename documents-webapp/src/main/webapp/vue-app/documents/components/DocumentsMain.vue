@@ -1583,7 +1583,7 @@ export default {
         .finally(() => this.loading = false);
     },
     showPreview(documentPreviewId) {
-      return this.$attachmentService.getAttachmentById(documentPreviewId)
+      return this.$attachmentService.getDocumentDetails(documentPreviewId,'')
         .then(attachment => {
           if (this.isFileReadable(attachment)){
             if (attachment?.acl?.canEdit && this.isFileEditable(attachment)){
@@ -1592,18 +1592,18 @@ export default {
               this.openFileInEditor(attachment,'view','_self');
 
             } } else {
-            attachment.source = 'documents';
-            document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [attachment],'id': documentPreviewId }}));
+            const file = {'id': attachment.id,'filename': attachment.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${attachment.id}`, 'icon': this.getFileIcon(attachment)};
+            document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': documentPreviewId }}));
             return attachment;}
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
     isFileEditable(file) {
-      return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file.mimetype ).length > 0;
+      return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file.mimeType ).length > 0;
     },
     isFileReadable(file) {
-      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimetype).length > 0;
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimeType).length > 0;
     },
     openFileInEditor(attachment,mode,tab) {
       if (attachment && attachment.id) {
