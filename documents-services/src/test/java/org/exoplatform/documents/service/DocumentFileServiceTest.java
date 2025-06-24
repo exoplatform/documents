@@ -205,9 +205,8 @@ public class DocumentFileServiceTest {
     files.add(file4);
 
     when(documentFileStorage.getFilesTimeline(filter, spaceID, 0, 0)).thenReturn(files);
-    List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.parseLong(currentIdentity.getId()),false);
-    assertEquals(files_.size(), 4);
+    List<? extends AbstractNode> documentItems = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.parseLong(currentIdentity.getId()),false);
+    assertEquals(documentItems.size(), 4);
   }
 
   @Test

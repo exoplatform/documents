@@ -29,8 +29,10 @@
         v-if="installed"
         v-model="enabled"
         :loading="loading"
+        :disabled="loading"
+        :aria-label="enabled ? $t('UserSettings.pwa.documentsOffline.disable') : $t('UserSettings.pwa.documentsOffline.enable')"
         class="py-2 px-3"
-        @click="toogle" />
+        @click.stop.prevent="toogle" />
       <v-tooltip
         v-else
         bottom>
@@ -38,9 +40,7 @@
           <div
             v-on="on"
             v-bind="attrs">
-            <v-switch
-              :aria-label="$t('UserSettings.pwa.documentsOffline.configure')"
-              disabled />
+            <v-switch disabled />
           </div>
         </template>
         <span v-if="!pwaSupported">
@@ -96,16 +96,25 @@ export default {
     },
     async toogle() {
       this.loading = true;
+      this.$root.$emit('close-alert-message');
       try {
         await this.$nextTick();
         if (this.enabled) {
           await this.$documentOfflineService.createDatabase();
           await this.$documentOfflineService.downloadFavorites();
+          this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationEnabled'), 'success');
         } else {
           await this.$documentOfflineService.deleteDatabase();
+          this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationDeleted'), 'success');
         }
       } catch (e) {
+        // eslint-disable-next-line no-console
+        if (this.enabled) {
+          await this.$documentOfflineService.deleteDatabase();
+        }
+        this.enabled = !this.enabled;
         console.error(e);
+        this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationSettingsUpdateError'), 'error');
       } finally {
         this.loading = false;
       }

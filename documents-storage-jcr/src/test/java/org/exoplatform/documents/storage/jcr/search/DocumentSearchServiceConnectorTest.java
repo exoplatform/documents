@@ -174,14 +174,14 @@ public class DocumentSearchServiceConnectorTest {
     // when
     filter.setQuery("test");
     when(client.sendRequest(expectedQuery, ES_INDEX)).thenReturn(searchResult);
-    Collection<SearchResult> result = documentSearchServiceConnector.search(userIdentity,
-                                                                            WORKSPACE,
-                                                                            path,
-                                                                            filter,
-                                                                            offset,
-                                                                            limit,
-                                                                            sort_field,
-                                                                            sort_direction);
+    Collection<DocumentFileSearchResult> result = documentSearchServiceConnector.search(userIdentity,
+                                                                                        WORKSPACE,
+                                                                                        path,
+                                                                                        filter,
+                                                                                        offset,
+                                                                                        limit,
+                                                                                        sort_field,
+                                                                                        sort_direction);
 
     // then
     // verify call with the expected query

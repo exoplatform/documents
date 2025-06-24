@@ -62,7 +62,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private static final Log      LOG                          = ExoLogger.getLogger(DocumentFileServiceImpl.class);
 
-  public static String          RENAME_FILE_EVENT            = "rename_file_event";
+  public static final String    RENAME_FILE_EVENT = "rename_file_event";
 
   private DocumentFileStorage   documentFileStorage;
 
@@ -110,45 +110,60 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public List<AbstractNode> getDocumentItems(FileListingType listingType,
-                                             DocumentNodeFilter filter,
-                                             int offset,
-                                             int limit,
-                                             long userIdentityId,
-                                             boolean showHiddenFiles) throws IllegalAccessException,
-                                                                  ObjectNotFoundException {
+  public List<? extends AbstractNode> getDocumentItems(FileListingType listingType,
+                                                       DocumentNodeFilter filter,
+                                                       int offset,
+                                                       int limit,
+                                                       long userIdentityId,
+                                                       boolean showHiddenFiles) throws IllegalAccessException,
+  ObjectNotFoundException {
     if (filter == null) {
       throw new IllegalArgumentException("File filter is mandatory");
     }
     if (userIdentityId <= 0) {
       throw new IllegalAccessException("User Identity is mandatory");
     }
-
+    
     switch (listingType) {
-      case TIMELINE:
-        if (!(filter instanceof DocumentTimelineFilter)) {
-          throw new IllegalArgumentException("filter must be an instance of DocumentTimelineFilter");
-        }
-        DocumentTimelineFilter timelinefilter = (DocumentTimelineFilter) filter;
-        timelinefilter.setIncludeHiddenFiles(showHiddenFiles);
-        if (timelinefilter.getOwnerId() == null || timelinefilter.getOwnerId() <= 0) {
-          throw new IllegalArgumentException("OwnerId is mandatory");
-        }
-        List<FileNode> files = getFilesTimeline(timelinefilter, offset, limit, userIdentityId);
-        return new ArrayList<>(files);
-      case FOLDER:
-        if (!(filter instanceof DocumentFolderFilter)) {
-          throw new IllegalArgumentException("filter must be an instance of DocumentFolderFilter");
-        }
-        DocumentFolderFilter folderFilter = (DocumentFolderFilter) filter;
-        folderFilter.setIncludeHiddenFiles(showHiddenFiles);
-        if (StringUtils.isBlank(folderFilter.getParentFolderId())&&(folderFilter.getOwnerId() == null || folderFilter.getOwnerId() <= 0)) {
-          throw new IllegalArgumentException("ParentFolderId or OwnerId is mandatory");
-        }
-        return getFolderChildNodes(folderFilter, offset, limit, userIdentityId);
-      default:
-        return Collections.emptyList();
+    case TIMELINE:
+      if (!(filter instanceof DocumentTimelineFilter)) {
+        throw new IllegalArgumentException("filter must be an instance of DocumentTimelineFilter");
+      }
+      DocumentTimelineFilter timelinefilter = (DocumentTimelineFilter) filter;
+      timelinefilter.setIncludeHiddenFiles(showHiddenFiles);
+      if (timelinefilter.getOwnerId() == null || timelinefilter.getOwnerId() <= 0) {
+        throw new IllegalArgumentException("OwnerId is mandatory");
+      }
+      List<FileNode> files = getFilesTimeline(timelinefilter, offset, limit, userIdentityId);
+      return new ArrayList<>(files);
+    case FOLDER:
+      if (!(filter instanceof DocumentFolderFilter)) {
+        throw new IllegalArgumentException("filter must be an instance of DocumentFolderFilter");
+      }
+      DocumentFolderFilter folderFilter = (DocumentFolderFilter) filter;
+      folderFilter.setIncludeHiddenFiles(showHiddenFiles);
+      if (StringUtils.isBlank(folderFilter.getParentFolderId())
+          && (folderFilter.getOwnerId() == null || folderFilter.getOwnerId() <= 0)) {
+        throw new IllegalArgumentException("ParentFolderId or OwnerId is mandatory");
+      }
+      return getFolderChildNodes(folderFilter, offset, limit, userIdentityId);
+    default:
+      return Collections.emptyList();
     }
+  }
+
+  @Override
+  public List<String> getFavoriteFileIds(DocumentNodeFilter filter,
+                                         int offset,
+                                         int limit,
+                                         long userIdentityId) throws IllegalAccessException {
+    if (filter == null) {
+      throw new IllegalArgumentException("File filter is mandatory");
+    }
+    if (userIdentityId <= 0) {
+      throw new IllegalAccessException("User Identity is mandatory");
+    }
+    return documentFileStorage.getFavoriteFileIds(filter, getAclUserIdentity(userIdentityId), offset, limit);
   }
 
   @Override
