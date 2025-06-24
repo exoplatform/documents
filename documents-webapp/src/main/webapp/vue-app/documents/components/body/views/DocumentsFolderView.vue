@@ -338,10 +338,12 @@ export default {
     this.$root.$on('tree-view-expand', this.collapseTreeView );
   },
   mounted(){
-    document.getElementById('headerName')?.closest('tr').addEventListener('mouseover', this.showSelectAllInputOnHover);
-    document.getElementById('headerName')?.closest('tr').addEventListener('mouseleave', this.hideSelectAllInputOnHover);
-    this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
-    DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
+    window.setTimeout(() => {
+      document.getElementById('headerName')?.closest('tr').addEventListener('mouseover', this.showSelectAllInputOnHover);
+      document.getElementById('headerName')?.closest('tr').addEventListener('mouseleave', this.hideSelectAllInputOnHover);
+      this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
+      DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
+    }, 50);
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
