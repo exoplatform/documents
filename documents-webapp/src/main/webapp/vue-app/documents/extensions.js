@@ -397,6 +397,22 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'openInDesktop',
+  labelKey: 'documents.label.openInDesktop',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 1,
+  enabled: (file, isMobile, currentView, isSearchResult, iconExtension) => {
+    return iconExtension?.protocol;
+  },
+  componentOptions: {
+    vueComponent: Vue.options.components['open-in-desktop-menu-action'],
+  },
+});
+
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   id: 'size',
   labelKey: 'documents.label.size',
