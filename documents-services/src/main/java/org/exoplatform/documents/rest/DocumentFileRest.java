@@ -42,6 +42,7 @@ import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
+import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
@@ -255,7 +256,7 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setSortField(getFromAlias(sortField));
       filter.setIncludeHiddenFiles(showHiddenFiles);
       filter.setCategoryIds(categoryIds);
-      List<AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, offset, limit, userIdentityId,showHiddenFiles);
+      List<? extends AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, offset, limit, userIdentityId, showHiddenFiles);
       List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
                                                                                        identityManager,
                                                                                        spaceService,
@@ -273,6 +274,45 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (Exception e) {
       LOG.warn("Error retrieving list of documents", e);
       return Response.serverError().entity(e.getMessage()).build();
+    }
+  }
+
+  @GET
+  @Path("favoriteIds")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Operation(method = "GET", description = "Retrieves the list of favorite documents for an authenticated")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+  })
+  public Response getFavoriteDocumentIds(
+                                         @Parameter(description = "Offset of results to return")
+                                         @Schema(defaultValue = "0")
+                                         @QueryParam("offset")
+                                         int offset,
+                                         @Parameter(description = "Limit of results to return")
+                                         @Schema(defaultValue = "10")
+                                         @QueryParam("limit")
+                                         int limit,
+                                         @Parameter(description = "afterDate")
+                                         @QueryParam("afterDate")
+                                         Long afterDate) {
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      DocumentNodeFilter filter = new DocumentFavoriteFilter();
+      filter.setAscending(false);
+      filter.setSortField(DocumentSortField.MODIFIED_DATE);
+      if (afterDate != null && afterDate.longValue() > 0) {
+        filter.setAfterDate(afterDate);
+      }
+      List<String> ids = documentFileService.getFavoriteFileIds(filter,
+                                                                offset,
+                                                                limit,
+                                                                userIdentityId);
+      return Response.ok(ids).build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     }
   }
 

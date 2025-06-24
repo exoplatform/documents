@@ -122,14 +122,14 @@ public class DocumentSearchServiceConnector {
     }
   }
 
-  public Collection<SearchResult> search(Identity userIdentity,
-                                         String workspace,
-                                         String path,
-                                         DocumentNodeFilter filter,
-                                         int offset,
-                                         int limit,
-                                         String sortField,
-                                         String sortDirection) {
+  public Collection<DocumentFileSearchResult> search(Identity userIdentity,
+                                                     String workspace,
+                                                     String path,
+                                                     DocumentNodeFilter filter,
+                                                     int offset,
+                                                     int limit,
+                                                     String sortField,
+                                                     String sortDirection) {
     if (userIdentity == null) {
       throw new IllegalArgumentException("Viewer identity is mandatory");
     }
@@ -381,11 +381,11 @@ public class DocumentSearchServiceConnector {
     return entries;
   }
 
-  protected Collection<SearchResult> buildResult(String jsonResponse) {
+  protected Collection<DocumentFileSearchResult> buildResult(String jsonResponse) {
 
     LOG.debug("Search Query response from ES : {} ", jsonResponse);
 
-    Collection<SearchResult> results = new ArrayList<>();
+    Collection<DocumentFileSearchResult> results = new ArrayList<>();
     JSONParser parser = new JSONParser();
 
     Map json;
@@ -405,12 +405,10 @@ public class DocumentSearchServiceConnector {
         }
       }
     }
-
     return results;
-
   }
 
-  protected SearchResult buildHit(JSONObject jsonHit) {
+  protected DocumentFileSearchResult buildHit(JSONObject jsonHit) {
     JSONObject hitSource = (JSONObject) jsonHit.get("_source");
     String title = getTitleFromJsonResult(hitSource);
     String url = getUrlFromJsonResult(hitSource);

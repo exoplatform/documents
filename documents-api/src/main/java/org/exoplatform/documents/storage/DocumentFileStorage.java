@@ -383,4 +383,9 @@ public interface DocumentFileStorage {
 
   boolean canImport(Identity identity);
 
+  List<String> getFavoriteFileIds(DocumentNodeFilter filter,
+                                  Identity aclUserIdentity,
+                                  int offset,
+                                  int limit);
+
 }

@@ -62,7 +62,7 @@ public class EntityBuilder {
                                                                 SpaceService spaceService,
                                                                 MetadataService metadataService,
                                                                 PublicDocumentAccessService publicDocumentAccessService,
-                                                                List<AbstractNode> documents,
+                                                                List<? extends AbstractNode> documents,
                                                                 String expand,
                                                                 long authenticatedUserId) {
     return documents.stream()

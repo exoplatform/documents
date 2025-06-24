@@ -294,13 +294,12 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response3.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    List<AbstractNode> files_ = new ArrayList<>();
-    files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,
-                                                  filter,
-                                                  0,
-                                                  0,
-                                                  Long.valueOf(currentIdentity.getId()),
-                                                  false);
+    List<? extends AbstractNode> files_ = documentFileService.getDocumentItems(FileListingType.TIMELINE,
+                                                                               filter,
+                                                                               0,
+                                                                               0,
+                                                                               Long.valueOf(currentIdentity.getId()),
+                                                                               false);
 
     FileNodeEntity nodeEntity = new FileNodeEntity();
     nodeEntity.setLinkedFileId("1");
