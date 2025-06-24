@@ -22,8 +22,7 @@
             :min-size="minSize"
             :max-size="maxSize"
             :is-mobile="isMobile"
-            :selected-documents="selectedDocuments"
-             />
+            :selected-documents="selectedDocuments" />
           <categories-filter
             v-if="$root.allowFilteringPerCategory && recentViewSelected"
             v-show="hasDocuments"

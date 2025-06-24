@@ -16,19 +16,26 @@
  */
 
 export const DB_NAME = 'FavoriteDocuments';
-export const DB_VERSION = '2';
+export const DB_VERSION = '2'; // Must be > 1
 export const DB_FILES_OBJECT_STORE = 'files';
 export const DB_FILE_BLOBS_OBJECT_STORE = 'file-blobs';
 
 /* File Item Operations */
-
-export async function downloadFavorites(offset, limit, size) {
-  const favoriteData = await Vue.prototype.$favoriteService.getFavorites(offset || 0, limit || 10, !offset || !size, 'file');
-  const items = favoriteData?.favoritesItem || [];
-  size = favoriteData?.size || size || 0;
-  await Promise.all(items.map(item => saveFile(item.objectId)));
-  if (size && size > favoriteData.offset + favoriteData.limit) {
-    await downloadFavorites(favoriteData.offset + favoriteData.limit, favoriteData.limit, size);
+let downloadingFavorites = false;
+export async function downloadFavorites() {
+  if (downloadingFavorites) {
+    return;
+  }
+  const syncTime = Date.now();
+  downloadingFavorites = true;
+  try {
+    await downloadFavoriteFiles(0, 10);
+    if (navigator?.storage?.persist) {
+      await navigator.storage.persist();
+    }
+  } finally {
+    localStorage.setItem('favorite-documents-lastSync', String(syncTime));
+    downloadingFavorites = false;
   }
 }
 
@@ -72,6 +79,9 @@ export async function removeFile(file) {
 
 export async function getFile(fileId) {
   const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
   return new Promise(resolve => {
     const transaction = database.transaction([DB_FILES_OBJECT_STORE], 'readonly');
     const request = transaction.objectStore(DB_FILES_OBJECT_STORE).get(fileId);
@@ -82,20 +92,32 @@ export async function getFile(fileId) {
 
 export async function getFileBlob(fileId) {
   const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
   return new Promise(resolve => {
     const transaction = database.transaction([DB_FILE_BLOBS_OBJECT_STORE], 'readonly');
     const request = transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).get(fileId);
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      transaction.db.close();
+      resolve(request.result);
+    };
     request.onerror = () => resolve(null);
   });
 }
 
 export async function getFiles() {
   const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
   return new Promise(resolve => {
     const files = [];
     const transaction = database.transaction([DB_FILES_OBJECT_STORE], 'readonly');
-    transaction.oncomplete = () => resolve(files);
+    transaction.oncomplete = () => {
+      transaction.db.close();
+      resolve(files);
+    };
     transaction.objectStore(DB_FILES_OBJECT_STORE).openCursor().onsuccess = e => {
       const cursor = e.target.result;
       if (cursor?.value) {
@@ -106,13 +128,46 @@ export async function getFiles() {
   });
 }
 
+async function downloadFavoriteFiles(offset, limit) {
+  const fileIds = await getFavoriteFileIds(offset, limit);
+  await Promise.all(fileIds.map(async id => {
+    try {
+      await saveFile(id);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.debug(`Error retrieving file with id ${id}`, e);
+    }
+  }));
+  if (fileIds.length >= limit) {
+    await downloadFavoriteFiles(offset + limit, limit);
+  }
+}
+
+function getFavoriteFileIds(offset, limit) {
+  const lastSyncDate = localStorage.getItem('favorite-documents-lastSync') ? Number(localStorage.getItem('favorite-documents-lastSync')) : 0;
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/favoriteIds?offset=${offset}&limit=${limit}&afterDate=${lastSyncDate}`)
+    .then(resp => {
+      if (resp?.ok) {
+        return resp.json();
+      } else {
+        throw new Error('Server indicates an error while sending request');
+      }
+    });   
+}
+
 /* Files DB Operations */
 
 async function removeFileFromDB(fileId) {
   const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
   return new Promise(resolve => {
     const transaction = database.transaction([DB_FILES_OBJECT_STORE, DB_FILE_BLOBS_OBJECT_STORE], 'readwrite');
-    transaction.oncomplete = resolve;
+    transaction.oncomplete = () => {
+      transaction.db.close();
+      resolve();
+    };
     transaction.objectStore(DB_FILES_OBJECT_STORE).delete(fileId);
     transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).delete(fileId);
   });
@@ -120,9 +175,15 @@ async function removeFileFromDB(fileId) {
 
 async function addFileToDB(file, blob) {
   const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
   return new Promise(resolve => {
     const transaction = database.transaction([DB_FILES_OBJECT_STORE, DB_FILE_BLOBS_OBJECT_STORE], 'readwrite');
-    transaction.oncomplete = resolve;
+    transaction.oncomplete = () => {
+      transaction.db.close();
+      resolve();
+    };
     const fileToStore = {
       ...file,
       downloadTime: Date.now(),
@@ -133,16 +194,15 @@ async function addFileToDB(file, blob) {
 }
 
 /* Database Operations */
-let localDatabase;
 export async function isDatabaseExists() {
   const dbs = await window.indexedDB.databases();
   return !!dbs?.find?.(db => db.name === DB_NAME);
 }
 
 export async function deleteDatabase() {
+  localStorage.removeItem('favorite-documents-lastSync');
   if (await isDatabaseExists()) {
     const db = retrieveDatabase('1');
-    localDatabase = null;
     if (db) {
       return new Promise((resolve, reject) => {
         const request = window.indexedDB.deleteDatabase(DB_NAME);
@@ -158,12 +218,11 @@ export function createDatabase() {
 }
 
 async function getDatabase() {
-  if (!(await isDatabaseExists())) {
+  if (await isDatabaseExists()) {
+    return retrieveDatabase();
+  } else {
     return null;
-  } else if (!localDatabase) {
-    localDatabase = await retrieveDatabase();
   }
-  return localDatabase;
 }
 
 async function retrieveDatabase(version) {

@@ -14,10 +14,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.constant;
+package org.exoplatform.documents.model;
 
-public enum FileListingType {
-  TIMELINE,
-  FOLDER,
-  FAVORITES;
+import lombok.*;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class DocumentFavoriteFilter extends DocumentTimelineFilter {
+
+  @Override
+  public Boolean getFavorites() {
+    return true;
+  }
+
 }
