@@ -48,6 +48,9 @@
       ref="drawer"
       @select="selectCategory" />
   </div>
+  <v-card-subtitle v-else class="d-flex mb-auto px-0 pt-2px d-inline text-no-wrap">
+    {{ $t('documents.drawer.details.noCategory') }}
+  </v-card-subtitle>
 </template>
 <script>
 export default {
