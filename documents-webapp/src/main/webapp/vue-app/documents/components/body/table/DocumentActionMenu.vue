@@ -76,10 +76,14 @@ export default {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
 
       if (!this.isMultiSelection) {
-        extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile, this.currentView, this.isSearchResult));
+        let iconExtension;
+        if (!this.file?.folder && this.$documentsIconsExtension?.[0]) {
+          iconExtension = this.$documentsIconsExtension?.[0]?.get?.(this.file?.mimeType);
+        }
+        extensions = extensions.filter(extension => extension.enabled(this.file, this.isMobile, this.currentView, this.isSearchResult, iconExtension));
 
       } else {
-        extensions = extensions.filter(extension => extension.enabledForMultiSelection());
+        extensions = extensions.filter(extension => extension?.enabledForMultiSelection?.());
         extensions.forEach(extension => {
           extension.disabled = this.selectedDocuments.some(file => !extension.enabled(file));
         });
