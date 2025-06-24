@@ -62,6 +62,8 @@ import FolderTreeViewDrawer from './components/body/views/FolderTreeViewDrawer.v
 import TreeView from './components/body/views/TreeView.vue';
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
 import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
+import OpenInDesktopCredentialsDialog from './components/body/actions/OpenInDesktopCredentialsDialog.vue';
+import OpenInDesktopMenuAction from './components/body/actions/OpenInDesktopMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
@@ -135,6 +137,8 @@ const components = {
   'copy-link-menu-action': CopyLinkMenuAction,
   'favorite-menu-action': FavoriteMenuAction,
   'delete-menu-action': DeleteMenuAction,
+  'open-in-desktop-menu-action': OpenInDesktopMenuAction,
+  'open-in-desktop-credentials-dialog': OpenInDesktopCredentialsDialog,
   'shortcut-menu-action': ShortcutMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
   'folder-tree-view': FolderTreeView,
