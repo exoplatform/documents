@@ -127,21 +127,12 @@ export default {
     },
     async handleFavoriteDocumentAdded() {
       this.$emit('added');
-      if (this.isFavoritesSynchronized || !this.isPwaEnabled) {
-        document.dispatchEvent(new CustomEvent('alert-message', {detail: {
-          alertType: 'success',
-          alertMessage: this.$t('documents.favoriteAdded'),
-        }}));
-        if (this.isFavoritesSynchronized) {
-          await this.$documentOfflineService.saveFile(this.file.id);
-        }
-      } else {
-        document.dispatchEvent(new CustomEvent('alert-message', {detail: {
-          alertType: 'success',
-          alertMessage: this.$t('documents.favoriteAddedWithSyncChoice'),
-          alertLinkCallback: this.handleSyncFavoriteDocument,
-          alertLinkText: this.$t('documents.file.synchronizeLocally'),
-        }}));
+      document.dispatchEvent(new CustomEvent('alert-message', {detail: {
+        alertType: 'success',
+        alertMessage: this.$t('documents.favoriteAdded'),
+      }}));
+      if (this.isFavoritesSynchronized && this.isPwaEnabled) {
+        await this.$documentOfflineService.saveFile(this.file.id);
       }
     },
     removeError() {
