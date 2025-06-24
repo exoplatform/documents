@@ -183,7 +183,7 @@
         </v-list-item>
         <v-list-item>
           <v-list-item-content class="py-1">
-            <v-list-item-title class="text-title py-0">
+            <v-list-item-title>
               {{ $t('documents.drawer.details.description') }}
             </v-list-item-title>
           </v-list-item-content>
@@ -191,7 +191,7 @@
         <v-list-item>
           <v-list-item-content class="pt-0 pb-4">
             <div v-if="showNoDescription">
-              <div class="d-flex flex-row justify-center text-center pt-4">
+              <div class="d-flex flex-row justify-center text-center">
                 <v-icon size="40" class="descriptionIcon"> fas fa-file-alt </v-icon>
               </div>
               <div class="documentDescription d-flex flex-column justify-center text-center pt-2 pb-8">
