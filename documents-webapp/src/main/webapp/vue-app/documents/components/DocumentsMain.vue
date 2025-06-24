@@ -78,7 +78,7 @@
               :selected-documents="selectedDocuments"
               :folder-path="folderPath"
               :is-mobile="isMobile"
-              class="px-4" />
+              class="px-4 no-border" />
             <exo-document-notification-alerts />
           </div>
         </div>

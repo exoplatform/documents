@@ -7,7 +7,7 @@
             icon
             v-bind="attrs"
             v-on="on"
-            class="me-2"
+            class="me-2 ms-n2"
             :disabled="disabledIconTree"
             @click.stop.prevent="openTreeView()">
             <img
