@@ -42,7 +42,8 @@
     <td>
       <date-format
         :value="file.downloadTime"
-        :format="dateFormat" />
+        :format="dateFormat"
+        class="d-flex align-center" />
     </td>
     <td>
       <div class="d-flex justify-center align-center">
