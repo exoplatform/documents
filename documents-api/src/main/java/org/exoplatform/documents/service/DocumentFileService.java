@@ -546,11 +546,15 @@ public interface DocumentFileService {
    * @param documentId Document identifier
    * @return {@link List} of linked category identifiers
    */
-  List<Long> getDocumentCategoryIds(String documentId);
+  default List<Long> getDocumentCategoryIds(String documentId) {
+    throw new UnsupportedOperationException();
+  }
 
   /**
-   * @return {@link List} of linked category identifiers to documents
+   * @param spaceIdentityId Space {@link org.exoplatform.social.core.identity.model.Identity} Identifier
+   * @return {@link List} of Category Ids used in Documents
    */
-  List<Long> getDocumentCategoryIds();
-
+  default List<Long> getDocumentCategoryIds(long spaceIdentityId, String userName) {
+    throw new UnsupportedOperationException();
+  }
 }

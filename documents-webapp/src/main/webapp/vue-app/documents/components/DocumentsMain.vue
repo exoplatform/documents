@@ -29,7 +29,7 @@
             v-model="$root.selectedCategoryId"
             :category-depth="$root.categoryDepth"
             :category-ids="$root.settings.categoryIds"
-            :space-id="$root.spaceId"
+            :space-id="$root.ownerId"
             class="full-width border-box-sizing application-background-color application-border application-border-radius py-2 px-3 mb-5"
             object-type="document"
             hide-on-empty />
