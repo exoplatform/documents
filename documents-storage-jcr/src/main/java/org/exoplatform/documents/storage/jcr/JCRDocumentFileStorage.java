@@ -1283,18 +1283,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
     StringBuilder categoryFilter = new StringBuilder();
     if (CollectionUtils.isNotEmpty(categoryIds)) {
-      categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (");
       String joinedConditions = categoryIds.stream()
-              .map(String::valueOf)
-              .map(id -> String.join(" OR ",
-                      "exo:categoryIds = '" + id + "'",
-                      "exo:categoryIds LIKE '" + id + ",%'",
-                      "exo:categoryIds LIKE '%," + id + ",%'",
-                      "exo:categoryIds LIKE '%," + id + "'"
-              ))
+              .map(id -> "exo:categoryIds = '" + id + "'")
               .collect(Collectors.joining(" OR "));
-      categoryFilter.append(joinedConditions);
-      categoryFilter.append(")");
+
+      categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (")
+              .append(joinedConditions)
+              .append(")");
     }
 
     return new StringBuilder().append("SELECT * FROM ")
