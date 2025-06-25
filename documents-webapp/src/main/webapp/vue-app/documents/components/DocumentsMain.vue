@@ -24,7 +24,7 @@
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
           <categories-filter
-            v-if="$root.allowFilteringPerCategory && recentViewSelected"
+            v-if="displayCategoriesFilter"
             v-show="hasDocuments"
             v-model="$root.selectedCategoryId"
             :category-depth="$root.categoryDepth"
@@ -187,6 +187,9 @@ export default {
     publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`
   }),
   computed: {
+    displayCategoriesFilter() {
+      return this.$root.allowFilteringPerCategory && this.recentViewSelected;
+    },
     hasDocuments() {
       return !!this.files.length;
     },

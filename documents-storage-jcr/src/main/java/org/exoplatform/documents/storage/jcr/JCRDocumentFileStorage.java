@@ -1112,7 +1112,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
     SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
     try {
-      Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, aclIdentity.getUserId(), ownerIdentity, sessionProvider);
+      Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, ownerIdentity.getRemoteId(), ownerIdentity, sessionProvider);
       if (identityRootNode == null) {
         return Collections.emptyList();
       }
