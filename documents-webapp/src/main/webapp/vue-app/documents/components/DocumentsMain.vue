@@ -30,7 +30,7 @@
             :category-depth="$root.categoryDepth"
             :category-ids="$root.settings.categoryIds"
             :space-id="$root.ownerId"
-            class="full-width border-box-sizing application-background-color application-border application-border-radius py-2 px-3 mb-5"
+            class="full-width border-box-sizing application-background-color application-border application-border-radius py-2 px-4"
             object-type="document"
             hide-on-empty />
           <div v-if="searchResult && !loading && initialized">
