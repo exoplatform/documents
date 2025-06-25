@@ -372,12 +372,14 @@ public class JCRDocumentsUtil {
   private static void retrieveCategoryIdsProperty(Node node, FileNode fileNode) throws RepositoryException {
     List<Long> idsList = new ArrayList<>();
     if (node != null && node.hasProperty(NodeTypeConstants.DOCUMENT_CATEGORY_IDS)) {
-      String categoryIds = node.getProperty(DOCUMENT_CATEGORY_IDS).getString();
-      idsList = Arrays.stream(categoryIds.split(","))
-                      .map(String::trim)
-                      .filter(s -> !s.isEmpty())
-                      .map(Long::parseLong)
-                      .collect(Collectors.toList());
+      Value[] categoryIds = node.getProperty(DOCUMENT_CATEGORY_IDS).getValues();
+      idsList = Arrays.stream(categoryIds).map(v -> {
+        try {
+          return v.getLong();
+        } catch (RepositoryException e) {
+          return null;
+        }
+      }).filter(Objects::nonNull).collect(Collectors.toList());
     }
     fileNode.setCategoryIds(idsList);
   }
