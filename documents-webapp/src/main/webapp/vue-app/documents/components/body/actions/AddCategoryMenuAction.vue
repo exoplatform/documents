@@ -36,7 +36,7 @@ export default {
   },
   computed: {
     spaceId() {
-      return eXo.env.portal.spaceId || 0;
+      return eXo.env.portal.spaceId || eXo.env.portal.userIdentityId;
     },
   },
   methods: {
