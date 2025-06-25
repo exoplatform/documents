@@ -46,7 +46,6 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
-import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
@@ -1131,11 +1130,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       while (nodes.hasNext()) {
         Node node = nodes.nextNode();
         if (node.hasProperty(DOCUMENT_CATEGORY_IDS)) {
-          String raw = node.getProperty(DOCUMENT_CATEGORY_IDS).getString();
-          String[] parts = raw.split(",");
-          for (String part : parts) {
+          Value[] values = node.getProperty(DOCUMENT_CATEGORY_IDS).getValues();
+          for (Value value : values) {
             try {
-              ids.add(Long.parseLong(part.trim()));
+              ids.add(Long.parseLong(value.getString()));
             } catch (NumberFormatException ignored) {
               // skip invalid entries
             }
