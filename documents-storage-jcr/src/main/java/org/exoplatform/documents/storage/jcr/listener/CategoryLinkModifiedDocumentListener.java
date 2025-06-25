@@ -31,10 +31,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import javax.jcr.Node;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.Value;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static io.meeds.social.category.service.CategoryLinkService.EVENT_CATEGORY_LINK_ADDED;
@@ -80,19 +83,23 @@ public class CategoryLinkModifiedDocumentListener implements ListenerBase<Long, 
         return;
       }
       List<Long> categoryIds = documentFileService.getDocumentCategoryIds(object.getId());
-      String newCategoryIds = categoryIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-
+      String[] newCategoryIds = categoryIds.stream().map(String::valueOf).toArray(String[]::new);
       if (node.canAddMixin(MIX_DOCUMENT_CATEGORY)) {
         node.addMixin(MIX_DOCUMENT_CATEGORY);
       }
 
       boolean modified = true;
       if (node.hasProperty(DOCUMENT_CATEGORY_IDS)) {
-        String existingCategoryIds = node.getProperty(DOCUMENT_CATEGORY_IDS).getString();
-        List<String> existingIdsList = Arrays.asList(existingCategoryIds.split(","));
+        Value[] existingValues = node.getProperty(DOCUMENT_CATEGORY_IDS).getValues();
+        List<String> existingIdsList = Arrays.stream(existingValues).map(v -> {
+          try {
+            return v.getString();
+          } catch (RepositoryException e) {
+            return null;
+          }
+        }).filter(Objects::nonNull).collect(Collectors.toList());
 
-        modified = CollectionUtils.size(existingIdsList) != CollectionUtils.size(categoryIds) || (!categoryIds.isEmpty()
-            && !CollectionUtils.isEqualCollection(Collections.singleton(categoryIds), existingIdsList));
+        modified = CollectionUtils.size(existingIdsList) != CollectionUtils.size(categoryIds) || (!categoryIds.isEmpty() && !CollectionUtils.isEqualCollection(Collections.singleton(categoryIds), existingIdsList));
       }
       if (modified) {
         node.setProperty(DOCUMENT_CATEGORY_IDS, newCategoryIds);
