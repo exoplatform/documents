@@ -78,7 +78,7 @@ export function init(event) {
           async init() {
             const registration = await navigator?.serviceWorker?.getRegistration?.();
             this.pwaEnabled = !!registration;
-            this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDatabaseExists());
+            this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isOfflineDocumentsEnabled());
           },
         },
         template: `<document-info-drawer id="${appId}"/>`,

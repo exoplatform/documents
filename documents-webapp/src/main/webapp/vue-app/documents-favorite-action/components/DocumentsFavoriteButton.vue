@@ -93,7 +93,7 @@ export default {
     async init() {
       const registration = await navigator?.serviceWorker?.getRegistration?.();
       this.pwaEnabled = !!registration;
-      this.favoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isDatabaseExists());
+      this.favoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isOfflineDocumentsEnabled());
     },
     // Begin: API to use by parent component
     changeFavorite() {
