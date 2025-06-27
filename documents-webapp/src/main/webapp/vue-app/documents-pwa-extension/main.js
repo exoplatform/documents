@@ -15,17 +15,22 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import * as documentOfflineService from './js/DocumentOfflineService.js';
-import * as transferRulesService from '../../js/transferRulesService.js';
+export function init() {
+  downloadFavorites();
+  window.setInterval(downloadFavorites, 3 * 60 * 1000);
+}
 
-if (!Vue.prototype.$documentOfflineService) {
-  window.Object.defineProperty(Vue.prototype, '$documentOfflineService', {
-    value: documentOfflineService,
+function downloadFavorites() {
+  window.require(['SHARED/DocumentsPWAOfflineApp'], () => {
+    downloadFavoritesFromServer();
   });
 }
 
-if (!Vue.prototype.$transferRulesService) {
-  window.Object.defineProperty(Vue.prototype, '$transferRulesService', {
-    value: transferRulesService,
-  });
+async function downloadFavoritesFromServer() {
+  if (await Vue.prototype.$documentOfflineService.isOfflineDocumentsEnabled()) {
+    if (!(await Vue.prototype.$documentOfflineService.isDatabaseExists())) {
+      await Vue.prototype.$documentOfflineService.createDatabase();
+    }
+    await Vue.prototype.$documentOfflineService.downloadFavorites();
+  }
 }

@@ -20,19 +20,25 @@
       <v-list-item-title class="text-wrap">
         {{ $t('UserSettings.pwa.documentsOffline.title') }}
       </v-list-item-title>
-      <v-list-item-subtitle class="text-wrap">
-        {{ $t('UserSettings.pwa.documentsOffline.description') }}
-      </v-list-item-subtitle>
     </v-list-item-content>
     <v-list-item-action class="mt-0 mb-auto">
-      <v-switch
-        v-if="installed"
-        v-model="enabled"
+      <v-card
+        v-if="enabled"
+        class="border-color py-2 px-3"
+        disabled
+        flat>
+        <v-icon class="success--text me-2" size="18">fa-check</v-icon>
+        {{ $t('UserSettings.pwa.documentsOffline.enabled') }}
+      </v-card>
+      <v-btn
+        v-else-if="installed"
+        :aria-label="$t('UserSettings.pwa.documentsOffline.enableOfflineAccessToDocuments')"
         :loading="loading"
         :disabled="loading"
-        :aria-label="enabled ? $t('UserSettings.pwa.documentsOffline.disable') : $t('UserSettings.pwa.documentsOffline.enable')"
-        class="py-2 px-3"
-        @click.stop.prevent="toogle" />
+        class="btn"
+        @click.stop.prevent="enable">
+        {{ $t('UserSettings.pwa.documentsOffline.enable') }}
+      </v-btn>
       <v-tooltip
         v-else
         bottom>
@@ -40,7 +46,11 @@
           <div
             v-on="on"
             v-bind="attrs">
-            <v-switch disabled />
+            <v-btn
+              class="btn"
+              disabled>
+              {{ $t('UserSettings.pwa.documentsOffline.enable') }}
+            </v-btn>
           </div>
         </template>
         <span v-if="!pwaSupported">
@@ -87,40 +97,34 @@ export default {
     async init() {
       this.loading = true;
       try {
-        this.enabled = await this.$documentOfflineService.isDatabaseExists();
-      } catch (e) {
-        console.error(e);
-      } finally {
-        this.loading = false;
-      }
-    },
-    async toogle() {
-      this.loading = true;
-      this.$root.$emit('close-alert-message');
-      try {
-        await this.$nextTick();
-        if (this.enabled) {
-          await this.$documentOfflineService.createDatabase();
-          await this.$documentOfflineService.downloadFavorites();
-          this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationEnabled'), 'success');
-        } else {
+        this.enabled = await this.$documentOfflineService.isOfflineDocumentsEnabled();
+        if (this.enabled && !this.installed) {
           await this.$documentOfflineService.deleteDatabase();
-          this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationDeleted'), 'success');
+          this.enabled = false;
         }
       } catch (e) {
         // eslint-disable-next-line no-console
-        if (this.enabled) {
-          await this.$documentOfflineService.deleteDatabase();
-        }
-        this.enabled = !this.enabled;
         console.error(e);
-        this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationSettingsUpdateError'), 'error');
       } finally {
         this.loading = false;
       }
     },
-    openDrawer() {
-      this.$refs?.drawer?.open?.();
+    async enable() {
+      this.loading = true;
+      this.$root.$emit('close-alert-message');
+      try {
+        await this.$documentOfflineService.createDatabase();
+        await this.$documentOfflineService.downloadFavorites();
+        this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationEnabled'), 'success');
+      } catch (e) {
+        await this.$documentOfflineService.deleteDatabase();
+        // eslint-disable-next-line no-console
+        console.error(e);
+        this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationSettingsUpdateError'), 'error');
+      } finally {
+        this.enabled = await this.$documentOfflineService.isOfflineDocumentsEnabled();
+        this.loading = false;
+      }
     },
   },
 };
