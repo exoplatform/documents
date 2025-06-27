@@ -34,19 +34,20 @@
       flat>
       <div class="text-title mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.noSiteConnection') }}</div>
     </v-card>
-    <v-card class="d-flex align-center pa-4" flat>
-      <div class="text-title">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
-      <v-spacer />
-      <v-text-field
-        v-if="hasOfflineFiles"
-        v-model="search"
-        :label="$t('OfflineApp.pwa.header.search')"
-        :prepend-inner-icon="term && 'fa-filter primary--text' || 'fa-filter icon-default-color'"
-        height="24"
-        class="full-height pa-0 my-0 ms-4"
-        single-line
-        hide-details />
-    </v-card>
+    <application-toolbar
+      ref="applicationToolbar"
+      :right-text-filter="hasOfflineFiles && {
+        minCharacters: 3,
+        placeholder: $t('OfflineApp.pwa.header.search'),
+        tooltip: $t('OfflineApp.pwa.header.search')
+      }"
+      class="mx-n4"
+      compact
+      @filter-text-input-end-typing="search = $event">
+      <template #left>
+        <div class="text-title">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
+      </template>
+    </application-toolbar>
     <v-data-table
       v-if="hasOfflineFiles"
       :items="offlineFiles"
