@@ -37,9 +37,12 @@
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
         </template>
-        <template v-if="$root.canEdit && $root.hover && !filterDispalyed" #right>
-          <div class="ms-auto">
-            <v-tooltip max-width="300" bottom>
+        <template #right>
+          <div class="d-flex ms-auto">
+            <v-tooltip
+              v-if="$root.canEdit && $root.hover && !filterDispalyed"
+              max-width="300"
+              bottom>
               <template #activator="{ on, attrs }">
                 <v-btn
                   id="documentSettingsButton"
@@ -55,11 +58,29 @@
                 {{ $t('documents.settings.button.tooltip') }}
               </span>
             </v-tooltip>
+            <v-tooltip v-if="offlineModeEnabled" bottom>
+              <template #activator="{ on, attrs }">
+                <div
+                  v-bind="attrs"
+                  v-on="on">
+                  <v-btn
+                    id="offlineDocumentsButton"
+                    class="ms-4"
+                    small
+                    icon
+                    @click="$root.$emit('open-document-offline-files')">
+                    <v-icon size="20">fa-power-off</v-icon>
+                  </v-btn>
+                </div>
+              </template>
+              <span>{{ $t('documents.offline.accessDocumentsTooltip') }}</span>
+            </v-tooltip>
           </div>
         </template>
       </application-toolbar>
     </div>
     <documents-setting-drawer :view-list="viewList" />
+    <documents-offline-drawer />
   </div>
 </template>
 
@@ -125,6 +146,7 @@ export default {
     tab: 'timeline',
     selectAllChecked: false,
     showFilter: false,
+    offlineModeEnabled: false,
     filterDispalyed: false,
     centerBotton: {
       selected: 'timeline',
@@ -184,13 +206,24 @@ export default {
   created() {
     this.$root.$on('resetSearch', this.cancelSearch);
     this.$root.$on('filer-query', this.filterQuery);
-    this.$root.$on('show-mobile-filter', data => {
-      this.showFilter= data;
-    });
+    this.$root.$on('show-mobile-filter', this.handleShowFilter);
     document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
+    this.init();
     this.refreshTabExtensions();
   },
+  beforeDestroy() {
+    this.$root.$off('resetSearch', this.cancelSearch);
+    this.$root.$off('filer-query', this.filterQuery);
+    this.$root.$off('show-mobile-filter', this.handleShowFilter);
+    document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
+  },
   methods: {
+    async init() {
+      this.offlineModeEnabled = await this.$documentOfflineService.isDatabaseExists();
+    },
+    handleShowFilter(data) {
+      this.showFilter = data;
+    },
     filterQuery(query){
       if (this.query === query){
         return;

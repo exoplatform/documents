@@ -15,6 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import '../documents-offline-common/main.js';
+
 import './initComponents.js';
 import '../documents-favorite-action/initComponents.js';
 

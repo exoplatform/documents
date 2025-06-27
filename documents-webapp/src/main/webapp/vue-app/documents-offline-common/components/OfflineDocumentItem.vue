@@ -16,9 +16,9 @@
 -->
 <template>
   <tr>
-    <td>
+    <td :class="cellClass">
       <v-card
-        class="d-flex align-center text-truncate"
+        class="d-flex align-center overflow-hidden"
         color="transparent"
         flat
         @click="openFile">
@@ -29,14 +29,14 @@
         </v-icon>
         <div
           :title="file.name"
-          class="d-flex text-truncate px-5">
-          {{ file.name }}
+          class="d-flex overflow-hidden ps-5">
+          <span class="text-truncate">{{ file.name }}</span>
         </div>
       </v-card>
     </td>
-    <td>
+    <td v-if="!noDates" :class="cellClass">
       <v-tooltip bottom>
-        <template v-slot:activator="{on, attrs}">
+        <template #activator="{on, attrs}">
           <div
             v-bind="attrs"
             v-on="on">
@@ -48,9 +48,9 @@
           :format="fullDateFormat" />
       </v-tooltip>
     </td>
-    <td>
+    <td v-if="!noDates" :class="cellClass">
       <v-tooltip bottom>
-        <template v-slot:activator="{on, attrs}">
+        <template #activator="{on, attrs}">
           <div
             v-bind="attrs"
             v-on="on">
@@ -62,7 +62,7 @@
           :format="fullDateFormat" />
       </v-tooltip>
     </td>
-    <td>
+    <td width="75px" :class="cellClass">
       <div class="d-flex justify-center align-center">
         <v-btn
           icon
@@ -79,6 +79,14 @@ export default {
     file: {
       type: Object,
       default: null,
+    },
+    cellClass: {
+      type: String,
+      default: null,
+    },
+    noDates: {
+      type: Boolean,
+      default: false,
     },
   },
   data: () => ({

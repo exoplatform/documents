@@ -15,10 +15,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import OfflineDocumentsApp from './components/OfflineDocumentsApp.vue';
+import OfflineDocumentItem from './components/OfflineDocumentItem.vue';
+import OfflineDocumentPreviewDialog from './components/OfflineDocumentPreviewDialog.vue';
 
 const components = {
-  'documents-offline': OfflineDocumentsApp,
+  'documents-offline-item': OfflineDocumentItem,
+  'documents-offline-preview-dialog': OfflineDocumentPreviewDialog,
 };
 
 for (const key in components) {
