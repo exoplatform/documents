@@ -48,6 +48,7 @@ module.exports = {
     documentsInfoDrawer: './src/main/webapp/vue-app/document-info-drawer/main.js',
     documentsOffline: './src/main/webapp/vue-app/documents-offline/main.js',
     documentsOfflineSettings: './src/main/webapp/vue-app/documents-offline-settings/main.js',
+    documentsPwaExtension: './src/main/webapp/vue-app/documents-pwa-extension/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),

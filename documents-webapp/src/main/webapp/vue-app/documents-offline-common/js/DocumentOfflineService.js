@@ -16,9 +16,14 @@
  */
 
 export const DB_NAME = 'FavoriteDocuments';
-export const DB_VERSION = '2'; // Must be > 1
+export const DB_VERSION = '3'; // Must be > 1
 export const DB_FILES_OBJECT_STORE = 'files';
 export const DB_FILE_BLOBS_OBJECT_STORE = 'file-blobs';
+export const DB_FILES_SETTINGS_STORE = 'files-settings';
+
+export async function isOfflineDocumentsEnabled() {
+  return (await isDatabaseExists()) && (await isDownloadDocumentsEnabled());
+}
 
 /* File Item Operations */
 let downloadingFavorites = false;
@@ -29,12 +34,13 @@ export async function downloadFavorites() {
   const syncTime = Date.now();
   downloadingFavorites = true;
   try {
-    await downloadFavoriteFiles(0, 10);
+    const lastSyncDate = (await getValue('favorite-documents-lastSync')) || 0;
+    await downloadFavoriteFiles(0, 10, lastSyncDate);
+  } finally {
+    await setValue('favorite-documents-lastSync', String(syncTime));
     if (navigator?.storage?.persist) {
       await navigator.storage.persist();
     }
-  } finally {
-    localStorage.setItem('favorite-documents-lastSync', String(syncTime));
     downloadingFavorites = false;
   }
 }
@@ -128,8 +134,8 @@ export async function getFiles() {
   });
 }
 
-async function downloadFavoriteFiles(offset, limit) {
-  const fileIds = await getFavoriteFileIds(offset, limit);
+async function downloadFavoriteFiles(offset, pageSize, lastSyncDate) {
+  const fileIds = await getFavoriteFileIds(offset, pageSize, lastSyncDate);
   await Promise.all(fileIds.map(async id => {
     try {
       await saveFile(id);
@@ -138,14 +144,15 @@ async function downloadFavoriteFiles(offset, limit) {
       console.debug(`Error retrieving file with id ${id}`, e);
     }
   }));
-  if (fileIds.length >= limit) {
-    await downloadFavoriteFiles(offset + limit, limit);
+  if (fileIds.length >= pageSize) {
+    await downloadFavoriteFiles(offset + pageSize, pageSize, lastSyncDate);
   }
 }
 
-function getFavoriteFileIds(offset, limit) {
-  const lastSyncDate = localStorage.getItem('favorite-documents-lastSync') ? Number(localStorage.getItem('favorite-documents-lastSync')) : 0;
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/favoriteIds?offset=${offset}&limit=${limit}&afterDate=${lastSyncDate}`)
+function getFavoriteFileIds(offset, limit, lastSyncDate) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/favoriteIds?offset=${offset}&limit=${limit}&afterDate=${lastSyncDate}`, {
+    credentials: 'include',
+  })
     .then(resp => {
       if (resp?.ok) {
         return resp.json();
@@ -190,6 +197,37 @@ async function addFileToDB(file, blob) {
     };
     transaction.objectStore(DB_FILES_OBJECT_STORE).put(fileToStore, file.id);
     transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).put(blob, file.id);
+    transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).put(blob, file.id);
+  });
+}
+
+/* File Settings DB Operations */
+
+export async function getValue(paramName) {
+  const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
+  return new Promise(resolve => {
+    const transaction = database.transaction([DB_FILES_SETTINGS_STORE], 'readonly');
+    const request = transaction.objectStore(DB_FILES_SETTINGS_STORE).get(paramName);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+}
+
+async function setValue(paramName, paramValue) {
+  const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
+  return new Promise(resolve => {
+    const transaction = database.transaction([DB_FILES_SETTINGS_STORE], 'readwrite');
+    transaction.oncomplete = () => {
+      transaction.db.close();
+      resolve();
+    };
+    transaction.objectStore(DB_FILES_SETTINGS_STORE).put(paramValue, paramName);
   });
 }
 
@@ -233,9 +271,11 @@ async function retrieveDatabase(version) {
     request.onupgradeneeded = e => {
       try {
         if (version === '1') {
+          e.target.result.deleteObjectStore(DB_FILES_SETTINGS_STORE);
           e.target.result.deleteObjectStore(DB_FILE_BLOBS_OBJECT_STORE);
           e.target.result.deleteObjectStore(DB_FILES_OBJECT_STORE);
         } else {
+          e.target.result.createObjectStore(DB_FILES_SETTINGS_STORE);
           e.target.result.createObjectStore(DB_FILE_BLOBS_OBJECT_STORE);
           e.target.result.createObjectStore(DB_FILES_OBJECT_STORE);
         }
@@ -244,4 +284,12 @@ async function retrieveDatabase(version) {
       }
     };
   });
+}
+
+async function isDownloadDocumentsEnabled() {
+  try {
+    return await Vue.prototype.$transferRulesService.getTransfertRulesDownloadDocumentStatus();
+  } catch {
+    return true;
+  }
 }
