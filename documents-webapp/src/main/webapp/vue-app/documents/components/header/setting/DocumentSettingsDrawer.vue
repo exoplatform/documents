@@ -29,20 +29,7 @@
     </template>
     <template v-if="drawer" #content>
       <div class="pa-5" flat>
-        <div class="mb-2 text-header">{{ $t('documents.settings.displayOptions') }}</div>
-        <div class="mb-2 font-weight-bold">{{ $t('documents.settings.viewOptions') }}</div>
-        <v-checkbox
-          v-for="view in viewList"
-          :key="view.id"
-          v-model="view.enabled"
-          :disabled="view.enabled && settings.enabledViewList.length === 1"
-          class="
-          ma-0"
-          @change="changeEnabledList">
-          <template #label>
-            <span class="text-font-size text-color">{{ $t(`${view.name}`) }}</span>
-          </template>
-        </v-checkbox>         
+        <div class="mb-2 text-header">{{ $t('documents.settings.displayOptions') }}</div>  
         <div class="mb-2 font-weight-bold">{{ $t('documents.settings.defaultView') }}</div>
         <v-radio-group
           v-model="settings.defaultView"
@@ -199,10 +186,7 @@ export default {
       this.settings = Object.assign({}, this.$root.settings);
       this.originalSettings = JSON.parse(JSON.stringify(this.$root.settings));
       this.filterPerCategories = !!this.categoryIds?.length;
-      if (!this.settings.enabledViewList || this.settings.enabledViewList.length === 0) {
-        this.settings.enabledViewList = this.viewList.map(item => item.id);
-      }
-      this.settings.defaultView = this.$root.settings.defaultView || this.settings.enabledViewList[0]?.id;
+      this.settings.defaultView = this.$root.settings.defaultView;
       this.settings.collapsedTreeView = this.$root.settings.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true;
       this.$refs.drawer.open();
     },
@@ -220,15 +204,8 @@ export default {
     }, 
     async save() {
       this.saving = true;
-      if (this.settings.enabledViewList.length === 0) {
-        this.$root.$emit('alert-message', this.$t('documents.settings.empty.enabled.list'), 'error');
-        this.saving = false;
-        return;
-      }
       try {
         const formData = new FormData();
-        this.settings.enabledViewList = this.viewList.filter(item => item.enabled).map(item => item.id);
-        const oldEnabledViewList = this.$root.settings.enabledViewList;
         this.$root.settings = this.settings;
         formData.append('settings', JSON.stringify(this.settings));
         const urlParams = new URLSearchParams(formData).toString();
@@ -241,11 +218,6 @@ export default {
           body: urlParams,
         });
         if (response?.ok) {
-          if (JSON.stringify(oldEnabledViewList) !== JSON.stringify(this.$root.settings.enabledViewList)) {
-            document.dispatchEvent(new CustomEvent('extension-Documents-views-updated', {
-              detail: {forceUpdate: true}
-            }));
-          }
           this.$root.$emit('alert-message', this.$t('documents.settings.savedSuccessfully'), 'success');
           this.$root.$emit('documents-settings-updated', this.settings);
           this.close();
