@@ -15,15 +15,37 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import '../documents-offline-common/main.js';
-
 import './initComponents.js';
-import '../documents-favorite-action/initComponents.js';
-
-import './services.js';
-
 import './extensions.js';
 import '../documents-icons-extension/extensions.js';
+
+import * as documentFileService from '../../js/DocumentFileService.js';
+import * as documentsUtils from '../../js/DocumentsUtils.js';
+import * as documentsWebSocket from './js/WebSocket.js';
+import * as transferRulesService from '../../js/transferRulesService.js';
+
+if (!Vue.prototype.$documentFileService) {
+  window.Object.defineProperty(Vue.prototype, '$documentFileService', {
+    value: documentFileService,
+  });
+}
+
+if (!Vue.prototype.$documentsUtils) {
+  window.Object.defineProperty(Vue.prototype, '$documentsUtils', {
+    value: documentsUtils,
+  });
+}
+
+if (!Vue.prototype.$documentsWebSocket) {
+  window.Object.defineProperty(Vue.prototype, '$documentsWebSocket', {
+    value: documentsWebSocket,
+  });
+}
+if (!Vue.prototype.$transferRulesService) {
+  window.Object.defineProperty(Vue.prototype, '$transferRulesService', {
+    value: transferRulesService,
+  });
+}
 
 // get overrided components if exists
 if (extensionRegistry) {
@@ -37,17 +59,21 @@ if (extensionRegistry) {
   document.addEventListener('documents-supported-document-types-updated', () => {
     Vue.prototype.$supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');
   });
+  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  document.addEventListener('documents-documents-icons-extension-updated', () => {
+    Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  });
 }
+
+Vue.use(Vuetify);
+const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 
 //getting language of the PLF
 const lang = eXo && eXo.env.portal.language || 'en';
 
 //should expose the locale ressources as REST API
-const urls = [
-  `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`,
-  `/pwa/i18n/locale.portlet.OfflineApplication?lang=${lang}`,
-  `/social/i18n/locale.portlet.social.UserSettings?lang=${lang}`
-];
+
+const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
 
 Vue.prototype.$nextTick(() => {
   Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
@@ -58,7 +84,7 @@ Vue.prototype.$nextTick(() => {
 
 export async function init(appId, canEdit,  settings, settingsSaveUrl) {
 
-  const i18n = await exoi18n.loadLanguageAsync(lang, urls);
+  const i18n = await exoi18n.loadLanguageAsync(lang, url);
 
   // init Vue app when locale ressources are ready
   let settingsSubcategoryIds;
@@ -74,8 +100,6 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       selectedCategoryId: null,
       selectedCategoryIds: null,
       settingsSubcategoryIds,
-      isFavoritesSynchronized: false,
-      pwaEnabled: false,
       ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     },
     computed: {
@@ -120,7 +144,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       },
     },
     template: `<documents-main id="${appId}" />`,
-    vuetify: Vue.prototype.vuetifyOptions,
+    vuetify,
     i18n
   }, `#${appId}`, 'Documents');
 
