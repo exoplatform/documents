@@ -16,12 +16,30 @@
 -->
 <template>
   <v-card
-    v-if="hasOfflineFiles"
+    v-if="!offlineModeEnabled && initialized"
+    class="d-flex flex-column align-center justify-center"
+    min-height="50vh"
+    min-width="100%"
     flat>
-    <div class="d-flex align-center mb-2 mx-4">
-      <div class="text-header">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
+    <v-icon size="75" class="tertiary-color mt-auto mb-5">fa-wifi</v-icon>
+    <div class="text-title mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.noSiteConnection') }}</div>
+  </v-card>
+  <v-card
+    v-else-if="initialized"
+    color="transparent"
+    flat>
+    <v-card
+      v-if="!hasOfflineFiles"
+      class="d-flex flex-column align-center justify-center py-5 mb-5"
+      min-width="100%"
+      flat>
+      <div class="text-title mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.noSiteConnection') }}</div>
+    </v-card>
+    <v-card class="d-flex align-center pa-4" flat>
+      <div class="text-title">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
       <v-spacer />
       <v-text-field
+        v-if="hasOfflineFiles"
         v-model="search"
         :label="$t('OfflineApp.pwa.header.search')"
         :prepend-inner-icon="term && 'fa-filter primary--text' || 'fa-filter icon-default-color'"
@@ -29,8 +47,9 @@
         class="full-height pa-0 my-0 ms-4"
         single-line
         hide-details />
-    </div>
+    </v-card>
     <v-data-table
+      v-if="hasOfflineFiles"
       :items="offlineFiles"
       :headers="headers"
       :search="search"
@@ -45,24 +64,27 @@
           @preview="openPreview" />
       </template>
     </v-data-table>
+    <v-card
+      v-else
+      class="d-flex flex-column align-center justify-center"
+      min-height="180"
+      min-width="100%"
+      flat>
+      <v-icon size="75" class="tertiary-color mt-auto mb-5">fa-file-alt</v-icon>
+      <div class="mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.offlineBookmarkDocumentsCta') }}</div>
+    </v-card>
     <documents-offline-preview-dialog
+      v-if="hasOfflineFiles"
       ref="preview"
       @download="download" />
-  </v-card>
-  <v-card
-    v-else
-    class="d-flex flex-column align-center justify-center"
-    min-height="50vh"
-    min-width="100%"
-    flat>
-    <v-icon size="75" class="tertiary-color mt-auto mb-5">fa-wifi</v-icon>
-    <div class="text-title mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.noSiteConnection') }}</div>
   </v-card>
 </template>
 <script>
 export default {
   data: () => ({
     offlineFiles: [],
+    offlineModeEnabled: false,
+    initialized: false,
     search: '',
   }),
   computed: {
@@ -101,7 +123,12 @@ export default {
   },
   methods: {
     async init() {
-      this.offlineFiles = await this.$documentOfflineService.getFiles();
+      try {
+        this.offlineFiles = await this.$documentOfflineService.getFiles();
+        this.offlineModeEnabled = await this.$documentOfflineService.isDatabaseExists();
+      } finally {
+        this.initialized = true;
+      }
     },
     async download(file) {
       const destination = await window.showSaveFilePicker({
