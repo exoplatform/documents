@@ -46,6 +46,7 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
