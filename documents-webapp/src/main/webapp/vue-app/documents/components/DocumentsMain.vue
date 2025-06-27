@@ -342,11 +342,14 @@ export default {
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
     document.addEventListener('document-category-selected', (event) => {
       if (event && event.detail) {
-        if (this.$root.selectedCategoryId === event.detail.categoryId) {
-          this.$root.selectedCategoryId = null;
-        } else {
-          this.$root.selectedCategoryId = event.detail.categoryId;
-        }
+        this.selectedView = 'timeline';
+        this.$nextTick().then(() => {
+          if (this.$root.selectedCategoryId === event.detail.categoryId) {
+            this.$root.selectedCategoryId = null;
+          } else {
+            this.$root.selectedCategoryId = event.detail.categoryId;
+          }
+        });
       }
     });
   },
@@ -616,10 +619,6 @@ export default {
       }
 
     },
-
-
-
-
     handleBulkMoveRedirect() {
       const folder = JSON.parse(sessionStorage.getItem('folder'));
       const space = JSON.parse(sessionStorage.getItem('space'));
@@ -668,9 +667,6 @@ export default {
       if (action.function.name === 'moveDocument') {
         this.moveDocument(...action.function.params, action.event);
       }
-    },
-    emitAlertAction(action) {
-      this.$emit(action.event, action);
     },
     restoreVersion(version) {
       return this.$documentFileService.restoreVersion(version.id).then(newVersion => {
