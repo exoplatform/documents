@@ -18,7 +18,7 @@
   <v-card
     v-if="hasOfflineFiles"
     flat>
-    <div class="d-flex align-center mt-5 mb-2 mx-4">
+    <div class="d-flex align-center mb-2 mx-4">
       <div class="text-header">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
       <v-spacer />
       <v-text-field
@@ -48,6 +48,15 @@
     <documents-offline-preview-dialog
       ref="preview"
       @download="download" />
+  </v-card>
+  <v-card
+    v-else
+    class="d-flex flex-column align-center justify-center"
+    min-height="50vh"
+    min-width="100%"
+    flat>
+    <v-icon size="75" class="tertiary-color mt-auto mb-5">fa-wifi</v-icon>
+    <div class="text-title mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.noSiteConnection') }}</div>
   </v-card>
 </template>
 <script>
