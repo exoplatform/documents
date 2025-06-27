@@ -35,15 +35,32 @@
       </v-card>
     </td>
     <td>
-      <date-format
-        :value="file.modifiedDate"
-        :format="dateFormat" />
+      <v-tooltip bottom>
+        <template v-slot:activator="{on, attrs}">
+          <div
+            v-bind="attrs"
+            v-on="on">
+            <date-format :value="file.modifiedDate" />
+          </div>
+        </template>
+        <date-format
+          :value="file.modifiedDate"
+          :format="fullDateFormat" />
+      </v-tooltip>
     </td>
     <td>
-      <date-format
-        :value="file.downloadTime"
-        :format="dateFormat"
-        class="d-flex align-center" />
+      <v-tooltip bottom>
+        <template v-slot:activator="{on, attrs}">
+          <div
+            v-bind="attrs"
+            v-on="on">
+            <date-format :value="file.downloadTime" />
+          </div>
+        </template>
+        <date-format
+          :value="file.downloadTime"
+          :format="fullDateFormat" />
+      </v-tooltip>
     </td>
     <td>
       <div class="d-flex justify-center align-center">
@@ -65,7 +82,7 @@ export default {
     },
   },
   data: () => ({
-    dateFormat: {
+    fullDateFormat: {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

@@ -29,7 +29,6 @@
     color="transparent"
     flat>
     <v-card
-      v-if="!hasOfflineFiles"
       class="d-flex flex-column align-center justify-center py-5 mb-5"
       min-width="100%"
       flat>
