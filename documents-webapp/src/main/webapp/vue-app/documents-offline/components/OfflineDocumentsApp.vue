@@ -38,7 +38,7 @@
       ref="applicationToolbar"
       :right-text-filter="hasOfflineFiles && {
         minCharacters: 3,
-        placeholder: $t('OfflineApp.pwa.header.search'),
+        placeholder: $t('OfflineApp.pwa.header.search.placeholder'),
         tooltip: $t('OfflineApp.pwa.header.search')
       }"
       class="mx-n4"
