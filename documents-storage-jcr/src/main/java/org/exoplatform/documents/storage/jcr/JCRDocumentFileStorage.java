@@ -661,6 +661,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
         folderId = ((NodeImpl) node).getIdentifier();
         if (StringUtils.isNotEmpty(destinationFolderPath)) {
+          destinationFolderPath = URLDecoder.decode(destinationFolderPath, StandardCharsets.UTF_8);
           if (destinationFolderPath.contains(node.getName()) && !destinationFolderPath.endsWith(node.getName())) {
             destinationFolderPath = destinationFolderPath.split(node.getName())[1];
           }
