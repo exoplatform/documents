@@ -37,16 +37,9 @@ public class DocumentPortlet extends GenericDispatchedViewPortlet {
 
   @Override
   protected void doView(RenderRequest request, RenderResponse response) throws PortletException, IOException {
-
     boolean canModifySettings = canModifySettings();
     request.setAttribute("canEdit", canModifySettings);
-
     super.doView(request, response);
-  }
-
-  @Override
-  public void serveResource(ResourceRequest request, ResourceResponse response) throws PortletException, IOException {
-    super.serveResource(request, response);
   }
 
   @Override
