@@ -58,23 +58,10 @@
                 {{ $t('documents.settings.button.tooltip') }}
               </span>
             </v-tooltip>
-            <v-tooltip v-if="offlineModeEnabled" bottom>
-              <template #activator="{ on, attrs }">
-                <div
-                  v-bind="attrs"
-                  v-on="on">
-                  <v-btn
-                    id="offlineDocumentsButton"
-                    class="ms-4"
-                    small
-                    icon
-                    @click="$root.$emit('open-document-offline-files')">
-                    <v-icon size="20">fa-power-off</v-icon>
-                  </v-btn>
-                </div>
-              </template>
-              <span>{{ $t('documents.offline.accessDocumentsTooltip') }}</span>
-            </v-tooltip>
+            <documents-offline-button
+              btn-class="ms-4"
+              tooltip
+              small />
           </div>
         </template>
       </application-toolbar>
@@ -146,7 +133,6 @@ export default {
     tab: 'timeline',
     selectAllChecked: false,
     showFilter: false,
-    offlineModeEnabled: false,
     filterDispalyed: false,
     centerBotton: {
       selected: 'timeline',
@@ -208,7 +194,6 @@ export default {
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('show-mobile-filter', this.handleShowFilter);
     document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
-    this.init();
     this.refreshTabExtensions();
   },
   beforeDestroy() {
@@ -218,9 +203,6 @@ export default {
     document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
   },
   methods: {
-    async init() {
-      this.offlineModeEnabled = await this.$documentOfflineService.isDatabaseExists();
-    },
     handleShowFilter(data) {
       this.showFilter = data;
     },
