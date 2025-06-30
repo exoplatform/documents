@@ -19,14 +19,23 @@
 <template>
   <div
     v-if="offlineModeEnabled"
-    :title="$t('documents.offline.accessDocumentsTooltip')">
-    <v-btn
-      id="offlineDocumentsButton"
-      class="ms-4"
-      icon
-      @click="$root.$emit('open-document-offline-files')">
-      <v-icon size="20">fa-power-off</v-icon>
-    </v-btn>
+    :title="hasDocmentsAccessedOffline ? $t('OfflineApp.pwa.documents.uploadDocumentsTooltip') : $t('OfflineApp.pwa.documents.accessDocumentsTooltip')">
+    <v-badge
+      :value="hasDocmentsAccessedOffline"
+      color="var(--allPagesBadgePrimaryColor, #d32a2a)"
+      offset-x="12"
+      offset-y="12"
+      overlap
+      flat
+      dot>
+      <v-btn
+        id="offlineDocumentsButton"
+        class="ms-4"
+        icon
+        @click="$root.$emit('open-document-offline-files')">
+        <v-icon size="20">fa-power-off</v-icon>
+      </v-btn>
+    </v-badge>
     <documents-offline-drawer />
   </div>
 </template>
@@ -34,6 +43,7 @@
 export default {
   data: () => ({
     offlineModeEnabled: false,
+    hasDocmentsAccessedOffline: false,
   }),
   created() {
     this.init();
@@ -41,6 +51,7 @@ export default {
   methods: {
     async init() {
       this.offlineModeEnabled = await this.$documentOfflineService.isDatabaseExists();
+      this.hasDocmentsAccessedOffline = await this.$documentOfflineService.hasDocumentsAccessedOffline();
     },
   }
 };
