@@ -18,11 +18,13 @@
 import OfflineDocumentItem from './components/OfflineDocumentItem.vue';
 import OfflineDocumentPreviewDialog from './components/OfflineDocumentPreviewDialog.vue';
 import OfflineDocumentDrawer from './components/OfflineDocumentDrawer.vue';
+import OfflineDocumentsButton from './components/OfflineDocumentsButton.vue';
 
 const components = {
   'documents-offline-item': OfflineDocumentItem,
   'documents-offline-preview-dialog': OfflineDocumentPreviewDialog,
   'documents-offline-drawer': OfflineDocumentDrawer,
+  'documents-offline-button': OfflineDocumentsButton,
 };
 
 for (const key in components) {

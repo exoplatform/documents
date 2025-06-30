@@ -16,11 +16,9 @@
  */
  
 import DocumentsFavoriteItem from './components/DocumentsFavoriteItem.vue';
-import DocumentsFavoriteOfflineButton from './components/DocumentsFavoriteOfflineButton.vue';
 
 const components = {
   'documents-favorite-item': DocumentsFavoriteItem,
-  'documents-favorite-offline-button': DocumentsFavoriteOfflineButton,
 };
 
 for (const key in components) {
