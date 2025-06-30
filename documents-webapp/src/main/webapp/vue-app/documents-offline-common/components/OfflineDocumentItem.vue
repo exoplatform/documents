@@ -79,7 +79,7 @@
       </td>
       <td
         :class="cellClass"
-        :width="actionsCellWidth"
+        :width="`${actionsCellWidth}px`"
         class="ps-0">
         <div class="d-flex justify-end align-center">
           <v-tooltip v-if="accessBadge && offlineAccessTime" bottom>
@@ -159,6 +159,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    actionsCellWidth: {
+      type: Number,
+      default: () => 75,
+    },
   },
   data: () => ({
     fullDateFormat: {
@@ -174,16 +178,6 @@ export default {
   computed: {
     extension() {
       return this.$documentsIconsExtension?.[0]?.get?.(this.file?.mimeType);
-    },
-    actionsCellWidth() {
-      let width = 50;
-      if (this.allowUpload) {
-        width += 50;
-      }
-      if (this.accessBadge && this.offlineAccessTime) {
-        width += 40;
-      }
-      return `${width}px`;
     },
     canPreview() {
       return this.extension?.canPreview;
@@ -230,10 +224,12 @@ export default {
           await this.$documentFileService.uploadNewFileVersion(this.file.id, blob);
           await this.$documentOfflineService.saveFile(this.file.id);
           await this.$documentOfflineService.markFileAsUpdated(this.file.id);
-          this.$root.$emit('alert-message', this.$t('documents.upload.newVersion.success.message'), 'success');
+          this.$root.$emit('alert-message', this.$t('OfflineApp.pwa.documents.newVersion.success.message'), 'success');
           this.$emit('updated');
-        } catch {
-          this.$root.$emit('alert-message', this.$t('documents.upload.newVersion.error.message'), 'error');
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error(e);
+          this.$root.$emit('alert-message', this.$t('OfflineApp.pwa.documents.newVersion.error.message'), 'error');
         } finally {
           this.uploading = false;
         }

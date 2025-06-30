@@ -41,7 +41,6 @@
         placeholder: $t('OfflineApp.pwa.header.search.placeholder'),
         tooltip: $t('OfflineApp.pwa.header.search')
       }"
-      class="mx-n4"
       compact
       @filter-text-input-end-typing="search = $event">
       <template #left>

@@ -62,8 +62,9 @@
               <documents-offline-item
                 :file="item"
                 :no-dates="!expanded"
-                class="mb-4 me-4"
+                :actions-cell-width="actionsCellWidth"
                 cell-class="no-border"
+                class="mb-4 me-4"
                 access-badge
                 allow-upload
                 info-icon
@@ -116,6 +117,16 @@ export default {
         value: 'name',
         width: '150px',
       }] || null;
+    },
+    hasOfflineAccessTime() {
+      return !!this.offlineFiles?.find(f => f.offlineAccessTime);
+    },
+    actionsCellWidth() {
+      let width = 100;
+      if (this.hasOfflineAccessTime) {
+        width += 40;
+      }
+      return width;
     },
   },
   created() {
