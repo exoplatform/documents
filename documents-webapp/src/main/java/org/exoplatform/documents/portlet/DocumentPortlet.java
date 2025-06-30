@@ -27,13 +27,12 @@ import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.space.SpaceUtils;
 import org.exoplatform.social.core.space.model.Space;
-import org.exoplatform.social.core.space.spi.SpaceService;
+
+import io.meeds.social.space.plugin.SpaceAclPlugin;
 
 public class DocumentPortlet extends GenericDispatchedViewPortlet {
 
   private UserACL         userAcl;
-
-  private SpaceService    spaceService;
 
   @Override
   protected void doView(RenderRequest request, RenderResponse response) throws PortletException, IOException {
@@ -66,13 +65,6 @@ public class DocumentPortlet extends GenericDispatchedViewPortlet {
     return userAcl;
   }
 
-  private SpaceService getSpaceService() {
-    if (spaceService == null) {
-      spaceService = ExoContainerContext.getService(SpaceService.class);
-    }
-    return spaceService;
-  }
-
   private boolean canModifySettings() {
     Space space = SpaceUtils.getSpaceByContext();
     Identity identity = getCurrentIdentity();
@@ -81,7 +73,9 @@ public class DocumentPortlet extends GenericDispatchedViewPortlet {
     } else if (space == null) {
       return getUserAcl().isAdministrator(identity);
     } else {
-      return getUserAcl().isAdministrator(identity)  || getSpaceService().canManageSpace(space, identity.getUserId());
+      return getUserAcl().isAdministrator(identity) || getUserAcl().hasEditPermission(SpaceAclPlugin.OBJECT_TYPE,
+              space.getId(),
+              identity);
     }
   }
 
