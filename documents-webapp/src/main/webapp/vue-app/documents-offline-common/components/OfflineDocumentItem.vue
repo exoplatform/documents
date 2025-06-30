@@ -189,7 +189,7 @@ export default {
     },
     async markAsUpdated() {
       await this.$documentOfflineService.markFileAsUpdated(this.file.id);
-      this.$set(this.file, 'offlineAccessTime', null);
+      this.$emit('updated');
       this.$root.$emit('documents-offline-updated', this.file);
     },
     async uploadVersion() {
@@ -212,6 +212,7 @@ export default {
           await this.$documentOfflineService.saveFile(this.file.id);
           await this.$documentOfflineService.markFileAsUpdated(this.file.id);
           this.$root.$emit('alert-message', this.$t('documents.upload.newVersion.success.message'), 'success');
+          this.$emit('updated');
         } catch {
           this.$root.$emit('alert-message', this.$t('documents.upload.newVersion.error.message'), 'error');
         } finally {
