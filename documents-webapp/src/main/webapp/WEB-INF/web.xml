@@ -30,6 +30,7 @@
     <url-pattern>*.js</url-pattern>
     <url-pattern>*.html</url-pattern>
     <url-pattern>/images/*</url-pattern>
+    <url-pattern>/i18n/*</url-pattern>
   </filter-mapping>
 
 </web-app>

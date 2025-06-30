@@ -72,7 +72,8 @@ const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 const lang = eXo && eXo.env.portal.language || 'en';
 
 //should expose the locale ressources as REST API 
-const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.portlet.Documents-${lang}.json`;
+
+const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
 
 Vue.prototype.$nextTick(() => {
   Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
@@ -86,29 +87,10 @@ export function init(appId, canEdit,  settings, settingsSaveUrl) {
     // init Vue app when locale ressources are ready
     Vue.createApp({
       data: {
-        DB_NAME: 'favoriteDocuments',
-        DB_VERSION: '1',
-        DB_OBJECT_STORE: 'handles',
-        DB_KEY: 'favorite',
-        localDatabase: null,
-        handle: null,
         canEdit,
         settings,
         settingsSaveUrl,
         hover: false,
-      },
-      computed: {
-        isFavoritesSynchronized() {
-          return !!this.handle;
-        },
-      },
-      created() {
-        this.init();
-      },
-      methods: {
-        async init() {
-          this.handle = await this.$documentOfflineService.getDirectoryHandle();
-        },
       },
       template: `<documents-main id="${appId}" />`,
       vuetify,
