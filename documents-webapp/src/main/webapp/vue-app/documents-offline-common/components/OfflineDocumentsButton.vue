@@ -79,7 +79,11 @@ export default {
     },
   },
   created() {
+    this.$root.$on('documents-offline-updated', this.init);
     this.init();
+  },
+  beforeDestroy() {
+    this.$root.$off('documents-offline-updated', this.init);
   },
   methods: {
     async init() {

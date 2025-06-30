@@ -16,11 +16,7 @@
 -->
 <template>
   <tr>
-    <td
-      :class="cellClass"
-      v-bind="noDates && accessBadge && !offlineAccessTime && {
-        colspan: 2,
-      }">
+    <td :class="cellClass">
       <v-card
         class="d-flex align-center overflow-hidden"
         color="transparent"
@@ -42,6 +38,7 @@
       <v-tooltip bottom>
         <template #activator="{on, attrs}">
           <div
+            class="text-center"
             v-bind="attrs"
             v-on="on">
             <date-format :value="file.modifiedDate" />
@@ -56,6 +53,7 @@
       <v-tooltip bottom>
         <template #activator="{on, attrs}">
           <div
+            class="text-center"
             v-bind="attrs"
             v-on="on">
             <date-format :value="file.downloadTime" />
@@ -67,27 +65,42 @@
       </v-tooltip>
     </td>
     <td
-      v-if="accessBadge && offlineAccessTime"
       :class="cellClass"
-      width="24">
-      <v-tooltip bottom>
-        <template #activator="{on, attrs}">
-          <v-btn
-            v-bind="attrs"
-            v-on="on"
-            :aria-label="$t('OfflineApp.pwa.documents.accessedWhileOffline')"
-            small
-            icon>
-            <v-avatar
-              class="error-color-background"
-              size="12" />
-          </v-btn>
-        </template>
-        <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
-      </v-tooltip>
-    </td>
-    <td width="75px" :class="cellClass">
-      <div class="d-flex justify-center align-center">
+      :width="actionsCellWidth"
+      class="px-0">
+      <div class="d-flex justify-end align-center">
+        <v-tooltip v-if="accessBadge && offlineAccessTime" bottom>
+          <template #activator="{on, attrs}">
+            <v-btn
+              v-bind="attrs"
+              v-on="on"
+              :aria-label="$t('OfflineApp.pwa.documents.accessedWhileOffline')"
+              class="me-4"
+              small
+              icon
+              @click="markAsUpdated">
+              <v-avatar
+                class="error-color-background"
+                size="12" />
+            </v-btn>
+          </template>
+          <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
+        </v-tooltip>
+        <v-tooltip v-if="allowUpload" bottom>
+          <template #activator="{on, attrs}">
+            <v-btn
+              v-bind="attrs"
+              v-on="on"
+              :aria-label="$t('OfflineApp.pwa.uploadVersion')"
+              :loading="uploading"
+              class="me-4"
+              icon
+              @click="uploadVersion">
+              <v-icon>fa-upload</v-icon>
+            </v-btn>
+          </template>
+          <span>{{ $t('OfflineApp.pwa.uploadVersion') }}</span>
+        </v-tooltip>
         <v-tooltip bottom>
           <template #activator="{on, attrs}">
             <v-btn
@@ -120,6 +133,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    allowUpload: {
+      type: Boolean,
+      default: false,
+    },
     accessBadge: {
       type: Boolean,
       default: false,
@@ -133,10 +150,21 @@ export default {
       hour: 'numeric',
       minute: 'numeric',
     },
+    uploading: false,
   }),
   computed: {
     extension() {
       return this.$documentsIconsExtension?.[0]?.get?.(this.file?.mimeType);
+    },
+    actionsCellWidth() {
+      let width = 50;
+      if (this.allowUpload) {
+        width += 50;
+      }
+      if (this.accessBadge && this.offlineAccessTime) {
+        width += 40;
+      }
+      return `${width}px`;
     },
     canPreview() {
       return this.extension?.canPreview;
@@ -157,6 +185,38 @@ export default {
         this.$emit('preview', this.file, this.extension);
       } else {
         this.$emit('download', this.file, this.extension);
+      }
+    },
+    async markAsUpdated() {
+      await this.$documentOfflineService.markFileAsUpdated(this.file.id);
+      this.$set(this.file, 'offlineAccessTime', null);
+      this.$root.$emit('documents-offline-updated', this.file);
+    },
+    async uploadVersion() {
+      const filePickerOptions = {
+        types: [{}],
+        multiple: false,
+      };
+      const fileExtension = this.file.name?.split?.('.')?.pop?.();
+      if (fileExtension) {
+        filePickerOptions.excludeAcceptAllOption = true;
+        filePickerOptions['types'][0]['accept'] = {};
+        filePickerOptions['types'][0]['accept'][this.file.mimeType] = [`.${fileExtension}`];
+      }
+      const [fileHandle] = await window.showOpenFilePicker(filePickerOptions);
+      if (fileHandle) {
+        this.uploading = true;
+        try {
+          const blob = await fileHandle.getFile();
+          await this.$documentFileService.uploadNewFileVersion(this.file.id, blob);
+          await this.$documentOfflineService.saveFile(this.file.id);
+          await this.$documentOfflineService.markFileAsUpdated(this.file.id);
+          this.$root.$emit('alert-message', this.$t('documents.upload.newVersion.success.message'), 'success');
+        } catch {
+          this.$root.$emit('alert-message', this.$t('documents.upload.newVersion.error.message'), 'error');
+        } finally {
+          this.uploading = false;
+        }
       }
     },
   },

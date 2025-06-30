@@ -67,7 +67,6 @@
       </application-toolbar>
     </div>
     <documents-setting-drawer :view-list="viewList" />
-    <documents-offline-drawer />
   </div>
 </template>
 
