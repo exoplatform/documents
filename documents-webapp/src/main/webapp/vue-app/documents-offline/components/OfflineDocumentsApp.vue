@@ -137,11 +137,11 @@ export default {
         startIn: 'documents',
       });
       const writable = await destination.createWritable();
-      await writable.write(await this.$documentOfflineService.getFileBlob(file.id));
+      await writable.write(await this.$documentOfflineService.getFileBlob(file.id, true));
       await writable.close();
     },
     openPreview(file, extension) {
-      this.$refs.preview.open(file, extension);
+      this.$refs.preview.open(file, extension, true);
     },
   },
 };

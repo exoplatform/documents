@@ -17,6 +17,7 @@
 
 export function init() {
   downloadFavorites();
+  checkDocumentsAccessdOffline();
   window.setInterval(downloadFavorites, 3 * 60 * 1000);
 }
 
@@ -26,6 +27,28 @@ function downloadFavorites() {
   });
 }
 
+function checkDocumentsAccessdOffline() {
+  window.require(['SHARED/eXoVueI18n', 'SHARED/DocumentsPWAOfflineApp'], exoi18n => {
+    displayDocumentsAccessdOfflineNotification(exoi18n);
+  });
+}
+
+async function displayDocumentsAccessdOfflineNotification(exoi18n) {
+  if (await Vue.prototype.$documentOfflineService.isOfflineDocumentsEnabled()
+      && await Vue.prototype.$documentOfflineService.isDocumentsAccessedOffline()) {
+    const lang = eXo?.env?.portal?.language || 'en';
+    const url = `/pwa/i18n/locale.portlet.OfflineApplication?lang=${lang}`;
+    await exoi18n.loadLanguageAsync(lang, url);
+    document.dispatchEvent(new CustomEvent('alert-message', {detail: {
+      alertType: 'info',
+      alertMessage: window.vueI18nMessages['OfflineApp.pwa.documents.accessed.tip'],
+      alertLinkText: window.vueI18nMessages['OfflineApp.pwa.review'],
+      alertLinkCallback: displayOfflineDocumentsDrawer,
+    }}));
+    await Vue.prototype.$documentOfflineService.setDocumentsAccessedOffline(false);
+  }
+}
+
 async function downloadFavoritesFromServer() {
   if (await Vue.prototype.$documentOfflineService.isOfflineDocumentsEnabled()) {
     if (!(await Vue.prototype.$documentOfflineService.isDatabaseExists())) {
@@ -33,4 +56,49 @@ async function downloadFavoritesFromServer() {
     }
     await Vue.prototype.$documentOfflineService.downloadFavorites();
   }
+}
+
+function displayOfflineDocumentsDrawer() {
+  window.require(['SHARED/eXoVueI18n'], exoi18n => initOfflineDocumentsDrawer(exoi18n));
+}
+
+async function initOfflineDocumentsDrawer(exoi18n) {
+  const appId = 'OfflineDocumentsDrawer';
+  if (!document.querySelector(`#${appId}`)) {
+    const parent = document.createElement('div');
+    parent.id = appId;
+    document.querySelector('#vuetify-apps').appendChild(parent);
+    await initOfflineDocumentsDrawerApp(appId, exoi18n);
+  }
+  document.dispatchEvent(new CustomEvent('open-document-offline-files'));
+  document.dispatchEvent(new CustomEvent('close-alert-message'));
+}
+
+function initOfflineDocumentsDrawerApp(appId, exoi18n) {
+  const lang = eXo?.env?.portal?.language || 'en';
+  const url = `/pwa/i18n/locale.portlet.OfflineApplication?lang=${lang}`;
+  return new Promise(resolve => exoi18n.loadLanguageAsync(lang, url)
+    .then(i18n => Vue.createApp({
+      template: `
+        <documents-offline-drawer
+          id="${appId}"
+          ref="drawer" />
+      `,
+      created() {
+        document.addEventListener('open-document-offline-files', this.openDrawer);
+      },
+      mounted() {
+        resolve();
+      },
+      beforeDestroy() {
+        document.removeEventListener('open-document-offline-files', this.openDrawer);
+      },
+      methods: {
+        openDrawer() {
+          this.$refs.drawer.open();
+        },
+      },
+      vuetify: Vue.prototype.vuetifyOptions,
+      i18n,
+    }, `#${appId}`, 'Kudos List Quick Action')));
 }

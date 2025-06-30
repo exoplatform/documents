@@ -16,7 +16,11 @@
 -->
 <template>
   <tr>
-    <td :class="cellClass">
+    <td
+      :class="cellClass"
+      v-bind="noDates && accessBadge && !offlineAccessTime && {
+        colspan: 2,
+      }">
       <v-card
         class="d-flex align-center overflow-hidden"
         color="transparent"
@@ -62,13 +66,41 @@
           :format="fullDateFormat" />
       </v-tooltip>
     </td>
+    <td
+      v-if="accessBadge && offlineAccessTime"
+      :class="cellClass"
+      width="24">
+      <v-tooltip bottom>
+        <template #activator="{on, attrs}">
+          <v-btn
+            v-bind="attrs"
+            v-on="on"
+            :aria-label="$t('OfflineApp.pwa.documents.accessedWhileOffline')"
+            small
+            icon>
+            <v-avatar
+              class="error-color-background"
+              size="12" />
+          </v-btn>
+        </template>
+        <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
+      </v-tooltip>
+    </td>
     <td width="75px" :class="cellClass">
       <div class="d-flex justify-center align-center">
-        <v-btn
-          icon
-          @click="openFile">
-          <v-icon>{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
-        </v-btn>
+        <v-tooltip bottom>
+          <template #activator="{on, attrs}">
+            <v-btn
+              v-bind="attrs"
+              v-on="on"
+              :aria-label="canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download')"
+              icon
+              @click="openFile">
+              <v-icon>{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
+            </v-btn>
+          </template>
+          <span>{{ canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download') }}</span>
+        </v-tooltip>
       </div>
     </td>
   </tr>
@@ -85,6 +117,10 @@ export default {
       default: null,
     },
     noDates: {
+      type: Boolean,
+      default: false,
+    },
+    accessBadge: {
       type: Boolean,
       default: false,
     },
@@ -110,6 +146,9 @@ export default {
     },
     fileIconColor() {
       return this.extension?.color || 'secondary';
+    },
+    offlineAccessTime() {
+      return this.file?.offlineAccessTime;
     },
   },
   methods: {
