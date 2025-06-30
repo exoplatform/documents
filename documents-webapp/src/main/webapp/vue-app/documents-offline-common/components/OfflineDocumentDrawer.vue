@@ -66,6 +66,7 @@
                 cell-class="no-border"
                 access-badge
                 allow-upload
+                info-icon
                 @download="download"
                 @preview="openPreview"
                 @updated="retrieveList" />
