@@ -88,6 +88,7 @@
         <documents-advanced-filter-drawer />
         <documents-download-drawer />
         <document-import-from-zip-drawer />
+        <documents-offline-changes-reminder />
         <documents-actions-menu-mobile
           :is-mobile="isMobile"
           :current-view="selectedView"
