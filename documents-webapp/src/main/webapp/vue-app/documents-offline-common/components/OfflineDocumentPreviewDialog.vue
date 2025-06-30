@@ -31,7 +31,7 @@
           :title="$t('OfflineApp.pwa.download')"
           icon
           class="white--text ms-1"
-          @click="$emit('download', file)">
+          @click="$emit('download', file, markAsDownloaded)">
           <v-icon>fa-download</v-icon>
         </v-btn>
         <v-btn
@@ -73,6 +73,7 @@
 export default {
   data: () => ({
     dialog: false,
+    markAsDownloaded: false,
     file: null, 
     extension: null, 
     src: null, 
@@ -107,9 +108,10 @@ export default {
     document.removeEventListener('keydown', this.closeOnEscape);
   },
   methods: {
-    async open(file, extension) {
+    async open(file, extension, markAsDownloaded) {
       this.file = file;
       this.extension = extension;
+      this.markAsDownloaded = markAsDownloaded;
       this.src = null;
       this.dialog = true;
       this.src = URL.createObjectURL(await this.$documentOfflineService.getFileBlob(this.file.id));

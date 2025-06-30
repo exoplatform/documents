@@ -39,6 +39,7 @@
             class="mb-4 me-4"
             cell-class="no-border"
             no-dates
+            access-badge
             @download="download"
             @preview="openPreview" />
         </template>

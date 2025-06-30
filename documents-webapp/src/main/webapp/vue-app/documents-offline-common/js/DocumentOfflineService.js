@@ -25,6 +25,14 @@ export async function isOfflineDocumentsEnabled() {
   return (await isDatabaseExists()) && (await isDownloadDocumentsEnabled());
 }
 
+export async function isDocumentsAccessedOffline() {
+  return await getValue('offline-access-files');
+}
+
+export async function setDocumentsAccessedOffline(value) {
+  await setValue('offline-access-files', value);
+}
+
 /* File Item Operations */
 let downloadingFavorites = false;
 export async function downloadFavorites() {
@@ -96,7 +104,7 @@ export async function getFile(fileId) {
   });
 }
 
-export async function getFileBlob(fileId) {
+export async function getFileBlob(fileId, markAsDownloaded) {
   const database = await getDatabase();
   if (!database) {
     return null;
@@ -106,6 +114,13 @@ export async function getFileBlob(fileId) {
     const request = transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).get(fileId);
     request.onsuccess = () => {
       transaction.db.close();
+      if (markAsDownloaded) {
+        getFile(fileId).then(async file => {
+          file.offlineAccessTime = Date.now();
+          await updateFile(file);
+          await setDocumentsAccessedOffline(true);
+        });
+      }
       resolve(request.result);
     };
     request.onerror = () => resolve(null);
@@ -197,7 +212,21 @@ async function addFileToDB(file, blob) {
     };
     transaction.objectStore(DB_FILES_OBJECT_STORE).put(fileToStore, file.id);
     transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).put(blob, file.id);
-    transaction.objectStore(DB_FILE_BLOBS_OBJECT_STORE).put(blob, file.id);
+  });
+}
+
+async function updateFile(file) {
+  const database = await getDatabase();
+  if (!database) {
+    return null;
+  }
+  return new Promise(resolve => {
+    const transaction = database.transaction([DB_FILES_OBJECT_STORE], 'readwrite');
+    transaction.oncomplete = () => {
+      transaction.db.close();
+      resolve();
+    };
+    transaction.objectStore(DB_FILES_OBJECT_STORE).put(file, file.id);
   });
 }
 
