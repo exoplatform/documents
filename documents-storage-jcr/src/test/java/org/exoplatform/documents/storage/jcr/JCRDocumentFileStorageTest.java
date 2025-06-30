@@ -48,6 +48,8 @@ import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
+import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -855,6 +857,32 @@ public class JCRDocumentFileStorageTest {
     when(getIdentityRootNode(spaceService, nodeHierarchyCreator, userName, ownerIdentity, sessionProvider)).thenReturn(userHome);
 
     fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, null, "", identity, true);
+    assertEquals(1, fullTreeItemList.size());
+    assertEquals(2, fullTreeItemList.get(0).getChildren().size());
+
+
+    Node destinationNode = mock(NodeImpl.class);
+    when(userHome.hasNode("/root/folder/ntFolderName/testFolder")).thenReturn(true);
+    when(userHome.getNode("/root/folder/ntFolderName/testFolder")).thenReturn(destinationNode);
+    when(destinationNode.getPath()).thenReturn("/root/folder/ntFolderName/testFolder");
+    when(nodeIterator.hasNext()).thenReturn(true, true, false);
+    when(nodeIterator.nextNode()).thenReturn(folderNTFolder, folderNTUnstructured);
+    when(userHome.getNodes()).thenReturn(nodeIterator);
+    WorkspaceImpl workspace = mock(WorkspaceImpl.class);
+    SessionImpl nodeSession = mock(SessionImpl.class);
+    when(folderNTFolder.getSession()).thenReturn(nodeSession);
+    when(folderNTUnstructured.getSession()).thenReturn(nodeSession);
+    when(nodeSession.getWorkspace()).thenReturn(workspace);
+    QueryManager queryManager = mock(QueryManager.class);
+    QueryImpl jcrQuery = mock(QueryImpl.class);
+    NodeIterator subItemsIterator = mock(NodeIterator.class);
+    QueryResult queryResult = mock(QueryResult.class);
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+    when(queryManager.createQuery(anyString(), any())).thenReturn(jcrQuery);
+    when(jcrQuery.execute()).thenReturn(queryResult);
+    when(queryResult.getNodes()).thenReturn(subItemsIterator);
+    when(subItemsIterator.getSize()).thenReturn(0L);
+    fullTreeItemList = jcrDocumentFileStorage.getFullTreeData(ownerId, null, "/root/folder/ntFolderName/testFolder", identity, false);
 
     assertEquals(1, fullTreeItemList.size());
     assertEquals(2, fullTreeItemList.get(0).getChildren().size());
