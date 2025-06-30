@@ -67,7 +67,8 @@
                 access-badge
                 allow-upload
                 @download="download"
-                @preview="openPreview" />
+                @preview="openPreview"
+                @updated="retrieveList" />
             </template>
           </v-data-table>
         </v-card>
@@ -127,13 +128,16 @@ export default {
       this.loading = true;
       try {
         this.$refs.drawer.open();
-        this.offlineFiles = await this.$documentOfflineService.getFiles();
+        await this.retrieveList();
       } finally {
         this.loading = false;
       }
     },
     close() {
       this.$refs.drawer.close();
+    },
+    async retrieveList() {
+      this.offlineFiles = await this.$documentOfflineService.getFiles();
     },
     async download(file) {
       const destination = await window.showSaveFilePicker({
