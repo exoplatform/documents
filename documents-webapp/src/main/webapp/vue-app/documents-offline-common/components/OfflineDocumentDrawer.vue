@@ -24,26 +24,54 @@
     :loading="loading"
     :right="!$vuetify.rtl"
     go-back-button
-    allow-expand>
+    allow-expand
+    @expand-updated="expanded = $event">
     <template #title>{{ $t('OfflineApp.pwa.documents.drawer.title') }}</template>
     <template v-if="drawer" #content>
-      <v-data-table
-        :items="offlineFiles"
-        class="d-flex flex-wrap"
-        hide-default-header
-        hide-default-footer
-        disable-pagination>
-        <template #item="{item}">
-          <documents-offline-item
-            :file="item"
-            class="mb-4 me-4"
-            cell-class="no-border"
-            no-dates
-            access-badge
-            @download="download"
-            @preview="openPreview" />
-        </template>
-      </v-data-table>
+      <div class="layout-page-body light-grey-background-color">
+        <v-card
+          :class="expanded && 'page-content pa-5'"
+          color="transparent"
+          flat>
+          <application-toolbar
+            v-if="expanded"
+            ref="applicationToolbar"
+            :right-text-filter="{
+              minCharacters: 3,
+              placeholder: $t('OfflineApp.pwa.header.search.placeholder'),
+              tooltip: $t('OfflineApp.pwa.header.search')
+            }"
+            compact
+            @filter-text-input-end-typing="search = $event">
+            <template #left>
+              <div class="text-title">{{ $t('OfflineApp.pwa.offlineDocuments') }}</div>
+            </template>
+          </application-toolbar>
+          <v-data-table
+            v-bind="expanded ? {
+              headers,
+              search,
+            } : {
+              'hide-default-header': true,
+            }"
+            :items="offlineFiles"
+            class="d-flex flex-wrap"
+            hide-default-footer
+            disable-pagination>
+            <template #item="{item}">
+              <documents-offline-item
+                :file="item"
+                :no-dates="!expanded"
+                class="mb-4 me-4"
+                cell-class="no-border"
+                access-badge
+                allow-upload
+                @download="download"
+                @preview="openPreview" />
+            </template>
+          </v-data-table>
+        </v-card>
+      </div>
       <documents-offline-preview-dialog
         ref="preview"
         @download="download" />
@@ -55,7 +83,39 @@ export default {
   data: () => ({
     drawer: false,
     loading: false,
+    expanded: false,
+    offlineFiles: [],
+    initialized: false,
+    search: '',
   }),
+  computed: {
+    headers() {
+      return this.expanded && [{
+        text: this.$t('OfflineApp.pwa.header.name'),
+        align: 'start',
+        sortable: true,
+        value: 'name'
+      }, {
+        text: this.$t('OfflineApp.pwa.header.lastModified'),
+        align: 'center',
+        sortable: true,
+        value: 'modifiedDate',
+        width: '175px',
+      }, {
+        text: this.$t('OfflineApp.pwa.header.downloadTime'),
+        align: 'center',
+        sortable: true,
+        value: 'downloadTime',
+        width: '175px',
+      }, {
+        text: this.$t('OfflineApp.pwa.header.actions'),
+        align: 'end',
+        sortable: false,
+        value: 'name',
+        width: '150px',
+      }] || null;
+    },
+  },
   created() {
     this.$root.$on('open-document-offline-files', this.open);
   },

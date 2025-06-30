@@ -41,6 +41,12 @@ export async function setDocumentsAccessedOffline(value) {
   await setValue('offline-access-files', value);
 }
 
+export async function markFileAsUpdated(fileId) {
+  const file = await getFile(fileId);
+  delete file.offlineAccessTime;
+  await updateFile(file);
+}
+
 /* File Item Operations */
 let downloadingFavorites = false;
 export async function downloadFavorites() {
