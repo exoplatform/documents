@@ -25,7 +25,7 @@
     :right="!$vuetify.rtl"
     go-back-button
     allow-expand>
-    <template #title>{{ $t('documents.offline.drawer.title') }}</template>
+    <template #title>{{ $t('OfflineApp.pwa.documents.drawer.title') }}</template>
     <template v-if="drawer" #content>
       <v-data-table
         :items="offlineFiles"

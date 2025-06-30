@@ -29,6 +29,14 @@ export async function isDocumentsAccessedOffline() {
   return await getValue('offline-access-files');
 }
 
+export async function hasDocumentsAccessedOffline() {
+  if (!(await isOfflineDocumentsEnabled())) {
+    return false;
+  }
+  const files = await getFiles();
+  return !!files?.filter?.(f => f.offlineAccessTime)?.length;
+}
+
 export async function setDocumentsAccessedOffline(value) {
   await setValue('offline-access-files', value);
 }
