@@ -27,24 +27,22 @@
     allow-expand>
     <template #title>{{ $t('documents.offline.drawer.title') }}</template>
     <template v-if="drawer" #content>
-      <div class="pa-5" flat>
-        <v-data-table
-          :items="offlineFiles"
-          class="d-flex flex-wrap"
-          hide-default-header
-          hide-default-footer
-          disable-pagination>
-          <template #item="{item}">
-            <documents-offline-item
-              :file="item"
-              class="mb-4 me-4"
-              cell-class="no-border"
-              no-dates
-              @download="download"
-              @preview="openPreview" />
-          </template>
-        </v-data-table>
-      </div>
+      <v-data-table
+        :items="offlineFiles"
+        class="d-flex flex-wrap"
+        hide-default-header
+        hide-default-footer
+        disable-pagination>
+        <template #item="{item}">
+          <documents-offline-item
+            :file="item"
+            class="mb-4 me-4"
+            cell-class="no-border"
+            no-dates
+            @download="download"
+            @preview="openPreview" />
+        </template>
+      </v-data-table>
       <documents-offline-preview-dialog
         ref="preview"
         @download="download" />

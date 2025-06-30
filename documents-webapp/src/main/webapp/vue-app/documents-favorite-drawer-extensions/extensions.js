@@ -20,4 +20,8 @@ export function initDocumentsExtensions() {
     id: 'file',
     vueComponent: Vue.options.components['documents-favorite-item'],
   });
+  extensionRegistry.registerComponent('FavoritesDrawer', 'title-icons', {
+    id: 'file',
+    vueComponent: Vue.options.components['documents-favorite-offline-button'],
+  });
 }
