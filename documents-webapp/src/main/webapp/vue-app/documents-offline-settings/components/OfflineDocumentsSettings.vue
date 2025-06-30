@@ -31,7 +31,7 @@
         {{ $t('UserSettings.pwa.documentsOffline.enabled') }}
       </v-card>
       <v-btn
-        v-else-if="installed"
+        v-else-if="installed && !suspended"
         :aria-label="$t('UserSettings.pwa.documentsOffline.enableOfflineAccessToDocuments')"
         :loading="loading"
         :disabled="loading"
@@ -53,7 +53,10 @@
             </v-btn>
           </div>
         </template>
-        <span v-if="!pwaSupported">
+        <span v-if="suspended">
+          {{ $t('UserSettings.pwa.documentsOffline.synchronizationSuspended') }}
+        </span>
+        <span v-else-if="!pwaSupported">
           {{ $t('UserSettings.pwa.browserNotSupported') }}
         </span>
         <span v-else-if="!pwaEnabled">
@@ -88,6 +91,7 @@ export default {
   },
   data: () => ({
     enabled: false,
+    suspended: false,
     loading: true,
   }),
   created() {
@@ -98,6 +102,7 @@ export default {
       this.loading = true;
       try {
         this.enabled = await this.$documentOfflineService.isOfflineDocumentsEnabled();
+        this.suspended = !(await this.$documentOfflineService.isDownloadDocumentsEnabled());
         if (this.enabled && !this.installed) {
           await this.$documentOfflineService.deleteDatabase();
           this.enabled = false;

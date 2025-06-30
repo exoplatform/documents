@@ -29,6 +29,14 @@ export async function isDocumentsAccessedOffline() {
   return await getValue('offline-access-files');
 }
 
+export async function isDownloadDocumentsEnabled() {
+  try {
+    return await Vue.prototype.$transferRulesService.getTransfertRulesDownloadDocumentStatus();
+  } catch {
+    return true;
+  }
+}
+
 export async function hasDocumentsAccessedOffline() {
   if (!(await isOfflineDocumentsEnabled())) {
     return false;
@@ -327,12 +335,4 @@ async function retrieveDatabase(version) {
       }
     };
   });
-}
-
-async function isDownloadDocumentsEnabled() {
-  try {
-    return await Vue.prototype.$transferRulesService.getTransfertRulesDownloadDocumentStatus();
-  } catch {
-    return true;
-  }
 }
