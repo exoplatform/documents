@@ -17,10 +17,17 @@
 
 import * as documentOfflineService from './js/DocumentOfflineService.js';
 import * as transferRulesService from '../../js/transferRulesService.js';
+import * as documentFileService from '../../js/DocumentFileService.js';
 
 if (!Vue.prototype.$documentOfflineService) {
   window.Object.defineProperty(Vue.prototype, '$documentOfflineService', {
     value: documentOfflineService,
+  });
+}
+
+if (!Vue.prototype.$documentFileService) {
+  window.Object.defineProperty(Vue.prototype, '$documentFileService', {
+    value: documentFileService,
   });
 }
 
