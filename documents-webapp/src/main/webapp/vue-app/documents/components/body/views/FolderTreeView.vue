@@ -47,7 +47,7 @@
       </v-tooltip>
     </v-card-title>
     <v-card-text class="px-0">
-      <tree-view
+      <document-tree-view
         :items="items"
         :folder-path="folderPath" />
     </v-card-text>

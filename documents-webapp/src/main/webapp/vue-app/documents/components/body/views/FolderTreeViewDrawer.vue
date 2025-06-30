@@ -26,7 +26,7 @@
       {{ $t('documents.drawer.tree') }}
     </template>
     <template slot="content">
-      <tree-view
+      <document-tree-view
         :items="items"
         :folder-path="folderPath" />
     </template>

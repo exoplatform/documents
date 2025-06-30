@@ -138,7 +138,7 @@ const components = {
   'documents-breadcrumb': DocumentsBreadcrumb,
   'folder-tree-view': FolderTreeView,
   'folder-treeview-drawer': FolderTreeViewDrawer,
-  'tree-view': TreeView,
+  'document-tree-view': TreeView,
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
   'upload-overlay': UploadOverlay,
