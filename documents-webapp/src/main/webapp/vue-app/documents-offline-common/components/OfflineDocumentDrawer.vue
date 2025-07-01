@@ -23,7 +23,7 @@
     v-model="drawer"
     :loading="loading"
     :right="!$vuetify.rtl"
-    go-back-button
+    :go-back-button="goBackButton"
     allow-expand
     @expand-updated="expanded = $event">
     <template #title>{{ $t('OfflineApp.pwa.documents.drawer.title') }}</template>
@@ -89,6 +89,7 @@ export default {
     expanded: false,
     offlineFiles: [],
     initialized: false,
+    goBackButton: false,
     search: '',
   }),
   computed: {
@@ -136,7 +137,8 @@ export default {
     this.$root.$off('open-document-offline-files', this.open);
   },
   methods: {
-    async open() {
+    async open(goBackButton) {
+      this.goBackButton = goBackButton;
       this.loading = true;
       try {
         this.$refs.drawer.open();

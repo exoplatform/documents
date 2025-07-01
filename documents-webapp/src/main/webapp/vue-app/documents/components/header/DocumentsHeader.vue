@@ -60,6 +60,7 @@
             </v-tooltip>
             <documents-offline-button
               btn-class="ms-4"
+              no-go-back-button
               tooltip
               small />
           </div>

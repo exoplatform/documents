@@ -40,7 +40,7 @@
             :small="small"
             :class="btnClass"
             icon
-            @click="$root.$emit('open-document-offline-files')">
+            @click="$root.$emit('open-document-offline-files', !noGoBackButton)">
             <v-icon size="20">fa-power-off</v-icon>
           </v-btn>
         </v-badge>
@@ -58,6 +58,10 @@ export default {
       default: false,
     },
     small: {
+      type: Boolean,
+      default: false,
+    },
+    noGoBackButton: {
       type: Boolean,
       default: false,
     },
