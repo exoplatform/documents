@@ -71,8 +71,7 @@
                 :file="item"
                 :no-dates="!expanded"
                 :hide-download="!expanded"
-                :actions-cell-width="actionsCellWidth"
-                cell-class="no-border"
+                :action-cell-class="!expanded && 'px-0'"
                 class="mb-4 me-4"
                 access-badge
                 allow-upload

@@ -17,7 +17,7 @@
 <template>
   <v-hover v-model="hover">
     <tr>
-      <td :class="cellClass">
+      <td class="no-border">
         <div class="d-flex align-center overflow-hidden">
           <v-card
             class="d-flex align-center overflow-hidden"
@@ -36,14 +36,27 @@
             </div>
           </v-card>
           <v-spacer />
-          <documents-offline-info-button
-            v-if="infoIcon && hover"
-            :file-id="file.id" />
+          <v-tooltip v-if="accessBadge && offlineAccessTime" bottom>
+            <template #activator="{on, attrs}">
+              <v-btn
+                v-bind="attrs"
+                v-on="on"
+                :aria-label="$t('OfflineApp.pwa.documents.accessedWhileOffline')"
+                small
+                icon
+                @click="markAsUpdated">
+                <v-avatar
+                  class="error-color-background"
+                  size="12" />
+              </v-btn>
+            </template>
+            <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
+          </v-tooltip>
         </div>
       </td>
       <td
         v-if="!noDates"
-        :class="cellClass"
+        class="no-border"
         width="175px">
         <v-tooltip bottom>
           <template #activator="{on, attrs}">
@@ -61,7 +74,7 @@
       </td>
       <td
         v-if="!noDates"
-        :class="cellClass"
+        class="no-border"
         width="175px">
         <v-tooltip bottom>
           <template #activator="{on, attrs}">
@@ -78,26 +91,14 @@
         </v-tooltip>
       </td>
       <td
-        :class="[cellClass || '', accessBadge ? 'ps-0' : '']"
-        :width="`${actionsCellWidth}px`">
+        :width="`${actionsCellWidth}px`"
+        :class="actionCellClass"
+        class="no-border">
         <div :class="accessBadge ? 'justify-end' : 'justify-center'" class="d-flex align-center">
-          <v-tooltip v-if="accessBadge && offlineAccessTime" bottom>
-            <template #activator="{on, attrs}">
-              <v-btn
-                v-bind="attrs"
-                v-on="on"
-                :aria-label="$t('OfflineApp.pwa.documents.accessedWhileOffline')"
-                class="me-2"
-                small
-                icon
-                @click="markAsUpdated">
-                <v-avatar
-                  class="error-color-background"
-                  size="12" />
-              </v-btn>
-            </template>
-            <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
-          </v-tooltip>
+          <documents-offline-info-button
+            v-if="infoIcon && hover"
+            :file-id="file.id"
+            class="me-2" />
           <v-tooltip v-if="allowUpload" bottom>
             <template #activator="{on, attrs}">
               <v-btn
@@ -138,7 +139,7 @@ export default {
       type: Object,
       default: null,
     },
-    cellClass: {
+    actionCellClass: {
       type: String,
       default: null,
     },
