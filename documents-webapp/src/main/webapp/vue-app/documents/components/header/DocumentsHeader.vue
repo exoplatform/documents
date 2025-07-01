@@ -28,6 +28,8 @@
         @filter-button-click="openAdvacedDrawer()"
         @filter-select-change="changeDocumentsFilter($event)"
         @toggle-select="changeDocumentView($event)"
+        @filter-expand="filterDispalyed = !filterDispalyed"
+        class="mb-4"
         ref="applicationToolbar">
         <template #left>
           <documents-header-left
@@ -36,13 +38,29 @@
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
         </template>
+        <template v-if="$root.canEdit && $root.hover && !filterDispalyed" #right>
+          <div class="ms-auto">
+            <v-tooltip max-width="300" bottom>
+              <template #activator="{ on, attrs }">
+                <v-btn
+                  id="documentSettingsButton"
+                  small
+                  icon
+                  v-bind="attrs"
+                  v-on="on"
+                  @click="$root.$emit('open-document-settings')">
+                  <v-icon size="20">fa-cog</v-icon>
+                </v-btn>
+              </template>
+              <span class="caption">
+                {{ $t('documents.settings.button.tooltip') }}
+              </span>
+            </v-tooltip>
+          </div>
+        </template>
       </application-toolbar>
     </div>
-    <documents-breadcrumb
-      v-if="selectedView === 'folder'"
-      v-show="showBreadcrumb"
-      :is-mobile="isMobile"
-      class="pt-4 px-1" />
+    <documents-setting-drawer :view-list="viewList" />
   </div>
 </template>
 
@@ -99,8 +117,8 @@ export default {
     }
   },
   data: () => ({
-    tabsExtensionApp: 'DocumentTabs',
-    tabsExtensionType: 'documentsHeaderTab',
+    tabsExtensionApp: 'Documents',
+    tabsExtensionType: 'views',
     tabsExtensions: {},
     mobileOnlyTabsExtensions: [],
     desktopOnlyTabsExtensions: [],
@@ -108,11 +126,13 @@ export default {
     tab: 'timeline',
     selectAllChecked: false,
     showFilter: false,
+    filterDispalyed: false,
     centerBotton: {
       selected: 'timeline',
       hide: false,
       buttons: []
-    }
+    },
+    viewList: []
   }),
   watch: {
     query() {  
@@ -160,9 +180,6 @@ export default {
     },
     canShowMobileFilter() {
       return this.isMobile && this.showFilter;
-    },
-    showBreadcrumb(){
-      return !this.query;
     }
   },
   created() {
@@ -171,7 +188,7 @@ export default {
     this.$root.$on('show-mobile-filter', data => {
       this.showFilter= data;
     });
-    document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshTabExtensions);
+    document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
   },
   methods: {
@@ -186,9 +203,20 @@ export default {
       this.query = null;
       this.$refs.applicationToolbar.setTerm(null);
     },
-    refreshTabExtensions() {
-      const extensions = extensionRegistry.loadExtensions(this.tabsExtensionApp, this.tabsExtensionType);
-      let changed = false;
+    refreshTabExtensions(event) {
+      let extensions = extensionRegistry.loadExtensions(this.tabsExtensionApp, this.tabsExtensionType);
+      this.viewList = [];
+      let changed =false;
+      if (event?.detail?.forceUpdate) {
+        this.tabsExtensions= {};
+      }
+      extensions.forEach(extension => {
+        this.viewList.push({'id': extension.id, 'name': extension.labelKey, 'enabled': !(this.$root.settings?.enabledViewList?.length !== 0) || this.$root.settings.enabledViewList.includes(extension.id)});
+      });
+      if (!this.$root.settings.enabledViewList || this.$root.settings.enabledViewList.length > 0)
+      {
+        extensions = extensions.filter(item => this.$root.settings.enabledViewList.includes(item.id));
+      }
       extensions.forEach(extension => {
         if (extension.id && (!this.tabsExtensions[extension.id] || this.tabsExtensions[extension.id] !== extension)) {
           if ( (!this.isMobile && !this.mobileOnlyTabsExtensions.includes(extension.id))
@@ -202,6 +230,9 @@ export default {
       if (changed) {
         this.tabsExtensions = Object.assign({}, this.tabsExtensions);
         this.tabsList=Object.values(this.tabsExtensions);
+        if (this.tabsList.length < 2){
+          this.tabsList=[];
+        }
         this.centerBotton.buttons=this.tabsList.map(e => ({...e, text: this.$t(`${e.labelKey}`)}));
       }
     },
@@ -221,12 +252,17 @@ export default {
         this.$root.$emit('open-mobile-filter-menu',true);
       } else {
         this.$root.$emit('open-advanced-filter-drawer');
-      }
-      
+      }     
+    },
+    openSettingsDrawer(){
+      this.$root.$emit('open-advanced-filter-drawer');    
     },  
     changeDocumentsFilter(primaryFilter){
       this.$root.$emit('documents-filter', primaryFilter);
       this.$root.$emit('set-mobile-filter', primaryFilter);
+    },  
+    displayRightFilter(){
+      this.filterDispalyed = true;
     },
   }
 };

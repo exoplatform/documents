@@ -7,13 +7,11 @@
   <portlet>
     <portlet-name>Documents</portlet-name>
     <display-name xml:lang="EN">Documents Application</display-name>
-    <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
+    <portlet-class>org.exoplatform.documents.portlet.DocumentPortlet</portlet-class>
     <init-param>
       <name>portlet-view-dispatched-file-path</name>
-      <value>/html/documents.html</value>
+      <value>/WEB-INF/jsp/document.jsp</value>
     </init-param>
-    <expiration-cache>-1</expiration-cache>
-    <cache-scope>PUBLIC</cache-scope>
     <supports>
       <mime-type>text/html</mime-type>
     </supports>
@@ -23,6 +21,18 @@
       <title>Documents Application</title>
       <keywords>Documents Application</keywords>
     </portlet-info>
+    <portlet-preferences>
+      <preference>
+        <name>settings</name>
+        <value>
+          {
+          "enabledViewList":[],
+          "defaultView":"timeline",
+          "collapsedTreeView":true,
+          }
+        </value>
+      </preference>
+    </portlet-preferences>
   </portlet>
 
   <portlet>

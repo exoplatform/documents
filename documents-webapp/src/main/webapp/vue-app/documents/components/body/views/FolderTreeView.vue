@@ -16,49 +16,71 @@
  * along with this program. If not, see <gnu.org/licenses>.
  *
 -->
+
 <template>
-  <exo-drawer 
-    ref="treeViewDrawer"
-    class="treeViewDrawer"
-    @closed="close"
-    right>
-    <template slot="title">
-      {{ $t('documents.drawer.tree') }}
-    </template>
-    <template slot="content">
+  <v-card 
+    v-if="treeViewCollapsed"
+    flat
+    :loading="loading"
+    width="310"
+    class="border-right-color expand-transition-enter-active">
+    <v-card-title class="pa-0 border-bottom-color"> 
+      <span v-if="treeViewCollapsed" class="text-header">{{ $t('documents.tree.title') }}</span>
+      <v-spacer />
+      <v-tooltip bottom>
+        <template #activator="{ on, attrs }">
+          <v-btn
+            icon
+            v-bind="attrs"
+            v-on="on"
+            @click.stop.prevent="$root.$emit('tree-view-expand', false)">
+            <img
+              src="/social/images/sidebar.svg"
+              class="icon-default-color mb-1"
+              height="20px"
+              width="20px">
+          </v-btn>
+        </template>
+        <span class="caption">
+          {{ $t('documents.tooltip.close.tree') }}
+        </span>
+      </v-tooltip>
+    </v-card-title>
+    <v-card-text class="px-0">
       <document-tree-view
         :items="items"
         :folder-path="folderPath" />
-    </template>
-  </exo-drawer>
+    </v-card-text>
+  </v-card>
 </template>
 <script>
 
 export default {
+
   props: {
     folderPath: {
       type: String,
       default: null
     },
+    treeViewCollapsed: {
+      type: String,
+      default: null
+    },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
+
   data: () => ({
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+    loading: false,
     items: []
   }),
-  created(){
-    this.$root.$on('openTreeFolderDrawer', this.open);
-  },
-  beforeDestroy() {
-    this.$root.$off('openTreeFolderDrawer', this.open);
+  created() {
+    this.retrieveDocumentTree();
   },
   methods: {
-    open() {
-      this.retrieveDocumentTree();
-      this.$refs.treeViewDrawer?.open();
-    },
-    close() {
-      this.$refs.treeViewDrawer?.close();
-    },
     retrieveDocumentTree(){
       this.items = [];
       this.loading = true;

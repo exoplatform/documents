@@ -1,22 +1,32 @@
 <template>
   <div v-if="documentsBreadcrumbToDisplay.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-btn
-        icon
-        small
-        class="me-2"
-        :disabled="disabledIconTree"
-        @click="openTreeFolderDrawer()">
-        <v-icon class="text-sub-title" size="16">
-          fas fa-sitemap
-        </v-icon>
-      </v-btn>
+      <v-tooltip v-if="!treeViewCollapsed || isMobile" bottom>
+        <template #activator="{ on, attrs }">
+          <v-btn
+            icon
+            v-bind="attrs"
+            v-on="on"
+            class="me-2 ms-n2"
+            :disabled="disabledIconTree"
+            @click.stop.prevent="openTreeView()">
+            <img
+              src="/social/images/sidebar.svg"
+              class="icon-default-color pb-1"
+              height="20px"
+              width="20px">
+          </v-btn>
+        </template>
+        <span class="caption">
+          {{ $t('documents.tooltip.open.tree') }}
+        </span>
+      </v-tooltip>
       <div
         id="breadcrumb-list-items"
         data-isfolder="true"
         :data-fileId="documentsBreadcrumbToDisplay[0].id"
         :data-canEdit="canEditFile(documentsBreadcrumbToDisplay[0])? 'true': 'false'"
-        class="pa-1 d-flex width-fit-content">
+        class="pa-1 mb-1 d-flex width-fit-content">
         <div
           v-for="(documents, index) in documentsBreadcrumbToDisplay"
           :key="index"
@@ -39,8 +49,8 @@
                   class="text-truncate"
                   :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
                   :class="[
-                    index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-sub-title' || 'text-color not-clickable',
-                    !move && 'caption'
+                    index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-header' || 'text-header text-color not-clickable',
+                    move && 'caption'
                   ]">
                   {{ getName(documents.name) }}
                 </a>
@@ -88,10 +98,14 @@ export default {
       type: Boolean,
       default: false,
     },
-    disabledIconTree: {
-      type: Boolean,
-      default: false,
+    treeViewCollapsed: {
+      type: String,
+      default: null,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     id: Math.random().toString(16),
@@ -165,10 +179,6 @@ export default {
       }
       this.$root.$emit('breadcrumb-updated');
     },
-    openTreeFolderDrawer(){
-      this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
-      this.$root.$emit('openTreeFolderDrawer');
-    },
     getName(name){
       if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
@@ -240,6 +250,14 @@ export default {
         this.getFolderPath(folderPath);
       } else {
         this.getDocumentDataFromUrl();
+      }
+    },
+    openTreeView() {
+      if (this.isMobile) {
+        this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
+        this.$root.$emit('openTreeFolderDrawer');
+      } else {
+        this.$root.$emit('tree-view-expand', true);
       }
     },
   }

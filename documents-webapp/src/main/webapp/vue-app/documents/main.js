@@ -68,13 +68,12 @@ if (extensionRegistry) {
 Vue.use(Vuetify);
 const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 
-const appId = 'DocumentsApplication';
-
 //getting language of the PLF
 const lang = eXo && eXo.env.portal.language || 'en';
 
 //should expose the locale ressources as REST API 
-const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.portlet.Documents-${lang}.json`;
+
+const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
 
 Vue.prototype.$nextTick(() => {
   Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
@@ -82,10 +81,17 @@ Vue.prototype.$nextTick(() => {
     Vue.prototype.$downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
   });
 });
-export function init() {
+
+export function init(appId, canEdit,  settings, settingsSaveUrl) {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
     // init Vue app when locale ressources are ready
     Vue.createApp({
+      data: {
+        canEdit,
+        settings,
+        settingsSaveUrl,
+        hover: false,
+      },
       template: `<documents-main id="${appId}" />`,
       vuetify,
       i18n

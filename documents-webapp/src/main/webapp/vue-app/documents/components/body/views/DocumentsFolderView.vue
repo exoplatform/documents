@@ -1,134 +1,158 @@
 <template>
-  <div>
-    <upload-overlay />
-    <v-data-table
-      ref="dataTable"
-      id="folderView"
-      class="documents-folder-table border-box-sizing"
-      :headers="headers"
-      :items="items"
-      :items-per-page="pageSize"
-      :loading="loading"
-      :options.sync="options"
-      :locale="lang"
-      :groupable="grouping"
-      :group-by="groupBy"
-      :group-desc="groupDesc"
-      :loading-text="loadingLabel"
-      :class="loadingClass"
-      :custom-sort="customSort"
-      mobile-breakpoint="960"
-      :show-select="!isMobile"
-      hide-default-footer
-      disable-pagination>
-      <template slot="group.header">
-        <span></span>
-      </template>
-      <template #[`header.data-table-select`]="{ on , props }">
-        <v-tooltip
-          v-on="on"
-          v-bind="props"
-          :disabled="selectAll"
-          open-on-hover
-          bottom>
-          <template #activator="{ on, attrs }">
-            <v-simple-checkbox
-              v-model="selectAll"
-              v-on="on"
-              v-bind="attrs"
-              :indeterminate="false"
-              color="primary"
-              :class="showSelectAll? 'visible': 'invisible'"
-              class="mt-auto"
-              @mouseover="showSelectAllInputOnHover"
-              @mouseleave="hideSelectAllInputOnHover"
-              @click="selectAllDocuments" />
-          </template>
-          {{ $t('documents.multiSelection.selectAll.element.tooltip.message') }}
-        </v-tooltip>
-      </template>
-      <template #[`header.name`]>
-        <span
-          id="headerName">
-          {{ $t('documents.label.name') }}
-        </span>
-      </template>
-      <template
-        v-if="!isMobile"
-        #body="{ items }">
-        <tbody>
-          <tr
-            v-for="item in items"
-            :key="item.id"
-            :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
-            draggable="true"
-            :data-fileId="item.id"
-            :data-isFolder="item.folder? 'true': 'false'"
-            :data-canEdit="canEditFile(item)? 'true': 'false'"
-            @mouseover="showSelectionInput(item)"
-            @mouseleave="hideSelectionInput(item)"
-            @contextmenu="openContextMenu($event, item)">
-            <td>
-              <documents-selection-cell
-                :file="item"
-                :files="items"
-                :select-all-checked="selectAll"
-                :selected-documents="selectedDocuments"
-                @document-selected="handleDocumentSelection"
-                @document-unselected="handleDocumentSelection" />
-            </td>
-            <td
-              v-for="header in extendedCells"
-              :key="header.value + item.id">
-              <documents-table-cell
-                :extension="header.cellExtension"
-                :file="item"
-                :query="query"
-                :extended-search="extendedSearch"
-                :is-mobile="isMobile"
-                :selected-view="selectedView"
-                :is-search-result="isSearchResult"
-                :selected-documents="selectedDocuments" />
-            </td>
-          </tr>
-        </tbody>
-      </template>
-      <template
-        v-else
-        #item="{item}">
-        <tr
-          :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
-          class="v-data-table__mobile-table-row pb-2 pt-2">
-          <td
-            class="v-data-table__mobile-row">
-            <documents-table-cell
-              v-for="header in extendedCells"
-              :key="header.value + item.id"
-              :extension="header.cellExtension"
-              :file="item"
-              :query="query"
-              :extended-search="extendedSearch"
-              :is-mobile="isMobile"
-              :selected-view="selectedView"
-              :is-search-result="isSearchResult"
-              :select-all-checked="selectAll"
-              :selected-documents="selectedDocuments"
-              :class="header.value === 'name' && isXScreen && 'ms-10'" />
-          </td>
-        </tr>
-      </template>
-      <template v-if="hasMore" slot="footer">
-        <v-flex class="d-flex py-2 border-box-sizing mb-1">
-          <v-btn
+  <div class="d-flex">
+    <component
+      :is="isMobile ? 'folder-treeview-drawer' : 'folder-tree-view'"
+      :tree-view-collapsed="treeViewCollapsed"
+      :is-mobile="isMobile"
+      :folder-path="folderPath" />
+    <v-card 
+      flat
+      class="width-full">
+      <documents-breadcrumb
+        :is-mobile="isMobile"
+        :tree-view-collapsed="treeViewCollapsed" />
+      <upload-overlay />
+      <documents-no-body-folder
+        v-if="items.length === 0"
+        :query="query"
+        :is-mobile="isMobile" />
+      <v-hover v-else v-model="hoverTable">
+        <div>
+          <v-data-table
+            ref="dataTable"
+            id="folderView"
+            class="documents-folder-table border-box-sizing"
+            :headers="headers"
+            :items="items"
+            :items-per-page="pageSize"
             :loading="loading"
-            :disabled="loading"
-            class="white mx-auto no-border primary--text no-box-shadow"
-            @click="$root.$emit('document-load-more')">
-            {{ $t('documents.loadMore') }}
-          </v-btn>
-        </v-flex>
-      </template>
-    </v-data-table>
+            :options.sync="options"
+            :locale="lang"
+            :groupable="grouping"
+            :group-by="groupBy"
+            :group-desc="groupDesc"
+            :loading-text="loadingLabel"
+            :class="loadingClass"
+            :custom-sort="customSort"
+            mobile-breakpoint="960"
+            :show-select="!isMobile"
+            hide-default-footer
+            disable-pagination>
+            <template slot="group.header">
+              <span></span>
+            </template>
+            <template #[`header.data-table-select`]="{ on , props }">
+              <v-tooltip
+                v-on="on"
+                v-bind="props"
+                :disabled="selectAll"
+                open-on-hover
+                bottom>
+                <template #activator="{ on, attrs }">
+                  <v-simple-checkbox
+                    v-model="selectAll"
+                    v-on="on"
+                    v-bind="attrs"
+                    :indeterminate="false"
+                    color="primary"
+                    :class="showSelectAll || hoverTable ? 'visible': 'invisible'"
+                    class="mt-auto"
+                    @mouseover="showSelectAllInputOnHover"
+                    @mouseleave="hideSelectAllInputOnHover"
+                    @click="selectAllDocuments" />
+                </template>
+                {{ $t('documents.multiSelection.selectAll.element.tooltip.message') }}
+              </v-tooltip>
+            </template>
+            <template #[`header.name`]>
+              <span
+                id="headerName">
+                {{ $t('documents.label.name') }}
+              </span>
+            </template>
+            <template
+              v-if="!isMobile"
+              #body="{ items }">
+              <tbody>
+                <v-hover
+                  v-for="item in items"
+                  v-slot="{ hover }"
+                  :key="item.id">
+                  <tr
+                    :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+                    draggable="true"
+                    :data-fileId="item.id"
+                    :data-isFolder="item.folder? 'true': 'false'"
+                    :data-canEdit="canEditFile(item)? 'true': 'false'"
+                    @mouseover="showSelectionInput(item)"
+                    @mouseleave="hideSelectionInput(item)"
+                    @contextmenu="openContextMenu($event, item)">
+                    <td>
+                      <documents-selection-cell
+                        :file="item"
+                        :files="items"
+                        :select-all-checked="selectAll"
+                        :selected-documents="selectedDocuments"
+                        @document-selected="handleDocumentSelection"
+                        @document-unselected="handleDocumentSelection" />
+                    </td>
+                    <td
+                      v-for="header in extendedCells"
+                      :key="header.value + item.id">
+                      <documents-table-cell
+                        :extension="header.cellExtension"
+                        :file="item"
+                        :query="query"
+                        :extended-search="extendedSearch"
+                        :is-mobile="isMobile"
+                        :hover="hover"
+                        :selected-view="selectedView"
+                        :is-search-result="isSearchResult"
+                        :selected-documents="selectedDocuments" />
+                    </td>
+                  </tr>
+                </v-hover>
+              </tbody>
+            </template>
+            <template
+              v-else
+              #item="{item}">
+              <tr
+                :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
+                class="v-data-table__mobile-table-row pb-2 pt-2">
+                <td
+                  class="v-data-table__mobile-row">
+                  <documents-table-cell
+                    v-for="header in extendedCells"
+                    :key="header.value + item.id"
+                    :extension="header.cellExtension"
+                    :file="item"
+                    :query="query"
+                    :extended-search="extendedSearch"
+                    :is-mobile="isMobile"
+                    :selected-view="selectedView"
+                    :is-search-result="isSearchResult"
+                    :select-all-checked="selectAll"
+                    :selected-documents="selectedDocuments"
+                    :class="header.value === 'name' && isXScreen && 'ms-10'" />
+                </td>
+              </tr>
+            </template>
+            <template v-if="hasMore" slot="footer">
+              <v-flex class="d-flex py-2 border-box-sizing mb-1">
+                <v-btn
+                  :loading="loading"
+                  :disabled="loading"
+                  class="white mx-auto no-border primary--text no-box-shadow"
+                  @click="$root.$emit('document-load-more')">
+                  {{ $t('documents.loadMore') }}
+                </v-btn>
+              </v-flex>
+            </template>
+          </v-data-table>
+        </div>
+      </v-hover>
+    </v-card>
   </div>
 </template>
 
@@ -211,6 +235,10 @@ export default {
       type: String,
       default: null
     },
+    folderPath: {
+      type: String,
+      default: null
+    },
     selectedDocuments: {
       type: Array,
       default: () => []
@@ -228,7 +256,9 @@ export default {
     mobileUnfriendlyExtensions: ['visibility','lastUpdated', 'size', 'lastActivity', 'favorite'],
     selectAll: false,
     showSelectAllInput: false,
-    showSelectInputTimer: null
+    showSelectInputTimer: null,
+    treeViewCollapsed: false,
+    hoverTable: false,
   }),
   computed: {
     isXScreen() {
@@ -281,6 +311,9 @@ export default {
     isSearchResult(){
       return ((this.query && this.query.length > 0) || this.minSize || this.maxSize || this.afterDate || this.beforeDate || this.fileType?.length>0 || this.primaryFilter!=='all') ;
     },
+    showBreadcrumb(){
+      return !this.query;
+    }
   },
   watch: {
     options() {
@@ -298,23 +331,29 @@ export default {
     },
   },
   created() {
+    this.treeViewCollapsed =  localStorage.getItem('collapsedTreeView')!=null ? localStorage.getItem('collapsedTreeView') === 'true' : (this.$root.settings?.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true);
     this.$root.$on('select-all-documents', (value) => this.selectAll = value);
     this.$root.$on('reset-selections', () => this.selectAll = false);
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
     this.$root.$on('documents-filter', this.updateFilter);
+    this.$root.$on('tree-view-expand', this.collapseTreeView );
   },
   mounted(){
-    document.getElementById('headerName')?.closest('tr').addEventListener('mouseover', this.showSelectAllInputOnHover);
-    document.getElementById('headerName')?.closest('tr').addEventListener('mouseleave', this.hideSelectAllInputOnHover);
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
     DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
+    this.$root.$off('tree-view-expand', this.collapseTreeView);
+    this.$root.$off('openTreeFolderDrawer', this.folderTreeDrawer);
   },
   methods: {
+    collapseTreeView(value) {
+      this.treeViewCollapsed = value;
+      localStorage.setItem('collapsedTreeView', value);
+    },
     canEditFile(file) {
       return file?.acl?.canEdit;
     },

@@ -18,6 +18,7 @@
     'use strict';
 
     let table = null;
+    let tableId = null;
     let breadCrumbList = null;
     let breadcrumbListId = null;
     let parentDragElement = null;
@@ -29,7 +30,8 @@
 
     const DocumentsDraggable = function () {/**/
     };
-    DocumentsDraggable.prototype.invoke = function (tableId, _breadcrumbListId) {
+    DocumentsDraggable.prototype.invoke = function (_tableId, _breadcrumbListId) {
+        tableId = _tableId
         table = document.getElementById(tableId);
         breadcrumbListId = _breadcrumbListId
         bindMouse();
@@ -88,6 +90,9 @@
     }
 
     function clearElements() {
+        if (!table) {
+            table = document.getElementById(tableId);
+        }
         dragElements.forEach(element => {
             element.remove();
         });
@@ -103,6 +108,9 @@
     }
 
     function handleCancelAction() {
+        if (!table) {
+            table = document.getElementById(tableId);
+        }
         table.querySelector('tr.is-intersected')?.classList.remove('is-intersected');
     }
 
@@ -111,6 +119,9 @@
     }
 
     function checkDropOnDocumentsBody(onDrop) {
+        if (!table) {
+            table = document.getElementById(tableId);
+        }
         const bodyIntersected = isIntersection(dragTooltipElement, getDocumentsBoyElement()) && !isIntersection(dragTooltipElement, table);
         const allowed = canDropOnListFiles();
         if (bodyIntersected) {
@@ -301,6 +312,9 @@
     }
 
     function getRows() {
+        if (!table) {
+            table = document.getElementById(tableId);
+        }
         return table.querySelectorAll('tbody tr');
     }
 

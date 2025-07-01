@@ -52,7 +52,10 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
-import org.exoplatform.documents.service.*;
+import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.DocumentFileServiceImpl;
+import org.exoplatform.documents.service.ExternalDownloadService;
+import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.portal.rest.CollectionEntity;
@@ -106,8 +109,6 @@ public class DocumentFileRestTest {
 
   private SettingService                     settingService;
 
-  private DocumentWebSocketService           documentWebSocketService;
-
   private PublicDocumentAccessService        publicDocumentAccessService;
 
   private ExternalDownloadService            externalDownloadService;
@@ -127,7 +128,6 @@ public class DocumentFileRestTest {
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     listenerService = mock(ListenerService.class);
     settingService = mock(SettingService.class);
-    documentWebSocketService = mock(DocumentWebSocketService.class);
     publicDocumentAccessService = mock(PublicDocumentAccessService.class);
     externalDownloadService = mock(ExternalDownloadService.class);
     imageThumbnailService = mock(ImageThumbnailService.class);
@@ -146,7 +146,6 @@ public class DocumentFileRestTest {
                                             identityManager,
                                             metadataService,
                                             settingService,
-                                            documentWebSocketService,
                                             publicDocumentAccessService,
                                             externalDownloadService);
   }
@@ -835,8 +834,8 @@ public class DocumentFileRestTest {
     Response response1 = documentFileRest.updateDocument("name","11111111", 2L, "renameTest", "", null);
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
 
-    when(documentFileStorage.getFullTreeData(2L, "11111111", userID, true)).thenReturn(children);
-    Response response2 = documentFileRest.getFullTreeData(2L, "11111111", true);
+    when(documentFileStorage.getFullTreeData(2L, "11111111", "", userID, true)).thenReturn(children);
+    Response response2 = documentFileRest.getFullTreeData(2L, "11111111",  "",true);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.moveDocument(null, null, "/Groups/spaces/test/Documents/test", null);
@@ -1075,7 +1074,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     FileNodeEntity nodeEntity = new FileNodeEntity();
@@ -1117,7 +1115,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
 
@@ -1193,7 +1190,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
@@ -1215,7 +1211,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     String username = "testuser";
@@ -1248,19 +1243,18 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
-    Response response = documentFileRest1.getFullTreeData(null, null, true);
+    Response response = documentFileRest1.getFullTreeData(null, null,  "",true);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123", true)).thenThrow(IllegalAccessException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123", true);
+    when(documentFileRest1.getFullTreeData(1L, "123",  "",true)).thenThrow(IllegalAccessException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123",  "",true);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123", true)).thenThrow(ObjectNotFoundException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123", true);
+    when(documentFileRest1.getFullTreeData(1L, "123",  "",true)).thenThrow(ObjectNotFoundException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123",  "",true);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123", true)).thenThrow(RuntimeException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123", true);
+    when(documentFileRest1.getFullTreeData(1L, "123",  "",true)).thenThrow(RuntimeException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123",  "",true);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
@@ -1283,7 +1277,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     Response response = documentFileRest1.updateVersionSummary(summary, null, null);
@@ -1316,7 +1309,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
@@ -1345,7 +1337,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     Response response = documentFileRest1.restoreVersion(null);
@@ -1371,7 +1362,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).renameDocument(1L, "123", "test", 2L);
@@ -1388,7 +1378,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     doThrow(new ObjectAlreadyExistsException("exist")).when(documentFileService1).moveDocument(1L, "123", "test", 2L, "");
@@ -1427,7 +1416,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     InputStream newContent = new ByteArrayInputStream("test".getBytes());
@@ -1454,7 +1442,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     AbstractNodeEntity abstractNodeEntity = mock(AbstractNodeEntity.class);
@@ -1486,7 +1473,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     Response response = documentFileRest1.getSize(null);
@@ -1512,7 +1498,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     Response response = documentFileRest1.addSize(null);
@@ -1540,7 +1525,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L, 1L);
@@ -1585,7 +1569,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L, 1L);
@@ -1645,7 +1628,6 @@ public class DocumentFileRestTest {
                                                               identityManager,
                                                               metadataService,
                                                               settingService,
-                                                              documentWebSocketService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
     Response response = documentFileRest1.importDocuments("1", null, null, null, "ignore");
@@ -1665,13 +1647,8 @@ public class DocumentFileRestTest {
             identityManager,
             metadataService,
             settingService,
-            documentWebSocketService,
             publicDocumentAccessService,
             externalDownloadService);
-
-    Response response = documentFileRest1.getSettings(1L);
-    assertEquals(500, response.getStatus());
-
     String userName = "user";
     Long ownerId = 1L;
     Identity currentUserIdentity = mock(Identity.class);
@@ -1679,14 +1656,12 @@ public class DocumentFileRestTest {
     ConversationState.setCurrent(new ConversationState(user));
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentUserIdentity);
     when(identityManager.getIdentity(userName)).thenReturn(currentUserIdentity);
-    when(documentWebSocketService.getUserToken(userName)).thenReturn("this1is2a3cometd4token");
-    when(documentWebSocketService.getCometdContextName()).thenReturn("/rest");
-    when(documentFileService.getDefaultView(ownerId, currentUserIdentity.getId())).thenReturn("CustomView");
+    when(documentFileService.canImport(user)).thenReturn(true);
 
-    response = documentFileRest1.getSettings(1L);
+    Response response = documentFileRest1.getSettings(1L);
     assertEquals(200, response.getStatus());
     DocumentsUserSettings documentsUserSettings = (DocumentsUserSettings) response.getEntity();
-    assertEquals(documentsUserSettings.getCometdContextName(), "/rest");
+    assertEquals(documentsUserSettings.getCanImport(), true);
   }
 
   @Test
@@ -1697,7 +1672,6 @@ public class DocumentFileRestTest {
             identityManager,
             metadataService,
             settingService,
-            documentWebSocketService,
             publicDocumentAccessService,
             externalDownloadService);
 
@@ -1730,7 +1704,6 @@ public class DocumentFileRestTest {
             identityManager,
             metadataService,
             settingService,
-            documentWebSocketService,
             publicDocumentAccessService,
             externalDownloadService);
 
@@ -1757,7 +1730,6 @@ public class DocumentFileRestTest {
                                                              identityManager,
                                                              metadataService,
                                                              settingService,
-                                                             documentWebSocketService,
                                                              publicDocumentAccessService,
                                                              externalDownloadService);
 
@@ -1789,7 +1761,6 @@ public class DocumentFileRestTest {
                                                              identityManager,
                                                              metadataService,
                                                              settingService,
-                                                             documentWebSocketService,
                                                              publicDocumentAccessService,
                                                              externalDownloadService);
     List<TrashElementEntity> trashElementEntities = new ArrayList<>();
@@ -1817,7 +1788,6 @@ public class DocumentFileRestTest {
                                                              identityManager,
                                                              metadataService,
                                                              settingService,
-                                                             documentWebSocketService,
                                                              publicDocumentAccessService,
                                                              externalDownloadService);
     List<TrashElementEntity> trashElementEntities = new ArrayList<>();
@@ -1845,7 +1815,6 @@ public class DocumentFileRestTest {
             identityManager,
             metadataService,
             settingService,
-            documentWebSocketService,
             publicDocumentAccessService,
             externalDownloadService);
     Request request = mock(Request.class);

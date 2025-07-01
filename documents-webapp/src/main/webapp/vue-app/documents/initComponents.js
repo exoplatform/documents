@@ -56,13 +56,16 @@ import HideMenuAction from './components/body/actions/HideMenuAction.vue';
 import RenameMenuAction from './components/body/actions/RenameMenuAction.vue';
 import CopyLinkMenuAction from './components/body/actions/CopyLinkMenuAction.vue';
 import DocumentsBreadcrumb from './components/body/views/DocumentsBreadcrumb.vue';
+import FolderTreeView from './components/body/views/FolderTreeView.vue';
 import FolderTreeViewDrawer from './components/body/views/FolderTreeViewDrawer.vue';
+import TreeView from './components/body/views/TreeView.vue';
 import DetailsMenuAction from './components/body/actions/DetailsMenuAction.vue';
 import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
 import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
 import DocumentAdvancedFilterDrawer from './components/header/filters/DocumentAdvancedFilterDrawer.vue';
+import DocumentSettingsDrawer from './components/header/setting/DocumentSettingsDrawer.vue';
 import DocumentFilterMenuMobile from './components/header/filters/DocumentFilterMenuMobile.vue';
 import FavoriteFilterActionMobile from './components/header/filters/FavoriteFilterActionMobile.vue';
 import AllFilterActionMobile from './components/header/filters/AllFilterActionMobile.vue';
@@ -109,6 +112,7 @@ const components = {
   'documents-actions-menu-mobile': DocumentActionMenuMobile,
   'documents-add-new-menu-mobile': DocumentAddNewMobile,
   'documents-advanced-filter-drawer': DocumentAdvancedFilterDrawer,
+  'documents-setting-drawer': DocumentSettingsDrawer,
   'documents-filter-menu-mobile': DocumentFilterMenuMobile,
   'documents-download-drawer': DocumentDownloadDrawer,
   'documents-select-period': SelectPeriod,
@@ -132,7 +136,9 @@ const components = {
   'delete-menu-action': DeleteMenuAction,
   'shortcut-menu-action': ShortcutMenuAction,
   'documents-breadcrumb': DocumentsBreadcrumb,
+  'folder-tree-view': FolderTreeView,
   'folder-treeview-drawer': FolderTreeViewDrawer,
+  'document-tree-view': TreeView,
   'details-menu-action': DetailsMenuAction,
   'documents-info-details-cell': DocumentsInfoDetailsCell,
   'upload-overlay': UploadOverlay,
