@@ -78,10 +78,9 @@
         </v-tooltip>
       </td>
       <td
-        :class="cellClass"
-        :width="`${actionsCellWidth}px`"
-        class="ps-0">
-        <div class="d-flex justify-end align-center">
+        :class="[cellClass || '', accessBadge ? 'ps-0' : '']"
+        :width="`${actionsCellWidth}px`">
+        <div :class="accessBadge ? 'justify-end' : 'justify-center'" class="d-flex align-center">
           <v-tooltip v-if="accessBadge && offlineAccessTime" bottom>
             <template #activator="{on, attrs}">
               <v-btn

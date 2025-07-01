@@ -130,9 +130,9 @@ export default {
       return !!this.offlineFiles?.find(f => f.offlineAccessTime);
     },
     actionsCellWidth() {
-      let width = 100;
+      let width = 90;
       if (this.hasOfflineAccessTime) {
-        width += 40;
+        width += 32;
       }
       return width;
     },
