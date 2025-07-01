@@ -88,7 +88,7 @@
                 v-bind="attrs"
                 v-on="on"
                 :aria-label="$t('OfflineApp.pwa.documents.accessedWhileOffline')"
-                class="me-4"
+                class="me-2"
                 small
                 icon
                 @click="markAsUpdated">
@@ -106,10 +106,10 @@
                 v-on="on"
                 :aria-label="$t('OfflineApp.pwa.uploadVersion')"
                 :loading="uploading"
-                class="me-4"
+                class="me-2"
                 icon
                 @click="uploadVersion">
-                <v-icon>fa-upload</v-icon>
+                <v-icon size="20">fa-upload</v-icon>
               </v-btn>
             </template>
             <span>{{ $t('OfflineApp.pwa.uploadVersion') }}</span>
@@ -122,7 +122,7 @@
                 :aria-label="canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download')"
                 icon
                 @click="openFile">
-                <v-icon>{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
+                <v-icon size="20">{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
               </v-btn>
             </template>
             <span>{{ canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download') }}</span>

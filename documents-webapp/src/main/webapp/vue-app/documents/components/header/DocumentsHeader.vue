@@ -38,9 +38,9 @@
             :selected-documents="selectedDocuments" />
         </template>
         <template #right>
-          <div class="d-flex ms-auto">
+          <div v-if="!filterDispalyed" class="d-flex ms-auto">
             <v-tooltip
-              v-if="$root.canEdit && $root.hover && !filterDispalyed"
+              v-if="$root.canEdit && $root.hover"
               max-width="300"
               bottom>
               <template #activator="{ on, attrs }">
