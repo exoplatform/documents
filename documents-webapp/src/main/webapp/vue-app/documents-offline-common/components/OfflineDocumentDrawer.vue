@@ -71,7 +71,9 @@
                 :file="item"
                 :no-dates="!expanded"
                 :hide-download="!expanded"
-                :action-cell-class="!expanded && 'px-0'"
+                :actions-cell-class="!expanded && 'px-0'"
+                :actions-cell-width="actionsCellWidth"
+                :reverse-info-position="!expanded"
                 class="mb-4 me-4"
                 access-badge
                 allow-upload
@@ -128,12 +130,12 @@ export default {
       }] || null;
     },
     hasOfflineAccessTime() {
-      return !!this.offlineFiles?.find(f => f.offlineAccessTime);
+      return !!this.offlineFiles?.find?.(f => f.offlineAccessTime);
     },
     actionsCellWidth() {
       let width = 90;
-      if (this.hasOfflineAccessTime) {
-        width += 32;
+      if (this.expanded && this.hasOfflineAccessTime) {
+        width += 50;
       }
       return width;
     },

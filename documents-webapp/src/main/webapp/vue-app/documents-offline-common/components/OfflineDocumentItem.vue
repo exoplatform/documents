@@ -20,7 +20,7 @@
       <td class="no-border">
         <div class="d-flex align-center overflow-hidden">
           <v-card
-            class="d-flex align-center overflow-hidden"
+            class="d-flex align-center overflow-hidden no-border-radius"
             color="transparent"
             flat
             @click="openFile">
@@ -36,7 +36,7 @@
             </div>
           </v-card>
           <v-spacer />
-          <v-tooltip v-if="accessBadge && offlineAccessTime" bottom>
+          <v-tooltip v-if="reverseInfoPosition && accessBadge && offlineAccessTime" bottom>
             <template #activator="{on, attrs}">
               <v-btn
                 v-bind="attrs"
@@ -52,6 +52,9 @@
             </template>
             <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
           </v-tooltip>
+          <documents-offline-info-button
+            v-else-if="!reverseInfoPosition && infoIcon && hover"
+            :file-id="file.id" />
         </div>
       </td>
       <td
@@ -92,40 +95,61 @@
       </td>
       <td
         :width="`${actionsCellWidth}px`"
-        :class="actionCellClass"
+        :class="actionsCellClass"
         class="no-border">
         <div :class="accessBadge ? 'justify-end' : 'justify-center'" class="d-flex align-center">
-          <documents-offline-info-button
-            v-if="infoIcon && hover"
-            :file-id="file.id" />
-          <v-tooltip v-if="allowUpload" bottom>
-            <template #activator="{on, attrs}">
-              <v-btn
-                v-bind="attrs"
-                v-on="on"
-                :aria-label="$t('OfflineApp.pwa.uploadVersion')"
-                :loading="uploading"
-                class="me-2"
-                icon
-                @click="uploadVersion">
-                <v-icon size="16">fa-upload</v-icon>
-              </v-btn>
-            </template>
-            <span>{{ $t('OfflineApp.pwa.uploadVersion') }}</span>
-          </v-tooltip>
-          <v-tooltip v-if="!hideDownload" bottom>
-            <template #activator="{on, attrs}">
-              <v-btn
-                v-bind="attrs"
-                v-on="on"
-                :aria-label="canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download')"
-                icon
-                @click="openFile">
-                <v-icon size="16">{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
-              </v-btn>
-            </template>
-            <span>{{ canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download') }}</span>
-          </v-tooltip>
+          <div v-if="infoIcon && reverseInfoPosition" class="me-2">
+            <documents-offline-info-button
+              :file-id="file.id" />
+          </div>
+          <div v-else-if="!reverseInfoPosition && accessBadge && offlineAccessTime" class="me-2">
+            <v-tooltip bottom>
+              <template #activator="{on, attrs}">
+                <v-btn
+                  v-bind="attrs"
+                  v-on="on"
+                  :aria-label="$t('OfflineApp.pwa.documents.accessedWhileOffline')"
+                  icon
+                  @click="markAsUpdated">
+                  <v-avatar
+                    class="error-color-background"
+                    size="12" />
+                </v-btn>
+              </template>
+              <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
+            </v-tooltip>
+          </div>
+          <div v-if="allowUpload" class="me-2">
+            <v-tooltip bottom>
+              <template #activator="{on, attrs}">
+                <v-btn
+                  v-bind="attrs"
+                  v-on="on"
+                  :aria-label="$t('OfflineApp.pwa.uploadVersion')"
+                  :loading="uploading"
+                  icon
+                  @click="uploadVersion">
+                  <v-icon size="16">fa-upload</v-icon>
+                </v-btn>
+              </template>
+              <span>{{ $t('OfflineApp.pwa.uploadVersion') }}</span>
+            </v-tooltip>
+          </div>
+          <div v-if="!hideDownload" class="me-2">
+            <v-tooltip bottom>
+              <template #activator="{on, attrs}">
+                <v-btn
+                  v-bind="attrs"
+                  v-on="on"
+                  :aria-label="canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download')"
+                  icon
+                  @click="openFile">
+                  <v-icon size="16">{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
+                </v-btn>
+              </template>
+              <span>{{ canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download') }}</span>
+            </v-tooltip>
+          </div>
         </div>
       </td>
     </tr>
@@ -136,10 +160,6 @@ export default {
   props: {
     file: {
       type: Object,
-      default: null,
-    },
-    actionCellClass: {
-      type: String,
       default: null,
     },
     noDates: {
@@ -161,6 +181,14 @@ export default {
     infoIcon: {
       type: Boolean,
       default: false,
+    },
+    reverseInfoPosition: {
+      type: Boolean,
+      default: false,
+    },
+    actionsCellClass: {
+      type: String,
+      default: null,
     },
     actionsCellWidth: {
       type: Number,

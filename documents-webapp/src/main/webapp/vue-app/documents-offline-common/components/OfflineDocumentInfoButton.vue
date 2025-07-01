@@ -4,7 +4,6 @@
       <v-btn
         v-bind="attrs"
         v-on="on"
-        class="me-2"
         icon
         @click.stop.prevent="displayDetails">
         <v-icon
