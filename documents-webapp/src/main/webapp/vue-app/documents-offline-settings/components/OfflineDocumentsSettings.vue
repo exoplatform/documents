@@ -22,23 +22,14 @@
       </v-list-item-title>
     </v-list-item-content>
     <v-list-item-action class="mt-0 mb-auto">
-      <v-card
-        v-if="enabled"
-        class="border-color py-2 px-3"
-        disabled
-        flat>
-        <v-icon class="success--text me-2" size="18">fa-check</v-icon>
-        {{ $t('UserSettings.pwa.documentsOffline.enabled') }}
-      </v-card>
-      <v-btn
-        v-else-if="installed && !suspended"
-        :aria-label="$t('UserSettings.pwa.documentsOffline.enableOfflineAccessToDocuments')"
+      <v-switch
+        v-if="installed"
+        v-model="enabled"
         :loading="loading"
-        :disabled="loading"
-        class="btn"
-        @click.stop.prevent="enable">
-        {{ $t('UserSettings.pwa.documentsOffline.enable') }}
-      </v-btn>
+        :disabled="loading || (suspended && !enabled)"
+        :aria-label="enabled ? $t('UserSettings.pwa.documentsOffline.disable') : $t('UserSettings.pwa.documentsOffline.enable')"
+        class="py-2 px-3"
+        @click.stop.prevent="toogle" />
       <v-tooltip
         v-else
         bottom>
@@ -46,11 +37,7 @@
           <div
             v-on="on"
             v-bind="attrs">
-            <v-btn
-              class="btn"
-              disabled>
-              {{ $t('UserSettings.pwa.documentsOffline.enable') }}
-            </v-btn>
+            <v-switch disabled />
           </div>
         </template>
         <span v-if="suspended">
@@ -114,17 +101,26 @@ export default {
         this.loading = false;
       }
     },
-    async enable() {
+    async toogle() {
       this.loading = true;
       this.$root.$emit('close-alert-message');
       try {
-        await this.$documentOfflineService.createDatabase();
-        await this.$documentOfflineService.downloadFavorites();
-        this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationEnabled'), 'success');
+        await this.$nextTick();
+        if (this.enabled) {
+          await this.$documentOfflineService.createDatabase();
+          await this.$documentOfflineService.downloadFavorites();
+          this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationEnabled'), 'success');
+        } else {
+          await this.$documentOfflineService.deleteDatabase();
+          this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationDeleted'), 'success');
+        }
       } catch (e) {
-        await this.$documentOfflineService.deleteDatabase();
         // eslint-disable-next-line no-console
         console.error(e);
+        if (this.enabled) {
+          await this.$documentOfflineService.deleteDatabase();
+        }
+        this.enabled = !this.enabled;
         this.$root.$emit('alert-message', this.$t('UserSettings.pwa.documentsOffline.synchronizationSettingsUpdateError'), 'error');
       } finally {
         this.enabled = await this.$documentOfflineService.isOfflineDocumentsEnabled();
