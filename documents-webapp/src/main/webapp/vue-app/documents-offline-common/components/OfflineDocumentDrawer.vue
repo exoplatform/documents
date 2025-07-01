@@ -69,6 +69,7 @@
               <documents-offline-item
                 :file="item"
                 :no-dates="!expanded"
+                :hide-download="!expanded"
                 :actions-cell-width="actionsCellWidth"
                 cell-class="no-border"
                 class="mb-4 me-4"

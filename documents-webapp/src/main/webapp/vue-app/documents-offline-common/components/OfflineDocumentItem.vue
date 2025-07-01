@@ -108,12 +108,12 @@
                 class="me-2"
                 icon
                 @click="uploadVersion">
-                <v-icon size="20">fa-upload</v-icon>
+                <v-icon size="16">fa-upload</v-icon>
               </v-btn>
             </template>
             <span>{{ $t('OfflineApp.pwa.uploadVersion') }}</span>
           </v-tooltip>
-          <v-tooltip bottom>
+          <v-tooltip v-if="!hideDownload" bottom>
             <template #activator="{on, attrs}">
               <v-btn
                 v-bind="attrs"
@@ -121,7 +121,7 @@
                 :aria-label="canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download')"
                 icon
                 @click="openFile">
-                <v-icon size="20">{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
+                <v-icon size="16">{{ canPreview ? 'fa-eye' : 'fa-download' }}</v-icon>
               </v-btn>
             </template>
             <span>{{ canPreview ? $t('OfflineApp.pwa.preview') : $t('OfflineApp.pwa.download') }}</span>
@@ -147,6 +147,10 @@ export default {
       default: false,
     },
     allowUpload: {
+      type: Boolean,
+      default: false,
+    },
+    hideDownload: {
       type: Boolean,
       default: false,
     },

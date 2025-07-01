@@ -89,7 +89,6 @@ export default {
       return [{
         text: this.$t('OfflineApp.pwa.header.name'),
         align: 'left',
-        class: 'ps-14',
         sortable: true,
         value: 'name'
       }, {
