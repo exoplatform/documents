@@ -59,6 +59,7 @@
               </span>
             </v-tooltip>
             <documents-offline-button
+              v-if="!spaceId"
               btn-class="ms-4"
               no-go-back-button
               tooltip
@@ -131,6 +132,7 @@ export default {
     desktopOnlyTabsExtensions: [],
     tabsList: [],
     tab: 'timeline',
+    spaceId: eXo.env.portal.spaceId,
     selectAllChecked: false,
     showFilter: false,
     filterDispalyed: false,
