@@ -29,6 +29,7 @@
         @filter-select-change="changeDocumentsFilter($event)"
         @toggle-select="changeDocumentView($event)"
         @filter-expand="filterDispalyed = !filterDispalyed"
+        class="mb-4"
         ref="applicationToolbar">
         <template #left>
           <documents-header-left
