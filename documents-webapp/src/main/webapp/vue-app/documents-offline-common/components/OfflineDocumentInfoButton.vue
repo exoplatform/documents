@@ -10,7 +10,7 @@
           v-bind="attrs"
           v-on="on"
           class="mx-0 px-0"
-          size="20">
+          size="16">
           fa-info-circle
         </v-icon>
       </v-btn>
