@@ -28,12 +28,6 @@
     v-else-if="initialized"
     color="transparent"
     flat>
-    <v-card
-      class="d-flex flex-column align-center justify-center py-5 mb-5"
-      min-width="100%"
-      flat>
-      <div class="text-title mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.noSiteConnection') }}</div>
-    </v-card>
     <application-toolbar
       ref="applicationToolbar"
       :right-text-filter="hasOfflineFiles && {
