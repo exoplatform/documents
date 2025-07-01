@@ -52,6 +52,7 @@
       <template #item="{item}">
         <documents-offline-item
           :file="item"
+          cell-class="no-border"
           class="mb-4 me-4"
           @download="download"
           @preview="openPreview" />
@@ -88,6 +89,7 @@ export default {
       return [{
         text: this.$t('OfflineApp.pwa.header.name'),
         align: 'left',
+        class: 'ps-14',
         sortable: true,
         value: 'name'
       }, {
