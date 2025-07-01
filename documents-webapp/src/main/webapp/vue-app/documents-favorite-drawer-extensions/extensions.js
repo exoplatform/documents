@@ -20,4 +20,18 @@ export function initDocumentsExtensions() {
     id: 'file',
     vueComponent: Vue.options.components['documents-favorite-item'],
   });
+  window.require(['SHARED/eXoVueI18n'], exoi18n => initOfflineExtension(exoi18n));
+}
+
+async function initOfflineExtension(exoi18n) {
+  const lang = eXo?.env?.portal?.language || 'en';
+  const urls = [
+    `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`,
+    `/pwa/i18n/locale.portlet.OfflineApplication?lang=${lang}`
+  ];
+  await exoi18n.loadLanguageAsync(lang, urls);
+  extensionRegistry.registerComponent('FavoritesDrawer', 'title-icons', {
+    id: 'file',
+    vueComponent: Vue.options.components['documents-offline-button'],
+  });
 }

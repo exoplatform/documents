@@ -13,15 +13,14 @@
     </v-list-item-content>
 
     <v-list-item-action>
-      <favorite-button
+      <documents-favorite-button
         :id="id"
-        :favorite="isFavorite"
+        :file="file"
         :top="top"
         :right="right"
-        type="file"
-        type-label="Documents"
-        @removed="removed"
-        @remove-error="removeError" />
+        standalone
+        @added="added"
+        @removed="removed" />
     </v-list-item-action>
   </v-list-item>
 </template>
@@ -52,7 +51,13 @@ export default {
   created() {
     this.$attachmentService.getAttachmentById(this.id)
       .then(file => { 
-        this.file = file;
+        this.file = {
+          ...file,
+          name: file.path.split('/').pop(),
+          metadatas: {
+            favorites: [file.id],
+          },
+        };
         this.getFileIcon(this.file?.mimetype);
         this.documentTitle = file.title;
         try {
@@ -88,7 +93,7 @@ export default {
   },
   methods: {
     getFileIcon(mimeType) {
-      const extensions = Vue.prototype.$documentsIconsExtension;
+      const extensions = this.$documentsIconsExtension;
       let extension = extensions[0].get(mimeType);
       if (!extension) {
         extension = extensions[0].get('file');
@@ -100,14 +105,15 @@ export default {
       documentPreview.init(this.documentPreviewInit);
       this.$root.$emit('close-favorite-drawer');
     },
-    removed() {
-      this.isFavorite = !this.isFavorite;
-      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyDeletedFavorite', {0: this.$t('file.label')}));
-      this.$emit('removed');
+    added() {
+      this.isFavorite = true;
+      this.$emit('added');
       this.$root.$emit('refresh-favorite-list');
     },
-    removeError() {
-      this.displayAlert(this.$t('Favorite.tooltip.ErrorDeletingFavorite', {0: this.$t('file.label')}), 'error');
+    removed() {
+      this.isFavorite = false;
+      this.$emit('removed');
+      this.$root.$emit('refresh-favorite-list');
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('attachments-notification-alert', {

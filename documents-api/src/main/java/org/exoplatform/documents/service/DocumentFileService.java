@@ -50,12 +50,12 @@ public interface DocumentFileService {
    * @throws ObjectNotFoundException when parentFolderId or ownerId doesn't
    *           exisits
    */
-  List<AbstractNode> getDocumentItems(FileListingType listingType,
-                                      DocumentNodeFilter filter,
-                                      int offset,
-                                      int limit,
-                                      long userIdentityId,
-                                      boolean showHiddenFiles) throws IllegalAccessException, ObjectNotFoundException;
+  List<? extends AbstractNode> getDocumentItems(FileListingType listingType,
+                                                DocumentNodeFilter filter,
+                                                int offset,
+                                                int limit,
+                                                long userIdentityId,
+                                                boolean showHiddenFiles) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
    * @param keyword Search term
@@ -115,6 +115,17 @@ public interface DocumentFileService {
                                   int offset,
                                   int limit,
                                   long userIdentityId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
+   * @param filter {@link DocumentFavoriteFilter} that contains filtering criteria
+   * @param offset Offset of the result list
+   * @param limit Limit of the result list
+   * @param userIdentityId {@link Identity} technical identifier of the user
+   *          acessing files
+   * @return {@link List} of {@link AbstractNode} identifiers
+   * @throws IllegalAccessException when the user isn't found
+   */
+  List<String> getFavoriteFileIds(DocumentNodeFilter filter, int offset, int limit, long userIdentityId) throws IllegalAccessException;
 
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the

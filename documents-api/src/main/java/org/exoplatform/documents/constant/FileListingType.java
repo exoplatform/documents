@@ -18,5 +18,6 @@ package org.exoplatform.documents.constant;
 
 public enum FileListingType {
   TIMELINE,
-  FOLDER;
+  FOLDER,
+  FAVORITES;
 }

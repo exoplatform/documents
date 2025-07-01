@@ -37,7 +37,6 @@ import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.container.xml.PropertiesParam;
 import org.exoplatform.container.xml.ValueParam;
 import org.exoplatform.documents.constant.DocumentSortField;
-import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.DocumentFolderFilter;
 import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.exoplatform.services.security.Identity;
@@ -174,14 +173,14 @@ public class DocumentSearchServiceConnectorTest {
     // when
     filter.setQuery("test");
     when(client.sendRequest(expectedQuery, ES_INDEX)).thenReturn(searchResult);
-    Collection<SearchResult> result = documentSearchServiceConnector.search(userIdentity,
-                                                                            WORKSPACE,
-                                                                            path,
-                                                                            filter,
-                                                                            offset,
-                                                                            limit,
-                                                                            sort_field,
-                                                                            sort_direction);
+    Collection<DocumentFileSearchResult> result = documentSearchServiceConnector.search(userIdentity,
+                                                                                        WORKSPACE,
+                                                                                        path,
+                                                                                        filter,
+                                                                                        offset,
+                                                                                        limit,
+                                                                                        sort_field,
+                                                                                        sort_direction);
 
     // then
     // verify call with the expected query

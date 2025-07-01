@@ -387,5 +387,64 @@
     </depends>
   </module>
 
+  <module>
+    <name>DocumentsPWAOfflineApp</name>
+    <load-group>pwaOfflineGRP</load-group>
+    <script>
+      <path>/js/documentsOffline.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>applicationToolbarComponent</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+  </module>
+
+  <module>
+    <name>DocumentsPWAUserSettings</name>
+    <load-group>pwaUserSettingsGRP</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsOfflineSettings.bundle.js</path>
+    </script>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+  </module>
+
+  <module>
+    <name>DocumentsPWARegisterExtension</name>
+    <load-group>baseGRP</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsPwaExtension.bundle.js</path>
+    </script>
+  </module>
+
 </gatein-resources>
 
