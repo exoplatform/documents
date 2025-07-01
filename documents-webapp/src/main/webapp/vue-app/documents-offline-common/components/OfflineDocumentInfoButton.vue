@@ -4,12 +4,12 @@
       <v-btn
         v-bind="attrs"
         v-on="on"
+        class="me-2"
         icon
         @click.stop.prevent="displayDetails">
         <v-icon
           v-bind="attrs"
           v-on="on"
-          class="mx-0 px-0"
           size="16">
           fa-info-circle
         </v-icon>

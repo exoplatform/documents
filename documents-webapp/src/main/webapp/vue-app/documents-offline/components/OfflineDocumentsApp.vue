@@ -52,7 +52,6 @@
       <template #item="{item}">
         <documents-offline-item
           :file="item"
-          cell-class="no-border"
           class="mb-4 me-4"
           @download="download"
           @preview="openPreview" />

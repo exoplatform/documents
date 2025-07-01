@@ -37,8 +37,11 @@ async function displayDocumentsAccessdOfflineNotification(exoi18n) {
   if (await Vue.prototype.$documentOfflineService.isOfflineDocumentsEnabled()
       && await Vue.prototype.$documentOfflineService.isDocumentsAccessedOffline()) {
     const lang = eXo?.env?.portal?.language || 'en';
-    const url = `/pwa/i18n/locale.portlet.OfflineApplication?lang=${lang}`;
-    await exoi18n.loadLanguageAsync(lang, url);
+    const urls = [
+      `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`,
+      `/pwa/i18n/locale.portlet.OfflineApplication?lang=${lang}`
+    ];
+    await exoi18n.loadLanguageAsync(lang, urls);
     document.dispatchEvent(new CustomEvent('alert-message', {detail: {
       alertType: 'info',
       alertMessage: window.vueI18nMessages['OfflineApp.pwa.documents.accessed.tip'],
