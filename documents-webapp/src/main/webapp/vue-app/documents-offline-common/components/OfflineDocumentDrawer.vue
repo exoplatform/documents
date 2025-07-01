@@ -28,9 +28,15 @@
     @expand-updated="expanded = $event">
     <template #title>{{ $t('OfflineApp.pwa.documents.drawer.title') }}</template>
     <template v-if="drawer" #content>
-      <div class="layout-page-body light-grey-background-color">
+      <v-card
+        :color="expanded ? 'light-grey-background-color' : 'transparent'"
+        min-height="calc(var(--100vh, 100vh) - 61px)"
+        class="d-flex"
+        flat>
         <v-card
           :class="expanded && 'page-content pa-5'"
+          class="d-flex flex-column"
+          min-height="100%"
           color="transparent"
           flat>
           <application-toolbar
@@ -41,6 +47,7 @@
               placeholder: $t('OfflineApp.pwa.header.search.placeholder'),
               tooltip: $t('OfflineApp.pwa.header.search')
             }"
+            class="flex-grow-0 flex-shrink-0"
             compact
             @filter-text-input-end-typing="search = $event">
             <template #left>
@@ -55,7 +62,7 @@
               'hide-default-header': true,
             }"
             :items="offlineFiles"
-            class="d-flex flex-wrap"
+            class="d-flex flex-wrap flex-grow-1 flex-shrink-0"
             hide-default-footer
             disable-pagination>
             <template #item="{item}">
@@ -74,7 +81,7 @@
             </template>
           </v-data-table>
         </v-card>
-      </div>
+      </v-card>
       <documents-offline-preview-dialog
         ref="preview"
         @download="download" />
