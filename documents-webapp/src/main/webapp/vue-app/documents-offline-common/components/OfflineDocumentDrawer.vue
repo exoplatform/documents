@@ -62,6 +62,7 @@
               'hide-default-header': true,
             }"
             :items="offlineFiles"
+            :class="expanded ? 'px-4' : 'px-3 py-2'"
             class="d-flex flex-wrap flex-grow-1 flex-shrink-0"
             hide-default-footer
             disable-pagination>

@@ -46,7 +46,7 @@
       :items="offlineFiles"
       :headers="headers"
       :search="search"
-      class="d-flex flex-wrap"
+      class="d-flex flex-wrap px-4"
       hide-default-footer
       disable-pagination>
       <template #item="{item}">
