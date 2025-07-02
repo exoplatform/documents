@@ -155,6 +155,9 @@ export default {
   watch: {
     async categoryId() {
       if (this.categoryId) {
+        if (!Array.isArray(this.settings.categoryIds)) {
+          this.settings.categoryIds = [];
+        }
         if (this.settings.categoryIds.indexOf(this.categoryId) < 0) {
           this.settings.categoryIds.push(this.categoryId);
         }
