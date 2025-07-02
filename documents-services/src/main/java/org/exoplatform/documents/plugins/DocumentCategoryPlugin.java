@@ -45,13 +45,13 @@ public class DocumentCategoryPlugin implements CategoryPlugin {
   @Override
   public boolean canAccess(String documentId, String username) {
     AbstractNode document = documentFileService.getDocumentById(documentId);
-    return document != null
-        && (documentFileService.canAccess(documentId, userAcl.getUserIdentity(username)) || canEdit(documentId, username));
+    return document != null && (userAcl.hasAccessPermission(OBJECT_TYPE, documentId, userAcl.getUserIdentity(username))
+        || canEdit(documentId, username));
   }
 
   @Override
   public boolean canEdit(String documentId, String username) {
-    return documentFileService.hasEditPermissionOnDocument(documentId, userAcl.getUserIdentity(username));
+    return userAcl.hasEditPermission(OBJECT_TYPE, documentId, userAcl.getUserIdentity(username));
   }
 
   @Override
