@@ -10,9 +10,6 @@
       </v-icon>
       <span class="text-body menu-text-color ps-1">{{ $t('document.label.rename') }}</span>
     </div>
-    <v-divider
-      v-if="!isMobile"
-      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
