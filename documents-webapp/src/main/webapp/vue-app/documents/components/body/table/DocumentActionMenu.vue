@@ -43,6 +43,10 @@ export default {
       type: Boolean,
       default: false
     },
+    parent: {
+      type: String,
+      default: ''
+    },
   },
   data: () => ({
     menuExtensionApp: 'DocumentMenu',
@@ -69,7 +73,11 @@ export default {
         disabledExtension: extension.disabled,
         isMultiSelection: this.isMultiSelection,
         currentView: this.currentView,
-        isSearchResult: this.isSearchResult
+        isSearchResult: this.isSearchResult,
+        parent: extension.parent,
+        id: extension.id,
+        labelKey: extension.labelKey,
+        icon: extension.icon,
       };
     },
     refreshMenuExtensions() {
@@ -87,6 +95,11 @@ export default {
         extensions.forEach(extension => {
           extension.disabled = this.selectedDocuments.some(file => !extension.enabled(file));
         });
+      }
+      if (this.parent) {
+        extensions = extensions.filter(extension => extension.parent === this.parent);
+      } else {
+        extensions = extensions.filter(extension => !extension.parent);
       }
       this.menuExtensions = extensions;
     },

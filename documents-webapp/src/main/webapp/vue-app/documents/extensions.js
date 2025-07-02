@@ -112,7 +112,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 3,
+  rank: 10,
   enabled: () => true,
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -128,6 +128,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'text-truncate ',
   width: '190px',
   rank: 1,
+  parent: 'openGroup',
   enabled: (file) => {
     return  file && !file.cloudDriveFolder
                  && Vue.prototype?.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file?.mimeType).length > 0;
@@ -145,7 +146,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate ',
   width: '190px',
-  rank: 2,
+  rank: 5,
+  parent: 'openGroup',
   enabled: (file,isMobile,currentView,searchResult) => {
     return (currentView === 'timeline'||searchResult)
             && file
@@ -165,6 +167,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'text-truncate ',
   width: '190px',
   rank: 4,
+  parent: 'openGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder
                 && file.acl.canEdit
@@ -184,7 +187,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 5,
+  rank: 20,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
   },
@@ -203,6 +206,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'text-truncate',
   width: '190px',
   rank: 6,
+  parent: 'copyMoveGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
   },
@@ -219,7 +223,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 5,
+  rank: 30,
   enabled: (file) => {
     return file && file.acl.canEdit && !file.folder;
   },
@@ -237,6 +241,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'text-truncate',
   width: '190px',
   rank: 7,
+  parent: 'copyMoveGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
   },
@@ -253,7 +258,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 8,
+  rank: 100,
+  parent: 'visibilityGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator) && !file.sourceID;
   },
@@ -271,7 +277,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 9,
+  rank: 70,
+  parent: 'visibilityGroup',
   enabled: (file) => {
     if (Vue.prototype.$shareDocumentSuspended) {
       return false;
@@ -295,7 +302,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 10,
+  rank: 100,
   enabled: (file,isMobile,currentView) => {
     return file && currentView === 'folder' && file.folder && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
   },
@@ -313,7 +320,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 10,
+  rank: 80,
+  parent: 'versionsGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.versionable;
   },
@@ -330,7 +338,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 11,
+  rank: 81,
+  parent: 'versionsGroup',
   enabled: (file) => {
     if (!file.versionable || file.cloudDriveFolder) {
       return false;
@@ -350,7 +359,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 12,
+  rank: 40,
   enabled: (file) => {
     if (Vue.prototype.$downloadDocumentSuspended) {
       return false;
@@ -387,7 +396,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 15,
+  rank: 110,
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
   },
@@ -404,7 +413,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 1,
+  rank: 11,
+  parent: 'openGroup',
   enabled: (file, isMobile, currentView, isSearchResult, iconExtension) => {
     return !isMobile && iconExtension?.protocol && file?.acl?.canEdit;
   },
@@ -507,5 +517,72 @@ extensionRegistry.registerExtension('DocumentMobileFilterMenu', 'menuMobileFilte
     vueComponent: Vue.options.components['favorite-filter-action'],
   },
 });
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'openGroup',
+  labelKey: 'documents.label.menu.group.open',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 50,
+  icon: 'fas fa-book-open',
+  enabled: (file) => {
+    return  file && !file.cloudDriveFolder && !file.folder;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['group-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'copyMoveGroup',
+  labelKey: 'documents.label.menu.group.copy.move',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 60,
+  icon: 'fa-arrows-alt',
+  enabled: () => true,
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['group-menu-action'],
+  },
+});
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'visibilityGroup',
+  labelKey: 'documents.label.menu.group.visibility',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 70,
+  icon: 'fas fa-shield-alt',
+  enabled: () => true,
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['group-menu-action'],
+  },
+});
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'versionsGroup',
+  labelKey: 'documents.label.menu.group.versions',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 80,
+  icon: 'fa fa-history',
+  enabled: (file) => {
+    return file && !file.cloudDriveFolder && file.versionable;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['group-menu-action'],
+  },
+});
+
 
 

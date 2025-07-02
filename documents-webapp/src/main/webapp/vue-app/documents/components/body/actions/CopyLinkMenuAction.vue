@@ -10,9 +10,6 @@
       </v-icon>
       <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.copy.link') }}</span>
     </div>
-    <v-divider
-      v-if="!file.cloudDriveFolder"
-      class="mt-1" />
   </div>  
 </template>
 <script>
