@@ -241,8 +241,8 @@ export default {
     },
   },
   created() {
-    $(document).on('mousedown', () => {
-      if (this.menuDisplayed) {
+    $(document).on('mousedown', (event) => {
+      if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
         window.setTimeout(() => {
           $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().removeAttr('style');
           this.menuDisplayed = false;
