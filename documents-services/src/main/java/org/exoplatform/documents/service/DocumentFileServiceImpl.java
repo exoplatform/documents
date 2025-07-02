@@ -31,7 +31,6 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
-import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
@@ -61,9 +60,9 @@ import io.meeds.portal.thumbnail.model.FileContent;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
-  private static final Log      LOG                          = ExoLogger.getLogger(DocumentFileServiceImpl.class);
+  private static final Log      LOG               = ExoLogger.getLogger(DocumentFileServiceImpl.class);
 
-  public static String          RENAME_FILE_EVENT            = "rename_file_event";
+  private static final String   RENAME_FILE_EVENT = "rename_file_event";
 
   private DocumentFileStorage   documentFileStorage;
 
@@ -89,14 +88,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   SimpleDateFormat              simpleDateFormat             = new SimpleDateFormat(dateFormat);
 
-  public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage,
+  public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage, // NOSONAR
                                  JCRDeleteFileStorage jcrDeleteFileStorage,
                                  Authenticator authenticator,
                                  SpaceService spaceService,
                                  IdentityManager identityManager,
                                  IdentityRegistry identityRegistry,
                                  ListenerService listenerService,
-                                 SettingService settingService,
                                  AnalyticsService analyticsService,
                                  ImageThumbnailService imageThumbnailService) {
     this.documentFileStorage = documentFileStorage;
@@ -111,45 +109,59 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public List<AbstractNode> getDocumentItems(FileListingType listingType,
-                                             DocumentNodeFilter filter,
-                                             int offset,
-                                             int limit,
-                                             long userIdentityId,
-                                             boolean showHiddenFiles) throws IllegalAccessException,
-                                                                  ObjectNotFoundException {
+  public List<? extends AbstractNode> getDocumentItems(FileListingType listingType,
+                                                       DocumentNodeFilter filter,
+                                                       int offset,
+                                                       int limit,
+                                                       long userIdentityId,
+                                                       boolean showHiddenFiles) throws IllegalAccessException,
+  ObjectNotFoundException {
     if (filter == null) {
       throw new IllegalArgumentException("File filter is mandatory");
     }
     if (userIdentityId <= 0) {
       throw new IllegalAccessException("User Identity is mandatory");
     }
-
+    
     switch (listingType) {
-      case TIMELINE:
-        if (!(filter instanceof DocumentTimelineFilter)) {
-          throw new IllegalArgumentException("filter must be an instance of DocumentTimelineFilter");
-        }
-        DocumentTimelineFilter timelinefilter = (DocumentTimelineFilter) filter;
-        timelinefilter.setIncludeHiddenFiles(showHiddenFiles);
-        if (timelinefilter.getOwnerId() == null || timelinefilter.getOwnerId() <= 0) {
-          throw new IllegalArgumentException("OwnerId is mandatory");
-        }
-        List<FileNode> files = getFilesTimeline(timelinefilter, offset, limit, userIdentityId);
-        return new ArrayList<>(files);
-      case FOLDER:
-        if (!(filter instanceof DocumentFolderFilter)) {
-          throw new IllegalArgumentException("filter must be an instance of DocumentFolderFilter");
-        }
-        DocumentFolderFilter folderFilter = (DocumentFolderFilter) filter;
-        folderFilter.setIncludeHiddenFiles(showHiddenFiles);
-        if (StringUtils.isBlank(folderFilter.getParentFolderId())&&(folderFilter.getOwnerId() == null || folderFilter.getOwnerId() <= 0)) {
-          throw new IllegalArgumentException("ParentFolderId or OwnerId is mandatory");
-        }
-        return getFolderChildNodes(folderFilter, offset, limit, userIdentityId);
-      default:
-        return Collections.emptyList();
+    case TIMELINE:
+      if (!(filter instanceof DocumentTimelineFilter)) {
+        throw new IllegalArgumentException("filter must be an instance of DocumentTimelineFilter");
+      }
+      DocumentTimelineFilter timelinefilter = (DocumentTimelineFilter) filter;
+      timelinefilter.setIncludeHiddenFiles(showHiddenFiles);
+      if (timelinefilter.getOwnerId() == null || timelinefilter.getOwnerId() <= 0) {
+        throw new IllegalArgumentException("OwnerId is mandatory");
+      }
+      List<FileNode> files = getFilesTimeline(timelinefilter, offset, limit, userIdentityId);
+      return new ArrayList<>(files);
+    case FOLDER:
+      if (!(filter instanceof DocumentFolderFilter)) {
+        throw new IllegalArgumentException("filter must be an instance of DocumentFolderFilter");
+      }
+      DocumentFolderFilter folderFilter = (DocumentFolderFilter) filter;
+      folderFilter.setIncludeHiddenFiles(showHiddenFiles);
+      if (StringUtils.isBlank(folderFilter.getParentFolderId())&&(folderFilter.getOwnerId() == null || folderFilter.getOwnerId() <= 0)) {
+        throw new IllegalArgumentException("ParentFolderId or OwnerId is mandatory");
+      }
+      return getFolderChildNodes(folderFilter, offset, limit, userIdentityId);
+    default:
+      return Collections.emptyList();
     }
+  }
+
+  @Override
+  public List<String> getFavoriteFileIds(DocumentNodeFilter filter,
+                                         int offset,
+                                         int limit,
+                                         long userIdentityId) throws IllegalAccessException {
+    if (filter == null) {
+      throw new IllegalArgumentException("File filter is mandatory");
+    }
+    if (userIdentityId <= 0) {
+      throw new IllegalAccessException("User Identity is mandatory");
+    }
+    return documentFileStorage.getFavoriteFileIds(filter, getAclUserIdentity(userIdentityId), offset, limit);
   }
 
   @Override
@@ -165,7 +177,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
     String username = aclIdentity.getUserId();
     Long ownerId = filter.getOwnerId();
-    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
     }
@@ -201,7 +213,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
     String username = aclIdentity.getUserId();
     Long ownerId = filter.getOwnerId();
-    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
     }
@@ -236,7 +248,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       if(StringUtils.isNotEmpty(userId)){
         ownerIdentity = identityManager.getOrCreateUserIdentity(userId);
       } else{
-        ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        ownerIdentity = identityManager.getIdentity(ownerId);
       }
       if (ownerIdentity == null) {
         throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
@@ -366,7 +378,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
-    Identity userIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
+    Identity userIdentity = identityManager.getIdentity(userIdentityId);
     if (userIdentity == null) {
       throw new IllegalAccessException("Can't find user identity with id " + userIdentityId);
     }
@@ -495,8 +507,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public DocumentsSize getDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException,
                                                                                ObjectNotFoundException {
-    Identity currentUserIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
-    Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    Identity currentUserIdentity = identityManager.getIdentity(userIdentityId);
+    Identity ownerIdentity = identityManager.getIdentity(ownerId);
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
     }
@@ -527,7 +539,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     List<StatisticData> stats = analyticsService.retrieveData(filter);
     if (!stats.isEmpty()) {
       StatisticData toStat = stats.get(0);
-      stats.stream().sorted(Comparator.comparing(StatisticData::getTimestamp)).toList();
       documentsSize.setOwnerId(ownerId);
       documentsSize.setToSize(Long.parseLong(toStat.getParameters().get("size")));
       documentsSize.setToSizeDate(toStat.getTimestamp());
@@ -548,8 +559,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public DocumentsSize addDocumentsSizeStat(long ownerId, long userIdentityId) throws IllegalAccessException,
                                                                                ObjectNotFoundException {
-    Identity currentUserIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
-    Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    Identity currentUserIdentity = identityManager.getIdentity(userIdentityId);
+    Identity ownerIdentity = identityManager.getIdentity(ownerId);
     StatisticData statisticData = new StatisticData();
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
@@ -609,7 +620,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
     String userName = "";
     Space space = null;
-    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = StringUtils.isBlank(ownerId) ? null : identityManager.getIdentity(Long.parseLong(ownerId));
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
     }
@@ -712,7 +723,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId) throws Exception {
     documentFileStorage.setDocumentVisibility(ownerId, documentID, hidden, getAclUserIdentity(authenticatedUserId));
   }
-  
+
+  @Override
   public List<Long> getDocumentCategoryIds(String documentId) {
     return getCategoryLinkService().getLinkedIds(new CategoryObject(DocumentCategoryPlugin.OBJECT_TYPE,
             String.valueOf(documentId),
@@ -720,6 +732,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @SneakyThrows
+  @Override
   public List<Long> getDocumentCategoryIds(long spaceIdentityId, String userName) {
     return documentFileStorage.getDocumentCategoryIds(spaceIdentityId, getAclUserIdentity(userName));
   }

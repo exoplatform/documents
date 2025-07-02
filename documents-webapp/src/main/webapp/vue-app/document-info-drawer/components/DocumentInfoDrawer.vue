@@ -8,17 +8,12 @@
       {{ $t('documents.drawer.details.title') }}
     </template>
     <template #titleIcons>
-      <favorite-button
+      <documents-favorite-button
         :id="fileId"
-        :space-id="spaceId"
-        :favorite="isFavorite"
-        type="file"
-        type-label="Documents"
+        :file="file"
         :small="false"
-        @removed="favoriteRemoved"
-        @remove-error="removeFavoriteError"
         @added="favoriteAdded"
-        @add-error="addFavoriteError" />
+        @removed="favoriteRemoved" />
       <v-tooltip bottom>
         <template #activator="{on, bind}">
           <div v-on="on" v-bind="bind">
@@ -317,8 +312,8 @@ export default {
       return eXo.env.portal.spaceId || 0;
     },
     icon(){
-      const fileIcon =  Vue.prototype.$documentsIconsExtension[0]?.get(this.file?.mimeType);
-      return fileIcon ? fileIcon : this.file.folder ? Vue.prototype.$documentsIconsExtension[0]?.get('folder') : Vue.prototype.$documentsIconsExtension[0]?.get('file');
+      const fileIcon =  this.$documentsIconsExtension[0]?.get(this.file?.mimeType);
+      return fileIcon ? fileIcon : this.file.folder ? this.$documentsIconsExtension[0]?.get('folder') : this.$documentsIconsExtension[0]?.get('file');
     },
     lastUpdated() {
       return this.file && (this.modifiedDate || this.file.createdDate) || '';
@@ -584,18 +579,10 @@ export default {
       }
     },
     favoriteRemoved() {
-      this.isFavorite = !this.isFavorite;
-      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyDeletedFavorite', {0: this.$t('file.label')}));
-    },
-    removeFavoriteError() {
-      this.displayAlert(this.$t('Favorite.tooltip.ErrorDeletingFavorite', {0: this.$t('file.label')}), 'error');
+      this.isFavorite = false;
     },
     favoriteAdded() {
-      this.isFavorite = !this.isFavorite;
-      this.displayAlert(this.$t('Favorite.tooltip.SuccessfullyAddedAsFavorite', {0: this.$t('file.label')}));
-    },
-    addFavoriteError() {
-      this.displayAlert(this.$t('Favorite.tooltip.ErrorAddingAsFavorite', {0: this.$t('file.label')}), 'error');
+      this.isFavorite = true;
     },
     copyLink() {
       this.loading = true;
@@ -618,7 +605,7 @@ export default {
       document.execCommand('copy');
       document.body.removeChild(input);
       this.loading = false;
-    }
-  }
+    },
+  },
 };
 </script>

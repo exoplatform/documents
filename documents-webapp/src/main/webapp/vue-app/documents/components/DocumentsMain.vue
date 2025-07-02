@@ -88,6 +88,7 @@
         <documents-advanced-filter-drawer />
         <documents-download-drawer />
         <document-import-from-zip-drawer />
+        <documents-offline-changes-reminder />
         <documents-actions-menu-mobile
           :is-mobile="isMobile"
           :current-view="selectedView"
@@ -1140,7 +1141,7 @@ export default {
           this.loading = false;
           this.$root.$emit('loading-documents', false);
         });
-
+          
     },
     isDocumentsToBeDeleted(doc) {
       return this.documentsToBeDeleted.find(documentId => documentId === doc.id) ? false : true;
@@ -1669,7 +1670,7 @@ export default {
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
     getFileIcon(file) {
-      const extensions = Vue.prototype.$documentsIconsExtension;
+      const extensions = this.$documentsIconsExtension;
       if (file?.folder) {
         return extensions[0].get('folder');
       } else {

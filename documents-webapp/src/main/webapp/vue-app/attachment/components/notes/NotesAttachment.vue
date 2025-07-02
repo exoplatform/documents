@@ -211,7 +211,7 @@ export default {
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
     getFileIcon(attachment) {
-      const extensions = Vue.prototype.$documentsIconsExtension;
+      const extensions = this.$documentsIconsExtension;
       let extension = extensions[0].get(attachment?.mimeType);
       if (!extension) {
         extension = extensions[0].get('file');

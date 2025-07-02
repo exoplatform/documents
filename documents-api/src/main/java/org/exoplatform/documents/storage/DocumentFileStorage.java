@@ -383,6 +383,11 @@ public interface DocumentFileStorage {
 
   boolean canImport(Identity identity);
 
+  List<String> getFavoriteFileIds(DocumentNodeFilter filter,
+                                  Identity aclUserIdentity,
+                                  int offset,
+                                  int limit);
+
   /**
    * @param spaceIdentityId Space {@link org.exoplatform.social.core.identity.model.Identity} Identifier
    * @return {@link List} of Category Ids used in Documents

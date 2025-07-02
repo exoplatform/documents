@@ -86,8 +86,7 @@ import AttachmentsUploaded from './components/header/actions/uploadZip/Attachmen
 import AttachmentsItem from './components/header/actions/uploadZip/AttachmentsItem.vue';
 import DocumentsAddNewFileMenu from './components/header/actions/DocumentsAddNewFileMenu.vue';
 import DocumentsMultiSelectMenu from './components/header/actions/DocumentsMultiSelectMenu.vue';
-
-
+import OfflineChangesReminder from './components/header/offline/OfflineChangesReminder.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -161,6 +160,7 @@ const components = {
   'documents-zip-item': AttachmentsItem,
   'documents-add-new-file-menu': DocumentsAddNewFileMenu,
   'documents-multi-select-menu': DocumentsMultiSelectMenu,
+  'documents-offline-changes-reminder': OfflineChangesReminder,
 };
 
 for (const key in components) {

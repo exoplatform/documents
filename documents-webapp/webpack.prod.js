@@ -2,7 +2,7 @@ const path = require('path');
 const ESLintPlugin = require('eslint-webpack-plugin');
 const { VueLoaderPlugin } = require('vue-loader')
 
-const config = {
+module.exports = {
   mode: 'production',
   context: path.resolve(__dirname, '.'),
   module: {
@@ -46,6 +46,9 @@ const config = {
     attachmentIntegration: './src/main/webapp/vue-app/attachment-integration/main.js',
     legacyComposerAttachments: './src/main/webapp/vue-app/legacy-composer-attachments/main.js',
     documentsInfoDrawer: './src/main/webapp/vue-app/document-info-drawer/main.js',
+    documentsOffline: './src/main/webapp/vue-app/documents-offline/main.js',
+    documentsOfflineSettings: './src/main/webapp/vue-app/documents-offline-settings/main.js',
+    documentsPwaExtension: './src/main/webapp/vue-app/documents-pwa-extension/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
@@ -58,5 +61,3 @@ const config = {
     jquery: '$',
   },
 };
-
-module.exports = config;

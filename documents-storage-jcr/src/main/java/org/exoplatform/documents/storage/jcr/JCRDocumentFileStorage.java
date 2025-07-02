@@ -46,10 +46,10 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
-import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
+import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -240,15 +240,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String sortField = getSortField(filter, false);
         String sortDirection = getSortDirection(filter);
 
-        Collection<SearchResult> filesSearchList =
-                                                 documentSearchServiceConnector.search(aclIdentity,
-                                                                                            workspace,
-                                                                                            rootPath,
-                                                                                            filter,
-                                                                                            offset,
-                                                                                            limit,
-                                                                                            sortField,
-                                                                                            sortDirection);
+        Collection<DocumentFileSearchResult> filesSearchList = documentSearchServiceConnector.search(aclIdentity,
+                                                                                                     workspace,
+                                                                                                     rootPath,
+                                                                                                     filter,
+                                                                                                     offset,
+                                                                                                     limit,
+                                                                                                     sortField,
+                                                                                                     sortDirection);
         return filesSearchList.stream()
                               .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
                               .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
@@ -262,6 +261,27 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public List<String> getFavoriteFileIds(DocumentNodeFilter filter,
+                                         Identity aclIdentity,
+                                         int offset,
+                                         int limit) {
+    String sortField = getSortField(filter, false);
+    String sortDirection = getSortDirection(filter);
+
+    Collection<DocumentFileSearchResult> filesSearchList = documentSearchServiceConnector.search(aclIdentity,
+                                                                                                 COLLABORATION,
+                                                                                                 "/",
+                                                                                                 filter,
+                                                                                                 offset,
+                                                                                                 limit,
+                                                                                                 sortField,
+                                                                                                 sortDirection);
+    return filesSearchList.stream()
+                          .map(DocumentFileSearchResult::getId)
+                          .toList();
+  }
+
+  @Override
   @SneakyThrows
   public List<FileNode> search(String keyword, Identity identity, int offset, int limit) {
     SessionProvider sessionProvider = null;
@@ -272,14 +292,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       DocumentTimelineFilter filter = new DocumentTimelineFilter();
       filter.setQuery(keyword);
       filter.setMimeTypes(FILE_MIME_TYPES);
-      Collection<SearchResult> results = documentSearchServiceConnector.search(identity,
-                                                                               COLLABORATION,
-                                                                               "/",
-                                                                               filter,
-                                                                               offset,
-                                                                               limit,
-                                                                               "_score",
-                                                                               "DESC");
+      Collection<DocumentFileSearchResult> results = documentSearchServiceConnector.search(identity,
+                                                                                           COLLABORATION,
+                                                                                           "/",
+                                                                                           filter,
+                                                                                           offset,
+                                                                                           limit,
+                                                                                           "_score",
+                                                                                           "DESC");
       return results.stream()
                     .map(result -> (AbstractNode) toFileNode(identityManager, session, identity, result, spaceService))
                     .filter(Objects::nonNull)
@@ -310,7 +330,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       String rootPath = identityRootNode.getPath();
       String workspace = session.getWorkspace().getName();
       DocumentTimelineFilter filter = new DocumentTimelineFilter();
-      Collection<SearchResult> results = documentSearchServiceConnector.search(aclIdentity, workspace, rootPath, filter, offset, limit, "fileSizeWithVersions", "DESC");
+      Collection<DocumentFileSearchResult> results = documentSearchServiceConnector.search(aclIdentity,
+                                                                                           workspace,
+                                                                                           rootPath,
+                                                                                           filter,
+                                                                                           offset,
+                                                                                           limit,
+                                                                                           "fileSizeWithVersions",
+                                                                                           "DESC");
       return results.stream()
                             .map(result -> (AbstractNode)toFileNode(identityManager, session, aclIdentity, result, spaceService))
                             .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
@@ -513,15 +540,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
           String sortDirection = getSortDirection(filter);
-          Collection<SearchResult> filesSearchList =
-                                                   documentSearchServiceConnector.search(aclIdentity,
-                                                                                              workspace,
-                                                                                              parent.getPath(),
-                                                                                              filter,
-                                                                                              offset,
-                                                                                              limit,
-                                                                                              sortField,
-                                                                                              sortDirection);
+          Collection<DocumentFileSearchResult> filesSearchList = documentSearchServiceConnector.search(aclIdentity,
+                                                                                                       workspace,
+                                                                                                       parent.getPath(),
+                                                                                                       filter,
+                                                                                                       offset,
+                                                                                                       limit,
+                                                                                                       sortField,
+                                                                                                       sortDirection);
           return filesSearchList.stream()
                                 .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
                                 .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
@@ -2121,7 +2147,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         fileVersion = JCRDocumentsUtil.toFileVersion(version, node, identityManager);
       }
     } catch (RepositoryException e) {
-      throw new IllegalStateException("Error while creating new version");
+      throw new IllegalStateException("Error while creating new version", e);
     }
     return fileVersion;
   }

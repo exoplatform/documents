@@ -19,32 +19,40 @@ const presentation = {
   class: 'fas fa-file-powerpoint',
   color: '#CB4B32',
   type: 'presentation',
+  protocol: 'ms-powerpoint:ofe|u|', 
 };
 const sheet = {
   class: 'fas fa-file-excel',
   color: '#217345',
   type: 'spreadsheet',
+  protocol: 'ms-excel:ofe|u|',
 };
 const word = {
-
   class: 'fas fa-file-word',
   color: '#2A5699',
-  type: 'document',  
+  type: 'document', 
+  protocol: 'ms-word:ofe|u|',
 };
 const image = {
   class: 'fas fa-file-image',
   color: '#999999',
   type: 'image',
+  isImage: true,
+  canPreview: true,
 };
 const video = {
   class: 'fas fa-file-video',
   color: '#79577A',
   type: 'video',
+  isVideo: true,
+  canPreview: true,
 };
 const audio = {
   class: 'fas fa-file-audio',
   color: '#79577A',
   type: 'audio',
+  isAudio: true,
+  canPreview: true,
 };
 const archive = {
   class: 'fas fa-file-archive',
@@ -129,3 +137,10 @@ const documentsMapIconsExtensions = new Map([
 ]);
 
 extensionRegistry.registerExtension('documents', 'documents-icons-extension', documentsMapIconsExtensions);
+
+if (!Vue.prototype.$documentsIconsExtension) {
+  Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  document.addEventListener('documents-documents-icons-extension-updated', () => {
+    Vue.prototype.$documentsIconsExtension = extensionRegistry.loadExtensions('documents', 'documents-icons-extension');
+  });
+}

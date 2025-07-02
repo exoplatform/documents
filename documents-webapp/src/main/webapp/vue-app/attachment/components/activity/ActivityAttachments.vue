@@ -67,7 +67,7 @@ export default {
   },
   methods: {
     getFileIcon(file) {
-      return Vue.prototype.$documentsIconsExtension[0]?.get(file?.mimeType);
+      return this.$documentsIconsExtension?.[0]?.get?.(file?.mimeType);
     },
     isFileEditable(file) {
       return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === file.mimeType ).length > 0;
