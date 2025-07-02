@@ -1,13 +1,18 @@
 <template>
-  <div
-    class=" clickable my-10px mx-2"
-    @click="download()">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fas fa-download
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.download') }}</span>
+  <div>
+    <div
+      class=" clickable my-10px mx-2"
+      @click="download()">
+      <v-icon
+        size="16"
+        class="pe-1">
+        fas fa-download
+      </v-icon>
+      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.download') }}</span>
+    </div>
+    <v-divider
+      v-if="!isMobile"
+      class="mt-1 dividerStyle" />
   </div>
 </template>
 <script>
