@@ -527,8 +527,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 50,
   icon: 'fas fa-book-open',
-  enabled: (file) => {
-    return  file && !file.cloudDriveFolder && !file.folder;
+  enabled: (file,isMobile,currentView,searchResult, iconExtension) => {
+    return (!!file && !file.cloudDriveFolder && Vue.prototype?.$supportedDocuments.some(doc => doc.edit && doc.mimeType === file.mimeType)) || ((currentView === 'timeline' || searchResult) && file && !file.cloudDriveFolder) || (file && !file.cloudDriveFolder && file.acl?.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName !== '__system' || eXo.env.portal.isAdministrator) && Vue.prototype?.$supportedDocuments.some(doc => doc.edit && doc.mimeType === file.mimeType)) || !!iconExtension?.protocol;
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -545,7 +545,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 60,
   icon: 'fa-arrows-alt',
-  enabled: () => true,
+  enabled: (file) => {
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
+  },
   enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['group-menu-action'],
@@ -560,7 +562,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 70,
   icon: 'fas fa-shield-alt',
-  enabled: () => true,
+  enabled: (file) => {
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator) && !file.sourceID;
+  },
   enabledForMultiSelection: () => false,
   componentOptions: {
     vueComponent: Vue.options.components['group-menu-action'],
