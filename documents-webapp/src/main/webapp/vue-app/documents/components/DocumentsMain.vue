@@ -263,6 +263,7 @@ export default {
     this.$root.$on('document-open-home', this.openHome);
     this.$root.$on('documents-add-folder', this.addFolder);
     this.$root.$on('duplicate-document', this.duplicateDocument);
+    this.$root.$on('past-document', this.pastDocument);
     this.$root.$on('documents-create-folder', this.createFolder);
     this.$root.$on('documents-rename', this.renameDocument);
     this.$root.$on('documents-move', this.moveDocument);
@@ -814,7 +815,7 @@ export default {
     duplicateDocument(documents){
       this.parentFolderId = documents.id;
       return this.$documentFileService
-        .duplicateDocument(this.parentFolderId,this.ownerId,this.prefixClone)
+        .duplicateDocument(this.parentFolderId,null,this.ownerId,this.prefixClone)
         .then( () => {
           this.parentFolderId=null;
           this.getFolderPath(this.folderPath);
@@ -826,6 +827,19 @@ export default {
           }
 
         }).catch(e => console.error(e));
+    },
+
+    pastDocument(documentId,destFolderId){
+      return this.$documentFileService
+        .duplicateDocument(documentId,destFolderId,this.ownerId)
+        .then( () => {
+          this.parentFolderId=null;
+          this.getFolderPath(this.folderPath);
+          this.refreshFiles();
+          this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.pasted')});
+        }).catch(() => {
+          this.$root.$emit('show-alert', {type: 'error',message: this.$t('documents.alert.error.label.pasted')});
+        });
     },
     addDeleteDocumentStatistics(file, multi) {
       document.dispatchEvent(new CustomEvent('exo-statistic-message', {

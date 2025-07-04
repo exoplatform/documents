@@ -756,25 +756,25 @@ public class DocumentFileRestTest {
 
     when(documentFileStorage.duplicateDocument(2, "oldFile", "copy of", userID)).thenReturn(file2);
 
-    Response response1 = documentFileRest.duplicateDocument(null, null, "copy of", "");
+    Response response1 = documentFileRest.duplicateDocument(null, null, "", "copy of", "");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response1.getStatus());
 
-    Response response2 = documentFileRest.duplicateDocument(Long.valueOf(2), "oldFile", "copy of", "");
+    Response response2 = documentFileRest.duplicateDocument(Long.valueOf(2), "oldFile", "", "copy of", "");
 
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response2.getStatus());
 
     when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
-    Response response3 = documentFileRest.duplicateDocument(Long.valueOf(2), "oldFile", "copy of", "");
+    Response response3 = documentFileRest.duplicateDocument(Long.valueOf(2), "oldFile", "", "copy of", "");
     assertEquals(Response.Status.OK.getStatusCode(), response3.getStatus());
     AbstractNodeEntity fileNode = (AbstractNodeEntity) response3.getEntity();
     assertEquals(fileNode.getName(), "Copy of oldFile");
     assertEquals(fileNode.getId(), "2");
 
-    when(documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "")).thenThrow(ObjectNotFoundException.class);
-    Response response = documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
+    when(documentFileRest.duplicateDocument(1L, "oldFile", "", "copy of", "")).thenThrow(ObjectNotFoundException.class);
+    Response response = documentFileRest.duplicateDocument(1L, "oldFile", "", "copy of", "");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
-    when(documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "")).thenThrow(RuntimeException.class);
-    response = documentFileRest.duplicateDocument(1L, "oldFile", "copy of", "");
+    when(documentFileRest.duplicateDocument(1L, "oldFile", "", "copy of", "")).thenThrow(RuntimeException.class);
+    response = documentFileRest.duplicateDocument(1L, "oldFile", "", "copy of", "");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
 
   }

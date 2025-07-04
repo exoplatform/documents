@@ -23,6 +23,7 @@ import static org.gatein.common.net.URLTools.SLASH;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -1042,6 +1043,40 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  @Override
+  public AbstractNode copyDocument(String nodeId, String destintionNodeId, Identity aclIdentity) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node sourceNode = getNodeByIdentifier(session, nodeId);
+      if (sourceNode == null) {
+        throw new ObjectNotFoundException("Source node with id '" + nodeId + "' not found");
+      }
+      Node destintionNode = getNodeByIdentifier(session, destintionNodeId);
+      if (destintionNode == null) {
+        throw new ObjectNotFoundException("Destintion node with id '" + nodeId + "' not found");
+      }
+      Node newNode = null;
+
+      if (destintionNode != null && sourceNode != null) {
+        newNode = duplicateItem(sourceNode, destintionNode, sourceNode.getParent(), "");
+        destintionNode.save();
+      }
+      VersionHistoryUtils.createVersion(newNode);
+      return toFileNode(identityManager, aclIdentity, destintionNode, "", spaceService);
+    } catch (ObjectNotFoundException e) {
+      throw new ObjectNotFoundException(e.getMessage());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
 
   }
 
@@ -1199,16 +1234,22 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private Node duplicateItem(Node oldNode, Node destinationNode, Node parentNode, String prefixClone) throws Exception{
+  private Node duplicateItem(Node oldNode, Node destinationNode, Node parentNode, String prefixClone) throws RepositoryException, UnsupportedEncodingException {
     if (oldNode.isNodeType(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
       return null;
     }
+    if (oldNode.getPath().contains(destinationNode.getPath())) {
+      // If the destination node is a child of the node to copy, we should not duplicate it
+      throw new IllegalStateException("Cannot duplicate a node into its own child");
+    }
     Node newNode = null;
     String name = oldNode.getName();
-    String title = oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString();
+    String title = oldNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString() : oldNode.getName();
     if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())){
-      name = prefixClone.concat(" ").concat(name);
-      title = prefixClone.concat(" ").concat(title);
+      if (StringUtils.isNotEmpty(prefixClone)) {
+        name = prefixClone.concat(" ").concat(name);
+        title = prefixClone.concat(" ").concat(title);
+      }
       String newName = name;
       int i =0;
       while((destinationNode.hasNode(newName))){
