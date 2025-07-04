@@ -157,6 +157,17 @@ public interface DocumentFileStorage {
   AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
+   * Copy the given node.
+   *
+   * @param nodeId           Id of the given file
+   * @param destintionNodeId Id of the destination folder
+   * @param aclIdentity      {@link Identity} of the user acessing files
+   * @return {@link AbstractNode}
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   */
+  public AbstractNode copyDocument(String nodeId, String destintionNodeId, Identity aclIdentity) throws ObjectNotFoundException;
+
+  /**
    * Move the given node.
    *
    * @param session current jcr session

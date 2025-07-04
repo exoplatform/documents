@@ -240,7 +240,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 7,
+  rank: 10,
   parent: 'copyMoveGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
@@ -581,6 +581,42 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   type: 'group',
   componentOptions: {
     vueComponent: Vue.options.components['group-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'copy',
+  labelKey: 'documents.label.copy',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 8,
+  parent: 'copyMoveGroup',
+  enabled: (file) => {
+    return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['copy-menu-action'],
+  },
+});
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'past',
+  labelKey: 'documents.label.past',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 9,
+  parent: 'copyMoveGroup',
+  enabled: (file) => {
+    return file && file.folder && !file.cloudDriveFolder && file.acl.canEdit;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['past-menu-action'],
   },
 });
 
