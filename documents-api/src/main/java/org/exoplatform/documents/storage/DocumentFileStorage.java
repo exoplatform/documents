@@ -163,8 +163,6 @@ public interface DocumentFileStorage {
    * @param destintionNodeId Id of the destination folder
    * @param aclIdentity      {@link Identity} of the user acessing files
    * @return {@link AbstractNode}
-   * @throws IllegalAccessException  when the user isn't allowed to access
-   *                                 documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
   public AbstractNode copyDocument(String nodeId, String destintionNodeId, Identity aclIdentity) throws ObjectNotFoundException;
