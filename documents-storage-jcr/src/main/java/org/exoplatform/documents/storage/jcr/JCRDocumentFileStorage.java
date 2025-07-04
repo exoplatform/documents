@@ -1061,11 +1061,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         throw new ObjectNotFoundException("Destintion node with id '" + nodeId + "' not found");
       }
       Node newNode = null;
-
-      if (destintionNode != null && sourceNode != null) {
-        newNode = duplicateItem(sourceNode, destintionNode, sourceNode.getParent(), "");
-        destintionNode.save();
-      }
+      newNode = duplicateItem(sourceNode, destintionNode, sourceNode.getParent(), "");
+      destintionNode.save();
       VersionHistoryUtils.createVersion(newNode);
       return toFileNode(identityManager, aclIdentity, destintionNode, "", spaceService);
     } catch (ObjectNotFoundException e) {
