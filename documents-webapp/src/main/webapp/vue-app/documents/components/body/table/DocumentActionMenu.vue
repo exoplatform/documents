@@ -82,7 +82,6 @@ export default {
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
-
       if (!this.isMultiSelection) {
         let iconExtension;
         if (!this.file?.folder && this.$documentsIconsExtension?.[0]) {
@@ -96,6 +95,12 @@ export default {
           extension.disabled = this.selectedDocuments.some(file => !extension.enabled(file));
         });
       }
+      const groupingExtensions =  extensions.filter(extension => extension.type === 'group');
+      groupingExtensions.forEach(extension => {
+        if (!extensions.some(ext => ext.parent === extension.id)) {
+          extensions = extensions.filter(extension_ => extension_.id !== extension.id);
+        }
+      });
       if (this.parent) {
         extensions = extensions.filter(extension => extension.parent === this.parent);
       } else {
