@@ -221,6 +221,19 @@ public interface DocumentFileService {
   AbstractNode duplicateDocument(long ownerId,String fileId,String prefixClone, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
+   * Copy the given node.
+   *
+   * @param nodeId              Id of the given file
+   * @param destintionNodeId    Id of the destination folder
+   * @param authenticatedUserId of the user acessing files
+   * @return {@link AbstractNode}
+   * @throws IllegalAccessException  when the user isn't allowed to access
+   *                                 documents of the designated parentFolderId
+   * @throws ObjectNotFoundException when folderId doesn't exisits
+   */
+  AbstractNode copyDocument(String nodeId, String destintionNodeId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
+
+  /**
    * Move the given node.
    *
    * @param fileId Id of the given file

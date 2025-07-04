@@ -147,11 +147,14 @@ export function getFullTreeData(ownerId, folderId, destinationFolderPath) {
   });
 }
 
-export function duplicateDocument(fileId,ownerId,prefixClone) {
+export function duplicateDocument(fileId,destinationFolderId,ownerId,prefixClone) {
   const formData = new FormData();
 
   if (fileId) {
     formData.append('fileId', fileId);
+  }
+  if (destinationFolderId) {
+    formData.append('destinationId', destinationFolderId);
   }
   if (ownerId) {
     formData.append('ownerId', ownerId);

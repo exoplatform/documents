@@ -21,13 +21,13 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 
 import javax.jcr.RepositoryException;
 
-import io.meeds.social.category.model.CategoryObject;
-import io.meeds.social.category.service.CategoryLinkService;
-import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -57,6 +57,9 @@ import io.meeds.analytics.model.StatisticData;
 import io.meeds.analytics.model.filter.AnalyticsFilter;
 import io.meeds.analytics.utils.AnalyticsUtils;
 import io.meeds.portal.thumbnail.model.FileContent;
+import io.meeds.social.category.model.CategoryObject;
+import io.meeds.social.category.service.CategoryLinkService;
+import lombok.SneakyThrows;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
 
@@ -282,6 +285,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
     return documentFileStorage.duplicateDocument(ownerId, fileId, prefixClone, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
+  public AbstractNode copyDocument(String nodeId, String destintionNodeId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.copyDocument(nodeId, destintionNodeId, getAclUserIdentity(authenticatedUserId));
   }
 
   @Override

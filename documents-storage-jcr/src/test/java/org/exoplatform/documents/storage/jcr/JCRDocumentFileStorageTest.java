@@ -233,6 +233,7 @@ public class JCRDocumentFileStorageTest {
     Identity identity = mock(Identity.class);
     Node rootNode = mock(Node.class);
     NodeImpl currentNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
 
     Property property = mock(Property.class);
     NodeType nodeType =  mock(NodeType.class);
@@ -260,13 +261,58 @@ public class JCRDocumentFileStorageTest {
     when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
     when(nodeType.getName()).thenReturn("nt:file");
     when(currentNode.getUUID()).thenReturn("123");
-    when(currentNode.getParent()).thenReturn(currentNode);
+    when(currentNode.getParent()).thenReturn(parentNode);
     when(currentNode.getIdentifier()).thenReturn("1");
+    when(parentNode.getIdentifier()).thenReturn("1");
     when(currentNode.addNode("copy of test","nt:file")).thenReturn(currentNode);
+    when(parentNode.addNode("copy of test", "nt:file")).thenReturn(currentNode);
     when(identity.getRemoteId()).thenReturn("username");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    when(parentNode.getPath()).thenReturn("/Documents/Private");
+    when(currentNode.getPath()).thenReturn("/Documents/Private/user/test");
+    Assert.assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.duplicateDocument(1L, "1", "copy of", userID));
+    when(currentNode.getPath()).thenReturn("/Documents/Private");
+    when(parentNode.getPath()).thenReturn("/Documents/Private/user/test");
     jcrDocumentFileStorage.duplicateDocument(1L,"1","copy of",userID);
-    verify(sessionProvider, times(1)).close();
+    verify(sessionProvider, times(2)).close();
+  }
+
+  @Test
+  public void copyDocument() throws Exception {
+    Session systemSession = mock(Session.class);
+    Identity identity = mock(Identity.class);
+    NodeImpl node = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    NodeType nodeType = mock(NodeType.class);
+
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+            manageableRepository)).thenReturn(systemSession);
+    when(identityManager.getIdentity("1")).thenReturn(identity);
+    Assert.assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.copyDocument("1", "2", userID));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(node);
+    Assert.assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.copyDocument("1", "2", userID));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    when(node.getPath()).thenReturn("/Documents/Private");
+    when(destinationNode.getPath()).thenReturn("/Documents/Private/user/test");
+    when(node.getParent()).thenReturn(parentNode);
+    when(parentNode.getIdentifier()).thenReturn("123");
+    when(node.getIdentifier()).thenReturn("12");
+    when(destinationNode.getIdentifier()).thenReturn("12");
+    when(node.getName()).thenReturn("nodeName");
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn("nt:file");
+    when(destinationNode.addNode("nodeName", "nt:file")).thenReturn(node);
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+    verify(sessionProvider, times(3)).close();
   }
 
   @Test

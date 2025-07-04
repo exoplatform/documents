@@ -90,6 +90,8 @@ import DocumentsAddNewFileMenu from './components/header/actions/DocumentsAddNew
 import DocumentsMultiSelectMenu from './components/header/actions/DocumentsMultiSelectMenu.vue';
 import OfflineChangesReminder from './components/header/offline/OfflineChangesReminder.vue';
 import DocumentsGroupMenu from './components/body/table/DocumentsGroupMenu.vue';
+import CopyMenuAction from './components/body/actions/CopyMenuAction.vue';
+import PastMenuAction from './components/body/actions/PastMenuAction.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -167,6 +169,8 @@ const components = {
   'documents-multi-select-menu': DocumentsMultiSelectMenu,
   'documents-offline-changes-reminder': OfflineChangesReminder,
   'group-menu-action': DocumentsGroupMenu,
+  'copy-menu-action': CopyMenuAction,
+  'past-menu-action': PastMenuAction,
 };
 
 for (const key in components) {
