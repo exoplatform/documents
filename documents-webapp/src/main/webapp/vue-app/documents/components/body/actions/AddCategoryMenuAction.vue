@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    class="clickable my-10px mx-2"
+    class="clickable py-10px mx-2"
     @click="addCategory">
     <v-icon
       size="16"

@@ -4,7 +4,7 @@
       v-if="!isMobile"
       class="mt-1 dividerStyle" />
     <div
-      class="clickable my-10px mx-2"
+      class="clickable py-10px mx-2"
       @click="deleteAction()">
       <v-icon
         size="16"
