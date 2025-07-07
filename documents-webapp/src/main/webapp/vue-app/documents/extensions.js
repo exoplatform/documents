@@ -527,7 +527,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 50,
   icon: 'fas fa-book-open',
-  enabled: () => true,
+  enabled: (file, isMobile) => {
+    return  !isMobile;
+  },
   enabledForMultiSelection: () => false,
   type: 'group',
   componentOptions: {
@@ -544,7 +546,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 60,
   icon: 'fa-arrows-alt',
-  enabled: () => true,
+  enabled: (file, isMobile) => {
+    return  !isMobile;
+  },
   enabledForMultiSelection: () => false,
   type: 'group',
   componentOptions: {
@@ -560,7 +564,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 70,
   icon: 'fas fa-shield-alt',
-  enabled: () => true,
+  enabled: (file, isMobile) => {
+    return  !isMobile;
+  },
   enabledForMultiSelection: () => false,
   type: 'group',
   componentOptions: {
@@ -576,7 +582,9 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   width: '190px',
   rank: 80,
   icon: 'fa fa-history',
-  enabled: () => true,
+  enabled: (file, isMobile) => {
+    return  !isMobile;
+  },
   enabledForMultiSelection: () => false,
   type: 'group',
   componentOptions: {
