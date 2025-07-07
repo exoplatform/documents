@@ -39,8 +39,8 @@
             class="pe-1">
             {{ icon }}
           </v-icon>
-          <span class="ps-1 ml-n2px text-body menu-text-color">{{ $t(labelKey) }}</span>
-          <v-icon size="16" class="pull-right">fa-caret-right</v-icon>
+          <span class="ps-2 pe-3 ml-n2px text-body menu-text-color">{{ $t(labelKey) }}</span>
+          <v-icon size="16" class="absolute-vertical-center r-3">fa-caret-right</v-icon>
         </div>
       </template>
       <documents-actions-menu
