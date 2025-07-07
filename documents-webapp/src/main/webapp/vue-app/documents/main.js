@@ -62,9 +62,14 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
 
   // init Vue app when locale ressources are ready
   let settingsSubcategoryIds;
+  let settingsExcludeSubcategoryIds;
   if (settings?.categoryIds?.length) {
     settingsSubcategoryIds = await getSubcategoryIds(settings.categoryIds, 1);
   }
+  if (settings?.excludeCategoryIds?.length) {
+    settingsExcludeSubcategoryIds = await getSubcategoryIds(settings.excludeCategoryIds, 1);
+  }
+
   await Vue.createApp({
     data: {
       canEdit,
@@ -74,6 +79,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       selectedCategoryId: null,
       selectedCategoryIds: null,
       settingsSubcategoryIds,
+      settingsExcludeSubcategoryIds,
       isFavoritesSynchronized: false,
       pwaEnabled: false,
       ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
@@ -81,6 +87,9 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
     computed: {
       categoryIds() {
         return this.settingsSubcategoryIds || this.settings.categoryIds;
+      },
+      excludeCategoryIds() {
+        return this.settingsExcludeSubcategoryIds || this.settings.excludeCategoryIds;
       },
       allowFilteringPerCategory() {
         return this.settings.allowFilteringPerCategory;
@@ -116,6 +125,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       async handleSettingsUpdate() {
         this.settings = JSON.parse(JSON.stringify(this.settings)); // Force update
         this.settingsSubcategoryIds = await getSubcategoryIds(this.settings.categoryIds, 1);
+        this.settingsExcludeSubcategoryIds = await getSubcategoryIds(this.settings.excludeCategoryIds, 1);
         this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
       },
     },

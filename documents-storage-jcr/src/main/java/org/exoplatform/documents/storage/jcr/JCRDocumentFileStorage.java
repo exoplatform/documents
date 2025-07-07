@@ -227,7 +227,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           && filter.getMaxSize() == null && filter.getMinSize() == null) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
-        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection, filter.getCategoryIds(), showHiddenFiles);
+        String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection, filter, showHiddenFiles);
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
         ((QueryImpl)jcrQuery).setOffset(offset);
         ((QueryImpl)jcrQuery).setLimit(limit);
@@ -1278,18 +1278,33 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private String getTimeLineQueryStatement(String rootPath,
                                            String sortField,
                                            String sortDirection,
-                                           List<Long> categoryIds,
+                                           DocumentTimelineFilter filter,
                                            boolean includeHiddenFiles) {
     String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable'";
 
+    if (CollectionUtils.isNotEmpty(filter.getCategoryIds()) && CollectionUtils.isNotEmpty(filter.getExcludedCategoryIds())) {
+      filter.getCategoryIds().removeAll(filter.getExcludedCategoryIds());
+    }
+
     StringBuilder categoryFilter = new StringBuilder();
-    if (CollectionUtils.isNotEmpty(categoryIds)) {
-      String joinedConditions = categoryIds.stream()
+    if (CollectionUtils.isNotEmpty(filter.getCategoryIds())) {
+      String joinedConditions = filter.getCategoryIds().stream()
               .map(id -> "exo:categoryIds = '" + id + "'")
               .collect(Collectors.joining(" OR "));
 
       categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (")
               .append(joinedConditions)
+              .append(")");
+    }
+
+    // Exclude categories
+    if (CollectionUtils.isNotEmpty(filter.getExcludedCategoryIds())) {
+      String joinedExclude = filter.getExcludedCategoryIds().stream()
+              .map(id -> "NOT exo:categoryIds = '" + id + "'")
+              .collect(Collectors.joining(" AND "));
+
+      categoryFilter.append(" AND (")
+              .append(joinedExclude)
               .append(")");
     }
 

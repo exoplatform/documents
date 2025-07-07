@@ -217,6 +217,9 @@ public class DocumentFileRest implements ResourceContainer {
                                    @Parameter(description = "Category id used to search associated document", required = false)
                                    @QueryParam("categoryId")
                                    List<Long> categoryIds,
+                                   @Parameter(description = "Category IDs to exclude from the result", required = false)
+                                   @QueryParam("excludedCategoryId")
+                                   List<Long> excludedCategoryIds,
                                    @Parameter(description = "afterDate")
                                    @QueryParam("afterDate")
                                    Long afterDate,
@@ -256,6 +259,7 @@ public class DocumentFileRest implements ResourceContainer {
       filter.setSortField(getFromAlias(sortField));
       filter.setIncludeHiddenFiles(showHiddenFiles);
       filter.setCategoryIds(categoryIds);
+      filter.setExcludedCategoryIds(excludedCategoryIds);
       List<? extends AbstractNode> documents = documentFileService.getDocumentItems(listingType, filter, offset, limit, userIdentityId, showHiddenFiles);
       List<AbstractNodeEntity> documentEntities = EntityBuilder.toDocumentItemEntities(documentFileService,
                                                                                        identityManager,
