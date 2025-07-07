@@ -20,7 +20,7 @@
   <v-tooltip :disabled="showPast" bottom>
     <template #activator="{on, attrs}">
       <div
-        class="my-10px mx-2"
+        class="py-10px mx-2"
         :class="showPast?'clickable':'non-clickable'"
         v-bind="attrs"
         v-on="on"
