@@ -57,4 +57,6 @@ public abstract class DocumentNodeFilter {
 
   private List<Long>        categoryIds;
 
+  private List<Long>        excludedCategoryIds;
+
 }

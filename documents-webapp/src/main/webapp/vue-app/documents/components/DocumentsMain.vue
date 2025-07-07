@@ -29,6 +29,7 @@
             v-model="$root.selectedCategoryId"
             :category-depth="$root.categoryDepth"
             :category-ids="$root.settings.categoryIds"
+            :exclude-category-ids="$root.settings.excludeCategoryIds"
             :space-id="$root.ownerId"
             class="full-width border-box-sizing application-background-color application-border application-border-radius py-2 px-4"
             object-type="document"
@@ -226,6 +227,9 @@ export default {
     },
     selectedCategoryIds() {
       return this.$root.selectedCategoryIds?.length ? this.$root.selectedCategoryIds : this.$root.categoryIds;
+    },
+    excludeCategoryIds() {
+      return this.$root.excludeCategoryIds;
     },
   },
   watch: {
@@ -1113,7 +1117,7 @@ export default {
       this.$root.$emit('loading-documents', true);
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
 
-      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.offset, this.limit + 1, expand)
+      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludeCategoryIds, this.offset, this.limit + 1, expand)
         .then(files => {
           this.files = options?.append ? this.files.concat(files) : files ;
           this.files = [...new Map(this.files.map((item) => [item['id'], item])).values()];
