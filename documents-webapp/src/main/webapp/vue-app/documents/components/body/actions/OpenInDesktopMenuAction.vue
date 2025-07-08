@@ -19,7 +19,7 @@
 <template>
   <v-card
     color="transparent"
-    class="d-flex pa-2"
+    class="d-flex py-10px px-4"
     flat
     @click="openDialog">
     <v-card
@@ -40,6 +40,9 @@ export default {
       default: null,
     },
   },
+  data: () => ({
+    open: false,
+  }),
   computed: {
     iconExtension() {
       return this.$documentsIconsExtension?.[0]?.get?.(this.file?.mimeType);
@@ -55,8 +58,10 @@ export default {
     },
   },
   methods: {
-    openDialog() {
-      this.$root.$emit('open-in-desktop-dialog', this.href);
+    async openDialog() {
+      this.open = true;
+      await this.$nextTick();
+      window.setTimeout(() => this.$refs?.dialog?.open?.(), 200);
     },
   },
 };

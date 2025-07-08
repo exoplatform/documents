@@ -23,16 +23,14 @@
       transition="slide-x-transition"
       content-class="documentActionMenu "
       offset-x
-      close-on-click
-      :nudge-right="16"
-      :nudge-top="8">
+      close-on-click>
       <template #activator="{ on, attrs }">
         <div
           dark
           icon
           v-bind="attrs"
           v-on="on"
-          class="clickable ma-auto py-10px mx-2"
+          class="clickable ma-auto py-10px px-4"
           @mousedown="disableLeftClick">
           <v-icon
             size="16"
