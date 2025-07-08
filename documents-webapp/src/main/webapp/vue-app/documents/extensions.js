@@ -127,7 +127,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate ',
   width: '190px',
-  rank: 1,
+  rank: 51,
   parent: 'openGroup',
   enabled: (file) => {
     return  file && !file.cloudDriveFolder
@@ -146,7 +146,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate ',
   width: '190px',
-  rank: 5,
+  rank: 53,
   parent: 'openGroup',
   enabled: (file,isMobile,currentView,searchResult) => {
     return (currentView === 'timeline'||searchResult)
@@ -166,7 +166,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate ',
   width: '190px',
-  rank: 4,
+  rank: 52,
   parent: 'openGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder
@@ -205,7 +205,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 6,
+  rank: 61,
   parent: 'copyMoveGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
@@ -240,7 +240,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 10,
+  rank: 64,
   parent: 'copyMoveGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
@@ -258,7 +258,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 100,
+  rank: 72,
   parent: 'visibilityGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator) && !file.sourceID;
@@ -277,7 +277,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 70,
+  rank: 71,
   parent: 'visibilityGroup',
   enabled: (file) => {
     if (Vue.prototype.$shareDocumentSuspended) {
@@ -320,7 +320,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 80,
+  rank: 81,
   parent: 'versionsGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.versionable;
@@ -338,7 +338,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 81,
+  rank: 82,
   parent: 'versionsGroup',
   enabled: (file) => {
     if (!file.versionable || file.cloudDriveFolder) {
@@ -413,7 +413,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 11,
+  rank: 54,
   parent: 'openGroup',
   enabled: (file, isMobile, currentView, isSearchResult, iconExtension) => {
     return !isMobile && iconExtension?.protocol && file?.acl?.canEdit;
@@ -599,7 +599,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 8,
+  rank: 62,
   parent: 'copyMoveGroup',
   enabled: (file) => {
     return file && !file.cloudDriveFolder && file.acl.canEdit && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator);
@@ -617,7 +617,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   sortable: true,
   cssClass: 'text-truncate',
   width: '190px',
-  rank: 9,
+  rank: 63,
   parent: 'copyMoveGroup',
   enabled: (file) => {
     return file && file.folder && !file.cloudDriveFolder && file.acl.canEdit;
