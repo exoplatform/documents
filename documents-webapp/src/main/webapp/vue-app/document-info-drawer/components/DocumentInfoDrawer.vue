@@ -24,7 +24,7 @@
             </v-btn>
           </div>
         </template>
-        <span>$t('documents.label.copy.link')</span>
+        <span>{{$t('documents.label.copy.link')}}</span>
       </v-tooltip>
       <v-tooltip bottom>
         <template #activator="{on, bind}">
