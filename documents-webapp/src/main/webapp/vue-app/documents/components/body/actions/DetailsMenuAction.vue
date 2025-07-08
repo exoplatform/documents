@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable py-10px mx-2"
+    class="clickable py-10px px-4"
     @click="displayDetails()">
     <v-icon
       size="16"
