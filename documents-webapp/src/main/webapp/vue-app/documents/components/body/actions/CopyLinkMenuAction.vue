@@ -26,31 +26,28 @@ export default {
     publicAccessVisibilityChoice: 'COLLABORATORS_AND_PUBLIC_ACCESS'
   }),
   methods: {
+
     copyLink() {
-      let path = `${window.location.host}${eXo.env.portal.context}`;
-      if (eXo.env.portal.spaceId){
-        const pathParts = eXo.env.portal.selectedNodeUri.split('home');
-        const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri.substring(eXo.env.portal.selectedNodeUri.indexOf('/documents'));
-        path = `${path}/s/${eXo.env.portal.spaceId}${nodeUri}`;
+      this.loading = true;
+      let path;
+      if (this.isFileEditable())  {
+        if (this.file?.acl?.canEdit){
+          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
+        } else {
+          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+        }
+      } else if (this.isFileReadable())  {
+        path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
       } else {
-        path = `${path}/${eXo.env.portal.portalName}/${eXo.env.portal.selectedNodeUri}`;
+        path = `${window.location.host}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
       }
-      if (this.file.folder){
-        path = `${path}?folderId=${this.file.id}`;
-      } else if (Vue.prototype?.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === this.file?.mimeType).length > 0){
-        const portalName = this.file?.acl?.visibilityChoice === this.publicAccessVisibilityChoice ? 'public' : eXo.env.portal.metaPortalName;
-        path = `${window.location.host}${eXo.env.portal.context}/${portalName}/oeditor?docId=${this.file.id}&mode=view`;
-      } else {
-        path = `${path}?documentPreviewId=${this.file.id}`;
-      }
-      path = `${window.location.protocol}//${path}`;
-      if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(path).catch(() => {
-          this.copy(path);
-        });
-      } else {
-        this.copy(path);
-      }
+      const input = document.createElement('input');
+      input.value = path;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      this.loading = false;
       this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.alert.success.label.linkCopied')});
       this.getDocumentView();
       document.dispatchEvent(new CustomEvent('document-change', {
@@ -78,6 +75,12 @@ export default {
       input.select();
       document.execCommand('copy');
       document.body.removeChild(input);
+    },
+    isFileEditable() {
+      return  this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === this.file.mimeType ).length > 0;
+    },
+    isFileReadable() {
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === this.file.mimeType).length > 0;
     }
   },
 };
