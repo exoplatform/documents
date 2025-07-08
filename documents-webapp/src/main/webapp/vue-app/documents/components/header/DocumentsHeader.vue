@@ -55,7 +55,7 @@
                   <v-icon size="20">fa-cog</v-icon>
                 </v-btn>
               </template>
-              <span class="caption">
+              <span>
                 {{ $t('documents.settings.button.tooltip') }}
               </span>
             </v-tooltip>
