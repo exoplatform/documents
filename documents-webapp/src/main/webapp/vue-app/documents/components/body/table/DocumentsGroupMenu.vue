@@ -32,7 +32,7 @@
           icon
           v-bind="attrs"
           v-on="on"
-          class="clickable ma-auto py-10px mx-2"
+          class="clickable ma-auto py-10px px-4"
           @mousedown="disableLeftClick">
           <v-icon
             size="16"
