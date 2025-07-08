@@ -127,19 +127,10 @@
 </template>
 <script>
 export default {
-  props: {
-    value: {
-      type: Boolean,
-      default: false,
-    },
-    href: {
-      type: String,
-      default: null,
-    },
-  },
   data: () => ({
     dialog: false,
     userName: eXo.env.portal.userName,
+    href: null,
     password: null,
     passwordType: 'password',
     canCopy: false,
@@ -173,8 +164,15 @@ export default {
       this.$emit('input', this.dialog);
     },
   },
+  created() {
+    this.$root.$on('open-in-desktop-dialog', this.open);
+  },
+  beforeDestroy() {
+    this.$root.$off('open-in-desktop-dialog', this.open);
+  },
   methods: {
-    async open() {
+    async open(href) {
+      this.href = href;
       const resp = await fetch('/social/rest/digest', {credentials: 'include'});
       this.password = await resp.text();
       this.dialog = true;
