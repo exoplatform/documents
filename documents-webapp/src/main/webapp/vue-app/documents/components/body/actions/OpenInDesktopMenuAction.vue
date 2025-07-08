@@ -21,17 +21,13 @@
     color="transparent"
     class="pa-2"
     flat
-    @click.prevent.stop="openDialog">
+    @click="openDialog">
     <v-icon
       size="16"
       class="px-1px me-1">
       {{ icon }}
     </v-icon>
     <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.openInDesktop') }}</span>
-    <open-in-desktop-credentials-dialog
-      v-if="open"
-      ref="dialog"
-      :href="href" />
   </v-card>
 </template>
 <script>
@@ -42,9 +38,6 @@ export default {
       default: null,
     },
   },
-  data: () => ({
-    open: false,
-  }),
   computed: {
     iconExtension() {
       return this.$documentsIconsExtension?.[0]?.get?.(this.file?.mimeType);
@@ -60,10 +53,8 @@ export default {
     },
   },
   methods: {
-    async openDialog() {
-      this.open = true;
-      await this.$nextTick();
-      window.setTimeout(() => this.$refs?.dialog?.open?.(), 200);
+    openDialog() {
+      this.$root.$emit('open-in-desktop-dialog', this.href);
     },
   },
 };
