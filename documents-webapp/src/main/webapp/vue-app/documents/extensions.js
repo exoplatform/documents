@@ -416,7 +416,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   rank: 54,
   parent: 'openGroup',
   enabled: (file, isMobile, currentView, isSearchResult, iconExtension) => {
-    return iconExtension?.protocol && file?.acl?.canEdit;
+    return !isMobile && iconExtension?.protocol && file?.acl?.canEdit;
   },
   componentOptions: {
     vueComponent: Vue.options.components['open-in-desktop-menu-action'],
