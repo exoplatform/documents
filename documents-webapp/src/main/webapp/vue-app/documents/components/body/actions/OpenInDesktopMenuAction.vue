@@ -19,14 +19,16 @@
 <template>
   <v-card
     color="transparent"
-    class="pa-2"
+    class="d-flex pa-2"
     flat
     @click="openDialog">
-    <v-icon
-      size="16"
-      class="px-1px me-1">
-      {{ icon }}
-    </v-icon>
+    <v-card
+      min-width="18"
+      color="transparent"
+      class="d-flex align-center justify-center me-2"
+      flat>
+      <v-icon size="16">{{ icon }}</v-icon>
+    </v-card>
     <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.openInDesktop') }}</span>
   </v-card>
 </template>
