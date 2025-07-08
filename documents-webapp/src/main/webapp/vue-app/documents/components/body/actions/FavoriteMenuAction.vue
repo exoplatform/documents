@@ -1,7 +1,6 @@
 <template>
   <div
-    class="clickable mx-2"
-    :class="isMobile? 'ms-0': ''"
+    class="clickable ma-auto py-10px px-4"
     @click.prevent="changeFavorite">
     <documents-favorite-button
       ref="favoriteButton"
