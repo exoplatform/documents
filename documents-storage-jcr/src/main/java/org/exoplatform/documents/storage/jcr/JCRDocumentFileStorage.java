@@ -2378,5 +2378,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     QueryResult queryResult = jcrQuery.execute();
     return queryResult.getNodes().getSize() > 0;
   }
+  @Override
+  public void clearSymlinksNavHistory() {
+    symlinksNavHistory.clear();
+  }
 
 }
