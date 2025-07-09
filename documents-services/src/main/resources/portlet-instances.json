@@ -34,6 +34,22 @@
         "*:/platform/users"
       ],
       "system":true
+    },
+    {
+      "nameId":"DocumentGadget",
+      "categoryNameId":"tools",
+      "portletName":"DocumentGadget",
+      "names":{
+        "en":"layout.portletInstance.documentGadget.name"
+      },
+      "descriptions":{
+        "en":"layout.portletInstance.documentGadget.description"
+      },
+      "illustrationPath":"war:/../skin/DefaultSkin/portletIcons/Document_Gadget.webp",
+      "permissions":[
+        "*:/platform/users"
+      ],
+      "system":true
     }
   ]
 }
