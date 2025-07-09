@@ -90,6 +90,8 @@
         <documents-download-drawer />
         <document-import-from-zip-drawer />
         <documents-offline-changes-reminder />
+        <open-in-desktop-credentials-dialog
+          ref="dialog" />
         <documents-actions-menu-mobile
           :is-mobile="isMobile"
           :current-view="selectedView"
