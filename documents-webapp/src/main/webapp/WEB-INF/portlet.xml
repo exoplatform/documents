@@ -128,4 +128,28 @@
       </preference>
     </portlet-preferences>
   </portlet>
+
+  <portlet>
+    <portlet-name>DocumentGadget</portlet-name>
+    <display-name>Document Gadget</display-name>
+    <portlet-class>org.exoplatform.documents.portlet.DocumentGadgetPortlet</portlet-class>
+    <init-param>
+      <name>portlet-view-dispatched-file-path</name>
+      <value>/WEB-INF/jsp/documentGadget.jsp</value>
+    </init-param>
+    <init-param>
+      <name>preload.resource.bundles</name>
+      <value>locale.portlet.Documents</value>
+    </init-param>
+    <init-param>
+      <name>layout-content-editable</name>
+      <value>true</value>
+    </init-param>
+    <supports>
+      <mime-type>text/html</mime-type>
+    </supports>
+    <portlet-info>
+      <title>Document Gadget</title>
+    </portlet-info>
+  </portlet>
 </portlet-app>
