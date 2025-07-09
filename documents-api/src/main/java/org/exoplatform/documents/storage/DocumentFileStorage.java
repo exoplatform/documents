@@ -395,4 +395,6 @@ public interface DocumentFileStorage {
   default List<Long> getDocumentCategoryIds(long spaceIdentityId, Identity aclIdentity) {
     throw new UnsupportedOperationException();
   }
+
+  void clearSymlinksNavHistory();
 }
