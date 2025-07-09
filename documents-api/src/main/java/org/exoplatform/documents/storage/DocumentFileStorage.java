@@ -334,4 +334,19 @@ public interface DocumentFileStorage {
                    long authenticatedUserId) throws Exception;
 
   boolean canImport(Identity identity);
+
+  List<String> getFavoriteFileIds(DocumentNodeFilter filter,
+                                  Identity aclUserIdentity,
+                                  int offset,
+                                  int limit);
+
+  /**
+   * @param spaceIdentityId Space {@link org.exoplatform.social.core.identity.model.Identity} Identifier
+   * @return {@link List} of Category Ids used in Documents
+   */
+  default List<Long> getDocumentCategoryIds(long spaceIdentityId, Identity aclIdentity) {
+    throw new UnsupportedOperationException();
+  }
+
+  void clearSymlinksNavHistory();
 }
