@@ -16,11 +16,9 @@
 -->
 <template>
   <v-list-item
-    :href="url"
     class="pa-1 pb-1"
-    @click="openFile">
+    @click="openPreview">
     <v-list-item-avatar
-      :href="url"
       class="my-0"
       tile>
       <v-avatar :size="avatarSize" tile>
@@ -32,7 +30,6 @@
       </v-avatar>
     </v-list-item-avatar>
     <v-list-item-content
-      :id="id"
       class="pa-0">
       <v-list-item-title class="text-color text-truncate-2 text-wrap spaceTitle">
         {{ fileName }}
@@ -68,14 +65,37 @@ export default {
     fileIconColor() {
       return this.extension?.color || 'secondary';
     },
+    isFileEditable() {
+      const type = this.mimeType || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+    },
+    isFileOnlyReadable() {
+      const type = this.mimeType || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+    },
   },
   methods: {
-    openFile() {
-      if (this.canPreview) {
-        this.$emit('preview', this.file, this.extension);
+    openPreview() {
+      this.loading = true;
+      if (this.file?.folder) {
+        this.$root.$emit('document-open-folder', this.file);
+      } else if (this.isFileEditable) {
+        this.openInEditMode(this.file);
+      } else if (this.isFileOnlyReadable) {
+        this.openInReadOnlyMode(this.file);
       } else {
-        this.$emit('download', this.file, this.extension);
+        this.$root.$emit('documents-preview', this.file);
       }
+      this.loading = false;
+      this.$root.$emit('mark-document-as-viewed', this.file);
+    },
+    openInEditMode(file) {
+      const fileId = file.sourceID ? file.sourceID : file.id;
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&backTo=${window.location.pathname}`, '_blank');
+    },
+    openInReadOnlyMode(file) {
+      const fileId = file.sourceID ? file.sourceID : file.id;
+      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
     },
   }
 };

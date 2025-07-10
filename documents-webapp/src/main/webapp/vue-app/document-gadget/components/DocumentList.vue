@@ -25,7 +25,7 @@
             <div
               v-if="!emptyWidget"
               class="widget-text-header text-none text-truncate d-flex align-center">
-              {{ $t('documents.documentGadgetSettings.title') }}
+              {{ $t('documents.documentGadget.title') }}
             </div>
             <div
               :class="{
@@ -42,12 +42,12 @@
                 min-width="auto"
                 class="pa-0"
                 text>
-                <span v-if="!hoverEdit" class="primary--text text-none">{{ $t('documents.documentGadgetSettings.seeMore') }}</span>
+                <span v-if="!hoverEdit" class="primary--text text-none">{{ $t('documents.documentGadget.seeMore') }}</span>
               </v-btn>
               <v-fab-transition hide-on-leave>
                 <v-btn
                   v-show="hoverEdit"
-                  :title="$t('documents.documentGadgetSettings.editTooltip')"
+                  :title="$t('documents.documentGadget.editTooltip')"
                   small
                   icon
                   @click="$root.$emit('document-gadget-settings')">
@@ -60,15 +60,27 @@
         <template v-if="initialized" #default>
           <div>
             <v-list class="pa-0">
-              <document-list-widget-item
-                v-for="file in files"
-                :key="file.id"
-                :file="file" />
+              <template v-if="isCardsView">
+                <card-carousel parent-class="activity-files-parent">
+                  <document-list-widget-item-card
+                    v-for="(file, index) in fileToDisplay"
+                    :index="index"
+                    :key="file.id"
+                    :file="file" />
+                </card-carousel>
+              </template>
+              <template v-else>
+                <document-list-widget-item
+                  v-for="file in fileToDisplay"
+                  :key="file.id"
+                  :file="file" />
+              </template>
             </v-list>
           </div>
         </template>
       </widget-wrapper>
     </v-hover>
+    <document-list-settings-drawer v-if="$root.canEdit" />
   </v-app>
 </template>
 <script>
@@ -87,6 +99,28 @@ export default {
     emptyWidget() {
       return !this.files?.length && this.initialized && this.applicationMounted;
     },
+    fileToDisplay() {
+      const files = this.files ?? [];
+      return files.map(file => {
+        const decodedName = this.safeDecodeURIComponent(file.name);
+        return {
+          id: file.id,
+          name: decodedName,
+          filename: decodedName,
+          mimetype: file.mimeType,
+          image: this.getImageUrl(file),
+          downloadUrl: this.getDownloadUrl(file),
+          icon: this.getFileIcon(file),
+          editable: this.isFileEditable(file),
+          readable: this.isFileReadable(file),
+          path: file.docPath,
+          source: 'documents',
+        };
+      });
+    },
+    isCardsView() {
+      return this.$root.viewOptions === 'cards';
+    }
   },
   watch: {
     loading() {
@@ -106,6 +140,7 @@ export default {
     },
   },
   created() {
+    this.$root.$on('documents-preview', this.previewDocument);
     this.getFiles();
   },
   mounted() {
@@ -121,6 +156,44 @@ export default {
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, 4, null).then(files => {
         this.files = files;
       }).finally(() => this.loading = false);
+    },
+    safeDecodeURIComponent(name) {
+      if (!name) {
+        return '';
+      }
+      try {
+        return decodeURIComponent(name.replace(/%25/g, '%').replace(/%([^2][^5])/g, '%25$1'));
+      } catch (e) {
+        console.warn('Filename decode failed:', name, e);
+        return name;
+      }
+    },
+    getFileIcon(file) {
+      return this.$documentsIconsExtension?.[0]?.get?.(file?.mimeType) || 'fas fa-file';
+    },
+    isFileEditable(file) {
+      return this.$supportedDocuments?.some(doc => doc.edit && doc.mimeType === file.mimeType) ?? false;
+    },
+    isFileReadable(file) {
+      return this.$supportedDocuments?.some(doc => doc.mimeType === file.mimeType) ?? false;
+    },
+    getImageUrl(file) {
+      const readable = this.isFileReadable(file);
+      return readable
+        ? this.$documentsUtils.getThumbnailUrl(file, '250x250', file.lastModified)
+        : this.getDownloadUrl(file);
+    },
+    getDownloadUrl(file) {
+      return this.$documentsUtils.getDownloadUrl(file.id, file.lastModified);
+    },
+    previewDocument(file) {
+      const files = [];
+      this.files.forEach((item) => {
+        if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
+          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.getFileIcon(item)});}
+      }
+      );
+      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
   },
 };
