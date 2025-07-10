@@ -112,7 +112,8 @@ export default {
     actualFolderId: '',
     folderPath: '',
     currentFolderPath: '',
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId
+    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+    showHidden: false,
   }),
   computed: {
     documentsBreadcrumbToDisplay() {
@@ -135,6 +136,9 @@ export default {
     this.$root.$on('open-folder', this.openFolder);
     document.addEventListener('document-open-previous-folder-to-drop', this.handleOpenRootFolder);
     document.addEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
+    this.$root.$on('set-advanced-filter', advancedFilter => {
+      this.showHidden = advancedFilter.showHidden;
+    });
   },
   beforeDestroy() {
     this.$root.$off('set-breadcrumb', this.setBreadcrumb);
@@ -255,7 +259,7 @@ export default {
     openTreeView() {
       if (this.isMobile) {
         this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
-        this.$root.$emit('openTreeFolderDrawer');
+        this.$root.$emit('openTreeFolderDrawer',this.showHidden);
       } else {
         this.$root.$emit('tree-view-expand', true);
       }

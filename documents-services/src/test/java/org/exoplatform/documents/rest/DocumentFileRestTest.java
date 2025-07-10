@@ -800,7 +800,7 @@ public class DocumentFileRestTest {
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
 
     List<FullTreeItem> children = new ArrayList<>();
-    FullTreeItem fullTreeItem = new FullTreeItem("11111222", "test", "path", null);
+    FullTreeItem fullTreeItem = new FullTreeItem("11111222", "test", "path", null,false);
     children.add(fullTreeItem);
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
@@ -846,8 +846,8 @@ public class DocumentFileRestTest {
     Response response1 = documentFileRest.updateDocument("name","11111111", 2L, "renameTest", "", null);
     assertEquals(Response.Status.OK.getStatusCode(), response1.getStatus());
 
-    when(documentFileStorage.getFullTreeData(2L, "11111111", "", userID, true)).thenReturn(children);
-    Response response2 = documentFileRest.getFullTreeData(2L, "11111111",  "",true);
+    when(documentFileStorage.getFullTreeData(2L, "11111111", "", userID, true, true)).thenReturn(children);
+    Response response2 = documentFileRest.getFullTreeData(2L, "11111111",  "",true, true);
     assertEquals(Response.Status.OK.getStatusCode(), response2.getStatus());
 
     Response response3 = documentFileRest.moveDocument(null, null, "/Groups/spaces/test/Documents/test", null);
@@ -1257,16 +1257,16 @@ public class DocumentFileRestTest {
                                                               settingService,
                                                               publicDocumentAccessService,
                                                               externalDownloadService);
-    Response response = documentFileRest1.getFullTreeData(null, null,  "",true);
+    Response response = documentFileRest1.getFullTreeData(null, null,  "",true,true);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123",  "",true)).thenThrow(IllegalAccessException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123",  "",true);
+    when(documentFileRest1.getFullTreeData(1L, "123",  "",true,true)).thenThrow(IllegalAccessException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123",  "",true,true);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123",  "",true)).thenThrow(ObjectNotFoundException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123",  "",true);
+    when(documentFileRest1.getFullTreeData(1L, "123",  "",true,true)).thenThrow(ObjectNotFoundException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123",  "",true,true);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
-    when(documentFileRest1.getFullTreeData(1L, "123",  "",true)).thenThrow(RuntimeException.class);
-    response = documentFileRest1.getFullTreeData(1L, "123",  "",true);
+    when(documentFileRest1.getFullTreeData(1L, "123",  "",true,true)).thenThrow(RuntimeException.class);
+    response = documentFileRest1.getFullTreeData(1L, "123",  "",true,true);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
 
