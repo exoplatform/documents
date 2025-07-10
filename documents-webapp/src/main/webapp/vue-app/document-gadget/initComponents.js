@@ -16,10 +16,14 @@
  */
 import DocumentList from './components/DocumentList.vue';
 import DocumentListWidgetItem from './components/DocumentListWidgetItem.vue';
+import DocumentListSettingsDrawer from './components/DocumentListSettingsDrawer.vue';
+import DocumentListWidgetItemCardVue from './components/DocumentListWidgetItemCard.vue.vue';
 
 const components = {
   'document-list': DocumentList,
   'document-list-widget-item': DocumentListWidgetItem,
+  'document-list-widget-item-card': DocumentListWidgetItemCardVue,
+  'document-list-settings-drawer': DocumentListSettingsDrawer,
 };
 
 for (const key in components) {
