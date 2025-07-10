@@ -26,6 +26,7 @@ const appId = 'DocumentGadget';
 
 export function init(
   portletStorageId,
+  viewOptions,
   canEdit,
   pageRef) {
   exoi18n.loadLanguageAsync(lang, url)
@@ -33,6 +34,7 @@ export function init(
       new Vue({
         data: {
           portletStorageId,
+          viewOptions,
           canEdit,
           pageRef
         },
