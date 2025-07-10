@@ -548,6 +548,7 @@ export default {
     },
     open(file) {
       this.file = file;
+      this.allMembersCanEdit = this.file.acl.allMembersCanEdit;
       this.visibilityChoice = this.file.acl.visibilityChoice;
       this.publicDocumentAccess = null;
       this.publicDocumentAccessOptions = null;
