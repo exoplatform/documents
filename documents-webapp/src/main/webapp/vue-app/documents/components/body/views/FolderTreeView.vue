@@ -49,7 +49,8 @@
     <v-card-text class="px-0">
       <document-tree-view
         :items="items"
-        :folder-path="folderPath" />
+        :folder-path="folderPath" 
+        :show-hidden="showHidden" />
     </v-card-text>
   </v-card>
 </template>
@@ -75,16 +76,21 @@ export default {
   data: () => ({
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     loading: false,
+    showHidden: false,
     items: []
   }),
   created() {
     this.retrieveDocumentTree();
+    this.$root.$on('set-advanced-filter', advancedFilter => {
+      this.showHidden = advancedFilter.showHidden;
+      this.retrieveDocumentTree();
+    });
   },
   methods: {
     retrieveDocumentTree(){
       this.items = [];
       this.loading = true;
-      this.$documentFileService.getFullTreeData(this.ownerId,null,this.folderPath)
+      this.$documentFileService.getFullTreeData(this.ownerId,null,this.folderPath,this.showHidden)
         .then(data => {
           this.items = data|| [];
           this.items = this.items.map(obj => {

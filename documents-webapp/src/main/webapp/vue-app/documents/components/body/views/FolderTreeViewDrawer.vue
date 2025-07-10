@@ -43,7 +43,8 @@ export default {
   },
   data: () => ({
     ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-    items: []
+    items: [],
+    showHidden: false,
   }),
   created(){
     this.$root.$on('openTreeFolderDrawer', this.open);
@@ -52,7 +53,8 @@ export default {
     this.$root.$off('openTreeFolderDrawer', this.open);
   },
   methods: {
-    open() {
+    open(showHidden) {
+      this.showHidden = showHidden;
       this.retrieveDocumentTree();
       this.$refs.treeViewDrawer?.open();
     },
@@ -62,7 +64,7 @@ export default {
     retrieveDocumentTree(){
       this.items = [];
       this.loading = true;
-      this.$documentFileService.getFullTreeData(this.ownerId,null,this.folderPath)
+      this.$documentFileService.getFullTreeData(this.ownerId,null,this.folderPath,this.showHidden)
         .then(data => {
           this.items = data|| [];
           this.items = this.items.map(obj => {

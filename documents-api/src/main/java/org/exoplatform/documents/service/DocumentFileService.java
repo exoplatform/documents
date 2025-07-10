@@ -206,7 +206,7 @@ public interface DocumentFileService {
    *           documents of the designated parentFolderId
    * @throws ObjectNotFoundException when folderId doesn't exisits
    */
-  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, long authenticatedUserId, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException;
+  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, long authenticatedUserId, boolean withChildren, boolean showHidden) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
    * Duplicate the given node.
