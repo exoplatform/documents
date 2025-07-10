@@ -675,7 +675,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                             String folderId,
                                             String destinationFolderPath,
                                             Identity aclIdentity,
-                                            boolean withChildren) {
+                                            boolean withChildren,
+                                            boolean showHidden) {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     List<FullTreeItem> parents = new ArrayList<>();
@@ -703,9 +704,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (node != null) {
         String nodeName = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        List<FullTreeItem> children = getAllFolderInNode(node, session, destinationNode, withChildren);
+        List<FullTreeItem> children = getAllFolderInNode(node, session, destinationNode, withChildren, showHidden);
 
-        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children));
+        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children, showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)));
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving tree folder'" + folderId, e);
@@ -717,12 +718,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
-  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, Node destinationNode, boolean withChildren) throws RepositoryException {
+  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, Node destinationNode, boolean withChildren, boolean showHidden) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
     while (nodeIter.hasNext()) {
       Node childNode = nodeIter.nextNode();
-      if (!childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
+      if (showHidden || !childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
           && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK))) {
         String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
                                                                                         .getString()
@@ -740,14 +741,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (childNode != null) {
           List<FullTreeItem> folderChildListNodes = new ArrayList<>();
           if (withChildren || (destinationNode != null && destinationNode.getPath().contains(childNode.getPath()))) {
-            folderChildListNodes = getAllFolderInNode(childNode, session, destinationNode, withChildren);
-          } else if (!hasFolderNodes(childNode)) {
+            folderChildListNodes = getAllFolderInNode(childNode, session, destinationNode, withChildren, showHidden);
+          } else if (!hasFolderNodes(childNode,showHidden)) {
             folderChildListNodes = null;
           }
           folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
                                                nodeName,
                                                childNode.getPath(),
-                                               folderChildListNodes));
+                                               folderChildListNodes,
+                                               showHidden && childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)));
         }
 
       }
@@ -2410,8 +2412,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return bulkStorageActionService.checkTotalUplaodsLimit(identity, false);
   }
 
-  public boolean hasFolderNodes(Node node) throws RepositoryException {
-    String statementOfFolders = getFolderDocumentsQuery(node.getPath(), "", "", FOLDER_NODE_TYPES, false);
+  public boolean hasFolderNodes(Node node, boolean showHidden) throws RepositoryException {
+    String statementOfFolders = getFolderDocumentsQuery(node.getPath(), "", "", FOLDER_NODE_TYPES, showHidden);
     Query jcrQuery = node.getSession().getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
     QueryResult queryResult = jcrQuery.execute();
     return queryResult.getNodes().getSize() > 0;

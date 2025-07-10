@@ -278,8 +278,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getBreadcrumb(ownerId, folderId, folderPath, getAclUserIdentity(authenticatedUserId));
   }
   @Override
-  public List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, long authenticatedUserId, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileStorage.getFullTreeData(ownerId, folderId, destinationFolderPath, getAclUserIdentity(authenticatedUserId), withChildren);
+  public List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, long authenticatedUserId, boolean withChildren, boolean showHidden) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getFullTreeData(ownerId, folderId, destinationFolderPath, getAclUserIdentity(authenticatedUserId), withChildren, showHidden);
   }
 
   @Override

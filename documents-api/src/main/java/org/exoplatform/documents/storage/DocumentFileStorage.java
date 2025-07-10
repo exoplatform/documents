@@ -131,7 +131,7 @@ public interface DocumentFileStorage {
    * @param withChildren get all children
    * @return {@link List} of {@link AbstractNode}
    */
-  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, Identity aclIdentity, boolean withChildren) throws IllegalAccessException, ObjectNotFoundException;
+  List<FullTreeItem> getFullTreeData(long ownerId, String folderId, String destinationFolderPath, Identity aclIdentity, boolean withChildren, boolean showHidden) throws IllegalAccessException, ObjectNotFoundException;
 
 
   /**
