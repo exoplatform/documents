@@ -1,6 +1,6 @@
 <template>
   <div
-    class="clickable ma-auto my-10px mx-2"
+    class="clickable ma-auto py-10px px-4"
     @click="changeVisibility()">
     <v-icon
       size="16"

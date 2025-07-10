@@ -1,7 +1,7 @@
 <template>
   <div>
     <div
-      class="clickable my-10px mx-2"
+      class="clickable py-10px px-4"
       @click="copyLink()">
       <v-icon
         size="16"
@@ -10,9 +10,6 @@
       </v-icon>
       <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.copy.link') }}</span>
     </div>
-    <v-divider
-      v-if="!file.cloudDriveFolder"
-      class="mt-1" />
   </div>  
 </template>
 <script>

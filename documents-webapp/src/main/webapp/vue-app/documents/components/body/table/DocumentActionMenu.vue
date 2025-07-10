@@ -6,7 +6,7 @@
       v-for="(extension, i) in menuExtensions"
       :key="i"
       :disabled="isMultiSelection && extension.disabled"
-      class="text-caption px-2 text-left action-menu-item">
+      class="text-caption px-0 text-left action-menu-item">
       <extension-registry-component
         :component="extension"
         :params="getParams(extension)"
@@ -43,6 +43,10 @@ export default {
       type: Boolean,
       default: false
     },
+    parent: {
+      type: String,
+      default: ''
+    },
   },
   data: () => ({
     menuExtensionApp: 'DocumentMenu',
@@ -69,12 +73,15 @@ export default {
         disabledExtension: extension.disabled,
         isMultiSelection: this.isMultiSelection,
         currentView: this.currentView,
-        isSearchResult: this.isSearchResult
+        isSearchResult: this.isSearchResult,
+        parent: extension.parent,
+        id: extension.id,
+        labelKey: extension.labelKey,
+        icon: extension.icon,
       };
     },
     refreshMenuExtensions() {
       let extensions = extensionRegistry.loadExtensions(this.menuExtensionApp, this.menuExtensionType);
-
       if (!this.isMultiSelection) {
         let iconExtension;
         if (!this.file?.folder && this.$documentsIconsExtension?.[0]) {
@@ -88,6 +95,21 @@ export default {
           extension.disabled = this.selectedDocuments.some(file => !extension.enabled(file));
         });
       }
+
+      if (!this.isMobile) {
+        const groupingExtensions =  extensions.filter(extension => extension.type === 'group');
+        groupingExtensions.forEach(extension => {
+          if (!extensions.some(ext => ext.parent === extension.id)) {
+            extensions = extensions.filter(extension_ => extension_.id !== extension.id);
+          }
+        });
+        if (this.parent) {
+          extensions = extensions.filter(extension => extension.parent === this.parent);
+        } else {
+          extensions = extensions.filter(extension => !extension.parent);
+        }
+      }
+
       this.menuExtensions = extensions;
     },
   }

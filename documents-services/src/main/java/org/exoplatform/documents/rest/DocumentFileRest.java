@@ -453,24 +453,32 @@ public class DocumentFileRest implements ResourceContainer {
           @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
           @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response duplicateDocument(@Parameter(description = "Identity technical identifier")
-                                @QueryParam("ownerId")
-                                        Long ownerId,
-                                @Parameter(description = "File technical identifier")
-                                @QueryParam("fileId")
-                                        String fileId,
-                                @Parameter(description = "File prefix Clone")
-                                @QueryParam("prefixClone")
-                                        String prefixClone,
-                                @Parameter(description = "File properties to expand.")
-                                @QueryParam("expand")
-                                         String expand) {
+                                    @QueryParam("ownerId")
+                                    Long ownerId,
+                                    @Parameter(description = "File technical identifier")
+                                    @QueryParam("fileId")
+                                    String fileId,
+                                    @Parameter(description = "File prefix Clone")
+                                    @QueryParam("destinationId")
+                                    String destinationId,
+                                    @Parameter(description = "File prefix Clone")
+                                    @QueryParam("prefixClone")
+                                    String prefixClone,
+                                    @Parameter(description = "File properties to expand.")
+                                    @QueryParam("expand")
+                                    String expand) {
 
     if (ownerId == null && StringUtils.isBlank(fileId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_FileID_is_mandatory").build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+      AbstractNode abstractNode = null;
     try {
-      AbstractNode abstractNode = documentFileService.duplicateDocument(ownerId, fileId, prefixClone, userIdentityId);
+        if (StringUtils.isBlank(destinationId)) {
+            abstractNode = documentFileService.duplicateDocument(ownerId, fileId, prefixClone, userIdentityId);
+        } else {
+            abstractNode = documentFileService.copyDocument(fileId, destinationId, userIdentityId);
+        }
       AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
               identityManager,
               spaceService,
