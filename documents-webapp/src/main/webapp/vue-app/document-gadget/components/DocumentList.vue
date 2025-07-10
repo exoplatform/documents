@@ -24,7 +24,7 @@
           <div class="d-flex flex-grow-1 flex-shrink-1 full-width align-center position-relative">
             <div
               v-if="!emptyWidget"
-              class="widget-text-header text-none text-truncate d-flex align-center mb-5">
+              class="widget-text-header text-none text-truncate d-flex align-center">
               {{ $t('documents.documentGadgetSettings.title') }}
             </div>
             <div
