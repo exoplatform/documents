@@ -36,8 +36,13 @@
         </v-icon>
         <v-list-item-title 
           class="body-2 mx-2 mt-1"
-          :class="idItemActive === item.id ? 'primary--text font-weight-bold' : ''">
-          {{ displayName(item.name) }}               
+          :class="idItemActive === item.id ? 'primary--text font-weight-bold' : item.hidden ? 'text-light-color' : ''">
+          {{ displayName(item.name) }} 
+          <v-icon
+            v-if="item.hidden"
+            size="13">
+            fas fa-eye-slash
+          </v-icon>              
         </v-list-item-title>
       </div>
     </template>
@@ -55,6 +60,10 @@ export default {
     items: {
       type: Array,
       default: () => []
+    },
+    showHidden: {
+      type: Boolean,
+      default: false
     }
   },
 
@@ -79,6 +88,21 @@ export default {
     });
     this.$root.$on('folder-created',createdFolder => {
       this.addChild(this.items, createdFolder.parentFolderId, createdFolder);
+    });
+    this.$root.$on('confirm-document-deletion',deletedItem => {
+      if (deletedItem.folder) {
+        this.removeItem(this.items, deletedItem.id);
+      }     
+    });
+    this.$root.$on('hide-element',hiddenItem => {
+      if (hiddenItem.folder) {
+        if (!this.showHidden){
+          this.removeItem(this.items, hiddenItem.id);
+        } else {
+          this.setHidden(this.items,hiddenItem);
+        }
+        
+      }     
     });
   },
   methods: {
@@ -135,6 +159,29 @@ export default {
         if (Array.isArray(node.children)) {
           const added = this.addChild(node.children, targetId, newChild);
           if (added) {return true;}
+        }
+      }
+      return false;
+    },
+    removeItem(nodes, idToRemove) {
+      return nodes
+        .map(node => {
+          if (node.children) {
+            node.children = this.removeItem(node.children, idToRemove);
+          }
+          return node;
+        })
+        .filter(node => node.id !== idToRemove);
+    },
+    setHidden(tree, folder) {
+      for (const node of tree) {
+        if (node.id === folder.id) {
+          node.hidden = folder.hidden;
+          return true;
+        }
+        if (Array.isArray(node.children)) {
+          const found = this.setHidden(node.children, folder);
+          if (found) {return true;}
         }
       }
       return false;

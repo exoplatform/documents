@@ -123,7 +123,7 @@ export function getBreadCrumbs(folderId,ownerId,folderPath) {
 
 }
 
-export function getFullTreeData(ownerId, folderId, destinationFolderPath) {
+export function getFullTreeData(ownerId, folderId, destinationFolderPath,showHidden) {
   const formData = new FormData();
   if (folderId) {
     formData.append('folderId', folderId);
@@ -133,6 +133,9 @@ export function getFullTreeData(ownerId, folderId, destinationFolderPath) {
   }
   if (destinationFolderPath) {
     formData.append('destinationFolderPath', destinationFolderPath);
+  }
+  if (showHidden) {
+    formData.append('showHidden', showHidden);
   }
   const params = new URLSearchParams(formData).toString();
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/fullTree?${params}`, {

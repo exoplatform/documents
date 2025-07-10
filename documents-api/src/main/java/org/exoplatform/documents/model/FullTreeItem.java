@@ -16,11 +16,11 @@
  */
 package org.exoplatform.documents.model;
 
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -30,4 +30,5 @@ public class FullTreeItem {
   private String                                name;
   private String                                path;
   private List<FullTreeItem>                    children;
+  private boolean                               hidden;
 }
