@@ -25,6 +25,7 @@
 <%@ page import="org.exoplatform.container.ExoContainerContext"%>
 <%
   String portletStorageId = ((String) request.getAttribute("portletStorageId"));
+  String viewOptions = request.getAttribute("documentGadgetViewOptions") == null ? "list" : ((String[]) request.getAttribute("documentGadgetViewOptions"))[0];
   Page currentPage = PortalRequestContext.getCurrentInstance().getPage();
   boolean canEdit = ExoContainerContext.getService(UserACL.class).hasEditPermission(currentPage, ConversationState.getCurrent().getIdentity());
   String pageRef = currentPage.getPageKey().format();
@@ -34,6 +35,7 @@
     <script type="text/javascript">
       require(['PORTLET/documents-portlet/DocumentGadget'], app => app.init(
         '<%=portletStorageId%>',
+        '<%=viewOptions%>',
         <%=canEdit%>,
         '<%=pageRef%>'
       ));
