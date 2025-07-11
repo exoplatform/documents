@@ -28,7 +28,6 @@ import javax.jcr.lock.LockException;
 import javax.jcr.version.VersionException;
 
 import org.apache.commons.lang3.StringUtils;
-import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.picocontainer.Startable;
@@ -59,7 +58,6 @@ import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.social.metadata.favorite.model.Favorite;
-import org.exoplatform.documents.storage.jcr.JCRDocumentFileStorage;
 
 public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable {
 
@@ -154,10 +152,8 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                              long delay,
                              Identity identity,
                              long userIdentityId) throws ObjectNotFoundException, RepositoryException {
-    Node nodeToDelete = JCRDocumentsUtil.getNodeByIdentifier(session, documentId);
-    boolean isSymlink = nodeToDelete != null && nodeToDelete.isNodeType(NodeTypeConstants.EXO_SYMLINK);
     if (folderPath == null) {
-      folderPath = nodeToDelete.getPath();
+      folderPath = JCRDocumentsUtil.getNodeByIdentifier(session, documentId).getPath();
     }
     if (delay > 0) {
       documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
@@ -168,7 +164,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
           RequestLifeCycle.begin(container);
           try {
             documentsToDeleteQueue.remove(documentId);
-            moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
+            moveToTrash(finalFolderPath, session, userIdentityId, favorite, checkToMoveToTrash);
           } catch (Exception e) {
             LOG.error("Error when deleting the document with path" + finalFolderPath, e);
           } finally {
@@ -177,10 +173,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         }
       }, delay, TimeUnit.SECONDS);
     } else {
-      moveToTrash(folderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
-    }
-    if (isSymlink) {
-      clearSymlinksNavHistory();
+      moveToTrash(folderPath, session, userIdentityId, favorite, checkToMoveToTrash);
     }
   }
 
@@ -469,11 +462,6 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       node.removeMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
       node.save();
     }
-  }
-
-  private void clearSymlinksNavHistory() {
-    JCRDocumentFileStorage jCRDocumentFileStorage = CommonsUtils.getService(JCRDocumentFileStorage.class);
-    jCRDocumentFileStorage.clearSymlinksNavHistory();
   }
 
 }
