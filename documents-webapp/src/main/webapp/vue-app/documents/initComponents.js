@@ -92,6 +92,7 @@ import OfflineChangesReminder from './components/header/offline/OfflineChangesRe
 import DocumentsGroupMenu from './components/body/table/DocumentsGroupMenu.vue';
 import CopyMenuAction from './components/body/actions/CopyMenuAction.vue';
 import PastMenuAction from './components/body/actions/PastMenuAction.vue';
+import PostMenuAction from './components/body/actions/PostMenuAction.vue';
 
 const components = {
   'documents-main': DocumentsMain,
@@ -171,6 +172,7 @@ const components = {
   'group-menu-action': DocumentsGroupMenu,
   'copy-menu-action': CopyMenuAction,
   'past-menu-action': PastMenuAction,
+  'post-menu-action': PostMenuAction,
 };
 
 for (const key in components) {
