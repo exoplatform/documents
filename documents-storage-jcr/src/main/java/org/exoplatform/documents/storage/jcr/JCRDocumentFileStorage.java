@@ -2084,15 +2084,4 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return bulkStorageActionService.checkTotalUplaodsLimit(identity, false);
   }
 
-  public boolean hasFolderNodes(Node node) throws RepositoryException {
-    String statementOfFolders = getFolderDocumentsQuery(node.getPath(), "", "", FOLDER_NODE_TYPES, false);
-    Query jcrQuery = node.getSession().getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
-    QueryResult queryResult = jcrQuery.execute();
-    return queryResult.getNodes().getSize() > 0;
-  }
-  @Override
-  public void clearSymlinksNavHistory() {
-    symlinksNavHistory.clear();
-  }
-
 }
