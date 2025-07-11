@@ -334,4 +334,6 @@ public interface DocumentFileStorage {
                    long authenticatedUserId) throws Exception;
 
   boolean canImport(Identity identity);
+
+  void clearSymlinksNavHistory();
 }

@@ -2084,4 +2084,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return bulkStorageActionService.checkTotalUplaodsLimit(identity, false);
   }
 
+  
+  @Override
+  public void clearSymlinksNavHistory() {
+    symlinksNavHistory.clear();
+  }
+
 }
