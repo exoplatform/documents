@@ -41,12 +41,13 @@ export default {
       } else {
         path = `${window.location.host}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
       }
-      const input = document.createElement('input');
-      input.value = path;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(path).catch(() => {
+          this.copy(path);
+        });
+      } else {
+        this.copy(path);
+      }
       this.loading = false;
       this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.alert.success.label.linkCopied')});
       this.getDocumentView();
