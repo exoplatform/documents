@@ -43,6 +43,12 @@
                 min-width="auto"
                 class="pa-0"
                 text>
+                <v-icon
+                  v-if="hoverEdit"
+                  size="18"
+                  color="primary">
+                  fa-external-link-alt
+                </v-icon>
                 <span v-if="!hoverEdit" class="primary--text text-none">{{ $t('documents.documentGadget.seeMore') }}</span>
               </v-btn>
               <v-fab-transition hide-on-leave>
@@ -181,10 +187,8 @@ export default {
       return this.$supportedDocuments?.some(doc => doc.mimeType === file.mimeType) ?? false;
     },
     getImageUrl(file) {
-      const readable = this.isFileReadable(file);
-      return readable
-        ? this.$documentsUtils.getThumbnailUrl(file, '250x250', file.lastModified)
-        : this.getDownloadUrl(file);
+      file.readable = this.isFileReadable(file);
+      return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
     },
     getDownloadUrl(file) {
       return this.$documentsUtils.getDownloadUrl(file.id, file.lastModified);
