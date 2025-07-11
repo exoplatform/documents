@@ -96,8 +96,12 @@ public class JCRDeleteFileStorageTest {
 
   @Mock
   private ListenerService listenerService;
+  
   @Mock
   private BulkStorageActionService bulkStorageActionService;
+  
+   @Mock
+   private JCRDocumentFileStorage jCRDocumentFileStorage;
 
   private JCRDeleteFileStorageImpl jcrDeleteFileStorage;
 
@@ -108,7 +112,7 @@ public class JCRDeleteFileStorageTest {
 
   @Before
   public void setUp() throws Exception {
-    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService);
+    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService, jCRDocumentFileStorage);
   }
 
   @Test

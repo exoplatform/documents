@@ -28,6 +28,7 @@ import javax.jcr.lock.LockException;
 import javax.jcr.version.VersionException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.picocontainer.Startable;
@@ -58,47 +59,48 @@ import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.social.metadata.favorite.model.Favorite;
+import org.exoplatform.documents.storage.jcr.JCRDocumentFileStorage;
 
 public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable {
 
-  private static final Log LOG = ExoLogger.getLogger(JCRDeleteFileStorageImpl.class.getName());
+  private static final Log                LOG                    = ExoLogger.getLogger(JCRDeleteFileStorageImpl.class.getName());
 
-  private RepositoryService repositoryService;
+  private RepositoryService               repositoryService;
 
-  private IdentityManager identityManager;
+  private TrashStorage                    trashStorage;
 
-  private TrashStorage trashStorage;
+  private FavoriteService                 favoriteService;
 
-  private FavoriteService favoriteService;
+  private ScheduledExecutorService        scheduledExecutor;
 
-  private ScheduledExecutorService scheduledExecutor;
+  private PortalContainer                 container;
 
-  private PortalContainer container;
+  private SessionProviderService          sessionProviderService;
 
-  private SessionProviderService sessionProviderService;
-
-  private ListenerService listenerService;
+  private ListenerService                 listenerService;
 
   private final BulkStorageActionService  bulkStorageActionService;
 
-  public static final  Map<String, String> documentsToDeleteQueue = new HashMap<>();
+  private JCRDocumentFileStorage          jCRDocumentFileStorage;
+
+  public static final Map<String, String> documentsToDeleteQueue = new HashMap<>();
 
   public JCRDeleteFileStorageImpl(RepositoryService repositoryService,
-                                  IdentityManager identityManager,
                                   TrashStorage trashStorage,
                                   FavoriteService favoriteService,
                                   PortalContainer container,
                                   SessionProviderService sessionProviderService,
                                   ListenerService listenerService,
-                                  BulkStorageActionService bulkStorageActionService) {
+                                  BulkStorageActionService bulkStorageActionService,
+                                  JCRDocumentFileStorage jCRDocumentFileStorage) {
     this.repositoryService = repositoryService;
-    this.identityManager = identityManager;
     this.trashStorage = trashStorage;
     this.favoriteService = favoriteService;
     this.container = container;
     this.sessionProviderService = sessionProviderService;
     this.listenerService = listenerService;
     this.bulkStorageActionService = bulkStorageActionService;
+    this.jCRDocumentFileStorage = jCRDocumentFileStorage;
   }
 
   @Override
@@ -124,17 +126,26 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       documentsToDeleteQueue.remove(documentId);
     }
   }
+
   @Override
-  public Map<String, String> getDocumentsToDelete(){
+  public Map<String, String> getDocumentsToDelete() {
     return documentsToDeleteQueue;
   }
+
   @Override
-  public void deleteDocument(String folderPath, String documentId, boolean favorite, boolean checkToMoveToTrash, long delay, Identity identity, long userIdentityId) {
+  public void deleteDocument(String folderPath,
+                             String documentId,
+                             boolean favorite,
+                             boolean checkToMoveToTrash,
+                             long delay,
+                             Identity identity,
+                             long userIdentityId) {
     SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
-      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                   manageableRepository);
       deleteDocument(session, folderPath, documentId, favorite, checkToMoveToTrash, delay, identity, userIdentityId);
     } catch (PathNotFoundException path) {
       LOG.error("The document with this path is not found" + folderPath, path);
@@ -152,8 +163,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                              long delay,
                              Identity identity,
                              long userIdentityId) throws ObjectNotFoundException, RepositoryException {
+    Node nodeToDelete = JCRDocumentsUtil.getNodeByIdentifier(session, documentId);
+    boolean isSymlink = nodeToDelete != null && nodeToDelete.isNodeType(NodeTypeConstants.EXO_SYMLINK);
     if (folderPath == null) {
-      folderPath = JCRDocumentsUtil.getNodeByIdentifier(session, documentId).getPath();
+      folderPath = nodeToDelete.getPath();
     }
     if (delay > 0) {
       documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
@@ -164,7 +177,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
           RequestLifeCycle.begin(container);
           try {
             documentsToDeleteQueue.remove(documentId);
-            moveToTrash(finalFolderPath, session, userIdentityId, favorite, checkToMoveToTrash);
+            moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
           } catch (Exception e) {
             LOG.error("Error when deleting the document with path" + finalFolderPath, e);
           } finally {
@@ -173,7 +186,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         }
       }, delay, TimeUnit.SECONDS);
     } else {
-      moveToTrash(folderPath, session, userIdentityId, favorite, checkToMoveToTrash);
+      moveToTrash(folderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
+    }
+    if (isSymlink) {
+      this.jCRDocumentFileStorage.clearSymlinksNavHistory();
     }
   }
 
@@ -211,12 +227,12 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     List<Node> nodes = trashStorage.getTrashElements(filter);
     List<TrashElementNode> result = nodes.stream().map(node -> {
       TrashElementNode trashElementNode = new TrashElementNode();
-        try {
-            JCRDocumentsUtil.retrieveTrashElementProperties(node, trashElementNode);
-        } catch (RepositoryException e) {
-            LOG.error("Error retrieving trash element properties with path {}", node, e);
-        }
-        return trashElementNode;
+      try {
+        JCRDocumentsUtil.retrieveTrashElementProperties(node, trashElementNode);
+      } catch (RepositoryException e) {
+        LOG.error("Error retrieving trash element properties with path {}", node, e);
+      }
+      return trashElementNode;
     }).filter(Objects::nonNull).collect(Collectors.toList());
     return result;
   }
@@ -238,20 +254,23 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   }
 
   @Override
-  public void deleteDocumentPermanently(String trashNodePath, String trashNodeId) throws ObjectNotFoundException, RepositoryException {
+  public void deleteDocumentPermanently(String trashNodePath, String trashNodeId) throws ObjectNotFoundException,
+                                                                                  RepositoryException {
     SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                   manageableRepository);
       Node nodeToBeDeleted = null;
       if (trashNodeId != null) {
         // Fetch the node by its identifier as a fallback,
-        // since JCR renumbers sibling nodes with the same name after one is removed.
+        // since JCR renumbers sibling nodes with the same name after one is
+        // removed.
         nodeToBeDeleted = JCRDocumentsUtil.getNodeByIdentifier(session, trashNodeId);
       }
       if (nodeToBeDeleted == null) {
-        nodeToBeDeleted = JCRDocumentsUtil.getNodeByPath(session,trashNodePath);
+        nodeToBeDeleted = JCRDocumentsUtil.getNodeByPath(session, trashNodePath);
       }
       if (nodeToBeDeleted == null || !trashStorage.isInTrash(nodeToBeDeleted)) {
         throw new ObjectNotFoundException("No node exist in trash with path " + trashNodePath);
@@ -263,9 +282,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   }
 
   @Override
-  public void deleteDocumentsPermanently(int actionId,
-                                         List<AbstractNode> trashElementNodes,
-                                         Identity aclUserIdentity) {
+  public void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, Identity aclUserIdentity) {
     ActionData actionData = new ActionData();
     actionData.setActionId(String.valueOf(actionId));
     actionData.setActionType(ActionType.PERMANENTLY_DELETE.name());
@@ -299,11 +316,19 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                null,
                                                0);
   }
+  
+  public static boolean canRemoveNode(Node node) throws RepositoryException {
+    return checkPermission(node, PermissionType.REMOVE);
+  }
 
-  private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
+  private void moveToTrash(String folderPath,
+                           Session session,
+                           long userIdentityId,
+                           boolean favorite,
+                           boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException {
     Node node = null;
     String trashId;
-    if(StringUtils.isNotBlank(folderPath)){
+    if (StringUtils.isNotBlank(folderPath)) {
       node = JCRDocumentsUtil.getNodeByPath(session, folderPath);
     }
     if (node != null) {
@@ -327,27 +352,26 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
    *
    * @param node
    * @param checkToMoveToTrash
-   * @return
-   *  0: node removed
-   * -1: move to trash failed
-   * trashId: moved to trash successfully
+   * @return 0: node removed -1: move to trash failed trashId: moved to trash
+   *         successfully
    * @throws RepositoryException
    */
   private String processRemoveOrMoveToTrash(Node node, boolean checkToMoveToTrash) throws RepositoryException {
     String trashId;
     if (!checkToMoveToTrash || trashStorage.isInTrash(node)) {
-      processRemoveNode( node);
+      processRemoveNode(node);
       return "0";
-    }else {
+    } else {
       trashId = moveToTrash(node);
       if (!trashId.equals("-1")) {
-        //Broadcast the event when delete folder, in case deleting file, Thrash service will broadcast event
+        // Broadcast the event when delete folder, in case deleting file, Thrash
+        // service will broadcast event
         node = trashStorage.getNodeByTrashId(trashId);
-        if(!node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE)){
+        if (!node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE)) {
           Queue<Node> queue = new LinkedList<>();
           queue.add(node);
 
-          //Broadcast event to remove file activities
+          // Broadcast event to remove file activities
           Node tempNode = null;
           try {
             while (!queue.isEmpty()) {
@@ -355,10 +379,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
               if (tempNode.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE)) {
                 listenerService.broadcast(TrashStorage.FILE_REMOVE_ACTIVITY, tempNode.getParent(), tempNode);
               } else {
-                for (NodeIterator iter = tempNode.getNodes(); iter.hasNext(); ) {
+                for (NodeIterator iter = tempNode.getNodes(); iter.hasNext();) {
                   Node childNode = iter.nextNode();
-                  if(childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) ||
-                          childNode.isNodeType(NodeTypeConstants.NT_FOLDER))
+                  if (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
+                      || childNode.isNodeType(NodeTypeConstants.NT_FOLDER))
                     queue.add(childNode);
                 }
               }
@@ -374,13 +398,12 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     return trashId;
   }
 
-  private void processRemoveNode(Node node)
-          throws RepositoryException {
+  private void processRemoveNode(Node node) throws RepositoryException {
     Node parentNode = node.getParent();
     try {
-      //Remove symlinks
-      if(!node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-        for(Node symlink : trashStorage.getAllLinks(node, NodeTypeConstants.EXO_SYMLINK)) {
+      // Remove symlinks
+      if (!node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        for (Node symlink : trashStorage.getAllLinks(node, NodeTypeConstants.EXO_SYMLINK)) {
           symlink.remove();
           symlink.getSession().save();
         }
@@ -394,11 +417,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     }
   }
 
-
   /**
-   * Move Node to Trash
-   * Return -1: move failed
-   * Return trashId: move successfully with trashId
+   * Move Node to Trash Return -1: move failed Return trashId: move successfully
+   * with trashId
+   * 
    * @param node
    * @return
    * @throws RepositoryException
@@ -441,18 +463,14 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       }
       ret = false;
     }
-    return (ret)?trashId:"-1";
+    return (ret) ? trashId : "-1";
   }
 
-  public static boolean canRemoveNode(Node node) throws RepositoryException {
-    return checkPermission(node, PermissionType.REMOVE);
-  }
-
-  private static boolean checkPermission(Node node,String permissionType) throws RepositoryException {
+  private static boolean checkPermission(Node node, String permissionType) throws RepositoryException {
     try {
-      ((ExtendedNode)node).checkPermission(permissionType);
+      ((ExtendedNode) node).checkPermission(permissionType);
       return true;
-    } catch(AccessControlException e) {
+    } catch (AccessControlException e) {
       return false;
     }
   }
@@ -463,5 +481,4 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       node.save();
     }
   }
-
 }
