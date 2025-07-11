@@ -19,9 +19,10 @@
     <v-hover v-model="hover">
       <widget-wrapper
         :loading="loading"
-        extra-class="application-body fill-height">
+        extra-class="application-body fill-height"
+        no-margin>
         <template #title>
-          <div class="d-flex flex-grow-1 flex-shrink-1 full-width align-center position-relative mb-5">
+          <div class="d-flex flex-grow-1 flex-shrink-1 width-full justify-space-between align-center position-relative pa-5">
             <div
               v-if="!emptyWidget"
               class="widget-text-header text-none text-truncate d-flex align-center">
@@ -33,7 +34,7 @@
                 'l-0': $vuetify.rtl,
                 'r-0': !$vuetify.rtl,
               }"
-              class="position-absolute absolute-vertical-center z-index-one">
+              class="position-absolute absolute-vertical-center pe-5 z-index-one">
               <v-btn
                 v-if="!emptyWidget"
                 :icon="hoverEdit"
@@ -61,7 +62,7 @@
           <div>
             <v-list class="pa-0">
               <template v-if="isCardsView">
-                <card-carousel parent-class="activity-files-parent">
+                <card-carousel parent-class="activity-files-parent px-4">
                   <document-list-widget-item-card
                     v-for="(file, index) in fileToDisplay"
                     :index="index"

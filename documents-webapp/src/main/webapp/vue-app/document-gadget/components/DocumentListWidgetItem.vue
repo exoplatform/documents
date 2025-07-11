@@ -17,7 +17,7 @@
 <template>
   <v-hover v-slot="{ hover }">
     <v-list-item
-      class="pa-0"
+      class="pa-0 px-3"
       @click="openPreview">
       <v-list-item-avatar
         class="my-0"
@@ -41,7 +41,7 @@
             :format="dateFormat" />
         </v-list-item-subtitle>
       </v-list-item-content>
-      <v-list-item-action v-if="hover">
+      <v-list-item-action v-if="hover" class="ma-0">
         <v-btn
           icon
           @click.stop="showInfo()">
