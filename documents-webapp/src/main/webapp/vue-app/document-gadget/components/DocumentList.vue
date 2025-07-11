@@ -19,9 +19,10 @@
     <v-hover v-model="hover">
       <widget-wrapper
         :loading="loading"
-        extra-class="application-body fill-height">
+        extra-class="application-body fill-height"
+        no-margin>
         <template #title>
-          <div class="d-flex flex-grow-1 flex-shrink-1 full-width align-center position-relative">
+          <div class="d-flex flex-grow-1 flex-shrink-1 width-full justify-space-between align-center position-relative pa-5">
             <div
               v-if="!emptyWidget"
               class="widget-text-header text-none text-truncate d-flex align-center">
@@ -33,7 +34,7 @@
                 'l-0': $vuetify.rtl,
                 'r-0': !$vuetify.rtl,
               }"
-              class="position-absolute absolute-vertical-center z-index-one">
+              class="position-absolute absolute-vertical-center pe-5 z-index-one">
               <v-btn
                 v-if="!emptyWidget"
                 :icon="hoverEdit"
@@ -42,6 +43,12 @@
                 min-width="auto"
                 class="pa-0"
                 text>
+                <v-icon
+                  v-if="hoverEdit"
+                  size="18"
+                  color="primary">
+                  fa-external-link-alt
+                </v-icon>
                 <span v-if="!hoverEdit" class="primary--text text-none">{{ $t('documents.documentGadget.seeMore') }}</span>
               </v-btn>
               <v-fab-transition hide-on-leave>
@@ -61,7 +68,7 @@
           <div>
             <v-list class="pa-0">
               <template v-if="isCardsView">
-                <card-carousel parent-class="activity-files-parent">
+                <card-carousel parent-class="activity-files-parent px-4">
                   <document-list-widget-item-card
                     v-for="(file, index) in fileToDisplay"
                     :index="index"
@@ -107,13 +114,15 @@ export default {
           id: file.id,
           name: decodedName,
           filename: decodedName,
-          mimetype: file.mimeType,
+          modifiedDate: file?.modifiedDate,
+          createdDate: file?.createdDate,
+          mimetype: file?.mimeType,
           image: this.getImageUrl(file),
           downloadUrl: this.getDownloadUrl(file),
           icon: this.getFileIcon(file),
           editable: this.isFileEditable(file),
           readable: this.isFileReadable(file),
-          path: file.docPath,
+          path: file?.docPath,
           source: 'documents',
         };
       });
@@ -178,10 +187,8 @@ export default {
       return this.$supportedDocuments?.some(doc => doc.mimeType === file.mimeType) ?? false;
     },
     getImageUrl(file) {
-      const readable = this.isFileReadable(file);
-      return readable
-        ? this.$documentsUtils.getThumbnailUrl(file, '250x250', file.lastModified)
-        : this.getDownloadUrl(file);
+      file.readable = this.isFileReadable(file);
+      return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
     },
     getDownloadUrl(file) {
       return this.$documentsUtils.getDownloadUrl(file.id, file.lastModified);

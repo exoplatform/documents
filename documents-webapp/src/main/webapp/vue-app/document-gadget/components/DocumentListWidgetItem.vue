@@ -15,27 +15,41 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <v-list-item
-    class="pa-1 pb-1"
-    @click="openPreview">
-    <v-list-item-avatar
-      class="my-0"
-      tile>
-      <v-avatar :size="avatarSize" tile>
-        <v-icon
-          :color="fileIconColor"
-          size="24">
-          {{ fileIcon }}
-        </v-icon>
-      </v-avatar>
-    </v-list-item-avatar>
-    <v-list-item-content
-      class="pa-0">
-      <v-list-item-title class="text-color text-truncate-2 text-wrap spaceTitle">
-        {{ fileName }}
-      </v-list-item-title>
-    </v-list-item-content>
-  </v-list-item>
+  <v-hover v-slot="{ hover }">
+    <v-list-item
+      class="pa-0 px-3"
+      @click="openPreview">
+      <v-list-item-avatar
+        class="my-0"
+        tile>
+        <v-avatar tile>
+          <v-icon
+            :color="fileIconColor"
+            size="34">
+            {{ fileIconClass }}
+          </v-icon>
+        </v-avatar>
+      </v-list-item-avatar>
+      <v-list-item-content
+        class="pa-0">
+        <v-list-item-title class="text-color text-truncate text-wrap spaceTitle">
+          {{ fileName }}
+        </v-list-item-title>
+        <v-list-item-subtitle>
+          <date-format
+            :value="modifiedDate"
+            :format="dateFormat" />
+        </v-list-item-subtitle>
+      </v-list-item-content>
+      <v-list-item-action v-if="hover" class="ma-0">
+        <v-btn
+          icon
+          @click.stop="showInfo()">
+          <v-icon size="20">fa-info-circle</v-icon>
+        </v-btn>
+      </v-list-item-action>
+    </v-list-item>
+  </v-hover>
 </template>
 <script>
 export default {
@@ -47,23 +61,27 @@ export default {
   },
   data: () => ({
     loading: false,
-    avatarSize: 37,
+    dateFormat: {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    },
   }),
   computed: {
-    extension() {
-      return this.$documentsIconsExtension?.[0]?.get?.(this.file?.mimeType);
-    },
-    canPreview() {
-      return this.extension?.canPreview;
+    fileId() {
+      return this.file?.id;
     },
     fileName() {
       return this.file?.name;
     },
-    fileIcon() {
-      return this.extension?.class || 'fas fa-file';
+    fileIconClass() {
+      return this.file?.icon?.class || 'fas fa-file';
     },
     fileIconColor() {
-      return this.extension?.color || 'secondary';
+      return this.file?.icon?.color || 'secondary';
+    },
+    mimeType() {
+      return this.file?.mimetype;
     },
     isFileEditable() {
       const type = this.mimeType || '';
@@ -72,6 +90,9 @@ export default {
     isFileOnlyReadable() {
       const type = this.mimeType || '';
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+    },
+    modifiedDate() {
+      return this.file?.modifiedDate || this.file?.createdDate;
     },
   },
   methods: {
@@ -96,6 +117,13 @@ export default {
     openInReadOnlyMode(file) {
       const fileId = file.sourceID ? file.sourceID : file.id;
       window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
+    },
+    showInfo(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.fileId}));
     },
   }
 };
