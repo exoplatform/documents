@@ -24,7 +24,7 @@
       max-height="210px"
       width="252px"
       max-width="100%"
-      class="activity-attachment overflow-hidden d-flex flex-column clickable border-box-sizing">
+      class="activity-attachment overflow-hidden d-flex flex-column clickable border-box-sizing ms-1">
       <v-card-text
         class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0"
         :class="isMediaFile && 'black'"
@@ -44,10 +44,12 @@
           v-else-if="fileImage"
           :src="fileImage"
           class="ma-auto"
-          @load="loading = false">
+          @load="loading = false"
+          @error="fileImage = fileImage !== downloadUrl ? downloadUrl : null">
         <v-icon
           v-else
           :class="fileIconClass"
+          :color="fileIconColor"
           class="ma-auto d-flex"
           size="80px" />
       </v-card-text>
@@ -76,7 +78,7 @@
               color="white"
               class=" my-auto"
               size="20">
-              <v-icon size="12" :color="fileIconColor">{{ fileIconClass }}</v-icon>
+              <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
               max-width="198px"
@@ -157,6 +159,7 @@ export default {
   },
   data: () => ({
     loading: true,
+    fileImage: false,
     invalid: false,
     showPlayer: false,
     showDownloadButton: false,
@@ -170,14 +173,11 @@ export default {
     fileName() {
       return this.file?.name;
     },
-    fileImage() {
-      return this.file?.image;
-    },
     fileIconClass() {
-      return this.extension?.class || 'fas fa-file';
+      return this.file?.icon?.class || 'fas fa-file';
     },
     fileIconColor() {
-      return this.extension?.color || 'secondary';
+      return this.file?.icon?.color || 'secondary';
     },
     downloadUrl() {
       return this.file?.downloadUrl;
@@ -210,6 +210,9 @@ export default {
     fileImage(newVal) {
       this.loading = newVal;
     },
+  },
+  created() {
+    this.fileImage = this.file?.image;
   },
   methods: {
     closeErrorBox(event) {
