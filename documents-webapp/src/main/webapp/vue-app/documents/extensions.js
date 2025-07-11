@@ -628,5 +628,44 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'actionsGroup',
+  labelKey: 'documents.label.menu.group.actions',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 90,
+  icon: 'fa fa-plus',
+  enabled: (file, isMobile) => {
+    return  !isMobile;
+  },
+  enabledForMultiSelection: () => false,
+  type: 'group',
+  componentOptions: {
+    vueComponent: Vue.options.components['group-menu-action'],
+  },
+});
+
+
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'post',
+  labelKey: 'documents.label.post',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 91,
+  parent: 'actionsGroup',
+  enabled: (file) => {
+    return file && file.canAdd && !file.folder && !file.cloudDriveFolder;
+  },
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['post-menu-action'],
+  },
+});
+
+
 
 
