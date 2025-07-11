@@ -38,6 +38,11 @@ export function init(
           canEdit,
           pageRef
         },
+        computed: {
+          isMobile() {
+            return this.$vuetify.breakpoint.smAndDown;
+          }
+        },
         template: `<document-list id="${appId}" />`,
         i18n,
         vuetify: Vue.prototype.vuetifyOptions,
