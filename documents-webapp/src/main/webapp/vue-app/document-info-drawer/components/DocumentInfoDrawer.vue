@@ -544,7 +544,6 @@ export default {
         return;
       }
       this.loading = true;
-      this.close();
       if (this.isFileEditable)  {
         if (this.file?.acl?.canEdit){
           this.openFileInEditor();
@@ -570,6 +569,7 @@ export default {
         document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': attachments,'id': this.fileId }}));
       }
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: this.file}}));
+      this.close();
       this.loading = false;
     },
     openFileInEditor(mode) {
