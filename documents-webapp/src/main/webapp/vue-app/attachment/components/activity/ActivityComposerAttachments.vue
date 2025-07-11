@@ -85,11 +85,13 @@ export default {
       this.attachedFiles = files;
     }
   },
-  created() {
+  mounted() {
     document.addEventListener('open-activity-attachments', () => this.openAttachmentDrawer());
     document.addEventListener('attachment-added', event => this.addAttachment(event.detail));
+    document.addEventListener('init-attachments', event => this.initAttachments(event.detail));
     document.addEventListener('attachment-removed', event => this.removeAttachment(event.detail));
     document.addEventListener('message-composer-opened', () => this.openComposerChangesReminder());
+    document.dispatchEvent(new CustomEvent('activity-composer-ready'));
   },
   methods: {
     retrieveAttachments() {
@@ -125,6 +127,11 @@ export default {
       if (file.attachment.mimetype.startsWith('video/')) {
         document.dispatchEvent(new CustomEvent('create-video-thumbnail', {detail: file.attachment}));
       } 
+      document.dispatchEvent(new CustomEvent('activity-composer-edited', {detail: this.attachedFiles}));
+    },
+    initAttachments(file) {
+      this.retrieveAttachments();
+      this.attachedFiles.push(file.attachment);
       document.dispatchEvent(new CustomEvent('activity-composer-edited', {detail: this.attachedFiles}));
     },
     removeAttachment(file) {
