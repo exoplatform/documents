@@ -418,19 +418,22 @@ public class DocumentFileRest implements ResourceContainer {
                                 @Parameter(description = "Folder technical identifier")
                                 @QueryParam("folderId")
                                 String folderId,
-                                  @Parameter(description = "include children")
-                                    @QueryParam("destinationFolderPath")
+                                  @Parameter(description = "")
+                                    @QueryParam("destination folder path")
                                     String destinationFolderPath,
-                                  @Parameter(description = "destination folder path")
+                                  @Parameter(description = "include children")
                                     @QueryParam("withChildren")
-                                    boolean withChildren) {
+                                    boolean withChildren,
+                                  @Parameter(description = "show hidden folder")
+                                    @QueryParam("showHidden")
+                                    boolean showHidden) {
 
     if (ownerId == null && StringUtils.isBlank(folderId)) {
       return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_folderId_is_mandatory").build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-        return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId,destinationFolderPath, userIdentityId, withChildren)))
+        return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId,destinationFolderPath, userIdentityId, withChildren,showHidden)))
               .build();
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
