@@ -21,7 +21,7 @@
         :loading="loading"
         extra-class="application-body fill-height">
         <template #title>
-          <div class="d-flex flex-grow-1 flex-shrink-1 full-width align-center position-relative">
+          <div class="d-flex flex-grow-1 flex-shrink-1 full-width align-center position-relative mb-5">
             <div
               v-if="!emptyWidget"
               class="widget-text-header text-none text-truncate d-flex align-center">
@@ -107,13 +107,15 @@ export default {
           id: file.id,
           name: decodedName,
           filename: decodedName,
-          mimetype: file.mimeType,
+          modifiedDate: file?.modifiedDate,
+          createdDate: file?.createdDate,
+          mimetype: file?.mimeType,
           image: this.getImageUrl(file),
           downloadUrl: this.getDownloadUrl(file),
           icon: this.getFileIcon(file),
           editable: this.isFileEditable(file),
           readable: this.isFileReadable(file),
-          path: file.docPath,
+          path: file?.docPath,
           source: 'documents',
         };
       });
