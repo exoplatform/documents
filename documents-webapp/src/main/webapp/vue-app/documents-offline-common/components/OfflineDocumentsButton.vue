@@ -17,7 +17,10 @@
 
 -->
 <template>
-  <v-tooltip v-if="offlineModeEnabled" bottom>
+  <v-tooltip
+    v-if="offlineModeEnabled"
+    :disabled="!tooltip"
+    bottom>
     <template #activator="{ on, attrs }">
       <div
         v-bind="attrs"
@@ -41,7 +44,18 @@
             :class="btnClass"
             icon
             @click="$root.$emit('open-document-offline-files', !noGoBackButton)">
-            <v-icon size="20">fa-power-off</v-icon>
+            <v-card
+              min-width="100%"
+              min-height="100%"
+              class="position-relative"
+              flat>
+              <v-icon size="20" class="absolute-all-center">fa-wifi</v-icon>
+              <v-icon
+                class="absolute-all-center"
+                size="18">
+                fa-slash
+              </v-icon>
+            </v-card>
           </v-btn>
         </v-badge>
         <documents-offline-drawer />
