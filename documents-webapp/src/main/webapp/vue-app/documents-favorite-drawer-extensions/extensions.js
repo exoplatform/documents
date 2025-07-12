@@ -16,6 +16,11 @@
  */
  
 export function initDocumentsExtensions() {
+  extensionRegistry.registerExtension('favorite', 'favorite-type', {
+    rank: 45,
+    id: 'file',
+    icon: 'fa-file-alt',
+  });
   extensionRegistry.registerComponent('favorite-file', 'favorite-drawer-item', {
     id: 'file',
     vueComponent: Vue.options.components['documents-favorite-item'],
