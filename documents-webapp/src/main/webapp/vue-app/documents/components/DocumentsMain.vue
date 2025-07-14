@@ -188,7 +188,7 @@ export default {
     minSize: null,
     maxSize: null,
     showHidden: false,
-    publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`
+    publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`,
   }),
   computed: {
     displayCategoriesFilter() {
@@ -1633,21 +1633,28 @@ export default {
         window.open(url,tab ? tab:'_blank');
       }
     },
-    dragFile(e){     
-      const item = e.dataTransfer.items[0];
-      const isFile = item && item.type !== '';
-      if (this.canAdd && isFile){
-        this.openDrawer(e.dataTransfer.files);
-        this.showOverlay = false;
-        this.$root.$emit('hide-upload-overlay');
+    async dragFile(e){     
+      if (this.canAdd) {
+        const items = e.dataTransfer.items;
+        const filesArray = [];
+
+        const entryPromises = [];
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i].webkitGetAsEntry?.();
+          if (item) {
+            entryPromises.push(this.getFilesList(item, '', filesArray));
+          }
+        }
+        await Promise.all(entryPromises);
+        this.openDrawer(filesArray);
       }
+      this.showOverlay = false;
+      this.$root.$emit('hide-upload-overlay');
     },
-    startDrag(e){
+    startDrag(){
       this.showOverlay = true;
-      const item = e.dataTransfer.items[0];
-      //folder haven't type
-      const isFile = item && item.type !== '';
-      if (this.canAdd && isFile){
+      if (this.canAdd){
         this.$root.$emit('show-upload-overlay');
       }
     },
@@ -1715,6 +1722,26 @@ export default {
               }
             });
         }
+      }
+    },
+    async getFilesList(entry, path, result) {
+      path = path || '';
+      if (entry.isFile) {
+        const file = await new Promise((resolve) => {
+          entry.file(resolve);
+        });
+        const folderPath = path.endsWith('/') ? path.slice(0, -1) : path;
+        file.destinationFolder=folderPath;
+        result.push(file);
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const entries = await new Promise((resolve) => {
+          reader.readEntries(resolve);
+        });
+        const promises = entries.map(child =>
+          this.getFilesList(child, `${path + entry.name}/`, result)
+        );
+        await Promise.all(promises);
       }
     }
   },
