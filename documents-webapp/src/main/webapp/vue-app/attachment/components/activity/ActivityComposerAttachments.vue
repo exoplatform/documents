@@ -86,12 +86,19 @@ export default {
     }
   },
   mounted() {
-    document.addEventListener('open-activity-attachments', () => this.openAttachmentDrawer());
-    document.addEventListener('attachment-added', event => this.addAttachment(event.detail));
-    document.addEventListener('init-attachments', event => this.initAttachments(event.detail));
-    document.addEventListener('attachment-removed', event => this.removeAttachment(event.detail));
-    document.addEventListener('message-composer-opened', () => this.openComposerChangesReminder());
+    document.addEventListener('open-activity-attachments', this.openAttachmentDrawer);
+    document.addEventListener('attachment-added', this.addAttachment);
+    document.addEventListener('init-attachments', this.initAttachments);
+    document.addEventListener('attachment-removed', this.removeAttachment);
+    document.addEventListener('message-composer-opened', this.openComposerChangesReminder);
     document.dispatchEvent(new CustomEvent('activity-composer-ready'));
+  },
+  beforeDestroy() {
+    document.removeEventListener('open-activity-attachments', this.openAttachmentDrawer);
+    document.removeEventListener('attachment-added', this.addAttachment);
+    document.removeEventListener('init-attachments', this.initAttachments);
+    document.removeEventListener('attachment-removed', this.removeAttachment);
+    document.removeEventListener('message-composer-opened', this.openComposerChangesReminder);
   },
   methods: {
     retrieveAttachments() {
@@ -122,19 +129,22 @@ export default {
           document.dispatchEvent(new CustomEvent('open-attachments-list-drawer', {detail: this.attachmentDrawerParams}));
         });
     },
-    addAttachment(file) {
+    addAttachment(event) {
+      const file = event.detail;
       this.attachedFiles.push(file.attachment);
       if (file.attachment.mimetype.startsWith('video/')) {
         document.dispatchEvent(new CustomEvent('create-video-thumbnail', {detail: file.attachment}));
       } 
       document.dispatchEvent(new CustomEvent('activity-composer-edited', {detail: this.attachedFiles}));
     },
-    initAttachments(file) {
+    initAttachments(event) {
+      const file = event.detail;
       this.retrieveAttachments();
       this.attachedFiles.push(file.attachment);
       document.dispatchEvent(new CustomEvent('activity-composer-edited', {detail: this.attachedFiles}));
     },
-    removeAttachment(file) {
+    removeAttachment(event) {
+      const file = event.detail;
       const index = this.attachedFiles.findIndex(attachment => attachment.id === file.id);
       if (index >= 0) {
         this.attachedFiles.splice(index, 1);
