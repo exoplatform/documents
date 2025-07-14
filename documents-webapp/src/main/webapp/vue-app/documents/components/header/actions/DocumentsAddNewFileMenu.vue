@@ -29,6 +29,7 @@
           class="btn btn-primary"
           :key="postKey"
           :disabled="disableButton"
+          :small="isMobile"
           v-bind="attrs"
           v-on="!isMobile && on"
           @click="openAddItemMenu()">
