@@ -180,14 +180,14 @@ export default {
             acl: file.acl,
             uploadId: this.getNewUploadId(),
             uploadProgress: 0,
-            destinationFolder: this.pathDestinationFolder,
+            destinationFolder: file.destinationFolder? `${this.pathDestinationFolder}/${file.destinationFolder}` :this.pathDestinationFolder,
             pathDestinationFolderForFile: '',
             isPublic: true,
             signal: signal
           });
         });
 
-        const existingAttachedFiles = newAttachedFiles.filter(file => this.attachments.some(f => f.title === file.title));
+        const existingAttachedFiles = newAttachedFiles.filter(file => this.attachments.some(f => f.title === file.title && f.destinationFolder === file.destinationFolder));
         if (existingAttachedFiles.length > 0) {
           const existingFiles = existingAttachedFiles.length === 1 ? existingAttachedFiles.map(file => file.title) : existingAttachedFiles.length;
           let sameFileErrorMessage = existingAttachedFiles.length === 1 ? this.$t('attachments.drawer.sameFile.error') : this.$t('attachments.drawer.sameFiles.error');
@@ -226,7 +226,7 @@ export default {
         }}));
         return;
       }
-      this.checkExistenceActions(file.title).then(actions => {
+      this.checkExistenceActions(file).then(actions => {
         if (actions.length > 0) {
           file.actions = actions;
           file.waitAction = true;
@@ -243,9 +243,10 @@ export default {
         }
       });
     },
-    checkExistenceActions(fileName) {
+    checkExistenceActions(file) {
       const actions = [];
-      return this.$attachmentService.checkExistence(this.currentDrive.name, 'collaboration', this.pathDestinationFolder, fileName).then((data) => {
+      const pathDestinationFolder = file.destinationFolder? file.destinationFolder :this.pathDestinationFolder;
+      return this.$attachmentService.checkExistence(this.currentDrive.name, 'collaboration', pathDestinationFolder, file.title).then((data) => {
         const exist = data && data.firstChild;
         const versioned = exist && exist.firstChild;
         if (exist && exist.tagName === 'Existed') {
