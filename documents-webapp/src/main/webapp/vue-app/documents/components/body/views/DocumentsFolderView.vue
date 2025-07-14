@@ -134,7 +134,7 @@
                     :is-search-result="isSearchResult"
                     :select-all-checked="selectAll"
                     :selected-documents="selectedDocuments"
-                    :class="header.value === 'name' && isXScreen && 'ms-10'" />
+                    :class="header.value === 'name' && isXScreen && 'ms-0'" />
                 </td>
               </tr>
             </template>
