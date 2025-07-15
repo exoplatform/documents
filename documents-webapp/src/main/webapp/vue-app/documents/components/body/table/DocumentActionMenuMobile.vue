@@ -1,8 +1,7 @@
 <template>
   <exo-drawer 
     ref="documentActionsMobileMenu"
-    class="mobileDrawer"
-    :bottom="true">
+    class="mobileDrawer">
     <template slot="content">
       <v-list dense>
         <v-list-item
