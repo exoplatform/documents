@@ -1637,9 +1637,7 @@ export default {
       if (this.canAdd) {
         const items = e.dataTransfer.items;
         const filesArray = [];
-
         const entryPromises = [];
-
         for (let i = 0; i < items.length; i++) {
           const item = items[i].webkitGetAsEntry?.();
           if (item) {
