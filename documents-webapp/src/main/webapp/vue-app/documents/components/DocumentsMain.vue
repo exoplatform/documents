@@ -1652,7 +1652,7 @@ export default {
     },
     startDrag(){
       this.showOverlay = true;
-      if (this.canAdd){
+      if (this.canAdd) {
         this.$root.$emit('show-upload-overlay');
       }
     },
