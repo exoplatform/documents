@@ -45,7 +45,8 @@ export default {
         path: this.file.path,
       };
       localStorage.setItem('documentCopiedItem', JSON.stringify(copyContent));
-      this.$emit.$on('copied-element');
+      this.$root.$emit('copied-element');
+      this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.copied')});
     }
   },
 };
