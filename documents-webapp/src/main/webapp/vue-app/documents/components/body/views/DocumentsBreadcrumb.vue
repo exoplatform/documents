@@ -118,11 +118,13 @@ export default {
   computed: {
     documentsBreadcrumbToDisplay() {
       this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
-      if (!this.documentsBreadcrumb || this.documentsBreadcrumb.length <= 4) {
+      const maxItemsToDisplay = this.isMobile?2:4;
+      const maxExeededItmesNumber = this.isMobile?2:3;
+      if (!this.documentsBreadcrumb || this.documentsBreadcrumb.length <= maxItemsToDisplay) {
         return this.documentsBreadcrumb || [];
       } else {
         const length = this.documentsBreadcrumb.length;
-        const documentsBreadcrumbToDisplay = [this.documentsBreadcrumb[0], ... this.documentsBreadcrumb.slice(length - 3, length)];
+        const documentsBreadcrumbToDisplay = [this.documentsBreadcrumb[0], ... this.documentsBreadcrumb.slice(length - maxExeededItmesNumber, length)];
         documentsBreadcrumbToDisplay[1] = Object.assign({}, documentsBreadcrumbToDisplay[1], {
           name: '...',
         });
