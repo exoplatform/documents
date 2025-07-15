@@ -124,7 +124,7 @@ export default {
         return this.documentsBreadcrumb || [];
       } else {
         const length = this.documentsBreadcrumb.length;
-        const documentsBreadcrumbToDisplay = [this.documentsBreadcrumb[0], ... this.documentsBreadcrumb.slice(length - maxExeededItmesNumber, length)];
+        const documentsBreadcrumbToDisplay = [this.documentsBreadcrumb[0], ... this.documentsBreadcrumb.slice(length - maxItemsCount, length)];
         documentsBreadcrumbToDisplay[1] = Object.assign({}, documentsBreadcrumbToDisplay[1], {
           name: '...',
         });
