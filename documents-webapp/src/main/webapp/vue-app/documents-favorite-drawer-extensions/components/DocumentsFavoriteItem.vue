@@ -24,7 +24,7 @@
       <v-list-item-title class="text-truncate">{{ fileName }}</v-list-item-title>
       <v-list-item-subtitle v-if="expanded" class="d-flex align-center full-width overflow-hidden pt-2px">
         <template v-if="spaceGroupId">
-          <space-avatar
+          <favorite-space-avatar
             :space-group-id="spaceGroupId"
             :size="16"
             class="flex-grow-0 flex-shrink-1 text-truncate"
@@ -33,20 +33,26 @@
         </template>
         <template v-else-if="ownerUsername">
           <div class="d-flex align-center flex-grow-0 flex-shrink-1 text-truncate">
-            <user-avatar
-              :profile-id="ownerUsername"
-              :size="16"
-              avatar />
-            {{ $t('UITopBarFavoritesPortlet.personalDrive') }}
+            <v-avatar
+              min-width="16"
+              height="16"
+              width="16">
+              <img
+                :src="ownerAvatarUrl"
+                class="object-fit-cover ma-auto"
+                loading="lazy"
+                alt="">
+            </v-avatar>
+            <span class="ms-1">{{ $t('UITopBarFavoritesPortlet.personalDrive') }}</span>
           </div>
           <v-icon class="flex-grow-0 flex-shrink-0 mx-2" size="2">fa-circle</v-icon>
         </template>
         <date-format class="flex-grow-0 flex-shrink-0" :value="updateDate" />
         <v-icon class="flex-grow-0 flex-shrink-0 mx-2" size="2">fa-circle</v-icon>
-        <user-avatar
+        <favorite-user-avatar
           :identity="updater"
           :size="16"
-          class="flex-grow-0 flex-shrink-1 text-truncate" />
+          class="flex-grow-1 flex-shrink-1 text-truncate" />
       </v-list-item-subtitle>
     </v-list-item-content>
     <v-list-item-action>
@@ -121,8 +127,18 @@ export default {
     spaceGroupId() {
       return this.file?.path?.startsWith?.('/Groups/spaces/') ? this.getSpaceGroupId(this.file.path) : null;
     },
+    updaterUsername() {
+      return this.updater?.username ||  this.updater?.userName;
+    },
     ownerUsername() {
       return this.file?.path?.startsWith?.('/Users/') && this.file?.path?.includes?.('/Private/') ? this.getUsername(this.file.path) : null;
+    },
+    ownerAvatarUrl() {
+      if (this.updaterUsername === this.ownerUsername) {
+        return this.updater?.avatar;
+      } else {
+        return this.ownerUsername && `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/users/${this.ownerUsername}/avatar` || `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/users/default-image/avatar`;
+      }
     },
     url() {
       if (this.isFileEditable || this.isFileReadable) {
