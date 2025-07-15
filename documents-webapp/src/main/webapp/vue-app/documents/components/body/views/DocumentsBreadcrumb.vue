@@ -118,7 +118,7 @@ export default {
   computed: {
     documentsBreadcrumbToDisplay() {
       this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
-      const maxItemsToDisplay = this.isMobile?2:4;
+      const maxItemsToDisplay = this.isMobile ? 2 : 4;
       const maxItemsCount = this.isMobile ? 2 : 3;
       if (!this.documentsBreadcrumb || this.documentsBreadcrumb.length <= maxItemsToDisplay) {
         return this.documentsBreadcrumb || [];
