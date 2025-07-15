@@ -1737,7 +1737,7 @@ export default {
           reader.readEntries(resolve);
         });
         const promises = entries.map(child =>
-          this.getFilesList(child, `${path + entry.name}/`, result)
+          this.getFilesList(child, `${path}${entry.name}/`, result)
         );
         await Promise.all(promises);
       }
