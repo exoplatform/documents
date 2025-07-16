@@ -44,6 +44,58 @@
             </template>
           </v-radio>
         </v-radio-group>
+        <div class="font-weight-bold my-2">{{ $t('documents.documentGadget.settings.additionalOptions') }}</div>
+        <div class="d-flex my-2 align-center justify-space-between">
+          <label class="v-label text-color align-start">
+            {{ $t('documents.documentGadget.settings.additionalOptions.updateHeader') }}
+          </label>
+          <div class="align-end">
+            <v-switch
+              v-model="customHeader"
+              color="primary"
+              class="pa-0 my-auto"
+              hide-details />
+          </div>
+        </div>
+        <translation-text-field
+          v-if="customHeader"
+          :object-id="applicationId"
+          :object-type="objectType"
+          :field-name="fieldName"
+          :field-value="displayedValue"
+          :drawer-title="$t('documents.documentGadget.header.translation.title')"
+          class="mt-2"
+          no-expand-icon
+          back-icon
+          required
+          @update:field-value="updateFieldValue"
+          @input="translationUpdated" />
+        <div class="d-flex my-2 align-center justify-space-between">
+          <label class="v-label text-color align-start">
+            {{ $t('documents.documentGadget.settings.additionalOptions.displaySeeMore') }}
+          </label>
+          <div class="align-end">
+            <v-switch
+              v-model="displaySeeMore"
+              color="primary"
+              class="pa-0 my-auto"
+              hide-details />
+          </div>
+        </div>
+
+        <div class="d-flex align-center">
+          <label class="v-label text-color">
+            {{ $t('documents.documentGadget.settings.additionalOptions.numberItems') }}
+          </label>
+          <div class="ms-auto">
+            <number-input
+              v-model="maxDocumentsToList"
+              :min="1"
+              :max="100"
+              :step="1"
+              editable />
+          </div>
+        </div>
       </div>
     </template>
     <template #footer>
@@ -71,9 +123,30 @@ export default {
   data: () => ({
     drawer: false,
     loading: false,
-    viewOptions: 'list'
+    viewOptions: 'list',
+    customHeader: false,
+    displaySeeMore: true,
+    maxDocumentsToList: 4,
+    objectType: 'documentGadget',
+    fieldName: 'headerTitle',
+    translations: [],
+    userLocale: eXo.env.portal.language,
+    translationsInitialized: false,
+    currentTranslations: []
   }),
   computed: {
+    settings() {
+      return this.$root.settings;
+    },
+    saveSettingsUrl() {
+      return this.settings?.saveSettingsUrl;
+    },
+    applicationId() {
+      return this.settings?.applicationId;
+    },
+    displayedValue() {
+      return this.translations?.[this.userLocale] || this.$t('documents.documentGadget.title');
+    },
   },
   created() {
     this.$root.$on('document-gadget-settings', this.open);
@@ -87,36 +160,47 @@ export default {
       this.$refs.drawer.open();
     },
     reset() {
-      this.viewOptions = this.$root.viewOptions || 'list';
+      this.maxDocumentsToList = Number(this.settings?.maxDocumentsToList);
+      this.viewOptions = this.settings?.viewOptions || 'list';
+      this.customHeader = this.settings?.customHeader || false;
+      this.displaySeeMore = this.settings?.displaySeeMore || false;
       this.loading = false;
     },
     close() {
       this.$refs.drawer.close();
     },
-    async save() {
-      this.loading = true;
-      const formData = new FormData();
-      formData.append('pageRef', this.$root.pageRef);
-      formData.append('applicationId', this.$root.portletStorageId);
-      const params = new URLSearchParams(formData).toString();
-      await fetch(`/layout/rest/pages/application/preferences?${params}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          preferences: [{
-            name: 'documentGadgetViewOptions',
-            value: String(this.viewOptions),
-          }],
-        }),
-      })
-        .then(() => {
-          this.$root.viewOptions = this.viewOptions || 'list';
-          this.close();
-        })
-        .finally(() => this.loading = false);
+    save() {
+      const settings = {
+        viewOptions: this.viewOptions,
+        maxDocumentsToList: this.maxDocumentsToList,
+        customHeader: this.customHeader,
+        displaySeeMore: this.displaySeeMore,
+      };
+      const refreshList = Number(this.maxDocumentsToList) !== this.settings.maxDocumentsToList;
+      this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
+        this.saveHeaderTranslations();
+        this.$emit('settings-updated', settings, this.displayedValue, refreshList);
+        this.$root.$emit('alert-message', this.$t('myApplications.settings.save.success.message'), 'success');
+        this.close();
+      }).catch(() => {
+        this.$root.$emit('alert-message', this.$t('myApplications.settings.save.error.message'), 'error');
+      });
+    },
+    async saveHeaderTranslations() {
+      if (this.customHeader) {
+        await this.$translationService.saveTranslations(this.objectType, this.applicationId, this.fieldName, this.translations);
+        this.currentTranslations = structuredClone(this.translations);
+      }
+    },
+    translationUpdated(translations) {
+      this.translations = translations;
+      if (!this.translationsInitialized) {
+        this.currentTranslations = structuredClone(this.translations);
+        this.translationsInitialized = true;
+      }
+    },
+    updateFieldValue(value) {
+      this.defaultLangValue = value;
     },
   },
 };
