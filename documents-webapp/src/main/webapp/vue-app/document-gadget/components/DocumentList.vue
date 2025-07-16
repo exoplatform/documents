@@ -24,25 +24,24 @@
         <template #title>
           <div class="d-flex flex-grow-1 flex-shrink-1 width-full justify-space-between align-center position-relative pa-5">
             <div
-              v-if="!emptyWidget"
               class="widget-text-header text-none text-truncate d-flex align-center">
               {{ headerTitle }}
             </div>
             <div
               :class="{
-                'mt-2 me-2': emptyWidget,
                 'l-0': $vuetify.rtl,
                 'r-0': !$vuetify.rtl,
               }"
               class="position-absolute absolute-vertical-center pe-5 z-index-one">
               <v-btn
-                v-if="!emptyWidget && displaySeeMore"
+                v-if="displaySeeMore"
                 :icon="hoverEdit"
                 :small="hoverEdit"
                 height="auto"
                 min-width="auto"
                 class="pa-0"
-                text>
+                text
+                @click="$refs.listDrawer.open()">
                 <v-icon
                   v-if="hoverEdit"
                   size="18"
@@ -70,17 +69,19 @@
               <template v-if="isCardsView">
                 <card-carousel parent-class="activity-files-parent px-4">
                   <document-list-widget-item-card
-                    v-for="(file, index) in fileToDisplay"
+                    v-for="(file, index) in filesToDisplay"
                     :index="index"
                     :key="file.id"
-                    :file="file" />
+                    :file="file"
+                    :files="filesToDisplay" />
                 </card-carousel>
               </template>
               <template v-else>
                 <document-list-widget-item
-                  v-for="file in fileToDisplay"
+                  v-for="file in filesToDisplay"
                   :key="file.id"
-                  :file="file" />
+                  :file="file"
+                  :files="filesToDisplay" />
               </template>
             </v-list>
           </div>
@@ -88,6 +89,7 @@
       </widget-wrapper>
     </v-hover>
     <document-list-settings-drawer v-if="canEdit" @settings-updated="settingsUpdated" />
+    <document-list-drawer ref="listDrawer" />
   </v-app>
 </template>
 <script>
@@ -112,10 +114,10 @@ export default {
     emptyWidget() {
       return !this.files?.length && this.initialized && this.applicationMounted;
     },
-    fileToDisplay() {
+    filesToDisplay() {
       const files = this.files ?? [];
       return files.map(file => {
-        const decodedName = this.safeDecodeURIComponent(file.name);
+        const decodedName = this.$root.safeDecodeURIComponent(file.name);
         return {
           id: file.id,
           name: decodedName,
@@ -123,11 +125,11 @@ export default {
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
           mimetype: file?.mimeType,
-          image: this.getImageUrl(file),
-          downloadUrl: this.getDownloadUrl(file),
-          icon: this.getFileIcon(file),
-          editable: this.isFileEditable(file),
-          readable: this.isFileReadable(file),
+          image: this.$root.getImageUrl(file),
+          downloadUrl: this.$root.getDownloadUrl(file),
+          icon: this.$root.getFileIcon(file),
+          editable: this.$root.isFileEditable(file),
+          readable: this.$root.isFileReadable(file),
           path: file?.docPath,
           source: 'documents',
         };
@@ -175,6 +177,10 @@ export default {
   },
   methods: {
     getFiles() {
+      if (!this.maxDocumentsToList) {
+        this.files = [];
+        return;
+      }
       this.loading = true;
       const filter = {
         ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
@@ -183,42 +189,6 @@ export default {
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.maxDocumentsToList, null).then(files => {
         this.files = files;
       }).finally(() => this.loading = false);
-    },
-    safeDecodeURIComponent(name) {
-      if (!name) {
-        return '';
-      }
-      try {
-        return decodeURIComponent(name.replace(/%25/g, '%').replace(/%([^2][^5])/g, '%25$1'));
-      } catch (e) {
-        console.warn('Filename decode failed:', name, e);
-        return name;
-      }
-    },
-    getFileIcon(file) {
-      return this.$documentsIconsExtension?.[0]?.get?.(file?.mimeType) || 'fas fa-file';
-    },
-    isFileEditable(file) {
-      return this.$supportedDocuments?.some(doc => doc.edit && doc.mimeType === file.mimeType) ?? false;
-    },
-    isFileReadable(file) {
-      return this.$supportedDocuments?.some(doc => doc.mimeType === file.mimeType) ?? false;
-    },
-    getImageUrl(file) {
-      file.readable = this.isFileReadable(file);
-      return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
-    },
-    getDownloadUrl(file) {
-      return this.$documentsUtils.getDownloadUrl(file.id, file.lastModified);
-    },
-    previewDocument(file) {
-      const files = [];
-      this.files.forEach((item) => {
-        if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
-          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.getFileIcon(item)});}
-      }
-      );
-      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
     settingsUpdated(settings, headerTitle, refreshList) {
       this.$root.settings.maxDocumentsToList = settings.maxDocumentsToList;
@@ -229,6 +199,14 @@ export default {
       if (refreshList) {
         this.getFiles();
       }
+    },
+    previewDocument(files, file) {
+      const attachments = [];
+      files.forEach((item) => {
+        if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
+          attachments.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.$root.getFileIcon(item)});}
+      });
+      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
   },
 };
