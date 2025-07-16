@@ -36,6 +36,52 @@ export function init(settings) {
             return this.$vuetify.breakpoint.smAndDown;
           }
         },
+        methods: {
+          safeDecodeURIComponent(name) {
+            if (!name) {
+              return '';
+            }
+            try {
+              return decodeURIComponent(name.replace(/%25/g, '%').replace(/%([^2][^5])/g, '%25$1'));
+            } catch (e) {
+              console.warn('Filename decode failed:', name, e);
+              return name;
+            }
+          },
+          getFileIcon(file) {
+            return this.$documentsIconsExtension?.[0]?.get?.(file?.mimeType) || 'fas fa-file';
+          },
+          isFileEditable(file) {
+            return this.$supportedDocuments?.some(doc => doc.edit && doc.mimeType === file.mimeType) ?? false;
+          },
+          isFileReadable(file) {
+            return this.$supportedDocuments?.some(doc => doc.mimeType === file.mimeType) ?? false;
+          },
+          getImageUrl(file) {
+            file.readable = this.isFileReadable(file);
+            return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
+          },
+          getDownloadUrl(file) {
+            return this.$documentsUtils.getDownloadUrl(file.id, file.lastModified);
+          },
+          previewDocument(file) {
+            const files = [];
+            this.files.forEach((item) => {
+              if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
+                files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.getFileIcon(item)});}
+            }
+            );
+            document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
+          },
+          openInEditMode(file) {
+            const fileId = file.sourceID ? file.sourceID : file.id;
+            window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&backTo=${window.location.pathname}`, '_blank');
+          },
+          openInReadOnlyMode(file) {
+            const fileId = file.sourceID ? file.sourceID : file.id;
+            window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
+          },
+        },
         template: `<document-list id="${appId}" />`,
         i18n,
         vuetify: Vue.prototype.vuetifyOptions,
