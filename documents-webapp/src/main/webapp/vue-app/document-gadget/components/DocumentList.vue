@@ -19,14 +19,14 @@
     <v-hover v-model="hover">
       <widget-wrapper
         :loading="loading"
-        extra-class="application-body fill-height"
+        extra-class="application-body position-static border-box-sizing"
         no-margin>
         <template #title>
           <div class="d-flex flex-grow-1 flex-shrink-1 width-full justify-space-between align-center position-relative pa-5">
             <div
               v-if="!emptyWidget"
               class="widget-text-header text-none text-truncate d-flex align-center">
-              {{ $t('documents.documentGadget.title') }}
+              {{ headerTitle }}
             </div>
             <div
               :class="{
@@ -36,7 +36,7 @@
               }"
               class="position-absolute absolute-vertical-center pe-5 z-index-one">
               <v-btn
-                v-if="!emptyWidget"
+                v-if="!emptyWidget && displaySeeMore"
                 :icon="hoverEdit"
                 :small="hoverEdit"
                 height="auto"
@@ -49,7 +49,7 @@
                   color="primary">
                   fa-external-link-alt
                 </v-icon>
-                <span v-if="!hoverEdit" class="primary--text text-none">{{ $t('documents.documentGadget.seeMore') }}</span>
+                <span v-if="!hoverEdit && displaySeeMore" class="primary--text text-none">{{ $t('documents.documentGadget.seeMore') }}</span>
               </v-btn>
               <v-fab-transition hide-on-leave>
                 <v-btn
@@ -87,7 +87,7 @@
         </template>
       </widget-wrapper>
     </v-hover>
-    <document-list-settings-drawer v-if="$root.canEdit" />
+    <document-list-settings-drawer v-if="canEdit" @settings-updated="settingsUpdated" />
   </v-app>
 </template>
 <script>
@@ -100,8 +100,14 @@ export default {
     files: [],
   }),
   computed: {
+    settings() {
+      return this.$root.settings;
+    },
+    canEdit() {
+      return this.settings?.canEdit;
+    },
     hoverEdit() {
-      return this.hover && this.$root.canEdit;
+      return this.hover && this.canEdit;
     },
     emptyWidget() {
       return !this.files?.length && this.initialized && this.applicationMounted;
@@ -128,7 +134,19 @@ export default {
       });
     },
     isCardsView() {
-      return this.$root.viewOptions === 'cards';
+      return this.settings?.viewOptions === 'cards';
+    },
+    customHeader() {
+      return this.settings?.customHeader;
+    },
+    headerTitle() {
+      return this.customHeader ? this.settings?.headerTitle : this.$t('documents.documentGadget.title');
+    },
+    maxDocumentsToList() {
+      return this.settings.maxDocumentsToList;
+    },
+    displaySeeMore() {
+      return this.settings.displaySeeMore;
     }
   },
   watch: {
@@ -143,7 +161,7 @@ export default {
       }
     },
     emptyWidget() {
-      if (this.emptyWidget && !this.$root.canEdit) {
+      if (this.emptyWidget && !this.canEdit) {
         this.$root.$updateApplicationVisibility(false);
       }
     },
@@ -162,7 +180,7 @@ export default {
         ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
         listingType: 'TIMELINE',
       };
-      return this.$documentFileService.getDocumentItems(filter, null, null, 0, 4, null).then(files => {
+      return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.maxDocumentsToList, null).then(files => {
         this.files = files;
       }).finally(() => this.loading = false);
     },
@@ -201,6 +219,16 @@ export default {
       }
       );
       document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
+    },
+    settingsUpdated(settings, headerTitle, refreshList) {
+      this.$root.settings.maxDocumentsToList = settings.maxDocumentsToList;
+      this.$root.settings.viewOptions = settings.viewOptions;
+      this.$root.settings.customHeader = settings.customHeader;
+      this.$root.settings.displaySeeMore = settings.displaySeeMore;
+      this.$root.settings.headerTitle = headerTitle;
+      if (refreshList) {
+        this.getFiles();
+      }
     },
   },
 };
