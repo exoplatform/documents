@@ -24,19 +24,17 @@
         <template #title>
           <div class="d-flex flex-grow-1 flex-shrink-1 width-full justify-space-between align-center position-relative pa-5">
             <div
-              v-if="!emptyWidget"
               class="widget-text-header text-none text-truncate d-flex align-center">
               {{ headerTitle }}
             </div>
             <div
               :class="{
-                'mt-2 me-2': emptyWidget,
                 'l-0': $vuetify.rtl,
                 'r-0': !$vuetify.rtl,
               }"
               class="position-absolute absolute-vertical-center pe-5 z-index-one">
               <v-btn
-                v-if="!emptyWidget && displaySeeMore"
+                v-if="displaySeeMore"
                 :icon="hoverEdit"
                 :small="hoverEdit"
                 height="auto"
@@ -71,17 +69,19 @@
               <template v-if="isCardsView">
                 <card-carousel parent-class="activity-files-parent px-4">
                   <document-list-widget-item-card
-                    v-for="(file, index) in fileToDisplay"
+                    v-for="(file, index) in filesToDisplay"
                     :index="index"
                     :key="file.id"
-                    :file="file" />
+                    :file="file"
+                    :files="filesToDisplay" />
                 </card-carousel>
               </template>
               <template v-else>
                 <document-list-widget-item
-                  v-for="file in fileToDisplay"
+                  v-for="file in filesToDisplay"
                   :key="file.id"
-                  :file="file" />
+                  :file="file"
+                  :files="filesToDisplay" />
               </template>
             </v-list>
           </div>
@@ -114,7 +114,7 @@ export default {
     emptyWidget() {
       return !this.files?.length && this.initialized && this.applicationMounted;
     },
-    fileToDisplay() {
+    filesToDisplay() {
       const files = this.files ?? [];
       return files.map(file => {
         const decodedName = this.$root.safeDecodeURIComponent(file.name);
@@ -177,6 +177,10 @@ export default {
   },
   methods: {
     getFiles() {
+      if (!this.maxDocumentsToList) {
+        this.files = [];
+        return;
+      }
       this.loading = true;
       const filter = {
         ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
@@ -195,6 +199,14 @@ export default {
       if (refreshList) {
         this.getFiles();
       }
+    },
+    previewDocument(files, file) {
+      const attachments = [];
+      files.forEach((item) => {
+        if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
+          attachments.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.$root.getFileIcon(item)});}
+      });
+      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
   },
 };

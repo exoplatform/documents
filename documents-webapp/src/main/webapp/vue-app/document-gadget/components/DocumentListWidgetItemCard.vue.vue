@@ -234,7 +234,7 @@ export default {
       } else if (this.isFileOnlyReadable) {
         this.$root.openInReadOnlyMode(this.file);
       } else {
-        this.$root.$emit('documents-preview', this.file);
+        this.$root.$emit('documents-preview', this.files, this.file);
       }
       this.loading = false;
       this.$root.$emit('mark-document-as-viewed', this.file);

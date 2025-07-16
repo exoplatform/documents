@@ -30,7 +30,8 @@
       <document-list-widget-item
         v-for="file in fileToDisplay"
         :key="file.id"
-        :file="file" />
+        :file="file"
+        :files="fileToDisplay" />
     </template>
     <template #footer>
       <div
@@ -57,6 +58,7 @@ export default {
     },
   },
   data: () => ({
+    limit: Math.round((window.innerHeight - 122) / 53),
     pageSize: 10,
     page: 1,
     drawer: false,
@@ -87,11 +89,20 @@ export default {
         };
       });
     },
-    limit() {
-      return this.pageSize * this.page;
-    },
     hasMore() {
-      return this.files.length > this.limit;
+      return this.limit < this.files.length || (this.loading && !this.files.length);
+    },
+  },
+  watch: {
+    limit() {
+      this.retrieveFiles();
+    },
+    loading() {
+      if (this.loading) {
+        this.$refs.documentListDrawer.startLoading();
+      } else {
+        this.$refs.documentListDrawer.endLoading();
+      }
     },
   },
   created() {
@@ -107,8 +118,9 @@ export default {
       this.$refs.drawer.open();
     },
     loadMore() {
-      this.page++;
-      this.retrieveFiles();
+      if (this.hasMore) {
+        this.limit += this.pageSize;
+      }
     },
     retrieveFiles() {
       this.loading = true;
