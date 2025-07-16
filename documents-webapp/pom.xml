@@ -21,14 +21,19 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-        <groupId>io.meeds.social</groupId>
-        <artifactId>social-component-core</artifactId>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-core</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
-        <groupId>org.exoplatform.documents</groupId>
-        <artifactId>documents-api</artifactId>
-        <scope>provided</scope>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-web</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.exoplatform.documents</groupId>
+      <artifactId>documents-api</artifactId>
+      <scope>provided</scope>
     </dependency>
   </dependencies>
   <build>
