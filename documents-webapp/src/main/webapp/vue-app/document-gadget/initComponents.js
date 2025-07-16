@@ -18,9 +18,11 @@ import DocumentList from './components/DocumentList.vue';
 import DocumentListWidgetItem from './components/DocumentListWidgetItem.vue';
 import DocumentListSettingsDrawer from './components/DocumentListSettingsDrawer.vue';
 import DocumentListWidgetItemCardVue from './components/DocumentListWidgetItemCard.vue.vue';
+import DocumentListDrawer from './components/DocumentListDrawer.vue';
 
 const components = {
   'document-list': DocumentList,
+  'document-list-drawer': DocumentListDrawer,
   'document-list-widget-item': DocumentListWidgetItem,
   'document-list-widget-item-card': DocumentListWidgetItemCardVue,
   'document-list-settings-drawer': DocumentListSettingsDrawer,
