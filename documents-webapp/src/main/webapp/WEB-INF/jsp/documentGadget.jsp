@@ -59,7 +59,7 @@
         customHeader: <%=customHeader%>,
         headerTitle: <%=headerTitle == null ? null : String.format("'%s'", StringEscapeUtils.escapeJava(headerTitle).replace("\\\"", "\"").replace("\\\\\"", "\\\""))%>,
         displaySeeMore: <%=displaySeeMore%>,
-        maxDocumentsToList: '<%=maxDocumentsToList%>',
+        maxDocumentsToList: <%=maxDocumentsToList%>,
         canEdit: <%=canEdit%>,
         saveSettingsUrl: '<%=saveSettingsUrl%>'
       }));

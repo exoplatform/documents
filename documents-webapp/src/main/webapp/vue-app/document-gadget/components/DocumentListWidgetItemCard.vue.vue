@@ -230,22 +230,14 @@ export default {
       if (this.file?.folder) {
         this.$root.$emit('document-open-folder', this.file);
       } else if (this.isFileEditable) {
-        this.openInEditMode(this.file);
+        this.$root.openInEditMode(this.file);
       } else if (this.isFileOnlyReadable) {
-        this.openInReadOnlyMode(this.file);
+        this.$root.openInReadOnlyMode(this.file);
       } else {
-        this.$root.$emit('documents-preview', this.file);
+        this.$root.$emit('documents-preview', this.files, this.file);
       }
       this.loading = false;
       this.$root.$emit('mark-document-as-viewed', this.file);
-    },
-    openInEditMode(file) {
-      const fileId = file.sourceID ? file.sourceID : file.id;
-      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&backTo=${window.location.pathname}`, '_blank');
-    },
-    openInReadOnlyMode(file) {
-      const fileId = file.sourceID ? file.sourceID : file.id;
-      window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
     },
     showInfo(event) {
       if (event) {
