@@ -24,19 +24,12 @@ const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
 
 const appId = 'DocumentGadget';
 
-export function init(
-  portletStorageId,
-  viewOptions,
-  canEdit,
-  pageRef) {
+export function init(settings) {
   exoi18n.loadLanguageAsync(lang, url)
     .then(i18n => {
       new Vue({
         data: {
-          portletStorageId,
-          viewOptions,
-          canEdit,
-          pageRef
+          settings
         },
         computed: {
           isMobile() {
