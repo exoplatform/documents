@@ -42,7 +42,8 @@
                 height="auto"
                 min-width="auto"
                 class="pa-0"
-                text>
+                text
+                @click="$refs.listDrawer.open()">
                 <v-icon
                   v-if="hoverEdit"
                   size="18"
@@ -88,6 +89,7 @@
       </widget-wrapper>
     </v-hover>
     <document-list-settings-drawer v-if="canEdit" @settings-updated="settingsUpdated" />
+    <document-list-drawer ref="listDrawer" />
   </v-app>
 </template>
 <script>
@@ -115,7 +117,7 @@ export default {
     fileToDisplay() {
       const files = this.files ?? [];
       return files.map(file => {
-        const decodedName = this.safeDecodeURIComponent(file.name);
+        const decodedName = this.$root.safeDecodeURIComponent(file.name);
         return {
           id: file.id,
           name: decodedName,
@@ -123,11 +125,11 @@ export default {
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
           mimetype: file?.mimeType,
-          image: this.getImageUrl(file),
-          downloadUrl: this.getDownloadUrl(file),
-          icon: this.getFileIcon(file),
-          editable: this.isFileEditable(file),
-          readable: this.isFileReadable(file),
+          image: this.$root.getImageUrl(file),
+          downloadUrl: this.$root.getDownloadUrl(file),
+          icon: this.$root.getFileIcon(file),
+          editable: this.$root.isFileEditable(file),
+          readable: this.$root.isFileReadable(file),
           path: file?.docPath,
           source: 'documents',
         };
@@ -183,42 +185,6 @@ export default {
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.maxDocumentsToList, null).then(files => {
         this.files = files;
       }).finally(() => this.loading = false);
-    },
-    safeDecodeURIComponent(name) {
-      if (!name) {
-        return '';
-      }
-      try {
-        return decodeURIComponent(name.replace(/%25/g, '%').replace(/%([^2][^5])/g, '%25$1'));
-      } catch (e) {
-        console.warn('Filename decode failed:', name, e);
-        return name;
-      }
-    },
-    getFileIcon(file) {
-      return this.$documentsIconsExtension?.[0]?.get?.(file?.mimeType) || 'fas fa-file';
-    },
-    isFileEditable(file) {
-      return this.$supportedDocuments?.some(doc => doc.edit && doc.mimeType === file.mimeType) ?? false;
-    },
-    isFileReadable(file) {
-      return this.$supportedDocuments?.some(doc => doc.mimeType === file.mimeType) ?? false;
-    },
-    getImageUrl(file) {
-      file.readable = this.isFileReadable(file);
-      return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
-    },
-    getDownloadUrl(file) {
-      return this.$documentsUtils.getDownloadUrl(file.id, file.lastModified);
-    },
-    previewDocument(file) {
-      const files = [];
-      this.files.forEach((item) => {
-        if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
-          files.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.getFileIcon(item)});}
-      }
-      );
-      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
     },
     settingsUpdated(settings, headerTitle, refreshList) {
       this.$root.settings.maxDocumentsToList = settings.maxDocumentsToList;
