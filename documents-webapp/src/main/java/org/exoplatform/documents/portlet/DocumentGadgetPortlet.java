@@ -17,9 +17,13 @@
 package org.exoplatform.documents.portlet;
 
 import java.io.IOException;
+import java.security.SecureRandom;
+import java.util.Enumeration;
 
 import javax.portlet.*;
 
+import io.meeds.social.portlet.CMSPortlet;
+import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.portal.config.UserACL;
@@ -30,28 +34,48 @@ import org.exoplatform.social.core.space.model.Space;
 
 import io.meeds.social.space.plugin.SpaceAclPlugin;
 
-public class DocumentGadgetPortlet extends GenericDispatchedViewPortlet {
+public class DocumentGadgetPortlet extends CMSPortlet {
 
-  private UserACL         userAcl;
+  private static final String OBJECT_TYPE    = "documentGadget";
+
+  private static final String APPLICATION_ID = "applicationId";
+
+  private static final String CAN_EDIT       = "canEdit";
+
+  private final SecureRandom  random         = new SecureRandom();
+
+  private UserACL             userAcl;
 
   @Override
-  protected void doView(RenderRequest request, RenderResponse response) throws PortletException, IOException {
+  public void init(PortletConfig config) throws PortletException {
+    super.init(config);
+    this.contentType = OBJECT_TYPE;
+  }
+
+  @Override
+  public void doView(RenderRequest request, RenderResponse response) throws PortletException, IOException {
     boolean canModifySettings = canModifySettings();
-    request.setAttribute("canEdit", canModifySettings);
+    request.setAttribute(CAN_EDIT, canModifySettings);
+    request.setAttribute(APPLICATION_ID, getOrCreateApplicationId(request.getPreferences()));
     super.doView(request, response);
   }
 
   @Override
   public void processAction(ActionRequest request, ActionResponse response) throws IOException, PortletException {
-
     if (!canModifySettings()) {
-      throw new PortletException("User is not allowed to save settings");
+      throw new PortletException("User is not allowed to edit settings");
     }
     PortletPreferences preferences = request.getPreferences();
-    String settings = request.getParameter("settings");
-    preferences.setValue("settings", settings);
+    Enumeration<String> parameterNames = request.getParameterNames();
+    while (parameterNames.hasMoreElements()) {
+      String name = parameterNames.nextElement();
+      if (StringUtils.equals(name, "action") || StringUtils.contains(name, "portal:")) {
+        continue;
+      }
+      String value = request.getParameter(name);
+      preferences.setValue(name, value);
+    }
     preferences.store();
-    response.setPortletMode(PortletMode.VIEW);
   }
 
   private Identity getCurrentIdentity() {
@@ -73,10 +97,18 @@ public class DocumentGadgetPortlet extends GenericDispatchedViewPortlet {
     } else if (space == null) {
       return getUserAcl().isAdministrator(identity);
     } else {
-      return getUserAcl().isAdministrator(identity) || getUserAcl().hasEditPermission(SpaceAclPlugin.OBJECT_TYPE,
-              space.getId(),
-              identity);
+      return getUserAcl().isAdministrator(identity)
+          || getUserAcl().hasEditPermission(SpaceAclPlugin.OBJECT_TYPE, space.getId(), identity);
     }
+  }
+
+  private String getOrCreateApplicationId(PortletPreferences preferences) {
+    String applicationId = preferences.getValue(APPLICATION_ID, null);
+    if (applicationId == null) {
+      applicationId = String.valueOf(random.nextLong() & Long.MAX_VALUE);
+      savePreference(APPLICATION_ID, applicationId);
+    }
+    return applicationId;
   }
 
 }
