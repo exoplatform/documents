@@ -68,7 +68,6 @@
           no-expand-icon
           back-icon
           required
-          @update:field-value="updateFieldValue"
           @input="translationUpdated" />
         <div class="d-flex my-2 align-center justify-space-between">
           <label class="v-label text-color align-start">
@@ -90,7 +89,7 @@
           <div class="ms-auto">
             <number-input
               v-model="maxDocumentsToList"
-              :min="1"
+              :min="0"
               :max="100"
               :step="1"
               editable />
@@ -198,9 +197,6 @@ export default {
         this.currentTranslations = structuredClone(this.translations);
         this.translationsInitialized = true;
       }
-    },
-    updateFieldValue(value) {
-      this.defaultLangValue = value;
     },
   },
 };
