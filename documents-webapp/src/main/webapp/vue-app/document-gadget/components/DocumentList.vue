@@ -125,6 +125,8 @@ export default {
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
           mimetype: file?.mimeType,
+          sourceID: file?.sourceID,
+          acl: file?.acl,
           image: this.$root.getImageUrl(file),
           downloadUrl: this.$root.getDownloadUrl(file),
           icon: this.$root.getFileIcon(file),
@@ -149,6 +151,9 @@ export default {
     },
     displaySeeMore() {
       return this.settings.displaySeeMore;
+    },
+    documentType() {
+      return this.settings.documentType;
     }
   },
   watch: {
@@ -182,9 +187,13 @@ export default {
         return;
       }
       this.loading = true;
+      const folderPath = eXo.env.portal.spaceIdentityId ? 'Shared' : 'Documents/Shared';
       const filter = {
         ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-        listingType: 'TIMELINE',
+        listingType: this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
+        folderPath: this.documentType === 'sharedWithMe' ? folderPath : null,
+        favorites: this.documentType === 'favorites',
+        sortField: 'lastUpdated',
       };
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.maxDocumentsToList, null).then(files => {
         this.files = files;
@@ -193,6 +202,7 @@ export default {
     settingsUpdated(settings, headerTitle, refreshList) {
       this.$root.settings.maxDocumentsToList = settings.maxDocumentsToList;
       this.$root.settings.viewOptions = settings.viewOptions;
+      this.$root.settings.documentType = settings.documentType;
       this.$root.settings.customHeader = settings.customHeader;
       this.$root.settings.displaySeeMore = settings.displaySeeMore;
       this.$root.settings.headerTitle = headerTitle;
