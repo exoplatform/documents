@@ -81,7 +81,6 @@
               hide-details />
           </div>
         </div>
-
         <div class="d-flex align-center">
           <label class="v-label text-color">
             {{ $t('documents.documentGadget.settings.additionalOptions.numberItems') }}
@@ -95,6 +94,49 @@
               editable />
           </div>
         </div>
+        <div class="mb-2 text-header">{{ $t('documents.documentGadget.settings.documentListing') }}</div>
+        <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.documentType') }}</div>
+        <v-radio-group
+          v-model="documentType"
+          class="mt-0"
+          mandatory>
+          <v-radio value="recentDocument">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.recentDocument') }}</span>
+            </template>
+          </v-radio>
+          <v-radio value="sharedWithMe">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.sharedWithMe') }}</span>
+            </template>
+          </v-radio>
+          <v-radio value="favorites">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.favorites') }}</span>
+            </template>
+          </v-radio>
+        </v-radio-group>
+        <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.documentSource') }}</div>
+        <v-radio-group
+          v-model="documentSource"
+          class="mt-0"
+          mandatory>
+          <v-radio value="currentDrive">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentSource.currentDrive') }}</span>
+            </template>
+          </v-radio>
+          <v-radio value="anyDrive">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentSource.anyDrive') }}</span>
+            </template>
+          </v-radio>
+          <v-radio value="oneDrive">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentSource.oneSelectedDrive') }}</span>
+            </template>
+          </v-radio>
+        </v-radio-group>
       </div>
     </template>
     <template #footer>
@@ -131,7 +173,9 @@ export default {
     translations: [],
     userLocale: eXo.env.portal.language,
     translationsInitialized: false,
-    currentTranslations: []
+    currentTranslations: [],
+    documentType: 'recentDocument',
+    documentSource: 'currentDrive',
   }),
   computed: {
     settings() {
@@ -161,6 +205,7 @@ export default {
     reset() {
       this.maxDocumentsToList = Number(this.settings?.maxDocumentsToList);
       this.viewOptions = this.settings?.viewOptions || 'list';
+      this.documentType = this.settings?.documentType || 'recentDocument';
       this.customHeader = this.settings?.customHeader || false;
       this.displaySeeMore = this.settings?.displaySeeMore || false;
       this.loading = false;
@@ -171,11 +216,12 @@ export default {
     save() {
       const settings = {
         viewOptions: this.viewOptions,
+        documentType: this.documentType,
         maxDocumentsToList: this.maxDocumentsToList,
         customHeader: this.customHeader,
         displaySeeMore: this.displaySeeMore,
       };
-      const refreshList = Number(this.maxDocumentsToList) !== this.settings.maxDocumentsToList;
+      const refreshList = Number(this.maxDocumentsToList) !== this.settings.maxDocumentsToList || (this.documentType !== this.settings.documentType);
       this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
         this.saveHeaderTranslations();
         this.$emit('settings-updated', settings, this.displayedValue, refreshList);
