@@ -11,7 +11,7 @@
       <useProjectArtifact>false</useProjectArtifact>
       <outputDirectory>/webapps</outputDirectory>
       <includes>
-        <include>${project.groupId}:documents-webapp:war</include>
+        <include>${project.groupId}:*:war</include>
       </includes>
       <scope>provided</scope>
       <outputFileNameMapping>${artifact.build.finalName}.${artifact.extension}</outputFileNameMapping>
