@@ -65,7 +65,7 @@
         </template>
         <template v-if="initialized" #default>
           <div>
-            <v-list class="pa-0">
+            <v-list :class="!isCardsView && !!filesToDisplay && 'pb-4'" class="pa-0">
               <template v-if="isCardsView">
                 <card-carousel parent-class="activity-files-parent px-4">
                   <document-list-widget-item-card
