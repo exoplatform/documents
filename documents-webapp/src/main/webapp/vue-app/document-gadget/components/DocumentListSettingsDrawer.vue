@@ -26,7 +26,7 @@
       {{ $t('documents.documentGadget.settings.title') }}
     </template>
     <template v-if="drawer" #content>
-      <div class="pa-5">
+      <div class="pa-4">
         <div class="mb-2 text-header">{{ $t('documents.documentGadget.settings.displayManagement') }}</div>
         <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.viewOptions') }}</div>
         <v-radio-group
@@ -188,7 +188,7 @@ export default {
       return this.settings?.applicationId;
     },
     displayedValue() {
-      return this.translations?.[this.userLocale] || this.$t('documents.documentGadget.title');
+      return this.translations?.[this.userLocale];
     },
   },
   created() {
