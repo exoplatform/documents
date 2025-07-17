@@ -41,6 +41,7 @@
 
   PortletPreferences preferences = renderRequest.getPreferences();
   String viewOptions = preferences.getValue("viewOptions", "list");
+  String documentType = preferences.getValue("documentType", "recentDocument");
   boolean customHeader = Boolean.parseBoolean(preferences.getValue("customHeader", "true"));
   boolean displaySeeMore = Boolean.parseBoolean(preferences.getValue("displaySeeMore", "true"));
   int maxDocumentsToList = Integer.parseInt(preferences.getValue("maxDocumentsToList", "4"));
@@ -56,6 +57,7 @@
       require(['PORTLET/documents-portlet/DocumentGadget'], app => app.init({
         applicationId: '<%=applicationId%>',
         viewOptions: '<%=viewOptions%>',
+        documentType: '<%=documentType%>',
         customHeader: <%=customHeader%>,
         headerTitle: <%=headerTitle == null ? null : String.format("'%s'", StringEscapeUtils.escapeJava(headerTitle).replace("\\\"", "\"").replace("\\\\\"", "\\\""))%>,
         displaySeeMore: <%=displaySeeMore%>,
