@@ -190,6 +190,7 @@ export default {
         listingType: this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
         folderPath: this.documentType === 'sharedWithMe' ? 'Documents/Shared' : null,
         favorites: this.documentType === 'favorites',
+        sortField: 'lastUpdated',
       };
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.maxDocumentsToList, null).then(files => {
         this.files = files;
