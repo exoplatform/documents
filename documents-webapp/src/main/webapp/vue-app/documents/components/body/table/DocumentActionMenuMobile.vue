@@ -3,7 +3,7 @@
     ref="documentActionsMobileMenu"
     class="mobileDrawer">
     <template slot="title">
-      {{ $t('documents.drawer.actions.menu.title') }}
+      {{ $t('documents.drawer.actions.menu.mobile.title') }}
     </template>
     <template slot="content">
       <v-list dense>
