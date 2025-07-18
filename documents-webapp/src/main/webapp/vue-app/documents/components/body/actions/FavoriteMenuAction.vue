@@ -1,13 +1,13 @@
 <template>
   <div
-    class="clickable ma-auto py-10px px-4"
+    class="clickable ma-auto py-10px px-2"
     @click.prevent="changeFavorite">
     <documents-favorite-button
       ref="favoriteButton"
       :file="file"
       @added="added"
       @removed="removed" />
-    <span class="pt-1">{{ favoriteLabel }}</span>
+    <span class="pa-1">{{ favoriteLabel }}</span>
     <v-divider class="mt-1 dividerStyle" />
   </div>
 </template>
