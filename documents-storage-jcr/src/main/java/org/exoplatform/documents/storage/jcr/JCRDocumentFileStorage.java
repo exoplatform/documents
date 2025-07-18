@@ -1237,7 +1237,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (oldNode.isNodeType(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
       return null;
     }
-    if (oldNode.getPath().contains(destinationNode.getPath())) {
+    if ((oldNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) && !oldNode.getParent().getPath().equals(destinationNode.getPath()) && oldNode.getPath().contains(destinationNode.getPath())) {
       // If the destination node is a child of the node to copy, we should not duplicate it
       throw new IllegalStateException("Cannot duplicate a node into its own child");
     }

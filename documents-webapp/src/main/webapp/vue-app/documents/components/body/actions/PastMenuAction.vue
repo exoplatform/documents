@@ -69,7 +69,7 @@ export default {
       const text = localStorage.getItem('documentCopiedItem');
       if (text) {
         const obj = JSON.parse(text);
-        if (this.file.path.includes(obj.path)){
+        if (this.file.folder && this.file.path.includes(obj.path)){
           this.noPastMassage = this.$t('documents.tooltip.paste.notAllowed');
           this.showPast = false;
         } else {
