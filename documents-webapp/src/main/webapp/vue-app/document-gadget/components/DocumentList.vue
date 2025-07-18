@@ -185,10 +185,11 @@ export default {
         return;
       }
       this.loading = true;
+      const folderPath = eXo.env.portal.spaceIdentityId ? 'Shared' : 'Documents/Shared';
       const filter = {
         ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
         listingType: this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
-        folderPath: this.documentType === 'sharedWithMe' ? 'Documents/Shared' : null,
+        folderPath: this.documentType === 'sharedWithMe' ? folderPath : null,
         favorites: this.documentType === 'favorites',
         sortField: 'lastUpdated',
       };

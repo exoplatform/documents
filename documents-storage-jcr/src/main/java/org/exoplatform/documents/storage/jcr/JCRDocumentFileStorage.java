@@ -1985,8 +1985,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (node == null) {
         return null;
       }
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        node = getNodeByIdentifier(session, node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+        if (node == null) {
+          return null;
+        }
+      }
       Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
-      return new FileContent(documentId, node.getProperty(NodeTypeConstants.EXO_TITLE).getString(), content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(), content.getProperty(NodeTypeConstants.JCR_DATA).getStream(), node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().getTime());
+      return new FileContent(documentId,
+                             node.getProperty(NodeTypeConstants.EXO_TITLE).getString(),
+                             content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(),
+                             content.getProperty(NodeTypeConstants.JCR_DATA).getStream(),
+                             node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().getTime());
     } catch (ItemNotFoundException e) {
       throw new ObjectNotFoundException("Document with id : " + documentId + " isn't found");
     } catch (RepositoryException e) {
