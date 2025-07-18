@@ -65,7 +65,7 @@
         </template>
         <template v-if="initialized" #default>
           <div>
-            <v-list class="pa-0">
+            <v-list :class="!isCardsView && !!filesToDisplay && 'pb-4'" class="pa-0">
               <template v-if="isCardsView">
                 <card-carousel parent-class="activity-files-parent px-4">
                   <document-list-widget-item-card
@@ -149,6 +149,9 @@ export default {
     },
     displaySeeMore() {
       return this.settings.displaySeeMore;
+    },
+    documentType() {
+      return this.settings.documentType;
     }
   },
   watch: {
@@ -184,7 +187,10 @@ export default {
       this.loading = true;
       const filter = {
         ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-        listingType: 'TIMELINE',
+        listingType: this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
+        folderPath: this.documentType === 'sharedWithMe' ? 'Documents/Shared' : null,
+        favorites: this.documentType === 'favorites',
+        sortField: 'lastUpdated',
       };
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.maxDocumentsToList, null).then(files => {
         this.files = files;
@@ -193,6 +199,7 @@ export default {
     settingsUpdated(settings, headerTitle, refreshList) {
       this.$root.settings.maxDocumentsToList = settings.maxDocumentsToList;
       this.$root.settings.viewOptions = settings.viewOptions;
+      this.$root.settings.documentType = settings.documentType;
       this.$root.settings.customHeader = settings.customHeader;
       this.$root.settings.displaySeeMore = settings.displaySeeMore;
       this.$root.settings.headerTitle = headerTitle;

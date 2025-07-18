@@ -92,6 +92,12 @@ export default {
     hasMore() {
       return this.limit < this.files.length || (this.loading && !this.files.length);
     },
+    settings() {
+      return this.$root.settings;
+    },
+    documentType() {
+      return this.settings?.documentType;
+    },
   },
   watch: {
     limit() {
@@ -126,7 +132,10 @@ export default {
       this.loading = true;
       const filter = {
         ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-        listingType: 'TIMELINE',
+        listingType: this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
+        folderPath: this.documentType === 'sharedWithMe' ? 'Documents/Shared' : null,
+        favorites: this.documentType === 'favorites',
+        sortField: 'lastUpdated',
       };
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.limit + 1, null).then(files => {
         this.files = files;
