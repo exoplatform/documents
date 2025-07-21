@@ -91,6 +91,9 @@ export default {
       const type = this.mimeType || '';
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
     },
+    canEdit() {
+      return this.file?.acl?.canEdit;
+    },
     isFileOnlyReadable() {
       const type = this.mimeType || '';
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
@@ -104,9 +107,9 @@ export default {
       this.loading = true;
       if (this.file?.folder) {
         this.$root.$emit('document-open-folder', this.file);
-      } else if (this.isFileEditable  && this.file?.acl?.canEdit) {
+      } else if (this.isFileEditable && this.canEdit) {
         this.$root.openInEditMode(this.file);
-      } else if (this.isFileOnlyReadable || !this.file?.acl?.canEdit) {
+      } else if (this.isFileOnlyReadable || !this.canEdit) {
         this.$root.openInReadOnlyMode(this.file);
       } else {
         this.$root.$emit('documents-preview', this.files, this.file);
