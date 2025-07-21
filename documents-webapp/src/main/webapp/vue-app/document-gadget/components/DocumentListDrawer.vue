@@ -27,7 +27,9 @@
       {{ $t('documents.documentGadget.title') }}
     </template>
     <template #content>
+      <document-list-empty-message v-if="!hasDocuments && !loading" :title="noDocumentMessage" />
       <document-list-widget-item
+        v-else
         v-for="file in fileToDisplay"
         :key="file.id"
         :file="file"
@@ -89,6 +91,9 @@ export default {
         };
       });
     },
+    hasDocuments() {
+      return !!this.files.length;
+    },
     hasMore() {
       return this.limit < this.files.length || (this.loading && !this.files.length);
     },
@@ -98,6 +103,9 @@ export default {
     documentType() {
       return this.settings?.documentType;
     },
+    noDocumentMessage() {
+      return this.$t(`documents.documentGadget.${this.documentType}.noDocumentMessage`);
+    }
   },
   watch: {
     limit() {

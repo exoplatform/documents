@@ -19,6 +19,7 @@ import DocumentListWidgetItem from './components/DocumentListWidgetItem.vue';
 import DocumentListSettingsDrawer from './components/DocumentListSettingsDrawer.vue';
 import DocumentListWidgetItemCardVue from './components/DocumentListWidgetItemCard.vue.vue';
 import DocumentListDrawer from './components/DocumentListDrawer.vue';
+import DocumentListEmptyMessage from './components/DocumentListEmptyMessage.vue';
 
 const components = {
   'document-list': DocumentList,
@@ -26,6 +27,7 @@ const components = {
   'document-list-widget-item': DocumentListWidgetItem,
   'document-list-widget-item-card': DocumentListWidgetItemCardVue,
   'document-list-settings-drawer': DocumentListSettingsDrawer,
+  'document-list-empty-message': DocumentListEmptyMessage,
 };
 
 for (const key in components) {
