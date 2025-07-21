@@ -1,8 +1,10 @@
 <template>
   <exo-drawer 
     ref="documentActionsMobileMenu"
-    class="mobileDrawer"
-    :bottom="true">
+    class="mobileDrawer">
+    <template slot="title">
+      {{ $t('documents.drawer.actions.menu.mobile.title') }}
+    </template>
     <template slot="content">
       <v-list dense>
         <v-list-item

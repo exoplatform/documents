@@ -327,8 +327,12 @@ export default {
       this.$root.$emit('mark-document-as-viewed', this.file);
     },
     displayActionMenu() {
-      this.menuDisplayed = true;
-      $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
+      if (this.isMobile){
+        this.$root.$emit('open-file-action-menu', this.file);
+      } else {
+        this.menuDisplayed = true;
+        $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
+      }
     },
     escapeRegExp(string) {
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
