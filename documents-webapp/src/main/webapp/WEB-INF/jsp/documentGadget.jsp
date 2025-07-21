@@ -42,9 +42,11 @@
   PortletPreferences preferences = renderRequest.getPreferences();
   String viewOptions = preferences.getValue("viewOptions", "list");
   String documentType = preferences.getValue("documentType", "recentDocument");
-  boolean customHeader = Boolean.parseBoolean(preferences.getValue("customHeader", "true"));
+  boolean customHeader = Boolean.parseBoolean(preferences.getValue("customHeader", "false"));
   boolean displaySeeMore = Boolean.parseBoolean(preferences.getValue("displaySeeMore", "true"));
   int maxDocumentsToList = Integer.parseInt(preferences.getValue("maxDocumentsToList", "4"));
+  String categoryIds = preferences.getValue("categoryIds", "[]").replace("\"", "`");
+  String excludeCategoryIds = preferences.getValue("excludeCategoryIds", "[]").replace("\"", "`");
   String headerTitle = CommonsUtils.getService(TranslationService.class).getTranslationLabelOrDefault("documentGadget",
           applicationId, "headerTitle", LocaleContextInfoUtils.getUserLocale(request.getRemoteUser()));
 %>
@@ -62,6 +64,8 @@
         headerTitle: <%=headerTitle == null ? null : String.format("'%s'", StringEscapeUtils.escapeJava(headerTitle).replace("\\\"", "\"").replace("\\\\\"", "\\\""))%>,
         displaySeeMore: <%=displaySeeMore%>,
         maxDocumentsToList: <%=maxDocumentsToList%>,
+        categoryIds: <%=categoryIds%>,
+        excludeCategoryIds: <%=excludeCategoryIds%>,
         canEdit: <%=canEdit%>,
         saveSettingsUrl: '<%=saveSettingsUrl%>'
       }));

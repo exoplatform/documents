@@ -137,6 +137,83 @@
             </template>
           </v-radio>
         </v-radio-group>
+        <div class="font-weight-bold mb-2">{{ $t('documents.settings.filterList') }}</div>
+        <div class="d-flex align-center text-start">
+          <div>{{ $t('documents.settings.filterListPerCategory') }}</div>
+          <v-spacer />
+          <v-switch
+            v-model="filterPerCategories"
+            class="ma-0 width-fit-content" />
+        </div>
+        <div v-if="filterPerCategories" class="mt-4">
+          <category-suggester
+            v-model="categoryId"
+            class="mt-n2 mb-4 mx-0 pa-0"
+            label=""
+            access-permission />
+          <v-list class="pa-0" dense>
+            <v-list-item
+              v-for="(c, index) in selectedCategories"
+              :key="c.id"
+              class="pa-0"
+              dense>
+              <v-list-item-icon class="me-2 my-auto">
+                <v-icon size="24">{{ c.icon }}</v-icon>
+              </v-list-item-icon>
+              <v-list-item-content class="me-2 pa-0 text-truncate">
+                <v-list-item-title class="text-truncate">
+                  {{ c.name }}
+                </v-list-item-title>
+              </v-list-item-content>
+              <v-list-item-action class="mx-0 my-auto">
+                <v-btn
+                  :title="$t('documents.settings.deleteCategory')"
+                  icon
+                  @click="removeItem(index, settings.categoryIds)">
+                  <v-icon size="18" color="error">fa-trash</v-icon>
+                </v-btn>
+              </v-list-item-action>
+            </v-list-item>
+          </v-list>
+        </div>
+        <div class="d-flex align-center text-start">
+          <div>{{ $t('documents.settings.filterExcludeCategory') }}</div>
+          <v-spacer />
+          <v-switch
+            v-model="filterPerExcludeCategories"
+            class="ma-0 width-fit-content" />
+        </div>
+        <div v-if="filterPerExcludeCategories" class="mt-4">
+          <category-suggester
+            v-model="excludeCategoryId"
+            class="mt-n2 mb-4 mx-0 pa-0"
+            label=""
+            access-permission />
+          <v-list class="pa-0" dense>
+            <v-list-item
+              v-for="(c, index) in selectedExcludeCategories"
+              :key="c.id"
+              class="pa-0"
+              dense>
+              <v-list-item-icon class="me-2 my-auto">
+                <v-icon size="24">{{ c.icon }}</v-icon>
+              </v-list-item-icon>
+              <v-list-item-content class="me-2 pa-0 text-truncate">
+                <v-list-item-title class="text-truncate">
+                  {{ c.name }}
+                </v-list-item-title>
+              </v-list-item-content>
+              <v-list-item-action class="mx-0 my-auto">
+                <v-btn
+                  :title="$t('documents.settings.deleteCategory')"
+                  icon
+                  @click="removeItem(index, settings.excludeCategoryIds)">
+                  <v-icon size="18" color="error">fa-trash</v-icon>
+                </v-btn>
+              </v-list-item-action>
+            </v-list-item>
+          </v-list>
+        </div>
       </div>
     </template>
     <template #footer>
@@ -164,6 +241,7 @@ export default {
   data: () => ({
     drawer: false,
     loading: false,
+    settings: {},
     viewOptions: 'list',
     customHeader: false,
     displaySeeMore: true,
@@ -176,11 +254,14 @@ export default {
     currentTranslations: [],
     documentType: 'recentDocument',
     documentSource: 'currentDrive',
+    categoryId: null,
+    excludeCategoryId: null,
+    selectedCategories: [],
+    selectedExcludeCategories: [],
+    filterPerCategories: false,
+    filterPerExcludeCategories: false,
   }),
   computed: {
-    settings() {
-      return this.$root.settings;
-    },
     saveSettingsUrl() {
       return this.settings?.saveSettingsUrl;
     },
@@ -190,6 +271,18 @@ export default {
     displayedValue() {
       return this.translations?.[this.userLocale];
     },
+    categoryIds() {
+      return this.settings?.categoryIds;
+    },
+    excludeCategoryIds() {
+      return this.settings?.excludeCategoryIds;
+    },
+    refreshList() {
+      return  Number(this.maxDocumentsToList) !== this.settings.maxDocumentsToList
+          || (this.documentType !== this.settings.documentType)
+          || (this.selectedCategories !== this.settings.categoryIds)
+          || (this.selectedExcludeCategories !== this.settings.excludeCategoryIds);
+    }
   },
   created() {
     this.$root.$on('document-gadget-settings', this.open);
@@ -197,17 +290,70 @@ export default {
   beforeDestroy() {
     this.$root.$off('document-gadget-settings', this.open);
   },
+  watch: {
+    async categoryId() {
+      if (this.categoryId) {
+        if (!Array.isArray(this.settings.categoryIds)) {
+          this.$root.settings.categoryIds = [];
+        }
+        if (this.settings.categoryIds.indexOf(this.categoryId) < 0) {
+          this.$root.settings.categoryIds.push(this.categoryId);
+        }
+        await this.$nextTick();
+        this.categoryId = null;
+      }
+    },
+    async excludeCategoryId() {
+      if (this.excludeCategoryId) {
+        if (!Array.isArray(this.settings.excludeCategoryIds)) {
+          this.$root.settings.excludeCategoryIds = [];
+        }
+        if (this.settings.excludeCategoryIds.indexOf(this.excludeCategoryId) < 0) {
+          this.$root.settings.excludeCategoryIds.push(this.excludeCategoryId);
+        }
+        await this.$nextTick();
+        this.excludeCategoryId = null;
+      }
+    },
+    async categoryIds() {
+      if (!this.categoryIds?.length) {
+        this.selectedCategories = [];
+      } else {
+        this.selectedCategories = await Promise.all(this.categoryIds.map(id => this.$categoryService.getCategory(id)));
+      }
+    },
+    filterPerCategories() {
+      if (this.drawer && !this.filterPerCategories) {
+        this.$root.settings.categoryIds = [];
+      }
+    },
+    async excludeCategoryIds() {
+      if (!this.excludeCategoryIds?.length) {
+        this.selectedExcludeCategories = [];
+      } else {
+        this.selectedExcludeCategories = await Promise.all(this.excludeCategoryIds.map(id => this.$categoryService.getCategory(id)));
+      }
+    },
+    filterPerExcludeCategories() {
+      if (this.drawer && !this.filterPerExcludeCategories) {
+        this.$root.settings.excludeCategoryIds = [];
+      }
+    },
+  },
   methods: {
     open() {
       this.reset();
       this.$refs.drawer.open();
     },
     reset() {
+      this.settings = Object.assign({}, this.$root.settings);
       this.maxDocumentsToList = Number(this.settings?.maxDocumentsToList);
       this.viewOptions = this.settings?.viewOptions || 'list';
       this.documentType = this.settings?.documentType || 'recentDocument';
       this.customHeader = this.settings?.customHeader || false;
       this.displaySeeMore = this.settings?.displaySeeMore || false;
+      this.filterPerCategories = !!this.categoryIds?.length;
+      this.filterPerExcludeCategories = !!this.excludeCategoryIds?.length;
       this.loading = false;
     },
     close() {
@@ -220,15 +366,16 @@ export default {
         maxDocumentsToList: this.maxDocumentsToList,
         customHeader: this.customHeader,
         displaySeeMore: this.displaySeeMore,
+        categoryIds: JSON.stringify(this.categoryIds),
+        excludeCategoryIds: JSON.stringify(this.excludeCategoryIds),
       };
-      const refreshList = Number(this.maxDocumentsToList) !== this.settings.maxDocumentsToList || (this.documentType !== this.settings.documentType);
       this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
         this.saveHeaderTranslations();
-        this.$emit('settings-updated', settings, this.displayedValue, refreshList);
-        this.$root.$emit('alert-message', this.$t('myApplications.settings.save.success.message'), 'success');
+        this.$emit('settings-updated', settings, this.displayedValue, this.refreshList);
+        this.$root.$emit('alert-message', this.$t('documents.documentGadget.settings.save.success.message'), 'success');
         this.close();
       }).catch(() => {
-        this.$root.$emit('alert-message', this.$t('myApplications.settings.save.error.message'), 'error');
+        this.$root.$emit('alert-message', this.$t('documents.documentGadget.settings.error.success.message'), 'error');
       });
     },
     async saveHeaderTranslations() {
@@ -243,6 +390,10 @@ export default {
         this.currentTranslations = structuredClone(this.translations);
         this.translationsInitialized = true;
       }
+    },
+    removeItem(index, array) {
+      array.splice(index, 1);
+      this.settings = JSON.parse(JSON.stringify(this.settings));
     },
   },
 };

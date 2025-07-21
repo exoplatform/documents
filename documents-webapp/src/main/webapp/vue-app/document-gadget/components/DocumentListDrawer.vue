@@ -103,6 +103,12 @@ export default {
     documentType() {
       return this.settings?.documentType;
     },
+    selectedCategoryIds() {
+      return this.settings.categoryIds;
+    },
+    excludedCategoryIds() {
+      return this.settings.excludeCategoryIds;
+    },
     noDocumentMessage() {
       return this.$t(`documents.documentGadget.${this.documentType}.noDocumentMessage`);
     }
@@ -145,7 +151,7 @@ export default {
         favorites: this.documentType === 'favorites',
         sortField: 'lastUpdated',
       };
-      return this.$documentFileService.getDocumentItems(filter, null, null, 0, this.limit + 1, null).then(files => {
+      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.limit + 1, null).then(files => {
         this.files = files;
       }).finally(() => this.loading = false);
     },
