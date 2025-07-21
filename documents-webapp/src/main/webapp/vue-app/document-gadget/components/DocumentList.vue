@@ -125,6 +125,8 @@ export default {
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
           mimetype: file?.mimeType,
+          sourceID: file?.sourceID,
+          acl: file?.acl,
           image: this.$root.getImageUrl(file),
           downloadUrl: this.$root.getDownloadUrl(file),
           icon: this.$root.getFileIcon(file),
