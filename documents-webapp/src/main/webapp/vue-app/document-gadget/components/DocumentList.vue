@@ -71,6 +71,7 @@
                   <document-list-widget-item-card
                     v-for="(file, index) in filesToDisplay"
                     :index="index"
+                    :count="filesCount"
                     :key="file.id"
                     :file="file"
                     :files="filesToDisplay" />
@@ -113,6 +114,9 @@ export default {
     },
     emptyWidget() {
       return !this.files?.length && this.initialized && this.applicationMounted;
+    },
+    filesCount() {
+      return this.files.length;
     },
     filesToDisplay() {
       const files = this.files ?? [];

@@ -15,7 +15,7 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <v-hover v-slot="{hover}">
+  <v-hover v-slot="{hover}" :class="marginClass">
     <v-card
       :elevation="hover ? 4 : 0"
       :class="{ 'border-color': !hover }"
@@ -24,7 +24,7 @@
       max-height="210px"
       width="252px"
       max-width="100%"
-      class="activity-attachment overflow-hidden d-flex flex-column clickable border-box-sizing ms-1">
+      class="activity-attachment overflow-hidden d-flex flex-column clickable border-box-sizing">
       <v-card-text
         class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0"
         :class="isMediaFile && 'black'"
@@ -156,6 +156,10 @@ export default {
       type: Number,
       default: 0,
     },
+    count: {
+      type: Number,
+      default: 0,
+    },
   },
   data: () => ({
     loading: true,
@@ -178,6 +182,13 @@ export default {
     },
     fileIconColor() {
       return this.file?.icon?.color || 'secondary';
+    },
+    marginClass() {
+      if (this.count === 1) {
+        return 'mx-auto';
+      }
+      const lastIndex = (this.count - 1) === this.index;
+      return this.index && (lastIndex && 'ms-2' || 'mx-2') || 'me-2';
     },
     downloadUrl() {
       return this.file?.downloadUrl;
