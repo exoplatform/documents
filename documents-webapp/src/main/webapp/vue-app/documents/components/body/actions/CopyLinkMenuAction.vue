@@ -30,7 +30,16 @@ export default {
     copyLink() {
       this.loading = true;
       let path;
-      if (this.isFileEditable())  {
+      if (this.file.folder){
+        path = `${window.location.origin}${eXo.env.portal.context}`;
+        if (eXo.env.portal.spaceId){
+          const pathParts = eXo.env.portal.selectedNodeUri.split('home');
+          const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri.substring(eXo.env.portal.selectedNodeUri.indexOf('/documents'));
+          path = `${path}/s/${eXo.env.portal.spaceId}${nodeUri}?folderId=${this.file.id}`;
+        } else {
+          path = `${path}/${eXo.env.portal.portalName}/${eXo.env.portal.selectedNodeUri}?folderId=${this.file.id}`;
+        }
+      } else if (this.isFileEditable())  {
         if (this.file?.acl?.canEdit){
           path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
         } else {
