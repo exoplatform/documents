@@ -31,7 +31,7 @@ export default {
       this.loading = true;
       let path;
       if (this.file.folder){
-        path = `${window.location.host}${eXo.env.portal.context}`;
+        path = `${window.location.origin}${eXo.env.portal.context}`;
         if (eXo.env.portal.spaceId){
           const pathParts = eXo.env.portal.selectedNodeUri.split('home');
           const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri.substring(eXo.env.portal.selectedNodeUri.indexOf('/documents'));
