@@ -268,11 +268,13 @@ public class JCRDocumentFileStorageTest {
     when(parentNode.addNode("copy of test", "nt:file")).thenReturn(currentNode);
     when(identity.getRemoteId()).thenReturn("username");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
-    when(parentNode.getPath()).thenReturn("/Documents/Private");
+    when(parentNode.getPath()).thenReturn("/Documents/Private/user");
     when(currentNode.getPath()).thenReturn("/Documents/Private/user/test");
+    when(currentNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
     Assert.assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.duplicateDocument(1L, "1", "copy of", userID));
     when(currentNode.getPath()).thenReturn("/Documents/Private");
     when(parentNode.getPath()).thenReturn("/Documents/Private/user/test");
+    when(currentNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(false);
     jcrDocumentFileStorage.duplicateDocument(1L,"1","copy of",userID);
     verify(sessionProvider, times(2)).close();
   }
