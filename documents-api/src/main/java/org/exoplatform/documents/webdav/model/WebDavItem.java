@@ -33,6 +33,10 @@ import lombok.Setter;
 @AllArgsConstructor
 public class WebDavItem {
 
+  private String                   webDavPath;
+
+  private String                   jcrPath;
+
   private URI                      identifier;
 
   private boolean                  file;

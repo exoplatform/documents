@@ -68,6 +68,13 @@ public class PropertyConstants {
   public static final QName                   CREATIONDATE               = new QName("DAV:", "creationdate");
 
   /**
+   * WebDAV creationdate property. See
+   * <a href='http://www.ietf.org/rfc/rfc2518.txt'>Versioning Extensions to
+   * WebDAV</a> for more information.
+   */
+  public static final QName                   GET_ETAG                   = new QName("DAV:", "getetag");
+
+  /**
    * WebDAV displayname property. See
    * <a href='http://www.ietf.org/rfc/rfc2518.txt'>Versioning Extensions to
    * WebDAV</a> for more information.
@@ -244,6 +251,48 @@ public class PropertyConstants {
    * more information..
    */
   public static final QName                   DAV_ALLPROP                = new QName("DAV:", REQUEST_ALL_PROPS);
+
+  /**
+   * WebDAV DeltaV predecessor-set property. See
+   * <a href='http://www.ietf.org/rfc/rfc3253.txt'>Versioning Extensions to
+   * WebDAV</a> for more information.
+   */
+  public static final QName                   PREDECESSORSET             = new QName("DAV:", "predecessor-set");
+
+  /**
+   * WebDAV DeltaV successor-set property. See
+   * <a href='http://www.ietf.org/rfc/rfc3253.txt'>Versioning Extensions to
+   * WebDAV</a> for more information.
+   */
+  public static final QName                   SUCCESSORSET               = new QName("DAV:", "successor-set");
+
+  /**
+   * WebDAV DeltaV version-history property. See
+   * <a href='http://www.ietf.org/rfc/rfc3253.txt'>Versioning Extensions to
+   * WebDAV</a> for more information.
+   */
+  public static final QName                   VERSIONHISTORY             = new QName("DAV:", "version-history");
+
+  /**
+   * WebDAV DeltaV version-name property. See
+   * <a href='http://www.ietf.org/rfc/rfc3253.txt'>Versioning Extensions to
+   * WebDAV</a> for more information.
+   */
+  public static final QName                   VERSIONNAME                = new QName("DAV:", "version-name");
+
+  /**
+   * WebDAV DeltaV checked-in property. See
+   * <a href='http://www.ietf.org/rfc/rfc3253.txt'>Versioning Extensions to
+   * WebDAV</a> for more information.
+   */
+  public static final QName                   CHECKEDIN                  = new QName("DAV:", "checked-in");
+
+  /**
+   * WebDAV DeltaV checked-out property. See
+   * <a href='http://www.ietf.org/rfc/rfc3253.txt'>Versioning Extensions to
+   * WebDAV</a> for more information.
+   */
+  public static final QName                   CHECKEDOUT                 = new QName("DAV:", "checked-out");
 
   /**
    * Creation date pattern.

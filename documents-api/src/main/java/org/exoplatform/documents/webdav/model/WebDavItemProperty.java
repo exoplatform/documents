@@ -31,6 +31,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.commons.utils.Tools;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 @Data
@@ -43,6 +44,7 @@ public class WebDavItemProperty {
 
   protected Map<String, String>      attributes = new HashMap<>();
 
+  @EqualsAndHashCode.Exclude
   protected List<WebDavItemProperty> children   = new ArrayList<>();
 
   public WebDavItemProperty(QName name) {
@@ -50,13 +52,17 @@ public class WebDavItemProperty {
   }
 
   public WebDavItemProperty(String name, String value) {
-    String[] tmp = name.split(":");
-    if (tmp.length > 1) {
-      this.name = new QName(tmp[0], tmp[1]);
-    } else {
-      this.name = new QName(tmp[0]);
-    }
+    this.name = toQname(name);
     this.value = value;
+  }
+
+  public static QName toQname(String name) {
+    int index = name.lastIndexOf(":");
+    if (index > 0) {
+      return new QName(name.substring(0, index), name.substring(index + 1));
+    } else {
+      return new QName(name);
+    }
   }
 
   public WebDavItemProperty(QName name, String value) {

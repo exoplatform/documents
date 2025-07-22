@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.plugin;
 
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_HIDDENABLE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CREATED_DATE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
@@ -95,6 +96,8 @@ public class WebdavReadCommandHandler extends CommandHandler {
                         String username) {
     if (StringUtils.equals("/", webDavPath)) {
       WebDavItem result = new WebDavItem();
+      result.setJcrPath("/");
+      result.setWebDavPath("/");
       result.setFile(false);
       result.setIdentifier(new URI(baseUri + "/"));
       result.addProperty(getIsFolderItemProperty());
@@ -283,6 +286,10 @@ public class WebdavReadCommandHandler extends CommandHandler {
     WebDavItem result = new WebDavItem();
     result.setFile(isFile(node));
     result.setIdentifier(new URI(getNodeUri(node, identityBaseJcrPath, identityBaseUri)));
+    List<String> pathParts = Arrays.stream(identityBaseUri.split("/")).filter(StringUtils::isNotBlank).toList();
+    String identityId = pathParts.getLast();
+    result.setJcrPath(node.getPath());
+    result.setWebDavPath(getRelativeNodeUri(node, identityBaseJcrPath, Long.parseLong(identityId)));
     addChildren(result,
                 node,
                 identityBaseJcrPath,
@@ -309,7 +316,7 @@ public class WebdavReadCommandHandler extends CommandHandler {
       NodeIterator nodes = node.getNodes();
       Iterable<Node> iterable = () -> nodes;
       StreamSupport.stream(iterable.spliterator(), false)
-                   .filter(childNode -> isFile(childNode) || isFolder(childNode))
+                   .filter(childNode -> (isFile(childNode) || isFolder(childNode)) && !isHidden(childNode))
                    .map(childNode -> get(childNode,
                                          identityBaseJcrPath,
                                          requestedPropertyNames,
@@ -326,7 +333,8 @@ public class WebdavReadCommandHandler extends CommandHandler {
                              boolean requestPropertyNamesOnly) {
     Collection<QName> propertyNames = requestedPropertyNames == null ? PROPERTY_NAMES : requestedPropertyNames;
     propertyNames.stream()
-                 .map(name -> requestPropertyNamesOnly ? new WebDavItemProperty(name) : getPropertyNoException(node, name))
+                 .map(name -> requestPropertyNamesOnly ? new WebDavItemProperty(name) :
+                                                       getWebDavPropertyNoException(node, result.getIdentifier(), null, name))
                  .filter(Objects::nonNull)
                  .forEach(result::addProperty);
   }
@@ -428,6 +436,8 @@ public class WebdavReadCommandHandler extends CommandHandler {
                                                                .filter(p -> !DISPLAYNAME.equals(p))
                                                                .collect(Collectors.toSet());
       }
+      identityWebDavItem.setJcrPath(identityParentNode.getPath());
+      identityWebDavItem.setWebDavPath(getRelativeNodeUri(identityParentNode, identityBaseJcrPath, identityId));
       addProperties(identityWebDavItem,
                     identityParentNode,
                     identityRequestedPropertyNames,
@@ -443,6 +453,11 @@ public class WebdavReadCommandHandler extends CommandHandler {
     } else {
       return null;
     }
+  }
+
+  @SneakyThrows
+  private boolean isHidden(Node node) {
+    return node.isNodeType(EXO_HIDDENABLE);
   }
 
 }

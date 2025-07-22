@@ -34,7 +34,6 @@ import javax.xml.namespace.QName;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 
 import org.exoplatform.documents.service.DocumentWebDavService;
 import org.exoplatform.documents.storage.jcr.model.JcrNamespaceContext;
@@ -58,25 +57,24 @@ import org.exoplatform.services.security.ConversationState;
 
 import lombok.SneakyThrows;
 
-@Service
 public class JcrWebDavService implements DocumentWebDavService {
 
-  private static final String       DAS_VALUE = "<DAV:basicsearch>" + "<exo:sql xmlns:exo=\"http://exoplatform.com/jcr\"/>" +
+  private static final String         DAS_VALUE = "<DAV:basicsearch>" + "<exo:sql xmlns:exo=\"http://exoplatform.com/jcr\"/>" +
       "<exo:xpath xmlns:exo=\"http://exoplatform.com/jcr\"/>";
 
   @Autowired
-  private WebdavReadCommandHandler  readCommandHandler;
+  protected WebdavReadCommandHandler  readCommandHandler;
 
   @Autowired
-  private WebdavWriteCommandHandler writeCommandHandler;
+  protected WebdavWriteCommandHandler writeCommandHandler;
 
   @Autowired
-  private RepositoryService         repositoryService;
+  protected RepositoryService         repositoryService;
 
   @Autowired
-  private UserACL                   userAcl;
+  protected UserACL                   userAcl;
 
-  private NamespaceContext          namespaceContext;
+  private NamespaceContext            namespaceContext;
 
   @Override
   public NamespaceContext getNamespaceContext() {
@@ -93,10 +91,10 @@ public class JcrWebDavService implements DocumentWebDavService {
 
   @Override
   @SneakyThrows
-  public boolean isFile(String path) {
+  public boolean isFile(String webDavPath) {
     Session session = getSession();
     try {
-      return readCommandHandler.isFile(session, path);
+      return readCommandHandler.isFile(session, webDavPath);
     } finally {
       session.logout();
     }
@@ -104,11 +102,11 @@ public class JcrWebDavService implements DocumentWebDavService {
 
   @Override
   @SneakyThrows
-  public WebDavFileDownload download(String path, String version, String baseUri, String username) throws WebDavException {
+  public WebDavFileDownload download(String webDavPath, String version, String baseUri, String username) throws WebDavException {
     Session session = getSession(username);
     try {
       return readCommandHandler.download(session,
-                                         path,
+                                         webDavPath,
                                          version);
     } finally {
       session.logout();
@@ -116,11 +114,11 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public long getLastModifiedDate(String path, String version) throws WebDavException {
+  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
     Session session = getSession();
     try {
       return readCommandHandler.getLastModifiedDate(session,
-                                                    path,
+                                                    webDavPath,
                                                     version);
     } finally {
       session.logout();
@@ -128,7 +126,7 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public WebDavItem get(String path,
+  public WebDavItem get(String webDavPath,
                         String propRequestType,
                         Set<QName> requestedPropertyNames,
                         boolean requestPropertyNamesOnly,
@@ -138,7 +136,7 @@ public class JcrWebDavService implements DocumentWebDavService {
     Session session = getSession(username);
     try {
       return readCommandHandler.get(session,
-                                    path,
+                                    webDavPath,
                                     requestedPropertyNames,
                                     requestPropertyNamesOnly,
                                     depth,
@@ -150,7 +148,7 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public List<WebDavItem> search(String path,
+  public List<WebDavItem> search(String webDavPath,
                                  String queryLanguage,
                                  String query,
                                  String baseUri,
@@ -168,14 +166,14 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public List<WebDavItem> getVersions(String path,
+  public List<WebDavItem> getVersions(String webDavPath,
                                       Set<QName> requestedPropertyNames,
                                       String baseUri,
                                       String username) {
     Session session = getSession(username);
     try {
       return readCommandHandler.getVersions(session,
-                                            path,
+                                            webDavPath,
                                             requestedPropertyNames,
                                             baseUri);
     } finally {
@@ -184,7 +182,7 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public void createFolder(String path,
+  public void createFolder(String webDavPath,
                            String folderType,
                            String contentNodeType,
                            String mixinTypes,
@@ -192,9 +190,9 @@ public class JcrWebDavService implements DocumentWebDavService {
                            String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
+      checkLock(session, webDavPath, lockTokens);
       writeCommandHandler.createFolder(session,
-                                       path,
+                                       webDavPath,
                                        NodeTypeUtil.getMixinTypes(mixinTypes));
     } finally {
       session.logout();
@@ -202,7 +200,7 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public void saveFile(String path,
+  public void saveFile(String webDavPath,
                        String fileType,
                        String contentNodeType,
                        String mediaType,
@@ -212,9 +210,9 @@ public class JcrWebDavService implements DocumentWebDavService {
                        String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
+      checkLock(session, webDavPath, lockTokens);
       writeCommandHandler.saveFile(session,
-                                   path,
+                                   webDavPath,
                                    mediaType,
                                    NodeTypeUtil.getMixinTypes(mixinTypes),
                                    inputStream);
@@ -224,13 +222,13 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public void delete(String path,
+  public void delete(String webDavPath,
                      List<String> lockTokens,
                      String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      writeCommandHandler.delete(session, path);
+      checkLock(session, webDavPath, lockTokens);
+      writeCommandHandler.delete(session, webDavPath);
     } finally {
       session.logout();
     }
@@ -277,16 +275,16 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public Map<String, Collection<WebDavItemProperty>> saveProperties(String path,
+  public Map<String, Collection<WebDavItemProperty>> saveProperties(String webDavPath,
                                                                     List<WebDavItemProperty> propertiesToSave,
                                                                     List<WebDavItemProperty> propertiesToRemove,
                                                                     List<String> lockTokens,
                                                                     String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
+      checkLock(session, webDavPath, lockTokens);
       return writeCommandHandler.saveProperties(session,
-                                                path,
+                                                webDavPath,
                                                 propertiesToSave,
                                                 propertiesToRemove);
     } finally {
@@ -295,59 +293,59 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public void enableVersioning(String path,
+  public void enableVersioning(String webDavPath,
                                List<String> lockTokens,
                                String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      writeCommandHandler.enableVersioning(session, path);
+      checkLock(session, webDavPath, lockTokens);
+      writeCommandHandler.enableVersioning(session, webDavPath);
     } finally {
       session.logout();
     }
   }
 
   @Override
-  public void checkin(String path,
+  public void checkin(String webDavPath,
                       List<String> lockTokens,
                       String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      writeCommandHandler.checkin(session, path);
+      checkLock(session, webDavPath, lockTokens);
+      writeCommandHandler.checkin(session, webDavPath);
     } finally {
       session.logout();
     }
   }
 
   @Override
-  public void checkout(String path,
+  public void checkout(String webDavPath,
                        List<String> lockTokens,
                        String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      writeCommandHandler.checkout(session, path);
+      checkLock(session, webDavPath, lockTokens);
+      writeCommandHandler.checkout(session, webDavPath);
     } finally {
       session.logout();
     }
   }
 
   @Override
-  public void uncheckout(String path,
+  public void uncheckout(String webDavPath,
                          List<String> lockTokens,
                          String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      writeCommandHandler.uncheckout(session, path);
+      checkLock(session, webDavPath, lockTokens);
+      writeCommandHandler.uncheckout(session, webDavPath);
     } finally {
       session.logout();
     }
   }
 
   @Override
-  public WebDavLockResponse lock(String path,
+  public WebDavLockResponse lock(String webDavPath,
                                  int depth,
                                  int lockTimeout,
                                  boolean bodyIsEmpty,
@@ -355,50 +353,50 @@ public class JcrWebDavService implements DocumentWebDavService {
                                  String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
+      checkLock(session, webDavPath, lockTokens);
       // TODO handle lockTimeout
-      return writeCommandHandler.lock(session, path, depth, bodyIsEmpty, username);
+      return writeCommandHandler.lock(session, webDavPath, depth, bodyIsEmpty, username);
     } finally {
       session.logout();
     }
   }
 
   @Override
-  public void unlock(String path,
+  public void unlock(String webDavPath,
                      List<String> lockTokens,
                      String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      writeCommandHandler.unlock(session, path);
+      checkLock(session, webDavPath, lockTokens);
+      writeCommandHandler.unlock(session, webDavPath);
     } finally {
       session.logout();
     }
   }
 
   @Override
-  public boolean order(String path,
+  public boolean order(String webDavPath,
                        List<WebDavItemOrder> members,
                        List<String> lockTokens,
                        String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      return writeCommandHandler.order(session, path, members);
+      checkLock(session, webDavPath, lockTokens);
+      return writeCommandHandler.order(session, webDavPath, members);
     } finally {
       session.logout();
     }
   }
 
   @Override
-  public void changeAcl(String path,
+  public void changeAcl(String webDavPath,
                         WebDavItemProperty requestBody,
                         List<String> lockTokens,
                         String username) throws WebDavException {
     Session session = getSession(username);
     try {
-      checkLock(session, path, lockTokens);
-      writeCommandHandler.changeAcl(session, path, requestBody);
+      checkLock(session, webDavPath, lockTokens);
+      writeCommandHandler.changeAcl(session, webDavPath, requestBody);
     } finally {
       session.logout();
     }
@@ -440,9 +438,9 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @SneakyThrows
-  private void checkLock(Session session, String path, List<String> tokens) throws WebDavException {
-    if (tokens != null && session.itemExists(path)) {
-      Item item = session.getItem(path);
+  private void checkLock(Session session, String webDavPath, List<String> tokens) throws WebDavException {
+    if (tokens != null && session.itemExists(webDavPath)) {
+      Item item = session.getItem(webDavPath);
       if (item instanceof Node node && node.isLocked()) {
         Lock lock = node.getLock();
         String lockToken = lock.getLockToken();

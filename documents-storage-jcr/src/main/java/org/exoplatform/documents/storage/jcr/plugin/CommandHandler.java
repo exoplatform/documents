@@ -20,13 +20,14 @@ import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_C
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CREATED_DATE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_FROZEN_NODE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_MIME_TYPE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_LOCKABLE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_UNSTRUCTURED;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ALLOW_METHODS_LIST;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHILDCOUNT;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATIONDATE;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATION_PATTERN;
@@ -34,6 +35,7 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTLENGTH;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTTYPE;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GET_ETAG;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HASCHILDREN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISCOLLECTION;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISFOLDER;
@@ -43,9 +45,13 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.OWNER;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PARENTNAME;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PREDECESSORSET;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.RESOURCETYPE;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUCCESSORSET;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDLOCK;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDMETHODSET;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
 
 import java.io.Serializable;
 import java.net.URI;
@@ -60,8 +66,8 @@ import java.util.stream.Collectors;
 import javax.jcr.Node;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.Property;
+import javax.jcr.RepositoryException;
 import javax.jcr.version.Version;
-import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
 
 import org.apache.commons.lang3.StringUtils;
@@ -81,7 +87,6 @@ import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
-import org.exoplatform.services.jcr.webdav.util.DeltaVConstants;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -97,17 +102,19 @@ public abstract class CommandHandler {
                                                         ExoLogger.getLogger(CommandHandler.class);
 
   protected static final List<QName>                PROPERTY_NAMES                     =
-                                                                   Arrays.asList(DeltaVConstants.VERSIONNAME,
-                                                                                 DeltaVConstants.VERSIONHISTORY,
+                                                                   Arrays.asList(VERSIONNAME,
+                                                                                 VERSIONHISTORY,
                                                                                  DISPLAYNAME,
-                                                                                 DeltaVConstants.CHECKEDIN,
-                                                                                 DeltaVConstants.PREDECESSORSET,
-                                                                                 DeltaVConstants.SUCCESSORSET,
+                                                                                 CHECKEDIN,
+                                                                                 CHECKEDOUT,
+                                                                                 PREDECESSORSET,
+                                                                                 SUCCESSORSET,
                                                                                  RESOURCETYPE,
                                                                                  GETCONTENTLENGTH,
                                                                                  GETCONTENTTYPE,
                                                                                  CREATIONDATE,
                                                                                  GETLASTMODIFIED,
+                                                                                 GET_ETAG,
                                                                                  CHILDCOUNT,
                                                                                  HASCHILDREN,
                                                                                  ISCOLLECTION,
@@ -180,23 +187,43 @@ public abstract class CommandHandler {
   }
 
   @SneakyThrows
-  protected WebDavItemProperty getProperty(Version version, // NOSONAR
-                                           QName name,
-                                           NamespaceContext nsContext,
-                                           URI nodeIdentifier,
-                                           boolean isFile) {
-    if (DeltaVConstants.VERSIONNAME.equals(name)) {
-      return new WebDavItemProperty(name, version.getName());
-    } else if (DISPLAYNAME.equals(name)) {
-      return new WebDavItemProperty(name, decodeValue(version.getName()));
-    } else if (DeltaVConstants.VERSIONHISTORY.equals(name)) {
+  protected WebDavItemProperty getWebDavPropertyNoException(Node node, URI nodeIdentifier, Version version, QName name) {
+    try {
+      return getWebDavProperty(node, nodeIdentifier, version, name);
+    } catch (Exception e) {
+      if (LOG.isTraceEnabled()) {
+        LOG.debug("Error retrieving property from path '{}' with name '{}'",
+                  node.getPath(),
+                  name,
+                  e);
+      } else {
+        LOG.trace("Error retrieving property from path '{}' with name '{}': {}",
+                  node.getPath(),
+                  name,
+                  e.getMessage());
+      }
+      return null;
+    }
+  }
+
+  @SneakyThrows
+  protected WebDavItemProperty getWebDavProperty(Node node, URI nodeIdentifier, Version version, QName name) { // NOSONAR
+    if (name.equals(DISPLAYNAME)) {
+      return version == null ? new WebDavItemProperty(name,
+                                                      String.format("%s%s",
+                                                                    decodeValue(node.getName()),
+                                                                    getNodeIndexSuffix(node))) :
+                             new WebDavItemProperty(name, decodeValue(version.getName()));
+    } else if (VERSIONNAME.equals(name)) {
+      return version == null ? null : new WebDavItemProperty(name, version.getName());
+    } else if (VERSIONHISTORY.equals(name)) {
       return new WebDavItemProperty(name);
-    } else if (DeltaVConstants.CHECKEDIN.equals(name)) {
+    } else if (CHECKEDIN.equals(name)) {
       WebDavItemProperty checkedInProperty = new WebDavItemProperty(name);
       WebDavItemProperty href = checkedInProperty.addChild(new WebDavItemProperty(new QName("DAV:", "href")));
       href.setValue(nodeIdentifier.toASCIIString());
       return checkedInProperty;
-    } else if (DeltaVConstants.PREDECESSORSET.equals(name)) {
+    } else if (PREDECESSORSET.equals(name)) {
       Version[] predecessors = version.getPredecessors();
       WebDavItemProperty predecessorsProperty = new WebDavItemProperty(name);
       for (Version curVersion : predecessors) {
@@ -208,7 +235,7 @@ public abstract class CommandHandler {
         href.setValue(versionHref);
       }
       return predecessorsProperty;
-    } else if (DeltaVConstants.SUCCESSORSET.equals(name)) {
+    } else if (SUCCESSORSET.equals(name)) {
       Version[] successors = version.getSuccessors();
       WebDavItemProperty successorsProperty = new WebDavItemProperty(name);
       for (Version curVersion : successors) {
@@ -217,65 +244,6 @@ public abstract class CommandHandler {
         href.setValue(versionHref);
       }
       return successorsProperty;
-    } else if (RESOURCETYPE.equals(name)) {
-      WebDavItemProperty resourceType = new WebDavItemProperty(name);
-      if (!isFile) {
-        resourceType.addChild(new WebDavItemProperty(new QName("DAV:", "collection")));
-      }
-      return resourceType;
-    } else if (GETCONTENTLENGTH.equals(name)) {
-      return new WebDavItemProperty(name,
-                                    String.valueOf(version.getNode(JCR_FROZEN_NODE)
-                                                          .getNode(JCR_CONTENT)
-                                                          .getProperty(JCR_DATA)
-                                                          .getLength()));
-    } else if (GETCONTENTTYPE.equals(name)) {
-      return new WebDavItemProperty(name,
-                                    String.valueOf(version.getNode(JCR_FROZEN_NODE)
-                                                          .getNode(JCR_CONTENT)
-                                                          .getProperty(JCR_MIME_TYPE)
-                                                          .getString()));
-    } else if (CREATIONDATE.equals(name)) {
-      WebDavItemProperty creationDate = new WebDavItemProperty(name,
-                                                               version.getNode(JCR_FROZEN_NODE)
-                                                                      .getProperty(JCR_CREATED_DATE)
-                                                                      .getDate(),
-                                                               CREATION_PATTERN);
-      creationDate.setAttribute("b:dt", "dateTime.tz");
-      return creationDate;
-    } else if (GETLASTMODIFIED.equals(name)) {
-      WebDavItemProperty creationDate = new WebDavItemProperty(name,
-                                                               version.getNode(JCR_FROZEN_NODE)
-                                                                      .getNode(JCR_CONTENT)
-                                                                      .getProperty(JCR_LAST_MODIFIED)
-                                                                      .getDate(),
-                                                               MODIFICATION_PATTERN);
-      creationDate.setAttribute("b:dt", "dateTime.1123");
-      return creationDate;
-    } else {
-      return null;
-    }
-  }
-
-  @SneakyThrows
-  protected WebDavItemProperty getPropertyNoException(Node node, QName name) {
-    try {
-      return getProperty(node, name);
-    } catch (Exception e) {
-      LOG.debug("Error retrieving property from path '{}' with name '{}'",
-                node.getPath(),
-                name,
-                e);
-      return null;
-    }
-  }
-
-  @SneakyThrows
-  protected WebDavItemProperty getProperty(Node node, QName name) { // NOSONAR
-    if (name.equals(DISPLAYNAME)) {
-      return new WebDavItemProperty(name,
-                                    decodeValue(node.getName()) +
-                                        (node.getIndex() > 1 ? "[" + node.getIndex() + "]" : ""));
     } else if (name.equals(CREATIONDATE)) {
       WebDavItemProperty creationDate = new WebDavItemProperty(name,
                                                                node.getProperty(JCR_CREATED_DATE).getDate(),
@@ -306,6 +274,13 @@ public abstract class CommandHandler {
       WebDavItemProperty lastModified = new WebDavItemProperty(name, modified, MODIFICATION_PATTERN);
       lastModified.setAttribute("b:dt", "dateTime.rfc1123");
       return lastModified;
+    } else if (name.equals(GET_ETAG)) {
+      try {
+        Calendar modified = node.getProperty(JCR_LAST_MODIFIED).getDate();
+        return modified == null ? null : new WebDavItemProperty(name, String.format("W/%s", modified.getTimeInMillis()));
+      } catch (PathNotFoundException e) {
+        return null;
+      }
     } else if (name.equals(HASCHILDREN)) {
       return new WebDavItemProperty(name, node.hasNodes() ? "1" : "0");
     } else if (name.equals(ISCOLLECTION)) {
@@ -509,7 +484,63 @@ public abstract class CommandHandler {
   }
 
   @SneakyThrows
-  protected String getJcrBasePath(String webDavPath) {
+  protected String getNodeUri(Node node, String identityBaseJcrPath, String identityBaseUri) {
+    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
+    if (StringUtils.isBlank(nodeRelativePath)) {
+      return identityBaseUri;
+    } else {
+      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
+                                             .filter(StringUtils::isNotBlank)
+                                             .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
+                                                                 .replace("+", "%20"))
+                                             .collect(Collectors.joining("/"));
+      return String.format(PATHS_CONCAT_FORMAT, identityBaseUri, encodedNodeRelativePath);
+    }
+  }
+
+  @SneakyThrows
+  protected String getRelativeNodeUri(Node node, String identityBaseJcrPath, long identityId) {
+    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
+    if (StringUtils.isBlank(nodeRelativePath)) {
+      return String.format("/%s", identityId);
+    } else {
+      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
+                                             .filter(StringUtils::isNotBlank)
+                                             .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
+                                                                 .replace("+", "%20"))
+                                             .collect(Collectors.joining("/"));
+      return String.format("/%s/%s", identityId, encodedNodeRelativePath);
+    }
+  }
+
+  protected Long getIdentityIdFromJcrPath(String jcrPath, String username) {
+    return this.identityIdFutureCache.get(username, jcrPath);
+  }
+
+  protected Long getIdentityIdFromWebDavPath(String webDavPath) {
+    return this.identityIdFutureCache.get(null, webDavPath);
+  }
+
+  protected Identity getIdentityFromWebDavPath(String webDavPath) {
+    Long identityId = getIdentityIdFromWebDavPath(webDavPath);
+    return identityId == null ? null : identityManager.getIdentity(identityId);
+  }
+
+  protected boolean isIdentityRootWebDavPath(String webDavPath) {
+    String identityRelativeJcrPath = getIdentityRelativeJcrPath(webDavPath);
+    return StringUtils.isBlank(identityRelativeJcrPath);
+  }
+
+  protected String getIdentityBaseUri(String baseUri, String webDavPath) {
+    return String.format(PATHS_CONCAT_FORMAT, baseUri, getIdentityIdFromWebDavPath(webDavPath));
+  }
+
+  protected String getIdentityBaseUri(String baseUri, long identityId) {
+    return String.format(PATHS_CONCAT_FORMAT, baseUri, identityId);
+  }
+
+  @SneakyThrows
+  private String getJcrBasePath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     if (identityId == null) {
       throw new WebDavException(HttpStatus.SC_BAD_REQUEST, String.format("Can't read identity id from path: %s", webDavPath));
@@ -519,7 +550,7 @@ public abstract class CommandHandler {
   }
 
   @SneakyThrows
-  protected String getJcrBasePath(long identityId) throws WebDavException {
+  private String getJcrBasePath(long identityId) throws WebDavException {
     Identity identity = identityManager.getIdentity(identityId);
     if (identity == null) {
       throw new WebDavException(HttpStatus.SC_NOT_FOUND,
@@ -544,40 +575,7 @@ public abstract class CommandHandler {
     }
   }
 
-  @SneakyThrows
-  protected String getNodeUri(Node node, String identityBaseJcrPath, String identityBaseUri) {
-    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
-    if (StringUtils.isBlank(nodeRelativePath)) {
-      return identityBaseUri;
-    } else {
-      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
-                                             .filter(StringUtils::isNotBlank)
-                                             .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
-                                                                 .replace("+", "%20"))
-                                             .collect(Collectors.joining("/"));
-      return String.format(PATHS_CONCAT_FORMAT, identityBaseUri, encodedNodeRelativePath);
-    }
-  }
-
-  protected Long getIdentityIdFromJcrPath(String jcrPath, String username) {
-    return this.identityIdFutureCache.get(username, jcrPath);
-  }
-
-  protected Long getIdentityIdFromWebDavPath(String webDavPath) {
-    return this.identityIdFutureCache.get(null, webDavPath);
-  }
-
-  protected Identity getIdentityFromWebDavPath(String webDavPath) {
-    Long identityId = getIdentityIdFromWebDavPath(webDavPath);
-    return identityId == null ? null : identityManager.getIdentity(identityId);
-  }
-
-  protected boolean isIdentityRootWebDavPath(String webDavPath) {
-    String identityRelativeJcrPath = getIdentityRelativeJcrPath(webDavPath);
-    return StringUtils.isBlank(identityRelativeJcrPath);
-  }
-
-  protected Long getIdentityId(String jcrPath, String username) {
+  private Long getIdentityId(String jcrPath, String username) {
     long identityId;
     if (jcrPath.startsWith(getGroupsBaseJcrPath() + "/spaces")) {
       String[] pathParts = jcrPath.replaceFirst(getGroupsBaseJcrPath() + "/spaces", "").split("/");
@@ -594,7 +592,7 @@ public abstract class CommandHandler {
     return identityId;
   }
 
-  protected Long getIdentityId(String webDavPath) {
+  private Long getIdentityId(String webDavPath) {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return null;
     } else {
@@ -603,12 +601,8 @@ public abstract class CommandHandler {
     }
   }
 
-  protected String getIdentityBaseUri(String baseUri, String webDavPath) {
-    return String.format(PATHS_CONCAT_FORMAT, baseUri, getIdentityIdFromWebDavPath(webDavPath));
-  }
-
-  protected String getIdentityBaseUri(String baseUri, long identityId) {
-    return String.format(PATHS_CONCAT_FORMAT, baseUri, identityId);
+  private String getNodeIndexSuffix(Node node) throws RepositoryException {
+    return node.getIndex() > 1 ? String.format("[%s]", node.getIndex()) : "";
   }
 
 }
