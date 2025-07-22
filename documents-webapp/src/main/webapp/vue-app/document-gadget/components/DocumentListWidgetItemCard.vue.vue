@@ -208,6 +208,9 @@ export default {
     isMobile() {
       return this.$root.isMobile;
     },
+    canEdit() {
+      return this.file?.acl?.canEdit;
+    },
     isFileEditable() {
       const type = this.mimeType || '';
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
@@ -240,9 +243,9 @@ export default {
       this.loading = true;
       if (this.file?.folder) {
         this.$root.$emit('document-open-folder', this.file);
-      } else if (this.isFileEditable) {
+      } else if (this.isFileEditable && this.canEdit) {
         this.$root.openInEditMode(this.file);
-      } else if (this.isFileOnlyReadable) {
+      } else if (this.isFileOnlyReadable || !this.canEdit) {
         this.$root.openInReadOnlyMode(this.file);
       } else {
         this.$root.$emit('documents-preview', this.files, this.file);
