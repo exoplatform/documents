@@ -112,9 +112,6 @@ export default {
     hoverEdit() {
       return this.hover && this.canEdit;
     },
-    emptyWidget() {
-      return !this.files?.length && this.initialized && this.applicationMounted;
-    },
     filesCount() {
       return this.files.length;
     },
@@ -175,11 +172,6 @@ export default {
     initialized() {
       if (this.initialized) {
         this.$root.$applicationLoaded();
-      }
-    },
-    emptyWidget() {
-      if (this.emptyWidget && !this.canEdit) {
-        this.$root.$updateApplicationVisibility(false);
       }
     },
   },
