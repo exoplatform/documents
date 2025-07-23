@@ -160,7 +160,7 @@ public class WebdavReadCommandHandler {
       }
       return result;
     } else if (pathCommandHandler.isIdentityRootWebDavPath(webDavPath)) {
-      Identity identity = pathCommandHandler.getIdentityFromWebDavPath(webDavPath);
+      Identity identity = getIdentityFromWebDavPath(webDavPath);
       if (identity != null) {
         return getWebDavIdentityItem(session,
                                      identity.getIdentityId(),
@@ -737,6 +737,11 @@ public class WebdavReadCommandHandler {
                                              .collect(Collectors.joining("/"));
       return String.format("/%s/%s", identityId, encodedNodeRelativePath);
     }
+  }
+
+  private Identity getIdentityFromWebDavPath(String webDavPath) {
+    Long identityId = pathCommandHandler.getIdentityIdFromWebDavPath(webDavPath);
+    return identityId == null ? null : identityManager.getIdentity(identityId);
   }
 
   private String getIdentityBaseUri(String baseUri, String webDavPath) {

@@ -74,7 +74,7 @@ import lombok.SneakyThrows;
 @Component
 public class PathCommandHandler {
 
-  public static final List<QName> PROPERTY_NAMES                     =                                               // NOSONAR
+  public static final List<QName> PROPERTY_NAMES                      =                                               // NOSONAR
                                                  Arrays.asList(VERSIONNAME,
                                                                VERSIONHISTORY,
                                                                DISPLAYNAME,
@@ -101,17 +101,19 @@ public class PathCommandHandler {
                                                                ACLProperties.ACL,
                                                                OWNER);
 
-  public static final String      PATHS_CONCAT_FORMAT                = "%s/%s";
+  public static final String      PATHS_CONCAT_FORMAT                 = "%s/%s";
 
-  protected static final Log      LOG                                = ExoLogger.getLogger(PathCommandHandler.class);
+  protected static final Log      LOG                                 = ExoLogger.getLogger(PathCommandHandler.class);
 
-  private static final String     WEBDAV_JCR_PATH_CACHE_NAME         = "webdav.jcrPath";
+  private static final String     WEBDAV_IDENTITY_JCR_PATH_CACHE_NAME = "webdav.identityJcrBasePath";
 
-  private static final String     WEBDAV_IDENTITY_ID_PATH_CACHE_NAME = "webdav.identityIdByPath";
+  private static final String     WEBDAV_IDENTITY_ID_PATH_CACHE_NAME  = "webdav.identityIdByPath";
 
-  private static final String     GROUPS_PATH                        = "groupsPath";
+  private static final String     WEBDAV_JCR_PATH_CACHE_NAME          = "webdav.jcrPathByWebDavPath";
 
-  private static final String     USERS_PATH                         = "usersPath";
+  private static final String     GROUPS_PATH                         = "groupsPath";
+
+  private static final String     USERS_PATH                          = "usersPath";
 
   @Autowired
   protected IdentityManager       identityManager;
@@ -130,7 +132,7 @@ public class PathCommandHandler {
   private String                  groupsJcrBasePath;
 
   @SneakyThrows
-  @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
+  @Cacheable(WEBDAV_IDENTITY_JCR_PATH_CACHE_NAME)
   public String getIdentityBaseJcrPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     if (identityId == null) {
@@ -141,7 +143,7 @@ public class PathCommandHandler {
   }
 
   @SneakyThrows
-  @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
+  @Cacheable(WEBDAV_IDENTITY_JCR_PATH_CACHE_NAME)
   public String getIdentityBaseJcrPath(long identityId) {
     Identity identity = identityManager.getIdentity(identityId);
     if (identity == null) {
@@ -193,6 +195,7 @@ public class PathCommandHandler {
     }
   }
 
+  @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
   public String transformToJcrPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     if (identityId == null) {
@@ -207,11 +210,6 @@ public class PathCommandHandler {
                              identityRelativeJcrPath);
       }
     }
-  }
-
-  public Identity getIdentityFromWebDavPath(String webDavPath) {
-    Long identityId = getIdentityIdFromWebDavPath(webDavPath);
-    return identityId == null ? null : identityManager.getIdentity(identityId);
   }
 
   public boolean isIdentityRootWebDavPath(String webDavPath) {
