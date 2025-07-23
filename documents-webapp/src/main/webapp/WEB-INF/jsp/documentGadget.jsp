@@ -42,6 +42,7 @@
   PortletPreferences preferences = renderRequest.getPreferences();
   String viewOptions = preferences.getValue("viewOptions", "list");
   String documentType = preferences.getValue("documentType", "recentDocument");
+  String spaceIdentityId = preferences.getValue("spaceIdentityId", "");
   boolean customHeader = Boolean.parseBoolean(preferences.getValue("customHeader", "false"));
   boolean displaySeeMore = Boolean.parseBoolean(preferences.getValue("displaySeeMore", "true"));
   int maxDocumentsToList = Integer.parseInt(preferences.getValue("maxDocumentsToList", "4"));
@@ -60,6 +61,7 @@
         applicationId: '<%=applicationId%>',
         viewOptions: '<%=viewOptions%>',
         documentType: '<%=documentType%>',
+        spaceIdentityId: '<%=spaceIdentityId%>',
         customHeader: <%=customHeader%>,
         headerTitle: <%=headerTitle == null ? null : String.format("'%s'", StringEscapeUtils.escapeJava(headerTitle).replace("\\\"", "\"").replace("\\\\\"", "\\\""))%>,
         displaySeeMore: <%=displaySeeMore%>,
