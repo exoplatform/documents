@@ -24,6 +24,7 @@ import java.util.Map;
 import javax.xml.namespace.QName;
 
 import org.exoplatform.common.http.HTTPStatus;
+import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 
 public class PropertyConstants {
 
@@ -356,6 +357,65 @@ public class PropertyConstants {
 
   public static String getStatusDescription(int status) {
     return String.format("%s %d %s", HTTPVER, status, HTTP_STATUS_DESCRIPTIONS.getOrDefault(status, ""));
+  }
+
+  public static WebDavItemProperty getSupportedLock() {
+    WebDavItemProperty supportedLock = new WebDavItemProperty(new QName("DAV:", "supportedlock"));
+    WebDavItemProperty lockEntry = new WebDavItemProperty(new QName("DAV:", "lockentry"));
+    supportedLock.addChild(lockEntry);
+    WebDavItemProperty lockScope = new WebDavItemProperty(new QName("DAV:", "lockscope"));
+    lockScope.addChild(new WebDavItemProperty(new QName("DAV:", "exclusive")));
+    lockEntry.addChild(lockScope);
+    WebDavItemProperty lockType = new WebDavItemProperty(new QName("DAV:", "locktype"));
+    lockType.addChild(new WebDavItemProperty(new QName("DAV:", "write")));
+    lockEntry.addChild(lockType);
+    return supportedLock;
+  }
+
+  public static WebDavItemProperty getLockDiscovery(String token, String lockOwner, String timeOut) {
+    WebDavItemProperty lockDiscovery = new WebDavItemProperty(new QName("DAV:", "lockdiscovery"));
+
+    WebDavItemProperty activeLock =
+                                  lockDiscovery.addChild(new WebDavItemProperty(new QName("DAV:", "activelock")));
+
+    WebDavItemProperty lockType = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "locktype")));
+    lockType.addChild(new WebDavItemProperty(new QName("DAV:", "write")));
+
+    WebDavItemProperty lockScope = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "lockscope")));
+    lockScope.addChild(new WebDavItemProperty(new QName("DAV:", "exclusive")));
+
+    WebDavItemProperty depth = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "depth")));
+    depth.setValue("Infinity");
+
+    if (lockOwner != null) {
+      WebDavItemProperty owner = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "owner")));
+      owner.setValue(lockOwner);
+    }
+
+    WebDavItemProperty timeout = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "timeout")));
+    timeout.setValue("Second-" + timeOut);
+
+    if (token != null) {
+      WebDavItemProperty lockToken = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "locktoken")));
+      WebDavItemProperty lockHref = lockToken.addChild(new WebDavItemProperty(HREF));
+      lockHref.setValue(token);
+    }
+
+    return lockDiscovery;
+  }
+
+  public static WebDavItemProperty getSupportedMethodSet() {
+    WebDavItemProperty supportedMethodProp = new WebDavItemProperty(SUPPORTEDMETHODSET);
+    ALLOW_METHODS_LIST.forEach(m -> supportedMethodProp.addChild(new WebDavItemProperty(new QName("DAV:", SUPPORTED_METHOD)))
+                                                       .setAttribute("name", m));
+    return supportedMethodProp;
+  }
+
+  public static WebDavItemProperty getIsFolderItemProperty() {
+    WebDavItemProperty collectionProp = new WebDavItemProperty(new QName("DAV:", "collection"));
+    WebDavItemProperty resourceType = new WebDavItemProperty(RESOURCETYPE);
+    resourceType.addChild(collectionProp);
+    return resourceType;
   }
 
 }

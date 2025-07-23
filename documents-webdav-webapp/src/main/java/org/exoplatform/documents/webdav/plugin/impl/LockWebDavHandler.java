@@ -71,7 +71,7 @@ public class LockWebDavHandler extends WebDavMethodHandler {
                             boolean bodyIsEmpty,
                             HttpServletResponse httpResponse) {
     httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
-    if (!bodyIsEmpty) { // TODO Verify if this is the right behavior
+    if (!bodyIsEmpty) {
       httpResponse.setHeader(ExtHttpHeaders.LOCKTOKEN, "<" + lockToken + ">");
     }
     try (OutputStream outputStream = httpResponse.getOutputStream()) {

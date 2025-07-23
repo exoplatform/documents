@@ -16,34 +16,21 @@
  */
 package org.exoplatform.documents.storage.jcr.plugin;
 
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CREATED_DATE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_MIME_TYPE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_LOCKABLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_UNSTRUCTURED;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ALLOW_METHODS_LIST;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHILDCOUNT;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATIONDATE;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATION_PATTERN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTLENGTH;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTTYPE;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GET_ETAG;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HASCHILDREN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HREF;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISCOLLECTION;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISFOLDER;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISROOT;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISVERSIONED;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.LOCKDISCOVERY;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.OWNER;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PARENTNAME;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PREDECESSORSET;
@@ -54,20 +41,13 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
 
-import java.net.URI;
 import java.net.URLDecoder;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import javax.jcr.Node;
-import javax.jcr.PathNotFoundException;
-import javax.jcr.Property;
-import javax.jcr.RepositoryException;
-import javax.jcr.version.Version;
 import javax.xml.namespace.QName;
 
 import org.apache.commons.lang3.StringUtils;
@@ -75,15 +55,12 @@ import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 
-import org.exoplatform.documents.storage.jcr.model.JcrNamespaceContext;
 import org.exoplatform.documents.storage.jcr.util.ACLProperties;
-import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
+import org.exoplatform.documents.storage.jcr.util.Utils;
 import org.exoplatform.documents.webdav.model.WebDavException;
-import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
-import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -127,8 +104,6 @@ public abstract class CommandHandler {
 
   protected static final String      PATHS_CONCAT_FORMAT                = "%s/%s";
 
-  private static final String        SUPPORTED_METHOD                   = "supported-method";
-
   private static final String        WEBDAV_JCR_PATH_CACHE_NAME         = "webdav.jcrPath";
 
   private static final String        WEBDAV_IDENTITY_ID_PATH_CACHE_NAME = "webdav.identityIdByPath";
@@ -152,329 +127,6 @@ public abstract class CommandHandler {
   private String                     usersJcrBasePath;
 
   private String                     groupsJcrBasePath;
-
-  @SneakyThrows
-  protected WebDavItemProperty getWebDavPropertyNoException(Node node, URI nodeIdentifier, Version version, QName name) {
-    try {
-      return getWebDavProperty(node, nodeIdentifier, version, name);
-    } catch (Exception e) {
-      if (LOG.isTraceEnabled()) {
-        LOG.warn("Error retrieving property from path '{}' with name '{}'",
-                 node.getPath(),
-                 name,
-                 e);
-      } else {
-        LOG.warn("Error retrieving property from path '{}' with name '{}': {}",
-                 node.getPath(),
-                 name,
-                 e.getMessage());
-      }
-      return null;
-    }
-  }
-
-  @SneakyThrows
-  protected WebDavItemProperty getWebDavProperty(Node node, URI nodeIdentifier, Version version, QName name) { // NOSONAR
-    if (name.equals(DISPLAYNAME)) {
-      return version == null ? new WebDavItemProperty(name,
-                                                      String.format("%s%s",
-                                                                    decodeValue(node.getName()),
-                                                                    getNodeIndexSuffix(node))) :
-                             new WebDavItemProperty(name, decodeValue(version.getName()));
-    } else if (VERSIONNAME.equals(name)) {
-      return version == null ? null : new WebDavItemProperty(name, version.getName());
-    } else if (VERSIONHISTORY.equals(name)) {
-      return new WebDavItemProperty(name);
-    } else if (CHECKEDIN.equals(name)) {
-      WebDavItemProperty checkedInProperty = new WebDavItemProperty(name);
-      WebDavItemProperty href = checkedInProperty.addChild(new WebDavItemProperty(HREF));
-      href.setValue(nodeIdentifier.toASCIIString());
-      return checkedInProperty;
-    } else if (CHECKEDOUT.equals(name)) {
-      return node.isCheckedOut() ? new WebDavItemProperty(name) : null;
-    } else if (PREDECESSORSET.equals(name)) {
-      Version[] predecessors = version.getPredecessors();
-      WebDavItemProperty predecessorsProperty = new WebDavItemProperty(name);
-      for (Version curVersion : predecessors) {
-        if ("jcr:rootVersion".equals(curVersion.getName())) {
-          continue;
-        }
-        String versionHref = nodeIdentifier.toASCIIString() + "/?version=" + curVersion.getName();
-        WebDavItemProperty href = predecessorsProperty.addChild(new WebDavItemProperty(HREF));
-        href.setValue(versionHref);
-      }
-      return predecessorsProperty;
-    } else if (SUCCESSORSET.equals(name)) {
-      Version[] successors = version.getSuccessors();
-      WebDavItemProperty successorsProperty = new WebDavItemProperty(name);
-      for (Version curVersion : successors) {
-        String versionHref = nodeIdentifier.toASCIIString() + "/?version=" + curVersion.getName();
-        WebDavItemProperty href = successorsProperty.addChild(new WebDavItemProperty(HREF));
-        href.setValue(versionHref);
-      }
-      return successorsProperty;
-    } else if (name.equals(CREATIONDATE)) {
-      WebDavItemProperty creationDate = new WebDavItemProperty(name,
-                                                               node.getProperty(JCR_CREATED_DATE).getDate(),
-                                                               CREATION_PATTERN);
-      creationDate.setAttribute("b:dt", "dateTime.tz");
-      return creationDate;
-    } else if (name.equals(CHILDCOUNT)) {
-      return new WebDavItemProperty(name, String.valueOf(node.getNodes().getSize()));
-    } else if (name.equals(GETCONTENTLENGTH)) {
-      return new WebDavItemProperty(name, String.valueOf(node.getProperty(JCR_DATA).getLength()));
-    } else if (name.equals(GETCONTENTTYPE)) {
-      Node contentNode = node.getNode(JCR_CONTENT);
-      String mimeType = contentNode.getProperty(JCR_MIME_TYPE).getString();
-      if (contentNode.hasProperty(JCR_ENCODING)) {
-        String encoding = contentNode.getProperty(JCR_ENCODING).getString();
-        if (!encoding.isEmpty()) {
-          return new WebDavItemProperty(name, mimeType + "; charset=" + encoding);
-        }
-      }
-      return new WebDavItemProperty(name, mimeType);
-    } else if (name.equals(GETLASTMODIFIED)) {
-      Calendar modified;
-      try {
-        modified = node.getProperty(JCR_LAST_MODIFIED).getDate();
-      } catch (PathNotFoundException e) {
-        modified = node.getProperty(JCR_CREATED_DATE).getDate();
-      }
-      WebDavItemProperty lastModified = new WebDavItemProperty(name, modified, MODIFICATION_PATTERN);
-      lastModified.setAttribute("b:dt", "dateTime.rfc1123");
-      return lastModified;
-    } else if (name.equals(GET_ETAG)) {
-      try {
-        Calendar modified = node.getProperty(JCR_LAST_MODIFIED).getDate();
-        return modified == null ? null : new WebDavItemProperty(name, String.format("W/%s", modified.getTimeInMillis()));
-      } catch (PathNotFoundException e) {
-        return null;
-      }
-    } else if (name.equals(HASCHILDREN)) {
-      return new WebDavItemProperty(name, node.hasNodes() ? "1" : "0");
-    } else if (name.equals(ISCOLLECTION)) {
-      return new WebDavItemProperty(name, isFolder(node) ? "1" : "0");
-    } else if (name.equals(ISFOLDER)) {
-      return new WebDavItemProperty(name, isFolder(node) ? "1" : "0");
-    } else if (name.equals(ISROOT)) {
-      return new WebDavItemProperty(name, node.getPath().equals("/") ? "1" : "0");
-    } else if (name.equals(PARENTNAME)) {
-      return new WebDavItemProperty(name, node.getParent().getName());
-    } else if (name.equals(RESOURCETYPE)) {
-      if (isFolder(node)) {
-        return getIsFolderItemProperty();
-      } else {
-        return new WebDavItemProperty(name);
-      }
-    } else if (name.equals(SUPPORTEDLOCK)) {
-      if (node.canAddMixin(MIX_LOCKABLE)) {
-        return supportedLock();
-      }
-    } else if (name.equals(LOCKDISCOVERY)) {
-      if (node.isLocked()) {
-        String token = node.getLock().getLockToken();
-        String owner = node.getLock().getLockOwner();
-        return lockDiscovery(token, owner, "86400");
-      }
-    } else if (name.equals(ISVERSIONED)) {
-      return new WebDavItemProperty(name, "0");
-    } else if (name.equals(SUPPORTEDMETHODSET)) {
-      return supportedMethodSet();
-    } else if (name.equals(ACLProperties.ACL)) {
-      return ACLProperties.getACL((NodeImpl) node);
-    } else if (name.equals(OWNER)) {
-      return ACLProperties.getOwner((NodeImpl) node);
-    } else {
-      String propName = JcrNamespaceContext.createName(name);
-      LOG.debug("Prop with name '{}' not recognized, attempt to retrieve it from Node as prop name '{}'",
-                name,
-                propName);
-      if (node.hasProperty(propName)) {
-        return new WebDavItemProperty(name, getValue(node.getProperty(propName)));
-      } else if (node.getNode(JCR_CONTENT).hasProperty(propName)) {
-        return new WebDavItemProperty(name, getValue(node.getNode(JCR_CONTENT).getProperty(propName)));
-      }
-    }
-    return null;
-  }
-
-  protected WebDavItemProperty getIsFolderItemProperty() {
-    WebDavItemProperty collectionProp = new WebDavItemProperty(new QName("DAV:", "collection"));
-    WebDavItemProperty resourceType = new WebDavItemProperty(RESOURCETYPE);
-    resourceType.addChild(collectionProp);
-    return resourceType;
-  }
-
-  @SneakyThrows
-  protected boolean isFolder(Node node) {
-    return node.isNodeType(NT_UNSTRUCTURED) || node.isNodeType(NT_FOLDER);
-  }
-
-  @SneakyThrows
-  protected boolean isFile(Node node) {
-    return node.isNodeType(NodeTypeConstants.NT_FILE);
-  }
-
-  @SneakyThrows
-  private String getValue(Property property) {
-    if (property != null) {
-      if (property.getDefinition().isMultiple()) {
-        if (property.getValues().length >= 1) {
-          return property.getValues()[0].getString();
-        }
-      } else {
-        return property.getString();
-      }
-    }
-    return "";
-  }
-
-  private String decodeValue(String value) {
-    String currentValue;
-    do {
-      currentValue = value;
-      try {
-        value = URLDecoder.decode(value, StandardCharsets.UTF_8);
-      } catch (IllegalArgumentException e) {
-        LOG.warn("Unable to decode value: ", e.getMessage());
-        return value;
-      }
-    } while (!StringUtils.equals(currentValue, value));
-    return value;
-  }
-
-  private WebDavItemProperty supportedLock() {
-    WebDavItemProperty supportedLock = new WebDavItemProperty(new QName("DAV:", "supportedlock"));
-
-    WebDavItemProperty lockEntry = new WebDavItemProperty(new QName("DAV:", "lockentry"));
-    supportedLock.addChild(lockEntry);
-
-    WebDavItemProperty lockScope = new WebDavItemProperty(new QName("DAV:", "lockscope"));
-    lockScope.addChild(new WebDavItemProperty(new QName("DAV:", "exclusive")));
-    lockEntry.addChild(lockScope);
-
-    WebDavItemProperty lockType = new WebDavItemProperty(new QName("DAV:", "locktype"));
-    lockType.addChild(new WebDavItemProperty(new QName("DAV:", "write")));
-    lockEntry.addChild(lockType);
-
-    return supportedLock;
-  }
-
-  private WebDavItemProperty lockDiscovery(String token, String lockOwner, String timeOut) {
-    WebDavItemProperty lockDiscovery = new WebDavItemProperty(new QName("DAV:", "lockdiscovery"));
-
-    WebDavItemProperty activeLock =
-                                  lockDiscovery.addChild(new WebDavItemProperty(new QName("DAV:", "activelock")));
-
-    WebDavItemProperty lockType = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "locktype")));
-    lockType.addChild(new WebDavItemProperty(new QName("DAV:", "write")));
-
-    WebDavItemProperty lockScope = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "lockscope")));
-    lockScope.addChild(new WebDavItemProperty(new QName("DAV:", "exclusive")));
-
-    WebDavItemProperty depth = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "depth")));
-    depth.setValue("Infinity");
-
-    if (lockOwner != null) {
-      WebDavItemProperty owner = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "owner")));
-      owner.setValue(lockOwner);
-    }
-
-    WebDavItemProperty timeout = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "timeout")));
-    timeout.setValue("Second-" + timeOut);
-
-    if (token != null) {
-      WebDavItemProperty lockToken = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "locktoken")));
-      WebDavItemProperty lockHref = lockToken.addChild(new WebDavItemProperty(HREF));
-      lockHref.setValue(token);
-    }
-
-    return lockDiscovery;
-  }
-
-  /**
-   * The information about supported methods.
-   * 
-   * @return information about supported methods
-   */
-  private WebDavItemProperty supportedMethodSet() {
-    WebDavItemProperty supportedMethodProp = new WebDavItemProperty(SUPPORTEDMETHODSET);
-    ALLOW_METHODS_LIST.forEach(m -> supportedMethodProp.addChild(new WebDavItemProperty(new QName("DAV:", SUPPORTED_METHOD)))
-                                                       .setAttribute("name", m));
-    return supportedMethodProp;
-  }
-
-  protected String getGroupsBaseJcrPath() {
-    if (groupsJcrBasePath == null) {
-      groupsJcrBasePath = nodeHierarchyCreator.getJcrPath(GROUPS_PATH);
-    }
-    return groupsJcrBasePath;
-  }
-
-  protected String getUsersBaseJcrPath() {
-    if (usersJcrBasePath == null) {
-      usersJcrBasePath = nodeHierarchyCreator.getJcrPath(USERS_PATH);
-    }
-    return usersJcrBasePath;
-  }
-
-  protected String transformToJcrPath(String webDavPath) {
-    Long identityId = getIdentityIdFromWebDavPath(webDavPath);
-    if (identityId == null) {
-      return "/";
-    } else {
-      String identityRelativeJcrPath = getIdentityRelativeJcrPath(webDavPath);
-      if (StringUtils.isBlank(identityRelativeJcrPath)) {
-        return getIdentityBaseJcrPath(identityId);
-      } else {
-        return String.format(PATHS_CONCAT_FORMAT,
-                             getIdentityBaseJcrPath(identityId),
-                             identityRelativeJcrPath);
-      }
-    }
-  }
-
-  protected String getIdentityRelativeJcrPath(String webDavPath) {
-    String[] pathParts = webDavPath.split("/");
-    return Arrays.stream(pathParts)
-                 .filter(StringUtils::isNotBlank)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                 .map(this::encodeNodeName)
-                 .skip(1)
-                 .collect(Collectors.joining("/"));
-  }
-
-  @SneakyThrows
-  protected String getNodeUri(Node node, String identityBaseJcrPath, String identityBaseUri) {
-    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
-    if (StringUtils.isBlank(nodeRelativePath)) {
-      return identityBaseUri;
-    } else {
-      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
-                                             .filter(StringUtils::isNotBlank)
-                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                                             .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
-                                                                 .replace("+", "%20"))
-                                             .collect(Collectors.joining("/"));
-      return String.format(PATHS_CONCAT_FORMAT, identityBaseUri, encodedNodeRelativePath);
-    }
-  }
-
-  @SneakyThrows
-  protected String getRelativeNodeUri(Node node, String identityBaseJcrPath, long identityId) {
-    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
-    if (StringUtils.isBlank(nodeRelativePath)) {
-      return String.format("/%s", identityId);
-    } else {
-      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
-                                             .filter(StringUtils::isNotBlank)
-                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                                             .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
-                                                                 .replace("+", "%20"))
-                                             .collect(Collectors.joining("/"));
-      return String.format("/%s/%s", identityId, encodedNodeRelativePath);
-    }
-  }
 
   @SneakyThrows
   @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
@@ -540,6 +192,22 @@ public abstract class CommandHandler {
     }
   }
 
+  protected String transformToJcrPath(String webDavPath) {
+    Long identityId = getIdentityIdFromWebDavPath(webDavPath);
+    if (identityId == null) {
+      return "/";
+    } else {
+      String identityRelativeJcrPath = getIdentityRelativeJcrPath(webDavPath);
+      if (StringUtils.isBlank(identityRelativeJcrPath)) {
+        return getIdentityBaseJcrPath(identityId);
+      } else {
+        return String.format(PATHS_CONCAT_FORMAT,
+                             getIdentityBaseJcrPath(identityId),
+                             identityRelativeJcrPath);
+      }
+    }
+  }
+
   protected Identity getIdentityFromWebDavPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     return identityId == null ? null : identityManager.getIdentity(identityId);
@@ -550,23 +218,28 @@ public abstract class CommandHandler {
     return StringUtils.isBlank(identityRelativeJcrPath);
   }
 
-  protected String getIdentityBaseUri(String baseUri, String webDavPath) {
-    return String.format(PATHS_CONCAT_FORMAT, baseUri, getIdentityIdFromWebDavPath(webDavPath));
+  private String getIdentityRelativeJcrPath(String webDavPath) {
+    String[] pathParts = webDavPath.split("/");
+    return Arrays.stream(pathParts)
+                 .filter(StringUtils::isNotBlank)
+                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(Utils::encodeNodeName)
+                 .skip(1)
+                 .collect(Collectors.joining("/"));
   }
 
-  protected String getIdentityBaseUri(String baseUri, long identityId) {
-    return String.format(PATHS_CONCAT_FORMAT, baseUri, identityId);
+  private String getGroupsBaseJcrPath() {
+    if (groupsJcrBasePath == null) {
+      groupsJcrBasePath = nodeHierarchyCreator.getJcrPath(GROUPS_PATH);
+    }
+    return groupsJcrBasePath;
   }
 
-  protected String getNodeIndexSuffix(Node node) throws RepositoryException {
-    return node.getIndex() > 1 ? String.format("[%s]", node.getIndex()) : "";
-  }
-
-  protected String encodeNodeName(String name) {
-    return name.replace("|", "%7C")
-               .replace("[", "%5b")
-               .replace("]", "%5d")
-               .replace("*", "%2a");
+  private String getUsersBaseJcrPath() {
+    if (usersJcrBasePath == null) {
+      usersJcrBasePath = nodeHierarchyCreator.getJcrPath(USERS_PATH);
+    }
+    return usersJcrBasePath;
   }
 
 }
