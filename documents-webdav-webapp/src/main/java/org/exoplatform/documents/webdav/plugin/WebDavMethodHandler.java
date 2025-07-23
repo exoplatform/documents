@@ -149,6 +149,7 @@ public abstract class WebDavMethodHandler {
   @SneakyThrows
   protected URI getResourceUri(String resourcePath) {
     return new URI(getBaseUri() + Arrays.stream(resourcePath.split("/"))
+                                        .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                         .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20"))
                                         .collect(Collectors.joining("/")));
   }
@@ -325,13 +326,15 @@ public abstract class WebDavMethodHandler {
     } catch (FactoryConfigurationError e) {
       throw new IOException(e.getMessage(), e);
     } catch (XMLStreamException e) {
-      if (LOG.isDebugEnabled())
-        LOG.debug("An XMLStreamException occurs", e);
+      if (LOG.isDebugEnabled()) {
+        LOG.warn("An XMLStreamException occurs", e);
+      }
       return null;
     } catch (RuntimeException e) {
       if ("com.ctc.wstx.exc.WstxLazyException".equals(e.getClass().getName())) { // NOSONAR
-        if (LOG.isDebugEnabled())
-          LOG.error(e.getMessage(), e);
+        if (LOG.isDebugEnabled()) {
+          LOG.warn(e.getMessage(), e);
+        }
         return null;
       } else {
         throw e;

@@ -294,6 +294,8 @@ public class PropertyConstants {
    */
   public static final QName                   CHECKEDOUT                 = new QName("DAV:", "checked-out");
 
+  public static final QName                   HREF                       = new QName("DAV:", "href");
+
   /**
    * Creation date pattern.
    */

@@ -91,8 +91,6 @@ public class WebDavRest {
         byte[] bytes = arrayOutputStream.toByteArray();
         if (LOG.isTraceEnabled()) {
           LOG.trace("[{}] - Response Body: {}", reqUuid, new String(bytes));
-        } else {
-          LOG.debug("[{}] - Response Body Length: {}", reqUuid, bytes.length);
         }
         LOG.debug("[{}] - Response Status: {}", reqUuid, httpResponse.getStatus());
         if (LOG.isTraceEnabled()) {

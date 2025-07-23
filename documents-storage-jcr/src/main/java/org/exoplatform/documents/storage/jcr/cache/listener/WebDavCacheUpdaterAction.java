@@ -21,7 +21,11 @@ import static javax.jcr.observation.Event.NODE_REMOVED;
 import static javax.jcr.observation.Event.PROPERTY_ADDED;
 import static javax.jcr.observation.Event.PROPERTY_CHANGED;
 import static javax.jcr.observation.Event.PROPERTY_REMOVED;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FILE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_RESOURCE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_UNSTRUCTURED;
 import static org.exoplatform.services.jcr.observation.ExtendedEvent.ADD_MIXIN;
 import static org.exoplatform.services.jcr.observation.ExtendedEvent.CHECKIN;
 import static org.exoplatform.services.jcr.observation.ExtendedEvent.CHECKOUT;
@@ -31,49 +35,90 @@ import static org.exoplatform.services.jcr.observation.ExtendedEvent.PERMISSION_
 import static org.exoplatform.services.jcr.observation.ExtendedEvent.REMOVE_MIXIN;
 import static org.exoplatform.services.jcr.observation.ExtendedEvent.UNLOCK;
 
-import org.apache.commons.chain.Context;
+import java.util.Arrays;
+import java.util.List;
+
+import javax.jcr.observation.Event;
+import javax.jcr.observation.EventIterator;
+import javax.jcr.observation.EventListener;
 
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.storage.jcr.cache.CachedJcrWebDavService;
-import org.exoplatform.services.command.action.Action;
-import org.exoplatform.services.ext.action.InvocationContext;
-import org.exoplatform.services.jcr.impl.core.NodeImpl;
-import org.exoplatform.services.jcr.impl.core.PropertyImpl;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
-public class WebDavCacheUpdaterAction implements Action {
+import lombok.SneakyThrows;
 
-  private CachedJcrWebDavService cachedJcrWebDavService;
+public class WebDavCacheUpdaterAction implements EventListener {
 
-  @Override
-  public boolean execute(Context context) throws Exception {
-    int eventType = (Integer) context.get(InvocationContext.EVENT);
+  public static final List<String> SUPPORTED_NODE_TYPES  = Arrays.asList(NT_RESOURCE,                          // NOSONAR
+                                                                         NT_FILE,
+                                                                         NT_FOLDER,
+                                                                         NT_UNSTRUCTURED);
 
-    NodeImpl node = null;
-    switch (eventType) { // NOSONAR
-    case NODE_ADDED, NODE_REMOVED, PERMISSION_CHANGED, NODE_MOVED, ADD_MIXIN, REMOVE_MIXIN, LOCK, UNLOCK, CHECKIN, CHECKOUT:
-      node = (NodeImpl) context.get(InvocationContext.CURRENT_ITEM);
-      break;
-    case PROPERTY_ADDED, PROPERTY_CHANGED, PROPERTY_REMOVED:
-      PropertyImpl property = (PropertyImpl) context.get(InvocationContext.CURRENT_ITEM);
-      if (property != null) {
-        node = property.getParent();
-        if (node.isNodeType(NT_RESOURCE)) {
-          node = node.getParent();
-        }
-      }
-      break;
-    }
-    if (node != null) {
-      boolean dropEntry = eventType == NODE_ADDED
-                          || eventType == NODE_MOVED
-                          || eventType == NODE_REMOVED
-                          || eventType == PERMISSION_CHANGED;
-      getCachedJcrWebDavService().clearCache(node, dropEntry);
-    }
-    return true;
+  public static final List<String> SUPPORTED_PATHS       = Arrays.asList("/Users",                             // NOSONAR
+                                                                         "/Groups/spaces");
+
+  public static final int          SUPPORTED_EVENT_TYPES = Arrays.asList(NODE_ADDED,                           // NOSONAR
+                                                                         NODE_REMOVED,
+                                                                         PERMISSION_CHANGED,
+                                                                         NODE_MOVED,
+                                                                         ADD_MIXIN,
+                                                                         REMOVE_MIXIN,
+                                                                         LOCK,
+                                                                         UNLOCK,
+                                                                         CHECKIN,
+                                                                         CHECKOUT,
+                                                                         PROPERTY_ADDED,
+                                                                         PROPERTY_CHANGED,
+                                                                         PROPERTY_REMOVED)
+                                                                 .stream()
+                                                                 .reduce(0, (a, b) -> a | b);
+
+  private static final Log         LOG                   = ExoLogger.getLogger(WebDavCacheUpdaterAction.class);
+
+  private CachedJcrWebDavService   cachedJcrWebDavService;
+
+  public WebDavCacheUpdaterAction(CachedJcrWebDavService cachedJcrWebDavService) {
+    this.cachedJcrWebDavService = cachedJcrWebDavService;
   }
 
-  public CachedJcrWebDavService getCachedJcrWebDavService() {
+  @Override
+  @SneakyThrows
+  public void onEvent(EventIterator eventIterator) {
+    while (eventIterator.hasNext()) {
+      Event event = eventIterator.nextEvent();
+
+      int eventType = event.getType();
+      String path = event.getPath();
+      switch (eventType) { // NOSONAR
+      case NODE_ADDED, NODE_REMOVED, PERMISSION_CHANGED, NODE_MOVED, ADD_MIXIN, REMOVE_MIXIN, LOCK, UNLOCK, CHECKIN, CHECKOUT:
+        path = path.endsWith(JCR_CONTENT) ? path.substring(0, path.lastIndexOf("/")) : path;
+        clearCache(path,
+                   eventType == NODE_ADDED
+                         || eventType == NODE_MOVED
+                         || eventType == NODE_REMOVED
+                         || eventType == PERMISSION_CHANGED);
+        break;
+      case PROPERTY_ADDED, PROPERTY_CHANGED, PROPERTY_REMOVED:
+        clearCache(path.substring(0, path.lastIndexOf("/")), false);
+        break;
+      }
+    }
+  }
+
+  private void clearCache(String path, boolean dropEntry) {
+    try {
+      getCachedJcrWebDavService().clearCache(path, dropEntry);
+    } catch (Exception e) {
+      LOG.warn("Error while clearing cache entry with path '{}' and drop option = '{}'",
+               path,
+               dropEntry,
+               e);
+    }
+  }
+
+  private CachedJcrWebDavService getCachedJcrWebDavService() {
     if (cachedJcrWebDavService == null) {
       cachedJcrWebDavService = ExoContainerContext.getService(CachedJcrWebDavService.class);
     }

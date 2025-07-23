@@ -37,6 +37,7 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GET_ETAG;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HASCHILDREN;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HREF;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISCOLLECTION;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISFOLDER;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISROOT;
@@ -53,7 +54,6 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
 
-import java.io.Serializable;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -73,16 +73,13 @@ import javax.xml.namespace.QName;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 
-import org.exoplatform.commons.cache.future.FutureCache;
-import org.exoplatform.commons.cache.future.FutureExoCache;
-import org.exoplatform.commons.cache.future.Loader;
 import org.exoplatform.documents.storage.jcr.model.JcrNamespaceContext;
 import org.exoplatform.documents.storage.jcr.util.ACLProperties;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
-import org.exoplatform.services.cache.CacheService;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
@@ -98,93 +95,63 @@ import lombok.SneakyThrows;
 
 public abstract class CommandHandler {
 
-  protected static final Log                        LOG                                =
-                                                        ExoLogger.getLogger(CommandHandler.class);
+  protected static final Log         LOG                                =
+                                         ExoLogger.getLogger(CommandHandler.class);
 
-  protected static final List<QName>                PROPERTY_NAMES                     =
-                                                                   Arrays.asList(VERSIONNAME,
-                                                                                 VERSIONHISTORY,
-                                                                                 DISPLAYNAME,
-                                                                                 CHECKEDIN,
-                                                                                 CHECKEDOUT,
-                                                                                 PREDECESSORSET,
-                                                                                 SUCCESSORSET,
-                                                                                 RESOURCETYPE,
-                                                                                 GETCONTENTLENGTH,
-                                                                                 GETCONTENTTYPE,
-                                                                                 CREATIONDATE,
-                                                                                 GETLASTMODIFIED,
-                                                                                 GET_ETAG,
-                                                                                 CHILDCOUNT,
-                                                                                 HASCHILDREN,
-                                                                                 ISCOLLECTION,
-                                                                                 ISFOLDER,
-                                                                                 ISROOT,
-                                                                                 PARENTNAME,
-                                                                                 SUPPORTEDLOCK,
-                                                                                 LOCKDISCOVERY,
-                                                                                 ISVERSIONED,
-                                                                                 SUPPORTEDMETHODSET,
-                                                                                 ACLProperties.ACL,
-                                                                                 OWNER);
+  protected static final List<QName> PROPERTY_NAMES                     =
+                                                    Arrays.asList(VERSIONNAME,
+                                                                  VERSIONHISTORY,
+                                                                  DISPLAYNAME,
+                                                                  CHECKEDIN,
+                                                                  CHECKEDOUT,
+                                                                  PREDECESSORSET,
+                                                                  SUCCESSORSET,
+                                                                  RESOURCETYPE,
+                                                                  GETCONTENTLENGTH,
+                                                                  GETCONTENTTYPE,
+                                                                  CREATIONDATE,
+                                                                  GETLASTMODIFIED,
+                                                                  GET_ETAG,
+                                                                  CHILDCOUNT,
+                                                                  HASCHILDREN,
+                                                                  ISCOLLECTION,
+                                                                  ISFOLDER,
+                                                                  ISROOT,
+                                                                  PARENTNAME,
+                                                                  SUPPORTEDLOCK,
+                                                                  LOCKDISCOVERY,
+                                                                  ISVERSIONED,
+                                                                  SUPPORTEDMETHODSET,
+                                                                  ACLProperties.ACL,
+                                                                  OWNER);
 
-  protected static final String                     PATHS_CONCAT_FORMAT                = "%s/%s";
+  protected static final String      PATHS_CONCAT_FORMAT                = "%s/%s";
 
-  private static final String                       SUPPORTED_METHOD                   = "supported-method";
+  private static final String        SUPPORTED_METHOD                   = "supported-method";
 
-  private static final String                       WEBDAV_JCR_PATH_CACHE_NAME         = "webdav.jcrPath";
+  private static final String        WEBDAV_JCR_PATH_CACHE_NAME         = "webdav.jcrPath";
 
-  private static final String                       WEBDAV_IDENTITY_ID_PATH_CACHE_NAME = "webdav.identityIdByPath";
+  private static final String        WEBDAV_IDENTITY_ID_PATH_CACHE_NAME = "webdav.identityIdByPath";
 
-  private static final String                       GROUPS_PATH                        = "groupsPath";
+  private static final String        GROUPS_PATH                        = "groupsPath";
 
-  private static final String                       USERS_PATH                         = "usersPath";
-
-  @Autowired
-  protected IdentityManager                         identityManager;
+  private static final String        USERS_PATH                         = "usersPath";
 
   @Autowired
-  protected SpaceService                            spaceService;
+  protected IdentityManager          identityManager;
 
   @Autowired
-  private NodeHierarchyCreator                      nodeHierarchyCreator;
+  protected SpaceService             spaceService;
 
   @Autowired
-  private SessionProviderService                    sessionProviderService;
+  private NodeHierarchyCreator       nodeHierarchyCreator;
 
   @Autowired
-  private CacheService                              cacheService;
+  private SessionProviderService     sessionProviderService;
 
-  private String                                    usersJcrBasePath;
+  private String                     usersJcrBasePath;
 
-  private String                                    groupsJcrBasePath;
-
-  private FutureCache<Serializable, String, Object> pathFutureCache;
-
-  private FutureCache<String, Long, String>         identityIdFutureCache;
-
-  protected void init() {
-    this.pathFutureCache = new FutureExoCache<>(new Loader<Serializable, String, Object>() {
-      @Override
-      public String retrieve(Object context, Serializable objectId) throws Exception {
-        return switch (objectId) {
-        case Long identityId -> getJcrBasePath(identityId);
-        case String webDavPath -> getJcrBasePath(webDavPath);
-        default -> null;
-        };
-      }
-    }, cacheService.getCacheInstance(WEBDAV_JCR_PATH_CACHE_NAME));
-    this.identityIdFutureCache = new FutureExoCache<>(new Loader<String, Long, String>() {
-      @Override
-      public Long retrieve(String username, String path) throws Exception {
-        if (StringUtils.isBlank(username)) {
-          return getIdentityId(path);
-        } else {
-          return getIdentityId(path, username);
-        }
-      }
-    }, cacheService.getCacheInstance(WEBDAV_IDENTITY_ID_PATH_CACHE_NAME));
-  }
+  private String                     groupsJcrBasePath;
 
   @SneakyThrows
   protected WebDavItemProperty getWebDavPropertyNoException(Node node, URI nodeIdentifier, Version version, QName name) {
@@ -192,15 +159,15 @@ public abstract class CommandHandler {
       return getWebDavProperty(node, nodeIdentifier, version, name);
     } catch (Exception e) {
       if (LOG.isTraceEnabled()) {
-        LOG.debug("Error retrieving property from path '{}' with name '{}'",
-                  node.getPath(),
-                  name,
-                  e);
+        LOG.warn("Error retrieving property from path '{}' with name '{}'",
+                 node.getPath(),
+                 name,
+                 e);
       } else {
-        LOG.trace("Error retrieving property from path '{}' with name '{}': {}",
-                  node.getPath(),
-                  name,
-                  e.getMessage());
+        LOG.warn("Error retrieving property from path '{}' with name '{}': {}",
+                 node.getPath(),
+                 name,
+                 e.getMessage());
       }
       return null;
     }
@@ -220,9 +187,11 @@ public abstract class CommandHandler {
       return new WebDavItemProperty(name);
     } else if (CHECKEDIN.equals(name)) {
       WebDavItemProperty checkedInProperty = new WebDavItemProperty(name);
-      WebDavItemProperty href = checkedInProperty.addChild(new WebDavItemProperty(new QName("DAV:", "href")));
+      WebDavItemProperty href = checkedInProperty.addChild(new WebDavItemProperty(HREF));
       href.setValue(nodeIdentifier.toASCIIString());
       return checkedInProperty;
+    } else if (CHECKEDOUT.equals(name)) {
+      return node.isCheckedOut() ? new WebDavItemProperty(name) : null;
     } else if (PREDECESSORSET.equals(name)) {
       Version[] predecessors = version.getPredecessors();
       WebDavItemProperty predecessorsProperty = new WebDavItemProperty(name);
@@ -231,7 +200,7 @@ public abstract class CommandHandler {
           continue;
         }
         String versionHref = nodeIdentifier.toASCIIString() + "/?version=" + curVersion.getName();
-        WebDavItemProperty href = predecessorsProperty.addChild(new WebDavItemProperty(new QName("DAV:", "href")));
+        WebDavItemProperty href = predecessorsProperty.addChild(new WebDavItemProperty(HREF));
         href.setValue(versionHref);
       }
       return predecessorsProperty;
@@ -240,7 +209,7 @@ public abstract class CommandHandler {
       WebDavItemProperty successorsProperty = new WebDavItemProperty(name);
       for (Version curVersion : successors) {
         String versionHref = nodeIdentifier.toASCIIString() + "/?version=" + curVersion.getName();
-        WebDavItemProperty href = successorsProperty.addChild(new WebDavItemProperty(new QName("DAV:", "href")));
+        WebDavItemProperty href = successorsProperty.addChild(new WebDavItemProperty(HREF));
         href.setValue(versionHref);
       }
       return successorsProperty;
@@ -416,7 +385,7 @@ public abstract class CommandHandler {
 
     if (token != null) {
       WebDavItemProperty lockToken = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "locktoken")));
-      WebDavItemProperty lockHref = lockToken.addChild(new WebDavItemProperty(new QName("DAV:", "href")));
+      WebDavItemProperty lockHref = lockToken.addChild(new WebDavItemProperty(HREF));
       lockHref.setValue(token);
     }
 
@@ -469,18 +438,10 @@ public abstract class CommandHandler {
     String[] pathParts = webDavPath.split("/");
     return Arrays.stream(pathParts)
                  .filter(StringUtils::isNotBlank)
+                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(this::encodeNodeName)
                  .skip(1)
                  .collect(Collectors.joining("/"));
-  }
-
-  @SneakyThrows
-  protected String getIdentityBaseJcrPath(String webDavPath) {
-    return this.pathFutureCache.get(null, webDavPath);
-  }
-
-  @SneakyThrows
-  protected String getIdentityBaseJcrPath(long identityId) {
-    return this.pathFutureCache.get(null, identityId);
   }
 
   @SneakyThrows
@@ -491,6 +452,7 @@ public abstract class CommandHandler {
     } else {
       String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
                                              .filter(StringUtils::isNotBlank)
+                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                              .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
                                                                  .replace("+", "%20"))
                                              .collect(Collectors.joining("/"));
@@ -506,6 +468,7 @@ public abstract class CommandHandler {
     } else {
       String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
                                              .filter(StringUtils::isNotBlank)
+                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                              .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
                                                                  .replace("+", "%20"))
                                              .collect(Collectors.joining("/"));
@@ -513,34 +476,9 @@ public abstract class CommandHandler {
     }
   }
 
-  protected Long getIdentityIdFromJcrPath(String jcrPath, String username) {
-    return this.identityIdFutureCache.get(username, jcrPath);
-  }
-
-  protected Long getIdentityIdFromWebDavPath(String webDavPath) {
-    return this.identityIdFutureCache.get(null, webDavPath);
-  }
-
-  protected Identity getIdentityFromWebDavPath(String webDavPath) {
-    Long identityId = getIdentityIdFromWebDavPath(webDavPath);
-    return identityId == null ? null : identityManager.getIdentity(identityId);
-  }
-
-  protected boolean isIdentityRootWebDavPath(String webDavPath) {
-    String identityRelativeJcrPath = getIdentityRelativeJcrPath(webDavPath);
-    return StringUtils.isBlank(identityRelativeJcrPath);
-  }
-
-  protected String getIdentityBaseUri(String baseUri, String webDavPath) {
-    return String.format(PATHS_CONCAT_FORMAT, baseUri, getIdentityIdFromWebDavPath(webDavPath));
-  }
-
-  protected String getIdentityBaseUri(String baseUri, long identityId) {
-    return String.format(PATHS_CONCAT_FORMAT, baseUri, identityId);
-  }
-
   @SneakyThrows
-  private String getJcrBasePath(String webDavPath) {
+  @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
+  protected String getIdentityBaseJcrPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     if (identityId == null) {
       throw new WebDavException(HttpStatus.SC_BAD_REQUEST, String.format("Can't read identity id from path: %s", webDavPath));
@@ -550,7 +488,8 @@ public abstract class CommandHandler {
   }
 
   @SneakyThrows
-  private String getJcrBasePath(long identityId) throws WebDavException {
+  @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
+  protected String getIdentityBaseJcrPath(long identityId) {
     Identity identity = identityManager.getIdentity(identityId);
     if (identity == null) {
       throw new WebDavException(HttpStatus.SC_NOT_FOUND,
@@ -575,24 +514,24 @@ public abstract class CommandHandler {
     }
   }
 
-  private Long getIdentityId(String jcrPath, String username) {
-    long identityId;
+  @Cacheable(WEBDAV_IDENTITY_ID_PATH_CACHE_NAME)
+  protected Long getIdentityIdFromJcrPath(String jcrPath, String username) {
     if (jcrPath.startsWith(getGroupsBaseJcrPath() + "/spaces")) {
       String[] pathParts = jcrPath.replaceFirst(getGroupsBaseJcrPath() + "/spaces", "").split("/");
       String spaceGroupId = String.format("/spaces/%s", StringUtils.firstNonBlank(pathParts[0], pathParts[1]));
       Space space = spaceService.getSpaceByGroupId(spaceGroupId);
       Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
-      identityId = spaceIdentity.getIdentityId();
+      return spaceIdentity.getIdentityId();
     } else if (jcrPath.startsWith(getUsersBaseJcrPath()) && jcrPath.contains(String.format("/%s/", username))) {
       Identity userIdentity = identityManager.getOrCreateUserIdentity(username);
-      identityId = userIdentity.getIdentityId();
+      return userIdentity.getIdentityId();
     } else {
       return null;
     }
-    return identityId;
   }
 
-  private Long getIdentityId(String webDavPath) {
+  @Cacheable(WEBDAV_IDENTITY_ID_PATH_CACHE_NAME)
+  protected Long getIdentityIdFromWebDavPath(String webDavPath) {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return null;
     } else {
@@ -601,8 +540,33 @@ public abstract class CommandHandler {
     }
   }
 
-  private String getNodeIndexSuffix(Node node) throws RepositoryException {
+  protected Identity getIdentityFromWebDavPath(String webDavPath) {
+    Long identityId = getIdentityIdFromWebDavPath(webDavPath);
+    return identityId == null ? null : identityManager.getIdentity(identityId);
+  }
+
+  protected boolean isIdentityRootWebDavPath(String webDavPath) {
+    String identityRelativeJcrPath = getIdentityRelativeJcrPath(webDavPath);
+    return StringUtils.isBlank(identityRelativeJcrPath);
+  }
+
+  protected String getIdentityBaseUri(String baseUri, String webDavPath) {
+    return String.format(PATHS_CONCAT_FORMAT, baseUri, getIdentityIdFromWebDavPath(webDavPath));
+  }
+
+  protected String getIdentityBaseUri(String baseUri, long identityId) {
+    return String.format(PATHS_CONCAT_FORMAT, baseUri, identityId);
+  }
+
+  protected String getNodeIndexSuffix(Node node) throws RepositoryException {
     return node.getIndex() > 1 ? String.format("[%s]", node.getIndex()) : "";
+  }
+
+  protected String encodeNodeName(String name) {
+    return name.replace("|", "%7C")
+               .replace("[", "%5b")
+               .replace("]", "%5d")
+               .replace("*", "%2a");
   }
 
 }

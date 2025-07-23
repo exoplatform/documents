@@ -16,11 +16,13 @@
 */
 package org.exoplatform.documents.webdav.service;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -69,20 +71,42 @@ public class WebDavHandler {
       handlersByMethod.getOrDefault(httpRequest.getMethod().toUpperCase(), errorHandler)
                       .handle(httpRequest, httpResponse);
     } catch (WebDavException e) {
-      if (e.getHttpError() != HttpStatus.SC_NOT_FOUND
-          && e.getHttpError() != HttpStatus.SC_FORBIDDEN) {
-        LOG.warn("Bad Request sent to WebDav using method '{}' and URI '{}'",
+      handleWebDavException(httpRequest, httpResponse, e);
+    } catch (Exception e) {
+      WebDavException webDavException = getWebDavException(e);
+      if (webDavException == null) {
+        LOG.warn("Unknown error while handling WebDav method '{}' and URI '{}'",
                  httpRequest.getMethod(),
                  httpRequest.getRequestURI(),
                  e);
+        httpResponse.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
+        httpResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+      } else {
+        handleWebDavException(httpRequest, httpResponse, webDavException);
       }
-      httpResponse.sendError(e.getHttpError(), e.getMessage());
-    } catch (Exception e) {
-      LOG.warn("Unknown error while handling WebDav method '{}' and URI '{}'",
+    }
+  }
+
+  private void handleWebDavException(HttpServletRequest httpRequest,
+                                     HttpServletResponse httpResponse,
+                                     WebDavException e) throws IOException {
+    if (e.getHttpError() != HttpStatus.SC_NOT_FOUND
+        && e.getHttpError() != HttpStatus.SC_FORBIDDEN) {
+      LOG.warn("Bad Request sent to WebDav using method '{}' and URI '{}'",
                httpRequest.getMethod(),
                httpRequest.getRequestURI(),
                e);
-      httpResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+    }
+    httpResponse.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
+    httpResponse.sendError(e.getHttpError(), e.getMessage());
+  }
+
+  private WebDavException getWebDavException(Throwable e) {
+    if (e.getCause() == null) {
+      return null;
+    } else {
+      return e.getCause() instanceof WebDavException webDavException ? webDavException :
+                                                                     getWebDavException(e.getCause());
     }
   }
 

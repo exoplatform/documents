@@ -34,6 +34,7 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -88,29 +89,22 @@ import lombok.SneakyThrows;
 @Service
 public class WebdavWriteCommandHandler extends CommandHandler {
 
+  private static final Set<QName> READ_ONLY_PROPS                = Collections.singleton(PropertyConstants.JCR_DATA);
+
+  private static final Set<QName> NON_REMOVING_PROPS             = new HashSet<>(Arrays.asList(PropertyConstants.CREATIONDATE,
+                                                                                               PropertyConstants.DISPLAYNAME,
+                                                                                               PropertyConstants.GETCONTENTLANGUAGE,
+                                                                                               PropertyConstants.GETCONTENTLENGTH,
+                                                                                               PropertyConstants.GETCONTENTTYPE,
+                                                                                               PropertyConstants.GETLASTMODIFIED,
+                                                                                               PropertyConstants.JCR_DATA));
+
   private static final String     RESOURCE_WITH_PATH_S_NOT_FOUND = "Resource with path '%s' not found";
 
-  private static final Set<QName> NON_REMOVING_PROPS             = new HashSet<>();
-
-  private static final Set<QName> READ_ONLY_PROPS                = new HashSet<>();
-
-  static {
-    READ_ONLY_PROPS.add(PropertyConstants.JCR_DATA);
-    NON_REMOVING_PROPS.add(PropertyConstants.CREATIONDATE);
-    NON_REMOVING_PROPS.add(PropertyConstants.DISPLAYNAME);
-    NON_REMOVING_PROPS.add(PropertyConstants.GETCONTENTLANGUAGE);
-    NON_REMOVING_PROPS.add(PropertyConstants.GETCONTENTLENGTH);
-    NON_REMOVING_PROPS.add(PropertyConstants.GETCONTENTTYPE);
-    NON_REMOVING_PROPS.add(PropertyConstants.GETLASTMODIFIED);
-    NON_REMOVING_PROPS.add(PropertyConstants.JCR_DATA);
-  }
-
-  private MimeTypeResolver mimeTypeResolver = new MimeTypeResolver();
+  private MimeTypeResolver        mimeTypeResolver               = new MimeTypeResolver();
 
   @PostConstruct
-  @Override
   public void init() {
-    super.init();
     this.mimeTypeResolver.setDefaultMimeType(InitParamsDefaults.FILE_MIME_TYPE);
   }
 
@@ -120,7 +114,7 @@ public class WebdavWriteCommandHandler extends CommandHandler {
                            List<String> mixinTypes) {
     checkNotRoot(webDavPath);
     String jcrPath = transformToJcrPath(webDavPath);
-    Node node = session.getRootNode().addNode(TextUtil.relativizePath(jcrPath), NT_FOLDER);
+    Node node = addNode(session, jcrPath, NT_FOLDER);
     addMixins(node, mixinTypes);
     session.save();
   }
@@ -135,19 +129,18 @@ public class WebdavWriteCommandHandler extends CommandHandler {
     String jcrPath = transformToJcrPath(webDavPath);
     Node node = session.itemExists(jcrPath) ? (Node) session.getItem(jcrPath) : null;
     if (node == null) {
-      List<String> pathParts = Arrays.stream(jcrPath.split("/")).filter(StringUtils::isNotBlank).toList();
-      String fileName = pathParts.getLast();
-      String filePath = StringUtils.join(pathParts.subList(0, pathParts.size() - 1), "/");
-      checkResourceExists(session, "/" + filePath);
-      node = session.getRootNode().getNode(filePath).addNode(fileName, NT_FILE);
-      node.addNode(JCR_CONTENT, NT_RESOURCE);
+      node = addNode(session, jcrPath, NT_FILE);
+      if (!node.hasNode(JCR_CONTENT)) {
+        node.addNode(JCR_CONTENT, NT_RESOURCE);
+      }
       if (node.canAddMixin(VersionHistoryUtils.MIX_VERSIONABLE)) {
         node.addMixin(VersionHistoryUtils.MIX_VERSIONABLE);
       }
     } else {
       VersionHistoryUtils.createVersion(node);
     }
-    updateContent(node, mediaType, inputStream, mixinTypes);
+    updateContent(node, mediaType, inputStream);
+    addMixins(node, mixinTypes);
     session.save();
   }
 
@@ -508,8 +501,7 @@ public class WebdavWriteCommandHandler extends CommandHandler {
 
   private void updateContent(Node node,
                              String mediaType,
-                             InputStream inputStream,
-                             List<String> mixinTypes) throws RepositoryException {
+                             InputStream inputStream) throws RepositoryException {
     Node content = node.getNode(JCR_CONTENT);
     String encoding = null;
     if (StringUtils.contains(mediaType, ";")) {
@@ -526,7 +518,14 @@ public class WebdavWriteCommandHandler extends CommandHandler {
     }
     content.setProperty(JCR_LAST_MODIFIED, Calendar.getInstance());
     content.setProperty(JCR_DATA, inputStream);
-    addMixins(node, mixinTypes);
+  }
+
+  @SneakyThrows
+  private Node addNode(Session session, String jcrPath, String nodeType) {
+    List<String> pathParts = Arrays.stream(jcrPath.split("/")).filter(StringUtils::isNotBlank).toList();
+    String name = pathParts.getLast();
+    String parentPath = StringUtils.join(pathParts.subList(0, pathParts.size() - 1), "/");
+    return ((Node) session.getItem("/" + parentPath)).addNode(encodeNodeName(name), nodeType);
   }
 
   @SneakyThrows

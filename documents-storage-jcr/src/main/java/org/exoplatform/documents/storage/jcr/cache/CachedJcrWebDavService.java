@@ -22,6 +22,7 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.REQUEST_ALL_PROPS;
 
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -34,7 +35,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.jcr.Node;
+import javax.jcr.Session;
+import javax.jcr.observation.ObservationManager;
 import javax.xml.namespace.QName;
 
 import org.apache.commons.collections4.CollectionUtils;
@@ -46,9 +48,11 @@ import org.exoplatform.documents.storage.jcr.JcrWebDavService;
 import org.exoplatform.documents.storage.jcr.cache.elasticsearch.model.WebDavItemEntity;
 import org.exoplatform.documents.storage.jcr.cache.elasticsearch.model.WebDavItemPropertyEntity;
 import org.exoplatform.documents.storage.jcr.cache.elasticsearch.repository.WebDavItemRepository;
+import org.exoplatform.documents.storage.jcr.cache.listener.WebDavCacheUpdaterAction;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
@@ -69,7 +73,9 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   @PostConstruct
   private void init() {
     // Clear stored Cache on startup
-    this.webDavItemRepository.deleteAll();
+    webDavItemRepository.deleteAll();
+    // Add Cache Clear Event Listener
+    addCacheEventListener();
   }
 
   @Override
@@ -115,7 +121,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
                         boolean requestPropertyNamesOnly,
                         int depth,
                         String baseUri,
-                        String username) {
+                        String username) throws WebDavException {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return super.get(webDavPath, propRequestType, requestedPropertyNames, requestPropertyNamesOnly, depth, baseUri, username);
     } else {
@@ -151,10 +157,10 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   }
 
   @SneakyThrows
-  public void clearCache(Node node, boolean drop) {
-    String jcrPath = node.getPath();
+  public void clearCache(String jcrPath, boolean drop) {
     WebDavItemEntity webDavItemEntity = webDavItemRepository.findByJcrPath(jcrPath);
     if (webDavItemEntity != null) {
+      LOG.debug("Clear WebDav Item from ES Cache with path '{}' and option drop = '{}'", jcrPath, drop);
       if (drop) {
         webDavItemRepository.delete(webDavItemEntity);
       } else if (!webDavItemEntity.isModified()) {
@@ -162,9 +168,10 @@ public class CachedJcrWebDavService extends JcrWebDavService {
         webDavItemRepository.save(webDavItemEntity);
       }
     }
-    String parentJcrPath = node.getParent().getPath();
+    String parentJcrPath = jcrPath.substring(0, jcrPath.lastIndexOf("/"));
     WebDavItemEntity parentWebDavItemEntity = webDavItemRepository.findByJcrPath(parentJcrPath);
     if (parentWebDavItemEntity != null && !parentWebDavItemEntity.isModified() && drop) {
+      LOG.debug("Clear WebDav Item from ES Cache with path '{}'", jcrPath);
       parentWebDavItemEntity.setModified(true);
       parentWebDavItemEntity.setDeep(false);
       webDavItemRepository.save(parentWebDavItemEntity);
@@ -176,43 +183,37 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     int childrenDepth = depth - 1;
     children.stream()
             .map(c -> {
-              if (c != null) {
-                if (childrenDepth > 0) {
-                  WebDavItem childWebDavItem = null;
-                  if (!c.isModified()
-                      && c.getUsernames().contains(username)
-                      && (c.isDeep() || childrenDepth == 0)) {
-                    childWebDavItem = c.toWebDavItem();
-                  } else {
-                    try {
-                      childWebDavItem = get(c.getWebDavPath(),
-                                            REQUEST_ALL_PROPS,
-                                            null,
-                                            false,
-                                            childrenDepth,
-                                            baseUri,
-                                            username);
-                    } catch (Exception e) {
-                      if (LOG.isTraceEnabled()) {
-                        LOG.trace("It seems that user isn't allowed to access {}. Continue for other child nodes",
-                                  c.getWebDavPath(),
-                                  e);
-                      } else {
-                        LOG.debug("It seems that user isn't allowed to access {}. Continue for other child nodes. Error: {}",
-                                  c.getWebDavPath(),
-                                  e.getMessage());
-                      }
-                    }
+              WebDavItem childWebDavItem = null;
+              if (!c.isModified()
+                  && c.getUsernames().contains(username)
+                  && (c.isDeep() || childrenDepth == 0)) {
+                childWebDavItem = c.toWebDavItem();
+              } else {
+                try {
+                  childWebDavItem = get(c.getWebDavPath(),
+                                        REQUEST_ALL_PROPS,
+                                        null,
+                                        false,
+                                        childrenDepth,
+                                        baseUri,
+                                        username);
+                } catch (Exception e) {
+                  if (LOG.isTraceEnabled()) {
+                    LOG.trace("It seems that user isn't allowed to access {}. Continue for other child nodes",
+                              c.getWebDavPath(),
+                              e);
+                  } else if (LOG.isDebugEnabled()) {
+                    LOG.debug("It seems that user isn't allowed to access {}. Continue for other child nodes. Error: {}",
+                              c.getWebDavPath(),
+                              e.getMessage());
                   }
-                  if (childrenDepth > 0) {
-                    addChildren(childWebDavItem, childrenDepth, baseUri, username);
-                  }
-                  return childWebDavItem;
-                } else {
-                  return c.toWebDavItem();
+                  return null;
                 }
               }
-              return null;
+              if (childrenDepth > 0) {
+                addChildren(childWebDavItem, childrenDepth, baseUri, username);
+              }
+              return childWebDavItem;
             })
             .filter(Objects::nonNull)
             .forEach(webDavItem::addChild);
@@ -257,6 +258,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   private WebDavItemEntity findCacheEntry(String webDavPath) {
     String id = Arrays.stream(webDavPath.split("/"))
                       .filter(StringUtils::isNotBlank)
+                      .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                       .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
                                           .replace("+", "%20"))
                       .collect(Collectors.joining("/"));
@@ -272,6 +274,42 @@ public class CachedJcrWebDavService extends JcrWebDavService {
            || webDavItemEntity.isModified()
            || (depth > 0 && !webDavItemEntity.isDeep())
            || !webDavItemEntity.getUsernames().contains(username);
+  }
+
+  @SneakyThrows
+  private void addCacheEventListener() {
+    Session session = getSystemSession();
+    try {
+      ObservationManager observation = session.getWorkspace().getObservationManager();
+      WebDavCacheUpdaterAction.SUPPORTED_PATHS.forEach(path -> addCacheEventListener(observation,
+                                                                                     createCacheListenerInstance(),
+                                                                                     path));
+    } finally {
+      session.logout();
+    }
+  }
+
+  @SneakyThrows
+  private void addCacheEventListener(ObservationManager observation,
+                                     WebDavCacheUpdaterAction cacheUpdaterAction,
+                                     String path) {
+    observation.addEventListener(cacheUpdaterAction,
+                                 WebDavCacheUpdaterAction.SUPPORTED_EVENT_TYPES,
+                                 path,
+                                 true,
+                                 null,
+                                 WebDavCacheUpdaterAction.SUPPORTED_NODE_TYPES.toArray(String[]::new),
+                                 false);
+  }
+
+  private WebDavCacheUpdaterAction createCacheListenerInstance() {
+    return new WebDavCacheUpdaterAction(this);
+  }
+
+  @SneakyThrows
+  private Session getSystemSession() {
+    ManageableRepository repository = repositoryService.getDefaultRepository();
+    return repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
   }
 
 }

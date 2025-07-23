@@ -83,6 +83,7 @@ public interface DocumentWebDavService {
    * @param baseUri Base Request URI
    * @param username user login accessing the resource
    * @return {@link WebDavItem} corresponding to the requested resource
+   * @throws WebDavException
    */
   WebDavItem get(String resourcePath,
                  String propRequestType,
@@ -90,7 +91,7 @@ public interface DocumentWebDavService {
                  boolean requestPropertyNamesOnly,
                  int depth,
                  String baseUri,
-                 String username);
+                 String username) throws WebDavException;
 
   /**
    * Creates a new folder in the designated location

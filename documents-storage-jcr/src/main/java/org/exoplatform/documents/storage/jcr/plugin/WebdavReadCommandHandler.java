@@ -65,7 +65,6 @@ import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.space.model.Space;
 
-import jakarta.annotation.PostConstruct;
 import lombok.SneakyThrows;
 
 @Service
@@ -80,26 +79,19 @@ public class WebdavReadCommandHandler extends CommandHandler {
                                                                                     GETCONTENTLENGTH,
                                                                                     GETCONTENTTYPE));
 
-  @PostConstruct
-  @Override
-  public void init() {
-    super.init();
-  }
-
-  @SneakyThrows
   public WebDavItem get(Session session, // NOSONAR
                         String webDavPath,
                         Set<QName> requestedPropertyNames,
                         boolean requestPropertyNamesOnly,
                         int depth,
                         String baseUri,
-                        String username) {
+                        String username) throws WebDavException {
     if (StringUtils.equals("/", webDavPath)) {
       WebDavItem result = new WebDavItem();
       result.setJcrPath("/");
       result.setWebDavPath("/");
       result.setFile(false);
-      result.setIdentifier(new URI(baseUri + "/"));
+      result.setIdentifier(getBaseUri(baseUri));
       result.addProperty(getIsFolderItemProperty());
       if (depth > 0) {
         addWebDavUserItem(session, requestedPropertyNames, requestPropertyNamesOnly, depth - 1, baseUri, username, result);
@@ -218,12 +210,12 @@ public class WebdavReadCommandHandler extends CommandHandler {
     }
   }
 
-  private Node getNode(Session session, String jcrPath) {
+  private Node getNode(Session session, String jcrPath) throws WebDavException {
     return getNode(session, jcrPath, null);
   }
 
   @SneakyThrows
-  private Node getNode(Session session, String jcrPath, String version) {
+  private Node getNode(Session session, String jcrPath, String version) throws WebDavException {
     if (version == null && jcrPath.contains(VERSION_QUERY_PARAM)) {
       version = jcrPath.substring(jcrPath.indexOf(VERSION_QUERY_PARAM) + VERSION_QUERY_PARAM.length());
       jcrPath = jcrPath.substring(0, jcrPath.indexOf(VERSION_QUERY_PARAM));
@@ -458,6 +450,11 @@ public class WebdavReadCommandHandler extends CommandHandler {
   @SneakyThrows
   private boolean isHidden(Node node) {
     return node.isNodeType(EXO_HIDDENABLE);
+  }
+
+  @SneakyThrows
+  private URI getBaseUri(String baseUri) {
+    return new URI(baseUri + "/");
   }
 
 }

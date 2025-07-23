@@ -132,7 +132,7 @@ public class JcrWebDavService implements DocumentWebDavService {
                         boolean requestPropertyNamesOnly,
                         int depth,
                         String baseUri,
-                        String username) {
+                        String username) throws WebDavException {
     Session session = getSession(username);
     try {
       return readCommandHandler.get(session,
