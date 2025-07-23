@@ -22,8 +22,6 @@ import '../documents-icons-extension/extensions.js';
 const lang = eXo?.env?.portal?.language || 'en';
 const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
 
-const appId = 'DocumentGadget';
-
 export function init(settings) {
   exoi18n.loadLanguageAsync(lang, url)
     .then(i18n => {
@@ -73,9 +71,9 @@ export function init(settings) {
             window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
           },
         },
-        template: `<document-list id="${appId}" />`,
+        template: `<document-list id="${settings?.id}" />`,
         i18n,
         vuetify: Vue.prototype.vuetifyOptions,
-      }).$mount(`#${appId}`);
+      }).$mount(`#${settings?.id}`);
     });
 }

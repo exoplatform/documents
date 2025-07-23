@@ -53,11 +53,14 @@
 %>
 
 <div class="VuetifyApp">
+  <% int generatedId = (int) (Math.random() * 1000000L); %>
   <div data-app="true"
        class="v-application v-application--is-ltr theme--light"
-       id="DocumentGadget">
+       id="documentGadget-<%= generatedId %>"
+       data-id="<%= generatedId %>">
     <script type="text/javascript">
       require(['PORTLET/documents-portlet/DocumentGadget'], app => app.init({
+        id: 'documentGadget-<%= generatedId %>',
         applicationId: '<%=applicationId%>',
         viewOptions: '<%=viewOptions%>',
         documentType: '<%=documentType%>',
