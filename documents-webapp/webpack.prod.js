@@ -35,6 +35,7 @@ module.exports = {
   ],
   entry: {
     documents: './src/main/webapp/vue-app/documents/main.js',
+    documentsUserSettings: './src/main/webapp/vue-app/documents-user-setting/main.js',
     documentsSnackbarComponent : './src/main/webapp/vue-app/snackbar/main.js',
     documentsFavoriteDrawerExtensions: './src/main/webapp/vue-app/documents-favorite-drawer-extensions/main.js',
     documentsSizeGadget: './src/main/webapp/vue-app/documents-size-gadget/main.js',
