@@ -95,27 +95,6 @@
           </div>
         </div>
         <div class="mb-2 text-header">{{ $t('documents.documentGadget.settings.documentListing') }}</div>
-        <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.documentType') }}</div>
-        <v-radio-group
-          v-model="documentType"
-          class="mt-0"
-          mandatory>
-          <v-radio value="recentDocument">
-            <template #label>
-              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.recentDocument') }}</span>
-            </template>
-          </v-radio>
-          <v-radio value="sharedWithMe">
-            <template #label>
-              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.sharedWithMe') }}</span>
-            </template>
-          </v-radio>
-          <v-radio value="favorites">
-            <template #label>
-              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.favorites') }}</span>
-            </template>
-          </v-radio>
-        </v-radio-group>
         <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.documentSource') }}</div>
         <v-radio-group
           v-model="documentSource"
@@ -126,14 +105,41 @@
               <span class="ms-1">{{ $t('documents.documentGadget.settings.documentSource.currentDrive') }}</span>
             </template>
           </v-radio>
-          <v-radio value="anyDrive">
-            <template #label>
-              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentSource.anyDrive') }}</span>
-            </template>
-          </v-radio>
           <v-radio value="oneDrive">
             <template #label>
               <span class="ms-1">{{ $t('documents.documentGadget.settings.documentSource.oneSelectedDrive') }}</span>
+            </template>
+          </v-radio>
+          <exo-identity-suggester
+            v-if="oneDriveSelected"
+            ref="driveSuggester"
+            v-model="spaceIdentity"
+            :labels="driveSuggesterLabels"
+            :include-users="false"
+            :width="220"
+            name="driveSuggester"
+            class="user-suggester mt-n2"
+            include-spaces
+            only-redactor />
+        </v-radio-group>
+        <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.documentType') }}</div>
+        <v-radio-group
+          v-model="documentType"
+          class="mt-0"
+          mandatory>
+          <v-radio value="recentDocument">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.recentDocument') }}</span>
+            </template>
+          </v-radio>
+          <v-radio :disabled="oneDriveSelected" value="sharedWithMe">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.sharedWithMe') }}</span>
+            </template>
+          </v-radio>
+          <v-radio :disabled="oneDriveSelected" value="favorites">
+            <template #label>
+              <span class="ms-1">{{ $t('documents.documentGadget.settings.documentType.favorites') }}</span>
             </template>
           </v-radio>
         </v-radio-group>
@@ -254,6 +260,8 @@ export default {
     currentTranslations: [],
     documentType: 'recentDocument',
     documentSource: 'currentDrive',
+    space: null,
+    spaceIdentity: null,
     categoryId: null,
     excludeCategoryId: null,
     selectedCategories: [],
@@ -281,7 +289,23 @@ export default {
       return  Number(this.maxDocumentsToList) !== this.settings.maxDocumentsToList
           || (this.documentType !== this.settings.documentType)
           || (this.selectedCategories !== this.settings.categoryIds)
-          || (this.selectedExcludeCategories !== this.settings.excludeCategoryIds);
+          || (this.selectedExcludeCategories !== this.settings.excludeCategoryIds)
+          || (this.spaceIdentityId !== this.settings.spaceIdentityId);
+    },
+    oneDriveSelected() {
+      return this.documentSource === 'oneDrive';
+    },
+    driveSuggesterLabels() {
+      return {
+        placeholder: this.$t('documents.documentGadget.settings.drive.placeholder'),
+        noDataLabel: this.$t('documents.documentGadget.settings.drive.noDataLabel'),
+      };
+    },
+    spaceId() {
+      return this.spaceIdentity?.spaceId;
+    },
+    spaceIdentityId() {
+      return this.space?.identityId || '';
     }
   },
   created() {
@@ -291,6 +315,13 @@ export default {
     this.$root.$off('document-gadget-settings', this.open);
   },
   watch: {
+    oneDriveSelected() {
+      if (this.oneDriveSelected) {
+        this.documentType = 'recentDocument';
+      } else {
+        this.spaceIdentity = null;
+      }
+    },
     async categoryId() {
       if (this.categoryId) {
         if (!Array.isArray(this.settings.categoryIds)) {
@@ -345,8 +376,26 @@ export default {
       this.reset();
       this.$refs.drawer.open();
     },
-    reset() {
+    async reset() {
       this.settings = Object.assign({}, this.$root.settings);
+      if (this.settings?.spaceIdentityId) {
+        this.documentSource = 'oneDrive';
+        await this.$identityService.getIdentityById(this.settings?.spaceIdentityId)
+          .then(data => {
+            const spaceEntity = data?.dataEntity?.space;
+            this.spaceIdentity ={
+              id: `space:${spaceEntity?.prettyName}`,
+              profile: {
+                avatarUrl: spaceEntity.avatarUrl,
+                fullName: spaceEntity.displayName,
+              },
+              providerId: 'space',
+              remoteId: data?.dataEntity.remoteId,
+              spaceId: spaceEntity.id,
+              displayName: spaceEntity.displayName,
+            };
+          });
+      }
       this.maxDocumentsToList = Number(this.settings?.maxDocumentsToList);
       this.viewOptions = this.settings?.viewOptions || 'list';
       this.documentType = this.settings?.documentType || 'recentDocument';
@@ -359,7 +408,13 @@ export default {
     close() {
       this.$refs.drawer.close();
     },
-    save() {
+    async save() {
+      if (this.spaceId) {
+        await this.$spaceService.getSpaceById(this.spaceId, 'identity')
+          .then((space) => {
+            this.space = space;
+          });
+      }
       const settings = {
         viewOptions: this.viewOptions,
         documentType: this.documentType,
@@ -368,6 +423,7 @@ export default {
         displaySeeMore: this.displaySeeMore,
         categoryIds: JSON.stringify(this.categoryIds),
         excludeCategoryIds: JSON.stringify(this.excludeCategoryIds),
+        spaceIdentityId: this.spaceIdentityId
       };
       this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
         this.saveHeaderTranslations();
