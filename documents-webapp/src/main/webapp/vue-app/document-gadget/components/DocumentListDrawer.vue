@@ -66,7 +66,6 @@ export default {
     drawer: false,
     loading: 0,
     files: [],
-    spaceId: eXo.env.portal.spaceId,
     expanded: false
   }),
   computed: {
@@ -104,14 +103,17 @@ export default {
       return this.settings?.documentType;
     },
     selectedCategoryIds() {
-      return this.settings.categoryIds;
+      return this.settings?.categoryIds;
     },
     excludedCategoryIds() {
-      return this.settings.excludeCategoryIds;
+      return this.settings?.excludeCategoryIds;
     },
     noDocumentMessage() {
       return this.$t(`documents.documentGadget.${this.documentType}.noDocumentMessage`);
-    }
+    },
+    spaceIdentityId() {
+      return this.settings?.spaceIdentityId;
+    },
   },
   watch: {
     limit() {
@@ -144,11 +146,12 @@ export default {
     },
     retrieveFiles() {
       this.loading = true;
+      const folderPath = eXo.env.portal.spaceIdentityId ? 'Shared' : 'Documents/Shared';
       const filter = {
-        ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-        listingType: this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
-        folderPath: this.documentType === 'sharedWithMe' ? 'Documents/Shared' : null,
-        favorites: this.documentType === 'favorites',
+        ownerId: this.spaceIdentityId ? this.spaceIdentityId : eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+        listingType: this.spaceIdentityId ? 'TIMELINE' : this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
+        folderPath: this.spaceIdentityId ? null : this.documentType === 'sharedWithMe' ? folderPath : null,
+        favorites: this.spaceIdentityId ? false : this.documentType === 'favorites',
         sortField: 'lastUpdated',
       };
       return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.limit + 1, null).then(files => {
