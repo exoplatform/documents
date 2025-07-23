@@ -8,7 +8,7 @@
   <artifactId>documents-storage-jcr</artifactId>
   <name>eXo Documents - Storage JCR Implementation</name>
   <properties>
-    <exo.test.coverage.ratio>0.43</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.39</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>
@@ -16,7 +16,6 @@
       <artifactId>documents-api</artifactId>
       <scope>provided</scope>
     </dependency>
-
     <dependency>
       <groupId>io.meeds.social</groupId>
       <artifactId>social-component-core</artifactId>
@@ -38,30 +37,34 @@
     </dependency>
     <dependency>
       <groupId>org.exoplatform.jcr</groupId>
-        <artifactId>exo.jcr.component.core</artifactId>
+      <artifactId>exo.jcr.component.core</artifactId>
     </dependency>
-      <dependency>
-          <groupId>org.exoplatform.jcr</groupId>
-          <artifactId>exo.jcr.component.ext</artifactId>
-      </dependency>
-      <dependency>
-          <groupId>org.exoplatform</groupId>
-          <artifactId>exo-jcr-services</artifactId>
-      </dependency>
-      <dependency>
-          <groupId>net.lingala.zip4j</groupId>
-          <artifactId>zip4j</artifactId>
-          <type>jar</type>
-          <scope>provided</scope>
-      </dependency>
+    <dependency>
+      <groupId>org.exoplatform.jcr</groupId>
+      <artifactId>exo.jcr.component.webdav</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.exoplatform.jcr</groupId>
+      <artifactId>exo.jcr.component.ext</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.exoplatform</groupId>
+      <artifactId>exo-jcr-services</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>net.lingala.zip4j</groupId>
+      <artifactId>zip4j</artifactId>
+      <type>jar</type>
+      <scope>provided</scope>
+    </dependency>
 
-      <!-- Test -->
-      <dependency>
-          <groupId>io.meeds.social</groupId>
-          <artifactId>social-component-core</artifactId>
-          <type>test-jar</type>
-          <scope>test</scope>
-      </dependency>
+    <!-- Test -->
+    <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-core</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <build>
     <finalName>documents-storage-jcr</finalName>

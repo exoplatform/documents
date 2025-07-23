@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Copyright (C) 2003 - 2025 eXo Platform SAS.
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU Affero General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Affero General Public License for more details.
+
+ You should have received a copy of the GNU Affero General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+-->
+<Context path="/webdav" docBase="webdav" reloadable="true" crossContext="false">
+  <Valve className="org.exoplatform.documents.webdav.valve.WebdavLoggingValve" />
+  <Valve
+    changeSessionIdOnAuthentication="false"
+    className="org.apache.catalina.authenticator.DigestAuthenticator"
+    algorithms="MD5" /><!-- can't use SHA-256, not known by MS Word -->
+  <Realm
+    className='org.apache.catalina.realm.JAASRealm'
+    appName='webdav-domain'
+    configFile="/webdav-jaas.conf"
+    userClassNames="org.exoplatform.services.security.jaas.UserPrincipal"
+    roleClassNames="org.exoplatform.services.security.jaas.RolePrincipal" />
+</Context>
