@@ -17,6 +17,7 @@
     <module>documents-storage-jcr</module>
     <module>documents-services</module>
     <module>documents-webapp</module>
+    <module>documents-webdav-webapp</module>
     <module>documents-packaging</module>
   </modules>
   <scm>
@@ -82,10 +83,18 @@
 
       <dependency>
         <groupId>${project.groupId}</groupId>
-        <artifactId>documents-packaging</artifactId>
+        <artifactId>documents-webdav-webapp</artifactId>
         <version>${project.version}</version>
         <scope>provided</scope>
         <type>war</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>documents-packaging</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+        <type>zip</type>
       </dependency>
     </dependencies>
   </dependencyManagement>

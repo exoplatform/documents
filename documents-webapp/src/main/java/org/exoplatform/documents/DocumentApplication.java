@@ -19,6 +19,7 @@ package org.exoplatform.documents;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.data.elasticsearch.repository.config.EnableElasticsearchRepositories;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 import io.meeds.spring.AvailableIntegration;
@@ -33,6 +34,7 @@ import io.meeds.spring.kernel.PortalApplicationContextInitializer;
   LiquibaseAutoConfiguration.class,
 })
 @EnableJpaRepositories(basePackages = DocumentApplication.MODULE_NAME)
+@EnableElasticsearchRepositories(basePackages = DocumentApplication.MODULE_NAME)
 @PropertySource("classpath:application.properties")
 @PropertySource("classpath:application-common.properties")
 public class DocumentApplication extends PortalApplicationContextInitializer {

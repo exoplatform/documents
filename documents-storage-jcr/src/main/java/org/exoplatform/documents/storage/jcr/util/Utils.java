@@ -16,13 +16,18 @@
  */
 package org.exoplatform.documents.storage.jcr.util;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+
+import javax.jcr.Node;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+
+import org.apache.commons.lang3.StringUtils;
+
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-
-import javax.jcr.Node;
-import javax.jcr.RepositoryException;
-import java.util.Comparator;
 
 public class Utils {
 
@@ -38,8 +43,45 @@ public class Utils {
 
   public static String getStringProperty(Node node, String propertyName) throws RepositoryException {
     if (node.hasProperty(propertyName)) {
-      return node.getProperty(propertyName).getString();
+      Property property = node.getProperty(propertyName);
+      if (property.getDefinition().isMultiple()) {
+        if (property.getValues().length >= 1) {
+          return property.getValues()[0].getString();
+        }
+      } else {
+        return property.getString();
+      }
     }
     return "";
   }
+
+  public static String decodeString(String value) {
+    String currentValue;
+    do {
+      currentValue = value;
+      try {
+        value = URLDecoder.decode(value, StandardCharsets.UTF_8);
+      } catch (IllegalArgumentException e) {
+        if (LOG.isDebugEnabled()) {
+          LOG.warn("Unable to decode value: {}. Return original value",
+                   value,
+                   e);
+        } else {
+          LOG.warn("Unable to decode value: {}, error: {}. Return original value.",
+                   value,
+                   e.getMessage());
+        }
+        return value;
+      }
+    } while (!StringUtils.equals(currentValue, value));
+    return value;
+  }
+
+  public static String encodeNodeName(String name) {
+    return name.replace("|", "%7C")
+               .replace("[", "%5b")
+               .replace("]", "%5d")
+               .replace("*", "%2a");
+  }
+
 }
