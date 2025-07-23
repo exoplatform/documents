@@ -50,6 +50,7 @@ module.exports = {
     documentsOfflineSettings: './src/main/webapp/vue-app/documents-offline-settings/main.js',
     documentsPwaExtension: './src/main/webapp/vue-app/documents-pwa-extension/main.js',
     documentGadget: './src/main/webapp/vue-app/document-gadget/main.js',
+    documentsUserSettings: './src/main/webapp/vue-app/documents-user-setting/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),

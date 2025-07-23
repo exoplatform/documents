@@ -74,6 +74,8 @@ public class NodeTypeConstants {
 
   public static final String JCR_DATE_MODIFIED         = "jcr:dateModified";
 
+  public static final String JCR_ROOT_VERSION          = "jcr:rootVersion";
+
   public static final String MIX_REFERENCEABLE         = "mix:referenceable";
 
   public static final String MIX_VERSIONABLE           = "mix:versionable";
@@ -137,6 +139,8 @@ public class NodeTypeConstants {
   public static final String TRASH_ID                  = "exo:trashId";
 
   public static final String EXO_PRIMARY_TYPE          = "exo:primaryType";
+
+  public static final String MIX_LOCKABLE              = "mix:lockable";
 
   public static final String JCR_FROZEN_NODE           = "jcr:frozenNode";
 

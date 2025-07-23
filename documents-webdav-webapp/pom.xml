@@ -1,0 +1,31 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.exoplatform.documents</groupId>
+    <artifactId>documents-parent</artifactId>
+    <version>7.1.x-meeds-qaui-SNAPSHOT</version>
+  </parent>
+  <artifactId>documents-webdav-webapp</artifactId>
+  <packaging>war</packaging>
+  <name>eXo Documents - Webdav - Application</name>
+  <dependencies>
+    <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.exoplatform.documents</groupId>
+      <artifactId>documents-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <finalName>webdav</finalName>
+  </build>
+</project>
