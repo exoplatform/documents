@@ -162,6 +162,9 @@ export default {
     excludedCategoryIds() {
       return this.settings.excludeCategoryIds;
     },
+    spaceIdentityId() {
+      return this.settings.spaceIdentityId;
+    },
   },
   watch: {
     loading() {
@@ -191,10 +194,10 @@ export default {
       this.loading = true;
       const folderPath = eXo.env.portal.spaceIdentityId ? 'Shared' : 'Documents/Shared';
       const filter = {
-        ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
-        listingType: this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
-        folderPath: this.documentType === 'sharedWithMe' ? folderPath : null,
-        favorites: this.documentType === 'favorites',
+        ownerId: this.spaceIdentityId ? this.spaceIdentityId : eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+        listingType: this.spaceIdentityId ? 'TIMELINE' : this.documentType === 'sharedWithMe' ? 'FOLDER' : 'TIMELINE',
+        folderPath: this.spaceIdentityId ? null : this.documentType === 'sharedWithMe' ? folderPath : null,
+        favorites: this.spaceIdentityId ? false : this.documentType === 'favorites',
         sortField: 'lastUpdated',
       };
       return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.maxDocumentsToList, null).then(files => {
@@ -207,6 +210,7 @@ export default {
       this.$root.settings.documentType = settings.documentType;
       this.$root.settings.customHeader = settings.customHeader;
       this.$root.settings.displaySeeMore = settings.displaySeeMore;
+      this.$root.settings.spaceIdentityId = settings.spaceIdentityId;
       this.$root.settings.headerTitle = headerTitle;
       if (refreshList) {
         this.getFiles();
