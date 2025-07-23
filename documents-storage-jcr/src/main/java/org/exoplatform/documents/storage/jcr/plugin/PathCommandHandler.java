@@ -54,6 +54,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Component;
 
 import org.exoplatform.documents.storage.jcr.util.ACLProperties;
 import org.exoplatform.documents.storage.jcr.util.Utils;
@@ -70,67 +71,67 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 
 import lombok.SneakyThrows;
 
-public abstract class CommandHandler {
+@Component
+public class PathCommandHandler {
 
-  protected static final Log         LOG                                =
-                                         ExoLogger.getLogger(CommandHandler.class);
+  public static final List<QName> PROPERTY_NAMES                     =                                               // NOSONAR
+                                                 Arrays.asList(VERSIONNAME,
+                                                               VERSIONHISTORY,
+                                                               DISPLAYNAME,
+                                                               CHECKEDIN,
+                                                               CHECKEDOUT,
+                                                               PREDECESSORSET,
+                                                               SUCCESSORSET,
+                                                               RESOURCETYPE,
+                                                               GETCONTENTLENGTH,
+                                                               GETCONTENTTYPE,
+                                                               CREATIONDATE,
+                                                               GETLASTMODIFIED,
+                                                               GET_ETAG,
+                                                               CHILDCOUNT,
+                                                               HASCHILDREN,
+                                                               ISCOLLECTION,
+                                                               ISFOLDER,
+                                                               ISROOT,
+                                                               PARENTNAME,
+                                                               SUPPORTEDLOCK,
+                                                               LOCKDISCOVERY,
+                                                               ISVERSIONED,
+                                                               SUPPORTEDMETHODSET,
+                                                               ACLProperties.ACL,
+                                                               OWNER);
 
-  protected static final List<QName> PROPERTY_NAMES                     =
-                                                    Arrays.asList(VERSIONNAME,
-                                                                  VERSIONHISTORY,
-                                                                  DISPLAYNAME,
-                                                                  CHECKEDIN,
-                                                                  CHECKEDOUT,
-                                                                  PREDECESSORSET,
-                                                                  SUCCESSORSET,
-                                                                  RESOURCETYPE,
-                                                                  GETCONTENTLENGTH,
-                                                                  GETCONTENTTYPE,
-                                                                  CREATIONDATE,
-                                                                  GETLASTMODIFIED,
-                                                                  GET_ETAG,
-                                                                  CHILDCOUNT,
-                                                                  HASCHILDREN,
-                                                                  ISCOLLECTION,
-                                                                  ISFOLDER,
-                                                                  ISROOT,
-                                                                  PARENTNAME,
-                                                                  SUPPORTEDLOCK,
-                                                                  LOCKDISCOVERY,
-                                                                  ISVERSIONED,
-                                                                  SUPPORTEDMETHODSET,
-                                                                  ACLProperties.ACL,
-                                                                  OWNER);
+  public static final String      PATHS_CONCAT_FORMAT                = "%s/%s";
 
-  protected static final String      PATHS_CONCAT_FORMAT                = "%s/%s";
+  protected static final Log      LOG                                = ExoLogger.getLogger(PathCommandHandler.class);
 
-  private static final String        WEBDAV_JCR_PATH_CACHE_NAME         = "webdav.jcrPath";
+  private static final String     WEBDAV_JCR_PATH_CACHE_NAME         = "webdav.jcrPath";
 
-  private static final String        WEBDAV_IDENTITY_ID_PATH_CACHE_NAME = "webdav.identityIdByPath";
+  private static final String     WEBDAV_IDENTITY_ID_PATH_CACHE_NAME = "webdav.identityIdByPath";
 
-  private static final String        GROUPS_PATH                        = "groupsPath";
+  private static final String     GROUPS_PATH                        = "groupsPath";
 
-  private static final String        USERS_PATH                         = "usersPath";
-
-  @Autowired
-  protected IdentityManager          identityManager;
+  private static final String     USERS_PATH                         = "usersPath";
 
   @Autowired
-  protected SpaceService             spaceService;
+  protected IdentityManager       identityManager;
 
   @Autowired
-  private NodeHierarchyCreator       nodeHierarchyCreator;
+  protected SpaceService          spaceService;
 
   @Autowired
-  private SessionProviderService     sessionProviderService;
+  private NodeHierarchyCreator    nodeHierarchyCreator;
 
-  private String                     usersJcrBasePath;
+  @Autowired
+  private SessionProviderService  sessionProviderService;
 
-  private String                     groupsJcrBasePath;
+  private String                  usersJcrBasePath;
+
+  private String                  groupsJcrBasePath;
 
   @SneakyThrows
   @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
-  protected String getIdentityBaseJcrPath(String webDavPath) {
+  public String getIdentityBaseJcrPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     if (identityId == null) {
       throw new WebDavException(HttpStatus.SC_BAD_REQUEST, String.format("Can't read identity id from path: %s", webDavPath));
@@ -141,7 +142,7 @@ public abstract class CommandHandler {
 
   @SneakyThrows
   @Cacheable(WEBDAV_JCR_PATH_CACHE_NAME)
-  protected String getIdentityBaseJcrPath(long identityId) {
+  public String getIdentityBaseJcrPath(long identityId) {
     Identity identity = identityManager.getIdentity(identityId);
     if (identity == null) {
       throw new WebDavException(HttpStatus.SC_NOT_FOUND,
@@ -167,7 +168,7 @@ public abstract class CommandHandler {
   }
 
   @Cacheable(WEBDAV_IDENTITY_ID_PATH_CACHE_NAME)
-  protected Long getIdentityIdFromJcrPath(String jcrPath, String username) {
+  public Long getIdentityIdFromJcrPath(String jcrPath, String username) {
     if (jcrPath.startsWith(getGroupsBaseJcrPath() + "/spaces")) {
       String[] pathParts = jcrPath.replaceFirst(getGroupsBaseJcrPath() + "/spaces", "").split("/");
       String spaceGroupId = String.format("/spaces/%s", StringUtils.firstNonBlank(pathParts[0], pathParts[1]));
@@ -183,7 +184,7 @@ public abstract class CommandHandler {
   }
 
   @Cacheable(WEBDAV_IDENTITY_ID_PATH_CACHE_NAME)
-  protected Long getIdentityIdFromWebDavPath(String webDavPath) {
+  public Long getIdentityIdFromWebDavPath(String webDavPath) {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return null;
     } else {
@@ -192,7 +193,7 @@ public abstract class CommandHandler {
     }
   }
 
-  protected String transformToJcrPath(String webDavPath) {
+  public String transformToJcrPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     if (identityId == null) {
       return "/";
@@ -208,12 +209,12 @@ public abstract class CommandHandler {
     }
   }
 
-  protected Identity getIdentityFromWebDavPath(String webDavPath) {
+  public Identity getIdentityFromWebDavPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     return identityId == null ? null : identityManager.getIdentity(identityId);
   }
 
-  protected boolean isIdentityRootWebDavPath(String webDavPath) {
+  public boolean isIdentityRootWebDavPath(String webDavPath) {
     String identityRelativeJcrPath = getIdentityRelativeJcrPath(webDavPath);
     return StringUtils.isBlank(identityRelativeJcrPath);
   }

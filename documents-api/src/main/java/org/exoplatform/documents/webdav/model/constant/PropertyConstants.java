@@ -54,6 +54,20 @@ public class PropertyConstants {
 
   public static final String                  SUPPORTED_METHOD           = "supported-method";
 
+  public static final QName                   SUPPORTEDMETHOD            = new QName("DAV:", SUPPORTED_METHOD);
+
+  public static final QName                   LOCKENTRY                  = new QName("DAV:", "lockentry");
+
+  public static final QName                   COLLECTION                 = new QName("DAV:", "collection");
+
+  public static final QName                   LOCKTOKEN                  = new QName("DAV:", "locktoken");
+
+  public static final QName                   TIMEOUT                    = new QName("DAV:", "timeout");
+
+  public static final QName                   DEPTH                      = new QName("DAV:", "depth");
+
+  public static final QName                   ACTIVELOCK                 = new QName("DAV:", "activelock");
+
   /**
    * WebDAV childcount property. See
    * <a href='http://www.ietf.org/rfc/rfc2518.txt'>Versioning Extensions to
@@ -360,43 +374,43 @@ public class PropertyConstants {
   }
 
   public static WebDavItemProperty getSupportedLock() {
-    WebDavItemProperty supportedLock = new WebDavItemProperty(new QName("DAV:", "supportedlock"));
-    WebDavItemProperty lockEntry = new WebDavItemProperty(new QName("DAV:", "lockentry"));
+    WebDavItemProperty supportedLock = new WebDavItemProperty(SUPPORTEDLOCK);
+    WebDavItemProperty lockEntry = new WebDavItemProperty(LOCKENTRY);
     supportedLock.addChild(lockEntry);
-    WebDavItemProperty lockScope = new WebDavItemProperty(new QName("DAV:", "lockscope"));
-    lockScope.addChild(new WebDavItemProperty(new QName("DAV:", "exclusive")));
+    WebDavItemProperty lockScope = new WebDavItemProperty(LOCKSCOPE);
+    lockScope.addChild(new WebDavItemProperty(EXCLUSIVE));
     lockEntry.addChild(lockScope);
-    WebDavItemProperty lockType = new WebDavItemProperty(new QName("DAV:", "locktype"));
-    lockType.addChild(new WebDavItemProperty(new QName("DAV:", "write")));
+    WebDavItemProperty lockType = new WebDavItemProperty(LOCKTYPE);
+    lockType.addChild(new WebDavItemProperty(WRITE));
     lockEntry.addChild(lockType);
     return supportedLock;
   }
 
   public static WebDavItemProperty getLockDiscovery(String token, String lockOwner, String timeOut) {
-    WebDavItemProperty lockDiscovery = new WebDavItemProperty(new QName("DAV:", "lockdiscovery"));
+    WebDavItemProperty lockDiscovery = new WebDavItemProperty(LOCKDISCOVERY);
 
     WebDavItemProperty activeLock =
-                                  lockDiscovery.addChild(new WebDavItemProperty(new QName("DAV:", "activelock")));
+                                  lockDiscovery.addChild(new WebDavItemProperty(ACTIVELOCK));
 
-    WebDavItemProperty lockType = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "locktype")));
-    lockType.addChild(new WebDavItemProperty(new QName("DAV:", "write")));
+    WebDavItemProperty lockType = activeLock.addChild(new WebDavItemProperty(LOCKTYPE));
+    lockType.addChild(new WebDavItemProperty(WRITE));
 
-    WebDavItemProperty lockScope = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "lockscope")));
-    lockScope.addChild(new WebDavItemProperty(new QName("DAV:", "exclusive")));
+    WebDavItemProperty lockScope = activeLock.addChild(new WebDavItemProperty(LOCKSCOPE));
+    lockScope.addChild(new WebDavItemProperty(EXCLUSIVE));
 
-    WebDavItemProperty depth = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "depth")));
+    WebDavItemProperty depth = activeLock.addChild(new WebDavItemProperty(DEPTH));
     depth.setValue("Infinity");
 
     if (lockOwner != null) {
-      WebDavItemProperty owner = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "owner")));
+      WebDavItemProperty owner = activeLock.addChild(new WebDavItemProperty(OWNER));
       owner.setValue(lockOwner);
     }
 
-    WebDavItemProperty timeout = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "timeout")));
+    WebDavItemProperty timeout = activeLock.addChild(new WebDavItemProperty(TIMEOUT));
     timeout.setValue("Second-" + timeOut);
 
     if (token != null) {
-      WebDavItemProperty lockToken = activeLock.addChild(new WebDavItemProperty(new QName("DAV:", "locktoken")));
+      WebDavItemProperty lockToken = activeLock.addChild(new WebDavItemProperty(LOCKTOKEN));
       WebDavItemProperty lockHref = lockToken.addChild(new WebDavItemProperty(HREF));
       lockHref.setValue(token);
     }
@@ -406,13 +420,13 @@ public class PropertyConstants {
 
   public static WebDavItemProperty getSupportedMethodSet() {
     WebDavItemProperty supportedMethodProp = new WebDavItemProperty(SUPPORTEDMETHODSET);
-    ALLOW_METHODS_LIST.forEach(m -> supportedMethodProp.addChild(new WebDavItemProperty(new QName("DAV:", SUPPORTED_METHOD)))
+    ALLOW_METHODS_LIST.forEach(m -> supportedMethodProp.addChild(new WebDavItemProperty(SUPPORTEDMETHOD))
                                                        .setAttribute("name", m));
     return supportedMethodProp;
   }
 
   public static WebDavItemProperty getIsFolderItemProperty() {
-    WebDavItemProperty collectionProp = new WebDavItemProperty(new QName("DAV:", "collection"));
+    WebDavItemProperty collectionProp = new WebDavItemProperty(COLLECTION);
     WebDavItemProperty resourceType = new WebDavItemProperty(RESOURCETYPE);
     resourceType.addChild(collectionProp);
     return resourceType;

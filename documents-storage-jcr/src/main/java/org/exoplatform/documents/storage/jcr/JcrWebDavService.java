@@ -33,7 +33,6 @@ import javax.xml.namespace.QName;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import org.exoplatform.documents.service.DocumentWebDavService;
 import org.exoplatform.documents.storage.jcr.model.JcrNamespaceContext;
@@ -62,19 +61,25 @@ public class JcrWebDavService implements DocumentWebDavService {
   private static final String         DAS_VALUE = "<DAV:basicsearch>" + "<exo:sql xmlns:exo=\"http://exoplatform.com/jcr\"/>" +
       "<exo:xpath xmlns:exo=\"http://exoplatform.com/jcr\"/>";
 
-  @Autowired
   protected WebdavReadCommandHandler  readCommandHandler;
 
-  @Autowired
   protected WebdavWriteCommandHandler writeCommandHandler;
 
-  @Autowired
   protected RepositoryService         repositoryService;
 
-  @Autowired
   protected UserACL                   userAcl;
 
   private NamespaceContext            namespaceContext;
+
+  public JcrWebDavService(WebdavReadCommandHandler readCommandHandler,
+                          WebdavWriteCommandHandler writeCommandHandler,
+                          RepositoryService repositoryService,
+                          UserACL userAcl) {
+    this.readCommandHandler = readCommandHandler;
+    this.writeCommandHandler = writeCommandHandler;
+    this.repositoryService = repositoryService;
+    this.userAcl = userAcl;
+  }
 
   @Override
   public NamespaceContext getNamespaceContext() {
@@ -354,8 +359,12 @@ public class JcrWebDavService implements DocumentWebDavService {
     Session session = getSession(username);
     try {
       checkLock(session, webDavPath, lockTokens);
-      // TODO handle lockTimeout
-      return writeCommandHandler.lock(session, webDavPath, depth, bodyIsEmpty, username);
+      return writeCommandHandler.lock(session,
+                                      webDavPath,
+                                      depth,
+                                      lockTimeout,
+                                      bodyIsEmpty,
+                                      username);
     } finally {
       session.logout();
     }

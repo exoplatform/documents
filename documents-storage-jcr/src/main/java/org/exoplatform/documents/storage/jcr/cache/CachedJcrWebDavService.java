@@ -49,9 +49,13 @@ import org.exoplatform.documents.storage.jcr.cache.elasticsearch.model.WebDavIte
 import org.exoplatform.documents.storage.jcr.cache.elasticsearch.model.WebDavItemPropertyEntity;
 import org.exoplatform.documents.storage.jcr.cache.elasticsearch.repository.WebDavItemRepository;
 import org.exoplatform.documents.storage.jcr.cache.listener.WebDavCacheUpdaterAction;
+import org.exoplatform.documents.storage.jcr.plugin.WebdavReadCommandHandler;
+import org.exoplatform.documents.storage.jcr.plugin.WebdavWriteCommandHandler;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.portal.config.UserACL;
+import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -66,7 +70,12 @@ public class CachedJcrWebDavService extends JcrWebDavService {
 
   private WebDavItemRepository webDavItemRepository;
 
-  public CachedJcrWebDavService(WebDavItemRepository webDavItemRepository) {
+  public CachedJcrWebDavService(WebdavReadCommandHandler readCommandHandler,
+                                WebdavWriteCommandHandler writeCommandHandler,
+                                RepositoryService repositoryService,
+                                UserACL userAcl,
+                                WebDavItemRepository webDavItemRepository) {
+    super(readCommandHandler, writeCommandHandler, repositoryService, userAcl);
     this.webDavItemRepository = webDavItemRepository;
   }
 
@@ -310,6 +319,24 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   private Session getSystemSession() {
     ManageableRepository repository = repositoryService.getDefaultRepository();
     return repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
+  }
+
+  public void unlockTimedOutNodes() {
+    List<String> nodePaths = writeCommandHandler.getOutdatedLockedNodePaths();
+    if (CollectionUtils.isNotEmpty(nodePaths)) {
+      Session session = getSystemSession();
+      nodePaths.forEach(jcrPath -> {
+        try {
+          writeCommandHandler.unlockNode(session, jcrPath);
+          LOG.info("Node with path {} was automatically unlocked after the lock timed out", jcrPath);
+        } catch (Exception e) {
+          LOG.warn("Error while automatically unlocking node with path {}. Delete it to not attempt unlocking it again",
+                   jcrPath,
+                   e);
+          writeCommandHandler.removeLockTimeout(jcrPath);
+        }
+      });
+    }
   }
 
 }
