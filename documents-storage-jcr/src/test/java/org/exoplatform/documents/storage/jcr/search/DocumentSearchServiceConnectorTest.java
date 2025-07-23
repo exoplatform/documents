@@ -123,6 +123,7 @@ public class DocumentSearchServiceConnectorTest {
     String sort_direction = "ASC";
     String expectedQuery = SEARCH_QUERY.replace("@term_query@", SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, filter.getQuery()))
                                        .replace("@favorite_query@", "")
+                                       .replace("@category_query@", "")
                                        .replace("@permissions@", getPermissionQuery(userIdentity))
                                        .replace("@fileTypes_query@", "")
                                        .replace("@size_query@", "")
