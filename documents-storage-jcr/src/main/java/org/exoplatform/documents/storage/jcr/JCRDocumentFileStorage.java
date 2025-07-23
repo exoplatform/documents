@@ -500,7 +500,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
           // Load folders + symlink of folders
-          String statementOfFolders = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, FOLDER_NODE_TYPES, includeHiddenFiles);
+          String statementOfFolders = getFolderDocumentsQuery(parent.getPath(),
+                                                              sortField,
+                                                              sortDirection,
+                                                              FOLDER_NODE_TYPES,
+                                                              filter.getCategoryIds(),
+                                                              filter.getExcludedCategoryIds(),
+                                                              includeHiddenFiles);
           Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
           ((QueryImpl)jcrQuery).setOffset(offset);
           ((QueryImpl)jcrQuery).setLimit(limit);
@@ -516,7 +522,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           // load files + symlink of files
           int itemsSize = fileItems.size();
           if(itemsSize < limit) {
-            String statementOfSymlinks = getFolderDocumentsQuery(parent.getPath(), sortField, sortDirection, List.of(NodeTypeConstants.NT_FILE, NodeTypeConstants.EXO_SYMLINK), includeHiddenFiles);
+            String statementOfSymlinks =
+                                       getFolderDocumentsQuery(parent.getPath(),
+                                                               sortField,
+                                                               sortDirection,
+                                                               List.of(NodeTypeConstants.NT_FILE, NodeTypeConstants.EXO_SYMLINK),
+                                                               filter.getCategoryIds(),
+                                                               filter.getExcludedCategoryIds(),
+                                                               includeHiddenFiles);
             jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfSymlinks, Query.SQL);
             ((QueryImpl)jcrQuery).setOffset(0);
             ((QueryImpl)jcrQuery).setLimit(limit);
@@ -1363,8 +1376,35 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                               .toString();
   }
 
-  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection, List<String> types, boolean includeHiddenFiles) {
+  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection, List<String> types, List<Long> categoryIds, List<Long> excludedCategoryIds, boolean includeHiddenFiles) {
     String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable' ";
+
+    if (CollectionUtils.isNotEmpty(categoryIds) && CollectionUtils.isNotEmpty(excludedCategoryIds)) {
+      categoryIds.removeAll(excludedCategoryIds);
+    }
+
+    StringBuilder categoryFilter = new StringBuilder();
+    if (CollectionUtils.isNotEmpty(categoryIds)) {
+      String joinedConditions = categoryIds.stream()
+              .map(id -> "exo:categoryIds = '" + id + "'")
+              .collect(Collectors.joining(" OR "));
+
+      categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (")
+              .append(joinedConditions)
+              .append(")");
+    }
+
+    // Exclude categories
+    if (CollectionUtils.isNotEmpty(excludedCategoryIds)) {
+      String joinedExclude = excludedCategoryIds.stream()
+              .map(id -> "NOT exo:categoryIds = '" + id + "'")
+              .collect(Collectors.joining(" AND "));
+
+      categoryFilter.append(" AND (")
+              .append(joinedExclude)
+              .append(")");
+    }
+    
     String typesStatement =" and (jcr:primaryType ='" + String.join("' OR jcr:primaryType ='", types) + "') ";
     String sortQuery = StringUtils.isEmpty(sortField) && StringUtils.isEmpty(sortDirection) ? " " : " ORDER BY " + sortField + " " + sortDirection;
     return new StringBuilder().append("SELECT * FROM nt:base")
@@ -1376,6 +1416,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             .append("/%/%' ")
             .append(typesStatement)
             .append(hiddenableQuery)
+            .append(categoryFilter)
             .append(sortQuery)
             .toString();
   }
@@ -2423,7 +2464,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   public boolean hasFolderNodes(Node node, boolean showHidden) throws RepositoryException {
-    String statementOfFolders = getFolderDocumentsQuery(node.getPath(), "", "", FOLDER_NODE_TYPES, showHidden);
+    String statementOfFolders = getFolderDocumentsQuery(node.getPath(), "", "", FOLDER_NODE_TYPES, null, null, showHidden);
     Query jcrQuery = node.getSession().getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
     QueryResult queryResult = jcrQuery.execute();
     return queryResult.getNodes().getSize() > 0;
