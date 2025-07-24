@@ -41,7 +41,7 @@
         v-else
         class="d-flex clickable"
         @click="openFolder(item)">
-        <v-list-item-avatar 
+        <v-list-item-avatar
           v-if="item.avatarUrl"
           size="24"
           class="mx-0"
@@ -136,7 +136,7 @@ export default {
     confirmDocumentDeletion(deletedItem) {
       if (deletedItem.folder) {
         this.removeItem(this.items, deletedItem.id);
-      } 
+      }
     },
     hideElement(hiddenItem) {
       if (hiddenItem.folder) {
@@ -144,8 +144,8 @@ export default {
           this.removeItem(this.items, hiddenItem.id);
         } else {
           this.setHidden(this.items,hiddenItem);
-        } 
-      } 
+        }
+      }
     },
     displayName(name) {
       if (name==='Private'){
@@ -260,11 +260,11 @@ export default {
               offset: this.offset,
               limit: this.limit,
             });
-          }  
+          }
           this.addChildren(this.items, 'space_drives', newChildren);
         }
         this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
-      });    
+      });
     },
     addChildren(tree, targetId, newChildren) {
       for (const node of tree) {
@@ -298,7 +298,7 @@ export default {
       }
       return null; // Node not found
     },
-    
+
     getDriveByIdentityId(id, nodes = this.items) {
       const drivesNode = nodes.find(item => item.drives === true);
       if (drivesNode) {
