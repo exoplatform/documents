@@ -48,9 +48,8 @@ export default {
 
   methods: {
     hide(hidden) {
-      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       this.file.hidden = hidden;
-      return this.$documentFileService.updateVisibility(ownerId,this.file)
+      return this.$documentFileService.updateVisibility(this.$root.ownerId,this.file)
         .then(() => {
           this.$root.$emit('hide-element',  this.file);
           const message = this.file.hidden ? this.$t('documents.alert.success.document.hidden') : this.$t('documents.alert.success.document.unhidden');

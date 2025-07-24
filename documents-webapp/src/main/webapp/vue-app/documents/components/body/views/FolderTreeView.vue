@@ -74,7 +74,6 @@ export default {
   },
 
   data: () => ({
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     loading: false,
     showHidden: false,
     items: []
@@ -87,22 +86,84 @@ export default {
     });
   },
   methods: {
-    retrieveDocumentTree(){
+    async retrieveDocumentTree() {
       this.items = [];
       this.loading = true;
-      this.$documentFileService.getFullTreeData(this.ownerId,null,this.folderPath,this.showHidden)
-        .then(data => {
-          this.items = data|| [];
-          this.items = this.items.map(obj => {
-            return JSON.parse(JSON.stringify(obj, (key, value) => 
-              // eslint-disable-next-line no-undefined
-              (value === null ? undefined : value) 
-            ));
-          });
+      try {
+        const promises = [
+          this.$documentFileService.getFullTreeData(
+            this.$root.ownerId,
+            null,
+            this.folderPath,
+            this.showHidden
+          )
+        ];
+        if (!eXo.env.portal.spaceIdentityId) {
+          promises.push(this.getUserSpaces());
+          promises.push(this.getUserProfile());
+        } else {
+          promises.push(Promise.resolve(null));
+          promises.push(Promise.resolve({}));
+        }
+        const [treeData, userSpacesTree, userProfile] = await Promise.all(promises);
+        this.items = treeData || [];
+        if (!eXo.env.portal.spaceIdentityId && this.items[0]?.name === 'Private') {
+          this.items[0].avatarUrl = userProfile.avatar || '';
+        }
+        if (userSpacesTree && userSpacesTree.children?.length > 0) {
+          this.items.push(userSpacesTree);
+        }
+        this.items = this.items.map(obj => ({
+          ...JSON.parse(JSON.stringify(obj, (key, value) =>
+            // eslint-disable-next-line no-undefined
+            (value === null ? undefined : value)
+          )),
+          children: obj.children || []
+        }));
 
-        })
-        .finally(() => this.loading = false);
+      } catch (error) {
+        console.error('Error retrieving document tree:', error);
+      } finally {
+        this.loading = false;
+      }
     },
+    async getUserSpaces() {
+      return await this.$documentFileService.getUserSpaces().then(data => {
+        const spaces = data.spaces || [];
+        if (spaces.length === 0) {
+          return [];
+        } else {
+          const spacesTree = {
+            name: this.$t('documents.label.drives'),
+            icon: 'fa fa-layer-group',
+            id: 'space_drives',
+            drives: true,
+            children: spaces.map(space => ({
+              id: space.id,
+              spaceId: space.id,
+              identityId: space.identityId,
+              name: space.prettyName,
+              avatarUrl: space.avatarUrl,
+              drive: true,
+              children: [],
+            }))
+          };
+          return spacesTree;
+        }
+      }).catch(error => {
+        console.error('Error fetching user spaces:', error);
+        return [];
+      });
+    },
+    async getUserProfile() {
+      try {
+        const profile = await this.$documentFileService.getUserProfile(eXo.env.portal.userName);
+        return profile || {};
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        return {};
+      }
+    }
   }
 };
 </script>
