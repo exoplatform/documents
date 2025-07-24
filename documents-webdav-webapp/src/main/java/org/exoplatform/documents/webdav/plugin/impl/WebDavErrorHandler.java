@@ -18,14 +18,14 @@ package org.exoplatform.documents.webdav.plugin.impl;
 
 import org.springframework.stereotype.Component;
 
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 
 @Component
-public class WebDavErrorHandler extends WebDavMethodHandler {
+public class WebDavErrorHandler extends WebDavHttpMethodPlugin {
 
   public WebDavErrorHandler() {
     super("");

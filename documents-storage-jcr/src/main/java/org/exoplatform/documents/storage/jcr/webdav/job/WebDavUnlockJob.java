@@ -14,14 +14,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.storage.jcr.job;
+package org.exoplatform.documents.storage.jcr.webdav.job;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
-import org.exoplatform.documents.storage.jcr.cache.CachedJcrWebDavService;
+import org.exoplatform.documents.storage.jcr.webdav.cache.CachedJcrWebDavService;
 
 import lombok.Synchronized;
 

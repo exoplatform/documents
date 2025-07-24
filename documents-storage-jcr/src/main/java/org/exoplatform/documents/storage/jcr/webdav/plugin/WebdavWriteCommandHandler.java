@@ -14,10 +14,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.storage.jcr.plugin;
+package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_PRIVILEGEABLE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
@@ -72,24 +70,25 @@ import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemOrder;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.WebDavLockResponse;
-import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.core.nodetype.NodeTypeDataManager;
 import org.exoplatform.services.jcr.core.nodetype.PropertyDefinitionData;
 import org.exoplatform.services.jcr.core.nodetype.PropertyDefinitionDatas;
 import org.exoplatform.services.jcr.datamodel.InternalQName;
 import org.exoplatform.services.jcr.datamodel.NodeData;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
-import org.exoplatform.services.jcr.webdav.command.acl.ACLProperties;
 import org.exoplatform.services.jcr.webdav.util.InitParamsDefaults;
 import org.exoplatform.services.jcr.webdav.util.PropertyConstants;
 import org.exoplatform.services.jcr.webdav.util.TextUtil;
 import org.exoplatform.services.jcr.webdav.xml.WebDavNamespaceContext;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.security.IdentityConstants;
 
 import jakarta.annotation.PostConstruct;
 import lombok.SneakyThrows;
@@ -117,12 +116,20 @@ public class WebdavWriteCommandHandler {
 
   private MimeTypeResolver        mimeTypeResolver               = new MimeTypeResolver();
 
+  private RepositoryService       repositoryService;
+
+  private SessionProviderService  sessionProviderService;
+
   private SettingService          settingService;
 
   private PathCommandHandler      pathCommandHandler;
 
-  public WebdavWriteCommandHandler(SettingService settingService,
+  public WebdavWriteCommandHandler(SessionProviderService sessionProviderService,
+                                   RepositoryService repositoryService,
+                                   SettingService settingService,
                                    PathCommandHandler pathCommandHandler) {
+    this.sessionProviderService = sessionProviderService;
+    this.repositoryService = repositoryService;
     this.settingService = settingService;
     this.pathCommandHandler = pathCommandHandler;
   }
@@ -163,6 +170,7 @@ public class WebdavWriteCommandHandler {
         node.addMixin(VersionHistoryUtils.MIX_VERSIONABLE);
       }
     } else {
+      unlockIfLocked(node);
       VersionHistoryUtils.createVersion(node);
     }
     updateContent(node, mediaType, inputStream);
@@ -237,11 +245,13 @@ public class WebdavWriteCommandHandler {
   }
 
   @SneakyThrows
-  public void delete(Session session, String webDavPath) throws WebDavException {
+  public void delete(Session session,
+                     String webDavPath) throws WebDavException {
     checkNotReadOnly(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
+    unlockIfLocked(node);
     node.remove();
     session.save();
   }
@@ -257,9 +267,16 @@ public class WebdavWriteCommandHandler {
     String targetJcrPath = pathCommandHandler.transformToJcrPath(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
     boolean itemExists = session.itemExists(targetJcrPath);
-    if (itemExists && !overwrite) {
-      throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
+    if (itemExists) {
+      if (overwrite) {
+        Node targetNodeToremove = (Node) session.getItem(targetJcrPath);
+        targetNodeToremove.remove();
+        session.save();
+      } else {
+        throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
+      }
     }
+    unlockIfLocked((Node) session.getItem(sourceJcrPath));
     session.move(sourceJcrPath, targetJcrPath);
     session.save();
     return itemExists;
@@ -285,11 +302,13 @@ public class WebdavWriteCommandHandler {
   }
 
   @SneakyThrows
-  public void enableVersioning(Session session, String webDavPath) {
+  public void enableVersioning(Session session,
+                               String webDavPath) {
     checkNotReadOnly(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
+    unlockIfLocked(node);
     if (!node.isNodeType(MIX_VERSIONABLE)) {
       node.addMixin(MIX_VERSIONABLE);
       session.save();
@@ -297,16 +316,19 @@ public class WebdavWriteCommandHandler {
   }
 
   @SneakyThrows
-  public void checkin(Session session, String webDavPath) {
+  public void checkin(Session session,
+                      String webDavPath) {
     checkNotReadOnly(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
+    unlockIfLocked(node);
     node.checkin();
   }
 
   @SneakyThrows
-  public void checkout(Session session, String webDavPath) throws WebDavException {
+  public void checkout(Session session,
+                       String webDavPath) throws WebDavException {
     checkNotReadOnly(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
@@ -315,7 +337,8 @@ public class WebdavWriteCommandHandler {
   }
 
   @SneakyThrows
-  public void uncheckout(Session session, String webDavPath) throws WebDavException {
+  public void uncheckout(Session session,
+                         String webDavPath) throws WebDavException {
     checkNotReadOnly(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
@@ -341,13 +364,22 @@ public class WebdavWriteCommandHandler {
     }
 
     Lock lock;
-    if (bodyIsEmpty) {
+    if (node.isLocked()) {
       lock = node.getLock();
-      lock.refresh();
+
+      String lockOwner = lock.getLockOwner();
+      if (StringUtils.equals(lockOwner, username)) {
+        lock.refresh();
+      } else {
+        throw new WebDavException(HttpStatus.SC_LOCKED,
+                                  String.format("Resource with path '%s' is already locked by a different owner %s",
+                                                jcrPath,
+                                                lockOwner));
+      }
     } else {
       lock = node.lock(depth > 1, false);
-      saveLockTimeout(jcrPath, lockTimeout);
     }
+    saveLockTimeout(jcrPath, lockTimeout);
     return new WebDavLockResponse(lock.getLockToken(), username);
   }
 
@@ -418,104 +450,15 @@ public class WebdavWriteCommandHandler {
     return members.stream().allMatch(m -> m.getStatus() == HTTPStatus.OK);
   }
 
-  @SneakyThrows
-  public void changeAcl(Session session, // NOSONAR
-                        String webDavPath,
-                        WebDavItemProperty requestBody) throws WebDavException {
-    checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
-    checkResourceExists(session, jcrPath);
-    NodeImpl node = (NodeImpl) session.getItem(jcrPath);
-
-    boolean isSessionToBeSaved = false;
-
-    boolean nodeIsNotCheckedOut = node.isNodeType(MIX_VERSIONABLE) && !node.isCheckedOut();
-
-    // to set ACL the node necessarily must be exo:owneable
-    if (!node.isNodeType(EXO_OWNEABLE)) {
-      if (nodeIsNotCheckedOut) {
-        node.checkout();
-      }
-      node.addMixin(EXO_OWNEABLE);
-      isSessionToBeSaved = true;
-    }
-
-    // to set ACL the node necessarily must be exo:privilegeable
-    if (!node.isNodeType(EXO_PRIVILEGEABLE)) {
-      if (nodeIsNotCheckedOut) {
-        node.checkout();
-      }
-      node.addMixin(EXO_PRIVILEGEABLE);
-      isSessionToBeSaved = true;
-    }
-
-    if (isSessionToBeSaved) {
-      session.save();
-      if (nodeIsNotCheckedOut) {
-        node.checkin();
-        session.save();
-      }
-    }
-
-    Map<String, String[]> permissionsToGrant = new HashMap<>();
-    Map<String, String[]> permissionsToDeny = new HashMap<>();
-    for (WebDavItemProperty ace : requestBody.getChildren()) {
-      WebDavItemProperty principalProperty = ace.getChild(ACLProperties.PRINCIPAL);
-      if (principalProperty == null) {
-        throw new IllegalArgumentException("Malformed ace element (seems that no principal element specified)");
-      }
-
-      String principal;
-      if (principalProperty.getChild(ACLProperties.HREF) != null) {
-        principal = principalProperty.getChild(ACLProperties.HREF).getValue();
-      } else if (principalProperty.getChild(ACLProperties.ALL) != null) {
-        principal = IdentityConstants.ANY;
-      } else {
-        throw new IllegalArgumentException("Malformed principal element");
-      }
-
-      WebDavItemProperty denyProperty = ace.getChild(ACLProperties.DENY);
-      WebDavItemProperty grantProperty = ace.getChild(ACLProperties.GRANT);
-      if (denyProperty == null && grantProperty == null) {
-        throw new IllegalArgumentException("Malformed ace element (seems that no deny|grant element specified)");
-      }
-      if (denyProperty != null) {
-        permissionsToDeny.put(principal, getPermissions(denyProperty));
-      }
-      if (grantProperty != null) {
-        permissionsToGrant.put(principal, getPermissions(grantProperty));
-      }
-
-      // request must not grant and deny the same privilege in a single ace
-      // http://www.webdav.org/specs/rfc3744.html#rfc.section.8.1.5
-      if (!permissionsToDeny.isEmpty() && !permissionsToGrant.isEmpty()) {
-        for (String denyPermission : permissionsToDeny.get(principal)) {
-          for (String grantPermission : permissionsToGrant.get(principal)) {
-            if (denyPermission.equals(grantPermission)) {
-              throw new IllegalArgumentException("Malformed ace element (seems that a client is trying to grant and denay the same privilege in a single ace)");
-
-            }
-          }
-        }
-      }
-    }
-    for (Entry<String, String[]> entry : permissionsToGrant.entrySet()) {
-      node.setPermission(entry.getKey(), entry.getValue());
-    }
-    for (Entry<String, String[]> entry : permissionsToDeny.entrySet()) {
-      for (String p : entry.getValue()) {
-        node.removePermission(entry.getKey(), p);
-      }
-    }
-    session.save();
-  }
-
   public void removeLockTimeout(String path) {
     settingService.remove(LOCK_CONTEXT, LOCK_SCOPE, path);
   }
 
   public void saveLockTimeout(String path, long lockTimeout) {
-    settingService.set(LOCK_CONTEXT, LOCK_SCOPE, path, SettingValue.create(System.currentTimeMillis() + lockTimeout * 1000));
+    settingService.set(LOCK_CONTEXT,
+                       LOCK_SCOPE,
+                       path,
+                       SettingValue.create(String.valueOf(System.currentTimeMillis() + lockTimeout * 1000)));
   }
 
   public List<String> getOutdatedLockedNodePaths() {
@@ -524,7 +467,7 @@ public class WebdavWriteCommandHandler {
     if (MapUtils.isNotEmpty(locks)) {
       return locks.entrySet()
                   .stream()
-                  .filter(e -> Long.parseLong(e.getValue().getValue()) > System.currentTimeMillis())
+                  .filter(e -> Long.parseLong(e.getValue().getValue()) < System.currentTimeMillis())
                   .map(Entry::getKey)
                   .toList();
     } else {
@@ -642,12 +585,12 @@ public class WebdavWriteCommandHandler {
                                                                              data.getPrimaryTypeName(),
                                                                              data.getMixinTypeNames());
       if (propdefs == null) {
-        throw new RepositoryException();
+        throw new ItemNotFoundException();
       }
 
       PropertyDefinitionData propertyDefinitionData = propdefs.getAnyDefinition();
       if (propertyDefinitionData == null) {
-        throw new RepositoryException();
+        throw new ItemNotFoundException();
       }
       boolean isMultiValued = propertyDefinitionData.isMultiple();
       if (node.isNodeType(MIX_VERSIONABLE) && !node.isCheckedOut()) {
@@ -665,10 +608,11 @@ public class WebdavWriteCommandHandler {
       return getStatusDescription(HTTPStatus.OK);
     } catch (AccessDeniedException e) {
       return getStatusDescription(HTTPStatus.FORBIDDEN);
-    } catch (ItemNotFoundException | PathNotFoundException e) {
-      return getStatusDescription(HTTPStatus.NOT_FOUND);
     } catch (RepositoryException e) {
-      return getStatusDescription(HTTPStatus.CONFLICT);
+      return getStatusDescription(HTTPStatus.NOT_FOUND);
+    } catch (Exception e) {
+      LOG.warn("Error while setting property '{}' value. Continue settings other properties", property.getName(), e);
+      return getStatusDescription(HTTPStatus.NOT_FOUND);
     }
   }
 
@@ -686,38 +630,31 @@ public class WebdavWriteCommandHandler {
     }
   }
 
-  private String[] getPermissions(WebDavItemProperty body) {
-    Set<String> permissionsToBeChanged = new HashSet<>();
-    if (CollectionUtils.isEmpty(body.getChildren())) {
-      throw new IllegalArgumentException("Malformed grant|deny element (seems that no privilige is specified)");
-    }
-    for (WebDavItemProperty property : body.getChildren()) {
-      WebDavItemProperty permissionProperty;
-      if (ACLProperties.PRIVILEGE.equals(property.getName())) {
-        if (property.getChildren().size() > 1) {
-          throw new IllegalArgumentException(
-                                             "Malformed privilege name (element privilege must contain only one element)");
+  @SneakyThrows
+  private boolean unlockIfLocked(Node node) {
+    if (node.isLocked()) {
+      try {
+        node.unlock();
+        node.getSession().save();
+      } catch (Exception e) {
+        SessionProvider systemSessionProvider = sessionProviderService.getSystemSessionProvider(null);
+        ManageableRepository repository = repositoryService.getDefaultRepository();
+        Session systemSession = systemSessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(),
+                                                                 repository);
+        try {
+          Node nodeWithSystemSession = (Node) systemSession.getItem(node.getPath());
+          nodeWithSystemSession.unlock();
+          systemSession.save();
+        } finally {
+          systemSession.logout();
+          node.getSession().refresh(false);
         }
-        permissionProperty = property.getChild(0);
-      } else {
-        permissionProperty = property;
       }
-      if (ACLProperties.READ.equals(permissionProperty.getName())) {
-        permissionsToBeChanged.add(PermissionType.READ);
-      } else if (ACLProperties.WRITE.equals(permissionProperty.getName())) {
-        permissionsToBeChanged.add(PermissionType.ADD_NODE);
-        permissionsToBeChanged.add(PermissionType.SET_PROPERTY);
-        permissionsToBeChanged.add(PermissionType.REMOVE);
-      } else if (ACLProperties.ALL.equals(permissionProperty.getName())) {
-        permissionsToBeChanged.add(PermissionType.READ);
-        permissionsToBeChanged.add(PermissionType.ADD_NODE);
-        permissionsToBeChanged.add(PermissionType.SET_PROPERTY);
-        permissionsToBeChanged.add(PermissionType.REMOVE);
-      } else {
-        throw new IllegalArgumentException("Malformed privilege element (unsupported privilege name)");
-      }
+      removeLockTimeout(node.getPath());
+      return true;
+    } else {
+      return false;
     }
-    return permissionsToBeChanged.toArray(new String[0]);
   }
 
 }

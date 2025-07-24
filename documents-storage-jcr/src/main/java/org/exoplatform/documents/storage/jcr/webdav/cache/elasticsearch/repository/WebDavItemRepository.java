@@ -14,14 +14,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see<http://www.gnu.org/licenses/>.
  */
-package org.exoplatform.documents.storage.jcr.cache.elasticsearch.repository;
+package org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.repository;
 
 import java.util.List;
 
 import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
 import org.springframework.stereotype.Repository;
 
-import org.exoplatform.documents.storage.jcr.cache.elasticsearch.model.WebDavItemEntity;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.model.WebDavItemEntity;
 
 @Repository
 public interface WebDavItemRepository extends ElasticsearchRepository<WebDavItemEntity, String> {

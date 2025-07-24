@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see<http://www.gnu.org/licenses/>.
  */
-package org.exoplatform.documents.storage.jcr.cache.elasticsearch;
+package org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch;
 
 import java.time.Duration;
 
@@ -44,13 +44,13 @@ public class ElasticSearchConfig extends ElasticsearchConfiguration {
   @Value("${exo.es.search.server.url:http://127.0.0.1:9200}")
   private String esUrl;
 
-  @Value("${meeds.elasticsearch.socketTimeout:20}")
+  @Value("${exo.es.search.socketTimeout:20}")
   private int    socketTimeout;
 
-  @Value("${meeds.elasticsearch.connectTimeout:20}")
+  @Value("${exo.es.search.connectTimeout:20}")
   private int    connectionTimeout;
 
-  @Value("${meeds.elasticsearch.connectionRetry:500}")
+  @Value("${exo.es.search.connectionRetry:500}")
   private int    connectionRetry;
 
   @Override

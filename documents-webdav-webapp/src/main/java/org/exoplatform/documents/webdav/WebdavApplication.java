@@ -20,7 +20,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration;
 import org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration;
 import org.springframework.context.annotation.PropertySource;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 import io.meeds.spring.AvailableIntegration;
 import io.meeds.spring.kernel.PortalApplicationContextInitializer;
@@ -32,7 +31,6 @@ import io.meeds.spring.kernel.PortalApplicationContextInitializer;
   LiquibaseAutoConfiguration.class,
   JpaRepositoriesAutoConfiguration.class,
 })
-@EnableJpaRepositories(basePackages = WebdavApplication.MODULE_NAME)
 @PropertySource("classpath:application.properties")
 @PropertySource("classpath:documents-webdav.properties")
 public class WebdavApplication extends PortalApplicationContextInitializer {

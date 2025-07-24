@@ -1,22 +1,20 @@
-/**
- * This file is part of the Meeds project (https://meeds.io/).
- *
- * Copyright (C) 2020 - 2025 Meeds Association contact@meeds.io
+/*
+ * Copyright (C) 2003 - 2025 eXo Platform SAS.
  *
  * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or (at your option) any later version.
+ * modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see<http://www.gnu.org/licenses/>.
  */
-package org.exoplatform.documents.storage.jcr.cache;
+package org.exoplatform.documents.storage.jcr.webdav.cache;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
@@ -44,13 +42,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.utils.Tools;
-import org.exoplatform.documents.storage.jcr.JcrWebDavService;
-import org.exoplatform.documents.storage.jcr.cache.elasticsearch.model.WebDavItemEntity;
-import org.exoplatform.documents.storage.jcr.cache.elasticsearch.model.WebDavItemPropertyEntity;
-import org.exoplatform.documents.storage.jcr.cache.elasticsearch.repository.WebDavItemRepository;
-import org.exoplatform.documents.storage.jcr.cache.listener.WebDavCacheUpdaterAction;
-import org.exoplatform.documents.storage.jcr.plugin.WebdavReadCommandHandler;
-import org.exoplatform.documents.storage.jcr.plugin.WebdavWriteCommandHandler;
+import org.exoplatform.documents.storage.jcr.webdav.JcrWebDavService;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.model.WebDavItemEntity;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.model.WebDavItemPropertyEntity;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.repository.WebDavItemRepository;
+import org.exoplatform.documents.storage.jcr.webdav.cache.listener.WebDavCacheUpdaterAction;
+import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
+import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
