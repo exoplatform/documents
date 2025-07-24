@@ -44,6 +44,12 @@ export default {
   }),
   computed: {
     icon() {
+      if (this.file.drive){
+        return {
+          icon: 'fas fa-lock',
+          title: this.$t('documents.label.visibility.system'),
+        };
+      }
       if (this.file.folder && this.file.creatorUserName === '__system' && eXo.env.portal.spaceIdentityId && !eXo.env.portal.isAdministrator){
         return {
           icon: 'fas fa-lock',

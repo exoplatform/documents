@@ -5,15 +5,16 @@
         :center-button-toggle="centerBotton"
         :right-text-filter="{
           minCharacters: 3,
-          placeholder: $t('documents.label.filterDocuments'),
-          tooltip: $t('documents.label.filterDocuments')
+          placeholder: $root.driveView ? $t('documents.label.filterDrives') : $t('documents.label.filterDocuments'),
+          tooltip: $root.driveView ? $t('documents.label.filterDrives') : $t('documents.label.filterDocuments')
         }"
         :right-filter-button="{
           text: $t('documents.label.filter'),
+          hide: $root.driveView,
         }"
 
         :right-select-box="{
-          hide: isMobile,
+          hide: isMobile || $root.driveView,
           selected: primaryFilter,
           items: [{
             value: 'all',
@@ -33,7 +34,7 @@
         ref="applicationToolbar">
         <template #left>
           <documents-header-left
-            v-if="canAdd"
+            v-if="canAdd && !$root.driveView"
             :selected-view="selectedView" 
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
@@ -196,6 +197,8 @@ export default {
     this.$root.$on('resetSearch', this.cancelSearch);
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('show-mobile-filter', this.handleShowFilter);
+    this.$root.$on('document-open-folder', this.openFolder);
+    this.$root.$on('document-show-drives', this.showDrives);
     document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
   },
@@ -203,6 +206,8 @@ export default {
     this.$root.$off('resetSearch', this.cancelSearch);
     this.$root.$off('filer-query', this.filterQuery);
     this.$root.$off('show-mobile-filter', this.handleShowFilter);
+    this.$root.$off('document-open-folder', this.openFolder);
+    this.$root.$off('document-show-drives', this.showDrives);
     document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
   },
   methods: {
@@ -250,6 +255,7 @@ export default {
         if (this.tabsList.length < 2){
           this.tabsList=[];
         }
+        this.centerBotton.hide = this.$root.driveView;
         this.centerBotton.buttons=this.tabsList.map(e => ({...e, text: this.$t(`${e.labelKey}`)}));
       }
     },
@@ -280,6 +286,12 @@ export default {
     },  
     displayRightFilter(){
       this.filterDispalyed = true;
+    }, 
+    openFolder(){
+      this.centerBotton.hide = false;
+    }, 
+    showDrives(){
+      this.centerBotton.hide = true;
     },
   }
 };
