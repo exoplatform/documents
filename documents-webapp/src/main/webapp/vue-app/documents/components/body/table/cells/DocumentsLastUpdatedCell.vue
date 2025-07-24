@@ -68,7 +68,7 @@ export default {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
     },
     isVersionable() {
-      return !this.file?.folder && this.file?.versionable;
+      return !this.file?.folder && !this.file?.drive && this.file?.versionable;
     }
   },
   methods: {
