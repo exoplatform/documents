@@ -14,7 +14,7 @@ export default {
   },
   computed: {
     size(){
-      if (this.file.folder) {
+      if (this.file.folder || this.file.drive) {
         return '';
       }
       const size = this.$documentsUtils.getSize(this.file.size );
