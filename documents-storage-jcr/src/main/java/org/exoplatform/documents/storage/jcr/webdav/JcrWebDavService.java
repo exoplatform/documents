@@ -377,7 +377,7 @@ public class JcrWebDavService implements DocumentWebDavService {
     Session session = getSession(username);
     try {
       checkLock(session, webDavPath, lockTokens);
-      writeCommandHandler.unlock(session, webDavPath);
+      writeCommandHandler.unlock(session, webDavPath, lockTokens);
     } finally {
       session.logout();
     }

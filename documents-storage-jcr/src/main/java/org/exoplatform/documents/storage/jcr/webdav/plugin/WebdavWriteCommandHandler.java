@@ -170,7 +170,7 @@ public class WebdavWriteCommandHandler {
         node.addMixin(VersionHistoryUtils.MIX_VERSIONABLE);
       }
     } else {
-      unlockIfLocked(node);
+      forceUnlock(node);
       VersionHistoryUtils.createVersion(node);
     }
     updateContent(node, mediaType, inputStream);
@@ -251,7 +251,7 @@ public class WebdavWriteCommandHandler {
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
-    unlockIfLocked(node);
+    forceUnlock(node);
     node.remove();
     session.save();
   }
@@ -276,7 +276,7 @@ public class WebdavWriteCommandHandler {
         throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
       }
     }
-    unlockIfLocked((Node) session.getItem(sourceJcrPath));
+    forceUnlock((Node) session.getItem(sourceJcrPath));
     session.move(sourceJcrPath, targetJcrPath);
     session.save();
     return itemExists;
@@ -308,7 +308,7 @@ public class WebdavWriteCommandHandler {
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
-    unlockIfLocked(node);
+    forceUnlock(node);
     if (!node.isNodeType(MIX_VERSIONABLE)) {
       node.addMixin(MIX_VERSIONABLE);
       session.save();
@@ -322,7 +322,7 @@ public class WebdavWriteCommandHandler {
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
-    unlockIfLocked(node);
+    forceUnlock(node);
     node.checkin();
   }
 
@@ -384,11 +384,17 @@ public class WebdavWriteCommandHandler {
   }
 
   @SneakyThrows
-  public void unlock(Session session, String webDavPath) {
+  public void unlock(Session session, String webDavPath, List<String> lockTokens) {
     checkNotReadOnly(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
-    unlockNode(session, jcrPath);
+    try {
+      unlockNode(session, jcrPath);
+    } catch (Exception e) {
+      if (CollectionUtils.isNotEmpty(lockTokens)) {
+        lockTokens.forEach(t -> unlockNode(session, jcrPath, t));
+      }
+    }
   }
 
   @SneakyThrows
@@ -450,6 +456,7 @@ public class WebdavWriteCommandHandler {
     return members.stream().allMatch(m -> m.getStatus() == HTTPStatus.OK);
   }
 
+  @SneakyThrows
   public void removeLockTimeout(String path) {
     settingService.remove(LOCK_CONTEXT, LOCK_SCOPE, path);
   }
@@ -631,7 +638,19 @@ public class WebdavWriteCommandHandler {
   }
 
   @SneakyThrows
-  private boolean unlockIfLocked(Node node) {
+  private void unlockNode(Session session, String path, String token) {
+    try {
+      session.removeLockToken(token);
+      removeLockTimeout(path);
+    } catch (Exception ex) {
+      LOG.warn("Can't unlock file '{}'. Attempt to force unlocking", path, ex);
+      Node node = (Node) session.getItem(path);
+      forceUnlock(node);
+    }
+  }
+
+  @SneakyThrows
+  private boolean forceUnlock(Node node) {
     if (node.isLocked()) {
       try {
         node.unlock();
