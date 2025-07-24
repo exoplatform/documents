@@ -950,7 +950,7 @@ export default {
     },
     openFolder(parentFolder) {
       this.$root.driveView = false;
-      if (parentFolder.spaceId) {       
+      if (parentFolder.spaceId) {
         this.$root.spaceId = parentFolder.spaceId;
       }
       if (parentFolder.identityId) {

@@ -28,7 +28,7 @@
           <i 
             class="fa-hdd driveFolderContentIcon"></i>
         </i>
-        <v-list-item-avatar 
+        <v-list-item-avatar
           v-else-if="file.drive"
           size="24"
           class="mx-0"
