@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.storage.jcr.cache.elasticsearch.model;
+package org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.model;
 
 import java.util.ArrayList;
 import java.util.HashMap;

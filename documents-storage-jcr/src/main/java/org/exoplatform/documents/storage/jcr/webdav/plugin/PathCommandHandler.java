@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.storage.jcr.plugin;
+package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
@@ -101,6 +101,8 @@ public class PathCommandHandler {
                                                                ACLProperties.ACL,
                                                                OWNER);
 
+  public static final String      IDENTITY_PATHS_FORMAT               = "%s/%s%s%s%s";
+
   public static final String      PATHS_CONCAT_FORMAT                 = "%s/%s";
 
   protected static final Log      LOG                                 = ExoLogger.getLogger(PathCommandHandler.class);
@@ -136,7 +138,7 @@ public class PathCommandHandler {
   public String getIdentityBaseJcrPath(String webDavPath) {
     Long identityId = getIdentityIdFromWebDavPath(webDavPath);
     if (identityId == null) {
-      throw new WebDavException(HttpStatus.SC_BAD_REQUEST, String.format("Can't read identity id from path: %s", webDavPath));
+      throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't read identity id from path: %s", webDavPath));
     } else {
       return getIdentityBaseJcrPath(identityId);
     }
@@ -190,8 +192,22 @@ public class PathCommandHandler {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return null;
     } else {
-      return Long.parseLong(StringUtils.firstNonBlank(webDavPath.split("/")[0],
-                                                      webDavPath.split("/")[1]));
+      String[] pathParts = webDavPath.split("/");
+      String identityPart = Arrays.stream(pathParts)
+                                  .filter(StringUtils::isNotBlank)
+                                  .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                  .findFirst()
+                                  .orElse(null);
+      String identityId = null;
+      if (identityPart != null
+          && identityPart.endsWith(")")
+          && identityPart.contains("(")) {
+        identityId = identityPart.substring(identityPart.lastIndexOf("(") + 1, identityPart.lastIndexOf(")"));
+      }
+      if (identityId != null) {
+        return Long.parseLong(identityId);
+      }
+      return null;
     }
   }
 

@@ -22,14 +22,14 @@ import org.apache.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.documents.webdav.model.WebDavException;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.services.rest.ExtHttpHeaders;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Component
-public class OptionsWebDavHandler extends WebDavMethodHandler {
+public class OptionsWebDavHandler extends WebDavHttpMethodPlugin {
 
   public OptionsWebDavHandler() {
     super("OPTIONS");

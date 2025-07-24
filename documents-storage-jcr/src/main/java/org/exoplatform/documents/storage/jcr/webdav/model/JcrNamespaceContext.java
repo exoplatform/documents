@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.storage.jcr.model;
+package org.exoplatform.documents.storage.jcr.webdav.model;
 
 import java.util.Collections;
 import java.util.HashMap;

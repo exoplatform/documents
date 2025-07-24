@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.documents.webdav.util.PropertyWriteUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,7 +38,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 
 @Component
-public class SearchWebDavHandler extends WebDavMethodHandler {
+public class SearchWebDavHandler extends WebDavHttpMethodPlugin {
 
   private static final Set<QName> REQUESTED_PROPERTIES = new HashSet<>();
 

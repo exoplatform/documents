@@ -57,10 +57,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import org.exoplatform.common.http.HTTPStatus;
 import org.exoplatform.commons.utils.CommonsUtils;
-import org.exoplatform.documents.service.DocumentWebDavService;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.ExtHttpHeaders;
@@ -73,7 +73,7 @@ import lombok.SneakyThrows;
 import lombok.ToString;
 
 @Getter
-public abstract class WebDavMethodHandler {
+public abstract class WebDavHttpMethodPlugin {
 
   public static final String      CONTEXT_PATH              = "/webdav/drives";
 
@@ -85,7 +85,7 @@ public abstract class WebDavMethodHandler {
 
   public static final String      DEFAULT_XML_ENCODING      = StandardCharsets.UTF_8.name();
 
-  protected static final Log      LOG                       = ExoLogger.getLogger(WebDavMethodHandler.class);
+  protected static final Log      LOG                       = ExoLogger.getLogger(WebDavHttpMethodPlugin.class);
 
   @Autowired
   @EqualsAndHashCode.Exclude
@@ -94,7 +94,7 @@ public abstract class WebDavMethodHandler {
 
   private String                  method;
 
-  protected WebDavMethodHandler(String method) {
+  protected WebDavHttpMethodPlugin(String method) {
     this.method = method;
   }
 
@@ -281,10 +281,6 @@ public abstract class WebDavMethodHandler {
         return null;
       }
     }
-  }
-
-  protected String escape(String text) {
-    return text;
   }
 
   @SneakyThrows
