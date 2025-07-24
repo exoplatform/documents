@@ -42,7 +42,6 @@ export default {
     },
   },
   data: () => ({
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     items: [],
     showHidden: false,
   }),
@@ -64,7 +63,7 @@ export default {
     retrieveDocumentTree(){
       this.items = [];
       this.loading = true;
-      this.$documentFileService.getFullTreeData(this.ownerId,null,this.folderPath,this.showHidden)
+      this.$documentFileService.getFullTreeData(this.$root.ownerId,null,this.folderPath,this.showHidden)
         .then(data => {
           this.items = data|| [];
           this.items = this.items.map(obj => {
