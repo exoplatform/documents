@@ -32,7 +32,10 @@ export default {
       let path;
       if (this.file.folder){
         path = `${window.location.origin}${eXo.env.portal.context}`;
-        if (eXo.env.portal.spaceId){
+        if (this.$root.ownerId !== eXo.env.portal.userIdentityId && this.$root.spaceId){
+          path = `${path}/s/${this.$root.spaceId}/documents?folderId=${this.file.id}`;
+        }
+        else if (eXo.env.portal.spaceId){
           const pathParts = eXo.env.portal.selectedNodeUri.split('home');
           const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri.substring(eXo.env.portal.selectedNodeUri.indexOf('/documents'));
           path = `${path}/s/${eXo.env.portal.spaceId}${nodeUri}?folderId=${this.file.id}`;
