@@ -90,7 +90,7 @@ export default {
     });
     this.$root.$on('search-drives', this.searchDrives);
   },
-  
+
   beforeDestroy() {
     this.$root.$off('search-drives', this.searchDrives);
   },
@@ -161,7 +161,7 @@ export default {
               offset: this.drivesOffset,
               limit: this.drivesLimit,
             });
-          }  
+          }
           const spacesTree = {
             name: this.$t('documents.label.drives'),
             icon: 'fa fa-layer-group',
@@ -211,7 +211,7 @@ export default {
               limit: this.drivesLimit,
               query: query,
             });
-          }  
+          }
           this.setChildren(this.items, 'space_drives', newChildren);
           this.$root.$emit('document-show-drives', newChildren);
         } else {
