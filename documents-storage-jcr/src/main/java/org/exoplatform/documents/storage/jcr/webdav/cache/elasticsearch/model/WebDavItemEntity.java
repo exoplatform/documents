@@ -24,6 +24,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
+import org.springframework.data.elasticsearch.annotations.Mapping;
+import org.springframework.data.elasticsearch.annotations.Mapping.Detection;
 import org.springframework.data.elasticsearch.annotations.Setting;
 
 import org.exoplatform.documents.webdav.model.WebDavItem;
@@ -37,7 +39,8 @@ import lombok.ToString;
 
 @Data
 @NoArgsConstructor
-@Document(indexName = "webdav_items", createIndex = true)
+@Document(indexName = "webdav_nodes", createIndex = true)
+@Mapping(dateDetection = Detection.FALSE, numericDetection = Detection.FALSE)
 @Setting(replicas = 0, shards = 1)
 public class WebDavItemEntity {
 
