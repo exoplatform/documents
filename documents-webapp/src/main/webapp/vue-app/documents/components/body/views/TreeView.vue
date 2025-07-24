@@ -31,8 +31,23 @@
     transition>
     <template #label="{ item }">
       <div class="d-flex clickable" @click="openFolder(item)">
-        <v-icon size="24" class="primary--text">
-          {{ 'fas fa-folder' }}
+        <v-list-item-avatar 
+          v-if="item.avatarUrl"
+          size="24"
+          class="mx-0"
+          tile>
+          <img
+            :src="item.avatarUrl"
+            alt=""
+            class="rounded"
+            width="24"
+            height="24">
+        </v-list-item-avatar>
+        <v-icon
+          v-else
+          size="24"
+          :class="item.icon? '' : 'primary--text'">
+          {{ item.icon ? item.icon : 'fas fa-folder' }}
         </v-icon>
         <v-list-item-title 
           class="body-2 mx-2 mt-1"
@@ -68,7 +83,6 @@ export default {
   },
 
   data: () => ({
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     currentFolderPathTab: [],
     loading: false,
   }),
@@ -128,12 +142,30 @@ export default {
       return items;
     },
     openFolder(folder){
-      this.$root.$emit('open-folder', folder);
+      this.currentFolderPathTab.push(folder.id);
+      if (folder.drives) {
+        this.$root.$emit('document-show-drives');
+      } else if (folder.drive) {
+        this.$root.ownerId = folder.identityId;
+        this.$root.spaceId = folder.spaceId;
+        this.$root.$emit('open-folder', folder);
+      } else {
+        if (folder.name ==='Private' && this.$root.ownerId !== eXo.env.portal.userIdentityId) {
+          this.$root.ownerId = eXo.env.portal.userIdentityId;
+          this.$root.spaceId = null;
+        } 
+        this.$root.$emit('open-folder', folder);
+      }
     },
     fetchChildren (item) {
       this.$root.$emit('tree-loading', true);
+      let folderId = item.id;
+      if (item.identityId) {
+        this.$root.ownerId = item.identityId;
+        folderId = null;
+      }
       this.$documentFileService
-        .getFullTreeData(this.ownerId,item.id).then(data => {
+        .getFullTreeData(this.$root.ownerId,folderId).then(data => {
           if (data) {
             const newItems = data.map(obj => {
               return JSON.parse(JSON.stringify(obj, (key, value) => 
@@ -141,6 +173,11 @@ export default {
                 (value === null ? undefined : value) 
               ));
             });
+            newItems[0].spaceId = item.spaceId;
+            newItems[0].children.map(child => {
+              child.spaceId = item.spaceId;
+            }
+            );
             item.children.push(...newItems[0].children);
             this.currentFolderPathTab.push(item.id);
           }

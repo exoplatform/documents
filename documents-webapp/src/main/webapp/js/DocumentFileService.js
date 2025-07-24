@@ -81,8 +81,7 @@ export function canAddDocument(spaceId) {
     }
   });   
 }
-export function getUserSettings() {
-  const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+export function getUserSettings(ownerId) {
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/settings/${ownerId}`, {
     headers: {
       'Content-Type': 'text/plain'
@@ -670,3 +669,45 @@ export function importFilesFromZip(ownerId,folderId,folderPath,uploadId,conflict
       return resp;    }
   });
 }
+
+export function getUserSpaces(query) {
+  const formData = new FormData();
+  if (query) {
+    formData.append('q', query);
+  }
+  formData.append('limit', 20);
+  formData.append('sort', 'lastVisited');
+  formData.append('returnSize', true);
+
+
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/spaces?${params}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.json();
+    }
+  });
+}
+export function getUserProfile(userName) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/users/${userName}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.json();
+    }
+  });
+}
+
