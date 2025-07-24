@@ -512,6 +512,7 @@ public class WebdavWriteCommandHandler {
   private void updateContent(Node node,
                              String mediaType,
                              InputStream inputStream) throws RepositoryException {
+    String path = node.getPath();
     Node content = node.getNode(JCR_CONTENT);
     String encoding = null;
     if (StringUtils.contains(mediaType, ";")) {
@@ -519,15 +520,17 @@ public class WebdavWriteCommandHandler {
       encoding = mediaType.split(";")[1].replace("charset", "").replace("=", "").trim();
     }
     if (StringUtils.isNotBlank(mediaType)) {
-      content.setProperty(JCR_MIME_TYPE, mediaType);
+      String mediaTypeConstant = mediaType;
+      handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, mediaTypeConstant), path);
     } else if (!content.hasProperty(JCR_MIME_TYPE)) {
-      content.setProperty(JCR_MIME_TYPE, this.mimeTypeResolver.getMimeType(node.getName()));
+      handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, this.mimeTypeResolver.getMimeType(node.getName())), path);
     }
     if (StringUtils.isNotBlank(encoding)) {
-      content.setProperty(JCR_ENCODING, encoding);
+      String encodingConstant = encoding;
+      handleJcrOperation(() -> content.setProperty(JCR_ENCODING, encodingConstant), path);
     }
-    content.setProperty(JCR_LAST_MODIFIED, Calendar.getInstance());
-    content.setProperty(JCR_DATA, inputStream);
+    handleJcrOperation(() -> content.setProperty(JCR_LAST_MODIFIED, Calendar.getInstance()), path);
+    handleJcrOperation(() -> content.setProperty(JCR_DATA, inputStream), path);
   }
 
   @SneakyThrows
@@ -674,6 +677,25 @@ public class WebdavWriteCommandHandler {
     } else {
       return false;
     }
+  }
+
+  @SneakyThrows
+  private void handleJcrOperation(RunnableWithException r, String path) {
+    try {
+      r.run();
+    } catch (RepositoryException e) {
+      throw e;
+    } catch (Exception e) {
+      // Any other exception is a listener exception, thus not thrown
+      LOG.warn("Unknown Error occurred while updating File '{}' Data. Continue storing file",
+               path,
+               e);
+    }
+  }
+
+  @FunctionalInterface
+  public interface RunnableWithException {
+    void run() throws RepositoryException;
   }
 
 }
