@@ -111,7 +111,6 @@ export default {
     }
   },
   data: () => ({
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     drawer: false,
     items: [],
     documentsBreadcrumbDestination: [],
@@ -184,7 +183,7 @@ export default {
   methods: {
     fetchChildren (item) {
       this.$documentFileService
-        .getFullTreeData(this.ownerId,item.id).then(data => {
+        .getFullTreeData(this.$root.ownerId,item.id).then(data => {
           if (data) {
             item.children.push(...data[0].children);
           }
@@ -192,8 +191,7 @@ export default {
     },
     open(file) {
       this.file = file;
-      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.retrieveDocumentTree(ownerId);
+      this.retrieveDocumentTree();
       this.space = {
         displayName: this.spaceDisplayName ? this.spaceDisplayName : this.userName,
         avatarUrl: this.spaceDisplayName ? `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/spaces/${this.spaceName}/avatar` :
@@ -218,7 +216,7 @@ export default {
     getDestination(folder, path) {
       this.folder = folder;
       this.destinationFolderId = folder?.id;
-      return this.$documentFileService.getBreadCrumbs(this.destinationFolderId, this.ownerId, !this.destinationFolderId && path || null)
+      return this.$documentFileService.getBreadCrumbs(this.destinationFolderId, this.$root.ownerId, !this.destinationFolderId && path || null)
         .then(breadCrumbs => {
           this.documentsBreadcrumbDestination = breadCrumbs;
           this.destinationFolderId = this.documentsBreadcrumbDestination[this.documentsBreadcrumbDestination.length - 1].id;
@@ -226,9 +224,9 @@ export default {
           return breadCrumbs;
         });
     },
-    retrieveDocumentTree(ownerId) {
+    retrieveDocumentTree() {
       this.$documentFileService
-        .getFullTreeData(ownerId).then(data => {
+        .getFullTreeData(this.$root.ownerId).then(data => {
           if (data) {
             this.items = [];
             this.items = data;
@@ -243,10 +241,10 @@ export default {
       const destinationPath = this.folder && this.folder.path ? this.folder.path : `/Groups${this.groupId}/Documents`;
       if (this.actionType === 'move') {
         if (this.isMultiSelection) {
-          this.$root.$emit('documents-bulk-move', this.ownerId, destinationPath, this.folder, this.space);
+          this.$root.$emit('documents-bulk-move', this.$root.ownerId, destinationPath, this.folder, this.space);
           this.close();
         } else {
-          this.$root.$emit('documents-move', this.ownerId, this.file, destinationPath, this.folder, this.space);
+          this.$root.$emit('documents-move', this.$root.ownerId, this.file, destinationPath, this.folder, this.space);
         }
       }
       if (this.actionType === 'shortcut') {

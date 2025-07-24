@@ -16,12 +16,13 @@
  */
 package org.exoplatform.documents.rest.model;
 
+import java.util.List;
+
+import org.exoplatform.documents.model.FullTreeItem;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.exoplatform.documents.model.FullTreeItem;
-
-import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -30,6 +31,7 @@ public class FullTreeItemEntity {
   private String                                id;
   private String                                name;
   private String                                path;
+  private long                                identityId;
   private List<FullTreeItem>               children;
 
 }

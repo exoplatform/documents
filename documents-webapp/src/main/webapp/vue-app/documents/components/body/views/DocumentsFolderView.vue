@@ -55,7 +55,7 @@
                     v-bind="attrs"
                     :indeterminate="false"
                     color="primary"
-                    :class="showSelectAll || hoverTable ? 'visible': 'invisible'"
+                    :class="!$root.driveView && (showSelectAll || hoverTable) ? 'visible': 'invisible'"
                     class="mt-auto"
                     @mouseover="showSelectAllInputOnHover"
                     @mouseleave="hideSelectAllInputOnHover"
@@ -89,6 +89,7 @@
                     @contextmenu="openContextMenu($event, item)">
                     <td>
                       <documents-selection-cell
+                        v-if="!$root.driveView" 
                         :file="item"
                         :files="items"
                         :select-all-checked="selectAll"
@@ -293,15 +294,17 @@ export default {
     headers() {
       const headers = [];
       this.sortedHeaderExtensions.forEach(headerExtension => {
-        headers.push({
-          text: headerExtension.labelKey && this.$t(headerExtension.labelKey) || '',
-          align: headerExtension.align || 'center',
-          sortable: headerExtension.sortable || false,
-          value: headerExtension.id,
-          class: headerExtension.cssClass || '',
-          width: headerExtension.width || 'auto',
-          cellExtension: headerExtension,
-        });
+        if (!this.$root.driveView  || (this.$root.driveView && headerExtension.id === 'name')) {
+          headers.push({
+            text: headerExtension.labelKey && this.$t(headerExtension.labelKey) || '',
+            align: headerExtension.align || 'center',
+            sortable: (!this.$root.driveView && headerExtension.sortable) || false,
+            value: headerExtension.id,
+            class: headerExtension.cssClass || '',
+            width: headerExtension.width || 'auto',
+            cellExtension: headerExtension,
+          });
+        }
       });
       return headers;
     },
