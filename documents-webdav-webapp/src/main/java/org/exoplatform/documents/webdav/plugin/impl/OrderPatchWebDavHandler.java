@@ -33,14 +33,14 @@ import org.springframework.util.MimeTypeUtils;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemOrder;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 
 @Component
-public class OrderPatchWebDavHandler extends WebDavMethodHandler {
+public class OrderPatchWebDavHandler extends WebDavHttpMethodPlugin {
 
   public OrderPatchWebDavHandler() {
     super("ORDERPATCH");
@@ -79,7 +79,7 @@ public class OrderPatchWebDavHandler extends WebDavMethodHandler {
           WebDavItemOrder member = members.get(i);
           xmlStreamWriter.writeStartElement("DAV:", "response");
           xmlStreamWriter.writeStartElement("DAV:", "href");
-          String href = uri.toASCIIString() + "/" + escape(member.getSegment());
+          String href = String.format("%s/%s", uri.toASCIIString(), member.getSegment());
           xmlStreamWriter.writeCharacters(href);
           xmlStreamWriter.writeEndElement();
           xmlStreamWriter.writeStartElement("DAV:", "status");

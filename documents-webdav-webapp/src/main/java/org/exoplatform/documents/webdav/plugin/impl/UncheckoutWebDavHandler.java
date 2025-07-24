@@ -19,13 +19,13 @@ package org.exoplatform.documents.webdav.plugin.impl;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.documents.webdav.model.WebDavException;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Component
-public class UncheckoutWebDavHandler extends WebDavMethodHandler {
+public class UncheckoutWebDavHandler extends WebDavHttpMethodPlugin {
 
   public UncheckoutWebDavHandler() {
     super("UNCHECKOUT");

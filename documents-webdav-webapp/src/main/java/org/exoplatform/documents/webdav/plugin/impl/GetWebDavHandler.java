@@ -37,33 +37,39 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.MimeTypeUtils;
+import org.springframework.web.context.ServletContextAware;
 
 import org.exoplatform.documents.webdav.model.Range;
 import org.exoplatform.documents.webdav.model.RangedInputStream;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.services.rest.ExtHttpHeaders;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.Setter;
 import lombok.SneakyThrows;
 
 @Component
-public class GetWebDavHandler extends WebDavMethodHandler {
+public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletContextAware {
 
   private static final String IMAGE_FILE_PATH     = "/documents-portlet/images/file.png";   // NOSONAR
 
   private static final String IMAGE_FOLDER_PATH   = "/documents-portlet/images/folder.png"; // NOSONAR
 
-  private static final String HTML_LISTING_FILE   = "/get-content.html";
+  private static final String HTML_LISTING_FILE   = "/html/get-content.html";
 
   private static final String ACCEPT_RANGES_BYTES = "bytes";
 
   public static final String  BOUNDARY            = "1234567890";
+
+  @Setter
+  private ServletContext      servletContext;
 
   @Value("${webdav.cacheControl:no-cache}")
   private String              cacheControl;
@@ -77,9 +83,11 @@ public class GetWebDavHandler extends WebDavMethodHandler {
   @PostConstruct
   @SneakyThrows
   public void init() {
-    URL resource = getClass().getClassLoader().getResource(HTML_LISTING_FILE);
-    try (InputStream inputStream = resource.openStream()) {
-      this.listingHtmlTemplate = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+    URL resource = servletContext.getResource(HTML_LISTING_FILE);
+    if (resource != null) {
+      try (InputStream is = resource.openStream()) {
+        this.listingHtmlTemplate = IOUtils.toString(is, StandardCharsets.UTF_8);
+      }
     }
   }
 

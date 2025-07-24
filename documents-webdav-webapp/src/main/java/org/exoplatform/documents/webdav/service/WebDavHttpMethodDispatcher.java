@@ -25,10 +25,10 @@ import java.util.stream.Collectors;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import org.exoplatform.documents.webdav.model.WebDavException;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.documents.webdav.plugin.impl.WebDavErrorHandler;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -38,29 +38,29 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 
-@Service
-public class WebDavHandler {
+@Component
+public class WebDavHttpMethodDispatcher {
 
-  protected static final Log               LOG = ExoLogger.getLogger(WebDavHandler.class);
-
-  @Autowired
-  private List<WebDavMethodHandler>        handlers;
+  protected static final Log                  LOG = ExoLogger.getLogger(WebDavHttpMethodDispatcher.class);
 
   @Autowired
-  private WebDavErrorHandler               errorHandler;
+  private List<WebDavHttpMethodPlugin>        handlers;
 
-  private Map<String, WebDavMethodHandler> handlersByMethod;
+  @Autowired
+  private WebDavErrorHandler                  errorHandler;
+
+  private Map<String, WebDavHttpMethodPlugin> handlersByMethod;
 
   @PostConstruct
   protected void init() {
     handlersByMethod = handlers.stream()
-                               .collect(Collectors.toMap(WebDavMethodHandler::getMethod,
+                               .collect(Collectors.toMap(WebDavHttpMethodPlugin::getMethod,
                                                          Function.identity()));
   }
 
   /**
    * Handles All WebDav Requests. A main operations which will dispatch the
-   * request into the adequate {@link WebDavMethodHandler}
+   * request into the adequate {@link WebDavHttpMethodPlugin}
    * 
    * @param httpRequest {@link HttpServletRequest}
    * @param httpResponse {@link HttpServletResponse}

@@ -30,7 +30,7 @@ import org.springframework.util.MimeTypeUtils;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.WebDavLockResponse;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.documents.webdav.util.PropertyWriteUtil;
 import org.exoplatform.services.rest.ExtHttpHeaders;
 
@@ -39,7 +39,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 
 @Component
-public class LockWebDavHandler extends WebDavMethodHandler {
+public class LockWebDavHandler extends WebDavHttpMethodPlugin {
 
   @Value("${webdav.lockTimeout:86400}")
   private int lockTimeout;
@@ -71,7 +71,7 @@ public class LockWebDavHandler extends WebDavMethodHandler {
                             boolean bodyIsEmpty,
                             HttpServletResponse httpResponse) {
     httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
-    if (!bodyIsEmpty) {
+    if (bodyIsEmpty) {
       httpResponse.setHeader(ExtHttpHeaders.LOCKTOKEN, "<" + lockToken + ">");
     }
     try (OutputStream outputStream = httpResponse.getOutputStream()) {

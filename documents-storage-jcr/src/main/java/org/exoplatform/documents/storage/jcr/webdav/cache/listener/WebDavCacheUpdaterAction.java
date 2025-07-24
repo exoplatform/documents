@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.storage.jcr.cache.listener;
+package org.exoplatform.documents.storage.jcr.webdav.cache.listener;
 
 import static javax.jcr.observation.Event.NODE_ADDED;
 import static javax.jcr.observation.Event.NODE_REMOVED;
@@ -43,7 +43,7 @@ import javax.jcr.observation.EventIterator;
 import javax.jcr.observation.EventListener;
 
 import org.exoplatform.container.ExoContainerContext;
-import org.exoplatform.documents.storage.jcr.cache.CachedJcrWebDavService;
+import org.exoplatform.documents.storage.jcr.webdav.cache.CachedJcrWebDavService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 

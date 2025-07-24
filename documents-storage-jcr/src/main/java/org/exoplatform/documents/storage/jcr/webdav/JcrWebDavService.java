@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.storage.jcr;
+package org.exoplatform.documents.storage.jcr.webdav;
 
 import java.io.InputStream;
 import java.util.Collection;
@@ -34,16 +34,16 @@ import javax.xml.namespace.QName;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 
-import org.exoplatform.documents.service.DocumentWebDavService;
-import org.exoplatform.documents.storage.jcr.model.JcrNamespaceContext;
-import org.exoplatform.documents.storage.jcr.plugin.WebdavReadCommandHandler;
-import org.exoplatform.documents.storage.jcr.plugin.WebdavWriteCommandHandler;
+import org.exoplatform.documents.storage.jcr.webdav.model.JcrNamespaceContext;
+import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
+import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemOrder;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.WebDavLockResponse;
+import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ManageableRepository;
@@ -397,20 +397,6 @@ public class JcrWebDavService implements DocumentWebDavService {
     }
   }
 
-  @Override
-  public void changeAcl(String webDavPath,
-                        WebDavItemProperty requestBody,
-                        List<String> lockTokens,
-                        String username) throws WebDavException {
-    Session session = getSession(username);
-    try {
-      checkLock(session, webDavPath, lockTokens);
-      writeCommandHandler.changeAcl(session, webDavPath, requestBody);
-    } finally {
-      session.logout();
-    }
-  }
-
   @SneakyThrows
   private JcrNamespaceContext buildNameSpaceContext() {
     Map<String, String> prefixes = new HashMap<>();
@@ -447,14 +433,17 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @SneakyThrows
-  private void checkLock(Session session, String webDavPath, List<String> tokens) throws WebDavException {
-    if (tokens != null && session.itemExists(webDavPath)) {
-      Item item = session.getItem(webDavPath);
+  private void checkLock(Session session, String jcrPath, List<String> tokens) throws WebDavException {
+    if (tokens != null && session.itemExists(jcrPath)) {
+      Item item = session.getItem(jcrPath);
       if (item instanceof Node node && node.isLocked()) {
         Lock lock = node.getLock();
         String lockToken = lock.getLockToken();
         if (tokens.stream().noneMatch(l -> StringUtils.equalsIgnoreCase(l, lockToken))) {
-          throw new WebDavException(HttpStatus.SC_LOCKED, "Resource already locked");
+          throw new WebDavException(HttpStatus.SC_LOCKED,
+                                    String.format("Resource with path '%s' is already locked by a different owner %s",
+                                                  jcrPath,
+                                                  lock.getLockOwner()));
         }
       }
     }

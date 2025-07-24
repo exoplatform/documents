@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.service;
+package org.exoplatform.documents.webdav.service;
 
 import java.io.InputStream;
 import java.util.Collection;
@@ -380,24 +380,5 @@ public interface DocumentWebDavService {
    * @throws WebDavException
    */
   void unlock(String resourcePath, List<String> lockTokens, String username) throws WebDavException;
-
-  /**
-   * Changes ACL of a designated File or Folder
-   * 
-   * @param resourcePath File or Folder Path
-   * @param hierarchicalProperty {@link WebDavItemProperty}
-   * @param lockTokens Already Hold Lock Tokens by the WebDav Session
-   * @param username user login making the changes
-   * @throws WebDavException when:
-   *           <ul>
-   *           <li>- Parameters aren't compliant to expected method inputs</li>
-   *           <li>- The user doesn't have access to designated resource</li>
-   *           <li>- The designated resource isn't found</li>
-   *           </ul>
-   */
-  void changeAcl(String resourcePath,
-                 WebDavItemProperty hierarchicalProperty,
-                 List<String> lockTokens,
-                 String username) throws WebDavException;
 
 }

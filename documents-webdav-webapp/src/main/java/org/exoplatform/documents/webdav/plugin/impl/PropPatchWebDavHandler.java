@@ -33,7 +33,7 @@ import org.springframework.util.MimeTypeUtils;
 
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
-import org.exoplatform.documents.webdav.plugin.WebDavMethodHandler;
+import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.documents.webdav.util.PropertyWriteUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,7 +41,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 
 @Component
-public class PropPatchWebDavHandler extends WebDavMethodHandler {
+public class PropPatchWebDavHandler extends WebDavHttpMethodPlugin {
 
   public PropPatchWebDavHandler() {
     super("PROPPATCH");
