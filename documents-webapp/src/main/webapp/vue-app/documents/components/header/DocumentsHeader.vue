@@ -198,6 +198,7 @@ export default {
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('show-mobile-filter', this.handleShowFilter);
     this.$root.$on('document-open-folder', this.openFolder);
+    this.$root.$on('document-open-home', this.openFolder);
     this.$root.$on('document-show-drives', this.showDrives);
     document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
@@ -207,6 +208,7 @@ export default {
     this.$root.$off('filer-query', this.filterQuery);
     this.$root.$off('show-mobile-filter', this.handleShowFilter);
     this.$root.$off('document-open-folder', this.openFolder);
+    this.$root.$off('document-open-home', this.openFolder);
     this.$root.$off('document-show-drives', this.showDrives);
     document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
   },
