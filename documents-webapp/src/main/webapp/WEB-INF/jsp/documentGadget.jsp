@@ -48,6 +48,7 @@
   int maxDocumentsToList = Integer.parseInt(preferences.getValue("maxDocumentsToList", "4"));
   String categoryIds = preferences.getValue("categoryIds", "[]").replace("\"", "`");
   String excludeCategoryIds = preferences.getValue("excludeCategoryIds", "[]").replace("\"", "`");
+  String selectedFoldersId = preferences.getValue("selectedFoldersId", "");
   String headerTitle = CommonsUtils.getService(TranslationService.class).getTranslationLabelOrDefault("documentGadget",
           applicationId, "headerTitle", LocaleContextInfoUtils.getUserLocale(request.getRemoteUser()));
 %>
@@ -71,6 +72,7 @@
         maxDocumentsToList: <%=maxDocumentsToList%>,
         categoryIds: <%=categoryIds%>,
         excludeCategoryIds: <%=excludeCategoryIds%>,
+        selectedFoldersId: '<%=selectedFoldersId%>',
         canEdit: <%=canEdit%>,
         saveSettingsUrl: '<%=saveSettingsUrl%>'
       }));

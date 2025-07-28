@@ -175,7 +175,7 @@ public class DocumentFileRestTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     DocumentTimelineFilter filter = null;
-    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()), null);
     filter.setFavorites(false);
     filter.setFileTypes("");
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
@@ -383,7 +383,7 @@ public class DocumentFileRestTest {
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
     DocumentTimelineFilter filter = null;
-    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()));
+    filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()), null);
     filter.setFavorites(false);
 
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
