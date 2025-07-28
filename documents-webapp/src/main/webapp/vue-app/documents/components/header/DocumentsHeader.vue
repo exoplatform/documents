@@ -34,7 +34,7 @@
         ref="applicationToolbar">
         <template #left>
           <documents-header-left
-            v-if="canAdd && !$root.driveView"
+            v-if="canAdd"
             :selected-view="selectedView" 
             :is-mobile="isMobile"
             :selected-documents="selectedDocuments" />
@@ -255,7 +255,7 @@ export default {
         if (this.tabsList.length < 2){
           this.tabsList=[];
         }
-        this.centerBotton.hide = this.$root.driveView;
+        this.centerBotton.hide = this.$root.driveView || this.$root.ownerId !== eXo.env.portal.userIdentityId;
         this.centerBotton.buttons=this.tabsList.map(e => ({...e, text: this.$t(`${e.labelKey}`)}));
       }
     },
@@ -288,7 +288,7 @@ export default {
       this.filterDispalyed = true;
     }, 
     openFolder(){
-      this.centerBotton.hide = false;
+      this.centerBotton.hide = this.$root.ownerId !== eXo.env.portal.userIdentityId;
     }, 
     showDrives(){
       this.centerBotton.hide = true;
