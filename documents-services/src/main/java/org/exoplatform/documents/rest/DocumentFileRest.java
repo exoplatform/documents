@@ -241,7 +241,7 @@ public class DocumentFileRest implements ResourceContainer {
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-      DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId)
+      DocumentNodeFilter filter = listingType == FileListingType.TIMELINE ? new DocumentTimelineFilter(ownerId, parentFolderId)
                                                                           : new DocumentFolderFilter(parentFolderId,
                                                                                                      folderPath,
                                                                                                      ownerId,
@@ -347,7 +347,8 @@ public class DocumentFileRest implements ResourceContainer {
 
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
-      DocumentTimelineFilter filter = new DocumentTimelineFilter(ownerId);
+      DocumentTimelineFilter filter = new DocumentTimelineFilter();
+      filter.setOwnerId(ownerId);
       filter.setQuery(query);
       filter.setFavorites(favorites);
 
