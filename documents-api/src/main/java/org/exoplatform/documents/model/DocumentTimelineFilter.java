@@ -27,7 +27,8 @@ import lombok.NoArgsConstructor;
 @EqualsAndHashCode(callSuper = true)
 public class DocumentTimelineFilter extends DocumentNodeFilter {
 
-  private Long ownerId;
+  private Long   ownerId;
 
+  private String parentFolderId;
 
 }
