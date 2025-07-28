@@ -388,6 +388,9 @@ export default {
       this.$root.$emit('hide-selection-input', file);
     },
     customSort: function (items, sortBy, isDesc) {
+      if (this.$root.driveView) {
+        return items;
+      }
       let sorted = items;
       const accentedExp = /[À-ÖØ-öø-ÿ]/;
       if (sortBy[1] === 'name') {
