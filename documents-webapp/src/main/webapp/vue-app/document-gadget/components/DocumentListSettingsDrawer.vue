@@ -121,6 +121,19 @@
             class="user-suggester mt-n2"
             include-spaces
             only-redactor />
+          <div v-if="spaceIdentity" class="d-flex align-center">
+            <label class="v-label text-color text-truncate">
+              {{ selectedFoldersPath }}
+            </label>
+            <div class="ms-auto">
+              <v-btn
+                small
+                icon
+                @click="$root.$emit('openSelectFolderDrawer')">
+                <v-icon size="18" class="icon-default-color">fas fa-edit</v-icon>
+              </v-btn>
+            </div>
+          </div>
         </v-radio-group>
         <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.documentType') }}</div>
         <v-radio-group
@@ -221,6 +234,11 @@
           </v-list>
         </div>
       </div>
+      <document-select-folder-drawer
+        v-if="spaceIdentity"
+        :selected-folder="selectedFoldersId"
+        :space-id="spaceId"
+        @apply="folderSelected" />
     </template>
     <template #footer>
       <div class="d-flex align-center">
@@ -268,6 +286,8 @@ export default {
     selectedExcludeCategories: [],
     filterPerCategories: false,
     filterPerExcludeCategories: false,
+    selectedFoldersId: [],
+    selectedFoldersPath: 'Document',
   }),
   computed: {
     saveSettingsUrl() {
@@ -290,7 +310,8 @@ export default {
           || (this.documentType !== this.settings.documentType)
           || (this.selectedCategories !== this.settings.categoryIds)
           || (this.selectedExcludeCategories !== this.settings.excludeCategoryIds)
-          || (this.spaceIdentityId !== this.settings.spaceIdentityId);
+          || (this.spaceIdentityId !== this.settings.spaceIdentityId)
+          || (this.selectedFoldersId !== this.settings.selectedFoldersId);
     },
     oneDriveSelected() {
       return this.documentSource === 'oneDrive';
@@ -370,6 +391,11 @@ export default {
         this.$root.settings.excludeCategoryIds = [];
       }
     },
+    spaceIdentity() {
+      if (!this.spaceIdentity) {
+        this.selectedFoldersId = [];
+      }
+    }
   },
   methods: {
     open() {
@@ -395,6 +421,12 @@ export default {
               displayName: spaceEntity.displayName,
             };
           });
+      }
+      this.selectedFoldersId = this.settings?.selectedFoldersId;
+      if (this.selectedFoldersId) {
+        this.$documentFileService.getDocumentById(this.selectedFoldersId).then(item => {
+          this.selectedFoldersPath = item?.path?.split(/\/spaces\/[^/]+\//)[1];
+        });
       }
       this.maxDocumentsToList = Number(this.settings?.maxDocumentsToList);
       this.viewOptions = this.settings?.viewOptions || 'list';
@@ -423,6 +455,7 @@ export default {
         displaySeeMore: this.displaySeeMore,
         categoryIds: JSON.stringify(this.categoryIds),
         excludeCategoryIds: JSON.stringify(this.excludeCategoryIds),
+        selectedFoldersId: this.selectedFoldersId || '',
         spaceIdentityId: this.spaceIdentityId
       };
       this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
@@ -450,6 +483,17 @@ export default {
     removeItem(index, array) {
       array.splice(index, 1);
       this.settings = JSON.parse(JSON.stringify(this.settings));
+    },
+    folderSelected(folderId) {
+      if (folderId) {
+        this.selectedFoldersId = folderId;
+        this.$documentFileService.getDocumentById(this.selectedFoldersId).then(item => {
+          this.selectedFoldersPath = item?.path?.split(/\/spaces\/[^/]+\//)[1];
+        });
+      } else {
+        this.selectedFoldersId = null;
+        this.selectedFoldersPath = 'Documents';
+      }
     },
   },
 };
