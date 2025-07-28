@@ -142,7 +142,7 @@ export default {
               id: space.id,
               spaceId: space.id,
               identityId: space.identityId,
-              name: space.prettyName,
+              name: space.displayName,
               avatarUrl: space.avatarUrl,
               drive: true,
               children: [],
