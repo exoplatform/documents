@@ -118,7 +118,7 @@ export default {
       return this.selectedView === 'folder';
     },
     disableButton(){
-      return this.currentFolder && this.currentFolder.accessList && this.currentFolder.accessList.canEdit === false ;
+      return  this.$root.driveView || (this.currentFolder && this.currentFolder.accessList && this.currentFolder.accessList.canEdit === false) ;
     },
   },
   created() {
