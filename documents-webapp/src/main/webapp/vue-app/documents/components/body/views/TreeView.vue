@@ -35,13 +35,16 @@
           v-if="item.avatarUrl"
           size="24"
           class="mx-0"
+          :class="item.spaceId && 'spaceAvatar' || 'userAvatar'"
           tile>
-          <img
-            :src="item.avatarUrl"
-            alt=""
-            class="rounded"
-            width="24"
-            height="24">
+          <v-avatar :size="24">
+            <img
+              :src="item.avatarUrl"
+              alt=""
+              class="rounded"
+              width="24"
+              height="24">
+          </v-avatar>
         </v-list-item-avatar>
         <v-icon
           v-else
@@ -150,9 +153,10 @@ export default {
         this.$root.spaceId = folder.spaceId;
         this.$root.$emit('open-folder', folder);
       } else {
-        if (folder.name ==='Private' && this.$root.ownerId !== eXo.env.portal.userIdentityId) {
+        if (folder.name ==='Private' && eXo.env.portal.userIdentityId) {
           this.$root.ownerId = eXo.env.portal.userIdentityId;
           this.$root.spaceId = null;
+          this.$root.driveView = false;
         } 
         this.$root.$emit('open-folder', folder);
       }
