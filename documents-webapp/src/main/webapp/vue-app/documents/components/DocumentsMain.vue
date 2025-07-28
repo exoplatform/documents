@@ -1763,7 +1763,7 @@ export default {
           this.files=spaces.map(space => ({
             spaceId: space.id,
             identityId: space.identityId,
-            name: space.prettyName,
+            name: space.displayName,
             avatarUrl: space.avatarUrl,
             drive: true,
             creatorUserName: '__system',
