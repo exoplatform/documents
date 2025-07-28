@@ -332,7 +332,7 @@ export default {
       this.loading = true;
       if (this.file?.folder) {
         this.$root.$emit('document-open-folder', this.file);
-      } if (this.file?.drive) {
+      } else if (this.file?.drive) {
         this.$root.ownerId = this.file.identityId;
         this.$root.spaceId = this.file.spaceId;
         this.$root.$emit('document-open-folder', this.file);
