@@ -216,7 +216,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
     try {
-      Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+      Node identityRootNode;
+      if (StringUtils.isNotBlank(filter.getParentFolderId())) {
+        ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+        Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+        identityRootNode = getNodeByIdentifier(session, filter.getParentFolderId());
+        if (identityRootNode != null && identityRootNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          String sourceNodeId = identityRootNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          identityRootNode = getNodeByIdentifier(session, sourceNodeId);
+        }
+      } else {
+        identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+      }
+
       if (identityRootNode == null) {
         return Collections.emptyList();
       }

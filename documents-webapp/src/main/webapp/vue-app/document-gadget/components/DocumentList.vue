@@ -162,6 +162,9 @@ export default {
     excludedCategoryIds() {
       return this.settings.excludeCategoryIds;
     },
+    selectedFoldersId() {
+      return this.settings?.selectedFoldersId;
+    },
     spaceIdentityId() {
       return this.settings.spaceIdentityId;
     },
@@ -199,6 +202,7 @@ export default {
         folderPath: this.spaceIdentityId ? null : this.documentType === 'sharedWithMe' ? folderPath : null,
         favorites: this.spaceIdentityId ? false : this.documentType === 'favorites',
         sortField: 'lastUpdated',
+        parentFolderId: this.selectedFoldersId,
       };
       return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.maxDocumentsToList, null).then(files => {
         this.files = files;
@@ -211,6 +215,7 @@ export default {
       this.$root.settings.customHeader = settings.customHeader;
       this.$root.settings.displaySeeMore = settings.displaySeeMore;
       this.$root.settings.spaceIdentityId = settings.spaceIdentityId;
+      this.$root.settings.selectedFoldersId = settings.selectedFoldersId;
       this.$root.settings.headerTitle = headerTitle;
       if (refreshList) {
         this.getFiles();

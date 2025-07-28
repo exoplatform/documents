@@ -108,6 +108,9 @@ export default {
     excludedCategoryIds() {
       return this.settings?.excludeCategoryIds;
     },
+    selectedFoldersId() {
+      return this.settings?.selectedFoldersId;
+    },
     noDocumentMessage() {
       return this.$t(`documents.documentGadget.${this.documentType}.noDocumentMessage`);
     },
@@ -153,8 +156,9 @@ export default {
         folderPath: this.spaceIdentityId ? null : this.documentType === 'sharedWithMe' ? folderPath : null,
         favorites: this.spaceIdentityId ? false : this.documentType === 'favorites',
         sortField: 'lastUpdated',
+        parentFolderId: this.selectedFoldersId,
       };
-      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.limit + 1, null).then(files => {
+      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, this.selectedFoldersIds, 0, this.limit + 1, null).then(files => {
         this.files = files;
       }).finally(() => this.loading = false);
     },
