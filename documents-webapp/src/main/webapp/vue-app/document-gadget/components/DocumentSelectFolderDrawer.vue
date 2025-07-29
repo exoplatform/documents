@@ -30,10 +30,11 @@
           :items="items"
           :open.sync="open"
           :load-children="fetchChildren"
+          :expand-icon="rootExpandIcon"
+          class="custom-tree"
           item-key="id"
           activatable
-          open-on-click
-          class="custom-tree">
+          open-on-click>
           <template #prepend="{ item }">
             <v-radio :value="item.id" color="primary" />
           </template>
@@ -82,6 +83,12 @@ export default {
   computed: {
     ownerId() {
       return this.space?.identityId;
+    },
+    rootExpandIcon() {
+      if (!this.items.length) {
+        return null;
+      }
+      return this.items[0]?.children && this.items[0]?.children.length > 0 ? 'mdi-menu-down' : null;
     }
   },
   created(){
