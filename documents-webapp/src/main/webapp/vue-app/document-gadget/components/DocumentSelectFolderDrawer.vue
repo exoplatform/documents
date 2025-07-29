@@ -118,7 +118,11 @@ export default {
               (value === null ? undefined : value)
             ));
           });
-          this.selectedId = this.selectedFolder;
+          if (!this.selectedFolder && this.items.length > 0) {
+            this.selectedId = this.items[0].id;
+          } else {
+            this.selectedId = this.selectedFolder;
+          }
         })
         .finally(() => this.loading = false);
     },
