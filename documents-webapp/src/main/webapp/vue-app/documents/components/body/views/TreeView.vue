@@ -53,7 +53,7 @@
           {{ item.icon ? item.icon : 'fas fa-folder' }}
         </v-icon>
         <v-list-item-title 
-          class="body-2 mx-2 mt-1"
+          class="body-1 mx-2 mt-1"
           :class="idItemActive === item.id ? 'primary--text font-weight-bold' : item.hidden ? 'text-light-color' : ''">
           {{ displayName(item.name) }} 
           <v-icon
