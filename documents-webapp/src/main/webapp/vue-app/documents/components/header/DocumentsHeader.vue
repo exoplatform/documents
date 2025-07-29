@@ -197,9 +197,6 @@ export default {
     this.$root.$on('resetSearch', this.cancelSearch);
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('show-mobile-filter', this.handleShowFilter);
-    this.$root.$on('document-open-folder', this.openFolder);
-    this.$root.$on('document-open-home', this.openFolder);
-    this.$root.$on('document-show-drives', this.showDrives);
     document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
     this.refreshTabExtensions();
   },
@@ -207,9 +204,6 @@ export default {
     this.$root.$off('resetSearch', this.cancelSearch);
     this.$root.$off('filer-query', this.filterQuery);
     this.$root.$off('show-mobile-filter', this.handleShowFilter);
-    this.$root.$off('document-open-folder', this.openFolder);
-    this.$root.$off('document-open-home', this.openFolder);
-    this.$root.$off('document-show-drives', this.showDrives);
     document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
   },
   methods: {
@@ -257,7 +251,7 @@ export default {
         if (this.tabsList.length < 2){
           this.tabsList=[];
         }
-        this.centerBotton.hide = this.$root.driveView || this.$root.ownerId !== eXo.env.portal.userIdentityId;
+        this.centerBotton.hide = !eXo.env.portal.spaceId;
         this.centerBotton.buttons=this.tabsList.map(e => ({...e, text: this.$t(`${e.labelKey}`)}));
       }
     },
@@ -288,13 +282,7 @@ export default {
     },  
     displayRightFilter(){
       this.filterDispalyed = true;
-    }, 
-    openFolder(){
-      this.centerBotton.hide = this.$root.ownerId !== eXo.env.portal.userIdentityId;
-    }, 
-    showDrives(){
-      this.centerBotton.hide = true;
-    },
+    }
   }
 };
 </script>
