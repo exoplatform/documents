@@ -286,7 +286,7 @@ export default {
     selectedExcludeCategories: [],
     filterPerCategories: false,
     filterPerExcludeCategories: false,
-    selectedFoldersId: [],
+    selectedFoldersId: '',
     selectedFoldersPath: 'Document',
   }),
   computed: {
@@ -337,11 +337,10 @@ export default {
   },
   watch: {
     oneDriveSelected() {
-      if (this.oneDriveSelected) {
-        this.documentType = 'recentDocument';
-      } else {
-        this.spaceIdentity = null;
-      }
+      this.documentType = 'recentDocument';
+      this.selectedFoldersId = '';
+      this.spaceIdentity = null;
+      this.space = null;
     },
     async categoryId() {
       if (this.categoryId) {
