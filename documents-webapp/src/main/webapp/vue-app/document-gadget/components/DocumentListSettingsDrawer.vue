@@ -429,6 +429,7 @@ export default {
       }
       this.maxDocumentsToList = Number(this.settings?.maxDocumentsToList);
       this.viewOptions = this.settings?.viewOptions || 'list';
+      this.documentSource = this.settings?.spaceIdentityId ? 'oneDrive' : 'currentDrive';
       this.documentType = this.settings?.documentType || 'recentDocument';
       this.customHeader = this.settings?.customHeader || false;
       this.displaySeeMore = this.settings?.displaySeeMore || false;
