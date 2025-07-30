@@ -30,10 +30,10 @@
       <document-list-empty-message v-if="!hasDocuments && !loading" :title="noDocumentMessage" />
       <document-list-widget-item
         v-else
-        v-for="file in fileToDisplay"
+        v-for="file in filesToDisplay"
         :key="file.id"
         :file="file"
-        :files="fileToDisplay" />
+        :files="filesToDisplay" />
     </template>
     <template #footer>
       <div
@@ -69,7 +69,7 @@ export default {
     expanded: false
   }),
   computed: {
-    fileToDisplay() {
+    filesToDisplay() {
       const files = this.files ?? [];
       return files.map(file => {
         const decodedName = this.$root.safeDecodeURIComponent(file.name);
@@ -80,6 +80,8 @@ export default {
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
           mimetype: file?.mimeType,
+          sourceID: file?.sourceID,
+          acl: file?.acl,
           image: this.$root.getImageUrl(file),
           downloadUrl: this.$root.getDownloadUrl(file),
           icon: this.$root.getFileIcon(file),
