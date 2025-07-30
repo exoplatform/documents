@@ -482,13 +482,13 @@ export default {
       }
     },
     initSettings() {
-      const lastView = localStorage.getItem('lastView');
+      const lastView = eXo.env.portal.spaceId ? localStorage.getItem('lastView') : 'folder';
       if (lastView && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === lastView)) {
         this.selectedView = lastView;
       } else if (this.$root.settings?.defaultView  && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === this.$root.settings.defaultView)) {
         this.selectedView =  this.$root.settings.defaultView;
       } else {
-        this.selectedView = 'timeline';
+        this.selectedView = eXo.env.portal.spaceId ? 'timeline' : 'folder';
       }
       this.$documentsWebSocket.initCometd(eXo.env.portal.cometdContext, eXo.env.portal.cometdToken, this.handleBulkActionNotif);
       return this.$documentFileService.getUserSettings(this.$root.ownerId)

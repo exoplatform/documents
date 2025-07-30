@@ -30,9 +30,10 @@
     <template v-if="drawer" #content>
       <div class="pa-5" flat>
         <div class="mb-2 text-header">{{ $t('documents.settings.displayOptions') }}</div>
-        <div class="mb-2 font-weight-bold">{{ $t('documents.settings.defaultView') }}</div>
+        <div v-if="showViewsList" class="mb-2 font-weight-bold">{{ $t('documents.settings.defaultView') }}</div>
         <v-radio-group
           v-model="settings.defaultView"
+          v-if="showViewsList"
           class="pa-0 ma-0 full-width"
           mandatory>
           <v-radio
@@ -195,6 +196,9 @@ export default {
     },
     excludeCategoryIds() {
       return this.settings.excludeCategoryIds;
+    },
+    showViewsList() {
+      return eXo.env.portal.spaceId;
     },
   },
   watch: {
