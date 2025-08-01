@@ -1758,7 +1758,7 @@ export default {
       return  this.$documentFileService.getUserSpaces(query).then(data => {
         const spaces = data.spaces || [];
         if (spaces.length === 0) {
-          return [];
+          this.files = [];
         } else {
           this.files=spaces.map(space => ({
             spaceId: space.id,
@@ -1771,7 +1771,7 @@ export default {
         }
       }).catch(error => {
         console.error('Error fetching user spaces:', error);
-        return [];
+        this.files = [];
       });
     },
   },
