@@ -117,7 +117,9 @@ export default {
   }),
   computed: {
     documentsBreadcrumbToDisplay() {
-      this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
+      if (this.actualFolderId) {
+        this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
+      }
       const maxItemsToDisplay = this.isMobile ? 2 : 4;
       const maxItemsCount = this.isMobile ? 2 : 3;
       if (!this.documentsBreadcrumb || this.documentsBreadcrumb.length <= maxItemsToDisplay) {
@@ -178,12 +180,17 @@ export default {
       this.folderPath = '';
       if (folder) {
         if (folder.drive) {
+          this.actualFolderId = '';
           this.driveName = folder.name;
+          this.documentsBreadcrumb = [];
+          this.documentsBreadcrumb.push({
+            name: folder.name,
+            symlink: false,
+          });
         } else {
           this.actualFolderId = folder.id;
+          this.getBreadCrumbs();
         }
-        
-        this.getBreadCrumbs(); 
       }
       this.$root.$emit('breadcrumb-updated');
     },
@@ -193,6 +200,15 @@ export default {
         this.folderPath='';
         this.actualFolderId ='';
         this.getBreadCrumbs();
+      } else if (folder.drive) {
+        this.actualFolderId = '';
+        this.driveName = folder.name;
+        this.documentsBreadcrumb = [];
+        this.documentsBreadcrumb.push({
+          name: folder.name,
+          symlink: false,
+        });
+        this.$root.$emit('document-open-folder', folder);
       } else if (folder.id !== this.actualFolderId ) {
         this.folderPath='';
         this.actualFolderId=folder.id;
