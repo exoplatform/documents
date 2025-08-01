@@ -25,7 +25,7 @@
           }],
         }"
         :filters-count="filtersCount"
-        @filter-text-input-end-typing="query = $event"
+        @filter-text-input-end-typing="filterQuery($event)"
         @filter-button-click="openAdvacedDrawer()"
         @filter-select-change="changeDocumentsFilter($event)"
         @toggle-select="changeDocumentView($event)"
@@ -146,10 +146,6 @@ export default {
     viewList: []
   }),
   watch: {
-    query() {  
-      this.$root.$emit('document-search', this.query);
-      return;
-    },
     selectedView: {
       immediate: true,
       handler() {
@@ -211,9 +207,6 @@ export default {
       this.showFilter = data;
     },
     filterQuery(query){
-      if (this.query === query){
-        return;
-      }
       this.query = query;
       this.$root.$emit('document-search', this.query);     
     },
