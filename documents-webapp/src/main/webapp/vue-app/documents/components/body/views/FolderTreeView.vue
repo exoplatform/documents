@@ -76,7 +76,10 @@ export default {
   data: () => ({
     loading: false,
     showHidden: false,
-    items: []
+    items: [],
+    pageSize: 20,
+    drivesLimit: 20,
+    drivesOffset: 0,
   }),
   created() {
     this.retrieveDocumentTree();
@@ -84,6 +87,11 @@ export default {
       this.showHidden = advancedFilter.showHidden;
       this.retrieveDocumentTree();
     });
+    this.$root.$on('search-drives', this.searchDrives);
+  },
+  
+  beforeDestroy() {
+    this.$root.$off('search-drives', this.searchDrives);
   },
   methods: {
     async retrieveDocumentTree() {
@@ -128,25 +136,35 @@ export default {
       }
     },
     async getUserSpaces() {
-      return await this.$documentFileService.getUserSpaces().then(data => {
+      return await this.$documentFileService.getUserSpaces(null,this.drivesOffset,this.drivesLimit).then(data => {
         const spaces = data.spaces || [];
         if (spaces.length === 0) {
           return [];
         } else {
+          const spacesList = spaces.map(space => ({
+            id: space.id,
+            spaceId: space.id,
+            identityId: space.identityId,
+            name: space.displayName,
+            avatarUrl: space.avatarUrl,
+            drive: true,
+            children: [],
+          }));
+          if (data.size > this.drivesLimit) {
+            spacesList.push({
+              id: 'load_more',
+              name: this.$t('documents.loadMore'),
+              isLoadMore: true,
+              offset: this.drivesOffset,
+              limit: this.drivesLimit,
+            });
+          }  
           const spacesTree = {
             name: this.$t('documents.label.drives'),
             icon: 'fa fa-layer-group',
             id: 'space_drives',
             drives: true,
-            children: spaces.map(space => ({
-              id: space.id,
-              spaceId: space.id,
-              identityId: space.identityId,
-              name: space.displayName,
-              avatarUrl: space.avatarUrl,
-              drive: true,
-              children: [],
-            }))
+            children: spacesList
           };
           return spacesTree;
         }
@@ -163,7 +181,58 @@ export default {
         console.error('Error fetching user profile:', error);
         return {};
       }
-    }
+    },
+    searchDrives(query) {
+      this.drivesOffset = 0;
+      this.drivesLimit = 20;
+      this.$documentFileService.getUserSpaces(query, this.drivesOffset, this.drivesLimit).then(data => {
+        const drives = data.spaces || [];
+        if (drives.length > 0) {
+          const newChildren = drives.map(drive => ({
+            id: drive.id,
+            spaceId: drive.id,
+            identityId: drive.identityId,
+            name: drive.displayName,
+            avatarUrl: drive.avatarUrl,
+            drive: true,
+            children: [],
+          }));
+          if (data.size > this.drivesLimit) {
+            newChildren.push({
+              id: 'load_more',
+              name: this.$t('documents.loadMore'),
+              isLoadMore: true,
+              offset: this.drivesOffset,
+              limit: this.drivesLimit,
+              query: query,
+            });
+          }  
+          this.setChildren(this.items, 'space_drives', newChildren);
+          this.$root.$emit('document-show-drives', newChildren);
+        } else {
+          this.setChildren(this.items, 'space_drives', []);
+          this.$root.$emit('document-show-drives', []);
+        }
+      }).catch(error => {
+        console.error('Error searching drives:', error);
+      });
+    },
+    setChildren(tree, targetId, newChildren) {
+      for (const node of tree) {
+        if (node.id === targetId) {
+          if (!Array.isArray(node.children)) {
+            node.children = [];
+          }
+          node.children=newChildren;
+          return true;
+        }
+        if (Array.isArray(node.children)) {
+          const added = this.setChildren(node.children, targetId, newChildren);
+          if (added) {return true;}
+        }
+      }
+      return false;
+    },
   }
 };
 </script>
