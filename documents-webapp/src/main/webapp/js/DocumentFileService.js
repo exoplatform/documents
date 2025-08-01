@@ -670,15 +670,15 @@ export function importFilesFromZip(ownerId,folderId,folderPath,uploadId,conflict
   });
 }
 
-export function getUserSpaces(query) {
+export function getUserSpaces(query,offset,limit) {
   const formData = new FormData();
   if (query) {
     formData.append('q', query);
-  } else {
-    formData.append('sort', 'lastVisited');
+  } 
+  formData.append('limit', limit ? limit : 20);
+  if (offset) {
+    formData.append('offset', offset);
   }
-  formData.append('limit', 20);
-  
   formData.append('returnSize', true);
 
 
