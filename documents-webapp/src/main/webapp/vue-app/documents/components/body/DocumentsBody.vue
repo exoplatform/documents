@@ -8,7 +8,7 @@
       :element="div" />
     <div
       class="extendFilterButton"
-      v-show="showExtend && !this.isMobile"
+      v-show="showExtend && !this.isMobile && !this.$root.driveView"
       @click="extendFilter()">
       <v-icon
         size="24"
