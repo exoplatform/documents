@@ -24,22 +24,29 @@
       offset-y
       down>
       <template #activator="{ on, attrs }">
-        <v-btn
-          :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
-          class="btn btn-primary"
-          :key="postKey"
-          :disabled="disableButton"
-          :small="isMobile"
-          v-bind="attrs"
-          v-on="!isMobile && on"
-          @click="openAddItemMenu()">
-          <v-icon
-            size="18"
-            dark>
-            fa-plus
-          </v-icon>
-          <span class="ps-1">{{ !isMobile ? $t('documents.button.addNew') : '' }}</span>
-        </v-btn>
+        <v-tooltip bottom>
+          <template #activator="{ on: tooltipOn, attrs: tooltipAttrs }">
+            <span v-bind="tooltipAttrs" v-on="disableButton ? tooltipOn : {}">
+              <v-btn
+                :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
+                class="btn btn-primary"
+                :key="postKey"
+                :disabled="disableButton"
+                :small="isMobile"
+                v-bind="attrs"
+                v-on="!isMobile && on"
+                @click="openAddItemMenu()">
+                <v-icon
+                  size="18"
+                  dark>
+                  fa-plus
+                </v-icon>
+                <span class="ps-1">{{ !isMobile ? $t('documents.button.addNew') : '' }}</span>
+              </v-btn>
+            </span>
+          </template>
+          <span>{{ disableButton ? $t('documents.tooltip.selectDrive') : '' }}</span>
+        </v-tooltip>
       </template>
       <v-list class="pa-0" dense>
         <v-list-item
