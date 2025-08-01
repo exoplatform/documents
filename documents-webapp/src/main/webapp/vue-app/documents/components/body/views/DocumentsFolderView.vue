@@ -342,6 +342,7 @@ export default {
     this.setSortOptions(this.sortField, this.ascending);
     this.$root.$on('documents-filter', this.updateFilter);
     this.$root.$on('tree-view-expand', this.collapseTreeView );
+    this.$root.$on('loading-documents', this.setLoading);
   },
   mounted(){
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
@@ -351,6 +352,7 @@ export default {
     this.$root.$off('documents-filter', this.updateFilter);
     this.$root.$off('tree-view-expand', this.collapseTreeView);
     this.$root.$off('openTreeFolderDrawer', this.folderTreeDrawer);
+    this.$root.$off('loading-documents', this.setLoading);
   },
   methods: {
     collapseTreeView(value) {
@@ -359,6 +361,9 @@ export default {
     },
     canEditFile(file) {
       return file?.acl?.canEdit;
+    },
+    setLoading(value) {
+      this.loading = value;
     },
     showSelectAllInputOnHover(){
       clearTimeout(this.showSelectInputTimer);
