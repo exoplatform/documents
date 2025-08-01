@@ -334,14 +334,14 @@ export default {
     },
   },
   created() {
-    this.treeViewCollapsed =  localStorage.getItem('collapsedTreeView')!=null ? localStorage.getItem('collapsedTreeView') === 'true' : (this.$root.settings?.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true);
+    this.treeViewCollapsed =  localStorage.getItem('collapsedTreeView')!=null ? localStorage.getItem('collapsedTreeView') === 'true' : (this.$root.settings?.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : false);
     this.$root.$on('select-all-documents', (value) => this.selectAll = value);
     this.$root.$on('reset-selections', () => this.selectAll = false);
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
     this.$root.$on('documents-filter', this.updateFilter);
-    this.$root.$on('tree-view-expand', this.collapseTreeView );
+    this.$root.$on('tree-view-collapse', this.collapseTreeView );
     this.$root.$on('loading-documents', this.setLoading);
   },
   mounted(){
@@ -350,7 +350,7 @@ export default {
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
-    this.$root.$off('tree-view-expand', this.collapseTreeView);
+    this.$root.$off('tree-view-collapse', this.collapseTreeView);
     this.$root.$off('openTreeFolderDrawer', this.folderTreeDrawer);
     this.$root.$off('loading-documents', this.setLoading);
   },
