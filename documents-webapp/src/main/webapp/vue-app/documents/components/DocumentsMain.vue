@@ -188,6 +188,8 @@ export default {
     maxSize: null,
     showHidden: false,
     publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`,
+    drivesLimit: 5,
+    drivesOffset: 0,
   }),
   computed: {
     displayCategoriesFilter() {
@@ -766,7 +768,7 @@ export default {
       const oldQuery = this.query;
       this.extendedSearch = false;
       if  (this.$root.driveView){
-        this.showDrives(query);
+        this.searchDrives(query);
       } else {
         this.query = query;
         this.refreshFiles();
@@ -1003,6 +1005,10 @@ export default {
       this.resetSelections();
     },
     loadMore() {
+      if (this.$root.driveView) {
+        this.$root.$emit('load-more-drives');
+        return;
+      }
       this.refreshFiles({'primaryFilter': this.primaryFilter, 'append': true});
     },
     resetSelections() {
@@ -1753,27 +1759,15 @@ export default {
         await Promise.all(promises);
       }
     },
-    showDrives(query) {
+    searchDrives(query) {
       this.$root.driveView = true;
-      return  this.$documentFileService.getUserSpaces(query).then(data => {
-        const spaces = data.spaces || [];
-        if (spaces.length === 0) {
-          this.files = [];
-        } else {
-          this.files=spaces.map(space => ({
-            spaceId: space.id,
-            identityId: space.identityId,
-            name: space.displayName,
-            avatarUrl: space.avatarUrl,
-            drive: true,
-            creatorUserName: '__system',
-          }));
-        }
-      }).catch(error => {
-        console.error('Error fetching user spaces:', error);
-        this.files = [];
-      });
+      this.$root.$emit('search-drives', query);
     },
+    showDrives(treeChildren){
+      this.$root.driveView = true;
+      this.hasMore = treeChildren.some(item => item.id === 'load_more');
+      this.files= treeChildren.filter(item => item.id !== 'load_more');
+    }
   },
 };
 </script>
