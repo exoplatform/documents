@@ -674,9 +674,11 @@ export function getUserSpaces(query) {
   const formData = new FormData();
   if (query) {
     formData.append('q', query);
+  } else {
+    formData.append('sort', 'lastVisited');
   }
   formData.append('limit', 20);
-  formData.append('sort', 'lastVisited');
+  
   formData.append('returnSize', true);
 
 
