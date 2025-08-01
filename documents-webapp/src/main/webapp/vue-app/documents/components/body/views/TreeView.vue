@@ -19,7 +19,7 @@
 
 <template>
   <v-treeview
-    :open.sync="openLevel"
+    :open.sync="openNodes"
     :items="items"
     :load-children="fetchChildren"
     class="treeView-item my-2"
@@ -30,7 +30,17 @@
     open-all
     transition>
     <template #label="{ item }">
-      <div class="d-flex clickable" @click="openFolder(item)">
+      <div class="d-flex clickable" v-if="item.isLoadMore">
+        <v-btn
+          class="white mx-auto no-border primary--text no-box-shadow"
+          @click="loadMoreDrives(item.query,item.offset,item.limit)">
+          {{ $t('documents.loadMore') }}
+        </v-btn>
+      </div>
+      <div
+        v-else
+        class="d-flex clickable"
+        @click="openFolder(item)">
         <v-list-item-avatar 
           v-if="item.avatarUrl"
           size="24"
@@ -88,6 +98,9 @@ export default {
   data: () => ({
     currentFolderPathTab: [],
     loading: false,
+    pageSize: 20,
+    offset: 0,
+    limit: 0,
   }),
   computed: {   
     openLevel() {
@@ -98,31 +111,58 @@ export default {
     }
   },
   created() {
-    this.$root.$on('documentsBreadcrumb',documentsBreadcrumb => {
+    this.$root.$on('documentsBreadcrumb',this.documentsBreadcrumbUpdated);
+    this.$root.$on('folder-created',this.folderCreated);
+    this.$root.$on('confirm-document-deletion',this.confirmDocumentDeletion);
+    this.$root.$on('hide-element',this.hideElement);
+    this.$root.$on('load-more-drives', this.loadMoreDrives);
+  },
+  beforeDestroy() {
+    this.$root.$off('documentsBreadcrumb',this.documentsBreadcrumbUpdated);
+    this.$root.$off('folder-created',this.folderCreated);
+    this.$root.$off('confirm-document-deletion',this.confirmDocumentDeletion);
+    this.$root.$off('hide-element', this.hideElement);
+    this.$root.$off('load-more-drives', this.loadMoreDrives);
+  },
+  watch: {
+    openNodes(newVal, oldVal) {
+      const collapsed = oldVal.filter(id => !newVal.includes(id));
+      const expanded = newVal.filter(id => !oldVal.includes(id));
+
+      if (collapsed.length) {
+        console.log('Collapsed:', collapsed);
+        // You can trigger custom logic here
+      }
+
+      if (expanded.length) {
+        console.log('Expanded:', expanded);
+        // Handle expansion logic here
+      }
+    }
+  },
+  methods: {
+    documentsBreadcrumbUpdated(documentsBreadcrumb) {
       const tab = [];
       documentsBreadcrumb.forEach(element => tab.push(element.id));
       this.currentFolderPathTab = tab;
-    });
-    this.$root.$on('folder-created',createdFolder => {
-      this.addChild(this.items, createdFolder.parentFolderId, createdFolder);
-    });
-    this.$root.$on('confirm-document-deletion',deletedItem => {
+    },
+    folderCreated(createdFolder) {
+      this.addChildren(this.items, createdFolder.parentFolderId, createdFolder);
+    },
+    confirmDocumentDeletion(deletedItem) {
       if (deletedItem.folder) {
         this.removeItem(this.items, deletedItem.id);
-      }     
-    });
-    this.$root.$on('hide-element',hiddenItem => {
+      } 
+    },
+    hideElement(hiddenItem) {
       if (hiddenItem.folder) {
         if (!this.showHidden){
           this.removeItem(this.items, hiddenItem.id);
         } else {
           this.setHidden(this.items,hiddenItem);
-        }
-        
-      }     
-    });
-  },
-  methods: {
+        } 
+      } 
+    },
     displayName(name) {
       if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
@@ -147,7 +187,7 @@ export default {
     openFolder(folder){
       this.currentFolderPathTab.push(folder.id);
       if (folder.drives) {
-        this.$root.$emit('document-show-drives');
+        this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
       } else if (folder.drive) {
         this.$root.ownerId = folder.identityId;
         this.$root.spaceId = folder.spaceId;
@@ -188,22 +228,6 @@ export default {
           this.$root.$emit('tree-loading', false);
         });
     },
-    addChild(tree, targetId, newChild) {
-      for (const node of tree) {
-        if (node.id === targetId) {
-          if (!Array.isArray(node.children)) {
-            node.children = [];
-          }
-          node.children.push(newChild);
-          return true;
-        }
-        if (Array.isArray(node.children)) {
-          const added = this.addChild(node.children, targetId, newChild);
-          if (added) {return true;}
-        }
-      }
-      return false;
-    },
     removeItem(nodes, idToRemove) {
       return nodes
         .map(node => {
@@ -226,7 +250,70 @@ export default {
         }
       }
       return false;
-    }
+    },
+    loadMoreDrives(query,offset, limit) {
+      this.offset = offset ? offset + this.pageSize : this.offset +this.pageSize;
+      this.limit = limit ? limit + this.pageSize : this.limit +this.pageSize;
+      this.removeItem(this.items, 'load_more');
+      this.$documentFileService.getUserSpaces(query,this.offset,this.limit).then(data => {
+        const spaces = data.spaces || [];
+        if (spaces.length > 0) {
+          const newChildren  =spaces.map(space => ({
+            id: space.id,
+            spaceId: space.id,
+            identityId: space.identityId,
+            name: space.displayName,
+            avatarUrl: space.avatarUrl,
+            drive: true,
+            children: [],
+          }));
+          if (data.size > this.limit) {
+            newChildren.push({
+              id: 'load_more',
+              name: this.$t('documents.loadMore'),
+              isLoadMore: true,
+              offset: this.offset,
+              limit: this.limit,
+            });
+          }  
+          this.addChildren(this.items, 'space_drives', newChildren);  
+          this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
+        }
+      });    
+    },
+    addChildren(tree, targetId, newChildren) {
+      for (const node of tree) {
+        if (node.id === targetId) {
+          if (!Array.isArray(node.children)) {
+            node.children = [];
+          }
+          if (Array.isArray(newChildren)) {
+            node.children.push(...newChildren);
+          } else {
+            node.children.push(newChildren);
+          }
+          return true;
+        }
+        if (Array.isArray(node.children)) {
+          const added = this.addChildren(node.children, targetId, newChildren);
+          if (added) {return true;}
+        }
+      }
+      return false;
+    },
+    getNodeChildrenById(id, nodes = this.items) {
+      for (const node of nodes) {
+        if (node.id === id) {
+          return node.children || [];
+        }
+        if (node.children && node.children.length > 0) {
+          const result = this.getNodeChildrenById(id, node.children);
+          if (result) {return result;}
+        }
+      }
+      return null; // Node not found
+    },
+
 
   },
 };
