@@ -404,11 +404,9 @@ public class WebdavWriteCommandHandler {
       if (node.isLocked()) {
         node.unlock();
         session.save();
-        removeLockTimeout(jcrPath);
       }
-    } else {
-      removeLockTimeout(jcrPath);
     }
+    removeLockTimeout(jcrPath);
   }
 
   @SneakyThrows
