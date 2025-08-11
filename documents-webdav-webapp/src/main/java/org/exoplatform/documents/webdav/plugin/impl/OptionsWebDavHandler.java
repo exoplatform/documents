@@ -42,7 +42,7 @@ public class OptionsWebDavHandler extends WebDavHttpMethodPlugin {
     httpResponse.setHeader(ExtHttpHeaders.DASL, documentWebDavService.getDaslValue());
     httpResponse.setHeader(ExtHttpHeaders.MSAUTHORVIA, "DAV");
     httpResponse.setHeader(HttpHeaders.CACHE_CONTROL, "max-age=3600,public");
-    httpResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
+    httpResponse.setStatus(HttpServletResponse.SC_OK);
   }
 
 }

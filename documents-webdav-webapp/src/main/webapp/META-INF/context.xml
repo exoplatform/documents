@@ -17,7 +17,8 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 -->
-<Context path="/digest" docBase="digest" reloadable="true" crossContext="false">
+<Context path="/webdav" docBase="webdav" reloadable="true" crossContext="false">
+  <Valve className="org.exoplatform.documents.webdav.valve.WebdavLoggingValve" />
   <Valve
     changeSessionIdOnAuthentication="false"
     className="org.apache.catalina.authenticator.DigestAuthenticator"
