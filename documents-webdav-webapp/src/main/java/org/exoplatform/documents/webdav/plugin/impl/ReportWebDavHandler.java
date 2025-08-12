@@ -52,7 +52,7 @@ public class ReportWebDavHandler extends WebDavHttpMethodPlugin {
 
     List<WebDavItem> versions = documentWebDavService.getVersions(resourcePath,
                                                                   requestPropertyNames,
-                                                                  getBaseUri(),
+                                                                  getBaseUrl(httpRequest),
                                                                   httpRequest.getRemoteUser());
     writeResponse(versions, requestPropertyNames, httpResponse);
   }

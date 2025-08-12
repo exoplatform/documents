@@ -74,7 +74,7 @@ public class PropFindWebDavHandler extends WebDavHttpMethodPlugin {
                                                     requestedPropertyNames,
                                                     requestPropertyNamesOnly,
                                                     depth,
-                                                    getBaseUri(),
+                                                    getBaseUrl(httpRequest),
                                                     httpRequest.getRemoteUser());
     writeResponse(resource, requestedPropertyNames, requestPropertyNamesOnly, depth, httpResponse);
   }

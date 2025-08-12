@@ -108,7 +108,7 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
     if (documentWebDavService.isFile(resourcePath)) {
       WebDavFileDownload fileDownload = documentWebDavService.download(resourcePath,
                                                                        version,
-                                                                       getBaseUri(),
+                                                                       getBaseUrl(httpRequest),
                                                                        httpRequest.getRemoteUser());
       // File content download
       long lastModifiedDate = fileDownload.getLastModifiedDate();
@@ -153,7 +153,7 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
                                                         Collections.singleton(DISPLAYNAME),
                                                         false,
                                                         1,
-                                                        getBaseUri(),
+                                                        getBaseUrl(httpRequest),
                                                         httpRequest.getRemoteUser());
       httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_HTML_VALUE);
       writeResponseHtml(httpResponse, webDavItem);

@@ -57,14 +57,17 @@ public class OrderPatchWebDavHandler extends WebDavHttpMethodPlugin {
                                     httpRequest.getRemoteUser())) {
       httpResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
     } else {
-      writeResponse(resourcePath, members, httpResponse);
+      writeResponse(resourcePath, members, httpRequest, httpResponse);
     }
   }
 
   @SneakyThrows
-  private void writeResponse(String resourcePath, List<WebDavItemOrder> members, HttpServletResponse httpResponse) {
+  private void writeResponse(String resourcePath,
+                             List<WebDavItemOrder> members,
+                             HttpServletRequest httpRequest,
+                             HttpServletResponse httpResponse) {
     try (OutputStream outputStream = httpResponse.getOutputStream()) {
-      URI uri = getResourceUri(resourcePath);
+      URI uri = getResourceUri(httpRequest);
 
       XMLStreamWriter xmlStreamWriter = XMLOutputFactory.newInstance()
                                                         .createXMLStreamWriter(outputStream, DEFAULT_XML_ENCODING);
