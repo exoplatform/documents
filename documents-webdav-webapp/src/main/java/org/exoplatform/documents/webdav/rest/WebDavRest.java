@@ -17,17 +17,10 @@
 package org.exoplatform.documents.webdav.rest;
 
 import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH;
+import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH_ROOT;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.Collection;
-import java.util.Enumeration;
-import java.util.UUID;
 
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.annotation.Secured;
@@ -45,18 +38,12 @@ import org.exoplatform.services.log.Log;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.ReadListener;
-import jakarta.servlet.ServletInputStream;
-import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpServletResponseWrapper;
 import lombok.SneakyThrows;
 
 @RestController("drives")
-@Tag(name = "/webdav/drives/", description = "Managing WebDav Files")
+@Tag(name = CONTEXT_PATH, description = "Managing WebDav Files")
 @CrossOrigin("*")
 public class WebDavRest {
 
@@ -83,140 +70,26 @@ public class WebDavRest {
 
   @SneakyThrows
   protected void handle(HttpServletRequest httpRequest, HttpServletResponse httpResponse) { // NOSONAR
-    if (httpRequest.getRequestURI().contains(CONTEXT_PATH)) {
+    if (httpRequest.getRequestURI().contains(CONTEXT_PATH)
+        && !httpRequest.getRequestURI().endsWith(CONTEXT_PATH)
+        && !httpRequest.getRequestURI().endsWith(CONTEXT_PATH_ROOT)) {
       ExoContainerContext.setCurrentContainer(container);
       RequestLifeCycle.begin(container);
       try { // NOSONAR
-        if (LOG.isDebugEnabled()) {
-          String reqUuid = UUID.randomUUID().toString();
-          LOG.debug("[{}] Request: {} - {}", reqUuid, httpRequest.getMethod(), httpRequest.getRequestURI());
-          if (LOG.isTraceEnabled()) {
-            Enumeration<String> headerNames = httpRequest.getHeaderNames();
-            while (headerNames.hasMoreElements()) {
-              String h = headerNames.nextElement();
-              LOG.trace("[{}] - Request Header: {}: {}", reqUuid, h, httpRequest.getHeader(h));
-            }
-          }
-          ByteArrayInputStream arrayInputStream = null;
-          try (InputStream inputStream = httpRequest.getInputStream()) {
-            arrayInputStream = new ByteArrayInputStream(IOUtils.toByteArray(inputStream));
-          }
-
-          if (arrayInputStream.available() > 0
-              && (StringUtils.contains(httpRequest.getContentType(), "text/")
-                  || StringUtils.equals(httpRequest.getContentType(), "application/xml")
-                  || StringUtils.equals(httpRequest.getContentType(), "application.json/"))) {
-            byte[] bytes = arrayInputStream.readAllBytes();
-            arrayInputStream.reset();
-            LOG.trace("[{}] + Request Body: {}", reqUuid, new String(bytes));
-          }
-
-          ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
-          webDavMethodDispatcher.handle(newHttpServletRequestWrapper(httpRequest, arrayInputStream),
-                                        newHttpServletResponseWrapper(httpResponse, arrayOutputStream));
-          LOG.debug("[{}] Response Status: {}", reqUuid, httpResponse.getStatus());
-          if (LOG.isTraceEnabled()) {
-            Collection<String> headerNames = httpResponse.getHeaderNames();
-            for (String h : headerNames) {
-              LOG.trace("[{}] + Response Header: {}: {}", reqUuid, h, httpResponse.getHeader(h));
-            }
-          }
-          byte[] bytes = arrayOutputStream.toByteArray();
-          if (LOG.isTraceEnabled()
-              && StringUtils.contains(httpResponse.getContentType(), "text/")
-              && bytes.length > 0) {
-            LOG.trace("[{}] + Response Body: {}", reqUuid, new String(bytes));
-          }
-          if (bytes.length > 0) {
-            try (ServletOutputStream responseOutputStream = httpResponse.getOutputStream()) {
-              responseOutputStream.write(bytes);
-            }
-          }
-        } else {
-          webDavMethodDispatcher.handle(httpRequest, httpResponse);
-        }
+        webDavMethodDispatcher.handle(httpRequest, httpResponse);
+        // Remove Header redundancy
+        httpResponse.setHeader("Vary", "Origin");
       } finally {
         RequestLifeCycle.end();
         ExoContainerContext.setCurrentContainer(null);
       }
     } else {
       try {
-        httpResponse.sendRedirect(CONTEXT_PATH);
+        LOG.warn("Redirect to main path {}", CONTEXT_PATH_ROOT);
+        httpResponse.sendRedirect(CONTEXT_PATH_ROOT);
       } catch (IOException e) {
-        LOG.error("Error while redirecting to context path {}", CONTEXT_PATH, e);
+        LOG.error("Error while redirecting to context path {}", CONTEXT_PATH_ROOT, e);
       }
     }
-  }
-
-  private HttpServletRequestWrapper newHttpServletRequestWrapper(HttpServletRequest httpRequest,
-                                                                 ByteArrayInputStream arrayInputStream) {
-    return new HttpServletRequestWrapper(httpRequest) {
-      @Override
-      public ServletInputStream getInputStream() throws IOException {
-        return newServletInputStreamWrapper(arrayInputStream);
-      }
-
-    };
-  }
-
-  private HttpServletResponseWrapper newHttpServletResponseWrapper(HttpServletResponse httpResponse,
-                                                                   ByteArrayOutputStream arrayOutputStream) {
-    return new HttpServletResponseWrapper(httpResponse) {
-      @Override
-      public ServletOutputStream getOutputStream() throws IOException {
-        return newServletOutputStreamWrapper(arrayOutputStream);
-      }
-    };
-  }
-
-  private ServletOutputStream newServletOutputStreamWrapper(ByteArrayOutputStream arrayOutputStream) {
-    return new ServletOutputStream() {
-
-      @Override
-      public void write(int b) throws IOException {
-        arrayOutputStream.write(b);
-      }
-
-      @Override
-      public boolean isReady() {
-        return true;
-      }
-
-      @Override
-      public void setWriteListener(WriteListener writeListener) {
-        // Noop
-      }
-
-    };
-  }
-
-  private ServletInputStream newServletInputStreamWrapper(ByteArrayInputStream arrayInputStream) {
-    return new ServletInputStream() {
-
-      @Override
-      public boolean isFinished() {
-        return arrayInputStream.available() == 0;
-      }
-
-      @Override
-      public boolean isReady() {
-        return true;
-      }
-
-      @Override
-      public void setReadListener(ReadListener readListener) {
-        // Noop
-      }
-
-      @Override
-      public int read() throws IOException {
-        return arrayInputStream.read();
-      }
-
-      @Override
-      public int available() throws IOException {
-        return arrayInputStream.available();
-      }
-    };
   }
 }

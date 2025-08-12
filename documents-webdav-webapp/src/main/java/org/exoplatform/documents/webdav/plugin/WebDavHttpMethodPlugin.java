@@ -77,6 +77,8 @@ public abstract class WebDavHttpMethodPlugin {
 
   public static final String      CONTEXT_PATH              = "/webdav/drives";
 
+  public static final String      CONTEXT_PATH_ROOT         = CONTEXT_PATH + "/";
+
   public static final String      OPAQUE_LOCK_TOKEN         = "opaquelocktoken";
 
   public static final String      INFINITY_DEPTH            = "Infinity";
