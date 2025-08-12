@@ -57,7 +57,7 @@ public class PropPatchWebDavHandler extends WebDavHttpMethodPlugin {
                                                                                               getPropertiesToRemove(body),
                                                                                               getLockTokens(httpRequest),
                                                                                               httpRequest.getRemoteUser());
-    writeResponse(result, getResourceUri(resourcePath), httpResponse);
+    writeResponse(result, getResourceUri(httpRequest), httpResponse);
   }
 
   @SneakyThrows

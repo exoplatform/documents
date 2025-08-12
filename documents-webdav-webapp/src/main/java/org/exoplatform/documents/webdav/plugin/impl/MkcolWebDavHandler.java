@@ -48,7 +48,7 @@ public class MkcolWebDavHandler extends WebDavHttpMethodPlugin {
                                        mixinTypes,
                                        lockTokens,
                                        httpRequest.getRemoteUser());
-    httpResponse.setHeader(HttpHeaders.LOCATION, getResourceUri(resourcePath).toASCIIString());
+    httpResponse.setHeader(HttpHeaders.LOCATION, getResourceUri(httpRequest).toASCIIString());
     httpResponse.setStatus(HttpServletResponse.SC_CREATED);
   }
 

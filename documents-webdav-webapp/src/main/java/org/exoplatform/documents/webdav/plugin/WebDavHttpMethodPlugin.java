@@ -75,19 +75,23 @@ import lombok.ToString;
 @Getter
 public abstract class WebDavHttpMethodPlugin {
 
-  public static final String      CONTEXT_PATH              = "/webdav/drives";
+  public static final String      CONTEXT_PATH                   = "/webdav/drives";
 
-  public static final String      CONTEXT_PATH_ROOT         = CONTEXT_PATH + "/";
+  public static final String      CONTEXT_PATH_ROOT              = CONTEXT_PATH + "/";
 
-  public static final String      OPAQUE_LOCK_TOKEN         = "opaquelocktoken";
+  public static final String      CONTEXT_PATH_SINGLE_DRIVE      = CONTEXT_PATH + "/d";
 
-  public static final String      INFINITY_DEPTH            = "Infinity";
+  public static final String      CONTEXT_PATH_SINGLE_DRIVE_ROOT = CONTEXT_PATH_SINGLE_DRIVE + "/";
 
-  public static final String      IF_MODIFIED_SINCE_PATTERN = "EEE, dd MMM yyyy HH:mm:ss z";
+  public static final String      OPAQUE_LOCK_TOKEN              = "opaquelocktoken";
 
-  public static final String      DEFAULT_XML_ENCODING      = StandardCharsets.UTF_8.name();
+  public static final String      INFINITY_DEPTH                 = "Infinity";
 
-  protected static final Log      LOG                       = ExoLogger.getLogger(WebDavHttpMethodPlugin.class);
+  public static final String      IF_MODIFIED_SINCE_PATTERN      = "EEE, dd MMM yyyy HH:mm:ss z";
+
+  public static final String      DEFAULT_XML_ENCODING           = StandardCharsets.UTF_8.name();
+
+  protected static final Log      LOG                            = ExoLogger.getLogger(WebDavHttpMethodPlugin.class);
 
   @Autowired
   @EqualsAndHashCode.Exclude
@@ -142,22 +146,30 @@ public abstract class WebDavHttpMethodPlugin {
   }
 
   protected String getResourcePath(HttpServletRequest httpRequest) {
-    String resourcePath = Arrays.stream(httpRequest.getRequestURI().substring(CONTEXT_PATH.length()).split("/"))
+    String resourcePath = Arrays.stream(httpRequest.getRequestURI().substring(getBaseUri(httpRequest).length()).split("/"))
                                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                 .collect(Collectors.joining("/"));
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
   }
 
   @SneakyThrows
-  protected URI getResourceUri(String resourcePath) {
-    return new URI(getBaseUri() + Arrays.stream(resourcePath.split("/"))
-                                        .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                                        .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20"))
-                                        .collect(Collectors.joining("/")));
+  protected URI getResourceUri(HttpServletRequest httpRequest) {
+    return new URI(getBaseUrl(httpRequest) + Arrays.stream(getResourcePath(httpRequest).split("/"))
+                                                   .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                                   .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20"))
+                                                   .collect(Collectors.joining("/")));
   }
 
-  protected String getBaseUri() {
-    return CommonsUtils.getCurrentDomain() + CONTEXT_PATH;
+  protected String getBaseUrl(HttpServletRequest httpRequest) {
+    return CommonsUtils.getCurrentDomain() + getBaseUri(httpRequest);
+  }
+
+  private String getBaseUri(HttpServletRequest httpRequest) {
+    if (httpRequest.getRequestURI().contains(CONTEXT_PATH_SINGLE_DRIVE)) {
+      return CONTEXT_PATH_SINGLE_DRIVE;
+    } else {
+      return CONTEXT_PATH;
+    }
   }
 
   @SneakyThrows
@@ -181,7 +193,7 @@ public abstract class WebDavHttpMethodPlugin {
 
   protected String getDestinationPath(HttpServletRequest httpRequest) {
     String resourcePath = Arrays.stream(Arrays.asList(httpRequest.getHeader(ExtHttpHeaders.DESTINATION)
-                                                                 .split(CONTEXT_PATH))
+                                                                 .split(getBaseUri(httpRequest)))
                                               .getLast()
                                               .split("/"))
                                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))

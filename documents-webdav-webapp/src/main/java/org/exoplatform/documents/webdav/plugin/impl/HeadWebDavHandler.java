@@ -59,7 +59,7 @@ public class HeadWebDavHandler extends WebDavHttpMethodPlugin {
                                                     REQUESTED_PROPERTIES,
                                                     false,
                                                     0,
-                                                    getBaseUri(),
+                                                    getBaseUrl(httpRequest),
                                                     httpRequest.getRemoteUser());
     httpResponse.setHeader(HttpHeaders.LAST_MODIFIED, resource.getProperty(GETLASTMODIFIED).getValue());
     httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, resource.getProperty(GETCONTENTTYPE).getValue());

@@ -17,6 +17,8 @@
 package org.exoplatform.documents.webdav.rest;
 
 import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH;
+import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH_SINGLE_DRIVE;
+import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH_SINGLE_DRIVE_ROOT;
 import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH_ROOT;
 
 import java.io.IOException;
@@ -71,8 +73,8 @@ public class WebDavRest {
   @SneakyThrows
   protected void handle(HttpServletRequest httpRequest, HttpServletResponse httpResponse) { // NOSONAR
     if (httpRequest.getRequestURI().contains(CONTEXT_PATH)
-        && !httpRequest.getRequestURI().endsWith(CONTEXT_PATH)
-        && !httpRequest.getRequestURI().endsWith(CONTEXT_PATH_ROOT)) {
+        && !httpRequest.getRequestURI().endsWith(CONTEXT_PATH_SINGLE_DRIVE)
+        && !httpRequest.getRequestURI().endsWith(CONTEXT_PATH_SINGLE_DRIVE_ROOT)) {
       ExoContainerContext.setCurrentContainer(container);
       RequestLifeCycle.begin(container);
       try { // NOSONAR
@@ -92,4 +94,5 @@ public class WebDavRest {
       }
     }
   }
+
 }

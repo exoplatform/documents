@@ -63,7 +63,7 @@ public class SearchWebDavHandler extends WebDavHttpMethodPlugin {
     List<WebDavItem> searchResultList = documentWebDavService.search(resourcePath,
                                                                      getQueryLanguage(body),
                                                                      getQuery(body),
-                                                                     getBaseUri(),
+                                                                     getBaseUrl(httpRequest),
                                                                      httpRequest.getRemoteUser());
     writeResponse(searchResultList, httpResponse);
   }
