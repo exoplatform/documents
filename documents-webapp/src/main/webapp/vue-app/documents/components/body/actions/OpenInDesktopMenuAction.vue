@@ -50,13 +50,10 @@ export default {
     icon() {
       return this.iconExtension.class;
     },
-    href() {
-      return `${this.protocol}${window.origin}/digest/jcr/repository/collaboration${this.file.path}`;
-    },
   },
   methods: {
     openDialog() {
-      this.$root.$emit('open-in-desktop-dialog', this.href);
+      this.$root.$emit('open-in-desktop-dialog', this.protocol, this.file.path);
     },
   },
 };

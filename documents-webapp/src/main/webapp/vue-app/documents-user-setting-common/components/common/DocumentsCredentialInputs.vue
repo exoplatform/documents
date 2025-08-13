@@ -121,6 +121,11 @@ export default {
       return this.passwordCopied ? this.$t('UserSettings.documents.webdav.copied') : this.$t('UserSettings.documents.webdav.copy');
     },
   },
+  watch: {
+    loading() {
+      this.$emit('loading', this.loading);
+    },
+  },
   async created() {
     if (!navigator?.clipboard?.writeText && navigator?.permissions?.query) {
       const status = await navigator.permissions.query({name: 'clipboard-write'});

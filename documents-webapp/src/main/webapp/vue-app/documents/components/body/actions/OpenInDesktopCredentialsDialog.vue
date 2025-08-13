@@ -20,11 +20,12 @@
   <v-dialog
     ref="dialog"
     v-model="dialog"
+    :loading="loading"
     content-class="uiPopup"
     max-width="100vw"
     width="420"
     persistent>
-    <v-card class="elevation-12 transparent">
+    <v-card v-if="dialog" class="elevation-12 transparent">
       <div class="ignore-vuetify-classes popupHeader transparent ClearFix">
         <v-btn
           class="pull-right"
@@ -38,78 +39,24 @@
         </span>
       </div>
       <v-card-text>
-        <div>
-          {{ $t('documents.label.openInDesktop.dialog.description') }}
-        </div>
-        <div class="mt-4 mb-2">
-          {{ $t('documents.label.openInDesktop.dialog.userName') }}
-        </div>
-        <v-text-field
-          v-model="userName"
-          class="pa-0"
-          outlined
-          readonly>
-          <template v-if="canCopy" #append>
-            <v-tooltip left>
-              <template #activator="{on, attrs}">
-                <v-btn
-                  v-bind="attrs"
-                  v-on="on"
-                  :aria-label="userNameTooltip"
-                  class="mt-n2"
-                  icon
-                  @click="copyUserName">
-                  <v-icon size="16">fa fa-copy</v-icon>
-                </v-btn>
-              </template>
-              <span>{{ userNameTooltip }}</span>
-            </v-tooltip>
-          </template>
-        </v-text-field>
-        <div class="my-2">
-          {{ $t('documents.label.openInDesktop.dialog.password') }}
-        </div>
-        <v-text-field
-          v-model="password"
-          :type="passwordType"
-          class="pa-0"
-          outlined
-          readonly>
-          <template v-if="canCopy" #append>
-            <v-tooltip bottom>
-              <template #activator="{on, attrs}">
-                <v-btn
-                  v-bind="attrs"
-                  v-on="on"
-                  :aria-label="passwordTypeTooltip"
-                  class="mt-n2"
-                  icon
-                  @click="switchPasswordType">
-                  <v-icon size="16">{{ passwordIcon }}</v-icon>
-                </v-btn>
-              </template>
-              <span>{{ passwordTypeTooltip }}</span>
-            </v-tooltip>
-            <v-tooltip left>
-              <template #activator="{on, attrs}">
-                <v-btn
-                  v-bind="attrs"
-                  v-on="on"
-                  :aria-label="passwordTooltip"
-                  class="mt-n2"
-                  icon
-                  @click="copyPassword">
-                  <v-icon size="16">fa fa-copy</v-icon>
-                </v-btn>
-              </template>
-              <span>{{ passwordTooltip }}</span>
-            </v-tooltip>
-          </template>
-        </v-text-field>
+        <template v-if="password">
+          <div>
+            {{ $t('documents.label.openInDesktop.dialog.description') }}
+          </div>
+          <documents-credential-inputs
+            :password="password" />
+        </template>
+        <documents-confirm-access-input
+          v-else
+          ref="confirmAccessInput"
+          @loading="loading = $event"
+          @validated="password = $event" />
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions v-if="password">
         <v-spacer />
         <v-btn
+          :loading="computing"
+          :diabled="!href"
           :href="href"
           class="btn btn-primary me-2"
           @click="openFile">
@@ -129,29 +76,16 @@
 export default {
   data: () => ({
     dialog: false,
-    userName: eXo.env.portal.userName,
-    href: null,
+    loading: false,
+    computing: false,
+    protocol: null,
+    relativePath: null,
+    identityId: null,
     password: null,
-    passwordType: 'password',
-    canCopy: false,
-    userNameCopied: false,
-    passwordCopied: false,
   }),
   computed: {
-    userNameTooltip() {
-      return this.userNameCopied ? this.$t('documents.label.openInDesktop.dialog.copied') : this.$t('documents.label.openInDesktop.dialog.copy');
-    },
-    passwordHidden() {
-      return this.passwordType === 'password';
-    },
-    passwordIcon() {
-      return this.passwordHidden ? 'fa-eye' : 'fa-eye-slash';
-    },
-    passwordTypeTooltip() {
-      return this.passwordHidden ? this.$t('documents.label.openInDesktop.dialog.viewPassword') : this.$t('documents.label.openInDesktop.dialog.hidePassword');
-    },
-    passwordTooltip() {
-      return this.passwordCopied ? this.$t('documents.label.openInDesktop.dialog.copied') : this.$t('documents.label.openInDesktop.dialog.copy');
+    href() {
+      return this.relativePath && this.identityId && this.protocol ? `${this.protocol}${window.origin}/webdav/drives/(${this.identityId})/${this.relativePath}` : null;
     },
   },
   watch: {
@@ -171,39 +105,41 @@ export default {
     this.$root.$off('open-in-desktop-dialog', this.open);
   },
   methods: {
-    async open(href) {
-      this.href = href;
-      const resp = await fetch('/social/rest/digest', {credentials: 'include'});
-      this.password = await resp.text();
+    async open(protocol, path) {
+      this.protocol = protocol;
+      this.identityId = null;
+      this.relativePath = null;
       this.dialog = true;
-      if (!navigator?.clipboard?.writeText
-          && navigator?.permissions?.query) {
-        const status = await navigator.permissions.query({name: 'clipboard-write'});
-        if (status?.state !== 'granted') {
-          this.canCopy = false;
-        } else {
-          this.canCopy = !!navigator?.clipboard?.writeText;
-        }
-      } else {
-        this.canCopy = !!navigator?.clipboard?.writeText;
+      await this.$nextTick();
+      if (this.$refs.confirmAccessInput) {
+        this.$refs.confirmAccessInput.init();
       }
-      this.passwordType = this.canCopy ? 'password' : 'text';
+      await this.computePath(path);
+    },
+    async computePath(path) {
+      this.computing = true;
+      try {
+        let providerId;
+        let remoteId;
+        if (path.startsWith('/Groups/spaces/')) {
+          providerId = 'space';
+          const groupName = path.replace('/Groups/spaces/', '').split('/').shift();
+          const space = await this.$spaceService.getSpaceByGroupId(`/spaces/${groupName}`);
+          remoteId = space.prettyName;
+          this.relativePath = path.replace(`/Groups/spaces/${groupName}/Documents/`, '');
+        } else {
+          providerId = 'organization';
+          remoteId = eXo.env.portal.userName;
+          this.relativePath = path.substring(path.indexOf(`/${eXo.env.portal.userName}/`) + `/${eXo.env.portal.userName}/Private/`.length);
+        }
+        const identity = await this.$identityService.getIdentityByProviderIdAndRemoteId(providerId, remoteId);
+        this.identityId = identity.id;
+      } finally {
+        this.computing = false;
+      }
     },
     close() {
       this.dialog = false;
-    },
-    switchPasswordType() {
-      this.passwordType = this.passwordHidden ? 'text' : 'password';
-    },
-    copyUserName() {
-      navigator.clipboard.writeText(this.userName);
-      this.userNameCopied = true;
-      window.setTimeout(() => this.userNameCopied = false, 2000);
-    },
-    copyPassword() {
-      navigator.clipboard.writeText(this.password);
-      this.passwordCopied = true;
-      window.setTimeout(() => this.passwordCopied = false, 2000);
     },
   },
 };
