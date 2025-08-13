@@ -18,7 +18,7 @@
 
 -->
 <Context path="/webdav" docBase="webdav" reloadable="true" crossContext="false">
-<!--   <Valve className="org.exoplatform.documents.webdav.valve.WebdavLoggingValve" /> -->
+  <Valve className="org.exoplatform.documents.webdav.valve.WebdavLoggingValve" />
   <Valve
     changeSessionIdOnAuthentication="false"
     className="org.apache.catalina.authenticator.DigestAuthenticator"
