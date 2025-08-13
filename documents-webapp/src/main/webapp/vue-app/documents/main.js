@@ -16,6 +16,7 @@
  */
 
 import '../documents-offline-common/main.js';
+import '../documents-user-setting-common/main.js';
 
 import './initComponents.js';
 import '../documents-favorite-action/initComponents.js';

@@ -16,7 +16,7 @@
  */
 
 import './initComponents.js';
-import './services.js';
+import '../documents-user-setting-common/main.js';
 
 // get overrided components if exists
 if (extensionRegistry) {

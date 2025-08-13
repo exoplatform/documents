@@ -416,7 +416,14 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   rank: 54,
   parent: 'openGroup',
   enabled: (file, isMobile, currentView, isSearchResult, iconExtension) => {
-    return !isMobile && iconExtension?.protocol && file?.acl?.canEdit;
+    return !isMobile
+      && iconExtension?.protocol
+      && file?.acl?.canEdit
+      && ((file.path.startsWith('/Groups/spaces/')
+            && file.path.includes('/Documents/'))
+          || (file.path.startsWith('/Users/')
+              && file.path.includes(`/${eXo.env.portal.userName}/`)
+              && file.path.includes('/Private/')));
   },
   componentOptions: {
     vueComponent: Vue.options.components['open-in-desktop-menu-action'],
