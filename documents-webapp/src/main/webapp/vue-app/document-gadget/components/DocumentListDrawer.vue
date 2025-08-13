@@ -160,7 +160,7 @@ export default {
         sortField: 'lastUpdated',
         parentFolderId: this.selectedFoldersId,
       };
-      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, this.selectedFoldersIds, 0, this.limit + 1, null).then(files => {
+      return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.limit + 1, null).then(files => {
         this.files = files;
       }).finally(() => this.loading = false);
     },
