@@ -460,7 +460,7 @@ export default {
       };
       this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
         this.saveHeaderTranslations();
-        this.$emit('settings-updated', settings, this.displayedValue, this.refreshList);
+        this.$emit('settings-updated', settings, this.translations?.[this.userLocale], this.refreshList);
         this.$root.$emit('alert-message', this.$t('documents.documentGadget.settings.save.success.message'), 'success');
         this.close();
       }).catch(() => {
