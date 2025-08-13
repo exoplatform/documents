@@ -17,8 +17,6 @@
 
 import DocumentsUserSettings from './components/DocumentsUserSettings.vue';
 
-import DocumentsCredentialInputs from './components/common/DocumentsCredentialInputs.vue';
-
 import DocumentsWebdavDrawer from './components/drawers/DocumentsWebdavDrawer.vue';
 import DocumentsWebdavConfirmAccessDrawer from './components/drawers/DocumentsWebdavConfirmAccessDrawer.vue';
 import DocumentsWebdavMapDrivesDrawer from './components/drawers/DocumentsWebdavMapDrivesDrawer.vue';
@@ -26,7 +24,6 @@ import DocumentsWebdavRegenerateAccessDrawer from './components/drawers/Document
 
 const components = {
   'documents-user-settings': DocumentsUserSettings,
-  'documents-credential-inputs': DocumentsCredentialInputs,
   'documents-webdav-drawer': DocumentsWebdavDrawer,
   'documents-webdav-confirm-access-drawer': DocumentsWebdavConfirmAccessDrawer,
   'documents-webdav-map-drives-drawer': DocumentsWebdavMapDrivesDrawer,
