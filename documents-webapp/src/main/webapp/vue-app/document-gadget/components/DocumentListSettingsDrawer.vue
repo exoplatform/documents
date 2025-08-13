@@ -59,7 +59,7 @@
         </div>
         <translation-text-field
           v-if="customHeader"
-          :object-id="applicationId"
+          :object-id="settingName"
           :object-type="objectType"
           :field-name="fieldName"
           :field-value="displayedValue"
@@ -293,8 +293,8 @@ export default {
     saveSettingsUrl() {
       return this.settings?.saveSettingsUrl;
     },
-    applicationId() {
-      return this.settings?.applicationId;
+    settingName() {
+      return this.settings?.settingName;
     },
     displayedValue() {
       return this.translations?.[this.userLocale];
@@ -460,7 +460,7 @@ export default {
       };
       this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
         this.saveHeaderTranslations();
-        this.$emit('settings-updated', settings, this.displayedValue, this.refreshList);
+        this.$emit('settings-updated', settings, this.translations?.[this.userLocale], this.refreshList);
         this.$root.$emit('alert-message', this.$t('documents.documentGadget.settings.save.success.message'), 'success');
         this.close();
       }).catch(() => {
@@ -469,7 +469,7 @@ export default {
     },
     async saveHeaderTranslations() {
       if (this.customHeader) {
-        await this.$translationService.saveTranslations(this.objectType, this.applicationId, this.fieldName, this.translations);
+        await this.$translationService.saveTranslations(this.objectType, this.settingName, this.fieldName, this.translations);
         this.currentTranslations = structuredClone(this.translations);
       }
     },
