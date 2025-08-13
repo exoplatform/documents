@@ -1,4 +1,3 @@
-<%@page import="org.exoplatform.services.security.ConversationState"%>
 <%
   /**
    * Copyright (C) 2025 eXo Platform SAS.
@@ -17,10 +16,6 @@
    * along with this program. If not, see <http://www.gnu.org/licenses/>.
    */
 %>
-<%@ page import="org.exoplatform.portal.config.model.Page"%>
-<%@ page import="org.exoplatform.portal.application.PortalRequestContext"%>
-<%@ page import="org.exoplatform.portal.config.UserACL"%>
-<%@ page import="org.exoplatform.container.ExoContainerContext"%>
 <%@ page import="javax.portlet.PortletPreferences" %>
 <%@ page import="org.exoplatform.commons.utils.CommonsUtils" %>
 <%@ page import="io.meeds.social.translation.service.TranslationService" %>
@@ -32,12 +27,9 @@
 <portlet:defineObjects/>
 <portlet:actionURL var="saveSettingsUrl" />
 <%
-  long applicationId;
-  Object applicationIdParam = request.getAttribute("applicationId");
-  applicationId = Long.parseLong((applicationIdParam instanceof String[]) ? ((String[]) applicationIdParam)[0]
-          : (String) applicationIdParam);
-  Page currentPage = PortalRequestContext.getCurrentInstance().getPage();
-  boolean canEdit = ExoContainerContext.getService(UserACL.class).hasEditPermission(currentPage, ConversationState.getCurrent().getIdentity());
+  String settingName = (String) request.getAttribute("settingName");
+  boolean canEdit = (boolean) request.getAttribute("canEdit");
+  String id = "DocumentGadget-" + renderRequest.getWindowID();
 
   PortletPreferences preferences = renderRequest.getPreferences();
   String viewOptions = preferences.getValue("viewOptions", "list");
@@ -50,19 +42,18 @@
   String excludeCategoryIds = preferences.getValue("excludeCategoryIds", "[]").replace("\"", "`");
   String selectedFoldersId = preferences.getValue("selectedFoldersId", "");
   String headerTitle = CommonsUtils.getService(TranslationService.class).getTranslationLabelOrDefault("documentGadget",
-          applicationId, "headerTitle", LocaleContextInfoUtils.getUserLocale(request.getRemoteUser()));
+          Long.parseLong(settingName), "headerTitle", LocaleContextInfoUtils.getUserLocale(request.getRemoteUser()));
 %>
 
 <div class="VuetifyApp">
-  <% int generatedId = (int) (Math.random() * 1000000L); %>
   <div data-app="true"
-       class="v-application v-application--is-ltr theme--light"
-       id="documentGadget-<%= generatedId %>"
-       data-id="<%= generatedId %>">
+    class="v-application transparent v-application--is-ltr theme--light"
+    id="<%=id%>">
     <script type="text/javascript">
       require(['PORTLET/documents-portlet/DocumentGadget'], app => app.init({
-        id: 'documentGadget-<%= generatedId %>',
-        applicationId: '<%=applicationId%>',
+        id: '<%= id %>',
+        settingName: '<%= settingName %>',
+        canEdit: <%=canEdit%>,
         viewOptions: '<%=viewOptions%>',
         documentType: '<%=documentType%>',
         spaceIdentityId: '<%=spaceIdentityId%>',
@@ -73,7 +64,6 @@
         categoryIds: <%=categoryIds%>,
         excludeCategoryIds: <%=excludeCategoryIds%>,
         selectedFoldersId: '<%=selectedFoldersId%>',
-        canEdit: <%=canEdit%>,
         saveSettingsUrl: '<%=saveSettingsUrl%>'
       }));
     </script>
