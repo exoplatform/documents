@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -56,6 +57,11 @@ public class WebdavLoggingValve extends ValveBase {
       UUID reqUuid = UUID.randomUUID();
       try { // NOSONAR
         LOG.debug("[{}] URI: {} - Method {}", reqUuid, request.getRequestURI(), request.getMethod());
+        Enumeration<String> headerNames = request.getHeaderNames();
+        while (headerNames.hasMoreElements()) {
+          String h = headerNames.nextElement();
+          LOG.debug("[{}] - Request Header: {}: {}", reqUuid, h, request.getHeader(h));
+        }
 
         ByteArrayInputStream arrayInputStream = null;
         try (InputStream inputStream = request.getInputStream()) {
@@ -68,7 +74,7 @@ public class WebdavLoggingValve extends ValveBase {
                 || StringUtils.equals(request.getContentType(), "application.json/"))) {
           byte[] bytes = arrayInputStream.readAllBytes();
           arrayInputStream.reset();
-          LOG.trace("[{}] + Request Body: {}", reqUuid, new String(bytes));
+          LOG.debug("[{}] + Request Body: {}", reqUuid, new String(bytes));
         }
 
         // Create a custom response wrapper
