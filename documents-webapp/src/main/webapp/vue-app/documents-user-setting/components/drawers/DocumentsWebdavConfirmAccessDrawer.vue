@@ -23,53 +23,19 @@
     id="documentsWebdavConfirmAccessDrawer"
     :loading="loading"
     :right="!$vuetify.rtl"
-    go-back-button>
+    go-back-button
+    eager>
     <template #title>
       {{ $t('UserSettings.documents.webdav.confirmAccess.title') }}
     </template>
-    <template v-if="drawer" #content>
-      <div class="d-flex flex-column justify-center align-center full-width pa-5">
-        <template v-if="emailSent">
-          <div class="full-width text-start">
-            {{ $t('UserSettings.documents.webdav.confirmAccess.checkEmail') }}
-          </div>
-          <v-text-field
-            id="otpCode"
-            v-model="otpCode"
-            :title="$t('UserSettings.documents.webdav.confirmAccess.inputTitle')"
-            :placeholder="$t('UserSettings.documents.webdav.confirmAccess.inputPlaceholder')"
-            prepend-inner-icon="fas fa-lock icon-default-color ms-n2"
-            class="border-box-sizing full-width py-4"
-            name="otpCode"
-            aria-required="true"
-            type="text"
-            tabindex="0"
-            required="required"
-            autofocus="autofocus"
-            outlined
-            dense />
-          <div class="d-flex">
-            <v-btn
-              :disabled="loading"
-              :loading="loading && operation === 'sendingEmail'"
-              class="btn"
-              @click="sendEmail">
-              {{ $t('UserSettings.documents.webdav.resend') }}
-            </v-btn>
-            <div class="px-2"></div>
-            <v-btn
-              :disabled="loading || !otpCode"
-              :loading="loading && operation === 'verifying'"
-              class="btn btn-primary"
-              @click="verify">
-              {{ $t('UserSettings.documents.webdav.verify') }}
-            </v-btn>
-          </div>
-        </template>
-        <div v-else>
-          {{ $t('UserSettings.documents.webdav.confirmAccess.sendingEmail') }}
-        </div>
-      </div>
+    <template #content>
+      <documents-confirm-access-input
+        ref="confirmAccessInput"
+        :drawer="nextStepDrawer"
+        :renew="renew"
+        class="pa-5"
+        @loading="loading = $event"
+        @validated="close" />
     </template>
   </exo-drawer>
 </template>
@@ -78,49 +44,20 @@ export default {
   data: () => ({
     drawer: false,
     loading: false,
-    emailSent: false,
-    otpMethod: 'email',
-    otpCode: null,
-    password: null,
-    operation: null,
     nextStepDrawer: null,
     renew: false,
   }),
   methods: {
-    open(nextStepDrawer, renew) {
-      if (this.password && !renew) {
-        nextStepDrawer.open(this.password);
-      } else {
-        this.nextStepDrawer = nextStepDrawer;
-        this.renew = renew;
-        this.otpCode = null;
-        this.emailSent = false;
-        this.sendEmail();
+    async open(nextStepDrawer, renew) {
+      this.nextStepDrawer = nextStepDrawer;
+      this.renew = renew;
+      await this.$nextTick();
+      if (this.$refs.confirmAccessInput.init()) {
         this.$refs.drawer.open();
       }
     },
-    async sendEmail() {
-      this.operation = 'sendingEmail';
-      this.loading = true;
-      try {
-        await this.$apiKeyService.sendOtpCode(this.otpMethod);
-      } finally {
-        this.loading = false;
-        this.emailSent = true;
-      }
-    },
-    async verify() {
-      this.operation = 'verifying';
-      this.loading = true;
-      try {
-        this.password = await this.$apiKeyService.getPassword(this.otpMethod, this.otpCode, this.renew);
-        this.nextStepDrawer.open(this.password);
-        window.setTimeout(() => this.$refs.drawer.close(), 200);
-      } catch {
-        this.$root.$emit('alert-message', this.$t('UserSettings.documents.webdav.otpCodeInvalid'), 'error');
-      } finally {
-        this.loading = false;
-      }
+    close() {
+      this.$refs.drawer.close();
     },
   },
 };
