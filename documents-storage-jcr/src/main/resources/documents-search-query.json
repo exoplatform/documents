@@ -18,6 +18,7 @@
     "bool": {
       @term_query@
       "filter": [
+        @category_query@
         @favorite_query@
         {
           "bool": {
