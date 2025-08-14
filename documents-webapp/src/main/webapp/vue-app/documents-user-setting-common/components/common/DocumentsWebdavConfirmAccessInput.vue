@@ -98,7 +98,7 @@ export default {
       this.operation = 'sendingEmail';
       this.loading = true;
       try {
-        await this.$apiKeyService.sendOtpCode(this.otpMethod);
+        await this.$otpService.sendOtpCode(this.otpMethod);
       } finally {
         this.loading = false;
         this.emailSent = true;
