@@ -16,11 +16,14 @@
 */
 package org.exoplatform.documents.webdav.valve;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+import java.security.Principal;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.List;
@@ -30,22 +33,47 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import org.apache.catalina.Context;
+import org.apache.catalina.Host;
+import org.apache.catalina.Session;
+import org.apache.catalina.Wrapper;
+import org.apache.catalina.connector.Connector;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
+import org.apache.catalina.core.AsyncContextImpl;
+import org.apache.catalina.mapper.MappingData;
 import org.apache.catalina.valves.ValveBase;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.coyote.ContinueResponseTiming;
+import org.apache.tomcat.util.buf.MessageBytes;
+import org.apache.tomcat.util.http.ServerCookies;
 
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
+import jakarta.servlet.AsyncContext;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ReadListener;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConnection;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletMapping;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
+import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpUpgradeHandler;
+import jakarta.servlet.http.Part;
+import jakarta.servlet.http.PushBuilder;
 
 public class WebdavLoggingValve extends ValveBase {
 
@@ -77,12 +105,13 @@ public class WebdavLoggingValve extends ValveBase {
           LOG.debug("[{}] + Request Body: {}", reqUuid, new String(bytes));
         }
 
-        // Create a custom response wrapper
+        // Create a custom response and request wrappers
+        RequestWrapper wrappedRequest = new RequestWrapper(request, arrayInputStream);
         ResponseWrapper wrappedResponse = new ResponseWrapper(response);
 
         // Continue the processing chain, allowing content to be written to the
         // wrapped response
-        getNext().invoke(request, wrappedResponse);
+        getNext().invoke(wrappedRequest, wrappedResponse);
 
         byte[] responseBytes = wrappedResponse.getBufferedContent();
         if (LOG.isTraceEnabled()
@@ -104,6 +133,715 @@ public class WebdavLoggingValve extends ValveBase {
       }
     } else {
       getNext().invoke(request, response);
+    }
+  }
+
+  private class RequestWrapper extends Request {
+
+    private Request              request;
+
+    private ByteArrayInputStream arrayInputStream;
+
+    public RequestWrapper(Request request, ByteArrayInputStream arrayInputStream) {
+      super(request.getConnector());
+      this.request = request;
+      this.arrayInputStream = arrayInputStream;
+    }
+
+    @Override
+    public void setCoyoteRequest(org.apache.coyote.Request coyoteRequest) {
+      request.setCoyoteRequest(coyoteRequest);
+    }
+
+    @Override
+    public org.apache.coyote.Request getCoyoteRequest() {
+      return request.getCoyoteRequest();
+    }
+
+    @Override
+    public void addPathParameter(String name, String value) {
+      request.addPathParameter(name, value);
+    }
+
+    @Override
+    public String getPathParameter(String name) {
+      return request.getPathParameter(name);
+    }
+
+    @Override
+    public void setAsyncSupported(boolean asyncSupported) {
+      request.setAsyncSupported(asyncSupported);
+    }
+
+    @Override
+    public void recycle() {
+      request.recycle();
+    }
+
+    @Override
+    public Connector getConnector() {
+      return request.getConnector();
+    }
+
+    @Override
+    public Context getContext() {
+      return request.getContext();
+    }
+
+    @Override
+    public boolean getDiscardFacades() {
+      return request.getDiscardFacades();
+    }
+
+    @Override
+    public FilterChain getFilterChain() {
+      return request.getFilterChain();
+    }
+
+    @Override
+    public void setFilterChain(FilterChain filterChain) {
+      request.setFilterChain(filterChain);
+    }
+
+    @Override
+    public Host getHost() {
+      return request.getHost();
+    }
+
+    @Override
+    public MappingData getMappingData() {
+      return request.getMappingData();
+    }
+
+    @Override
+    public HttpServletRequest getRequest() {
+      return newHttpServletRequestWrapper(request.getRequest(), arrayInputStream);
+    }
+
+    @Override
+    public void setRequest(HttpServletRequest applicationRequest) {
+      request.setRequest(applicationRequest);
+    }
+
+    @Override
+    public Response getResponse() {
+      return request.getResponse();
+    }
+
+    @Override
+    public void setResponse(Response response) {
+      request.setResponse(response);
+    }
+
+    @Override
+    public InputStream getStream() {
+      return request.getStream();
+    }
+
+    @Override
+    public Wrapper getWrapper() {
+      return request.getWrapper();
+    }
+
+    @Override
+    public ServletInputStream createInputStream() throws IOException {
+      return request.createInputStream();
+    }
+
+    @Override
+    public void finishRequest() throws IOException {
+      request.finishRequest();
+    }
+
+    @Override
+    public Object getNote(String name) {
+      return request.getNote(name);
+    }
+
+    @Override
+    public void removeNote(String name) {
+      request.removeNote(name);
+    }
+
+    @Override
+    public void setLocalPort(int port) {
+      request.setLocalPort(port);
+    }
+
+    @Override
+    public void setNote(String name, Object value) {
+      request.setNote(name, value);
+    }
+
+    @Override
+    public void setRemoteAddr(String remoteAddr) {
+      request.setRemoteAddr(remoteAddr);
+    }
+
+    @Override
+    public void setRemoteHost(String remoteHost) {
+      request.setRemoteHost(remoteHost);
+    }
+
+    @Override
+    public void setSecure(boolean secure) {
+      request.setSecure(secure);
+    }
+
+    @Override
+    public void setServerPort(int port) {
+      request.setServerPort(port);
+    }
+
+    @Override
+    public Object getAttribute(String name) {
+      return request.getAttribute(name);
+    }
+
+    @Override
+    public long getContentLengthLong() {
+      return request.getContentLengthLong();
+    }
+
+    @Override
+    public Enumeration<String> getAttributeNames() {
+      return request.getAttributeNames();
+    }
+
+    @Override
+    public String getCharacterEncoding() {
+      return request.getCharacterEncoding();
+    }
+
+    @Override
+    public int getContentLength() {
+      return request.getContentLength();
+    }
+
+    @Override
+    public String getContentType() {
+      return request.getContentType();
+    }
+
+    @Override
+    public void setContentType(String contentType) {
+      request.setContentType(contentType);
+    }
+
+    @Override
+    public ServletInputStream getInputStream() throws IOException {
+      return request.getInputStream();
+    }
+
+    @Override
+    public Locale getLocale() {
+      return request.getLocale();
+    }
+
+    @Override
+    public Enumeration<Locale> getLocales() {
+      return request.getLocales();
+    }
+
+    @Override
+    public String getParameter(String name) {
+      return request.getParameter(name);
+    }
+
+    @Override
+    public Map<String, String[]> getParameterMap() {
+      return request.getParameterMap();
+    }
+
+    @Override
+    public Enumeration<String> getParameterNames() {
+      return request.getParameterNames();
+    }
+
+    @Override
+    public String[] getParameterValues(String name) {
+      return request.getParameterValues(name);
+    }
+
+    @Override
+    public String getProtocol() {
+      return request.getProtocol();
+    }
+
+    @Override
+    public BufferedReader getReader() throws IOException {
+      return request.getReader();
+    }
+
+    @Override
+    public String getRemoteAddr() {
+      return request.getRemoteAddr();
+    }
+
+    @Override
+    public String getPeerAddr() {
+      return request.getPeerAddr();
+    }
+
+    @Override
+    public String getRemoteHost() {
+      return request.getRemoteHost();
+    }
+
+    @Override
+    public int getRemotePort() {
+      return request.getRemotePort();
+    }
+
+    @Override
+    public String getLocalName() {
+      return request.getLocalName();
+    }
+
+    @Override
+    public String getLocalAddr() {
+      return request.getLocalAddr();
+    }
+
+    @Override
+    public int getLocalPort() {
+      return request.getLocalPort();
+    }
+
+    @Override
+    public RequestDispatcher getRequestDispatcher(String path) {
+      return request.getRequestDispatcher(path);
+    }
+
+    @Override
+    public String getScheme() {
+      return request.getScheme();
+    }
+
+    @Override
+    public String getServerName() {
+      return request.getServerName();
+    }
+
+    @Override
+    public int getServerPort() {
+      return request.getServerPort();
+    }
+
+    @Override
+    public boolean isSecure() {
+      return request.isSecure();
+    }
+
+    @Override
+    public void removeAttribute(String name) {
+      request.removeAttribute(name);
+    }
+
+    @Override
+    public void setAttribute(String name, Object value) {
+      request.setAttribute(name, value);
+    }
+
+    @Override
+    public void setCharacterEncoding(String enc) throws UnsupportedEncodingException {
+      request.setCharacterEncoding(enc);
+    }
+
+    @Override
+    public ServletContext getServletContext() {
+      return request.getServletContext();
+    }
+
+    @Override
+    public AsyncContext startAsync() {
+      return request.startAsync();
+    }
+
+    @Override
+    public AsyncContext startAsync(ServletRequest request, ServletResponse response) {
+      return request.startAsync(request, response);
+    }
+
+    @Override
+    public boolean isAsyncStarted() {
+      return request.isAsyncStarted();
+    }
+
+    @Override
+    public boolean isAsyncDispatching() {
+      return request.isAsyncDispatching();
+    }
+
+    @Override
+    public boolean isAsyncCompleting() {
+      return request.isAsyncCompleting();
+    }
+
+    @Override
+    public boolean isAsync() {
+      return request.isAsync();
+    }
+
+    @Override
+    public boolean isAsyncSupported() {
+      return request.isAsyncSupported();
+    }
+
+    @Override
+    public AsyncContext getAsyncContext() {
+      return request.getAsyncContext();
+    }
+
+    @Override
+    public AsyncContextImpl getAsyncContextInternal() {
+      return request.getAsyncContextInternal();
+    }
+
+    @Override
+    public DispatcherType getDispatcherType() {
+      return request.getDispatcherType();
+    }
+
+    @Override
+    public String getRequestId() {
+      return request.getRequestId();
+    }
+
+    @Override
+    public String getProtocolRequestId() {
+      return request.getProtocolRequestId();
+    }
+
+    @Override
+    public ServletConnection getServletConnection() {
+      return request.getServletConnection();
+    }
+
+    @Override
+    public void addCookie(Cookie cookie) {
+      request.addCookie(cookie);
+    }
+
+    @Override
+    public void addLocale(Locale locale) {
+      request.addLocale(locale);
+    }
+
+    @Override
+    public void clearCookies() {
+      request.clearCookies();
+    }
+
+    @Override
+    public void clearLocales() {
+      request.clearLocales();
+    }
+
+    @Override
+    public void setAuthType(String type) {
+      request.setAuthType(type);
+    }
+
+    @Override
+    public void setPathInfo(String path) {
+      request.setPathInfo(path);
+    }
+
+    @Override
+    public void setRequestedSessionCookie(boolean flag) {
+      request.setRequestedSessionCookie(flag);
+    }
+
+    @Override
+    public void setRequestedSessionId(String id) {
+      request.setRequestedSessionId(id);
+    }
+
+    @Override
+    public void setRequestedSessionURL(boolean flag) {
+      request.setRequestedSessionURL(flag);
+    }
+
+    @Override
+    public void setRequestedSessionSSL(boolean flag) {
+      request.setRequestedSessionSSL(flag);
+    }
+
+    @Override
+    public String getDecodedRequestURI() {
+      return request.getDecodedRequestURI();
+    }
+
+    @Override
+    public MessageBytes getDecodedRequestURIMB() {
+      return request.getDecodedRequestURIMB();
+    }
+
+    @Override
+    public void setUserPrincipal(Principal principal) {
+      request.setUserPrincipal(principal);
+    }
+
+    @Override
+    public boolean isTrailerFieldsReady() {
+      return request.isTrailerFieldsReady();
+    }
+
+    @Override
+    public Map<String, String> getTrailerFields() {
+      return request.getTrailerFields();
+    }
+
+    @Override
+    public PushBuilder newPushBuilder() {
+      return request.newPushBuilder();
+    }
+
+    @Override
+    public PushBuilder newPushBuilder(HttpServletRequest httpServletRequest) {
+      return request.newPushBuilder(httpServletRequest);
+    }
+
+    @Override
+    public <T extends HttpUpgradeHandler> T upgrade(Class<T> httpUpgradeHandlerClass) throws IOException, ServletException {
+      return request.upgrade(httpUpgradeHandlerClass);
+    }
+
+    @Override
+    public String getAuthType() {
+      return request.getAuthType();
+    }
+
+    @Override
+    public String getContextPath() {
+      return request.getContextPath();
+    }
+
+    @Override
+    public Cookie[] getCookies() {
+      return request.getCookies();
+    }
+
+    @Override
+    public ServerCookies getServerCookies() {
+      return request.getServerCookies();
+    }
+
+    @Override
+    public long getDateHeader(String name) {
+      return request.getDateHeader(name);
+    }
+
+    @Override
+    public String getHeader(String name) {
+      return request.getHeader(name);
+    }
+
+    @Override
+    public Enumeration<String> getHeaders(String name) {
+      return request.getHeaders(name);
+    }
+
+    @Override
+    public Enumeration<String> getHeaderNames() {
+      return request.getHeaderNames();
+    }
+
+    @Override
+    public int getIntHeader(String name) {
+      return request.getIntHeader(name);
+    }
+
+    @Override
+    public HttpServletMapping getHttpServletMapping() {
+      return request.getHttpServletMapping();
+    }
+
+    @Override
+    public String getMethod() {
+      return request.getMethod();
+    }
+
+    @Override
+    public String getPathInfo() {
+      return request.getPathInfo();
+    }
+
+    @Override
+    public String getPathTranslated() {
+      return request.getPathTranslated();
+    }
+
+    @Override
+    public String getQueryString() {
+      return request.getQueryString();
+    }
+
+    @Override
+    public String getRemoteUser() {
+      return request.getRemoteUser();
+    }
+
+    @Override
+    public MessageBytes getRequestPathMB() {
+      return request.getRequestPathMB();
+    }
+
+    @Override
+    public String getRequestedSessionId() {
+      return request.getRequestedSessionId();
+    }
+
+    @Override
+    public String getRequestURI() {
+      return request.getRequestURI();
+    }
+
+    @Override
+    public StringBuffer getRequestURL() {
+      return request.getRequestURL();
+    }
+
+    @Override
+    public String getServletPath() {
+      return request.getServletPath();
+    }
+
+    @Override
+    public HttpSession getSession() {
+      return request.getSession();
+    }
+
+    @Override
+    public HttpSession getSession(boolean create) {
+      return request.getSession(create);
+    }
+
+    @Override
+    public boolean isRequestedSessionIdFromCookie() {
+      return request.isRequestedSessionIdFromCookie();
+    }
+
+    @Override
+    public boolean isRequestedSessionIdFromURL() {
+      return request.isRequestedSessionIdFromURL();
+    }
+
+    @Override
+    public boolean isRequestedSessionIdValid() {
+      return request.isRequestedSessionIdValid();
+    }
+
+    @Override
+    public boolean isUserInRole(String role) {
+      return request.isUserInRole(role);
+    }
+
+    @Override
+    public Principal getPrincipal() {
+      return request.getPrincipal();
+    }
+
+    @Override
+    public Principal getUserPrincipal() {
+      return request.getUserPrincipal();
+    }
+
+    @Override
+    public Session getSessionInternal() {
+      return request.getSessionInternal();
+    }
+
+    @Override
+    public void changeSessionId(String newSessionId) {
+      request.changeSessionId(newSessionId);
+    }
+
+    @Override
+    public String changeSessionId() {
+      return request.changeSessionId();
+    }
+
+    @Override
+    public Session getSessionInternal(boolean create) {
+      return request.getSessionInternal(create);
+    }
+
+    @Override
+    public boolean isParametersParsed() {
+      return request.isParametersParsed();
+    }
+
+    @Override
+    public boolean isFinished() {
+      return request.isFinished();
+    }
+
+    @Override
+    public boolean authenticate(HttpServletResponse response) throws IOException, ServletException {
+      return request.authenticate(response);
+    }
+
+    @Override
+    public void login(String username, String password) throws ServletException {
+      request.login(username, password);
+    }
+
+    @Override
+    public void logout() throws ServletException {
+      request.logout();
+    }
+
+    @Override
+    public Collection<Part> getParts() throws IOException, IllegalStateException, ServletException {
+      return request.getParts();
+    }
+
+    @Override
+    public Part getPart(String name) throws IOException, IllegalStateException, ServletException {
+      return request.getPart(name);
+    }
+
+    private HttpServletRequestWrapper newHttpServletRequestWrapper(HttpServletRequest httpRequest,
+                                                                   ByteArrayInputStream arrayInputStream) {
+      return new HttpServletRequestWrapper(httpRequest) {
+        @Override
+        public ServletInputStream getInputStream() throws IOException {
+          return newServletInputStreamWrapper(arrayInputStream);
+        }
+
+      };
+    }
+
+    private ServletInputStream newServletInputStreamWrapper(ByteArrayInputStream arrayInputStream) {
+      return new ServletInputStream() {
+
+        @Override
+        public boolean isFinished() {
+          return arrayInputStream.available() == 0;
+        }
+
+        @Override
+        public boolean isReady() {
+          return true;
+        }
+
+        @Override
+        public void setReadListener(ReadListener readListener) {
+          // Noop
+        }
+
+        @Override
+        public int read() throws IOException {
+          return arrayInputStream.read();
+        }
+
+        @Override
+        public int available() throws IOException {
+          return arrayInputStream.available();
+        }
+      };
     }
   }
 

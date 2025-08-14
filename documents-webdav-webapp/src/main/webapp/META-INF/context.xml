@@ -19,10 +19,7 @@
 -->
 <Context path="/webdav" docBase="webdav" reloadable="true" crossContext="false">
   <Valve className="org.exoplatform.documents.webdav.valve.WebdavLoggingValve" />
-  <Valve
-    changeSessionIdOnAuthentication="false"
-    className="org.apache.catalina.authenticator.DigestAuthenticator"
-    algorithms="MD5" /><!-- can't use SHA-256, not known by MS Word -->
+  <Valve className="io.meeds.web.security.authenticator.DigestAuthenticatorValve" />
   <Realm
     className='org.apache.catalina.realm.JAASRealm'
     appName='webdav-domain'
