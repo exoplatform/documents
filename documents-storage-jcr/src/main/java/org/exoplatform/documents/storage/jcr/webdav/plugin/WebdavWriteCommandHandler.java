@@ -29,6 +29,7 @@ import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_RE
 import static org.exoplatform.documents.storage.jcr.util.Utils.encodeNodeName;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getStatusDescription;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -56,6 +57,7 @@ import javax.xml.namespace.QName;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -507,6 +509,7 @@ public class WebdavWriteCommandHandler {
     }
   }
 
+  @SneakyThrows
   private void updateContent(Node node,
                              String mediaType,
                              InputStream inputStream) throws RepositoryException {
@@ -528,7 +531,8 @@ public class WebdavWriteCommandHandler {
       handleJcrOperation(() -> content.setProperty(JCR_ENCODING, encodingConstant), path);
     }
     handleJcrOperation(() -> content.setProperty(JCR_LAST_MODIFIED, Calendar.getInstance()), path);
-    handleJcrOperation(() -> content.setProperty(JCR_DATA, inputStream), path);
+    ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(IOUtils.toByteArray(inputStream));
+    handleJcrOperation(() -> content.setProperty(JCR_DATA, byteArrayInputStream), path);
   }
 
   @SneakyThrows
