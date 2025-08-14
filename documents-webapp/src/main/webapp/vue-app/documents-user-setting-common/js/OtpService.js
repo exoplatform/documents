@@ -15,17 +15,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import * as apiKeyService from './js/ApiKeyService.js';
-import * as otpService from './js/OtpService.js';
-
-if (!Vue.prototype.$apiKeyService) {
-  window.Object.defineProperty(Vue.prototype, '$apiKeyService', {
-    value: apiKeyService,
+export async function sendOtpCode(optMethod) {
+  const resp = await fetch(`/social/rest/apiKey?method=${optMethod}`, {
+    method: 'GET',
+    credentials: 'include'
   });
-}
-
-if (!Vue.prototype.$otpService) {
-  window.Object.defineProperty(Vue.prototype, '$otpService', {
-    value: otpService,
-  });
+  if (!resp?.ok) {
+    const msg = resp ? await resp.text() : 'Unkown error';
+    throw new Error(`Server Error: ${msg}`);
+  }
 }
