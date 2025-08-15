@@ -27,6 +27,7 @@
         v-model="otpCode"
         :title="$t('UserSettings.documents.webdav.confirmAccess.inputTitle')"
         :placeholder="$t('UserSettings.documents.webdav.confirmAccess.inputPlaceholder')"
+        :readonly="loading"
         prepend-inner-icon="fas fa-lock icon-default-color ms-n2"
         class="border-box-sizing full-width py-4"
         name="otpCode"
@@ -49,7 +50,8 @@
         <v-btn
           :disabled="loading || !otpCode"
           :loading="loading && operation === 'verifying'"
-          class="btn btn-primary"
+          color="primary"
+          class="btn"
           @click="verify">
           {{ $t('UserSettings.documents.webdav.verify') }}
         </v-btn>
