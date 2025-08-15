@@ -36,22 +36,26 @@
           flat>
           {{ $t('UserSettings.documents.webdav.mapDrivesDescription') }}
         </v-card>
-        <v-btn
-          class="mt-4"
-          color="primary"
-          elevation="0"
-          @click="mapDrives">
-          {{ $t('UserSettings.documents.webdav.mapDrives') }}
-        </v-btn>
-        <v-btn
-          class="btn mt-4"
-          elevation="0"
-          @click="regenerateAccess">
-          {{ $t('UserSettings.documents.webdav.regenerateAccess') }}
-        </v-btn>
+        <div class="d-flex flex-column">
+          <v-btn
+            class="mt-4"
+            color="primary"
+            elevation="0"
+            @click="mapDrives">
+            {{ $t('UserSettings.documents.webdav.mapDrives') }}
+          </v-btn>
+          <v-btn
+            v-if="hasApiKey"
+            class="btn mt-4"
+            elevation="0"
+            @click="regenerateAccess">
+            {{ $t('UserSettings.documents.webdav.regenerateAccess') }}
+          </v-btn>
+        </div>
       </div>
       <documents-webdav-confirm-access-drawer
-        ref="confirmAccessDrawer" />
+        ref="confirmAccessDrawer"
+        @validated="hasApiKey = true" />
       <documents-webdav-map-drives-drawer
         ref="mapDrivesDrawer" />
       <documents-webdav-regenerate-access-drawer
@@ -63,7 +67,11 @@
 export default {
   data: () => ({
     drawer: false,
+    hasApiKey: false,
   }),
+  async created() {
+    this.hasApiKey = await this.$apiKeyService.hasPassword();
+  },
   methods: {
     open() {
       this.$refs.drawer.open();
