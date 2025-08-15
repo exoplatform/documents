@@ -35,7 +35,7 @@
         :renew="renew"
         class="pa-5"
         @loading="loading = $event"
-        @validated="close" />
+        @validated="handleValidated" />
     </template>
   </exo-drawer>
 </template>
@@ -55,6 +55,10 @@ export default {
       if (this.$refs.confirmAccessInput.init()) {
         this.$refs.drawer.open();
       }
+    },
+    handleValidated() {
+      this.$emit('validated');
+      this.close();
     },
     close() {
       this.$refs.drawer.close();
