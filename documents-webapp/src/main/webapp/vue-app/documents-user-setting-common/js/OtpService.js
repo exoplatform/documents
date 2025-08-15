@@ -16,7 +16,7 @@
  */
 
 export async function sendOtpCode(optMethod) {
-  const resp = await fetch(`/social/rest/apiKey?method=${optMethod}`, {
+  const resp = await fetch(`/social/rest/otp?method=${optMethod}`, {
     method: 'GET',
     credentials: 'include'
   });

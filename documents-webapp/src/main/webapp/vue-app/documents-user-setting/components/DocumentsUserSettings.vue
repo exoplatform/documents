@@ -48,4 +48,37 @@
     </div>
   </v-app>
 </template>
-<script></script>
+<script>
+export default {
+  data: () => ({
+    id: `Settings${parseInt(Math.random() * 10000)
+      .toString()
+      .toString()}`,
+    displayed: true,
+  }),
+  watch: {
+    displayed() {
+      this.$root.$updateApplicationVisibility(this.displayed);
+    },
+  },
+  created() {
+    document.addEventListener('showSettingsApps', this.showSettingsApps);
+    document.addEventListener('hideSettingsApps', this.hideSettingsApps);
+  },
+  mounted() {
+    this.$root.$updateApplicationVisibility(this.displayed);
+  },
+  beforeDestroy() {
+    document.removeEventListener('showSettingsApps', this.showSettingsApps);
+    document.removeEventListener('hideSettingsApps', this.hideSettingsApps);
+  },
+  methods: {
+    hideSettingsApps() {
+      this.displayed = false;
+    },
+    showSettingsApps() {
+      this.displayed = true;
+    },
+  },
+};
+</script>

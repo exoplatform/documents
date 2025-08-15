@@ -101,38 +101,46 @@
             </div>
             <div v-if="!canCopy" class="full-width mt-2">
               <v-text-field
-                v-model="userName"
+                v-model="href"
                 prepend-inner-icon="fas fa-link icon-default-color ms-n2"
                 class="pa-0 full-width"
                 outlined
                 readonly
                 dense />
             </div>
-            <div class="d-flex flex-column align-start text-start mt-4">
+            <div class="d-flex flex-column align-start text-start mt-2">
               <div>2. {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep2') }}</div>
-              <ul class="text-subtitle pa-0 mt-2">
-                <li>
-                  <div>{{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip1') }}</div>
-                  <ul class="text-subtitle ps-2">
-                    <li>- {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip2') }}</li>
-                    <li>- {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip3') }}</li>
-                    <li>- {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip4') }}</li>
-                  </ul>
-                </li>
-                <li>
-                  <div>{{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep2.linuxOs.tip1') }}</div>
-                </li>
-              </ul>
+              <div class="text-subtitle pa-0 mt-2">
+                <div v-for="l in tipLabels" :key="l">{{ $t(l) }}</div>
+              </div>
             </div>
-            <div class="d-flex flex-column align-start text-start mt-4">
+            <v-img
+              v-if="step2ImageSrc"
+              :src="step2ImageSrc"
+              max-height="175"
+              class="mt-2"
+              contain />
+            <div class="d-flex flex-column align-start text-start mt-2">
               <div>3. {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep3') }}</div>
             </div>
-            <div class="d-flex flex-column align-start text-start mt-4">
+            <v-img
+              v-if="step3ImageSrc"
+              :src="step3ImageSrc"
+              max-height="175"
+              class="mt-2"
+              contain />
+            <div class="d-flex flex-column align-start text-start mt-2">
               <div>4. {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep4') }}</div>
             </div>
             <documents-credential-inputs
               :password="password"
               class="mt-2 full-width text-start" />
+            <v-img
+              v-if="step4ImageSrc"
+              :src="step4ImageSrc"
+              max-height="175"
+              class="mt-2"
+              contain />
           </v-stepper-content>
         </v-stepper>
       </div>
@@ -150,7 +158,7 @@
         <v-btn
           :title="$t('UserSettings.documents.webdav.close')"
           class="btn ms-auto me-2"
-          @click="close()">
+          @click="close">
           {{ $t('UserSettings.documents.webdav.close') }}
         </v-btn>
         <v-btn
@@ -176,10 +184,71 @@ export default {
     spaceIdentityId: null,
     hrefCopied: false,
     canCopy: false,
+    tipsByOs: {
+      windows: {
+        labels: [
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip1',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip2',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip3',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.windowsOs.tip4',
+        ],
+        images: {
+          step2: '/documents-portlet/images/addNetworkLocation-windowsOs.webp',
+          step3: '/documents-portlet/images/addNetworkForm-windowsOs.webp',
+          step4: '/documents-portlet/images/addNetworkCredentials-windowsOs.webp',
+        },
+      },
+      linux: {
+        labels: [
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.linuxOs.tip1',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.linuxOs.tip2',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.linuxOs.tip3',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.linuxOs.tip4',
+        ],
+        images: {
+          step2: '/documents-portlet/images/addNetworkLocation-linuxOs.webp',
+          step4: '/documents-portlet/images/addNetworkCredentials-linuxOs.webp',
+        },
+      },
+      mac: {
+        labels: [
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.macOs.tip1',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.macOs.tip2',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.macOs.tip3',
+        ],
+        images: {
+          step2: '/documents-portlet/images/addNetworkLocation-macOs.webp',
+          step3: '/documents-portlet/images/addNetworkForm-macOs.webp',
+          step4: '/documents-portlet/images/addNetworkCredentials-macOs.webp',
+        },
+      },
+    },
   }),
   computed: {
     isMobile() {
       return this.$vuetify.breakpoint.mobile;
+    },
+    tips() {
+      if (this.$utils.isLinuxOs()) {
+        return this.tipsByOs.linux;
+      } else if (this.$utils.isMacOs()) {
+        return this.tipsByOs.mac;
+      } else {
+        // Default if none matches
+        return this.tipsByOs.windows;
+      }
+    },
+    tipLabels() {
+      return this.tips.labels;
+    },
+    step2ImageSrc() {
+      return this.tips.images?.step2;
+    },
+    step3ImageSrc() {
+      return this.tips.images?.step3;
+    },
+    step4ImageSrc() {
+      return this.tips.images?.step4;
     },
     disabledNextStep() {
       return this.driveType === 'SPACE' && !this.spaceIdentityId;
@@ -218,6 +287,9 @@ export default {
     },
   },
   methods: {
+    close() {
+      this.$refs.drawer.close();
+    },
     async open(password) {
       this.password = password;
       this.stepper = 1;
