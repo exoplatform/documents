@@ -195,7 +195,7 @@ export default {
         images: {
           step2: '/documents-portlet/images/addNetworkLocation-windowsOs.webp',
           step3: '/documents-portlet/images/addNetworkForm-windowsOs.webp',
-          step4: '/documents-portlet/images/addNetworkCredentials-windowsOs.webp.webp',
+          step4: '/documents-portlet/images/addNetworkCredentials-windowsOs.webp',
         },
       },
       linux: {
@@ -210,6 +210,18 @@ export default {
           step4: '/documents-portlet/images/addNetworkCredentials-linuxOs.webp',
         },
       },
+      mac: {
+        labels: [
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.macOs.tip1',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.macOs.tip2',
+          'UserSettings.documents.webdav.mapNetworkDeviceStep2.macOs.tip3',
+        ],
+        images: {
+          step2: '/documents-portlet/images/addNetworkLocation-macOs.webp',
+          step3: '/documents-portlet/images/addNetworkForm-macOs.webp',
+          step4: '/documents-portlet/images/addNetworkCredentials-macOs.webp',
+        },
+      },
     },
   }),
   computed: {
@@ -219,6 +231,8 @@ export default {
     tips() {
       if (this.$utils.isLinuxOs()) {
         return this.tipsByOs.linux;
+      } else if (this.$utils.isMacOs()) {
+        return this.tipsByOs.mac;
       } else {
         // Default if none matches
         return this.tipsByOs.windows;
