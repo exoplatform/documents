@@ -15,6 +15,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+export async function hasPassword() {
+  const resp = await fetch('/social/rest/apiKey', {
+    method: 'GET',
+    credentials: 'include',
+  });
+  if (resp?.ok) {
+    return (await resp.text()) === 'true';
+  } else {
+    const msg = resp ? await resp.text() : 'Unkown error';
+    throw new Error(`Server Error: ${msg}`);
+  }
+}
+
 export async function getPassword(optMethod, otpCode, renew) {
   const formData = new FormData();
   formData.append('method', optMethod);
