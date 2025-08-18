@@ -2,7 +2,7 @@
   <div class="d-flex">
     <component
       :is="isMobile ? 'folder-treeview-drawer' : 'folder-tree-view'"
-      :tree-view-collapsed="treeViewCollapsed"
+      :tree-view-expended="treeViewExpended"
       :is-mobile="isMobile"
       :folder-path="folderPath" />
     <v-card 
@@ -10,7 +10,7 @@
       class="width-full">
       <documents-breadcrumb
         :is-mobile="isMobile"
-        :tree-view-collapsed="treeViewCollapsed" />
+        :tree-view-expended="treeViewExpended" />
       <upload-overlay />
       <documents-no-body-folder
         v-if="items.length === 0"
@@ -258,7 +258,7 @@ export default {
     selectAll: false,
     showSelectAllInput: false,
     showSelectInputTimer: null,
-    treeViewCollapsed: false,
+    treeViewExpended: true,
     hoverTable: false,
   }),
   computed: {
@@ -334,14 +334,14 @@ export default {
     },
   },
   created() {
-    this.treeViewCollapsed =  localStorage.getItem('collapsedTreeView')!=null ? localStorage.getItem('collapsedTreeView') === 'true' : (this.$root.settings?.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : false);
+    this.treeViewExpended =  localStorage.getItem('expendedTreeView')!=null ? localStorage.getItem('expendedTreeView') === 'true' : (this.$root.settings?.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true);
     this.$root.$on('select-all-documents', (value) => this.selectAll = value);
     this.$root.$on('reset-selections', () => this.selectAll = false);
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
     this.$root.$on('documents-filter', this.updateFilter);
-    this.$root.$on('tree-view-collapse', this.collapseTreeView );
+    this.$root.$on('tree-view-expend', this.extendTreeView );
     this.$root.$on('loading-documents', this.setLoading);
   },
   mounted(){
@@ -350,14 +350,14 @@ export default {
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
-    this.$root.$off('tree-view-collapse', this.collapseTreeView);
+    this.$root.$off('tree-view-expend', this.extendTreeView);
     this.$root.$off('openTreeFolderDrawer', this.folderTreeDrawer);
     this.$root.$off('loading-documents', this.setLoading);
   },
   methods: {
-    collapseTreeView(value) {
-      this.treeViewCollapsed = value;
-      localStorage.setItem('collapsedTreeView', value);
+    extendTreeView(value) {
+      this.treeViewExpended = value;
+      localStorage.setItem('expendedTreeView', value);
     },
     canEditFile(file) {
       return file?.acl?.canEdit;
