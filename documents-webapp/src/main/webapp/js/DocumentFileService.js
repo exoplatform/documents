@@ -675,6 +675,7 @@ export function getUserSpaces(query,offset,limit) {
   if (query) {
     formData.append('q', query);
   }
+  formData.append('filterType', 'member');
   formData.append('sort', 'lastVisited');
   formData.append('limit', limit ? limit : 20);
   if (offset) {
