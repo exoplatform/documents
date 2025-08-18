@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Collections;
 
 import javax.jcr.Node;
@@ -95,6 +96,7 @@ public class WebdavWriteCommandHandlerTest {
     when(session.getItem(JCR_PATH)).thenReturn(node);
     when(node.getSession()).thenReturn(session);
     when(node.getPath()).thenReturn(JCR_PATH);
+    when(node.getName()).thenReturn(Arrays.asList(JCR_PATH.split("/")).getLast());
   }
 
   @Test
