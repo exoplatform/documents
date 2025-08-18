@@ -37,7 +37,8 @@
         required="required"
         autofocus="autofocus"
         outlined
-        dense />
+        dense
+        @keyup.enter="verify" />
       <div class="d-flex">
         <v-btn
           :disabled="loading"
