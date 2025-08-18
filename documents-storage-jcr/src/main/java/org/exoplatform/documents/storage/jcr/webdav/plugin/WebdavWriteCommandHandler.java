@@ -16,7 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
@@ -178,6 +178,11 @@ public class WebdavWriteCommandHandler {
       if (node.canAddMixin(VersionHistoryUtils.MIX_VERSIONABLE)) {
         node.addMixin(VersionHistoryUtils.MIX_VERSIONABLE);
       }
+      if(node.canAddMixin(EXO_SORTABLE)) {
+        node.addMixin(EXO_SORTABLE);
+      }
+      node.setProperty(EXO_NAME, node.getName());
+      node.setProperty(EXO_TITLE, node.getName());
     } else {
       forceUnlock(node);
       VersionHistoryUtils.createVersion(node);
@@ -294,6 +299,12 @@ public class WebdavWriteCommandHandler {
     forceUnlock((Node) session.getItem(sourceJcrPath));
     session.move(sourceJcrPath, targetJcrPath);
     session.save();
+    Node targetNode = (Node) session.getItem(targetJcrPath);
+    if (targetNode.isNodeType(EXO_SORTABLE)) {
+      targetNode.setProperty(EXO_NAME, targetNode.getName());
+      targetNode.setProperty(EXO_TITLE, targetNode.getName());
+      session.save();
+    }
     return itemExists;
   }
 
