@@ -68,11 +68,14 @@ import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.utils.MimeTypeResolver;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemOrder;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.WebDavLockResponse;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.core.nodetype.NodeTypeDataManager;
 import org.exoplatform.services.jcr.core.nodetype.PropertyDefinitionData;
@@ -120,6 +123,8 @@ public class WebdavWriteCommandHandler {
 
   private RepositoryService       repositoryService;
 
+  private TrashStorage            trashStorage;
+
   private SessionProviderService  sessionProviderService;
 
   private SettingService          settingService;
@@ -128,10 +133,12 @@ public class WebdavWriteCommandHandler {
 
   public WebdavWriteCommandHandler(SessionProviderService sessionProviderService,
                                    RepositoryService repositoryService,
+                                   TrashStorage trashStorage,
                                    SettingService settingService,
                                    PathCommandHandler pathCommandHandler) {
     this.sessionProviderService = sessionProviderService;
     this.repositoryService = repositoryService;
+    this.trashStorage = trashStorage;
     this.settingService = settingService;
     this.pathCommandHandler = pathCommandHandler;
   }
@@ -252,9 +259,15 @@ public class WebdavWriteCommandHandler {
     checkNotReadOnly(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
     checkResourceExists(session, jcrPath);
+
     Node node = (Node) session.getItem(jcrPath);
     forceUnlock(node);
-    node.remove();
+    if (canRemoveNode(node)) {
+      trashStorage.moveToTrash(node,
+                               new SessionProvider(((SessionImpl) session).getUserState()));
+    } else {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN, String.format("Resource with path '%s' can't be removed", jcrPath));
+    }
     session.save();
   }
 
@@ -678,6 +691,19 @@ public class WebdavWriteCommandHandler {
       removeLockTimeout(node.getPath());
       return true;
     } else {
+      return false;
+    }
+  }
+
+  private boolean canRemoveNode(Node node) {
+    return checkPermission(node, PermissionType.REMOVE);
+  }
+
+  private boolean checkPermission(Node node, String permissionType) {
+    try {
+      ((ExtendedNode) node).checkPermission(permissionType);
+      return true;
+    } catch (RepositoryException e) {
       return false;
     }
   }
