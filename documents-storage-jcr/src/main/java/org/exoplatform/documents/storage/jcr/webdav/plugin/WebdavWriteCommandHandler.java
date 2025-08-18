@@ -531,14 +531,20 @@ public class WebdavWriteCommandHandler {
     String encoding = null;
     if (StringUtils.contains(mediaType, ";")) {
       String[] mediaTypeParts = mediaType.split(";");
-      encoding = mediaTypeParts[1].replace("charset", "").replace("=", "").trim();
+      encoding = mediaTypeParts[1].replace("charset", "")
+                                  .replace("=", "")
+                                  .replace("\"", "")
+                                  .toUpperCase()
+                                  .trim();
       mediaType = mediaTypeParts[0].trim();
     }
-    if (StringUtils.isNotBlank(mediaType)) {
+    String resolvedMimeType = mimeTypeResolver.getMimeType(node.getName());
+    if (StringUtils.isNotBlank(resolvedMimeType)
+        && !StringUtils.equals(resolvedMimeType, mimeTypeResolver.getDefaultMimeType())) {
+      handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, resolvedMimeType), path);
+    } else {
       String mediaTypeConstant = mediaType;
       handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, mediaTypeConstant), path);
-    } else if (!content.hasProperty(JCR_MIME_TYPE)) {
-      handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, this.mimeTypeResolver.getMimeType(node.getName())), path);
     }
     if (StringUtils.isNotBlank(encoding)) {
       String encodingConstant = encoding;
