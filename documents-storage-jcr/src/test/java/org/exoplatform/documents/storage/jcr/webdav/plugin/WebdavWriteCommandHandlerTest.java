@@ -28,7 +28,6 @@ import java.io.InputStream;
 import java.util.Collections;
 
 import javax.jcr.Node;
-import javax.jcr.Session;
 import javax.jcr.lock.Lock;
 import javax.jcr.version.Version;
 
@@ -39,8 +38,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
+import org.exoplatform.services.security.ConversationState;
 
 import lombok.SneakyThrows;
 
@@ -56,13 +60,19 @@ public class WebdavWriteCommandHandlerTest {
   private SessionProviderService    sessionProviderService;
 
   @Mock
+  private TrashStorage              trashStorage;
+
+  @Mock
   private PathCommandHandler        pathCommandHandler;
 
   @Mock
-  private Session                   session;
+  private SessionImpl               session;
 
   @Mock
-  private Node                      node;
+  private NodeImpl                  node;
+
+  @Mock
+  private ConversationState         conversationState;
 
   @Mock
   private Node                      destNode;
@@ -100,8 +110,9 @@ public class WebdavWriteCommandHandlerTest {
   @Test
   @SneakyThrows
   public void testDelete() {
+    when(session.getUserState()).thenReturn(conversationState);
     handler.delete(session, JCR_PATH);
-    verify(node).remove();
+    verify(trashStorage).moveToTrash(eq(node), any(SessionProvider.class));
     verify(session).save();
   }
 
@@ -113,4 +124,5 @@ public class WebdavWriteCommandHandlerTest {
     verify(node).addMixin("mix:versionable");
     verify(session).save();
   }
+
 }
