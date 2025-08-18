@@ -158,7 +158,7 @@
         <v-btn
           :title="$t('UserSettings.documents.webdav.close')"
           class="btn ms-auto me-2"
-          @click="close()">
+          @click="close">
           {{ $t('UserSettings.documents.webdav.close') }}
         </v-btn>
         <v-btn
@@ -287,6 +287,9 @@ export default {
     },
   },
   methods: {
+    close() {
+      this.$refs.drawer.close();
+    },
     async open(password) {
       this.password = password;
       this.stepper = 1;
