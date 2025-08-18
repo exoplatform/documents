@@ -674,7 +674,8 @@ export function getUserSpaces(query,offset,limit) {
   const formData = new FormData();
   if (query) {
     formData.append('q', query);
-  } 
+  }
+  formData.append('sort', 'lastVisited');
   formData.append('limit', limit ? limit : 20);
   if (offset) {
     formData.append('offset', offset);
