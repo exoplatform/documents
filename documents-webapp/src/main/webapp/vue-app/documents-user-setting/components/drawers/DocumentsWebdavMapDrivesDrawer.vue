@@ -101,7 +101,7 @@
             </div>
             <div v-if="!canCopy" class="full-width mt-2">
               <v-text-field
-                v-model="userName"
+                v-model="href"
                 prepend-inner-icon="fas fa-link icon-default-color ms-n2"
                 class="pa-0 full-width"
                 outlined
