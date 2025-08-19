@@ -85,6 +85,11 @@ public class WebdavLoggingValve extends ValveBase {
       UUID reqUuid = UUID.randomUUID();
       try { // NOSONAR
         LOG.debug("[{}] URI: {} - Method {}", reqUuid, request.getRequestURI(), request.getMethod());
+        Enumeration<String> paramNames = request.getParameterNames();
+        while (paramNames.hasMoreElements()) {
+          String p = paramNames.nextElement();
+          LOG.debug("[{}] - Request Param: {}: {}", reqUuid, p, StringUtils.join(request.getParameterValues(p), ", "));
+        }
         Enumeration<String> headerNames = request.getHeaderNames();
         while (headerNames.hasMoreElements()) {
           String h = headerNames.nextElement();
@@ -97,7 +102,8 @@ public class WebdavLoggingValve extends ValveBase {
         }
 
         if (arrayInputStream.available() > 0
-            && (StringUtils.contains(request.getContentType(), "text/")
+            && (arrayInputStream.available() < 2048
+                || StringUtils.contains(request.getContentType(), "text/")
                 || StringUtils.equals(request.getContentType(), "application/xml")
                 || StringUtils.equals(request.getContentType(), "application.json/"))) {
           byte[] bytes = arrayInputStream.readAllBytes();
