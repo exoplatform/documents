@@ -277,8 +277,8 @@ export default {
             });
           }  
           this.addChildren(this.items, 'space_drives', newChildren);  
-          this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
         }
+        this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
       });    
     },
     addChildren(tree, targetId, newChildren) {
