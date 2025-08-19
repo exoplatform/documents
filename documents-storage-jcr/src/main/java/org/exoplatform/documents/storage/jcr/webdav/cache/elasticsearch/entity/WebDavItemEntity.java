@@ -86,7 +86,7 @@ public class WebDavItemEntity {
     this.webDavPath = webDavPath;
     this.jcrPath = jcrPath;
     this.parentWebDavPath = webDavPath.substring(0, webDavPath.lastIndexOf("/"));
-    this.identifier = identifier.toASCIIString();
+    this.identifier = identifier == null ? null : identifier.toASCIIString();
     this.file = file;
     if (properties != null) {
       this.properties = properties.stream().map(WebDavItemPropertyEntity::new).toList();
@@ -97,7 +97,7 @@ public class WebDavItemEntity {
   public WebDavItem toWebDavItem() {
     return new WebDavItem(webDavPath,
                           jcrPath,
-                          new URI(identifier),
+                          identifier == null ? null : new URI(identifier),
                           file,
                           properties == null ? null :
                                              properties.stream().map(WebDavItemPropertyEntity::toWebDavItemProperty).toList(),
