@@ -66,7 +66,8 @@
   <security-constraint>
     <web-resource-collection>
       <web-resource-name>rest</web-resource-name>
-      <url-pattern>/drives/*</url-pattern>
+      <url-pattern>/*</url-pattern>
+      <http-method-omission>OPTIONS</http-method-omission>
     </web-resource-collection>
     <auth-constraint>
       <role-name>users</role-name>
