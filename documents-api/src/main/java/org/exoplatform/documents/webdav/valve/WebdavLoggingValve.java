@@ -138,7 +138,19 @@ public class WebdavLoggingValve extends ValveBase {
         }
       }
     } else {
-      getNext().invoke(request, response);
+      // Create a custom response
+      ResponseWrapper wrappedResponse = new ResponseWrapper(response);
+
+      // Continue the processing chain, allowing content to be written to the
+      // wrapped response
+      getNext().invoke(request, wrappedResponse);
+
+      byte[] responseBytes = wrappedResponse.getBufferedContent();
+      if (responseBytes.length > 0) {
+        try (ServletOutputStream responseOutputStream = response.getOutputStream()) {
+          responseOutputStream.write(responseBytes);
+        }
+      }
     }
   }
 
