@@ -53,7 +53,7 @@ import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.portal.config.UserACL;
-import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.impl.RepositoryServiceImpl;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
@@ -69,7 +69,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
 
   public CachedJcrWebDavService(WebdavReadCommandHandler readCommandHandler,
                                 WebdavWriteCommandHandler writeCommandHandler,
-                                RepositoryService repositoryService,
+                                RepositoryServiceImpl repositoryService,
                                 UserACL userAcl,
                                 WebDavItemRepository webDavItemRepository) {
     super(readCommandHandler, writeCommandHandler, repositoryService, userAcl);
@@ -77,7 +77,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   }
 
   @PostConstruct
-  private void init() {
+  public void init() {
     // Clear stored Cache on startup
     webDavItemRepository.deleteAll();
     // Add Cache Clear Event Listener

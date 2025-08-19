@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -28,6 +29,7 @@ import java.io.ByteArrayInputStream;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -36,6 +38,7 @@ import javax.jcr.Session;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
+import javax.xml.namespace.QName;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,12 +46,14 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
 import lombok.SneakyThrows;
@@ -56,7 +61,19 @@ import lombok.SneakyThrows;
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class WebdavReadCommandHandlerTest {
 
-  private static final String      WEBDAV_PATH = "/webdav/path";
+  private static final String      IDENTITY_PATH            = "/Users/r/root/Private";
+
+  private static final String      JCR_RELATIVE_PATH        = "/path/to/file";
+
+  private static final String      WEBDAV_PATH              = "/John Doe (1)" + JCR_RELATIVE_PATH;
+
+  private static final String      JCR_PATH                 = IDENTITY_PATH + JCR_RELATIVE_PATH;
+
+  private static final String      USERNAME                 = "username";
+
+  private static final String      BASE_URI                 = "baseUri";
+
+  private static final Set<QName>  REQUESTED_PROPERTY_NAMES = Collections.singleton(DISPLAYNAME);
 
   @Mock
   private IdentityManager          identityManager;
@@ -97,6 +114,9 @@ public class WebdavReadCommandHandlerTest {
   @Mock
   private Profile                  profile;
 
+  @Mock
+  private ListAccess<Space>        memberSpacesListAccess;
+
   private WebdavReadCommandHandler handler;
 
   @Before
@@ -124,6 +144,45 @@ public class WebdavReadCommandHandlerTest {
     when(profile.getFullName()).thenReturn("John Doe");
     when(identity.getIdentityId()).thenReturn(1L);
     when(identityManager.getIdentity(anyLong())).thenReturn(identity);
+    when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(identity);
+    when(spaceService.getMemberSpaces(USERNAME)).thenReturn(memberSpacesListAccess);
+    when(node.getPath()).thenReturn(JCR_PATH);
+    when(pathCommandHandler.getIdentityBaseJcrPath(WEBDAV_PATH)).thenReturn(IDENTITY_PATH);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testGetRootPath() {
+    WebDavItem webDavItem = handler.get(session,
+                                        "/",
+                                        REQUESTED_PROPERTY_NAMES,
+                                        false,
+                                        5,
+                                        BASE_URI,
+                                        USERNAME);
+    assertNotNull(webDavItem);
+    assertEquals("/", webDavItem.getJcrPath());
+    assertEquals("/", webDavItem.getWebDavPath());
+    assertFalse(webDavItem.isFile());
+    assertNotNull(webDavItem.getIdentifier());
+    assertNotNull(webDavItem.getProperties());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testGetWithNodePath() {
+    WebDavItem webDavItem = handler.get(session,
+                                        WEBDAV_PATH,
+                                        REQUESTED_PROPERTY_NAMES,
+                                        false,
+                                        5,
+                                        BASE_URI,
+                                        USERNAME);
+    assertNotNull(webDavItem);
+    assertEquals(JCR_PATH, webDavItem.getJcrPath());
+    assertEquals(WEBDAV_PATH.replace(" ", "%20"), webDavItem.getWebDavPath());
+    assertFalse(webDavItem.isFile());
+    assertNotNull(webDavItem.getIdentifier());
   }
 
   @Test
@@ -161,7 +220,7 @@ public class WebdavReadCommandHandlerTest {
   @SneakyThrows
   public void testGetVersionsEmptyWhenNotVersionable() {
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
-    List<WebDavItem> result = handler.getVersions(session, WEBDAV_PATH, Collections.emptySet(), "baseUri");
+    List<WebDavItem> result = handler.getVersions(session, WEBDAV_PATH, Collections.emptySet(), BASE_URI);
     assertTrue(result.isEmpty());
   }
 
@@ -172,7 +231,7 @@ public class WebdavReadCommandHandlerTest {
     when(node.getVersionHistory()).thenReturn(versionHistory);
     when(versionHistory.getAllVersions()).thenReturn(versionIterator);
     when(versionIterator.hasNext()).thenReturn(false); // no versions
-    List<WebDavItem> result = handler.getVersions(session, WEBDAV_PATH, Collections.emptySet(), "baseUri");
+    List<WebDavItem> result = handler.getVersions(session, WEBDAV_PATH, Collections.emptySet(), BASE_URI);
     assertNotNull(result);
   }
 }

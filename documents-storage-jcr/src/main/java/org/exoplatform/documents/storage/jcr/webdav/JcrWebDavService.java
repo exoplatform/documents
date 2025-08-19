@@ -26,6 +26,7 @@ import java.util.Set;
 import javax.jcr.Item;
 import javax.jcr.NamespaceRegistry;
 import javax.jcr.Node;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.lock.Lock;
 import javax.xml.namespace.NamespaceContext;
@@ -46,7 +47,6 @@ import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.WebDavLockResponse;
 import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.portal.config.UserACL;
-import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.impl.RepositoryContainer;
 import org.exoplatform.services.jcr.impl.RepositoryServiceImpl;
@@ -61,16 +61,19 @@ import lombok.SneakyThrows;
 
 public class JcrWebDavService implements DocumentWebDavService {
 
-  protected static final Log          LOG       = ExoLogger.getLogger(JcrWebDavService.class);
+  public static final String          REPOSITORY_NAME = "repository";
 
-  private static final String         DAS_VALUE = "<DAV:basicsearch>" + "<exo:sql xmlns:exo=\"http://exoplatform.com/jcr\"/>" +
-      "<exo:xpath xmlns:exo=\"http://exoplatform.com/jcr\"/>";
+  public static final String          DAS_VALUE       =
+                                                "<DAV:basicsearch>" + "<exo:sql xmlns:exo=\"http://exoplatform.com/jcr\"/>" +
+                                                    "<exo:xpath xmlns:exo=\"http://exoplatform.com/jcr\"/>";
+
+  protected static final Log          LOG             = ExoLogger.getLogger(JcrWebDavService.class);
 
   protected WebdavReadCommandHandler  readCommandHandler;
 
   protected WebdavWriteCommandHandler writeCommandHandler;
 
-  protected RepositoryService         repositoryService;
+  protected RepositoryServiceImpl     repositoryService;
 
   protected UserACL                   userAcl;
 
@@ -78,7 +81,7 @@ public class JcrWebDavService implements DocumentWebDavService {
 
   public JcrWebDavService(WebdavReadCommandHandler readCommandHandler,
                           WebdavWriteCommandHandler writeCommandHandler,
-                          RepositoryService repositoryService,
+                          RepositoryServiceImpl repositoryService,
                           UserACL userAcl) {
     this.readCommandHandler = readCommandHandler;
     this.writeCommandHandler = writeCommandHandler;
@@ -441,12 +444,10 @@ public class JcrWebDavService implements DocumentWebDavService {
   @SneakyThrows
   protected Session getSession(String username) {
     ManageableRepository repository = repositoryService.getDefaultRepository();
-    RepositoryContainer repositoryContainer = ((RepositoryServiceImpl) repositoryService).getRepositoryContainer("repository");
+    RepositoryContainer repositoryContainer = repositoryService.getRepositoryContainer(REPOSITORY_NAME);
     WorkspaceContainer workspaceContainer = repositoryContainer.getWorkspaceContainer(repository.getConfiguration()
                                                                                                 .getDefaultWorkspaceName());
-    return new SessionImpl(repository.getConfiguration().getDefaultWorkspaceName(),
-                           new ConversationState(userAcl.getUserIdentity(username)),
-                           workspaceContainer);
+    return newSession(username, repository, workspaceContainer);
   }
 
   @SneakyThrows
@@ -470,6 +471,14 @@ public class JcrWebDavService implements DocumentWebDavService {
         }
       }
     }
+  }
+
+  public Session newSession(String username,
+                            ManageableRepository repository,
+                            WorkspaceContainer workspaceContainer) throws RepositoryException {
+    return new SessionImpl(repository.getConfiguration().getDefaultWorkspaceName(),
+                           new ConversationState(userAcl.getUserIdentity(username)),
+                           workspaceContainer);
   }
 
 }
