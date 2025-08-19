@@ -252,6 +252,9 @@ export default {
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');
     },
+    canEdit() {
+      return this.file?.acl?.canEdit;
+    },
   },
   created() {
     $(document).on('mousedown', (event) => {
@@ -333,9 +336,9 @@ export default {
         this.$root.ownerId = this.file.identityId;
         this.$root.spaceId = this.file.spaceId;
         this.$root.$emit('document-open-folder', this.file);
-      } else if (this.isFileEditable && this.file?.acl?.canEdit)  {
+      } else if (this.isFileEditable && this.canEdit) {
         this.openInEditMode(this.file);
-      } else if (this.isFileOnlyReadable || !this.file?.acl?.canEdit)  {
+      } else if (this.isFileOnlyReadable) {
         this.openInReadOnlyMode(this.file);
       } else {
         this.$root.$emit('documents-preview', this.file);
