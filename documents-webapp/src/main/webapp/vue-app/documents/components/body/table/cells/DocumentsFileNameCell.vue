@@ -337,7 +337,7 @@ export default {
         this.$root.ownerId = this.file.identityId;
         this.$root.spaceId = this.file.spaceId;
         this.$root.$emit('document-open-folder', this.file);
-      } else if (this.isFileEditable && this.canEdit)  {
+      } else if (this.isFileEditable && this.canEdit) {
         this.openInEditMode(this.file);
       } else if (this.isFileOnlyReadable) {
         this.openInReadOnlyMode(this.file);
