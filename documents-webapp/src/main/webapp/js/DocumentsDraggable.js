@@ -101,8 +101,9 @@
         mouseDrag = false;
         parentDragElement = null;
         clearTimeout(openFolderTimer);
-        table.querySelector('tr.is-dragover')?.classList.remove('is-dragover', 'grey', 'lighten-3');
-        table.querySelector('tr.drag-source')?.classList.remove('v-data-table__selected', 'drag-source');
+        currentOpenedFolder = null;
+        breadCrumbList = null;
+        table = null;
         getBreadCrumbListElement()?.classList.remove('is-intersected', 'is-drop-active');
         getDocumentsBoyElement().classList.remove('is-drop-active');
     }
