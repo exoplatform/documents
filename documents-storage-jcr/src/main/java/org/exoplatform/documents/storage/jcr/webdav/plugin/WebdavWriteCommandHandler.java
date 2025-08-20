@@ -43,6 +43,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import javax.jcr.AccessDeniedException;
+import javax.jcr.Item;
 import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -320,7 +321,11 @@ public class WebdavWriteCommandHandler {
     String targetJcrPath = pathCommandHandler.transformToJcrPath(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
     boolean itemExists = session.itemExists(targetJcrPath);
-    if (itemExists && !overwrite) {
+    if (itemExists && removeDestination) {
+      Item destItem = session.getItem(targetJcrPath);
+      destItem.remove();
+      session.save();
+    } else if (itemExists && !overwrite) {
       throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
     }
     Workspace workspace = session.getWorkspace();
@@ -554,7 +559,7 @@ public class WebdavWriteCommandHandler {
         && !StringUtils.equals(resolvedMimeType, mimeTypeResolver.getDefaultMimeType())) {
       handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, resolvedMimeType), path);
     } else {
-      String mediaTypeConstant = mediaType;
+      String mediaTypeConstant = StringUtils.firstNonBlank(mediaType, mimeTypeResolver.getDefaultMimeType());
       handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, mediaTypeConstant), path);
     }
     if (StringUtils.isNotBlank(encoding)) {
