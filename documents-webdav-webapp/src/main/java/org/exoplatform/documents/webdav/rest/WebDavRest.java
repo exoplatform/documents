@@ -66,7 +66,6 @@ public class WebDavRest {
                                                                            "Thumbs\\.db",
                                                                            "ehthumbs\\.db",
                                                                            "desktop\\.ini",
-                                                                           ".*\\.tmp",
                                                                            "\\.Trash-.*",
                                                                            "\\.nfs.*",
                                                                            "\\.X0-lock",
