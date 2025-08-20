@@ -19,13 +19,13 @@
 
 <template>
   <v-card 
-    v-if="!treeViewCollapsed"
+    v-if="treeViewExpended"
     flat
     :loading="loading"
     width="310"
     class="border-right-color expand-transition-enter-active">
     <v-card-title class="pa-0 border-bottom-color"> 
-      <span v-if="!treeViewCollapsed" class="text-header">{{ $t('documents.tree.title') }}</span>
+      <span v-if="!treeViewExpended" class="text-header">{{ $t('documents.tree.title') }}</span>
       <v-spacer />
       <v-tooltip bottom>
         <template #activator="{ on, attrs }">
@@ -33,7 +33,7 @@
             icon
             v-bind="attrs"
             v-on="on"
-            @click.stop.prevent="$root.$emit('tree-view-collapse', true)">
+            @click.stop.prevent="$root.$emit('tree-view-expend', false)">
             <img
               src="/social/images/sidebar.svg"
               class="icon-default-color mb-1"
@@ -63,7 +63,7 @@ export default {
       type: String,
       default: null
     },
-    treeViewCollapsed: {
+    treeViewExpended: {
       type: String,
       default: null
     },
