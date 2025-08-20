@@ -120,8 +120,8 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
         setAcceptRangesHeader(httpResponse);
         setContentTypeHeader(httpResponse, contentType);
         setCacheHeaders(httpResponse, lastModifiedDate);
-        writeResponseStream(httpResponse, fileDownload);
         httpResponse.setStatus(HttpServletResponse.SC_OK);
+        writeResponseStream(httpResponse, fileDownload);
       } else if (ranges.size() == 1) {
         // Requested a single range
         Range range = ranges.get(0);
@@ -156,8 +156,8 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
                                                         getBaseUrl(httpRequest),
                                                         httpRequest.getRemoteUser());
       httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_HTML_VALUE);
-      writeResponseHtml(httpResponse, webDavItem);
       httpResponse.setStatus(HttpServletResponse.SC_OK);
+      writeResponseHtml(httpResponse, webDavItem);
     }
   }
 

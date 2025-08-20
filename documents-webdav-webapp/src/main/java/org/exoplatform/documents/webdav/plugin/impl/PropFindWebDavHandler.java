@@ -85,6 +85,8 @@ public class PropFindWebDavHandler extends WebDavHttpMethodPlugin {
                             boolean requestPropertyNamesOnly,
                             int depth,
                             HttpServletResponse httpResponse) {
+    httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
+    httpResponse.setStatus(207); // MULTISTATUS exclusively used in WebDav
     try (OutputStream outputStream = httpResponse.getOutputStream()) {
       XMLStreamWriter xmlStreamWriter = XMLOutputFactory.newInstance()
                                                         .createXMLStreamWriter(outputStream, DEFAULT_XML_ENCODING);
@@ -107,8 +109,6 @@ public class PropFindWebDavHandler extends WebDavHttpMethodPlugin {
         xmlStreamWriter.close();
       }
     }
-    httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
-    httpResponse.setStatus(207); // MULTISTATUS exclusively used in WebDav
   }
 
   @SneakyThrows

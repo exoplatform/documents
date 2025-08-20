@@ -108,9 +108,9 @@ public class WebDavRest {
       ExoContainerContext.setCurrentContainer(container);
       RequestLifeCycle.begin(container);
       try { // NOSONAR
-        webDavMethodDispatcher.handle(httpRequest, httpResponse);
         // Remove Header redundancy
         httpResponse.setHeader("Vary", "Origin");
+        webDavMethodDispatcher.handle(httpRequest, httpResponse);
       } finally {
         RequestLifeCycle.end();
         ExoContainerContext.setCurrentContainer(null);
