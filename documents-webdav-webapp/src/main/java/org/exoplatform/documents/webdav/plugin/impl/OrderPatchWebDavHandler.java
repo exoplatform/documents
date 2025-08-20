@@ -66,6 +66,8 @@ public class OrderPatchWebDavHandler extends WebDavHttpMethodPlugin {
                              List<WebDavItemOrder> members,
                              HttpServletRequest httpRequest,
                              HttpServletResponse httpResponse) {
+    httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
+    httpResponse.setStatus(207); // MULTISTATUS exclusively used in WebDav
     try (OutputStream outputStream = httpResponse.getOutputStream()) {
       URI uri = getResourceUri(httpRequest);
 
@@ -95,8 +97,6 @@ public class OrderPatchWebDavHandler extends WebDavHttpMethodPlugin {
       } finally {
         xmlStreamWriter.close();
       }
-      httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
-      httpResponse.setStatus(207); // MULTISTATUS exclusively used in WebDav
     }
   }
 

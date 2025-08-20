@@ -74,6 +74,7 @@ public class LockWebDavHandler extends WebDavHttpMethodPlugin {
     if (bodyIsEmpty) {
       httpResponse.setHeader(ExtHttpHeaders.LOCKTOKEN, "<" + lockToken + ">");
     }
+    httpResponse.setStatus(HttpServletResponse.SC_OK);
     try (OutputStream outputStream = httpResponse.getOutputStream()) {
       XMLStreamWriter xmlStreamWriter = XMLOutputFactory.newInstance().createXMLStreamWriter(outputStream, DEFAULT_XML_ENCODING);
       try {
@@ -89,7 +90,6 @@ public class LockWebDavHandler extends WebDavHttpMethodPlugin {
         xmlStreamWriter.close();
       }
     }
-    httpResponse.setStatus(HttpServletResponse.SC_OK);
   }
 
   public WebDavItemProperty lockDiscovery(String token, String lockOwner, long timeOut) {

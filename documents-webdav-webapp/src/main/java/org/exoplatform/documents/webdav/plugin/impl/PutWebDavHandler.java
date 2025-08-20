@@ -49,13 +49,13 @@ public class PutWebDavHandler extends WebDavHttpMethodPlugin {
     InputStream inputStream = httpRequest.getInputStream();
 
     documentWebDavService.saveFile(resourcePath,
-                                 fileType,
-                                 contentNodeType,
-                                 mediaType,
-                                 mixinTypes,
-                                 inputStream,
-                                 lockTokens,
-                                 httpRequest.getRemoteUser());
+                                   fileType,
+                                   contentNodeType,
+                                   mediaType,
+                                   mixinTypes,
+                                   inputStream,
+                                   lockTokens,
+                                   httpRequest.getRemoteUser());
     httpResponse.setStatus(HttpServletResponse.SC_CREATED);
   }
 

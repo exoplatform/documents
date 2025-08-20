@@ -25,7 +25,9 @@ import javax.xml.namespace.QName;
 import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamWriter;
 
+import org.apache.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.util.MimeTypeUtils;
 
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
@@ -61,6 +63,8 @@ public class ReportWebDavHandler extends WebDavHttpMethodPlugin {
   public void writeResponse(List<WebDavItem> versions,
                             Set<QName> requestPropertyNames,
                             HttpServletResponse httpResponse) {
+    httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
+    httpResponse.setStatus(207); // MULTISTATUS exclusively used in WebDav
     try (OutputStream outputStream = httpResponse.getOutputStream()) {
       XMLStreamWriter xmlStreamWriter = XMLOutputFactory.newInstance()
                                                         .createXMLStreamWriter(outputStream, DEFAULT_XML_ENCODING);

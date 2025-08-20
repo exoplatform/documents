@@ -64,6 +64,8 @@ public class PropPatchWebDavHandler extends WebDavHttpMethodPlugin {
   private void writeResponse(Map<String, Collection<WebDavItemProperty>> result,
                              URI uri,
                              HttpServletResponse httpResponse) {
+    httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
+    httpResponse.setStatus(207); // MULTISTATUS exclusively used in WebDav
     try (OutputStream outputStream = httpResponse.getOutputStream()) {
       XMLStreamWriter xmlStreamWriter = XMLOutputFactory.newInstance()
                                                         .createXMLStreamWriter(outputStream, DEFAULT_XML_ENCODING);
@@ -88,8 +90,6 @@ public class PropPatchWebDavHandler extends WebDavHttpMethodPlugin {
         xmlStreamWriter.close();
       }
     }
-    httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
-    httpResponse.setStatus(207); // MULTISTATUS exclusively used in WebDav
   }
 
   private List<WebDavItemProperty> getPropertiesToSave(WebDavItemProperty body) {
