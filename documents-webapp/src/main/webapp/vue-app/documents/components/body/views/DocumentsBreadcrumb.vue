@@ -1,7 +1,7 @@
 <template>
   <div v-if="documentsBreadcrumbToDisplay.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-tooltip v-if="treeViewCollapsed || isMobile" bottom>
+      <v-tooltip v-if="!treeViewExpended || isMobile" bottom>
         <template #activator="{ on, attrs }">
           <v-btn
             icon
@@ -98,7 +98,7 @@ export default {
       type: Boolean,
       default: false,
     },
-    treeViewCollapsed: {
+    treeViewExpended: {
       type: String,
       default: null,
     },
@@ -295,7 +295,7 @@ export default {
         this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
         this.$root.$emit('openTreeFolderDrawer',this.showHidden);
       } else {
-        this.$root.$emit('tree-view-collapse', false);
+        this.$root.$emit('tree-view-expend', true);
       }
     },
   }
