@@ -30,7 +30,7 @@
     response.setCharacterEncoding("UTF-8");
     response.setContentType("text/html; charset=UTF-8");
 
-    String contextPath = request.getContextPath();
+    String contextPath = "/portal";
 
     // Styles
     List<String> skinUrls = (List<String>) request.getAttribute("skinUrls");

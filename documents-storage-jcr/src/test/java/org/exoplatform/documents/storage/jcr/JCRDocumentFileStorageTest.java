@@ -1050,6 +1050,8 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
                       .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(any()))
+                      .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.retrieveFileProperties(any(), any(), any(), any(), any()))
                       .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(any(IdentityManager.class),
@@ -1174,6 +1176,7 @@ public class JCRDocumentFileStorageTest {
     Property createdDateProperty = mock(Property.class);
     when(createdDateProperty.getDate()).thenReturn(createdDate);
     when(folderMock.getProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(createdDateProperty);
+    when(folderMock.getName()).thenReturn(name);
     when(getNodeByIdentifier(session, name + "Identifier")).thenReturn(folderMock);
     when(getNodeByIdentifier(null, name + "Identifier")).thenReturn(folderMock);
     return folderMock;

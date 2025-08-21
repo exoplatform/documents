@@ -19,7 +19,7 @@ import './initComponents.js';
 import './extensions.js';
 
 const lang = eXo.env.portal.language;
-const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.notification.DocumentsNotification-${lang}.json`;
+const url = `/documents-portlet/i18n/locale.notification.DocumentsNotification?lang=${lang}`;
 
 export function init() {
   return exoi18n.loadLanguageAsync(lang, url)
