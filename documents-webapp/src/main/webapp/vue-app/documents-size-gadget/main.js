@@ -41,7 +41,7 @@ const appId = 'DocumentsSizeGadget';
 const lang = eXo?.env?.portal?.language || 'en';
 
 //should expose the locale ressources as REST API
-const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.portlet.Documents-${lang}.json`;
+const url = `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`;
 
 export function init() {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {

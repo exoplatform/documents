@@ -453,11 +453,7 @@ public class JCRDocumentsUtil {
       }
     }
 
-    if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-      documentNode.setName(node.getProperty(NodeTypeConstants.EXO_TITLE).getString());
-    } else {
-      documentNode.setName(node.getName());
-    }
+    documentNode.setName(getTitle(node));
     if (node.hasProperty(NodeTypeConstants.EXO_DATE_CREATED)) {
       long createdDate = node.getProperty(NodeTypeConstants.EXO_DATE_CREATED)
                              .getDate()
@@ -821,11 +817,7 @@ public class JCRDocumentsUtil {
     FileVersion versionFileNode = new FileVersion();
     String currentVersionName = node.getBaseVersion().getName();
     Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
-    if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-      versionFileNode.setTitle(Utils.getStringProperty(node, NodeTypeConstants.EXO_TITLE));
-    } else {
-      versionFileNode.setTitle(node.getName());
-    }
+    versionFileNode.setTitle(getTitle(node));
     String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
     org.exoplatform.social.core.identity.model.Identity
         identity = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName);
@@ -909,7 +901,7 @@ public class JCRDocumentsUtil {
       }
     }
     return new DownloadItem(((NodeImpl) node).getIdentifier(),
-                            Utils.getStringProperty(node, NodeTypeConstants.EXO_TITLE),
+                            getTitle(node),
                             byteArrayOutputStream,
                             mimeType);
   }
@@ -1049,11 +1041,7 @@ public class JCRDocumentsUtil {
 
   public static void retrieveTrashElementProperties(Node node, TrashElementNode trashElementNode) throws RepositoryException {
     trashElementNode.setId(((NodeImpl) node).getIdentifier());
-    if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-      trashElementNode.setName(node.getProperty(NodeTypeConstants.EXO_TITLE).getString());
-    } else {
-      trashElementNode.setName(node.getName());
-    }
+    trashElementNode.setName(getTitle(node));
     trashElementNode.setPath(node.getPath());
     if (node.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)) {
       Node nodeToModify = node;
@@ -1088,4 +1076,17 @@ public class JCRDocumentsUtil {
       }
     }
   }
+
+  public static String getTitle(Node node) throws RepositoryException {
+    String title = null;
+    if (node.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+      title = node.getProperty(NodeTypeConstants.EXO_TITLE).getString();
+    }
+    if (StringUtils.isBlank(title)) {
+      return node.getName();
+    } else {
+      return title;
+    }
+  }
+
 }

@@ -46,7 +46,7 @@ const appId = 'TrashManagement';
 const lang = eXo?.env?.portal?.language || 'en';
 
 //should expose the locale resources as REST API
-const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.portlet.TrashManagement-${lang}.json`;
+const url = `/documents-portlet/i18n/locale.portlet.TrashManagement?lang=${lang}`;
 
 export function init() {
   exoi18n.loadLanguageAsync(lang, url).then(i18n => {
