@@ -21,6 +21,7 @@ import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.documents.service.ExternalDownloadService;
+import org.exoplatform.portal.application.localization.HttpRequestWrapper;
 import org.exoplatform.portal.branding.BrandingService;
 import org.exoplatform.portal.resource.SkinService;
 import org.exoplatform.services.resources.LocaleConfigService;
@@ -31,6 +32,7 @@ import org.exoplatform.web.controller.QualifiedName;
 import org.json.JSONObject;
 import org.exoplatform.container.xml.InitParams;
 
+import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -118,7 +120,13 @@ public class PublicAccessDownloadDocumentHandler extends JspBasedWebHandler {
                           Collections.emptyList(),
                           Collections.singletonList("portal/login"),
                           params -> extendApplicationParameters(params, parameters));
-    servletContext.getRequestDispatcher(publicDownloadJspPath).include(request, response);
+    RequestDispatcher requestDispatcher = servletContext.getRequestDispatcher(publicDownloadJspPath);
+    requestDispatcher.include(new HttpRequestWrapper(request) {
+      @Override
+      public String getContextPath() {
+        return "/documents-portlet";
+      }
+    }, response);
     return true;
   }
 }

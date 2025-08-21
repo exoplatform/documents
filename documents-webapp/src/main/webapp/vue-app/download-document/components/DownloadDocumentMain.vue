@@ -134,7 +134,7 @@ export default {
   },
   methods: {
     validatePassword() {
-      return this.$refs.form.validate();
+      return !this.requirePassword || this.$refs?.form?.validate?.();
     },
     downloadDocument() {
       if (!this.validatePassword()) {
