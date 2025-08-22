@@ -116,6 +116,29 @@
         </object-param>
       </init-params>
     </component-plugin>
+    <component-plugin>
+      <name>Documents mode preview redirect handler</name>
+      <set-method>addFilterDefinitions</set-method>
+      <type>org.exoplatform.web.filter.FilterDefinitionPlugin</type>
+      <priority>2</priority>
+      <init-params>
+        <object-param>
+          <name>Registered document mode preview redirect handler</name>
+          <object type="org.exoplatform.web.filter.FilterDefinition">
+            <field name="filter">
+              <object type="org.exoplatform.documents.filter.DocumentModeRedirectHandler" />
+            </field>
+            <field name="patterns">
+              <collection type="java.util.ArrayList" item-type="java.lang.String">
+                <value>
+                  <string>/.*/oeditor.*</string>
+                </value>
+              </collection>
+            </field>
+          </object>
+        </object-param>
+      </init-params>
+    </component-plugin>
   </external-component-plugins>
 
   <external-component-plugins>
