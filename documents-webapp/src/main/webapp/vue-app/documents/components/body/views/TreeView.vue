@@ -19,7 +19,7 @@
 
 <template>
   <v-treeview
-    :open.sync="openNodes"
+    :open.sync="openLevel"
     :items="items"
     :load-children="fetchChildren"
     class="treeView-item my-2"
@@ -123,22 +123,6 @@ export default {
     this.$root.$off('confirm-document-deletion',this.confirmDocumentDeletion);
     this.$root.$off('hide-element', this.hideElement);
     this.$root.$off('load-more-drives', this.loadMoreDrives);
-  },
-  watch: {
-    openNodes(newVal, oldVal) {
-      const collapsed = oldVal.filter(id => !newVal.includes(id));
-      const expanded = newVal.filter(id => !oldVal.includes(id));
-
-      if (collapsed.length) {
-        console.log('Collapsed:', collapsed);
-        // You can trigger custom logic here
-      }
-
-      if (expanded.length) {
-        console.log('Expanded:', expanded);
-        // Handle expansion logic here
-      }
-    }
   },
   methods: {
     documentsBreadcrumbUpdated(documentsBreadcrumb) {
