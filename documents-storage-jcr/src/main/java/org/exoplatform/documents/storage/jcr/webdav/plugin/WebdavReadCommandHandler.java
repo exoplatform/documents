@@ -108,8 +108,10 @@ import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.documents.webdav.model.constant.FileConstants;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -119,18 +121,22 @@ import lombok.SneakyThrows;
 @Component
 public class WebdavReadCommandHandler {
 
-  private static final String     VERSION_QUERY_PARAM = "?version=";
+  private static final String     VERSION_QUERY_PARAM     = "?version=";
 
-  private static final String     IDENTITY_ID_PREFIX  = "%20(";
+  private static final String     IDENTITY_ID_PREFIX      = "%20(";
 
-  private static final String     IDENTITY_ID_SUFFIX  = ")";
+  private static final String     IDENTITY_ID_SUFFIX      = ")";
 
-  private static final Set<QName> SEARCH_PROPERTIES   = new HashSet<>(Arrays.asList(DISPLAYNAME,
-                                                                                    RESOURCETYPE,
-                                                                                    CREATIONDATE,
-                                                                                    GETLASTMODIFIED,
-                                                                                    GETCONTENTLENGTH,
-                                                                                    GETCONTENTTYPE));
+  private static final String     EXO_HIDDEN_PROPERTY     = "exo:hidden";
+
+  private static final String     WINDOWS_HIDDEN_PROPERTY = "lp1:win32FileAttributes";
+
+  private static final Set<QName> SEARCH_PROPERTIES       = new HashSet<>(Arrays.asList(DISPLAYNAME,
+                                                                                        RESOURCETYPE,
+                                                                                        CREATIONDATE,
+                                                                                        GETLASTMODIFIED,
+                                                                                        GETCONTENTLENGTH,
+                                                                                        GETCONTENTTYPE));
 
   private PathCommandHandler      pathCommandHandler;
 
@@ -368,6 +374,9 @@ public class WebdavReadCommandHandler {
                          boolean requestPropertyNamesOnly,
                          int depth,
                          String identityBaseUri) {
+    if (FileConstants.BLOCKED_FILES_PATTERN.matcher(node.getName()).find()) {
+      return null;
+    }
     WebDavItem result = new WebDavItem();
     result.setFile(isFile(node));
     result.setIdentifier(new URI(getNodeUri(node, identityBaseJcrPath, identityBaseUri)));
@@ -413,6 +422,7 @@ public class WebdavReadCommandHandler {
                                          requestPropertyNamesOnly,
                                          depth - 1,
                                          identityBaseUri))
+                   .filter(Objects::nonNull)
                    .forEach(webDavItem::addChild);
     }
   }
@@ -638,8 +648,11 @@ public class WebdavReadCommandHandler {
       List<String> memberSpacesIds = spaceService.getMemberSpacesIds(username, 0, memberSpacesSize);
       for (String spaceId : memberSpacesIds) {
         Space space = spaceService.getSpaceById(spaceId);
+        Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+        // Ensure that old Spaces considers using the Space Display Name
+        spaceIdentity.getProfile().setProperty(Profile.FULL_NAME, space.getDisplayName());
         WebDavItem webDavIdentityItem = getWebDavIdentityItem(session,
-                                                              identityManager.getOrCreateSpaceIdentity(space.getPrettyName()),
+                                                              spaceIdentity,
                                                               requestedPropertyNames,
                                                               requestPropertyNamesOnly,
                                                               depth,
@@ -675,6 +688,9 @@ public class WebdavReadCommandHandler {
                                            boolean requestPropertyNamesOnly,
                                            int depth,
                                            String baseUri) {
+    if (StringUtils.isBlank(displayName)) {
+      displayName = getDisplayName(identityId);
+    }
     WebDavItem identityWebDavItem = new WebDavItem();
     String identityBaseUri = String.format(IDENTITY_PATHS_FORMAT,
                                            baseUri,
@@ -714,6 +730,7 @@ public class WebdavReadCommandHandler {
     }
   }
 
+  @SneakyThrows
   private void addProperties(WebDavItem result,
                              Node node,
                              Set<QName> requestedPropertyNames,
@@ -726,6 +743,12 @@ public class WebdavReadCommandHandler {
                                                        getWebDavPropertyNoException(node, result.getIdentifier(), null, name))
                  .filter(Objects::nonNull)
                  .forEach(result::addProperty);
+    if (node.isNodeType(EXO_HIDDENABLE)) {
+      // Windows
+      result.addProperty(new WebDavItemProperty(WINDOWS_HIDDEN_PROPERTY, "2"));
+      // Custom Property
+      result.addProperty(new WebDavItemProperty(EXO_HIDDEN_PROPERTY, "1"));
+    }
   }
 
   @SneakyThrows
@@ -806,6 +829,16 @@ public class WebdavReadCommandHandler {
   private String encodeUrlString(String s) {
     return URLEncoder.encode(s, StandardCharsets.UTF_8)
                      .replace("+", "%20");
+  }
+
+  private String getDisplayName(long identityId) {
+    Identity identity = identityManager.getIdentity(identityId);
+    if (identity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(identity.getRemoteId());
+      return space.getDisplayName();
+    } else {
+      return identity.getProfile().getFullName();
+    }
   }
 
 }

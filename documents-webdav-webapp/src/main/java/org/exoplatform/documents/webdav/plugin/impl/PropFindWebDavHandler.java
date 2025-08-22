@@ -66,6 +66,7 @@ public class PropFindWebDavHandler extends WebDavHttpMethodPlugin {
     String propRequestType = getRequestPropertyType(body);
     if (!ALLOWED_REQUEST_PROP_TYPES.contains(propRequestType)) {
       httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+      return;
     }
 
     boolean requestPropertyNamesOnly = REQUEST_SINGLE_PROP_NAME.equals(propRequestType);

@@ -16,16 +16,13 @@
 */
 package org.exoplatform.documents.webdav.rest;
 
+import static org.exoplatform.documents.webdav.model.constant.FileConstants.BLOCKED_FILES_PATTERN;
 import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH;
 import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH_ROOT;
 import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH_SINGLE_DRIVE;
 import static org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin.CONTEXT_PATH_SINGLE_DRIVE_ROOT;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -54,29 +51,6 @@ import lombok.SneakyThrows;
 public class WebDavRest {
 
   protected static final Log         LOG                   = ExoLogger.getLogger(WebDavRest.class);
-
-  private static final List<String>  BLOCKED_FILES         = Arrays.asList("\\.DS_Store",
-                                                                           "\\._.*",
-                                                                           "\\.Spotlight-V100",
-                                                                           "\\.Trashes",
-                                                                           "\\.fseventsd",
-                                                                           "\\.TemporaryItems",
-                                                                           "\\.VolumeIcon\\.icns",
-                                                                           "\\.DocumentRevisions-V100",
-                                                                           "Thumbs\\.db",
-                                                                           "ehthumbs\\.db",
-                                                                           "desktop\\.ini",
-                                                                           "\\.Trash-.*",
-                                                                           "\\.nfs.*",
-                                                                           "\\.X0-lock",
-                                                                           "\\.Xauthority",
-                                                                           "\\.gvfs",
-                                                                           "\\.bash_history",
-                                                                           "\\.zsh_history");
-
-  private static final Pattern       BLOCKED_FILES_PATTERN = Pattern.compile(String.format("(?i)(?:^|/)(?:%s)$",
-                                                                                           BLOCKED_FILES.stream()
-                                                                                                        .collect(Collectors.joining("|"))));
 
   @Autowired
   private PortalContainer            container;

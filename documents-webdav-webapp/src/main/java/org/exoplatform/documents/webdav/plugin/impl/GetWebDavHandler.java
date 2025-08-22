@@ -135,8 +135,8 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
           setAcceptRangesHeader(httpResponse);
           setContentTypeHeader(httpResponse, contentType);
           setCacheHeaders(httpResponse, lastModifiedDate);
-          writeResponseRange(httpResponse, fileDownload, range);
           httpResponse.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
+          writeResponseRange(httpResponse, fileDownload, range);
         }
       } else {
         // Requested a set of ranges
@@ -144,7 +144,6 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
         httpResponse.setDateHeader(HttpHeaders.LAST_MODIFIED, lastModifiedDate);
         setAcceptRangesHeader(httpResponse);
         writeResponseRanges(httpResponse, fileDownload, ranges);
-        httpResponse.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
       }
     } else {
       // Folder listing
@@ -199,6 +198,7 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
         httpResponse.setHeader(ExtHttpHeaders.CONTENTRANGE, "bytes */" + contentLength);
         httpResponse.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
       } else {
+        httpResponse.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
         writeResponseRanges(inputStream, outputStream, contentLength, contentType, ranges);
       }
     }
@@ -249,9 +249,7 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
     httpResponse.setHeader("Access-Control-Allow-Origin", "*");
     httpResponse.setHeader("Access-Control-Allow-Credentials", "true");
     httpResponse.setHeader("Access-Control-Allow-Methods", ALLOW_METHODS);
-    httpResponse.setHeader("Access-Control-Allow-Headers",
-                           "Overwrite, Destination, Content-Type, Depth, User-Agent, Translate, Range, Content-Range," +
-                               " Timeout, X-File-Size, X-Requested-With, If-Modified-Since, X-File-Name, Cache-Control, Location, Lock-Token, If");
+    httpResponse.setHeader("Access-Control-Allow-Headers", "*");
     httpResponse.setHeader("Access-Control-Expose-Header", "DAV, content-length, Allow");
     httpResponse.setHeader("Access-Control-Max-Age", "3600");
   }
