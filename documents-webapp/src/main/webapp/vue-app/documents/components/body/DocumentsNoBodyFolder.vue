@@ -1,6 +1,6 @@
 <template>
-  <div v-if="!loading" class="documents-body">
-    <div class="ma-4 d-flex documents-no-body flex-column justify-center text-center text-color">
+  <div class="documents-body">
+    <div v-if="!$root.driveView" class="ma-4 d-flex documents-no-body flex-column justify-center text-center text-color">
       <v-img
         :src="emptyDocs"
         class="mx-auto mb-4 overflow-visible"
@@ -33,6 +33,20 @@
         </div>
       </div>
     </div>
+    <v-card
+      v-else
+      min-height="250"
+      class="d-flex align-center justify-center"
+      flat>
+      <div>
+        <p>
+          <v-icon color="tertiary" size="60">fa-layer-group</v-icon>
+        </p>
+        <p class="text-title">
+          {{ $t('documents.label.noResults') }}
+        </p>
+      </div>
+    </v-card>
   </div>
 </template>
 

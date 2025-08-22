@@ -13,7 +13,7 @@
         :tree-view-expended="treeViewExpended" />
       <upload-overlay />
       <documents-no-body-folder
-        v-if="items.length === 0"
+        v-if="!loading && items.length === 0"
         :query="query"
         :is-mobile="isMobile" />
       <v-hover v-else v-model="hoverTable">
