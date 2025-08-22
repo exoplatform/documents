@@ -22,7 +22,8 @@
     v-if="treeViewExpended"
     flat
     :loading="loading"
-    width="310"
+    min-width="310"
+    max-width="310"
     class="border-right-color expand-transition-enter-active">
     <v-card-title class="pa-0 border-bottom-color"> 
       <span v-if="!treeViewExpended" class="text-header">{{ $t('documents.tree.title') }}</span>
