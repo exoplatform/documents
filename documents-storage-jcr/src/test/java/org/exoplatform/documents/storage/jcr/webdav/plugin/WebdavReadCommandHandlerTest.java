@@ -129,6 +129,7 @@ public class WebdavReadCommandHandlerTest {
     when(session.getItem("/jcr/path")).thenReturn(node);
 
     when(node.isNodeType(anyString())).thenReturn(false); // default
+    when(node.getName()).thenReturn("path");
     when(node.getNode("jcr:content")).thenReturn(contentNode);
     when(contentNode.hasProperty(anyString())).thenReturn(true);
     when(contentNode.getProperty(anyString())).thenReturn(property);

@@ -179,7 +179,7 @@ public class WebdavWriteCommandHandler {
       if (node.canAddMixin(VersionHistoryUtils.MIX_VERSIONABLE)) {
         node.addMixin(VersionHistoryUtils.MIX_VERSIONABLE);
       }
-      if(node.canAddMixin(EXO_SORTABLE)) {
+      if (node.canAddMixin(EXO_SORTABLE)) {
         node.addMixin(EXO_SORTABLE);
       }
       node.setProperty(EXO_NAME, node.getName());
