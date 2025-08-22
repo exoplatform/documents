@@ -166,10 +166,12 @@ export default {
             drives: true,
             children: spacesList
           };
+          this.$root.$emit('loading-documents', false);
           return spacesTree;
         }
       }).catch(error => {
         console.error('Error fetching user spaces:', error);
+        this.$root.$emit('loading-documents', false);
         return [];
       });
     },
@@ -213,8 +215,10 @@ export default {
           this.setChildren(this.items, 'space_drives', []);
           this.$root.$emit('document-show-drives', []);
         }
+        this.$root.$emit('loading-documents', false);
       }).catch(error => {
         console.error('Error searching drives:', error);
+        this.$root.$emit('loading-documents', false);
       });
     },
     setChildren(tree, targetId, newChildren) {
