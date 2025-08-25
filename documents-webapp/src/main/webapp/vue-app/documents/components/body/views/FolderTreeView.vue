@@ -151,6 +151,7 @@ export default {
             drive: true,
             children: [],
           }));
+          this.$root.$emit('add-drives', spacesList);
           if (data.size > this.drivesLimit) {
             spacesList.push({
               id: 'load_more',

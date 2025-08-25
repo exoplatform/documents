@@ -114,6 +114,7 @@ export default {
     folderPath: '',
     currentFolderPath: '',
     showHidden: false,
+    drives: [],
   }),
   computed: {
     documentsBreadcrumbToDisplay() {
@@ -143,6 +144,9 @@ export default {
     this.$root.$on('document-show-drives', this.showDrives);
     this.$root.$on('set-advanced-filter', advancedFilter => {
       this.showHidden = advancedFilter.showHidden;
+    });
+    this.$root.$on('add-drives', drives => {
+      this.drives.push(...drives);
     });
   },
   beforeDestroy() {
@@ -221,7 +225,13 @@ export default {
       if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
       } else if (name==='Documents'){
-        return this.driveName && this.$root.ownerId !== eXo.env.portal.userIdentityId ? this.driveName : this.$t('documents.label.spaceHomeDocuments');
+        if (this.$root.ownerId !== eXo.env.portal.userIdentityId){
+          const drive = this.drives.find(drive => drive.identityId === this.$root.ownerId);
+          if (drive) {
+            return drive.name;
+          }
+        }
+        return this.$t('documents.label.spaceHomeDocuments');
       }
       return name;
     },
