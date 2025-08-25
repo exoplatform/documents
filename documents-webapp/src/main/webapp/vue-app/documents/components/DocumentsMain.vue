@@ -191,6 +191,7 @@ export default {
     drivesLimit: 5,
     drivesOffset: 0,
     viewType: 'listView',
+    drives: [],
   }),
   computed: {
     displayCategoriesFilter() {
@@ -350,6 +351,7 @@ export default {
     this.$root.$on('documents-folder-download', this.downloadFolder);
     this.$root.$on('documents-preview', this.previewDocument);
     this.$root.$on('hide-element', this.hideElement);
+    this.$root.$on('add-drives', this.addDrives);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
     document.addEventListener('document-category-selected', (event) => {
@@ -368,6 +370,9 @@ export default {
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
+  beforeDestroy() {
+    this.$root.$off('add-drives', this.addDrives());
+  },
   methods: {
     copyPublicLinkToClipBoard(text) {
       navigator.clipboard.writeText(text).then(() => {
@@ -385,6 +390,9 @@ export default {
     downloadFolder(file) {
       this.selectedDocuments.push(file);
       this.bulkDownloadDocument();
+    },
+    addDrives(drives) {
+      this.drives.push(...drives);
     },
     hideElement(element) {
       if (!this.showHidden){
@@ -1480,37 +1488,62 @@ export default {
       const attachmentAppConfiguration = {
         'sourceApp': 'NEW.APP'
       };
-      if (eXo.env.portal.spaceName) {
-        attachmentAppConfiguration.defaultDrive = {
-          isSelected: true,
-          name: `.spaces.${eXo.env.portal.spaceGroup}`,
-          title: eXo.env.portal.spaceDisplayName,
-        };
-        const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-        const currentUrlSearchParams = window.location.search;
-        const queryParams = new URLSearchParams(currentUrlSearchParams);
-        if (pathparts.length > 1 || queryParams.has('folderId')) {
-          attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
-        }
-      } else {
-        attachmentAppConfiguration.defaultDrive = {
-          isSelected: true,
-          name: 'Personal Documents',
-          title: 'Personal Documents'
-        };
-        attachmentAppConfiguration.defaultFolder = '/';
-        let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
-        if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
-          pathparts = pathparts[1].split('Private/');
-        }
-        if (pathparts.length > 1) {
-          attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
+      if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId){
+        const drive = this.drives.find(drive => drive.identityId === this.$root.ownerId);
+        if (drive) {
+          attachmentAppConfiguration.defaultDrive = {
+            isSelected: true,
+            name: `.spaces.${drive.groupId}`,
+            title: drive.name,
+          };
+          attachmentAppConfiguration.spaceId = drive.id;
+          if (files){
+            attachmentAppConfiguration.files=files;
+          }
+          if (this.parentFolderId) {
+            this.$attachmentService.getDocumentDetails(this.parentFolderId,'')
+              .then(folder => {
+                attachmentAppConfiguration.defaultFolder = folder?.path.substring(folder.path.indexOf('Documents') + '/Documents'.length);
+                document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
+              });
+          } else {
+            document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
+          }
         }
       }
-      if (files){
-        attachmentAppConfiguration.files=files;
+      else {
+        if (eXo.env.portal.spaceName) {
+          attachmentAppConfiguration.defaultDrive = {
+            isSelected: true,
+            name: `.spaces.${eXo.env.portal.spaceGroup}`,
+            title: eXo.env.portal.spaceDisplayName,
+          };
+          const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+          const currentUrlSearchParams = window.location.search;
+          const queryParams = new URLSearchParams(currentUrlSearchParams);
+          if (pathparts.length > 1 || queryParams.has('folderId')) {
+            attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
+          }
+        }  else  {
+          attachmentAppConfiguration.defaultDrive = {
+            isSelected: true,
+            name: 'Personal Documents',
+            title: 'Personal Documents'
+          };
+          attachmentAppConfiguration.defaultFolder = '/';
+          let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
+          if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
+            pathparts = pathparts[1].split('Private/');
+          }
+          if (pathparts.length > 1) {
+            attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
+          }
+        }
+        if (files){
+          attachmentAppConfiguration.files=files;
+        }
+        document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
       }
-      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
     extractDefaultFolder(isPersonalDrive) {
       const path = this.currentFolder.path;
