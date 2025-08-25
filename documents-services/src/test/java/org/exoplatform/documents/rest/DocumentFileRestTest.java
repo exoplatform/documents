@@ -800,7 +800,7 @@ public class DocumentFileRestTest {
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
 
     List<FullTreeItem> children = new ArrayList<>();
-    FullTreeItem fullTreeItem = new FullTreeItem("11111222", "test", "path", null,false);
+    FullTreeItem fullTreeItem = new FullTreeItem("11111222", "test", "path", null,false,null);
     children.add(fullTreeItem);
 
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
