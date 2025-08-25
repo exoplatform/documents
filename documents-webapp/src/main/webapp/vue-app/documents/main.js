@@ -73,6 +73,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
 
   await Vue.createApp({
     data: {
+      appId,
       canEdit,
       settings,
       settingsSaveUrl,
