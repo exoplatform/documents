@@ -67,6 +67,38 @@
               tooltip
               small />
           </div>
+          <div class="d-flex ms-5">
+            <v-menu v-model="menu" offset-y>
+              <template #activator="{ on, attrs }">
+                <v-btn
+                  id="documentSettingsView"
+                  small
+                  elevation="0"
+                  class="px-0"
+                  v-bind="attrs"
+                  v-on="on">
+                  <v-icon
+                    v-if="selectedViewType"
+                    :class="selectedViewType.icon"
+                    size="20" />
+                  <v-icon class="ms-1" size="13">mdi-chevron-down</v-icon>
+                </v-btn>
+              </template>
+              <v-list class="pa-0">
+                <v-list-item
+                  v-for="item in viewItemsTypes"
+                  :key="item.value"
+                  @click="setViewType(item)">
+                  <v-list-item-icon class="me-2 my-0 align-self-center">
+                    <v-icon
+                      :class="[item.icon, item.value === viewType ? 'primary--text' : 'icon-default-color']"
+                      size="20" />
+                  </v-list-item-icon>
+                  <div :class="item.value === viewType && 'primary--text'">{{ item.label }}</div>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+          </div>
         </template>
       </application-toolbar>
     </div>
@@ -143,7 +175,9 @@ export default {
       hide: false,
       buttons: []
     },
-    viewList: []
+    viewList: [],
+    menu: false,
+    viewType: 'listView',
   }),
   watch: {
     selectedView: {
@@ -163,6 +197,16 @@ export default {
     },
   },
   computed: {
+    viewItemsTypes() {
+      return [
+        { value: 'listView', icon: 'fas fa-th-list', label: this.$t('documents.label.viewType.list') },
+        { value: 'cardsView', icon: 'fas fa-th-large', label: this.$t('documents.label.viewType.cards')},
+      ];
+    },
+    selectedViewType() {
+      const item = this.viewItemsTypes.find(i => i.value === this.viewType);
+      return item ? item : null;
+    },
     filtersCount(){
       let fNum = 0;
       if (this.primaryFilter.toLowerCase()!=='all') {
@@ -185,9 +229,6 @@ export default {
       }
       return fNum;
     },
-    canShowMobileFilter() {
-      return this.isMobile && this.showFilter;
-    }
   },
   created() {
     this.$root.$on('resetSearch', this.cancelSearch);
@@ -203,6 +244,11 @@ export default {
     document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
   },
   methods: {
+    setViewType(item) {
+      this.viewType = item.value;
+      this.$documentsUtils.setViewType(this.viewType, this.$root.appId);
+      this.menu = false;
+    },
     handleShowFilter(data) {
       this.showFilter = data;
     },
@@ -266,16 +312,10 @@ export default {
         this.$root.$emit('open-advanced-filter-drawer');
       }     
     },
-    openSettingsDrawer(){
-      this.$root.$emit('open-advanced-filter-drawer');    
-    },  
     changeDocumentsFilter(primaryFilter){
       this.$root.$emit('documents-filter', primaryFilter);
       this.$root.$emit('set-mobile-filter', primaryFilter);
-    },  
-    displayRightFilter(){
-      this.filterDispalyed = true;
-    }
+    },
   }
 };
 </script>
