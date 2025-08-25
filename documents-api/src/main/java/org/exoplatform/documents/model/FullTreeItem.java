@@ -31,4 +31,5 @@ public class FullTreeItem {
   private String                                path;
   private List<FullTreeItem>                    children;
   private boolean                               hidden;
+  private String                                ownerId;
 }

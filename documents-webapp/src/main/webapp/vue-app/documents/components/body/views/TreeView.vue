@@ -181,19 +181,18 @@ export default {
           this.$root.ownerId = eXo.env.portal.userIdentityId;
           this.$root.spaceId = null;
           this.$root.driveView = false;
-        } 
+        } else if (folder.ownerId) {
+          this.$root.ownerId = folder.ownerId;
+        }
         this.$root.$emit('open-folder', folder);
       }
     },
     fetchChildren (item) {
       this.$root.$emit('tree-loading', true);
       let folderId = item.id;
-      if (item.identityId) {
-        this.$root.ownerId = item.identityId;
-        folderId = null;
-      }
+      folderId = null;
       this.$documentFileService
-        .getFullTreeData(this.$root.ownerId,folderId).then(data => {
+        .getFullTreeData(item.identityId,folderId).then(data => {
           if (data) {
             const newItems = data.map(obj => {
               return JSON.parse(JSON.stringify(obj, (key, value) => 
@@ -251,6 +250,7 @@ export default {
             drive: true,
             children: [],
           }));
+          this.$root.$emit('add-drives', newChildren);
           if (data.size > this.limit) {
             newChildren.push({
               id: 'load_more',
@@ -260,7 +260,7 @@ export default {
               limit: this.limit,
             });
           }  
-          this.addChildren(this.items, 'space_drives', newChildren);  
+          this.addChildren(this.items, 'space_drives', newChildren);
         }
         this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
       });    
@@ -297,8 +297,16 @@ export default {
       }
       return null; // Node not found
     },
-
-
+    
+    getDriveByIdentityId(id, nodes = this.items) {
+      const drivesNode = nodes.find(item => item.drives === true);
+      if (drivesNode) {
+        const drive = drivesNode.children.find(item => item.drive === true && item.identityId === id);
+        return drive || null;
+      } else {
+        return null;
+      }
+    },
   },
 };
 </script>
