@@ -145,15 +145,14 @@ export default {
     this.$root.$on('set-advanced-filter', advancedFilter => {
       this.showHidden = advancedFilter.showHidden;
     });
-    this.$root.$on('add-drives', drives => {
-      this.drives.push(...drives);
-    });
+    this.$root.$on('add-drives', this.addDrives);
   },
   beforeDestroy() {
     this.$root.$off('set-breadcrumb', this.setBreadcrumb);
     this.$root.$off('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$off('open-folder', this.openFolder);
     this.$root.$off('document-show-drives', this.showDrives);
+    this.$root.$off('add-drives', this.addDrives());
     document.removeEventListener('document-open-previous-folder-to-drop', this.handleOpenRootFolder);
     document.removeEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
   },
@@ -167,6 +166,9 @@ export default {
       if (this.documentsBreadcrumbToDisplay.length > 1) {
         this.$root.$emit('document-open-folder', this.documentsBreadcrumbToDisplay[this.documentsBreadcrumbToDisplay.length - 2]);
       }
+    },
+    addDrives(drives) {
+      this.drives.push(...drives);
     },
     canEditFile(file) {
       return file?.accessList?.canEdit;
