@@ -16,7 +16,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 %>
-<%@page import="io.meeds.social.util.JsonUtils"%>
 <%@taglib uri="http://java.sun.com/portlet_2_0" prefix="portlet" %>
 <portlet:defineObjects />
 <portlet:actionURL var="saveSettingsUrl" />
@@ -24,7 +23,6 @@
 <%
   String portletId = (String) request.getAttribute("portletStorageId");
   String domId = "DocumentsApplication" + portletId;
-  String valueDomId = "documentSettingsValue" + portletId;
   boolean canEdit = (boolean) request.getAttribute("canEdit");
   Object settings = (String[]) request.getAttribute("settings");
   if (settings != null) {
@@ -36,6 +34,7 @@
     <div data-app="true" class="v-application transparent v-application--is-ltr theme--light"
       id="<%=domId%>">
       <script type="text/javascript">
-          require(['PORTLET/documents-portlet/Documents'], app => app.init('<%=domId%>', <%=canEdit%>, <%=settings%>, '<%=saveSettingsUrl%>'));      </script>
+          require(['PORTLET/documents-portlet/Documents'], app => app.init('<%=domId%>', <%=canEdit%>, <%=settings%>, '<%=saveSettingsUrl%>'));
+      </script>
     </div>
   </div>
