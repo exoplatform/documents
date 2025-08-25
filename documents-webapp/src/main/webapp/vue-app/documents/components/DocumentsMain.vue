@@ -190,6 +190,7 @@ export default {
     publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`,
     drivesLimit: 5,
     drivesOffset: 0,
+    viewType: 'listView',
   }),
   computed: {
     displayCategoriesFilter() {
@@ -243,6 +244,7 @@ export default {
     },
   },
   created() {
+    this.viewType = this.$documentsUtils.getViewType(this.$root.appId);
     document.addEventListener('categories-updated', this.refreshDocument);
 
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
