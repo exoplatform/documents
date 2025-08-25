@@ -244,6 +244,7 @@ export default {
           const newChildren  =spaces.map(space => ({
             id: space.id,
             spaceId: space.id,
+            groupId: space.groupId,
             identityId: space.identityId,
             name: space.displayName,
             avatarUrl: space.avatarUrl,
