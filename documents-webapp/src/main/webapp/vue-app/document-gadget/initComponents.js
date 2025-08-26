@@ -17,7 +17,7 @@
 import DocumentList from './components/DocumentList.vue';
 import DocumentListWidgetItem from './components/DocumentListWidgetItem.vue';
 import DocumentListSettingsDrawer from './components/DocumentListSettingsDrawer.vue';
-import DocumentListWidgetItemCardVue from './components/DocumentListWidgetItemCard.vue.vue';
+import DocumentItemCard from '../documents/components/body/views/DocumentItemCard.vue';
 import DocumentListDrawer from './components/DocumentListDrawer.vue';
 import DocumentListEmptyMessage from './components/DocumentListEmptyMessage.vue';
 import DocumentSelectFolderDrawer from './components/DocumentSelectFolderDrawer.vue';
@@ -26,7 +26,7 @@ const components = {
   'document-list': DocumentList,
   'document-list-drawer': DocumentListDrawer,
   'document-list-widget-item': DocumentListWidgetItem,
-  'document-list-widget-item-card': DocumentListWidgetItemCardVue,
+  'document-list-widget-item-card': DocumentItemCard,
   'document-list-settings-drawer': DocumentListSettingsDrawer,
   'document-list-empty-message': DocumentListEmptyMessage,
   'document-select-folder-drawer': DocumentSelectFolderDrawer,
