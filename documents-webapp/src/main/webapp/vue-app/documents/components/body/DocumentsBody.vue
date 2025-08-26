@@ -5,7 +5,7 @@
       v-if="viewExtension"
       :component="viewExtension"
       :params="params"
-      :element="div" />
+      element="div" />
     <div
       class="extendFilterButton"
       v-show="showExtend && !this.isMobile && !this.$root.driveView"
@@ -107,6 +107,10 @@ export default {
       type: String,
       default: null
     },
+    viewType: {
+      type: String,
+      default: null
+    },
     folderPath: {
       type: String,
       default: null
@@ -140,6 +144,7 @@ export default {
         maxSize: this.maxSize,
         primaryFilter: this.primaryFilter,
         folderPath: this.folderPath,
+        viewType: this.viewType,
       };
     },
     showExtend(){

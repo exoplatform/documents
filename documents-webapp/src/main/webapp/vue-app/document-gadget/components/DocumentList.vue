@@ -74,7 +74,8 @@
                     :count="filesCount"
                     :key="file.id"
                     :file="file"
-                    :files="filesToDisplay" />
+                    :files="filesToDisplay"
+                    extra-margin />
                 </card-carousel>
               </template>
               <template v-else>
