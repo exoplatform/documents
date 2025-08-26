@@ -80,6 +80,7 @@
                   <v-icon
                     v-if="selectedViewType"
                     :class="selectedViewType.icon"
+                    class="icon-default-color"
                     size="20" />
                   <v-icon class="ms-1" size="13">mdi-chevron-down</v-icon>
                 </v-btn>
@@ -231,6 +232,7 @@ export default {
     },
   },
   created() {
+    this.viewType = this.$documentsUtils.getViewType(this.$root.appId);
     this.$root.$on('resetSearch', this.cancelSearch);
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('show-mobile-filter', this.handleShowFilter);
@@ -246,6 +248,7 @@ export default {
   methods: {
     setViewType(item) {
       this.viewType = item.value;
+      this.$emit('documents-type-view-applied', this.viewType);
       this.$documentsUtils.setViewType(this.viewType, this.$root.appId);
       this.menu = false;
     },
