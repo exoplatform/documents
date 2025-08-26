@@ -146,7 +146,7 @@ export default {
       return this.settings?.customHeader;
     },
     headerTitle() {
-      return this.customHeader ? this.settings?.headerTitle : this.$t('documents.documentGadget.title');
+      return this.customHeader ? this.settings?.headerTitle : this.settings?.documentType === 'recentDocument' ? this.$t('documents.documentGadget.recentDocumentTitle') : this.settings?.documentType === 'sharedWithMe' ? this.$t('documents.documentGadget.sharedWithMeTitle') :  this.$t('documents.documentGadget.title');
     },
     maxDocumentsToList() {
       return this.settings.maxDocumentsToList;
