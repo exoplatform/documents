@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
- * Copyright (C) 2023 eXo Platform SAS.
+ * Copyright (C) 2025 eXo Platform SAS.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,31 +19,90 @@
 <page-set xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://www.exoplatform.org/xml/ns/gatein_objects_1_8 http://www.exoplatform.org/xml/ns/gatein_objects_1_8"
           xmlns="http://www.exoplatform.org/xml/ns/gatein_objects_1_8">
-
     <page>
         <name>drives</name>
         <title>Drives</title>
         <access-permissions>*:/platform/users;*:/platform/externals</access-permissions>
         <edit-permission>*:/platform/administrators</edit-permission>
-        <container
-                id="top-documents-container"
-                template="system:/groovy/portal/webui/container/UIAddOnContainer.gtmpl">
-            <name>drives-top-container</name>
-            <access-permissions>*:/platform/users;*:/platform/externals</access-permissions>
-            <factory-id>addonContainer</factory-id>
-        </container>
-        <container
-                id="documents-container"
-                template="system:/groovy/portal/webui/container/UIAddOnContainer.gtmpl"
-                cssClass="singlePageApplication">
-            <name>drives-mid-container</name>
-            <access-permissions>*:/platform/users;*:/platform/externals</access-permissions>
-            <factory-id>addonContainer</factory-id>
-        </container>
-        <container id="bottom-documents-container" template="system:/groovy/portal/webui/container/UIAddOnContainer.gtmpl">
-            <name>drives-bottom-container</name>
-            <access-permissions>*:/platform/users;*:/platform/externals</access-permissions>
-            <factory-id>addonContainer</factory-id>
+        <container template="system:/groovy/portal/webui/container/UIPageLayout.gtmpl">
+            <section-columns
+                    sticky-beahvior="false"
+                    mobile-columns-style="true">
+                <column col-span="8">
+                    <portlet-application profiles="documents">
+                        <portlet>
+                            <application-ref>documents-portlet</application-ref>
+                            <portlet-ref>DocumentGadget</portlet-ref>
+                            <preferences>
+                                <preference>
+                                    <name>viewOptions</name>
+                                    <value>cards</value>
+                                </preference>
+                                <preference>
+                                    <name>customHeader</name>
+                                    <value>false</value>
+                                </preference>
+                                <preference>
+                                    <name>displaySeeMore</name>
+                                    <value>true</value>
+                                </preference>
+                                <preference>
+                                    <name>maxDocumentsToList</name>
+                                    <value>4</value>
+                                </preference>
+                                <preference>
+                                    <name>documentType</name>
+                                    <value>recentDocument</value>
+                                </preference>
+                            </preferences>
+                        </portlet>
+                    </portlet-application>
+                </column>
+                <column col-span="4">
+                    <portlet-application profiles="documents">
+                        <portlet>
+                            <application-ref>documents-portlet</application-ref>
+                            <portlet-ref>DocumentGadget</portlet-ref>
+                            <preferences>
+                                <preference>
+                                    <name>viewOptions</name>
+                                    <value>list</value>
+                                </preference>
+                                <preference>
+                                    <name>customHeader</name>
+                                    <value>false</value>
+                                </preference>
+                                <preference>
+                                    <name>displaySeeMore</name>
+                                    <value>true</value>
+                                </preference>
+                                <preference>
+                                    <name>maxDocumentsToList</name>
+                                    <value>4</value>
+                                </preference>
+                                <preference>
+                                    <name>documentType</name>
+                                    <value>sharedWithMe</value>
+                                </preference>
+                            </preferences>
+                        </portlet>
+                        <height>300</height>
+                    </portlet-application>
+                </column>
+            </section-columns>
+            <section-columns
+                    sticky-beahvior="false"
+                    mobile-columns-style="true">
+                <column col-span="12">
+                    <portlet-application>
+                        <portlet>
+                            <application-ref>documents-portlet</application-ref>
+                            <portlet-ref>Documents</portlet-ref>
+                        </portlet>
+                        <title>Documents Application</title>
+                    </portlet-application>
+                </column>
+            </section-columns>
         </container>
     </page>
 </page-set>
