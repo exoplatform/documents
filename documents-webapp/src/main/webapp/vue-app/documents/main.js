@@ -132,6 +132,41 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
         this.settingsExcludeSubcategoryIds = await getSubcategoryIds(this.settings.excludeCategoryIds, 1);
         this.selectedCategoryIds = await getSubcategoryIds(this.settings.categoryIds || [], -1);
       },
+      safeDecodeURIComponent(name) {
+        if (!name) {
+          return '';
+        }
+        try {
+          return decodeURIComponent(name.replace(/%25/g, '%').replace(/%([^2][^5])/g, '%25$1'));
+        } catch (e) {
+          console.warn('Filename decode failed:', name, e);
+          return name;
+        }
+      },
+      getFileIcon(file) {
+        return this.$documentsIconsExtension?.[0]?.get?.(file?.mimeType) || 'fas fa-file';
+      },
+      isFileEditable(file) {
+        return this.$supportedDocuments?.some(doc => doc.edit && doc.mimeType === file.mimeType) ?? false;
+      },
+      isFileReadable(file) {
+        return this.$supportedDocuments?.some(doc => doc.mimeType === file.mimeType) ?? false;
+      },
+      getImageUrl(file) {
+        file.readable = this.isFileReadable(file);
+        return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.lastModified);
+      },
+      getDownloadUrl(file) {
+        return this.$documentsUtils.getDownloadUrl(file.id, file.lastModified);
+      },
+      openInEditMode(file) {
+        const fileId = file.sourceID ? file.sourceID : file.id;
+        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&backTo=${window.location.pathname}`, '_blank');
+      },
+      openInReadOnlyMode(file) {
+        const fileId = file.sourceID ? file.sourceID : file.id;
+        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
+      },
     },
     template: `<documents-main id="${appId}" />`,
     vuetify: Vue.prototype.vuetifyOptions,
