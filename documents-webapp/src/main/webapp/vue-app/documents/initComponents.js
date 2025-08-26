@@ -24,6 +24,9 @@ import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
 import DocumentsNoBodyFolder from './components/body/DocumentsNoBodyFolder.vue';
 import DocumentsNoResultBody from './components/body/DocumentsNoResultBody.vue';
 import DocumentsTimelineView from './components/body/views/DocumentsTimelineView.vue';
+import DocumentsCardsView from './components/body/views/DocumentsCardsView.vue';
+import DocumentsListView from './components/body/views/DocumentsListView.vue';
+import DocumentItemCard from './components/body/views/DocumentItemCard.vue';
 import DocumentsFolderView from './components/body/views/DocumentsFolderView.vue';
 import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimelineGroupHeader.vue';
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
@@ -105,6 +108,9 @@ const components = {
   'documents-no-result-body': DocumentsNoResultBody,
   'documents-folder-view': DocumentsFolderView,
   'documents-timeline-view': DocumentsTimelineView,
+  'documents-cards-view': DocumentsCardsView,
+  'documents-list-view': DocumentsListView,
+  'documents-item-card': DocumentItemCard,
   'documents-timeline-group-header': DocumentsTimelineGroupHeader,
   'documents-table-cell': DocumentsTableCell,
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
