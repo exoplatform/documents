@@ -22,7 +22,8 @@
             :min-size="minSize"
             :max-size="maxSize"
             :is-mobile="isMobile"
-            :selected-documents="selectedDocuments" />
+            :selected-documents="selectedDocuments"
+            @documents-type-view-applied="applyViewType" />
           <categories-filter
             v-if="displayCategoriesFilter"
             v-show="hasDocuments"
@@ -77,7 +78,7 @@
               :max-size="maxSize"
               :selected-view="selectedView"
               :selected-documents="selectedDocuments"
-              :folder-path="folderPath"
+              :view-type="viewType"
               :is-mobile="isMobile"
               class="px-4 no-border" />
             <exo-document-notification-alerts />
@@ -1781,6 +1782,10 @@ export default {
       this.$root.driveView = true;
       this.hasMore = treeChildren.some(item => item.id === 'load_more');
       this.files= treeChildren.filter(item => item.id !== 'load_more');
+    },
+    applyViewType(viewType) {
+      this.viewType = viewType;
+      this.refreshFiles();
     }
   },
 };

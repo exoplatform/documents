@@ -15,7 +15,7 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <v-hover v-slot="{hover}" :class="marginClass">
+  <v-hover v-slot="{hover}" :class="extraMargin && marginClass">
     <v-card
       :elevation="hover ? 4 : 0"
       :class="{ 'border-color': !hover }"
@@ -160,6 +160,10 @@ export default {
       type: Number,
       default: 0,
     },
+    extraMargin: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     loading: true,
@@ -248,7 +252,7 @@ export default {
       } else if (this.isFileOnlyReadable) {
         this.$root.openInReadOnlyMode(this.file);
       } else {
-        this.$root.$emit('documents-preview', this.files, this.file);
+        this.$root.$emit('documents-preview', this.file);
       }
       this.loading = false;
       this.$root.$emit('mark-document-as-viewed', this.file);
