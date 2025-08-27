@@ -84,6 +84,7 @@ export default {
     },
   },
   created() {
+    this.showSelectionsMenu = this.selectedDocuments.length;
     this.$root.$on('show-mobile-filter', data => {
       this.showFilter= data;
     });
