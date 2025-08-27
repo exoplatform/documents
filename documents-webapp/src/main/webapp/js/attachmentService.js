@@ -319,7 +319,7 @@ export function getAttachmentById(attachmentId) {
     credentials: 'include',
     method: 'GET',
   }).then((resp) => {
-    if (resp || resp.ok) {
+    if (resp?.ok) {
       return resp.json();
     } else {
       throw new Error('Error getting entity\'s linked attachment');
