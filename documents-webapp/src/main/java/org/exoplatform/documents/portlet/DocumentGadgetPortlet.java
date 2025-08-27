@@ -16,13 +16,18 @@
  */
 package org.exoplatform.documents.portlet;
 
-import javax.portlet.*;
-
-import io.meeds.social.portlet.CMSPortlet;
-import org.apache.commons.lang3.StringUtils;
 import java.io.IOException;
 import java.util.Enumeration;
-import java.util.concurrent.ThreadLocalRandom;
+
+import javax.portlet.ActionRequest;
+import javax.portlet.ActionResponse;
+import javax.portlet.PortletConfig;
+import javax.portlet.PortletException;
+import javax.portlet.PortletPreferences;
+
+import org.apache.commons.lang3.StringUtils;
+
+import io.meeds.social.portlet.CMSPortlet;
 
 public class DocumentGadgetPortlet extends CMSPortlet {
 
@@ -47,14 +52,5 @@ public class DocumentGadgetPortlet extends CMSPortlet {
       preferences.setValue(name, value);
     }
     preferences.store();
-  }
-
-  @Override
-  protected String generateRandomId() {
-    String name;
-    do {
-      name = String.valueOf(ThreadLocalRandom.current().nextLong(Long.MAX_VALUE));
-    } while (isSettingNameExists(name));
-    return name;
   }
 }
