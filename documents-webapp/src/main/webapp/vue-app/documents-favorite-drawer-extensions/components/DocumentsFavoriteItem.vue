@@ -1,5 +1,6 @@
 <template>
   <v-list-item
+    v-if="file"
     v-bind="url && {
       href: url,
       target: '_blank',
@@ -84,7 +85,7 @@ export default {
     },
   },
   data: () => ({
-    file: {},
+    file: null,
     isFavorite: true,
   }),
   computed: {
@@ -98,7 +99,7 @@ export default {
       return this.file?.mimetype || '';
     },
     isFileEditable() {
-      return this.$supportedDocuments?.filter?.(doc => doc.edit && doc.mimeType === this.fileType && !this.file.cloudDrive)?.length;
+      return this.$supportedDocuments?.filter?.(doc => doc.edit && doc.mimeType === this.fileType && !this.file?.cloudDrive)?.length;
     },
     isFileReadable() {
       return this.$supportedDocuments?.filter?.(doc => doc.mimeType === this.fileType)?.length;
@@ -116,7 +117,7 @@ export default {
       return this.fileIcon?.class;
     },
     downloadUrl() {
-      return this.file.downloadUrl;
+      return this.file?.downloadUrl;
     },
     updater() {
       return this.file?.updater?.profile;
@@ -125,13 +126,13 @@ export default {
       return this.file?.updated || this.file?.created;
     },
     spaceGroupId() {
-      return this.file?.path?.startsWith?.('/Groups/spaces/') ? this.getSpaceGroupId(this.file.path) : null;
+      return this.file?.path?.startsWith?.('/Groups/spaces/') ? this.getSpaceGroupId(this.file?.path) : null;
     },
     updaterUsername() {
       return this.updater?.username ||  this.updater?.userName;
     },
     ownerUsername() {
-      return this.file?.path?.startsWith?.('/Users/') && this.file?.path?.includes?.('/Private/') ? this.getUsername(this.file.path) : null;
+      return this.file?.path?.startsWith?.('/Users/') && this.file?.path?.includes?.('/Private/') ? this.getUsername(this.file?.path) : null;
     },
     ownerAvatarUrl() {
       if (this.updaterUsername === this.ownerUsername) {
@@ -142,21 +143,25 @@ export default {
     },
     url() {
       if (this.isFileEditable || this.isFileReadable) {
-        return `${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.file.id}${this.isFileReadable && !this.isFileEditable && '&mode=view' || ''}&backTo=${window.location.pathname}`;
+        return `${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.file?.id}${this.isFileReadable && !this.isFileEditable && '&mode=view' || ''}&backTo=${window.location.pathname}`;
       } else {
         return null;
       }
     },
   },
   async created() {
-    const file = await this.$attachmentService.getAttachmentById(this.id);
-    this.file = {
-      ...file,
-      name: file.path.split('/').pop(),
-      metadatas: {
-        favorites: [file.id],
-      },
-    };
+    try {
+      const file = await this.$attachmentService.getAttachmentById(this.id);
+      this.file = {
+        ...file,
+        name: file.path.split('/').pop(),
+        metadatas: {
+          favorites: [file.id],
+        },
+      };
+    } catch {
+      this.$root.$emit('favorite-removed', 'file', this.id);
+    }
   },
   methods: {
     openPreview(event) {
