@@ -244,7 +244,6 @@ export default {
     },
   },
   created() {
-    this.viewType = this.$documentsUtils.getViewType(this.$root.appId);
     document.addEventListener('categories-updated', this.refreshDocument);
 
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
