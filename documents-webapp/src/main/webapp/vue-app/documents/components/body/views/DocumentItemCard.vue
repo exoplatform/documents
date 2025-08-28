@@ -69,7 +69,7 @@
       </v-expand-transition>
       <v-expand-transition>
         <v-card
-          v-if="(hover || isMobile ) && !loading && !invalid && !showPlayer"
+          v-if="(hover || isMobile || showDetails) && !loading && !invalid && !showPlayer"
           class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
           elevation="0"
           style="height: 36px;">
@@ -81,7 +81,7 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              max-width="198px"
+              max-width="75%"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <v-card-text
                 :title="fileName"
@@ -161,6 +161,10 @@ export default {
       default: 0,
     },
     extraMargin: {
+      type: Boolean,
+      default: false
+    },
+    showDetails: {
       type: Boolean,
       default: false
     },
