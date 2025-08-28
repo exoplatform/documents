@@ -15,22 +15,37 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="d-flex flex-wrap border-box-sizing">
-    <div
-      v-for="(file, index) in filesToDisplay"
-      :key="file.id"
-      class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
-      <documents-item-card
-        :index="index"
-        :count="filesCount"
+  <div>
+    <v-card
+      class="d-flex flex-wrap border-box-sizing"
+      flat>
+      <div
+        v-for="folder in folderToDisplay"
+        :key="folder.id"
+        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
+        <documents-folder-card
+          :folder="folder" />
+      </div>
+    </v-card>
+    <v-card
+      class="d-flex flex-wrap border-box-sizing"
+      flat>
+      <div
+        v-for="(file, index) in filesToDisplay"
         :key="file.id"
-        :file="file"
-        :files="files"
-        height="175px"
-        max-height="175px"
-        width="200px"
-        show-details />
-    </div>
+        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
+        <documents-item-card
+          :index="index"
+          :count="filesCount"
+          :key="file.id"
+          :file="file"
+          :files="files"
+          height="175px"
+          max-height="175px"
+          width="200px"
+          show-details />
+      </div>
+    </v-card>
     <v-col
       v-if="hasMore"
       cols="12"
@@ -45,6 +60,7 @@
     </v-col>
   </div>
 </template>
+
 <script>
 export default {
   props: {
@@ -63,7 +79,7 @@ export default {
   },
   computed: {
     filesToDisplay() {
-      const files = this.files ?? [];
+      const files = this.files ? this.files.filter(item => !item.folder) : [];
       return files.map(file => {
         const decodedName = this.$root.safeDecodeURIComponent(file.name);
         return {
@@ -82,12 +98,16 @@ export default {
           readable: this.$root.isFileReadable(file),
           path: file?.docPath,
           source: 'documents',
+          folder: file.folder,
         };
       });
     },
     filesCount() {
       return this.files && this.files.length || 0;
     },
+    folderToDisplay() {
+      return this.files ? this.files.filter(item => item.folder) : [];
+    }
   },
 };
 </script>

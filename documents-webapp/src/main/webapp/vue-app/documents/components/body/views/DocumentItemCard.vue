@@ -20,9 +20,9 @@
       :elevation="hover ? 4 : 0"
       :class="{ 'border-color': !hover }"
       :loading="loading"
-      height="210px"
-      max-height="210px"
-      width="252px"
+      :height="height"
+      :max-height="maxHeight"
+      :width="width"
       max-width="100%"
       class="activity-attachment overflow-hidden d-flex flex-column clickable border-box-sizing">
       <v-card-text
@@ -69,7 +69,7 @@
       </v-expand-transition>
       <v-expand-transition>
         <v-card
-          v-if="(hover || isMobile ) && !loading && !invalid && !showPlayer"
+          v-if="(hover || isMobile || showDetails) && !loading && !invalid && !showPlayer"
           class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
           elevation="0"
           style="height: 36px;">
@@ -81,7 +81,7 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              max-width="198px"
+              max-width="75%"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <v-card-text
                 :title="fileName"
@@ -163,6 +163,22 @@ export default {
     extraMargin: {
       type: Boolean,
       default: false
+    },
+    showDetails: {
+      type: Boolean,
+      default: false
+    },
+    height: {
+      type: String,
+      default: '210px',
+    },
+    maxHeight: {
+      type: String,
+      default: '210px',
+    },
+    width: {
+      type: String,
+      default: '252px',
     }
   },
   data: () => ({
@@ -199,6 +215,9 @@ export default {
     },
     id() {
       return `PreviewDoc_${this.fileId}_${this.index}`;
+    },
+    isFolder() {
+      return this.file?.folder;
     },
     mimeType() {
       return this.file?.mimetype;
@@ -245,7 +264,7 @@ export default {
     },
     openPreview() {
       this.loading = true;
-      if (this.file?.folder) {
+      if (this.isFolder) {
         this.$root.$emit('document-open-folder', this.file);
       } else if (this.isFileEditable && this.canEdit) {
         this.$root.openInEditMode(this.file);
