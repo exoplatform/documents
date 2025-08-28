@@ -24,19 +24,41 @@ import javax.portlet.ActionResponse;
 import javax.portlet.PortletConfig;
 import javax.portlet.PortletException;
 import javax.portlet.PortletPreferences;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
 
 import org.apache.commons.lang3.StringUtils;
 
+import org.exoplatform.container.ExoContainerContext;
+
 import io.meeds.social.portlet.CMSPortlet;
+import io.meeds.social.translation.service.TranslationService;
 
 public class DocumentGadgetPortlet extends CMSPortlet {
 
-  private static final String OBJECT_TYPE = "documentGadget";
+  private static final String HEADER_FIELD_NAME = "headerTitle";
+
+  private static final String OBJECT_TYPE       = "documentGadget";
+
+  private TranslationService  translationService;
 
   @Override
   public void init(PortletConfig config) throws PortletException {
     super.init(config);
     this.contentType = OBJECT_TYPE;
+  }
+
+  @Override
+  public void doView(RenderRequest request, RenderResponse response) throws PortletException, IOException {
+    String name = request.getPreferences().getValue(NAME, null);
+    String headerTitle = getTranslationService().getTranslationLabelOrDefault(OBJECT_TYPE,
+                                                                              name,
+                                                                              HEADER_FIELD_NAME,
+                                                                              request.getLocale());
+    if (headerTitle != null) {
+      request.setAttribute(HEADER_FIELD_NAME, headerTitle);
+    }
+    super.doView(request, response);
   }
 
   @Override
@@ -52,5 +74,12 @@ public class DocumentGadgetPortlet extends CMSPortlet {
       preferences.setValue(name, value);
     }
     preferences.store();
+  }
+
+  public TranslationService getTranslationService() {
+    if (translationService == null) {
+      translationService = ExoContainerContext.getService(TranslationService.class);
+    }
+    return translationService;
   }
 }

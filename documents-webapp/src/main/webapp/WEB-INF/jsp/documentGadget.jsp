@@ -17,17 +17,15 @@
    */
 %>
 <%@ page import="javax.portlet.PortletPreferences" %>
-<%@ page import="org.exoplatform.commons.utils.CommonsUtils" %>
-<%@ page import="io.meeds.social.translation.service.TranslationService" %>
 <%@ page import="org.exoplatform.portal.localization.LocaleContextInfoUtils" %>
 <%@ page import="org.apache.commons.text.StringEscapeUtils" %>
-
 
 <%@ taglib uri="http://java.sun.com/portlet_2_0" prefix="portlet" %>
 <portlet:defineObjects/>
 <portlet:actionURL var="saveSettingsUrl" />
 <%
   String settingName = (String) request.getAttribute("settingName");
+  String headerTitle = (String) request.getAttribute("headerTitle");
   boolean canEdit = (boolean) request.getAttribute("canEdit");
   String id = "DocumentGadget-" + renderRequest.getWindowID();
 
@@ -41,8 +39,6 @@
   String categoryIds = preferences.getValue("categoryIds", "[]").replace("\"", "`");
   String excludeCategoryIds = preferences.getValue("excludeCategoryIds", "[]").replace("\"", "`");
   String selectedFoldersId = preferences.getValue("selectedFoldersId", "");
-  String headerTitle = CommonsUtils.getService(TranslationService.class).getTranslationLabelOrDefault("documentGadget",
-          Long.parseLong(settingName), "headerTitle", LocaleContextInfoUtils.getUserLocale(request.getRemoteUser()));
 %>
 
 <div class="VuetifyApp">
