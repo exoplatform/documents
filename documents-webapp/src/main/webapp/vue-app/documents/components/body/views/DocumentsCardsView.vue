@@ -19,13 +19,17 @@
     <div
       v-for="(file, index) in filesToDisplay"
       :key="file.id"
-      class="flex-grow-1 flex-shrink-0 col-3 mb-3 pa-0">
+      class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
       <documents-item-card
         :index="index"
         :count="filesCount"
         :key="file.id"
         :file="file"
-        :files="files" />
+        :files="files"
+        height="175px"
+        max-height="175px"
+        width="200px"
+        show-details />
     </div>
     <v-col
       v-if="hasMore"
