@@ -27,7 +27,10 @@ import DocumentsTimelineView from './components/body/views/DocumentsTimelineView
 import DocumentsCardsView from './components/body/views/DocumentsCardsView.vue';
 import DocumentsListView from './components/body/views/DocumentsListView.vue';
 import DocumentItemCard from './components/body/views/DocumentItemCard.vue';
+import DocumentFolderCard from './components/body/views/DocumentFolderCard.vue';
 import DocumentsFolderView from './components/body/views/DocumentsFolderView.vue';
+import DocumentsFolderCardsView from './components/body/views/DocumentsFolderCardsView.vue';
+import DocumentsFolderListView from './components/body/views/DocumentsFolderListView.vue';
 import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimelineGroupHeader.vue';
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
 import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
@@ -107,10 +110,13 @@ const components = {
   'documents-no-body-folder': DocumentsNoBodyFolder,
   'documents-no-result-body': DocumentsNoResultBody,
   'documents-folder-view': DocumentsFolderView,
+  'documents-folder-cards-view': DocumentsFolderCardsView,
+  'documents-folder-list-view': DocumentsFolderListView,
   'documents-timeline-view': DocumentsTimelineView,
   'documents-cards-view': DocumentsCardsView,
   'documents-list-view': DocumentsListView,
   'documents-item-card': DocumentItemCard,
+  'documents-folder-card': DocumentFolderCard,
   'documents-timeline-group-header': DocumentsTimelineGroupHeader,
   'documents-table-cell': DocumentsTableCell,
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
