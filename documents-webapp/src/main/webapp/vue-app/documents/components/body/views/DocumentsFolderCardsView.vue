@@ -18,24 +18,22 @@
   <div>
     <v-card
       class="d-flex flex-wrap border-box-sizing"
-      width="90%"
       flat>
       <div
         v-for="folder in folderToDisplay"
         :key="folder.id"
-        class="flex-grow-1 flex-shrink-0 col-3 mb-3 pa-0">
+        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
         <documents-folder-card
           :folder="folder" />
       </div>
     </v-card>
     <v-card
       class="d-flex flex-wrap border-box-sizing"
-      width="90%"
       flat>
       <div
         v-for="(file, index) in filesToDisplay"
         :key="file.id"
-        class="flex-grow-1 flex-shrink-0 col-3 mb-3 pa-0">
+        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
         <documents-item-card
           :index="index"
           :count="filesCount"
@@ -44,7 +42,8 @@
           :files="files"
           height="175px"
           max-height="175px"
-          width="200px" />
+          width="200px"
+          show-details />
       </div>
     </v-card>
     <v-col
