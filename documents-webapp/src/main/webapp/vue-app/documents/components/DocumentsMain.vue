@@ -174,7 +174,6 @@ export default {
     selectedView: '',
     previewMode: false,
     primaryFilter: 'all',
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     documentsToBeDeleted: [],
     showOverlay: false,
     selectedDocuments: [],
@@ -189,6 +188,9 @@ export default {
     maxSize: null,
     showHidden: false,
     publicLinkUrl: `${window.location.origin}/${eXo.env.portal.containerName}/download-document/`,
+    drivesLimit: 5,
+    drivesOffset: 0,
+    drives: [],
   }),
   computed: {
     displayCategoriesFilter() {
@@ -266,6 +268,7 @@ export default {
     this.$root.$on('document-load-more', this.loadMore);
     this.$root.$on('document-change-view', this.changeView);
     this.$root.$on('document-open-folder', this.openFolder);
+    this.$root.$on('document-show-drives', this.showDrives);
     this.$root.$on('document-open-home', this.openHome);
     this.$root.$on('documents-add-folder', this.addFolder);
     this.$root.$on('duplicate-document', this.duplicateDocument);
@@ -346,6 +349,7 @@ export default {
     this.$root.$on('documents-folder-download', this.downloadFolder);
     this.$root.$on('documents-preview', this.previewDocument);
     this.$root.$on('hide-element', this.hideElement);
+    this.$root.$on('add-drives', this.addDrives);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
     document.addEventListener('document-category-selected', (event) => {
@@ -364,6 +368,9 @@ export default {
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
   },
+  beforeDestroy() {
+    this.$root.$off('add-drives', this.addDrives());
+  },
   methods: {
     copyPublicLinkToClipBoard(text) {
       navigator.clipboard.writeText(text).then(() => {
@@ -381,6 +388,9 @@ export default {
     downloadFolder(file) {
       this.selectedDocuments.push(file);
       this.bulkDownloadDocument();
+    },
+    addDrives(drives) {
+      this.drives.push(...drives);
     },
     hideElement(element) {
       if (!this.showHidden){
@@ -468,7 +478,6 @@ export default {
       }
     },
     handleMoveDroppedDocuments(event) {
-      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       const index = this.files.findIndex(file => file.id === event.detail.destinationId);
       let folder = this.files[index];
       if (!folder?.folder) {
@@ -477,22 +486,22 @@ export default {
       const filesToMove = event.detail.sourceFiles;
       if (filesToMove?.length > 1) {
         this.selectedDocuments = filesToMove;
-        this.bulkMoveDocument(ownerId, folder.path, folder, null);
+        this.bulkMoveDocument(folder.path, folder, null);
       } else {
-        this.moveDocument(ownerId, filesToMove[0], folder.path, folder, null, null);
+        this.moveDocument(filesToMove[0], folder.path, folder, null, null);
       }
     },
     initSettings() {
-      const lastView = localStorage.getItem('lastView');
+      const lastView = eXo.env.portal.spaceId ? localStorage.getItem('lastView') : 'folder';
       if (lastView && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === lastView)) {
         this.selectedView = lastView;
       } else if (this.$root.settings?.defaultView  && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === this.$root.settings.defaultView)) {
         this.selectedView =  this.$root.settings.defaultView;
       } else {
-        this.selectedView = 'timeline';
+        this.selectedView = eXo.env.portal.spaceId ? 'timeline' : 'folder';
       }
       this.$documentsWebSocket.initCometd(eXo.env.portal.cometdContext, eXo.env.portal.cometdToken, this.handleBulkActionNotif);
-      return this.$documentFileService.getUserSettings()
+      return this.$documentFileService.getUserSettings(this.$root.ownerId)
         .then(userSettings => {
           this.userSettings = userSettings;
           if (userSettings) {
@@ -766,8 +775,12 @@ export default {
     search(query) {
       const oldQuery = this.query;
       this.extendedSearch = false;
-      this.query = query;
-      this.refreshFiles();
+      if  (this.$root.driveView){
+        this.searchDrives(query);
+      } else {
+        this.query = query;
+        this.refreshFiles();
+      }
       if (query && query.length>0){
         this.$root.$emit('enable-extend-filter');
         this.showExtendFilter=true;
@@ -821,7 +834,7 @@ export default {
     duplicateDocument(documents){
       this.parentFolderId = documents.id;
       return this.$documentFileService
-        .duplicateDocument(this.parentFolderId,null,this.ownerId,this.prefixClone)
+        .duplicateDocument(this.parentFolderId,null,this.$root.ownerId,this.prefixClone)
         .then( () => {
           this.parentFolderId=null;
           this.getFolderPath(this.folderPath);
@@ -837,7 +850,7 @@ export default {
 
     pastDocument(documentId,destFolderId){
       return this.$documentFileService
-        .duplicateDocument(documentId,destFolderId,this.ownerId)
+        .duplicateDocument(documentId,destFolderId,this.$root.ownerId)
         .then( () => {
           this.parentFolderId=null;
           this.getFolderPath(this.folderPath);
@@ -924,7 +937,7 @@ export default {
         window.location.href = `${pathName + spaceGroup }/${space.prettyName}/documents/${folderPath}`;
       }, 1000);
     },
-    bulkMoveDocument(ownerId, destPath, folder, space){
+    bulkMoveDocument(destPath, folder, space){
       const max = Math.floor(9999);
       const random = crypto.getRandomValues(new Uint32Array(1))[0];
       const actionId =random % max;
@@ -932,16 +945,23 @@ export default {
       sessionStorage.setItem('folder', JSON.stringify(folder));
       sessionStorage.setItem('space', JSON.stringify(space));
       return this.$documentFileService
-        .bulkMoveDocuments(actionId,this.selectedDocuments, ownerId, destPath)
+        .bulkMoveDocuments(actionId,this.selectedDocuments, this.$root.ownerId, destPath)
         .catch(e => console.error(e));
     },
     openFolder(parentFolder) {
+      this.$root.driveView = false;
+      if (parentFolder.spaceId) {       
+        this.$root.spaceId = parentFolder.spaceId;
+      }
+      if (parentFolder.identityId) {
+        this.$root.ownerId = parentFolder.identityId;
+      }
       this.folderPath = '';
       this.fileName = null;
-      this.parentFolderId = parentFolder.id;
+      this.parentFolderId = parentFolder.drive ? null : parentFolder.id;
       let symlinkId = null;
       if (parentFolder.sourceID){
-        symlinkId = parentFolder.id;
+        symlinkId  = parentFolder.drive ? null : parentFolder.id;
         this.parentFolderId = parentFolder.sourceID; 
       }
       this.files = [];
@@ -981,7 +1001,7 @@ export default {
           
           window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Private')[0]}/Private${folderPath}?view=folder`);
         }
-        if (parentFolder.path.includes(userPublicPathPrefix)){
+        if (parentFolder.path?.includes(userPublicPathPrefix)){
           const pathParts = parentFolder.path.split(userPublicPathPrefix);
           if (pathParts.length>1){
             folderPath = pathParts[1];
@@ -993,6 +1013,10 @@ export default {
       this.resetSelections();
     },
     loadMore() {
+      if (this.$root.driveView) {
+        this.$root.$emit('load-more-drives');
+        return;
+      }
       this.refreshFiles({'primaryFilter': this.primaryFilter, 'append': true});
     },
     resetSelections() {
@@ -1006,6 +1030,7 @@ export default {
       params.set('view', view);
       if (view !== 'folder'){
         params.delete('folderId');
+        this.$root.ownerId = !eXo.env.portal.spaceId ? eXo.env.portal.userIdentityId: this.$root.ownerId;
       }
       params.forEach((value, key) => { url.searchParams.append(key, value); });
       window.history.replaceState('documents', 'Documents', url.toString());
@@ -1054,7 +1079,7 @@ export default {
         return Promise.resolve(null);
       }
       const filter = {
-        ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+        ownerId: this.$root.ownerId,
         listingType: this.selectedViewExtension.listingType,
       };
       if (this.parentFolderId) {
@@ -1230,9 +1255,8 @@ export default {
       observer.observe(bodyElement, config);
     },
     addFolder(){
-      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
       const i18nName = this.$t('documents.label.newfolder');
-      this.$documentFileService.getNewName(ownerId, this.parentFolderId, this.folderPath, i18nName)
+      this.$documentFileService.getNewName(this.$root.ownerId, this.parentFolderId, this.folderPath, i18nName)
         .then( newName => {
           const newFolder = {
             'id': -1,
@@ -1246,8 +1270,7 @@ export default {
       this.files.splice(this.files.indexOf(folder), 1);
     },
     createFolder(name){
-      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.$documentFileService.createFolder(ownerId,this.parentFolderId,this.folderPath,name)
+      this.$documentFileService.createFolder(this.$root.ownerId,this.parentFolderId,this.folderPath,name)
         .then(createdFolder => {
           createdFolder.canAdd = this.canAdd;
           this.files.shift();
@@ -1264,8 +1287,7 @@ export default {
         .finally(() => this.loading = false);
     },
     renameDocument(file,name){
-      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
-      this.$documentFileService.renameDocument(ownerId,file.id,name)
+      this.$documentFileService.renameDocument(this.$root.ownerId,file.id,name)
         .then(() => {
           this.refreshFiles();
           this.$root.$emit('document-renamed', file);
@@ -1306,8 +1328,8 @@ export default {
         return actions;
       }
     },
-    moveDocument(ownerId, file, destPath, destFolder, space, conflictAction) {
-      this.$documentFileService.moveDocument(ownerId, file.id, destPath, conflictAction)
+    moveDocument(file, destPath, destFolder, space, conflictAction) {
+      this.$documentFileService.moveDocument(this.$root.ownerId, file.id, destPath, conflictAction)
         .then( () => {
           this.displayMessage({
             type: 'success',
@@ -1331,7 +1353,7 @@ export default {
                 message: this.getConflictMessage(file),
                 actions: this.getConflictActions(response.existingObject, {
                   name: 'moveDocument',
-                  params: [ownerId, file, destPath, destFolder, space] // moveDocument function arguments
+                  params: [this.$root.ownerId, file, destPath, destFolder, space] // moveDocument function arguments
                 })
               });
             });
@@ -1464,37 +1486,62 @@ export default {
       const attachmentAppConfiguration = {
         'sourceApp': 'NEW.APP'
       };
-      if (eXo.env.portal.spaceName) {
-        attachmentAppConfiguration.defaultDrive = {
-          isSelected: true,
-          name: `.spaces.${eXo.env.portal.spaceGroup}`,
-          title: eXo.env.portal.spaceDisplayName,
-        };
-        const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-        const currentUrlSearchParams = window.location.search;
-        const queryParams = new URLSearchParams(currentUrlSearchParams);
-        if (pathparts.length > 1 || queryParams.has('folderId')) {
-          attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
-        }
-      } else {
-        attachmentAppConfiguration.defaultDrive = {
-          isSelected: true,
-          name: 'Personal Documents',
-          title: 'Personal Documents'
-        };
-        attachmentAppConfiguration.defaultFolder = '/';
-        let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
-        if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
-          pathparts = pathparts[1].split('Private/');
-        }
-        if (pathparts.length > 1) {
-          attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
+      if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId){
+        const drive = this.drives.find(drive => drive.identityId === this.$root.ownerId);
+        if (drive) {
+          attachmentAppConfiguration.defaultDrive = {
+            isSelected: true,
+            name: `.spaces.${drive.groupId}`,
+            title: drive.name,
+          };
+          attachmentAppConfiguration.spaceId = drive.id;
+          if (files){
+            attachmentAppConfiguration.files=files;
+          }
+          if (this.parentFolderId) {
+            this.$attachmentService.getDocumentDetails(this.parentFolderId,'')
+              .then(folder => {
+                attachmentAppConfiguration.defaultFolder = folder?.path.substring(folder.path.indexOf('Documents') + '/Documents'.length);
+                document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
+              });
+          } else {
+            document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
+          }
         }
       }
-      if (files){
-        attachmentAppConfiguration.files=files;
+      else {
+        if (eXo.env.portal.spaceName) {
+          attachmentAppConfiguration.defaultDrive = {
+            isSelected: true,
+            name: `.spaces.${eXo.env.portal.spaceGroup}`,
+            title: eXo.env.portal.spaceDisplayName,
+          };
+          const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
+          const currentUrlSearchParams = window.location.search;
+          const queryParams = new URLSearchParams(currentUrlSearchParams);
+          if (pathparts.length > 1 || queryParams.has('folderId')) {
+            attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
+          }
+        }  else  {
+          attachmentAppConfiguration.defaultDrive = {
+            isSelected: true,
+            name: 'Personal Documents',
+            title: 'Personal Documents'
+          };
+          attachmentAppConfiguration.defaultFolder = '/';
+          let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
+          if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
+            pathparts = pathparts[1].split('Private/');
+          }
+          if (pathparts.length > 1) {
+            attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
+          }
+        }
+        if (files){
+          attachmentAppConfiguration.files=files;
+        }
+        document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
       }
-      document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
     },
     extractDefaultFolder(isPersonalDrive) {
       const path = this.currentFolder.path;
@@ -1523,6 +1570,9 @@ export default {
               this.selectFile(attachment.path);
             }
           });
+      }
+      if (queryParams.has('ownerId')) {
+        this.$root.ownerId = queryParams.get('ownerId');
       }
       if (queryParams.has('folderId')) {
         this.parentFolderId = queryParams.get('folderId');
@@ -1741,6 +1791,15 @@ export default {
         );
         await Promise.all(promises);
       }
+    },
+    searchDrives(query) {
+      this.$root.driveView = true;
+      this.$root.$emit('search-drives', query);
+    },
+    showDrives(treeChildren){
+      this.$root.driveView = true;
+      this.hasMore = treeChildren.some(item => item.id === 'load_more');
+      this.files= treeChildren.filter(item => item.id !== 'load_more');
     }
   },
 };

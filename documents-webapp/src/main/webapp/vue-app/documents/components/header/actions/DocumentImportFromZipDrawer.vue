@@ -240,7 +240,6 @@ export default {
       showImportOptionsList: false,
       folderPath: '',
       importing: false,
-      ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
       settings: {},
       status: '',
       totalNumber: 0,

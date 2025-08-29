@@ -28,6 +28,18 @@
           <i 
             class="fa-hdd driveFolderContentIcon"></i>
         </i>
+        <v-list-item-avatar 
+          v-else-if="file.drive"
+          size="24"
+          class="mx-0"
+          tile>
+          <img
+            :src="file.avatarUrl"
+            alt=""
+            class="rounded"
+            width="24"
+            height="24">
+        </v-list-item-avatar>
         <v-icon
           v-else
           :size="isMobile && 32 || 22"
@@ -85,11 +97,12 @@
     </a>
     <v-spacer />
     <documents-info-details-cell
-      v-if="!isMobile"
+      v-if="!isMobile && !file.drive"
       :file="file"
       :is-mobile="isMobile"
       :class="editNameMode ? '' : 'button-info-details'" />
     <div
+      v-if="!file.drive"
       class="ma-auto"
       :id="`document-action-menu-cel-${file.id}`">
       <v-tooltip bottom>
@@ -204,7 +217,7 @@ export default {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
     },
     documentMultiSelectionActive() {
-      return this.$vuetify.breakpoint.width >= 600;
+      return this.$vuetify.breakpoint.width >= 600 && !this.file.drive;
     },
     title() {
       let docTitle = this.fileName;
@@ -318,6 +331,11 @@ export default {
     openPreview() {
       this.loading = true;
       if (this.file?.folder) {
+        this.$root.$emit('document-open-folder', this.file);
+      }
+      if (this.file?.drive) {
+        this.$root.ownerId = this.file.identityId;
+        this.$root.spaceId = this.file.spaceId;
         this.$root.$emit('document-open-folder', this.file);
       } else if (this.isFileEditable && this.canEdit)  {
         this.openInEditMode(this.file);

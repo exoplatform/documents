@@ -228,9 +228,20 @@ public class EntityBuilder {
     return brList;
   }
 
-  public static List<FullTreeItemEntity> toFullTreeItemEntities(List<FullTreeItem> folders) {
+  public static List<FullTreeItemEntity> toFullTreeItemEntities(List<FullTreeItem> folders, long ownerId) {
     List<FullTreeItemEntity>  brList = new ArrayList<>();
-    brList = folders.stream().map(document -> new FullTreeItemEntity(document.getId(), document.getName(), document.getPath(),document.getChildren())).collect(Collectors.toList());
+    brList = folders.stream()
+            .map(document -> {
+              document.getChildren().forEach(child -> child.setOwnerId(String.valueOf(ownerId)));
+              return new FullTreeItemEntity(
+                      document.getId(),
+                      document.getName(),
+                      document.getPath(),
+                      ownerId,
+                      document.getChildren()
+              );
+            })
+            .collect(Collectors.toList());
     Collections.reverse(brList);
     return brList;
   }

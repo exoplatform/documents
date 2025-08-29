@@ -1,7 +1,7 @@
 <template>
   <div v-if="documentsBreadcrumbToDisplay.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-tooltip v-if="!treeViewCollapsed || isMobile" bottom>
+      <v-tooltip v-if="!treeViewExpended || isMobile" bottom>
         <template #activator="{ on, attrs }">
           <v-btn
             icon
@@ -98,7 +98,7 @@ export default {
       type: Boolean,
       default: false,
     },
-    treeViewCollapsed: {
+    treeViewExpended: {
       type: String,
       default: null,
     },
@@ -110,14 +110,17 @@ export default {
   data: () => ({
     id: Math.random().toString(16),
     actualFolderId: '',
+    driveName: '',
     folderPath: '',
     currentFolderPath: '',
-    ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
     showHidden: false,
+    drives: [],
   }),
   computed: {
     documentsBreadcrumbToDisplay() {
-      this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
+      if (this.actualFolderId) {
+        this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
+      }
       const maxItemsToDisplay = this.isMobile ? 2 : 4;
       const maxItemsCount = this.isMobile ? 2 : 3;
       if (!this.documentsBreadcrumb || this.documentsBreadcrumb.length <= maxItemsToDisplay) {
@@ -138,14 +141,18 @@ export default {
     this.$root.$on('open-folder', this.openFolder);
     document.addEventListener('document-open-previous-folder-to-drop', this.handleOpenRootFolder);
     document.addEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
+    this.$root.$on('document-show-drives', this.showDrives);
     this.$root.$on('set-advanced-filter', advancedFilter => {
       this.showHidden = advancedFilter.showHidden;
     });
+    this.$root.$on('add-drives', this.addDrives);
   },
   beforeDestroy() {
     this.$root.$off('set-breadcrumb', this.setBreadcrumb);
     this.$root.$off('update-breadcrumb', this.updateBreadcrumb);
     this.$root.$off('open-folder', this.openFolder);
+    this.$root.$off('document-show-drives', this.showDrives);
+    this.$root.$off('add-drives', this.addDrives());
     document.removeEventListener('document-open-previous-folder-to-drop', this.handleOpenRootFolder);
     document.removeEventListener('move-dropped-documents-on-breadcrumb', this.handleMoveDroppedOnBreadcrumb);
   },
@@ -160,14 +167,36 @@ export default {
         this.$root.$emit('document-open-folder', this.documentsBreadcrumbToDisplay[this.documentsBreadcrumbToDisplay.length - 2]);
       }
     },
+    addDrives(drives) {
+      this.drives.push(...drives);
+    },
     canEditFile(file) {
       return file?.accessList?.canEdit;
+    },
+    showDrives() {
+      this.documentsBreadcrumb = [];
+      this.documentsBreadcrumb.push({
+        id: 'space_drives',
+        name: this.$t('documents.label.drives'),
+        drives: true,
+        symlink: false,
+      });
     },
     setBreadcrumb(folder) {
       this.folderPath = '';
       if (folder) {
-        this.actualFolderId = folder.id;
-        this.getBreadCrumbs(); 
+        if (folder.drive) {
+          this.actualFolderId = '';
+          this.driveName = folder.name;
+          this.documentsBreadcrumb = [];
+          this.documentsBreadcrumb.push({
+            name: folder.name,
+            symlink: false,
+          });
+        } else {
+          this.actualFolderId = folder.id;
+          this.getBreadCrumbs();
+        }
       }
       this.$root.$emit('breadcrumb-updated');
     },
@@ -177,6 +206,15 @@ export default {
         this.folderPath='';
         this.actualFolderId ='';
         this.getBreadCrumbs();
+      } else if (folder.drive) {
+        this.actualFolderId = '';
+        this.driveName = folder.name;
+        this.documentsBreadcrumb = [];
+        this.documentsBreadcrumb.push({
+          name: folder.name,
+          symlink: false,
+        });
+        this.$root.$emit('document-open-folder', folder);
       } else if (folder.id !== this.actualFolderId ) {
         this.folderPath='';
         this.actualFolderId=folder.id;
@@ -189,6 +227,12 @@ export default {
       if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
       } else if (name==='Documents'){
+        if (this.$root.ownerId !== eXo.env.portal.userIdentityId){
+          const drive = this.drives.find(drive => drive.identityId === this.$root.ownerId);
+          if (drive) {
+            return drive.name;
+          }
+        }
         return this.$t('documents.label.spaceHomeDocuments');
       }
       return name;
@@ -242,11 +286,11 @@ export default {
 
     getBreadCrumbs() {
       return this.$documentFileService
-        .getBreadCrumbs(this.actualFolderId,this.ownerId,this.folderPath)
+        .getBreadCrumbs(this.actualFolderId,this.$root.ownerId,this.folderPath)
         .then(breadCrumbs => {
           this.documentsBreadcrumb = breadCrumbs;
-          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1].id;
-          this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1].path;
+          this.actualFolderId = this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1]?.id;
+          this.currentFolderPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1]?.path;
           this.$root.$emit('set-current-folder', this.documentsBreadcrumb[this.documentsBreadcrumb.length - 1]);
         })
         .finally(() => this.loading = false);
@@ -263,7 +307,7 @@ export default {
         this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
         this.$root.$emit('openTreeFolderDrawer',this.showHidden);
       } else {
-        this.$root.$emit('tree-view-expand', true);
+        this.$root.$emit('tree-view-expend', true);
       }
     },
   }

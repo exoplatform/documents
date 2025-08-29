@@ -30,9 +30,10 @@
     <template v-if="drawer" #content>
       <div class="pa-5" flat>
         <div class="mb-2 text-header">{{ $t('documents.settings.displayOptions') }}</div>
-        <div class="mb-2 font-weight-bold">{{ $t('documents.settings.defaultView') }}</div>
+        <div v-if="showViewsList" class="mb-2 font-weight-bold">{{ $t('documents.settings.defaultView') }}</div>
         <v-radio-group
           v-model="settings.defaultView"
+          v-if="showViewsList"
           class="pa-0 ma-0 full-width"
           mandatory>
           <v-radio
@@ -43,10 +44,10 @@
             :disabled="!view.enabled" />
         </v-radio-group>
         <div class="d-flex align-center text-start">
-          <div>{{ $t('documents.settings.collapsedTreeView') }}</div>
+          <div>{{ $t('documents.settings.expendedTreeView') }}</div>
           <v-spacer />
           <v-switch
-            v-model="settings.collapsedTreeView"
+            v-model="settings.expendedTreeView"
             class="ma-0 width-fit-content" />
         </div>
         <div class="mt-4 mb-2 text-header">{{ $t('documents.settings.filterOptions') }}</div>
@@ -196,6 +197,9 @@ export default {
     excludeCategoryIds() {
       return this.settings.excludeCategoryIds;
     },
+    showViewsList() {
+      return eXo.env.portal.spaceId;
+    },
   },
   watch: {
     async categoryId() {
@@ -263,7 +267,7 @@ export default {
         this.settings.enabledViewList = this.viewList.map(item => item.id);
       }
       this.settings.defaultView = this.$root.settings.defaultView || this.settings.enabledViewList[0]?.id;
-      this.settings.collapsedTreeView = this.$root.settings.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true;
+      this.settings.expendedTreeView = this.$root.settings.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true;
       this.$refs.drawer.open();
     },
     close() {

@@ -32,7 +32,7 @@
             <name>documents</name>
             <label>#{portal.global.drives}</label>
             <visibility>SYSTEM</visibility>
-            <page-reference>portal::global::drives</page-reference>
+            <page-reference>portal::global::documents</page-reference>
         </node>
         <node>
             <name>home</name>
@@ -42,8 +42,9 @@
                 <name>documents</name>
                 <label>#{portal.global.documents}</label>
                 <visibility>SYSTEM</visibility>
-                <page-reference>portal::global::drives</page-reference>
+                <page-reference>portal::global::documents</page-reference>
             </node>
         </node>
     </page-nodes>
 </node-navigation>
+

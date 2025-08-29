@@ -5,15 +5,16 @@
         :center-button-toggle="centerBotton"
         :right-text-filter="{
           minCharacters: 3,
-          placeholder: $t('documents.label.filterDocuments'),
-          tooltip: $t('documents.label.filterDocuments')
+          placeholder: $root.driveView ? $t('documents.label.filterDrives') : $t('documents.label.filterDocuments'),
+          tooltip: $root.driveView ? $t('documents.label.filterDrives') : $t('documents.label.filterDocuments')
         }"
         :right-filter-button="{
           text: $t('documents.label.filter'),
+          hide: $root.driveView,
         }"
 
         :right-select-box="{
-          hide: isMobile,
+          hide: isMobile || $root.driveView,
           selected: primaryFilter,
           items: [{
             value: 'all',
@@ -24,7 +25,7 @@
           }],
         }"
         :filters-count="filtersCount"
-        @filter-text-input-end-typing="query = $event"
+        @filter-text-input-end-typing="filterQuery($event)"
         @filter-button-click="openAdvacedDrawer()"
         @filter-select-change="changeDocumentsFilter($event)"
         @toggle-select="changeDocumentView($event)"
@@ -145,10 +146,6 @@ export default {
     viewList: []
   }),
   watch: {
-    query() {  
-      this.$root.$emit('document-search', this.query);
-      return;
-    },
     selectedView: {
       immediate: true,
       handler() {
@@ -210,9 +207,6 @@ export default {
       this.showFilter = data;
     },
     filterQuery(query){
-      if (this.query === query){
-        return;
-      }
       this.query = query;
       this.$root.$emit('document-search', this.query);     
     },
@@ -250,6 +244,7 @@ export default {
         if (this.tabsList.length < 2){
           this.tabsList=[];
         }
+        this.centerBotton.hide = !eXo.env.portal.spaceId;
         this.centerBotton.buttons=this.tabsList.map(e => ({...e, text: this.$t(`${e.labelKey}`)}));
       }
     },
@@ -280,7 +275,7 @@ export default {
     },  
     displayRightFilter(){
       this.filterDispalyed = true;
-    },
+    }
   }
 };
 </script>

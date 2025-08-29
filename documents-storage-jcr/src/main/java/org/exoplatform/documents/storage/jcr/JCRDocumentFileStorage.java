@@ -731,7 +731,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String nodeName = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
         List<FullTreeItem> children = getAllFolderInNode(node, session, destinationNode, withChildren, showHidden);
 
-        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children, showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)));
+        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children, showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE), null));
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving tree folder'" + folderId, e);
@@ -774,7 +774,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                nodeName,
                                                childNode.getPath(),
                                                folderChildListNodes,
-                                               showHidden && childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)));
+                                               showHidden && childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE),
+                                               null));
         }
 
       }

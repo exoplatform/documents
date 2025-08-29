@@ -2,7 +2,7 @@
   <div class="d-flex">
     <component
       :is="isMobile ? 'folder-treeview-drawer' : 'folder-tree-view'"
-      :tree-view-collapsed="treeViewCollapsed"
+      :tree-view-expended="treeViewExpended"
       :is-mobile="isMobile"
       :folder-path="folderPath" />
     <v-card 
@@ -10,10 +10,10 @@
       class="width-full">
       <documents-breadcrumb
         :is-mobile="isMobile"
-        :tree-view-collapsed="treeViewCollapsed" />
+        :tree-view-expended="treeViewExpended" />
       <upload-overlay />
       <documents-no-body-folder
-        v-if="items.length === 0"
+        v-if="!loading && items.length === 0"
         :query="query"
         :is-mobile="isMobile" />
       <v-hover v-else v-model="hoverTable">
@@ -55,7 +55,7 @@
                     v-bind="attrs"
                     :indeterminate="false"
                     color="primary"
-                    :class="showSelectAll || hoverTable ? 'visible': 'invisible'"
+                    :class="!$root.driveView && (showSelectAll || hoverTable) ? 'visible': 'invisible'"
                     class="mt-auto"
                     @mouseover="showSelectAllInputOnHover"
                     @mouseleave="hideSelectAllInputOnHover"
@@ -89,6 +89,7 @@
                     @contextmenu="openContextMenu($event, item)">
                     <td>
                       <documents-selection-cell
+                        v-if="!$root.driveView" 
                         :file="item"
                         :files="items"
                         :select-all-checked="selectAll"
@@ -257,7 +258,7 @@ export default {
     selectAll: false,
     showSelectAllInput: false,
     showSelectInputTimer: null,
-    treeViewCollapsed: false,
+    treeViewExpended: true,
     hoverTable: false,
   }),
   computed: {
@@ -293,15 +294,17 @@ export default {
     headers() {
       const headers = [];
       this.sortedHeaderExtensions.forEach(headerExtension => {
-        headers.push({
-          text: headerExtension.labelKey && this.$t(headerExtension.labelKey) || '',
-          align: headerExtension.align || 'center',
-          sortable: headerExtension.sortable || false,
-          value: headerExtension.id,
-          class: headerExtension.cssClass || '',
-          width: headerExtension.width || 'auto',
-          cellExtension: headerExtension,
-        });
+        if (!this.$root.driveView  || (this.$root.driveView && headerExtension.id === 'name')) {
+          headers.push({
+            text: headerExtension.labelKey && this.$t(headerExtension.labelKey) || '',
+            align: headerExtension.align || 'center',
+            sortable: (!this.$root.driveView && headerExtension.sortable) || false,
+            value: headerExtension.id,
+            class: headerExtension.cssClass || '',
+            width: headerExtension.width || 'auto',
+            cellExtension: headerExtension,
+          });
+        }
       });
       return headers;
     },
@@ -331,14 +334,15 @@ export default {
     },
   },
   created() {
-    this.treeViewCollapsed =  localStorage.getItem('collapsedTreeView')!=null ? localStorage.getItem('collapsedTreeView') === 'true' : (this.$root.settings?.collapsedTreeView !== null ? this.$root.settings.collapsedTreeView : true);
+    this.treeViewExpended =  localStorage.getItem('expendedTreeView')!=null ? localStorage.getItem('expendedTreeView') === 'true' : (this.$root.settings?.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true);
     this.$root.$on('select-all-documents', (value) => this.selectAll = value);
     this.$root.$on('reset-selections', () => this.selectAll = false);
     document.addEventListener(`extension-${this.headerExtensionApp}-${this.headerExtensionType}-updated`, this.refreshHeaderExtensions);
     this.refreshHeaderExtensions();
     this.setSortOptions(this.sortField, this.ascending);
     this.$root.$on('documents-filter', this.updateFilter);
-    this.$root.$on('tree-view-expand', this.collapseTreeView );
+    this.$root.$on('tree-view-expend', this.extendTreeView );
+    this.$root.$on('loading-documents', this.setLoading);
   },
   mounted(){
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
@@ -346,16 +350,20 @@ export default {
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
-    this.$root.$off('tree-view-expand', this.collapseTreeView);
+    this.$root.$off('tree-view-expend', this.extendTreeView);
     this.$root.$off('openTreeFolderDrawer', this.folderTreeDrawer);
+    this.$root.$off('loading-documents', this.setLoading);
   },
   methods: {
-    collapseTreeView(value) {
-      this.treeViewCollapsed = value;
-      localStorage.setItem('collapsedTreeView', value);
+    extendTreeView(value) {
+      this.treeViewExpended = value;
+      localStorage.setItem('expendedTreeView', value);
     },
     canEditFile(file) {
       return file?.acl?.canEdit;
+    },
+    setLoading(value) {
+      this.loading = value;
     },
     showSelectAllInputOnHover(){
       clearTimeout(this.showSelectInputTimer);
@@ -385,6 +393,9 @@ export default {
       this.$root.$emit('hide-selection-input', file);
     },
     customSort: function (items, sortBy, isDesc) {
+      if (this.$root.driveView) {
+        return items;
+      }
       let sorted = items;
       const accentedExp = /[À-ÖØ-öø-ÿ]/;
       if (sortBy[1] === 'name') {
