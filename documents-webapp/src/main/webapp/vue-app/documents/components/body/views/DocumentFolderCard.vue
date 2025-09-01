@@ -29,7 +29,7 @@
             tile>
             <v-icon size="60" class="primary--text">fas fa-folder</v-icon>
           </v-avatar>
-          <div class="align-self-center">{{ folder.name }}</div>
+          <div class="align-self-center text-subtitle-2">{{ folder.name }}</div>
         </div>
         <v-card-actions>
           <v-btn
