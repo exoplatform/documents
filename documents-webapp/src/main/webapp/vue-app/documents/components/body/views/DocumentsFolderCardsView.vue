@@ -15,36 +15,80 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <div>
+  <div class="d-flex">
+    <component
+      :is="isMobile ? 'folder-treeview-drawer' : 'folder-tree-view'"
+      :tree-view-expended="treeViewExpended"
+      :is-mobile="isMobile"
+      :folder-path="folderPath" />
     <v-card
-      class="d-flex flex-wrap border-box-sizing"
-      flat>
-      <div
-        v-for="folder in folderToDisplay"
-        :key="folder.id"
-        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
-        <documents-folder-card
-          :folder="folder" />
+      flat
+      class="width-full">
+      <documents-breadcrumb
+        :is-mobile="isMobile"
+        :tree-view-expended="treeViewExpended" />
+      <upload-overlay />
+      <div :class="treeViewExpended && 'ms-2'" class="d-flex mb-5 align-center">
+        <v-menu v-model="sortMenu" offset-y>
+          <template #activator="{ on, attrs }">
+            <v-btn
+              id="documentSort"
+              small
+              elevation="0"
+              class="px-0"
+              v-bind="attrs"
+              v-on="on">
+              <div class="text-header">{{ selectedSort.label }}</div>
+            </v-btn>
+          </template>
+          <v-list class="pa-0">
+            <v-list-item
+              v-for="item in sortFields"
+              :key="item.value"
+              @click="setSortField(item)">
+              <div>{{ item.label }}</div>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+        <v-btn icon @click="updatedSortDirection">
+          <v-icon class="ms-1" size="16">{{ sortDirectionIcon }}</v-icon>
+        </v-btn>
       </div>
-    </v-card>
-    <v-card
-      class="d-flex flex-wrap border-box-sizing"
-      flat>
-      <div
-        v-for="(file, index) in filesToDisplay"
-        :key="file.id"
-        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
-        <documents-item-card
-          :index="index"
-          :count="filesCount"
+      <v-card
+        :class="treeViewExpended && 'ms-2'"
+        class="d-flex flex-wrap border-box-sizing"
+        flat>
+        <div
+          v-for="folder in folderToDisplay"
+          :key="folder.id"
+          :class="treeViewExpended ? 'col-3' : 'col-2'"
+          class="flex-grow-1 flex-shrink-0 mb-3 pa-0">
+          <documents-folder-card
+            :folder="folder" />
+        </div>
+      </v-card>
+      <v-card
+        :class="treeViewExpended && 'ms-2'"
+
+        class="d-flex flex-wrap border-box-sizing"
+        flat>
+        <div
+          v-for="(file, index) in filesToDisplay"
           :key="file.id"
-          :file="file"
-          :files="files"
-          height="175px"
-          max-height="175px"
-          width="200px"
-          show-details />
-      </div>
+          :class="treeViewExpended ? 'col-3' : 'col-2'"
+          class="flex-grow-1 flex-shrink-0 mb-3 pa-0">
+          <documents-item-card
+            :index="index"
+            :count="filesCount"
+            :key="file.id"
+            :file="file"
+            :files="files"
+            height="175px"
+            max-height="175px"
+            width="200px"
+            show-details />
+        </div>
+      </v-card>
     </v-card>
     <v-col
       v-if="hasMore"
@@ -76,7 +120,21 @@ export default {
       type: Boolean,
       default: false,
     },
+    isMobile: {
+      type: Boolean,
+      default: false
+    },
+    folderPath: {
+      type: String,
+      default: null
+    },
   },
+  data: () => ({
+    treeViewExpended: true,
+    sortMenu: false,
+    sortField: 'lastUpdated',
+    ascending: false
+  }),
   computed: {
     filesToDisplay() {
       const files = this.files ? this.files.filter(item => !item.folder) : [];
@@ -107,7 +165,41 @@ export default {
     },
     folderToDisplay() {
       return this.files ? this.files.filter(item => item.folder) : [];
+    },
+    sortFields() {
+      return [
+        {value: 'lastUpdated', label: this.$t('documents.label.lastUpdated')},
+        {value: 'name', label: this.$t('documents.label.name')},
+        {value: 'size', label: this.$t('documents.label.size')}
+      ];
+    },
+    selectedSort() {
+      const item = this.sortFields.find(i => i.value === this.sortField);
+      return item ? item : null;
+    },
+    sortDirectionIcon() {
+      return this.ascending ? 'fa-arrow-down' : 'fa-arrow-up';
     }
   },
+  created() {
+    this.treeViewExpended =  localStorage.getItem('expendedTreeView')!=null ? localStorage.getItem('expendedTreeView') === 'true' : (this.$root.settings?.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true);
+    this.$root.$on('tree-view-expend', this.extendTreeView);
+  },
+  methods: {
+    extendTreeView(value) {
+      this.treeViewExpended = value;
+      localStorage.setItem('expendedTreeView', value);
+    },
+    setSortField(item) {
+      this.sortField = item.value;
+      this.ascending = false;
+      this.$root.$emit('documents-sort', this.sortField, this.ascending);
+      this.sortMenu = false;
+    },
+    updatedSortDirection() {
+      this.ascending = !this.ascending;
+      this.$root.$emit('documents-sort', this.sortField, this.ascending);
+    }
+  }
 };
 </script>
