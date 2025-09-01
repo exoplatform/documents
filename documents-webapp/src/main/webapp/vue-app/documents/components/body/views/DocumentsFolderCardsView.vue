@@ -89,19 +89,19 @@
             show-details />
         </div>
       </v-card>
+      <v-col
+        v-if="hasMore"
+        cols="12"
+        class="px-3">
+        <v-btn
+          :loading="loading"
+          class="loadMoreButton btn"
+          block
+          @click="$root.$emit('document-load-more')">
+          {{ $t('documents.loadMore') }}
+        </v-btn>
+      </v-col>
     </v-card>
-    <v-col
-      v-if="hasMore"
-      cols="12"
-      class="px-3">
-      <v-btn
-        :loading="loading"
-        class="loadMoreButton btn"
-        block
-        @click="$root.$emit('document-load-more')">
-        {{ $t('documents.loadMore') }}
-      </v-btn>
-    </v-col>
   </div>
 </template>
 
