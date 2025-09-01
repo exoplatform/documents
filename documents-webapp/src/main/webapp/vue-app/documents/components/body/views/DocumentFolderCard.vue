@@ -27,9 +27,20 @@
             class="ma-3"
             size="60"
             tile>
-            <v-icon size="60" class="primary--text">fas fa-folder</v-icon>
+            <img
+              v-if="isDrive"
+              :src="avatarUrl"
+              :alt="name"
+              width="24"
+              height="24">
+            <v-icon
+              v-else
+              size="60"
+              class="primary--text">
+              fas fa-folder
+            </v-icon>
           </v-avatar>
-          <div class="align-self-center text-subtitle-2">{{ folder.name }}</div>
+          <div class="align-self-center text-subtitle-2">{{ name }}</div>
         </div>
         <v-card-actions>
           <v-btn
@@ -58,6 +69,15 @@ export default {
   computed: {
     folderId() {
       return this.folder?.id;
+    },
+    name() {
+      return this.folder?.name;
+    },
+    isDrive() {
+      return this.folder?.drive;
+    },
+    avatarUrl() {
+      return this.folder?.avatarUrl;
     }
   },
   methods: {
