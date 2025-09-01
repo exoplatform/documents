@@ -85,6 +85,7 @@
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <v-card-text
                 :title="fileName"
+                :class="showDetails && 'text-subtitle-2'"
                 class="pa-0  my-auto white--text text-wrap text-break text-truncate"
                 v-text="fileName" />
             </v-card>
