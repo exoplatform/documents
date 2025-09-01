@@ -164,7 +164,7 @@ export default {
       return this.files && this.files.length || 0;
     },
     folderToDisplay() {
-      return this.files ? this.files.filter(item => item.folder) : [];
+      return this.files ? this.files.filter(item => item.folder || item.drive) : [];
     },
     sortFields() {
       return [
