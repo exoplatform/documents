@@ -16,21 +16,52 @@
 -->
 <template>
   <div class="d-flex flex-wrap border-box-sizing">
-    <div
-      v-for="(file, index) in filesToDisplay"
-      :key="file.id"
-      class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
-      <documents-item-card
-        :index="index"
-        :count="filesCount"
-        :key="file.id"
-        :file="file"
-        :files="files"
-        height="175px"
-        max-height="175px"
-        width="200px"
-        show-details />
+    <div class="d-flex mb-5 align-center">
+      <v-menu v-model="sortMenu" offset-y>
+        <template #activator="{ on, attrs }">
+          <v-btn
+            id="documentSort"
+            small
+            elevation="0"
+            class="px-0"
+            v-bind="attrs"
+            v-on="on">
+            <div class="text-header">{{ selectedSort.label }}</div>
+          </v-btn>
+        </template>
+        <v-list class="pa-0">
+          <v-list-item
+            v-for="item in sortFields"
+            :key="item.value"
+            @click="setSortField(item)">
+            <div>{{ item.label }}</div>
+          </v-list-item>
+        </v-list>
+      </v-menu>
+      <v-btn icon @click="updatedSortDirection">
+        <v-icon class="ms-1" size="16">{{ sortDirectionIcon }}</v-icon>
+      </v-btn>
     </div>
+    <v-card
+      class="d-flex flex-wrap border-box-sizing"
+      flat>
+      <div
+        v-for="(file, index) in filesToDisplay"
+        :key="file.id"
+        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
+        <documents-item-card
+          :index="index"
+          :count="filesCount"
+          :key="file.id"
+          :file="file"
+          :files="files"
+          height="175px"
+          max-height="175px"
+          width="200px"
+          show-details />
+      </div>
+    </v-card>
+
     <v-col
       v-if="hasMore"
       cols="12"
@@ -61,6 +92,11 @@ export default {
       default: false,
     },
   },
+  data: () => ({
+    sortMenu: false,
+    sortField: 'lastUpdated',
+    ascending: false
+  }),
   computed: {
     filesToDisplay() {
       const files = this.files ?? [];
@@ -88,6 +124,32 @@ export default {
     filesCount() {
       return this.files && this.files.length || 0;
     },
+    sortFields() {
+      return [
+        {value: 'lastUpdated', label: this.$t('documents.label.lastUpdated')},
+        {value: 'name', label: this.$t('documents.label.name')},
+        {value: 'size', label: this.$t('documents.label.size')}
+      ];
+    },
+    selectedSort() {
+      const item = this.sortFields.find(i => i.value === this.sortField);
+      return item ? item : null;
+    },
+    sortDirectionIcon() {
+      return this.ascending ? 'fa-arrow-down' : 'fa-arrow-up';
+    }
   },
+  methods: {
+    setSortField(item) {
+      this.sortField = item.value;
+      this.ascending = false;
+      this.$root.$emit('documents-sort', this.sortField, this.ascending);
+      this.sortMenu = false;
+    },
+    updatedSortDirection() {
+      this.ascending = !this.ascending;
+      this.$root.$emit('documents-sort', this.sortField, this.ascending);
+    }
+  }
 };
 </script>
