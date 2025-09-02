@@ -9,4 +9,5 @@
   <import>war:/conf/documents/dynamic-container-configuration.xml</import>
   <import>war:/conf/documents/portal-upgrade-configuration.xml</import>
   <import>war:/conf/documents/notification-upgrade-plugin.xml</import>
+  <import>war:/conf/documents/ckeditor-configuration.xml</import>
 </configuration>
