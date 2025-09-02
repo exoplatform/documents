@@ -189,8 +189,7 @@ export default {
     },
     fetchChildren (item) {
       this.$root.$emit('tree-loading', true);
-      let folderId = item.id;
-      folderId = null;
+      const folderId = item.identityId ? null : item.id;
       this.$documentFileService
         .getFullTreeData(item.identityId,folderId).then(data => {
           if (data) {
