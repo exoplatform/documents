@@ -45,12 +45,12 @@ module.exports = {
     documentsPreviewExtension: './src/main/webapp/vue-app/preview-extension/main.js',
     attachmentApp: './src/main/webapp/vue-app/attachment/main.js',
     attachmentIntegration: './src/main/webapp/vue-app/attachment-integration/main.js',
-    legacyComposerAttachments: './src/main/webapp/vue-app/legacy-composer-attachments/main.js',
     documentsInfoDrawer: './src/main/webapp/vue-app/document-info-drawer/main.js',
     documentsOffline: './src/main/webapp/vue-app/documents-offline/main.js',
     documentsOfflineSettings: './src/main/webapp/vue-app/documents-offline-settings/main.js',
     documentsPwaExtension: './src/main/webapp/vue-app/documents-pwa-extension/main.js',
     documentGadget: './src/main/webapp/vue-app/document-gadget/main.js',
+    filesSearch: './src/main/webapp/vue-app/files-search/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
