@@ -22,7 +22,10 @@
       width="200px"
       @click="openFolder">
       <div class="d-flex flex-no-wrap justify-space-between">
-        <div class="d-flex flex-no-wrap">
+        <v-card
+          class="d-flex flex-no-wrap"
+          width="80%"
+          flat>
           <v-avatar
             class="ma-3"
             size="60"
@@ -40,8 +43,8 @@
               fas fa-folder
             </v-icon>
           </v-avatar>
-          <div class="align-self-center text-subtitle-2">{{ name }}</div>
-        </div>
+          <div class="align-self-center text-subtitle-2 text-truncate-2">{{ name }}</div>
+        </v-card>
         <v-card-actions>
           <v-btn
             id="attachment-info"
