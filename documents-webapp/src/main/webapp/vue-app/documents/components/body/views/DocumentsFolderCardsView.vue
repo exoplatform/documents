@@ -69,7 +69,6 @@
       </v-card>
       <v-card
         :class="treeViewExpended && 'ms-2'"
-
         class="d-flex flex-wrap border-box-sizing"
         flat>
         <div
@@ -137,7 +136,7 @@ export default {
   }),
   computed: {
     filesToDisplay() {
-      const files = this.files ? this.files.filter(item => !item.folder) : [];
+      const files = this.files ? this.files.filter(item => !item.folder && !item.drive) : [];
       return files.map(file => {
         const decodedName = this.$root.safeDecodeURIComponent(file.name);
         return {
