@@ -40,7 +40,7 @@
               fas fa-folder
             </v-icon>
           </v-avatar>
-          <div class="align-self-center text-subtitle-2">{{ name }}</div>
+          <div class="align-self-center text-subtitle-2 text-truncate-2">{{ name }}</div>
         </div>
         <v-card-actions>
           <v-btn
