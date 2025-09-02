@@ -103,6 +103,9 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       categoryDepth() {
         return this.settings.categoryDepth || 4;
       },
+      isMobile() {
+        return this.$vuetify.breakpoint.smAndDown;
+      },
     },
     watch: {
       async selectedCategoryId() {
