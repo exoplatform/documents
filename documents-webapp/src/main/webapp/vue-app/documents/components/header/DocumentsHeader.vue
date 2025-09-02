@@ -67,7 +67,7 @@
               tooltip
               small />
           </div>
-          <div class="d-flex ms-5">
+          <div v-if="!$root.isMobile" class="d-flex ms-5">
             <v-menu v-model="menu" offset-y>
               <template #activator="{ on, attrs }">
                 <v-btn
@@ -208,7 +208,7 @@ export default {
       const item = this.viewItemsTypes.find(i => i.value === this.viewType);
       return item ? item : null;
     },
-    filtersCount(){
+    filtersCount() {
       let fNum = 0;
       if (this.primaryFilter.toLowerCase()!=='all') {
         fNum++;
