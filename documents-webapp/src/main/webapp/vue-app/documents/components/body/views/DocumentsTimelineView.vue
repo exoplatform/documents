@@ -17,7 +17,7 @@
 <template>
   <div>
     <documents-cards-view
-      v-if="viewType === 'cardsView'"
+      v-if="cardsDisplay"
       :files="files"
       :has-more="hasMore"
       :loading="loading" />
@@ -134,5 +134,10 @@ export default {
       default: null
     },
   },
+  computed: {
+    cardsDisplay() {
+      return !this.$root.isMobile && this.viewType === 'cardsView';
+    },
+  }
 };
 </script>
