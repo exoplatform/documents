@@ -185,7 +185,7 @@
               <string>SHARED/FileSearch</string>
             </field>
             <field name="i18nBundle">
-              <string>locale.portlet.documents</string>
+              <string>locale.portlet.Documents</string>
             </field>
             <field name="uiComponent">
               <string>file-search-card</string>
