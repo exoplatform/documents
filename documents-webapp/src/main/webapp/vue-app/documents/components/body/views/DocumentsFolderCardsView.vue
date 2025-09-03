@@ -61,8 +61,7 @@
         <div
           v-for="folder in folderToDisplay"
           :key="folder.id"
-          :class="treeViewExpended ? 'col-3' : 'col-2'"
-          class="flex-grow-1 flex-shrink-0 mb-3 pa-0">
+          class=" flex-shrink-0 mb-3 me-3 pa-0">
           <documents-folder-card
             :folder="folder" />
         </div>
@@ -74,8 +73,7 @@
         <div
           v-for="(file, index) in filesToDisplay"
           :key="file.id"
-          :class="treeViewExpended ? 'col-3' : 'col-2'"
-          class="flex-grow-1 flex-shrink-0 mb-3 pa-0">
+          class=" flex-shrink-0 mb-3 me-3 pa-0">
           <documents-item-card
             :index="index"
             :count="filesCount"
