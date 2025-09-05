@@ -15,65 +15,73 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="d-flex flex-wrap border-box-sizing">
-    <div class="d-flex mb-5 align-center">
-      <v-menu v-model="sortMenu" offset-y>
-        <template #activator="{ on, attrs }">
-          <v-btn
-            id="documentSort"
-            small
-            elevation="0"
-            class="px-0"
-            v-bind="attrs"
-            v-on="on">
-            <div class="text-header">{{ selectedSort.label }}</div>
-          </v-btn>
-        </template>
-        <v-list class="pa-0">
-          <v-list-item
-            v-for="item in sortFields"
-            :key="item.value"
-            @click="setSortField(item)">
-            <div>{{ item.label }}</div>
-          </v-list-item>
-        </v-list>
-      </v-menu>
-      <v-btn icon @click="updatedSortDirection">
-        <v-icon class="ms-1" size="16">{{ sortDirectionIcon }}</v-icon>
-      </v-btn>
-    </div>
+  <div class="d-flex">
     <v-card
-      class="d-flex flex-wrap border-box-sizing"
-      flat>
-      <div
-        v-for="(file, index) in filesToDisplay"
-        :key="file.id"
-        class="flex-grow-1 flex-shrink-0 col-2 mb-3 pa-0">
-        <documents-item-card
-          :index="index"
-          :count="filesCount"
-          :key="file.id"
-          :file="file"
-          :files="files"
-          height="175px"
-          max-height="175px"
-          width="200px"
-          show-details />
+      flat
+      class="width-full">
+      <div class="d-flex mb-5 align-center">
+        <v-menu v-model="sortMenu" offset-y>
+          <template #activator="{ on, attrs }">
+            <v-btn
+              id="documentSort"
+              small
+              elevation="0"
+              class="px-0"
+              v-bind="attrs"
+              v-on="on">
+              <div class="text-header">{{ selectedSort.label }}</div>
+            </v-btn>
+          </template>
+          <v-list class="pa-0">
+            <v-list-item
+              v-for="item in sortFields"
+              :key="item.value"
+              @click="setSortField(item)">
+              <div>{{ item.label }}</div>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+        <v-btn icon @click="updatedSortDirection">
+          <v-icon class="ms-1" size="16">{{ sortDirectionIcon }}</v-icon>
+        </v-btn>
       </div>
-    </v-card>
+      <v-card
+        class="d-flex flex-wrap border-box-sizing"
+        flat>
+        <div
+          v-for="(file, index) in filesToDisplay"
+          :key="file.id"
+          class="flex-shrink-0 mb-3 me-3 pa-0">
+          <documents-item-card
+            :index="index"
+            :count="filesCount"
+            :key="file.id"
+            :file="file"
+            :files="files"
+            :select-all-checked="selectAll"
+            :selected-documents="selectedDocuments"
+            @document-selected="handleDocumentSelection"
+            @document-unselected="handleDocumentSelection"
+            height="175px"
+            max-height="175px"
+            width="215px"
+            show-details />
+        </div>
+      </v-card>
 
-    <v-col
-      v-if="hasMore"
-      cols="12"
-      class="px-3">
-      <v-btn
-        :loading="loading"
-        class="loadMoreButton btn"
-        block
-        @click="$root.$emit('document-load-more')">
-        {{ $t('documents.loadMore') }}
-      </v-btn>
-    </v-col>
+      <v-col
+        v-if="hasMore"
+        cols="12"
+        class="px-3">
+        <v-btn
+          :loading="loading"
+          class="loadMoreButton btn"
+          block
+          @click="$root.$emit('document-load-more')">
+          {{ $t('documents.loadMore') }}
+        </v-btn>
+      </v-col>
+    </v-card>
   </div>
 </template>
 <script>
@@ -82,6 +90,10 @@ export default {
     files: {
       type: Array,
       default: null,
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
     },
     hasMore: {
       type: Boolean,
@@ -95,7 +107,8 @@ export default {
   data: () => ({
     sortMenu: false,
     sortField: 'lastUpdated',
-    ascending: false
+    ascending: false,
+    selectAll: false
   }),
   computed: {
     filesToDisplay() {
@@ -139,6 +152,12 @@ export default {
       return this.ascending ? 'fa-arrow-down' : 'fa-arrow-up';
     }
   },
+  created() {
+    window.addEventListener('keydown', this.handleKeydown);
+  },
+  beforeDestroy() {
+    window.removeEventListener('keydown', this.handleKeydown);
+  },
   methods: {
     setSortField(item) {
       this.sortField = item.value;
@@ -149,7 +168,19 @@ export default {
     updatedSortDirection() {
       this.ascending = !this.ascending;
       this.$root.$emit('documents-sort', this.sortField, this.ascending);
-    }
+    },
+    handleKeydown(event) {
+      if (event.ctrlKey && event.key === 'a') {
+        event.preventDefault();
+        this.selectAllDocuments();
+      }
+    },
+    selectAllDocuments() {
+      this.$root.$emit('select-all-documents', this.selectAll);
+    },
+    handleDocumentSelection() {
+      this.selectAll = this.files.length === this.selectedDocuments.length;
+    },
   }
 };
 </script>
