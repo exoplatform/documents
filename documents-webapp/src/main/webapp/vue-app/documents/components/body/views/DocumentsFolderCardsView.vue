@@ -63,7 +63,12 @@
           :key="folder.id"
           class=" flex-shrink-0 mb-3 me-3 pa-0">
           <documents-folder-card
-            :folder="folder" />
+            :folder="folder"
+            :files="folderToDisplay"
+            :select-all-checked="selectAll"
+            :selected-documents="selectedDocuments"
+            @document-selected="handleDocumentSelection"
+            @document-unselected="handleDocumentSelection" />
         </div>
       </v-card>
       <v-card
@@ -80,6 +85,10 @@
             :key="file.id"
             :file="file"
             :files="files"
+            :select-all-checked="selectAll"
+            :selected-documents="selectedDocuments"
+            @document-selected="handleDocumentSelection"
+            @document-unselected="handleDocumentSelection"
             height="175px"
             max-height="175px"
             width="200px"
@@ -125,12 +134,17 @@ export default {
       type: String,
       default: null
     },
+    selectedDocuments: {
+      type: Array,
+      default: () => []
+    },
   },
   data: () => ({
     treeViewExpended: true,
     sortMenu: false,
     sortField: 'lastUpdated',
-    ascending: false
+    ascending: false,
+    selectAll: false
   }),
   computed: {
     filesToDisplay() {
@@ -181,6 +195,10 @@ export default {
   created() {
     this.treeViewExpended =  localStorage.getItem('expendedTreeView')!=null ? localStorage.getItem('expendedTreeView') === 'true' : (this.$root.settings?.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true);
     this.$root.$on('tree-view-expend', this.extendTreeView);
+    window.addEventListener('keydown', this.handleKeydown);
+  },
+  beforeDestroy() {
+    window.removeEventListener('keydown', this.handleKeydown);
   },
   methods: {
     extendTreeView(value) {
@@ -196,7 +214,19 @@ export default {
     updatedSortDirection() {
       this.ascending = !this.ascending;
       this.$root.$emit('documents-sort', this.sortField, this.ascending);
-    }
+    },
+    handleDocumentSelection() {
+      this.selectAll = this.files.length === this.selectedDocuments.length;
+    },
+    selectAllDocuments() {
+      this.$root.$emit('select-all-documents', this.selectAll);
+    },
+    handleKeydown(event) {
+      if (event.ctrlKey && event.key === 'a') {
+        event.preventDefault();
+        this.selectAllDocuments();
+      }
+    },
   }
 };
 </script>
