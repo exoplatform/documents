@@ -81,7 +81,7 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              max-width="75%"
+              :max-width="hover || selectedDocuments.length ? '65%' : '75%'"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <v-card-text
                 :title="fileName"
@@ -90,6 +90,13 @@
                 v-text="fileName" />
             </v-card>
             <v-spacer />
+            <v-simple-checkbox
+              v-if="hover || selectedDocuments.length"
+              v-model="checked"
+              color="white"
+              @click="selectDocument($event)"
+              @mouseover="checkRangeSelect"
+              @mouseleave="resetRangeSelect" />
             <v-btn
               id="attachment-info"
               @click="showInfo()"
@@ -153,6 +160,10 @@ export default {
       type: Array,
       default: () => []
     },
+    selectedDocuments: {
+      type: Array,
+      default: () => [],
+    },
     index: {
       type: Number,
       default: 0,
@@ -190,6 +201,10 @@ export default {
     showDownloadButton: false,
     playErrorLabel: '',
     playErrorDescription: '',
+    checked: false,
+    show: false,
+    canSelectRange: false,
+    rangeSelectTimer: null
   }),
   computed: {
     fileId() {
@@ -250,7 +265,22 @@ export default {
     },
   },
   created() {
+    this.$root.$on('update-selection-documents-list', this.handleUpdateSelectionList);
+    this.$root.$on('show-selection-input', this.handleShowSelectionInput);
+    this.$root.$on('hide-selection-input', this.handleHideSelectionInput);
+    this.$root.$on('select-all-documents', this.handleSelectAllDocuments);
+    this.$root.$on('select-target-document', this.handleSelectTargetDocument);
+    this.$root.$on('reset-selections', this.handleResetSelections);
     this.fileImage = this.file?.image;
+    this.initSelected();
+  },
+  beforeDestroy() {
+    this.$root.$off('update-selection-documents-list', this.handleUpdateSelectionList);
+    this.$root.$off('show-selection-input', this.handleShowSelectionInput);
+    this.$root.$off('hide-selection-input', this.handleHideSelectionInput);
+    this.$root.$off('select-all-documents', this.handleSelectAllDocuments);
+    this.$root.$off('select-target-document', this.handleSelectTargetDocument);
+    this.$root.$off('reset-selections', this.handleResetSelections);
   },
   methods: {
     closeErrorBox(event) {
@@ -303,6 +333,96 @@ export default {
       }
       this.invalid = true;
       this.showPlayer = false;
+    },
+    isFileSelected(file) {
+      return this.selectedDocuments.findIndex(object => object.id === file?.id) !== -1;
+    },
+    selectRangeDocuments(start, end) {
+      this.files.slice(start, end + 1).forEach(file => {
+        this.$root.$emit('select-target-document', file);
+      });
+    },
+    selectDocument(event) {
+      if (event && event.shiftKey && this.selectedDocuments.length) {
+        const currentPosition = this.files.findIndex(file => file.id === this.fileId);
+        const startPosition  = this.getFirstSelectedAbovePosition(currentPosition, this.files);
+        const endPosition  = this.getFirstSelectedBelowPosition(currentPosition, this.files);
+        if (startPosition !== -1 && endPosition !== -1) {
+          this.selectRangeDocuments(startPosition, endPosition);
+        } else if (startPosition !== -1) {
+          this.selectRangeDocuments(startPosition, currentPosition);
+        } else if (endPosition !== -1) {
+          this.selectRangeDocuments(currentPosition, endPosition);
+        }
+      } else {
+        this.$root.$emit('update-selection-documents-list', this.checked, this.file);
+        if (this.checked) {
+          this.$emit('document-selected', this.file);
+        } else {
+          this.$emit('document-unselected', this.file);
+        }
+      }
+    },
+    checkRangeSelect() {
+      this.resetRangeSelect();
+      this.rangeSelectTimer = setInterval(() => {
+        this.canSelectRange = !this.isFileSelected(this.file) && this.selectedDocuments.length > 0;
+      },500);
+    },
+    resetRangeSelect() {
+      clearInterval(this.rangeSelectTimer);
+      this.canSelectRange = false;
+    },
+    getFirstSelectedAbovePosition(currentPosition, files) {
+      let position = -1;
+      for (let index = currentPosition; index >= 0; index--) {
+        if (this.isFileSelected(files[index])) {
+          position = index;
+          break;
+        }
+      }
+      return position;
+    },
+    getFirstSelectedBelowPosition(currentPosition, files) {
+      let position = -1;
+      for (let index = currentPosition;  index < files.length; index ++)  {
+        if (this.isFileSelected(files[index])) {
+          position = index;
+          break;
+        }
+      }
+      return position;
+    },
+    initSelected() {
+      if (this.selectAllChecked) {
+        this.checked = true;
+        this.selectDocument();
+      } else {
+        this.checked = this.selectedDocuments.findIndex(folder => folder.id === this.folderId) !== -1;
+      }
+      this.show = this.selectedDocuments.length > 0;
+    },
+    handleSelectAllDocuments() {
+      this.selectAllChecked = true;
+      this.checked = true;
+      this.selectDocument();
+    },
+    handleShowSelectionInput(file, check) {
+      if (this.fileId === file.id) {
+        this.show = true;
+        if (check) {
+          this.checked = !this.checked;
+          this.selectDocument();
+        }
+      }
+    },
+    handleHideSelectionInput(file) {
+      if (this.fileId === file.id && !this.checked && !this.selectedDocuments.length) {
+        this.show = false;
+      }
+    },
+    handleUpdateSelectionList() {
+      this.show = this.selectedDocuments.length > 0;
     }
   },
 };
