@@ -20,6 +20,8 @@
       v-if="cardsDisplay"
       :files="files"
       :has-more="hasMore"
+      :is-mobile="isMobile"
+      :selected-documents="selectedDocuments"
       :loading="loading" />
     <documents-folder-list-view
       v-else

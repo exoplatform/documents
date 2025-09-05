@@ -19,12 +19,12 @@
     <v-card
       :elevation="hover ? 4 : 0"
       :class="{ 'border-color': !hover }"
-      width="200px"
+      width="215px"
       @click="openFolder">
       <div class="d-flex flex-no-wrap justify-space-between">
         <v-card
           class="d-flex flex-no-wrap"
-          width="80%"
+          :width="hover || selectedDocuments.length ? '70%' : '80%'"
           flat>
           <v-avatar
             class="ma-3"
@@ -43,9 +43,15 @@
               fas fa-folder
             </v-icon>
           </v-avatar>
-          <div class="align-self-center text-subtitle-2 text-truncate-2">{{ name }}</div>
+          <div class="align-self-center text-subtitle-2 text-truncate">{{ name }}</div>
         </v-card>
         <v-card-actions>
+          <v-simple-checkbox
+            v-show="hover || selectedDocuments.length"
+            v-model="checked"
+            @click="selectDocument($event)"
+            @mouseover="checkRangeSelect"
+            @mouseleave="resetRangeSelect" />
           <v-btn
             id="attachment-info"
             :title="$t('attachments.label.details')"
@@ -68,7 +74,25 @@ export default {
       type: Object,
       default: null,
     },
+    files: {
+      type: Array,
+      default: () => []
+    },
+    selectedDocuments: {
+      type: Array,
+      default: () => [],
+    },
+    selectAllChecked: {
+      type: Boolean,
+      default: false,
+    },
   },
+  data: () => ({
+    checked: false,
+    show: false,
+    canSelectRange: false,
+    rangeSelectTimer: null
+  }),
   computed: {
     folderId() {
       return this.folder?.id;
@@ -83,6 +107,23 @@ export default {
       return this.folder?.avatarUrl;
     }
   },
+  created() {
+    this.$root.$on('update-selection-documents-list', this.handleUpdateSelectionList);
+    this.$root.$on('show-selection-input', this.handleShowSelectionInput);
+    this.$root.$on('hide-selection-input', this.handleHideSelectionInput);
+    this.$root.$on('select-all-documents', this.handleSelectAllDocuments);
+    this.$root.$on('select-target-document', this.handleSelectTargetDocument);
+    this.$root.$on('reset-selections', this.handleResetSelections);
+    this.initSelected();
+  },
+  beforeDestroy() {
+    this.$root.$off('update-selection-documents-list', this.handleUpdateSelectionList);
+    this.$root.$off('show-selection-input', this.handleShowSelectionInput);
+    this.$root.$off('hide-selection-input', this.handleHideSelectionInput);
+    this.$root.$off('select-all-documents', this.handleSelectAllDocuments);
+    this.$root.$off('select-target-document', this.handleSelectTargetDocument);
+    this.$root.$off('reset-selections', this.handleResetSelections);
+  },
   methods: {
     showInfo(event) {
       if (event) {
@@ -93,6 +134,96 @@ export default {
     },
     openFolder() {
       this.$root.$emit('document-open-folder', this.folder);
+    },
+    isFileSelected(folder) {
+      return this.selectedDocuments.findIndex(object => object.id === folder?.id) !== -1;
+    },
+    selectRangeDocuments(start, end) {
+      this.files.slice(start, end + 1).forEach(file => {
+        this.$root.$emit('select-target-document', file);
+      });
+    },
+    selectDocument(event) {
+      if (event && event.shiftKey && this.selectedDocuments.length) {
+        const currentPosition = this.files.findIndex(file => file.id === this.folderId);
+        const startPosition  = this.getFirstSelectedAbovePosition(currentPosition, this.files);
+        const endPosition  = this.getFirstSelectedBelowPosition(currentPosition, this.files);
+        if (startPosition !== -1 && endPosition !== -1) {
+          this.selectRangeDocuments(startPosition, endPosition);
+        } else if (startPosition !== -1) {
+          this.selectRangeDocuments(startPosition, currentPosition);
+        } else if (endPosition !== -1) {
+          this.selectRangeDocuments(currentPosition, endPosition);
+        }
+      } else {
+        this.$root.$emit('update-selection-documents-list', this.checked, this.folder);
+        if (this.checked) {
+          this.$emit('document-selected', this.file);
+        } else {
+          this.$emit('document-unselected', this.file);
+        }
+      }
+    },
+    checkRangeSelect() {
+      this.resetRangeSelect();
+      this.rangeSelectTimer = setInterval(() => {
+        this.canSelectRange = !this.isFileSelected(this.folder) && this.selectedDocuments.length > 0;
+      },500);
+    },
+    resetRangeSelect() {
+      clearInterval(this.rangeSelectTimer);
+      this.canSelectRange = false;
+    },
+    getFirstSelectedAbovePosition(currentPosition, files) {
+      let position = -1;
+      for (let index = currentPosition; index >= 0; index--) {
+        if (this.isFileSelected(files[index])) {
+          position = index;
+          break;
+        }
+      }
+      return position;
+    },
+    getFirstSelectedBelowPosition(currentPosition, files) {
+      let position = -1;
+      for (let index = currentPosition;  index < files.length; index ++)  {
+        if (this.isFileSelected(files[index])) {
+          position = index;
+          break;
+        }
+      }
+      return position;
+    },
+    initSelected() {
+      if (this.selectAllChecked) {
+        this.checked = true;
+        this.selectDocument();
+      } else {
+        this.checked = this.selectedDocuments.findIndex(folder => folder.id === this.folderId) !== -1;
+      }
+      this.show = this.selectedDocuments.length > 0;
+    },
+    handleSelectAllDocuments() {
+      this.selectAllChecked = true;
+      this.checked = true;
+      this.selectDocument();
+    },
+    handleShowSelectionInput(folder, check) {
+      if (this.folderId === folder.id) {
+        this.show = true;
+        if (check) {
+          this.checked = !this.checked;
+          this.selectDocument();
+        }
+      }
+    },
+    handleHideSelectionInput(folder) {
+      if (this.folderId === folder.id && !this.checked && !this.selectedDocuments.length) {
+        this.show = false;
+      }
+    },
+    handleUpdateSelectionList() {
+      this.show = this.selectedDocuments.length > 0;
     }
   }
 };
