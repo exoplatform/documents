@@ -91,7 +91,7 @@
             @document-unselected="handleDocumentSelection"
             height="175px"
             max-height="175px"
-            width="200px"
+            width="215px"
             show-details />
         </div>
       </v-card>
