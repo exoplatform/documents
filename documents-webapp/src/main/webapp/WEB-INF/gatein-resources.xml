@@ -225,9 +225,6 @@
         <module>AttachmentIntegration</module>
       </depends>
       <depends>
-        <module>LegacyComposerAttachments</module>
-      </depends>
-      <depends>
         <module>documentsPreviewExtension</module>
       </depends>
     </module>
@@ -264,34 +261,6 @@
     <script>
       <minify>false</minify>
       <path>/js/attachmentIntegration.bundle.js</path>
-    </script>
-    <depends>
-      <module>vue</module>
-    </depends>
-    <depends>
-      <module>eXoVueI18n</module>
-    </depends>
-    <depends>
-      <module>vuetify</module>
-    </depends>
-    <depends>
-      <module>jquery</module>
-      <as>$</as>
-    </depends>
-    <depends>
-      <module>extensionRegistry</module>
-    </depends>
-    <depends>
-      <module>commonVueComponents</module>
-    </depends>
-  </module>
-
-  <module>
-    <name>LegacyComposerAttachments</name>
-    <load-group>AttachmentIntegrationGRP</load-group>
-    <script>
-      <minify>false</minify>
-      <path>/js/legacyComposerAttachments.bundle.js</path>
     </script>
     <depends>
       <module>vue</module>
@@ -494,6 +463,35 @@
       <minify>false</minify>
       <path>/js/documentsPwaExtension.bundle.js</path>
     </script>
+  </module>
+
+  <module>
+    <name>FileSearch</name>
+    <script>
+      <minify>false</minify>
+      <path>/js/filesSearch.bundle.js</path>
+    </script>
+    <depends>
+      <module>commonDocComponents</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>jquery</module>
+    </depends>
   </module>
 
 </gatein-resources>
