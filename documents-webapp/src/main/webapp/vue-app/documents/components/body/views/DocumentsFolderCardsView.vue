@@ -195,10 +195,6 @@ export default {
   created() {
     this.treeViewExpended =  localStorage.getItem('expendedTreeView')!=null ? localStorage.getItem('expendedTreeView') === 'true' : (this.$root.settings?.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true);
     this.$root.$on('tree-view-expend', this.extendTreeView);
-    window.addEventListener('keydown', this.handleKeydown);
-  },
-  beforeDestroy() {
-    window.removeEventListener('keydown', this.handleKeydown);
   },
   methods: {
     extendTreeView(value) {
@@ -220,12 +216,6 @@ export default {
     },
     selectAllDocuments() {
       this.$root.$emit('select-all-documents', this.selectAll);
-    },
-    handleKeydown(event) {
-      if (event.ctrlKey && event.key === 'a') {
-        event.preventDefault();
-        this.selectAllDocuments();
-      }
     },
   }
 };
