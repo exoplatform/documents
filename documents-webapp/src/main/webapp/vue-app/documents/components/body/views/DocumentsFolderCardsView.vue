@@ -195,6 +195,7 @@ export default {
   created() {
     this.treeViewExpended =  localStorage.getItem('expendedTreeView')!=null ? localStorage.getItem('expendedTreeView') === 'true' : (this.$root.settings?.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true);
     this.$root.$on('tree-view-expend', this.extendTreeView);
+    this.$root.$on('reset-selections', () => this.selectAll = false);
   },
   methods: {
     extendTreeView(value) {
