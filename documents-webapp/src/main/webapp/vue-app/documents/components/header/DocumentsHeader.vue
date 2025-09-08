@@ -237,6 +237,7 @@ export default {
     this.$root.$on('filer-query', this.filterQuery);
     this.$root.$on('show-mobile-filter', this.handleShowFilter);
     document.addEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
+    window.addEventListener('keydown', this.handleKeydown);
     this.refreshTabExtensions();
   },
   beforeDestroy() {
@@ -244,6 +245,7 @@ export default {
     this.$root.$off('filer-query', this.filterQuery);
     this.$root.$off('show-mobile-filter', this.handleShowFilter);
     document.removeEventListener(`extension-${this.tabsExtensionApp}-${this.tabsExtensionType}-updated`, this.refreshTabExtensions);
+    window.removeEventListener('keydown', this.handleKeydown);
   },
   methods: {
     setViewType(item) {
@@ -319,6 +321,12 @@ export default {
       this.$root.$emit('documents-filter', primaryFilter);
       this.$root.$emit('set-mobile-filter', primaryFilter);
     },
+    handleKeydown(event) {
+      if (event.ctrlKey && event.key === 'a') {
+        event.preventDefault();
+        this.$root.$emit('select-all-documents', true);
+      }
+    }
   }
 };
 </script>
