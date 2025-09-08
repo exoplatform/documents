@@ -69,7 +69,7 @@ export default {
       try {
         const promises = [
           this.$documentFileService.getFullTreeData(
-            this.$root.ownerId,
+            this.$root.ownerId && this.$root.ownerId !== '0' ? this.$root.ownerId : eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
             null,
             this.folderPath,
             this.showHidden

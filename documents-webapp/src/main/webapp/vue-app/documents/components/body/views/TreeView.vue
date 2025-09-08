@@ -169,6 +169,9 @@ export default {
       return items;
     },
     openFolder(folder){
+      if (this.currentFolderPathTab[this.currentFolderPathTab.length - 1] === folder.id) {
+        return;
+      }
       this.currentFolderPathTab.push(folder.id);
       if (folder.drives) {
         this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
