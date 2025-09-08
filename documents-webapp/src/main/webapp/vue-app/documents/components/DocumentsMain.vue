@@ -237,6 +237,11 @@ export default {
     },
   },
   watch: {
+    recentViewSelected() {
+      if (this.recentViewSelected) {
+        this.$root.selectedPath = '/';
+      }
+    },
     selectedCategoryIds() {
       if (this.initialized) {
         this.refreshFiles();
@@ -1508,39 +1513,13 @@ export default {
             document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
           }
         }
-      }
-      else {
-        if (eXo.env.portal.spaceName) {
-          attachmentAppConfiguration.defaultDrive = {
-            isSelected: true,
-            name: `.spaces.${eXo.env.portal.spaceGroup}`,
-            title: eXo.env.portal.spaceDisplayName,
-          };
-          const pathparts = window.location.pathname.toLowerCase().split(`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`);
-          const currentUrlSearchParams = window.location.search;
-          const queryParams = new URLSearchParams(currentUrlSearchParams);
-          if (pathparts.length > 1 || queryParams.has('folderId')) {
-            attachmentAppConfiguration.defaultFolder = this.extractDefaultFolder();
-          }
-        }  else  {
-          attachmentAppConfiguration.defaultDrive = {
-            isSelected: true,
-            name: 'Personal Documents',
-            title: 'Personal Documents'
-          };
-          attachmentAppConfiguration.defaultFolder = '/';
-          let pathparts = window.location.pathname.split(`${eXo.env.portal.selectedNodeUri}/`);
-          if (pathparts.length > 1 && pathparts[1].startsWith('Private/')){
-            pathparts = pathparts[1].split('Private/');
-          }
-          if (pathparts.length > 1) {
-            attachmentAppConfiguration.defaultFolder = `${this.extractDefaultFolder(true)}`;
-          }
-        }
-        if (files){
-          attachmentAppConfiguration.files=files;
-        }
-        document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: attachmentAppConfiguration}));
+      } else {
+        document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', { detail: {
+          'sourceApp': 'NEW.APP',
+          defaultDrive: this.$root.selectedDrive,
+          defaultFolder: this.$root.selectedPath,
+          files,
+        }}));
       }
     },
     extractDefaultFolder(isPersonalDrive) {
