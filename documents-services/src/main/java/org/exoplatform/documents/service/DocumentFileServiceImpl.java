@@ -548,13 +548,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!stats.isEmpty()) {
       StatisticData toStat = stats.get(0);
       documentsSize.setOwnerId(ownerId);
-      documentsSize.setToSize(Long.parseLong(toStat.getParameters().get("size")));
+      documentsSize.setToSize(Long.parseLong(String.valueOf(toStat.getParameters().get("size"))));
       documentsSize.setToSizeDate(toStat.getTimestamp());
       documentsSize.setTodaySize(simpleDateFormat.format(new Date())
                                                  .equals(simpleDateFormat.format(new Date(toStat.getTimestamp()))));
       if (stats.size() > 1) {
         StatisticData fromStat = stats.get(stats.size() - 1);
-        documentsSize.setFromSize(Long.parseLong(fromStat.getParameters().get("size")));
+        documentsSize.setFromSize(Long.parseLong(String.valueOf(fromStat.getParameters().get("size"))));
         documentsSize.setFromSizeDate(fromStat.getTimestamp());
         LocalDateTime date = LocalDateTime.ofInstant(Instant.ofEpochMilli(fromStat.getTimestamp()), ZoneId.systemDefault());
         long diff = ChronoUnit.DAYS.between(date, to);
