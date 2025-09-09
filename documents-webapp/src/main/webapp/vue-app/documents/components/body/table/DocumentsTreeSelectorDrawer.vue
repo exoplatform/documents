@@ -241,10 +241,10 @@ export default {
       const destinationPath = this.folder && this.folder.path ? this.folder.path : `/Groups${this.groupId}/Documents`;
       if (this.actionType === 'move') {
         if (this.isMultiSelection) {
-          this.$root.$emit('documents-bulk-move', this.$root.ownerId, destinationPath, this.folder, this.space);
+          this.$root.$emit('documents-bulk-move', destinationPath, this.folder, this.space);
           this.close();
         } else {
-          this.$root.$emit('documents-move', this.$root.ownerId, this.file, destinationPath, this.folder, this.space);
+          this.$root.$emit('documents-move', this.file, destinationPath, this.folder, this.space);
         }
       }
       if (this.actionType === 'shortcut') {
