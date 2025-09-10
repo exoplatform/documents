@@ -135,6 +135,18 @@ export default {
       }
     },
   },
+  watch: {
+    documentsBreadcrumb() {
+      const drive = { ... this.documentsBreadcrumb[0]};
+      if (drive.path?.startsWith?.('/Groups/spaces')) {
+        drive.name = `.spaces.${drive.path.split('/').filter(s => s?.length)[2]}`;
+      } else {
+        drive.name='Personal Documents';
+      }
+      this.$root.selectedDrive = drive;
+      this.$root.selectedPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path.replace(`${drive.path}/`,'');
+    },
+  },
   created() {
     this.$root.$on('set-breadcrumb', this.setBreadcrumb);
     this.$root.$on('update-breadcrumb', this.updateBreadcrumb);

@@ -86,6 +86,8 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       ownerId: eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
       driveView: false,
       spaceId: null,
+      selectedDrive: null,
+      selectedPath: null,
     },
     computed: {
       categoryIds() {
