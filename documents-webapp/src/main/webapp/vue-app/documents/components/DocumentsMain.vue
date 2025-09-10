@@ -1638,21 +1638,21 @@ export default {
         .then(attachment => {
           return this.$attachmentService.getDocumentDetails(version.frozenId)
             .then(file => {
-              file.downloadUrl =`${attachment.downloadUrl}?version=${version.versionNumber}`;
+              file.downloadUrl =`/rest/jcr/repository/collaboration${attachment.path}?version=${version.versionNumber}`;
               file.path = attachment.path;
               file.mimeType = attachment.mimeType;
               file.filename = file.name;
               file.source = 'documents';
               if (this.isFileReadable(attachment)){
                 if (attachment?.acl?.canEdit && this.isFileEditable(attachment)){
-                  this.openFileInEditor(attachment,'edit');
+                  this.openFileInEditor(file,'edit');
                 } else {
-                  this.openFileInEditor(attachment,'view');
+                  this.openFileInEditor(file,'view');
                 } 
               } else {
-                document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': file.id }}));
-              }
-              return attachment;
+                const versionFile = {'id': file.id,'filename': file.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': file.downloadUrl, 'icon': this.getFileIcon(attachment)};
+                document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [versionFile],'id': file.id }}));
+                return attachment;}
             });
         })
         .catch(e => console.error(e))
