@@ -81,7 +81,7 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              :max-width="hover || selectedDocuments.length ? '65%' : '75%'"
+              :max-width="(hover || selectedDocuments.length) && showDetails ? '65%' : '75%'"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <v-card-text
                 :title="fileName"
@@ -91,7 +91,7 @@
             </v-card>
             <v-spacer />
             <v-simple-checkbox
-              v-if="hover || selectedDocuments.length"
+              v-if="(hover || selectedDocuments.length) && showDetails"
               v-model="checked"
               color="white"
               @click="selectDocument($event)"
