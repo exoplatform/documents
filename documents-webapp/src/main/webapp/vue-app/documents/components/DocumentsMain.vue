@@ -1623,11 +1623,7 @@ export default {
               file.filename = file.name;
               file.source = 'documents';
               if (this.isFileReadable(attachment)){
-                if (attachment?.acl?.canEdit && this.isFileEditable(attachment)){
-                  this.openFileInEditor(file,'edit');
-                } else {
-                  this.openFileInEditor(file,'view');
-                } 
+                this.openFileInEditor(file,'view');
               } else {
                 const versionFile = {'id': file.id,'filename': file.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': file.downloadUrl, 'icon': this.getFileIcon(attachment)};
                 document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [versionFile],'id': file.id }}));
