@@ -17,10 +17,11 @@
 
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanFiles;
+
+import java.io.*;
 import java.net.URLDecoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
@@ -51,6 +52,8 @@ import org.exoplatform.services.log.Log;
 import org.exoplatform.upload.UploadService;
 
 import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.model.FileHeader;
+
 
 public class ActionThread implements Runnable {
 
@@ -99,6 +102,12 @@ public class ActionThread implements Runnable {
   public static final String             EXO_SORTABLE           = "exo:sortable";
 
   public static final String             MIX_VERSIONABLE        = "mix:versionable";
+
+  private static final List<Charset> CHARSETS = Arrays.asList(
+          StandardCharsets.ISO_8859_1,
+          Charset.forName("Windows-1252"),
+          Charset.forName("CP437"),
+          Charset.forName("Cp850"));
 
   private static final MimeTypeResolver  mimeTypes              = new MimeTypeResolver();
 
@@ -285,60 +294,31 @@ public class ActionThread implements Runnable {
     brodcastEvent();
   }
 
-  private void downloadItems() {
-    List<javax.jcr.Node> nodes = items.stream()
-                                      .map(document -> JCRDocumentsUtil.getNodeByIdentifier(session, document.getId()))
-                                      .toList();
-
-    try {
-      tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
-
-    boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
-    brodcastEvent();
-    try {
-      for (Node node : nodes) {
-        if (checkCanceled()) {
-          File folder = new File(tempFolderPath);
-          JCRDocumentsUtil.cleanFiles(folder);
-          break;
-        }
-        parentPath = node.getParent().getPath();
-        if (hasFolders) {
-          JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
+  public static void fixAndExtractZip(File zipFile, File outputDir) throws IOException {
+    if (!outputDir.exists()) outputDir.mkdirs();
+    try (ZipFile zip = new ZipFile(zipFile)) {
+      List<FileHeader> headers = zip.getFileHeaders();
+      for (FileHeader header : headers) {
+        byte[] rawBytes = header.getFileName().getBytes(StandardCharsets.ISO_8859_1);
+        String fixedName = pickBestEncoding(rawBytes);
+        File outFile = new File(outputDir, fixedName);
+        if (header.isDirectory()) {
+          if (!outFile.exists()) outFile.mkdirs();
         } else {
-          JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentPath);
+          File parent = outFile.getParentFile();
+          if (parent != null && !parent.exists()) parent.mkdirs();
+
+          try (InputStream is = zip.getInputStream(header);
+               OutputStream os = new FileOutputStream(outFile)) {
+            byte[] buffer = new byte[4096];
+            int len;
+            while ((len = is.read(buffer)) != -1) {
+              os.write(buffer, 0, len);
+            }
+          }
         }
-
       }
-    } catch (Exception e) {
-      log.error("Error when creating temp files for download", e);
-      actionData.setStatus(ActionStatus.FAILED.name());
     }
-
-    String zipName = ZIP_PREFIX + actionData.getActionId() + ZIP_EXTENSION;
-    String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
-    try {
-      JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
-      File zipped = new File(zipPath);
-      actionData.setDownloadZipPath(zipped.getPath());
-      File folder = new File(tempFolderPath);
-      JCRDocumentsUtil.cleanFiles(folder);
-    } catch (Exception e) {
-      log.error("Error when creating zip file", e);
-      actionData.setStatus(ActionStatus.FAILED.name());
-    }
-    if (checkCanceled()) {
-      File zip = new File(zipPath);
-      deleteFile(zip);
-      return;
-    }
-    if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {
-      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
-    }
-    brodcastEvent();
-  } catch (IOException e) {
-    log.error("Cannot create temp folder to download documents", e);
-  }
   }
 
   private void duplicateItems() {
@@ -392,31 +372,32 @@ public class ActionThread implements Runnable {
     }
   }
 
-  public void importFromZip() throws RepositoryException {
-    try (ZipFile zip = new ZipFile(uploadService.getUploadResource(actionData.getActionId()).getStoreLocation())) {
-      startTime = System.currentTimeMillis();
-      actionData.setStatus(ActionStatus.UNZIPPING.name());
-      brodcastEvent();
-      zip.setCharset(StandardCharsets.UTF_8);
-      zip.extractAll(actionData.getTempFolderPath());
-      List<String> files = new ArrayList<>();
-      listFiles(new File(actionData.getTempFolderPath()), files);
-      actionData.setFiles(files);
-      uploadService.removeUploadResource(actionData.getActionId());
-      actionData.setStatus(ActionStatus.CREATING_DOCUMENTS.name());
-      brodcastEvent();
-      createItems();
-    } catch (IOException e) {
-      actionData.setStatus(ActionStatus.CANNOT_UNZIP_FILE.name());
-      log.error("Cannot unzip the zip file", e);
-      brodcastEvent();
-    } finally {
-      bulkStorageActionService.removeActionData(actionData);
-      JCRDocumentsUtil.cleanFiles(new File(actionData.getTempFolderPath()));
+  private static String pickBestEncoding(byte[] rawBytes) {
+    String best = null;
+    int bestScore = -1;
+    for (Charset cs : CHARSETS) {
+      String decoded = new String(rawBytes, cs);
+      int score = readabilityScore(decoded);
+      if (score > bestScore) {
+        bestScore = score;
+        best = decoded;
+      }
     }
+    return best;
   }
 
-  private void listFiles(File dir, List<String> files) {
+  private static int readabilityScore(String s) {
+    int score = 0;
+    for (char c : s.toCharArray()) {
+      if (Character.isLetterOrDigit(c)) score++;
+      else if (c >= 0x0600 && c <= 0x06FF) score += 2;
+      else if (c == ' ' || c == '\'' || c == '-' || c == '_' || c == '.') score++;
+      else if (c == '�') score -= 5;
+    }
+    return score;
+  }
+
+  private static void listFiles(File dir, List<String> files) {
     File[] dirFiles = dir.listFiles();
     if (dirFiles != null && dirFiles.length > 0) {
       for (File file : dirFiles) {
@@ -429,8 +410,99 @@ public class ActionThread implements Runnable {
     }
   }
 
-  public void createItems() throws RepositoryException {
-    String tempFolderPath = actionData.getTempFolderPath();
+  private void downloadItems() {
+    List<javax.jcr.Node> nodes = items.stream()
+                                      .map(document -> JCRDocumentsUtil.getNodeByIdentifier(session, document.getId()))
+                                      .toList();
+
+    try {
+      tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
+
+    boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
+    brodcastEvent();
+    try {
+      for (Node node : nodes) {
+        if (checkCanceled()) {
+          File folder = new File(tempFolderPath);
+          cleanFiles(folder);
+          break;
+        }
+        parentPath = node.getParent().getPath();
+        if (hasFolders) {
+          JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
+        } else {
+          JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentPath);
+        }
+
+      }
+    } catch (Exception e) {
+      log.error("Error when creating temp files for download", e);
+      actionData.setStatus(ActionStatus.FAILED.name());
+    }
+
+    String zipName = ZIP_PREFIX + actionData.getActionId() + ZIP_EXTENSION;
+    String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
+    try {
+      JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
+      File zipped = new File(zipPath);
+      actionData.setDownloadZipPath(zipped.getPath());
+      File folder = new File(tempFolderPath);
+      cleanFiles(folder);
+    } catch (Exception e) {
+      log.error("Error when creating zip file", e);
+      actionData.setStatus(ActionStatus.FAILED.name());
+    }
+    if (checkCanceled()) {
+      File zip = new File(zipPath);
+      deleteFile(zip);
+      return;
+    }
+    if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {
+      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
+    }
+    brodcastEvent();
+  } catch (IOException e) {
+    log.error("Cannot create temp folder to download documents", e);
+  }
+  }
+
+  public void importFromZip() {
+    String tempFolder = actionData.getTempFolderPath();
+    String fixedTempFolder = "";
+    try {
+      startTime = System.currentTimeMillis();
+      actionData.setStatus(ActionStatus.UNZIPPING.name());
+      brodcastEvent();
+      String zipFilePath = uploadService.getUploadResource(actionData.getActionId()).getStoreLocation();
+      List<String> files = new ArrayList<>();
+      try (ZipFile zip = new ZipFile(zipFilePath)) {
+        zip.setCharset(StandardCharsets.UTF_8);
+        zip.extractAll(tempFolder);
+        listFiles(new File(tempFolder), files);
+      }
+      if (files.isEmpty() || files.stream().anyMatch(s -> s.indexOf('�') >= 0)) {
+        fixedTempFolder = tempFolder + "_fixed";
+        fixAndExtractZip(new File(zipFilePath), new File(fixedTempFolder));
+        files = new ArrayList<>();
+        listFiles(new File(fixedTempFolder), files);
+      }
+      actionData.setFiles(files);
+      uploadService.removeUploadResource(actionData.getActionId());
+      actionData.setStatus(ActionStatus.CREATING_DOCUMENTS.name());
+      brodcastEvent();
+      createItems(fixedTempFolder.isEmpty() ? tempFolder : fixedTempFolder);
+    } catch (Exception e) {
+      actionData.setStatus(ActionStatus.CANNOT_UNZIP_FILE.name());
+      log.error("Cannot unzip the zip file", e);
+      brodcastEvent();
+    } finally {
+      cleanFiles(new File(tempFolder));
+      cleanFiles(new File(fixedTempFolder));
+      bulkStorageActionService.removeActionData(actionData);
+    }
+  }
+
+  public void createItems(String tempFolderPath) throws RepositoryException {
     Map<String, String> folderReplaced = new HashMap<>();
     Map<String, String> folderCreated = new HashMap<>();
     for (String filePath : actionData.getFiles()) {
