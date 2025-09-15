@@ -434,6 +434,7 @@ public class DocumentFileRest implements ResourceContainer {
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     try {
+        ownerId = ownerId == null ? 0 :ownerId;
         return Response.ok(EntityBuilder.toFullTreeItemEntities(documentFileService.getFullTreeData(ownerId, folderId,destinationFolderPath, userIdentityId, withChildren,showHidden),ownerId))
               .build();
     } catch (IllegalAccessException e) {
