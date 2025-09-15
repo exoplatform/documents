@@ -1613,21 +1613,21 @@ export default {
       return this.getFolderPath(this.folderPath);
     },
     showVersionPreview(version) {
-      return this.$attachmentService.getAttachmentById(version.originId)
+      return this.$attachmentService.getDocumentDetails(version.originId)
         .then(attachment => {
-          return this.$attachmentService.getAttachmentById(version.frozenId)
+          return this.$attachmentService.getDocumentDetails(version.frozenId)
             .then(file => {
-              file.downloadUrl =`${attachment.downloadUrl}?version=${version.versionNumber}`;
+              file.downloadUrl =`/rest/jcr/repository/collaboration${attachment.path}?version=${version.versionNumber}`;
               file.path = attachment.path;
-              file.mimetype = attachment.mimetype;
-              file.filename = file.title;
+              file.mimeType = attachment.mimeType;
+              file.filename = file.name;
               file.source = 'documents';
               if (this.isFileReadable(attachment)){
-                this.openFileInEditor(file,'view','_self');
+                this.openFileInEditor(file,'view');
               } else {
-                document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': file.id }}));
-              }
-              return attachment;
+                const versionFile = {'id': file.id,'filename': file.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': file.downloadUrl, 'icon': this.getFileIcon(attachment)};
+                document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [versionFile],'id': file.id }}));
+                return attachment;}
             });
         })
         .catch(e => console.error(e))
