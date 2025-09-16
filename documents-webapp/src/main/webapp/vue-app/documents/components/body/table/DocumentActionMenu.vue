@@ -96,7 +96,7 @@ export default {
         });
       }
 
-      if (!this.isMobile) {
+      if (!this.isMobile && !this.isMultiSelection) {
         const groupingExtensions =  extensions.filter(extension => extension.type === 'group');
         groupingExtensions.forEach(extension => {
           if (!extensions.some(ext => ext.parent === extension.id)) {
