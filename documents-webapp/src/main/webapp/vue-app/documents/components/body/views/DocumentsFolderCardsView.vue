@@ -15,7 +15,7 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="d-flex">
+  <div class="row no-gutters">
     <component
       :is="isMobile ? 'folder-treeview-drawer' : 'folder-tree-view'"
       :tree-view-expended="treeViewExpended"
@@ -23,7 +23,7 @@
       :folder-path="folderPath" />
     <v-card
       flat
-      class="width-full">
+      class="col-lg-8 col-md-7">
       <documents-breadcrumb
         :is-mobile="isMobile"
         :tree-view-expended="treeViewExpended" />

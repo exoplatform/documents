@@ -1,5 +1,5 @@
 <template>
-  <div v-if="documentsBreadcrumbToDisplay.length" class="documents-breadcrumb-wrapper">
+  <div v-if="documentsBreadcrumbList.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
       <v-tooltip v-if="!treeViewExpended || isMobile" bottom>
         <template #activator="{ on, attrs }">
@@ -22,63 +22,80 @@
         </span>
       </v-tooltip>
       <div
+        v-if="!isMobile"
         id="breadcrumb-list-items"
         data-isfolder="true"
         :data-fileId="documentsBreadcrumbToDisplay[0].id"
         :data-canEdit="canEditFile(documentsBreadcrumbToDisplay[0])? 'true': 'false'"
-        class="pa-1 mb-1 d-flex width-fit-content">
-        <div
-          v-for="(documents, index) in documentsBreadcrumbToDisplay"
-          :key="index"
-          :data-fileId="documents.id"
-          :class="documentsBreadcrumbToDisplay.length === 1 && 'single-path-element' || ''"
-          class="documents-tree-item d-flex text-truncate">
-          <v-tooltip max-width="300" bottom>
-            <template #activator="{ on, attrs }">
-              <v-btn
-                height="20px"
-                min-width="45px"
-                class="pa-0 flex-shrink-1 text-truncate documents-breadcrumb-element"
-                :class="documentsBreadcrumbToDisplay[documentsBreadcrumbToDisplay.length-1].id === actualFolderId && 'clickable' || ''"
-                text
-                v-bind="attrs"
-                v-on="on"
-                :disabled="disabledIconTree"
-                @click="openFolder(documents)">
+        class="d-flex align-center width-full pa-1 mb-1">
+        <template v-for="(document, index) in documentsBreadcrumbList">
+          <div
+            v-if="document.isBreadcrumbItem && !document.isEllipsis"
+            :key="index"
+            :data-fileId="document.id"
+            :class="document.class">
+            <v-tooltip max-width="300" bottom>
+              <template #activator="{ on, attrs }">
                 <a
-                  class="text-truncate"
-                  :id="move ? 'breadCrumb-link-move' : 'breadCrumb-link'"
-                  :class="[
-                    index < documentsBreadcrumbToDisplay.length-1 && 'path-clickable text-header' || 'text-header text-color not-clickable',
-                    move && 'caption'
-                  ]">
-                  {{ getName(documents.name) }}
-                </a>
+                  :id="document.isLast && 'lastBreadcrumbItem'"
+                  :ref="document.id"
+                  :class="document.classLink"
+                  v-bind="attrs"
+                  v-on="on"
+                  @click="!document.isLast && openFolder(documentsBreadcrumb[document.index])">{{ getName(document.name) }}</a>
+              </template>
+              <span class="caption breadcrumbName">
+                {{ getName(document.name) }}
                 <v-icon
-                  v-if="documents.symlink"
+                  v-if="document.symlink"
                   size="10"
                   class="pe-1 iconStyle">
                   mdi-link-variant
                 </v-icon>
-              </v-btn>
-            </template>
-            <span class="caption breadcrumbName">
-              {{ getName(documents.name) }}
-              <v-icon
-                v-if="documents.symlink"
-                size="10"
-                class="pe-1 iconStyle">
-                mdi-link-variant
-              </v-icon>
-            </span>
-          </v-tooltip>
-          <v-icon
-            v-if="index < documentsBreadcrumbToDisplay.length-1"
-            :size="move ? 12 : 14"
-            :class="move ? 'px-1' : 'px-3'">
-            fa-chevron-right
-          </v-icon>
-        </div>
+              </span>
+            </v-tooltip>
+            <v-icon
+              v-if="document.isIcon"
+              class="flex-grow-1 icon-default-color flex-shrink-0"
+              :class="index === 0 && documentsEllipsisList.length > 0 ? 'ms-2' : 'mx-2'"
+              size="14">
+              fa-chevron-right
+            </v-icon>
+          </div>
+          <div
+            v-if="document.isEllipsis"
+            :key="index"
+            class="min-width-content long-path-second-item d-flex">
+            <v-tooltip :key="tooltipKey" bottom>
+              <template #activator="{ on, attrs }">
+                <v-icon
+                  v-show="documentsEllipsisList.length > 0"
+                  v-bind="attrs"
+                  v-on="on"
+                  class="text-sub-title"
+                  size="18"
+                  @click="openFolder(documentsBreadcrumb[documentsEllipsisList[documentsEllipsisList.length-1].index])">
+                  fas fa-ellipsis-h
+                </v-icon>
+              </template>
+              <p
+                v-for="(document) in documentsEllipsisList"
+                :key="document.index"
+                class="mb-0">
+                <span
+                  class="caption">
+                  <v-icon
+                    size="18"
+                    class="tooltip-chevron">
+                    fas fa-chevron-right
+                  </v-icon>
+                  {{ document.name }}
+                </span>
+              </p>
+            </v-tooltip>
+            <v-icon class="clickable me-2" size="18">fas fa-chevron-right</v-icon>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -115,6 +132,11 @@ export default {
     currentFolderPath: '',
     showHidden: false,
     drives: [],
+    documentsBreadcrumbList: [],
+    documentsEllipsisList: [],
+    isMounted: false,
+    tooltipKey: 0,
+    countRecursive: 0,
   }),
   computed: {
     documentsBreadcrumbToDisplay() {
@@ -145,6 +167,22 @@ export default {
       }
       this.$root.selectedDrive = drive;
       this.$root.selectedPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path.replace(`${drive.path}/`,'');
+      this.initDocumentsBreadcrumb();
+      this.$forceUpdate();
+      this.isMounted = true;
+    },
+    isMounted() {
+      if (this.isMounted) {
+        document.fonts.ready.then(() => {
+          this.$nextTick(() => {
+            if (this.documentsEllipsisList.length === 0 || this.documentsBreadcrumb.length > 4) {
+              this.isLastDocumentsTruncated();
+              this.countRecursive = 0;
+            }
+          });
+        });
+        this.isMounted = false;
+      }
     },
   },
   created() {
@@ -213,6 +251,8 @@ export default {
       this.$root.$emit('breadcrumb-updated');
     },
     openFolder(folder) {
+      this.documentsBreadcrumb = [];
+      this.documentsBreadcrumbList = [];
       if (folder.name === 'Private'){
         this.$root.$emit('document-open-home');
         this.folderPath='';
@@ -321,6 +361,124 @@ export default {
       } else {
         this.$root.$emit('tree-view-expend', true);
       }
+    },
+    initDocumentsBreadcrumb() {
+      const documentsBreadcrumbLength = this.documentsBreadcrumb.length;
+      this.documentsBreadcrumbList = [];
+      this.documentsEllipsisList = [];
+      this.documentsBreadcrumb.forEach((document, index) => {
+        const isFirst = index === 0;
+        const isLast = index === documentsBreadcrumbLength - 1;
+        const isSecondLast = index === documentsBreadcrumbLength - 2;
+        const isEllipsis = documentsBreadcrumbLength > 4 && this.documentsEllipsisList.length === 0 && !isFirst;
+        const isBreadcrumbItem = isFirst || isLast || isSecondLast;
+        const breadcrumbItem = {
+          ...document,
+          index,
+          class: isLast ? 'd-flex text-truncate mx-2' : 'd-flex  document-tree-item min-width-content',
+          classLink: isLast ? 'text-header text-color text-truncate breadCrumb-link' : 'text-header text-sub-title path-clickable breadCrumb-link',
+          isIcon: isFirst && documentsBreadcrumbLength !== 1  || !isLast,
+          isLast,
+          isEllipsis,
+          isBreadcrumbItem,
+        };
+        if (documentsBreadcrumbLength > 4 && !isFirst && !isSecondLast && !isLast) {
+          this.documentsEllipsisList.push(breadcrumbItem);
+        }
+        this.documentsBreadcrumbList.push(breadcrumbItem);
+      });
+    },
+    getTextWidth(text, font) {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      context.font = font;
+      return context.measureText(text).width;
+    },
+    isLastDocumentsTruncated() {
+      document.fonts.ready.then(() => {
+        this.$nextTick(() => {
+          const documentsBreadcrumbListLength = this.documentsBreadcrumbList.length;
+          if (this.countRecursive === 2){
+            this.documentsBreadcrumbList[documentsBreadcrumbListLength - 1].class = 'd-flex text-truncate min-width-title';
+            return;
+          }
+          const lastdocumentsElement = document.getElementById('lastBreadcrumbItem');
+          if (!lastdocumentsElement) {
+            return;
+          }
+          const elementWidth = lastdocumentsElement.clientWidth;
+          const text = this.getTruncatedText(lastdocumentsElement);
+          const font = window.getComputedStyle(lastdocumentsElement).font;
+          const textWidth = this.getTextWidth(lastdocumentsElement.innerText, font);
+          if (textWidth > elementWidth && text.length <= 10) {
+            if (this.documentsBreadcrumb.length < 5 && this.countRecursive === 0) {
+              this.getDocumentsBreadcrumbList();
+            } else if (this.countRecursive === 0) {
+              const beforeLastIndex = documentsBreadcrumbListLength - 2;
+              const beforeLastElement = this.documentsBreadcrumbList[beforeLastIndex];
+              beforeLastElement.isBreadcrumbItem = false;
+              beforeLastElement.isIcon = false;
+              beforeLastElement.isEllipsis = this.documentsEllipsisList.length === 0 ? true : false;
+              this.documentsEllipsisList.push(beforeLastElement);
+              this.documentsBreadcrumbList = this.documentsBreadcrumbList.map((item, index) => {
+                return index === beforeLastIndex ? beforeLastElement : item;
+              });
+            } else if (this.countRecursive === 1) {
+              this.documentsBreadcrumbList[0].class = 'd-flex document-tree-item min-width-content';
+              this.documentsBreadcrumbList[0].classLink = 'text-header text-sub-title path-clickable breadCrumb-link';
+            }
+            this.isLastDocumentsTruncated();
+            this.countRecursive += 1;
+          } else {
+            this.documentsBreadcrumbList[documentsBreadcrumbListLength - 1].class = 'd-flex text-truncate min-width-title';
+          }
+        });
+      });
+    },
+    getTruncatedText(element) {
+      const text = element.innerText;
+      const style = window.getComputedStyle(element);
+      const font = `${style.fontSize} ${style.fontFamily}`;
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      context.font = font;
+      let truncatedText = '';
+      const visibleWidth = element.clientWidth;
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const charWidth = context.measureText(truncatedText + char).width;
+        if (charWidth > visibleWidth - 400) {
+          break;
+        }
+        truncatedText += char;
+      }
+      return truncatedText;
+    },
+    getDocumentsBreadcrumbList() {
+      this.documentsBreadcrumbList = [];
+      this.documentsEllipsisList = [];
+      const documentsBreadcrumbLength = this.documentsBreadcrumb.length;
+      this.documentsBreadcrumb.forEach((document, index) => {
+        const isFirst = index === 0;
+        const isLast = index === documentsBreadcrumbLength - 1;
+        const isEllipsis = this.documentsEllipsisList.length === 0 && !isFirst && !isLast;
+        const isBreadcrumbItem = isFirst || isLast;
+        const breadcrumbItem = {
+          ...document,
+          index,
+          class: isLast ? 'd-flex text-truncate' : 'd-flex document-tree-item min-width-content',
+          classLink: isLast ? 'text-header text-color text-truncate breadCrumb-link' : 'text-header text-sub-title path-clickable breadCrumb-link',
+          isIcon: isFirst,
+          isLast,
+          isEllipsis,
+          isBreadcrumbItem,
+        };
+        if (!isFirst && !isLast) {
+          this.documentsEllipsisList.push(breadcrumbItem);
+        }
+        this.documentsBreadcrumbList.push(breadcrumbItem);
+      });
+      this.tooltipKey += 1;
     },
   }
 };
