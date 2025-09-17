@@ -131,13 +131,22 @@
         }
       }
     }
-    .document-tree-items {
+    .documents-tree-items {
       max-width: 100% !important;
       width: 100% !important;
+      
+      .min-width-content {
+        min-width: max-content;
+      }
+      
+      .min-width-title {
+        min-width: 7%;
+      }
   
       .document-tree-item {
         .path-clickable {
           max-width: 97% !important;
+          white-space: nowrap;
   
           &:hover {
             color: @primaryColor !important;
@@ -147,7 +156,8 @@
     }
 
     .documents-breadcrumb-wrapper {
-      max-width: 100% !important;
+      max-width: 95% !important;
+      width: 95% !important;
       #breadCrumb-link-move {
         font-size: 12px !important;
       }
