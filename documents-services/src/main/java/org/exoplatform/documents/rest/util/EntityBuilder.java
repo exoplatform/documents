@@ -282,8 +282,14 @@ public class EntityBuilder {
       if (expandProperties.contains("modifier") && node.getModifierId() > 0) {
         nodeEntity.setModifierIdentity(toIdentityEntity(identityManager, spaceService, node.getModifierId()));
       }
-      if (expandProperties.contains("owner") && node.getOwnerId() > 0) {
-        nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
+      if (expandProperties.contains("owner")) {
+        long ownerId = node.getOwnerId();
+        if (ownerId <= 0) {
+          Identity ownerIdentity = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
+          nodeEntity.setOwnerIdentity(toIdentityEntity(ownerIdentity, spaceService));
+        } else {
+          nodeEntity.setOwnerIdentity(toIdentityEntity(identityManager, spaceService, node.getOwnerId()));
+        }
       }
       if (expandProperties.contains("auditTrails")) {
         // TODO (documentFileService.getNodeAuditTrails) think of using limit of
