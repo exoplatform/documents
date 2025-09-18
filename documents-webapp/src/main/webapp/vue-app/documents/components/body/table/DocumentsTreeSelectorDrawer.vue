@@ -224,9 +224,9 @@ export default {
           return breadCrumbs;
         });
     },
-    retrieveDocumentTree() {
+    retrieveDocumentTree(ownerId) {
       this.$documentFileService
-        .getFullTreeData(this.$root.ownerId).then(data => {
+        .getFullTreeData(ownerId ? ownerId : this.$root.ownerId).then(data => {
           if (data) {
             this.items = [];
             this.items = data;
