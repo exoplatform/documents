@@ -85,13 +85,6 @@
           </v-card>
         </v-hover>
         <v-divider dark />
-        <v-list-item>
-          <v-list-item-content class="py-1">
-            <v-list-item-title class="text-title py-0">
-              {{ $t('documents.drawer.details.details') }}
-            </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
         <v-list-item dense two-line>
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-subtitle>{{ $t('documents.drawer.details.type') }}</v-list-item-subtitle>
@@ -176,21 +169,21 @@
             <v-list-item-subtitle>{{ $t('documents.details.drive.label') }}</v-list-item-subtitle>
             <div class="d-flex">
               <v-list-item-avatar 
-                size="24"
+                size="20"
                 class="mx-0 my-1"
                 :class="file.ownerIdentity.providerId === 'space' && 'spaceAvatar' || 'userAvatar'"
                 tile>
-                <v-avatar :size="24">
+                <v-avatar :size="20">
                   <img
                     :src="file.ownerIdentity.avatar"
                     alt=""
                     class="rounded"
-                    width="24"
-                    height="24">
+                    width="20"
+                    height="20">
                 </v-avatar>
               </v-list-item-avatar>
               <v-list-item-title class="ms-3">
-                {{ file.ownerIdentity.providerId === 'space' && file.ownerIdentity.name || $t('documents.label.userHomeDocuments') }}
+                <a :href="getDrivePath()" class="font-weight-bold">{{ file.ownerIdentity.providerId === 'space' && file.ownerIdentity.name || $t('documents.label.userHomeDocuments') }}</a>
               </v-list-item-title>
             </div>
           </v-list-item-content>
@@ -223,10 +216,10 @@
         <v-list-item>
           <v-list-item-content class="pt-0 pb-4">
             <div v-if="showNoDescription" class="d-flex documentDescription">
-              <v-icon size="22" class="descriptionIcon"> fas fa-file-alt </v-icon>
+              <v-icon size="20" class="descriptionIcon"> fas fa-file-alt </v-icon>
               <a
                 v-if="file.acl.canEdit"
-                class="font-weight-bold ms-2 clickable pt-1 documentDescription"
+                class="font-weight-bold ps-4 clickable py-auto documentDescription"
                 @click="openEditor">
                 <span>{{ $t('documents.message.addYourDescription') }}</span>
               </a>
@@ -252,7 +245,7 @@
                           v-bind="attrs"
                           v-on="on"
                           class="primary--text"
-                          size="16"
+                          size="20"
                           @click="openEditor">
                           {{ 'fa fa-edit' }}
                         </v-icon>
@@ -630,6 +623,13 @@ export default {
       document.execCommand('copy');
       document.body.removeChild(input);
       this.loading = false;
+    },
+    getDrivePath() {
+      if (this.file?.ownerIdentity?.providerId === 'space') {
+        const spaceId = this.file?.ownerIdentity?.avatar.split('social/spaces/')[1].split('/avatar')[0];
+        return `${eXo.env.portal.context}/s/${spaceId}/documents`;
+      } 
+      return `${eXo.env.portal.context}/${eXo.env.portal.portalName}/documents`;
     },
   },
 };
