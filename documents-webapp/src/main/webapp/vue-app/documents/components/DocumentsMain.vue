@@ -770,7 +770,7 @@ export default {
 
     importDocuments(uploadId,overrideMode){
       this.setMultiActionLoading(true,'import');
-      this.$documentFileService.importFilesFromZip(this.$root.ownerId,this.parentFolderId,this.folderPath,uploadId,overrideMode).then().catch(e => {
+      this.$documentFileService.importFilesFromZip(this.ownerId,this.parentFolderId,this.folderPath,uploadId,overrideMode).then().catch(e => {
         console.error('Error when import documents', e);
         this.status='failed';
         this.$root.$emit('show-alert', {
