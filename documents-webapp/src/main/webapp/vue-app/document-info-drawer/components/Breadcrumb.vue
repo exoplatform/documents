@@ -21,7 +21,7 @@
       <div
         id="breadcrumb-list-items"
         data-isfolder="true"
-        class="pa-1 d-flex width-fit-content">
+        class="pa-0 d-flex width-fit-content">
         <div
           v-for="(folder, index) in documentsBreadcrumbToDisplay"
           :key="index"
@@ -31,7 +31,7 @@
             <template #activator="{ on, attrs }">
               <v-btn
                 height="20px"
-                min-width="25px"
+                min-width="20px"
                 class="pa-0 text-truncate flex-shrink-1 clickable"
                 text
                 v-bind="attrs"
@@ -54,8 +54,8 @@
                 </v-card>
                 <v-icon
                   v-else
-                  size="16"
-                  class="pe-1">
+                  size="18"
+                  class="pa-0 pe-2">
                   fas fa-home
                 </v-icon>
                 <v-icon
