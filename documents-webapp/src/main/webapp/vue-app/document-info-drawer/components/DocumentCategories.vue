@@ -53,11 +53,11 @@
     class="d-flex mb-auto px-0 pb-0 pt-2px d-inline clickable documentCategories"
     @click="addCategory">
     <v-icon
-      size="21"
+      size="20"
       class="pe-1">
       fa-th-large
     </v-icon>
-    <a class="font-weight-bold ms-2 clickable pt-1 documentCategories">{{ $t('documents.label.addCategories') }}</a>
+    <a class="font-weight-bold ps-2 clickable py-auto documentCategories">{{ $t('documents.label.addCategories') }}</a>
   </div>
 </template>
 <script>
