@@ -85,17 +85,10 @@
           </v-card>
         </v-hover>
         <v-divider dark />
-        <v-list-item>
-          <v-list-item-content class="py-1">
-            <v-list-item-title class="text-title py-0">
-              {{ $t('documents.drawer.details.details') }}
-            </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
         <v-list-item dense two-line>
           <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-title>{{ $t('documents.drawer.details.type') }}</v-list-item-title>
-            <v-list-item-subtitle> {{ $t(`documents.label.type.${icon.type}`) }} </v-list-item-subtitle>
+            <v-list-item-subtitle>{{ $t('documents.drawer.details.type') }}</v-list-item-subtitle>
+            <v-list-item-title> {{ $t(`documents.label.type.${icon.type}`) }} </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
         <v-list-item
@@ -103,16 +96,16 @@
           dense
           two-line>
           <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-title>{{ $t('documents.drawer.details.size') }}</v-list-item-title>
-            <v-list-item-subtitle>
+            <v-list-item-subtitle>{{ $t('documents.drawer.details.size') }}</v-list-item-subtitle>
+            <v-list-item-title class="text-body">
               {{ fileSize.value }} {{ $t(`document.size.label.unit.${fileSize.unit}`) }} ({{ fileWithVersionsSize.value }} {{ $t(`document.size.label.unit.${fileWithVersionsSize.unit}`) }} {{ $t('documents.drawer.details.sizeWithVersions') }})              
-            </v-list-item-subtitle>
+            </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
         <v-list-item dense two-line>
           <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-title>{{ $t('documents.drawer.details.created') }}</v-list-item-title>
-            <v-list-item-subtitle class="d-flex flex-row">
+            <v-list-item-subtitle>{{ $t('documents.drawer.details.created') }}</v-list-item-subtitle>
+            <v-list-item-title class="d-flex flex-row">
               <date-format
                 :value="lastUpdated"
                 :format="fullDateFormat" />
@@ -131,13 +124,13 @@
               <span v-else class="primary--text not-clickable font-weight-bold mx-1">
                 {{ infoDrawerCreatorLabel }}
               </span>
-            </v-list-item-subtitle>
+            </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
         <v-list-item dense two-line>
           <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-title>{{ $t('documents.drawer.details.modified') }}</v-list-item-title>
-            <v-list-item-subtitle class="d-flex flex-row">
+            <v-list-item-subtitle>{{ $t('documents.drawer.details.modified') }}</v-list-item-subtitle>
+            <v-list-item-title class="d-flex flex-row">
               <date-format
                 :value="lastUpdated"
                 :format="fullDateFormat" />
@@ -156,7 +149,7 @@
               <span v-else class="primary--text font-weight-bold mx-1">
                 {{ infoDrawerModifierLabel }}
               </span>
-            </v-list-item-subtitle>
+            </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
         <v-list-item
@@ -164,47 +157,72 @@
           dense
           two-line>
           <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-title>{{ $t('documents.details.view.label') }}</v-list-item-title>
-            <v-list-item-subtitle>{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</v-list-item-subtitle>
+            <v-list-item-subtitle>{{ $t('documents.details.view.label') }}</v-list-item-subtitle>
+            <v-list-item-title>{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</v-list-item-title>
           </v-list-item-content>
         </v-list-item>
-        <v-list-item dense two-line>
+        <v-list-item
+          v-if="file.ownerIdentity"
+          dense
+          two-line>
           <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-title>{{ $t('documents.drawer.details.location') }}</v-list-item-title>
-            <v-list-item-subtitle>
-              <breadcrumb :folder-id="file.parentFolderId" :is-mobile="isMobile" />
-            </v-list-item-subtitle>
+            <v-list-item-subtitle>{{ $t('documents.details.drive.label') }}</v-list-item-subtitle>
+            <div class="d-flex">
+              <v-list-item-avatar 
+                size="20"
+                class="mx-0 my-1"
+                :class="file.ownerIdentity.providerId === 'space' && 'spaceAvatar' || 'userAvatar'"
+                tile>
+                <v-avatar :size="20">
+                  <img
+                    :src="file.ownerIdentity.avatar"
+                    alt=""
+                    class="rounded"
+                    width="20"
+                    height="20">
+                </v-avatar>
+              </v-list-item-avatar>
+              <v-list-item-title class="ms-3">
+                <a :href="getDrivePath()" class="font-weight-bold">{{ file.ownerIdentity.providerId === 'space' && file.ownerIdentity.name || $t('documents.label.userHomeDocuments') }}</a>
+              </v-list-item-title>
+            </div>
           </v-list-item-content>
         </v-list-item>
+        
+
         <v-list-item dense two-line>
-          <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-title>{{ $t('documents.drawer.details.category') }}</v-list-item-title>
-            <v-list-item-subtitle>
-              <document-categories v-if="file" :file="file" />
-            </v-list-item-subtitle>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content class="py-1">
+          <v-list-item-content class="pt-1 pb-2">
+            <v-list-item-subtitle>{{ $t('documents.drawer.details.location') }}</v-list-item-subtitle>
             <v-list-item-title>
-              {{ $t('documents.drawer.details.description') }}
+              <breadcrumb :folder-id="file.parentFolderId" :is-mobile="isMobile" />
+            </v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item dense two-line>
+          <v-list-item-content class="py-0 pt-1">
+            <v-list-item-subtitle>{{ $t('documents.drawer.details.category') }}</v-list-item-subtitle>
+            <v-list-item-title class="my-1">
+              <document-categories v-if="file" :file="file" />
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
         <v-list-item>
+          <v-list-item-content class="py-1">
+            <v-list-item-subtitle>
+              {{ $t('documents.drawer.details.description') }}
+            </v-list-item-subtitle>
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item>
           <v-list-item-content class="pt-0 pb-4">
-            <div v-if="showNoDescription">
-              <div class="d-flex flex-row justify-center text-center">
-                <v-icon size="40" class="descriptionIcon"> fas fa-file-alt </v-icon>
-              </div>
-              <div class="documentDescription d-flex flex-column justify-center text-center pt-2 pb-8">
-                <a
-                  v-if="file.acl.canEdit"
-                  class="align-center font-weight-bold"
-                  @click="openEditor">
-                  <span>{{ $t('documents.message.addYourDescription') }}</span>
-                </a>
-              </div>
+            <div v-if="showNoDescription" class="d-flex documentDescription">
+              <v-icon size="20" class="descriptionIcon"> fas fa-file-alt </v-icon>
+              <a
+                v-if="file.acl.canEdit"
+                class="font-weight-bold ps-4 clickable py-auto documentDescription"
+                @click="openEditor">
+                <span>{{ $t('documents.message.addYourDescription') }}</span>
+              </a>
             </div>
             <v-hover>
               <div class="documentDescription" slot-scope="{ hover }">
@@ -227,7 +245,7 @@
                           v-bind="attrs"
                           v-on="on"
                           class="primary--text"
-                          size="16"
+                          size="20"
                           @click="openEditor">
                           {{ 'fa fa-edit' }}
                         </v-icon>
@@ -379,7 +397,7 @@ export default {
     document.addEventListener('search-metadata-tag', this.close);
     document.addEventListener('document-category-selected', this.close);
     document.addEventListener('click', (event) => {
-      if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentDescription')) {return;}
+      if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentDescription') || event.target.closest('.documentCategories')) {return;}
       this.close();
     });
   },
@@ -605,6 +623,13 @@ export default {
       document.execCommand('copy');
       document.body.removeChild(input);
       this.loading = false;
+    },
+    getDrivePath() {
+      if (this.file?.ownerIdentity?.providerId === 'space') {
+        const spaceId = this.file?.ownerIdentity?.avatar.split('social/spaces/')[1].split('/avatar')[0];
+        return `${eXo.env.portal.context}/s/${spaceId}/documents`;
+      } 
+      return `${eXo.env.portal.context}/${eXo.env.portal.portalName}/documents`;
     },
   },
 };

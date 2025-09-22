@@ -23,7 +23,7 @@
         <category-chip
           :ref="`category${index}`"
           :category="c"
-          chip-class="flex-shrink-0 me-2"
+          chip-class="flex-shrink-0 me-2 body-1"
           breadcrumb
           small
           @select="selectCategory" />
@@ -48,9 +48,17 @@
       ref="drawer"
       @select="selectCategory" />
   </div>
-  <v-card-subtitle v-else class="d-flex mb-auto px-0 pt-2px d-inline text-no-wrap">
-    {{ $t('documents.drawer.details.noCategory') }}
-  </v-card-subtitle>
+  <div
+    v-else
+    class="d-flex mb-auto px-0 pb-0 pt-2px d-inline clickable documentCategories"
+    @click="addCategory">
+    <v-icon
+      size="20"
+      class="pe-1">
+      fa-th-large
+    </v-icon>
+    <a class="font-weight-bold ps-2 clickable py-auto documentCategories">{{ $t('documents.label.addCategories') }}</a>
+  </div>
 </template>
 <script>
 export default {
@@ -112,6 +120,13 @@ export default {
       this.moreDrawer = true;
       await this.$nextTick();
       this.$refs?.drawer?.open?.(this.categories);
+    },
+    addCategory() {
+      document.dispatchEvent(new CustomEvent('category-form-drawer-open', {detail: {
+        objectType: 'document',
+        objectId: this.file.id,
+        categoryIds: [],
+      }}));
     },
   },
 };
