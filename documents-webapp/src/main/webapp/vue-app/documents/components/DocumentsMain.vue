@@ -79,6 +79,7 @@
               :selected-view="selectedView"
               :selected-documents="selectedDocuments"
               :view-type="viewType"
+              :folder-path="folderPath"
               :is-mobile="isMobile"
               class="px-4 no-border" />
             <exo-document-notification-alerts />

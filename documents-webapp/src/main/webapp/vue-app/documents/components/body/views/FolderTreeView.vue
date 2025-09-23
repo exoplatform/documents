@@ -122,13 +122,12 @@ export default {
         if (userSpacesTree && userSpacesTree.children?.length > 0) {
           this.items.push(userSpacesTree);
         }
-        this.items = this.items.map(obj => ({
-          ...JSON.parse(JSON.stringify(obj, (key, value) =>
-            // eslint-disable-next-line no-undefined
-            (value === null ? undefined : value)
-          )),
-          children: obj.children || []
-        }));
+        this.items = this.items.map(obj => {
+          return JSON.parse(JSON.stringify(obj, (key, value) => 
+          // eslint-disable-next-line no-undefined
+            (value === null ? undefined : value) 
+          ));
+        });
 
       } catch (error) {
         console.error('Error retrieving document tree:', error);
