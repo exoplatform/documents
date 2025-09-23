@@ -44,6 +44,7 @@
       :max-size="maxSize"
       :is-mobile="isMobile"
       :selected-view="selectedView"
+      :folder-path="folderPath"
       :selected-documents="selectedDocuments" />
   </div>
 </template>

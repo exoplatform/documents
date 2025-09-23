@@ -166,7 +166,7 @@ export default {
         drive.name='Personal Documents';
       }
       this.$root.selectedDrive = drive;
-      this.$root.selectedPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1].path.replace(`${drive.path}/`,'');
+      this.$root.selectedPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1]?.path?.replace(`${drive.path}/`,'');
       this.initDocumentsBreadcrumb();
       this.$forceUpdate();
       this.isMounted = true;
