@@ -101,6 +101,7 @@ export default {
     pageSize: 20,
     offset: 0,
     limit: 0,
+    currentDriveBreadCrumb: [],
   }),
   computed: {   
     openLevel() {
@@ -126,8 +127,11 @@ export default {
   },
   methods: {
     documentsBreadcrumbUpdated(documentsBreadcrumb) {
-      const tab = [];
-      documentsBreadcrumb.forEach(element => tab.push(element.id));
+      const tab = this.currentDriveBreadCrumb;
+      documentsBreadcrumb.forEach(element => {
+        if (!tab.includes(element.id)){
+          tab.push(element.id);}
+      });
       this.currentFolderPathTab = tab;
     },
     folderCreated(createdFolder) {
@@ -169,6 +173,9 @@ export default {
       return items;
     },
     openFolder(folder){
+      if (folder.drive) {
+        this.currentDriveBreadCrumb  = ['space_drives', folder.id];
+      }
       if (this.currentFolderPathTab[this.currentFolderPathTab.length - 1] === folder.id) {
         return;
       }

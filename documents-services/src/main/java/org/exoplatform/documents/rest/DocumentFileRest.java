@@ -419,8 +419,8 @@ public class DocumentFileRest implements ResourceContainer {
                                 @Parameter(description = "Folder technical identifier")
                                 @QueryParam("folderId")
                                 String folderId,
-                                  @Parameter(description = "")
-                                    @QueryParam("destination folder path")
+                                  @Parameter(description = "destination folder path")
+                                    @QueryParam("destinationFolderPath")
                                     String destinationFolderPath,
                                   @Parameter(description = "include children")
                                     @QueryParam("withChildren")
