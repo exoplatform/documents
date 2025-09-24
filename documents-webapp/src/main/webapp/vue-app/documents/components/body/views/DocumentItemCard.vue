@@ -335,6 +335,13 @@ export default {
     this.$root.$on('cancel-edit-mode', this.cancelEditMode);
     this.fileImage = this.file?.image;
     this.initSelected();
+    $(document).on('mousedown', (event) => {
+      if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
+        window.setTimeout(() => {
+          this.menuDisplayed = false;
+        }, this.waitTimeUntilCloseMenu);
+      }
+    });
   },
   beforeDestroy() {
     this.$root.$off('update-selection-documents-list', this.handleUpdateSelectionList);
