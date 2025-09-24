@@ -287,7 +287,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
                 && file.acl.canEdit
                 && (eXo.env.portal.spaceIdentityId === '' || file.creatorUserName!=='__system' || eXo.env.portal.isAdministrator)
                 && !file.sourceID
-                && !file.path.includes('News Attachments');
+                && !file.path?.includes('News Attachments');
   },
   enabledForMultiSelection: () => false,
   componentOptions: {

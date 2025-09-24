@@ -22,6 +22,7 @@
       :has-more="hasMore"
       :is-mobile="isMobile"
       :selected-documents="selectedDocuments"
+      :selected-view="selectedView"
       :loading="loading" />
     <documents-folder-list-view
       v-else

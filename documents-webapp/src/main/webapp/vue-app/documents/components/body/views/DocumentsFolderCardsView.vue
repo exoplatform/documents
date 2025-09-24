@@ -165,7 +165,7 @@ export default {
           icon: this.$root.getFileIcon(file),
           editable: this.$root.isFileEditable(file),
           readable: this.$root.isFileReadable(file),
-          path: file?.docPath,
+          path: file?.path,
           source: 'documents',
           folder: file.folder,
         };
