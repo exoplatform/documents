@@ -62,29 +62,6 @@
             @click="selectDocument($event)"
             @mouseover="checkRangeSelect"
             @mouseleave="resetRangeSelect" />
-          <div v-show="hover || selectedDocuments.length">
-            <v-menu
-            
-              v-model="menuDisplayed"
-              bottom>
-              <template #activator="{ on, attrs }">
-                <v-btn
-                  :title="$t('documents.label.menu.action.tooltip')"
-                  small
-                  icon
-                  class="my-auto mx-0"
-                  v-bind="attrs"
-                  v-on="on">
-                  <v-icon size="20">mdi-dots-vertical</v-icon>
-                </v-btn>
-              </template>
-              <documents-actions-menu
-                :file="folder"
-                :current-view="currentView"
-                :is-search-result="isSearchResult"
-                :is-mobile="isMobile" />
-            </v-menu>
-          </div>
           <v-btn
             id="attachment-info"
             :title="$t('attachments.label.details')"
@@ -181,14 +158,6 @@ export default {
     this.$root.$on('select-target-document', this.handleSelectTargetDocument);
     this.$root.$on('reset-selections', this.handleResetSelections);
     this.initSelected();
-    
-    $(document).on('mousedown', (event) => {
-      if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
-        window.setTimeout(() => {
-          this.menuDisplayed = false;
-        }, this.waitTimeUntilCloseMenu);
-      }
-    });
   },
   beforeDestroy() {
     this.$root.$off('update-selection-documents-list', this.handleUpdateSelectionList);
