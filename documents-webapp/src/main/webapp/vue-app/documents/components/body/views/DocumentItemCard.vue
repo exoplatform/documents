@@ -81,7 +81,7 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              :max-width="(hover || selectedDocuments.length) && showDetails ? '50%' : '75%'"
+              :max-width="(hover || selectedDocuments.length) && showDetails ? '50%' : '90%'"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <v-card-text
                 :title="fileName"
@@ -90,43 +90,47 @@
                 v-text="fileName" />
             </v-card>
             <v-spacer />
-            <div class="d-flex" v-show="(hover || selectedDocuments.length) && showDetails">
+            <div class="d-flex">
               <v-simple-checkbox
+                v-show="(hover || selectedDocuments.length) && showDetails"
                 v-model="checked"
                 color="white"
                 @click="selectDocument($event)"
                 @mouseover="checkRangeSelect"
                 @mouseleave="resetRangeSelect" />
-              <v-menu
-                v-model="menuDisplayed"
-                bottom>
-                <template #activator="{ on, attrs }">
-                  <v-btn
-                    :title="$t('documents.label.menu.action.tooltip')"
-                    small
-                    icon
-                    class="white--text my-auto mx-0"
-                    v-bind="attrs"
-                    v-on="on">
-                    <v-icon size="20">mdi-dots-vertical</v-icon>
-                  </v-btn>
-                </template>
-                <documents-actions-menu
-                  :file="file"
-                  :current-view="currentView"
-                  :is-search-result="isSearchResult"
-                  :is-mobile="isMobile" />
-              </v-menu>
+              <v-btn
+                id="attachment-info"
+                v-show="(hover || selectedDocuments.length) && showDetails"
+                @click="showInfo()"
+                :title="$t('attachments.label.details')"
+                small
+                icon
+                class="white--text my-auto mx-0">
+                <v-icon size="20">fa-info-circle</v-icon>
+              </v-btn>  
+              <div v-show="(hover || selectedDocuments.length) && showDetails">
+                <v-menu
+                  v-model="menuDisplayed"
+                  bottom>
+                  <template #activator="{ on, attrs }">
+                    <v-btn
+                      :title="$t('documents.label.menu.action.tooltip')"
+                      small
+                      icon
+                      class="white--text my-auto mx-0"
+                      v-bind="attrs"
+                      v-on="on">
+                      <v-icon size="20">mdi-dots-vertical</v-icon>
+                    </v-btn>
+                  </template>
+                  <documents-actions-menu
+                    :file="file"
+                    :current-view="currentView"
+                    :is-search-result="isSearchResult"
+                    :is-mobile="isMobile" />
+                </v-menu>
+              </div>
             </div>  
-            <v-btn
-              id="attachment-info"
-              @click="showInfo()"
-              :title="$t('attachments.label.details')"
-              small
-              icon
-              class="white--text my-auto mx-0">
-              <v-icon size="20">fa-info-circle</v-icon>
-            </v-btn>
           </v-card-text>
         </v-card>
       </v-expand-transition>
@@ -304,13 +308,6 @@ export default {
     this.$root.$on('reset-selections', this.handleResetSelections);
     this.fileImage = this.file?.image;
     this.initSelected();
-    $(document).on('mousedown', (event) => {
-      if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
-        window.setTimeout(() => {
-          this.menuDisplayed = false;
-        }, this.waitTimeUntilCloseMenu);
-      }
-    });
   },
   beforeDestroy() {
     this.$root.$off('update-selection-documents-list', this.handleUpdateSelectionList);
@@ -319,6 +316,15 @@ export default {
     this.$root.$off('select-all-documents', this.handleSelectAllDocuments);
     this.$root.$off('select-target-document', this.handleSelectTargetDocument);
     this.$root.$off('reset-selections', this.handleResetSelections);
+  },
+  mounted() {
+    $(document).on('mousedown', (event) => {
+      if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
+        window.setTimeout(() => {
+          this.menuDisplayed = false;
+        }, this.waitTimeUntilCloseMenu);
+      }
+    });
   },
   methods: {
     displayActionMenu() {
