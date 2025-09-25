@@ -218,7 +218,9 @@ export default {
       }
     },
     addDrives(drives) {
-      this.drives.push(...drives);
+      if (drives) {
+        this.drives.push(...drives);
+      }
     },
     canEditFile(file) {
       return file?.accessList?.canEdit;

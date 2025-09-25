@@ -399,7 +399,9 @@ export default {
       this.bulkDownloadDocument();
     },
     addDrives(drives) {
-      this.drives.push(...drives);
+      if (drives) {
+        this.drives.push(...drives);
+      }
     },
     hideElement(element) {
       if (!this.showHidden){
@@ -1787,6 +1789,7 @@ export default {
     applyViewType(viewType) {
       this.viewType = viewType;
       this.refreshFiles();
+      this.$nextTick().then(() => this.$root.$emit('update-breadcrumb', this.folderPath));
     }
   },
 };
