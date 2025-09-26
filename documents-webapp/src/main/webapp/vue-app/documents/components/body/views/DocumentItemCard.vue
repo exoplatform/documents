@@ -81,7 +81,7 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              :max-width="(hover || selectedDocuments.length) && showDetails ? '50%' : '90%'"
+              :max-width="(hover || selectedDocuments.length) && showDetails ? '50%' : showDetails ? '90%': '80%'"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <v-card-text
                 :title="fileName"
@@ -100,7 +100,7 @@
                 @mouseleave="resetRangeSelect" />
               <v-btn
                 id="attachment-info"
-                v-show="(hover || selectedDocuments.length) && showDetails"
+                v-show="hover"
                 @click="showInfo()"
                 :title="$t('attachments.label.details')"
                 small
@@ -108,7 +108,7 @@
                 class="white--text my-auto mx-0">
                 <v-icon size="20">fa-info-circle</v-icon>
               </v-btn>  
-              <div v-show="(hover || selectedDocuments.length) && showDetails">
+              <div v-show="hover && showDetails">
                 <v-menu
                   v-model="menuDisplayed"
                   bottom>
@@ -318,9 +318,9 @@ export default {
     this.$root.$off('reset-selections', this.handleResetSelections);
   },
   mounted() {
-    $(document).on('mousedown', (event) => {
+    document.addEventListener('mousedown', (event) => {
       if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
-        window.setTimeout(() => {
+        setTimeout(() => {
           this.menuDisplayed = false;
         }, this.waitTimeUntilCloseMenu);
       }
