@@ -154,7 +154,7 @@ export default {
     this.$root.$off('reset-selections', this.handleResetSelections);
   },
   mounted() {
-    $(document).on('mousedown', (event) => {
+    document.addEventListener('mousedown', (event) => {
       if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
         window.setTimeout(() => {
           this.menuDisplayed = false;
