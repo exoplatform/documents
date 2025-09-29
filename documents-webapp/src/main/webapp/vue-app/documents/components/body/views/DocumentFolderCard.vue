@@ -24,7 +24,7 @@
       <div class="d-flex flex-no-wrap justify-space-between">
         <v-card
           class="d-flex flex-no-wrap"
-          :width="hover || selectedDocuments.length ? '70%' : '80%'"
+          :width="!isDrive && (hover || selectedDocuments.length) ? '58%' : '100%'"
           flat>
           <v-avatar
             class="ma-3"
@@ -45,9 +45,8 @@
           </v-avatar>
           <div class="align-self-center text-subtitle-2 text-truncate">{{ name }}</div>
         </v-card>
-        <v-card-actions>
+        <v-card-actions v-show="!isDrive && (hover || selectedDocuments.length)">
           <v-simple-checkbox
-            v-show="hover || selectedDocuments.length"
             v-model="checked"
             @click="selectDocument($event)"
             @mouseover="checkRangeSelect"
@@ -60,7 +59,27 @@
             class="my-auto mx-0"
             @click="showInfo">
             <v-icon size="20">fa-info-circle</v-icon>
-          </v-btn>
+          </v-btn>  
+          <v-menu
+            v-model="menuDisplayed"
+            bottom>
+            <template #activator="{ on, attrs }">
+              <v-btn
+                :title="$t('documents.label.menu.action.tooltip')"
+                small
+                icon
+                class="my-auto mx-0"
+                v-bind="attrs"
+                v-on="on">
+                <v-icon size="20">mdi-dots-vertical</v-icon>
+              </v-btn>
+            </template>
+            <documents-actions-menu
+              :file="folder"
+              :current-view="currentView"
+              :is-search-result="isSearchResult"
+              :is-mobile="isMobile" />
+          </v-menu>
         </v-card-actions>
       </div>
     </v-card>
@@ -86,12 +105,22 @@ export default {
       type: Boolean,
       default: false,
     },
+    currentView: {
+      type: String,
+      default: ''
+    },
+    isSearchResult: {
+      type: Boolean,
+      default: false
+    }
   },
   data: () => ({
     checked: false,
     show: false,
     canSelectRange: false,
-    rangeSelectTimer: null
+    rangeSelectTimer: null,
+    menuDisplayed: false,
+    waitTimeUntilCloseMenu: 200,
   }),
   computed: {
     folderId() {
@@ -124,7 +153,23 @@ export default {
     this.$root.$off('select-target-document', this.handleSelectTargetDocument);
     this.$root.$off('reset-selections', this.handleResetSelections);
   },
+  mounted() {
+    document.addEventListener('mousedown', (event) => {
+      if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
+        window.setTimeout(() => {
+          this.menuDisplayed = false;
+        }, this.waitTimeUntilCloseMenu);
+      }
+    });
+  },
   methods: {
+    displayActionMenu() {
+      if (this.isMobile){
+        this.$root.$emit('open-file-action-menu', this.file);
+      } else {
+        this.menuDisplayed = true;
+      }
+    },
     showInfo(event) {
       if (event) {
         event.preventDefault();
