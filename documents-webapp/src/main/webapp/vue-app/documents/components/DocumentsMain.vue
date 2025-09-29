@@ -1523,17 +1523,10 @@ export default {
         document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', { detail: {
           'sourceApp': 'NEW.APP',
           defaultDrive: this.$root.selectedDrive,
-          defaultFolder: this.$root.selectedPath,
+          defaultFolder: this.$root.selectedPath.indexOf(this.$root.selectedDrive.path) !== -1 ? this.$root.selectedPath.split(this.$root.selectedDrive.path)[1] : this.$root.selectedPath,
           files,
         }}));
       }
-    },
-    extractDefaultFolder(isPersonalDrive) {
-      const path = this.currentFolder.path;
-      if (isPersonalDrive) {
-        return path.substring(path.indexOf('Private') + '/Private'.length);
-      }
-      return path.substring(path.indexOf('Documents') + '/Documents'.length);
     },
     setCurrentFolder(folder) {
       this.currentFolder = folder;
