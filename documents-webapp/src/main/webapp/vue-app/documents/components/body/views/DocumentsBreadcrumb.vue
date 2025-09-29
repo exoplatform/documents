@@ -167,6 +167,9 @@ export default {
       }
       this.$root.selectedDrive = drive;
       this.$root.selectedPath = this.documentsBreadcrumb[this.documentsBreadcrumb.length-1]?.path?.replace(`${drive.path}/`,'');
+      if (this.$root.selectedPath.indexOf('Public') !== -1) {
+        this.$root.selectedPath = `Public/${this.$root.selectedPath.split('Public')[1]}` || 'Public';
+      }
       this.initDocumentsBreadcrumb();
       this.$forceUpdate();
       this.isMounted = true;
