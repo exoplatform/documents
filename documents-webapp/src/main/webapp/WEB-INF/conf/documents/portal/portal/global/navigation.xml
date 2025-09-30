@@ -45,6 +45,12 @@
                 <page-reference>portal::global::documents</page-reference>
             </node>
         </node>
+        <node>
+          <name>download-document</name>
+          <label>#{portal.global.download-document}</label>
+          <visibility>SYSTEM</visibility>
+          <page-reference>portal::global::download-document</page-reference>
+        </node>
     </page-nodes>
 </node-navigation>
 

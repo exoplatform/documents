@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 eXo Platform SAS
+ * Copyright (C) 2025 eXo Platform SAS
  *
  *  This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -16,12 +16,6 @@
  */
 package org.exoplatform.documents.controller;
 
-import org.exoplatform.container.PortalContainer;
-import org.exoplatform.documents.model.PublicDocumentAccess;
-import org.exoplatform.documents.model.DownloadItem;
-import org.exoplatform.documents.service.PublicDocumentAccessService;
-import org.exoplatform.documents.service.ExternalDownloadService;
-import org.exoplatform.portal.application.localization.HttpRequestWrapper;
 import org.exoplatform.portal.branding.BrandingService;
 import org.exoplatform.portal.resource.SkinService;
 import org.exoplatform.services.resources.LocaleConfigService;
@@ -29,48 +23,21 @@ import org.exoplatform.web.ControllerContext;
 import org.exoplatform.web.application.JspBasedWebHandler;
 import org.exoplatform.web.application.javascript.JavascriptConfigService;
 import org.exoplatform.web.controller.QualifiedName;
-import org.json.JSONObject;
-import org.exoplatform.container.xml.InitParams;
 
-import jakarta.servlet.RequestDispatcher;
-import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 public class PublicAccessDownloadDocumentHandler extends JspBasedWebHandler {
 
-  private ServletContext                servletContext;
-
   private static final QualifiedName    NODE_ID                   = QualifiedName.create("gtn", "nodeId");
-
-  private static final String           DOWNLOAD_DOCUMENT_JSP_PATH = "public.download.jsp.path";
 
   private static final String           NAME                       = "download-document";
 
-  private final PublicDocumentAccessService publicDocumentAccessService;
-
-  private final ExternalDownloadService externalDownloadService;
-
-  private String                        publicDownloadJspPath;
-
-  public PublicAccessDownloadDocumentHandler(PortalContainer container,
-                                             PublicDocumentAccessService publicDocumentAccessService,
-                                             ExternalDownloadService externalDownloadService,
-                                             LocaleConfigService localeConfigService,
+  public PublicAccessDownloadDocumentHandler(LocaleConfigService localeConfigService,
                                              BrandingService brandingService,
                                              JavascriptConfigService javascriptConfigService,
-                                             SkinService skinService,
-                                             InitParams initParams) {
+                                             SkinService skinService) {
     super(localeConfigService, brandingService, javascriptConfigService, skinService);
-    this.publicDocumentAccessService = publicDocumentAccessService;
-    this.externalDownloadService = externalDownloadService;
-    this.servletContext = container.getPortalContext();
-    if (initParams != null && initParams.containsKey(DOWNLOAD_DOCUMENT_JSP_PATH)) {
-      this.publicDownloadJspPath = initParams.getValueParam(DOWNLOAD_DOCUMENT_JSP_PATH).getValue();
-    }
   }
 
   @Override
@@ -79,21 +46,10 @@ public class PublicAccessDownloadDocumentHandler extends JspBasedWebHandler {
     HttpServletResponse response = controllerContext.getResponse();
 
     String nodeId = controllerContext.getParameter(NODE_ID);
-    DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
-    boolean hasPublicLink = publicDocumentAccess != null;
-    boolean isAccessLocked = hasPublicLink && publicDocumentAccess.getPasswordHashKey() != null;
-    boolean isAccessExpired = publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId);
-    Map<String, Object> parameters = new HashMap<>();
-    parameters.put("nodeId", nodeId);
-    parameters.put("hasPublicLink", hasPublicLink);
-    parameters.put("isAccessLocked", isAccessLocked);
-    parameters.put("isAccessExpired", isAccessExpired);
-    if (downloadItem != null) {
-      parameters.put("documentName", downloadItem.getItemName());
-      parameters.put("documentType", downloadItem.getMimeType());
-    }
-    return dispatch(controllerContext, request, response, parameters);
+
+    String redirect = request.getRequestURI().replace("/"+nodeId, "?nodeId="+nodeId);
+    response.sendRedirect(response.encodeRedirectURL(redirect));
+    return true;
   }
 
   @Override
@@ -106,27 +62,4 @@ public class PublicAccessDownloadDocumentHandler extends JspBasedWebHandler {
     return true;
   }
 
-  protected void extendApplicationParameters(JSONObject applicationParameters, Map<String, Object> additionalParameters) {
-    additionalParameters.forEach(applicationParameters::put);
-  }
-
-  private boolean dispatch(ControllerContext controllerContext,
-                           HttpServletRequest request,
-                           HttpServletResponse response,
-                           Map<String, Object> parameters) throws Exception {
-
-    super.prepareDispatch(controllerContext,
-                          "PORTLET/documents-portlet/DownloadDocumentsPublicAccess",
-                          Collections.emptyList(),
-                          Collections.singletonList("portal/login"),
-                          params -> extendApplicationParameters(params, parameters));
-    RequestDispatcher requestDispatcher = servletContext.getRequestDispatcher(publicDownloadJspPath);
-    requestDispatcher.include(new HttpRequestWrapper(request) {
-      @Override
-      public String getContextPath() {
-        return "/documents-portlet";
-      }
-    }, response);
-    return true;
-  }
 }

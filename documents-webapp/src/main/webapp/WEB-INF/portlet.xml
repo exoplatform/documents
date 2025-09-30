@@ -46,7 +46,7 @@
       <name>portlet-view-dispatched-file-path</name>
       <value>/WEB-INF/jsp/download_document.jsp</value>
     </init-param>
-    <expiration-cache>-1</expiration-cache>
+    <expiration-cache>0</expiration-cache>
     <cache-scope>PUBLIC</cache-scope>
     <supports>
       <mime-type>text/html</mime-type>

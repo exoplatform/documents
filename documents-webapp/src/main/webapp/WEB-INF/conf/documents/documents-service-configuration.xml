@@ -76,12 +76,6 @@
       <name>PublicAccessDownloadDocumentHandler</name>
       <set-method>register</set-method>
       <type>org.exoplatform.documents.controller.PublicAccessDownloadDocumentHandler</type>
-      <init-params>
-        <value-param>
-          <name>public.download.jsp.path</name>
-          <value>${documents.public.download.jsp.path:/WEB-INF/jsp/download_document.jsp}</value>
-        </value-param>
-      </init-params>
     </component-plugin>
   </external-component-plugins>
 
