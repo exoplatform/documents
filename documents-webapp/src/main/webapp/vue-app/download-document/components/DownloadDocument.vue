@@ -16,12 +16,7 @@
  *
 -->
 <template>
-  <portal-login-template
-    :params="params"
-    branding-image
-    center>
-    <download-document-main :params="params" />
-  </portal-login-template>
+  <download-document-main :params="jsonParams" />
 </template>
 
 <script>
@@ -32,8 +27,14 @@ export default {
       default: null,
     },
   },
+  data() {
+    return {
+      jsonParams: {},
+    };
+  },
   created() {
-    document.title = this.$t('document.download.title');
+    this.jsonParams = JSON.parse(this.params);
+    console.log('DownloadDocument created with params:', this.jsonParams);
   },
   mounted() {
     this.$root.$applicationLoaded();
