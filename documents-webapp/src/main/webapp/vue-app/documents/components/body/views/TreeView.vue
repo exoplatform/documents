@@ -105,7 +105,7 @@ export default {
   }),
   computed: {   
     openLevel() {
-      return this.items && this.items.length ? this.currentFolderPathTab : [];
+      return this.items && this.items.length ?  [...new Set(this.currentFolderPathTab)] : [];
     },
     idItemActive() {
       return this.currentFolderPathTab && this.currentFolderPathTab.length ? this.currentFolderPathTab[this.currentFolderPathTab.length-1] : [];
@@ -127,12 +127,37 @@ export default {
   },
   methods: {
     documentsBreadcrumbUpdated(documentsBreadcrumb) {
-      const tab = this.currentDriveBreadCrumb;
-      documentsBreadcrumb.forEach(element => {
-        if (!tab.includes(element.id)){
-          tab.push(element.id);}
-      });
-      this.currentFolderPathTab = tab;
+      this.$nextTick()
+        .then(() => {
+        
+          const tab = this.currentDriveBreadCrumb;
+          if (tab.indexOf('space_drives') !== -1 && documentsBreadcrumb[0]?.name === 'Private') {
+            this.currentDriveBreadCrumb = documentsBreadcrumb.map(item => item.id);
+
+          } else {
+            const drive = this.getDriveByIdentityId(documentsBreadcrumb[0].identityId);
+            if (drive) {
+              tab.push(drive.id);
+            }
+            if ( !documentsBreadcrumb.length === 1 || documentsBreadcrumb[0].id !== 'space_drives') {
+              let spaceDrivesTree = false;
+              documentsBreadcrumb.forEach(element => {
+                if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId){
+                  if (element.path.includes('Groups/spaces')){
+                    spaceDrivesTree = true;
+                  }
+                } 
+                if (!tab.includes(element.id)){
+                  tab.push(element.id);}
+              });
+              if (spaceDrivesTree && tab.indexOf('space_drives') === -1){
+                tab.unshift('space_drives');
+              }
+            }
+            this.currentFolderPathTab = tab;
+          }
+        });
+      
     },
     folderCreated(createdFolder) {
       this.addChildren(this.items, createdFolder.parentFolderId, createdFolder);
@@ -173,20 +198,21 @@ export default {
       return items;
     },
     openFolder(folder){
-      if (folder.drive) {
-        this.currentDriveBreadCrumb  = ['space_drives', folder.id];
-      }
       if (this.currentFolderPathTab[this.currentFolderPathTab.length - 1] === folder.id) {
         return;
       }
-      this.currentFolderPathTab.push(folder.id);
+      
       if (folder.drives) {
         this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
       } else if (folder.drive) {
+        if (this.currentDriveBreadCrumb.indexOf('space_drives') === -1){
+          this.currentDriveBreadCrumb.push('space_drives');
+        }
         this.$root.ownerId = folder.identityId;
         this.$root.spaceId = folder.spaceId;
         this.$root.$emit('open-folder', folder);
       } else {
+        this.currentFolderPathTab.push(folder.id);
         if (folder.name ==='Private' && eXo.env.portal.userIdentityId) {
           this.$root.ownerId = eXo.env.portal.userIdentityId;
           this.$root.spaceId = null;
@@ -196,6 +222,7 @@ export default {
         }
         this.$root.$emit('open-folder', folder);
       }
+      
     },
     fetchChildren (item) {
       this.$root.$emit('tree-loading', true);
@@ -216,6 +243,9 @@ export default {
             );
             item.children.push(...newItems[0].children);
             this.currentFolderPathTab.push(item.id);
+            if (item.drive && this.currentFolderPathTab.indexOf('space_drives') === -1){
+              this.currentFolderPathTab.unshift('space_drives');
+            }
           }
           this.$root.$emit('tree-loading', false);
         });
