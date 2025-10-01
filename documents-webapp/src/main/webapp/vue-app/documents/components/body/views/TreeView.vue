@@ -131,7 +131,7 @@ export default {
         .then(() => {
         
           const tab = this.currentDriveBreadCrumb;
-          if (tab.indexOf('space_drives') !== -1 && documentsBreadcrumb[0]?.name === 'Private') {
+          if (tab.includes('space_drives') && documentsBreadcrumb[0]?.name === 'Private') {
             this.currentDriveBreadCrumb = documentsBreadcrumb.map(item => item.id);
 
           } else {
@@ -139,7 +139,7 @@ export default {
             if (drive) {
               tab.push(drive.id);
             }
-            if ( !documentsBreadcrumb.length === 1 || documentsBreadcrumb[0].id !== 'space_drives') {
+            if ( documentsBreadcrumb.length !== 1 || documentsBreadcrumb[0].id !== 'space_drives') {
               let spaceDrivesTree = false;
               documentsBreadcrumb.forEach(element => {
                 if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId){
@@ -150,7 +150,7 @@ export default {
                 if (!tab.includes(element.id)){
                   tab.push(element.id);}
               });
-              if (spaceDrivesTree && tab.indexOf('space_drives') === -1){
+              if (spaceDrivesTree && !tab.includes('space_drives')){
                 tab.unshift('space_drives');
               }
             }
@@ -205,7 +205,7 @@ export default {
       if (folder.drives) {
         this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
       } else if (folder.drive) {
-        if (this.currentDriveBreadCrumb.indexOf('space_drives') === -1){
+        if (!this.currentDriveBreadCrumb.includes('space_drives')){
           this.currentDriveBreadCrumb.push('space_drives');
         }
         this.$root.ownerId = folder.identityId;
@@ -243,7 +243,7 @@ export default {
             );
             item.children.push(...newItems[0].children);
             this.currentFolderPathTab.push(item.id);
-            if (item.drive && this.currentFolderPathTab.indexOf('space_drives') === -1){
+            if (item.drive && !this.currentFolderPathTab.includes('space_drives')){
               this.currentFolderPathTab.unshift('space_drives');
             }
           }
