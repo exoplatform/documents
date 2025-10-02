@@ -729,9 +729,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (node != null) {
         String nodeName = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        List<FullTreeItem> children = getAllFolderInNode(node, session, destinationNode, withChildren, showHidden);
+        List<FullTreeItem> children = getAllFolderInNode(node, session, destinationNode, withChildren, showHidden, String.valueOf(ownerId));
 
-        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children, showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE), null));
+        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children, showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE), String.valueOf(ownerId)));
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving tree folder'" + folderId, e);
@@ -743,7 +743,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
-  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, Node destinationNode, boolean withChildren, boolean showHidden) throws RepositoryException {
+  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, Node destinationNode, boolean withChildren, boolean showHidden, String ownerId) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
     while (nodeIter.hasNext()) {
@@ -766,7 +766,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (childNode != null) {
           List<FullTreeItem> folderChildListNodes = new ArrayList<>();
           if (withChildren || (destinationNode != null && destinationNode.getPath().contains(childNode.getPath()))) {
-            folderChildListNodes = getAllFolderInNode(childNode, session, destinationNode, withChildren, showHidden);
+            folderChildListNodes = getAllFolderInNode(childNode, session, destinationNode, withChildren, showHidden, ownerId);
           } else if (!hasFolderNodes(childNode,showHidden)) {
             folderChildListNodes = null;
           }
@@ -775,7 +775,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                childNode.getPath(),
                                                folderChildListNodes,
                                                showHidden && childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE),
-                                               null));
+                                               ownerId));
         }
 
       }
