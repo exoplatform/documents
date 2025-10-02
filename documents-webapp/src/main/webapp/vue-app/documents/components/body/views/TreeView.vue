@@ -217,7 +217,7 @@ export default {
           this.$root.ownerId = eXo.env.portal.userIdentityId;
           this.$root.spaceId = null;
           this.$root.driveView = false;
-        } else if (folder.ownerId) {
+        } else if (folder.ownerId && folder.ownerId !== '0') {
           this.$root.ownerId = folder.ownerId;
         }
         this.$root.$emit('open-folder', folder);
