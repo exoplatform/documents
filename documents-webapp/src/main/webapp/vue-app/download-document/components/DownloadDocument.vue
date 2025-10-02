@@ -34,7 +34,6 @@ export default {
   },
   created() {
     this.jsonParams = JSON.parse(this.params);
-    console.log('DownloadDocument created with params:', this.jsonParams);
   },
   mounted() {
     this.$root.$applicationLoaded();

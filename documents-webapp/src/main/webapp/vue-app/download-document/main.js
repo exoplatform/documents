@@ -48,7 +48,6 @@ const urls = [
 ];
 
 export function init(id, params) {
-  console.log('Init Download Document widget with params', params,id);
   exoi18n.loadLanguageAsync(lang, urls).then(i18n => {
     // init Vue app when locale ressources are ready
     Vue.createApp({
