@@ -17,17 +17,19 @@
 <template>
   <v-hover v-slot="{hover}">
     <v-card
-      :elevation="hover ? 4 : 0"
+      :elevation="hover && !editNameMode ? 4 : 0"
       :class="{ 'border-color': !hover }"
+      :ripple="!editNameMode"
       width="215px"
+      height="85px"
       @click="openFolder">
       <div class="d-flex flex-no-wrap justify-space-between">
         <v-card
           class="d-flex flex-no-wrap"
-          :width="!isDrive && (hover || selectedDocuments.length) ? '58%' : '100%'"
+          :width="!isDrive && !editNameMode && (hover || selectedDocuments.length) ? '58%' : '100%'"
           flat>
           <v-avatar
-            class="ma-3"
+            :class="editNameMode ? 'me-1 ma-3' : 'ma-3'"
             size="60"
             tile>
             <img
@@ -43,9 +45,18 @@
               fas fa-folder
             </v-icon>
           </v-avatar>
-          <div class="align-self-center text-subtitle-2 text-truncate">{{ name }}</div>
+          <documents-file-edit-name-cell
+            class="align-self-center mt-2 me-1"
+            v-if="editNameMode"
+            :file="folder"
+            :file-name="name"
+            file-type="folder"
+            :is-mobile="isMobile"
+            :edit-name-mode="editNameMode"
+            card-view="true" />
+          <div v-else class="align-self-center text-subtitle-2 text-truncate">{{ name }}</div>
         </v-card>
-        <v-card-actions v-show="!isDrive && (hover || selectedDocuments.length)">
+        <v-card-actions v-show="!isDrive && (hover || selectedDocuments.length) && !editNameMode">
           <v-simple-checkbox
             v-model="checked"
             @click="selectDocument($event)"
@@ -134,7 +145,10 @@ export default {
     },
     avatarUrl() {
       return this.folder?.avatarUrl;
-    }
+    }, 
+    editNameMode() {
+      return !this.folder.id || this.folder.id === -1;
+    },
   },
   created() {
     this.$root.$on('update-selection-documents-list', this.handleUpdateSelectionList);
@@ -178,6 +192,10 @@ export default {
       document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.folderId}));
     },
     openFolder() {
+      if (this.editNameMode) 
+      {
+        return;
+      }
       this.$root.$emit('document-open-folder', this.folder);
     },
     isFileSelected(folder) {
