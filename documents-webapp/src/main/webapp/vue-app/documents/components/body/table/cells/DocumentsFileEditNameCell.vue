@@ -14,7 +14,7 @@
     @blur="cancelEditNameMode()"
     @keyup="checkInput($event,fileName)"
     @contextmenu.stop.prevent>
-    <div slot="append" class="d-flex">
+    <div v-if="!cardView" slot="append" class="d-flex">
       <v-divider v-if="!isMobile" vertical />
       <v-icon
         class="primary--text ma-1 px-1"
@@ -57,6 +57,10 @@ export default {
       default: '',
     },
     isMobile: {
+      type: Boolean,
+      default: false,
+    },
+    cardView: {
       type: Boolean,
       default: false,
     },
