@@ -72,7 +72,7 @@
           v-if="(hover || isMobile || showDetails) && !loading && !invalid && !showPlayer"
           class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
           elevation="0"
-          style="height: 36px;">
+          :height="editNameMode ? '40px' : '36px'">
           <v-card-text class="d-flex font-weight-bold ps-1 pe-0 py-0 my-auto">
             <v-avatar
               color="white"
@@ -81,9 +81,19 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              :max-width="(hover || selectedDocuments.length) && showDetails ? '50%' : showDetails ? '90%': '80%'"
+              :max-width="(hover || selectedDocuments.length) && showDetails && !editNameMode ? '50%' : showDetails ? '90%': '80%'"
               class="d-flex  px-1 my-auto  no-border elevation-0">
+              <documents-file-edit-name-cell
+                class="white-background"
+                v-if="editNameMode"
+                :file="file"
+                :file-name="fileNameToEdit"
+                :file-type="fileType"
+                :is-mobile="isMobile"
+                :edit-name-mode="editNameMode"
+                card-view="true" />
               <v-card-text
+                v-else
                 :title="fileName"
                 :class="showDetails && 'text-subtitle-2'"
                 class="pa-0  my-auto white--text text-wrap text-break text-truncate"
@@ -92,7 +102,7 @@
             <v-spacer />
             <div class="d-flex">
               <v-simple-checkbox
-                v-show="(hover || selectedDocuments.length) && showDetails"
+                v-show="(hover || selectedDocuments.length) && showDetails && !editNameMode"
                 v-model="checked"
                 color="white"
                 @click="selectDocument($event)"
@@ -100,7 +110,7 @@
                 @mouseleave="resetRangeSelect" />
               <v-btn
                 id="attachment-info"
-                v-show="hover"
+                v-show="hover && !editNameMode"
                 @click="showInfo()"
                 :title="$t('attachments.label.details')"
                 small
@@ -108,7 +118,7 @@
                 class="white--text my-auto mx-0">
                 <v-icon size="20">fa-info-circle</v-icon>
               </v-btn>  
-              <div v-show="hover && showDetails">
+              <div v-show="hover && showDetails && !editNameMode">
                 <v-menu
                   v-model="menuDisplayed"
                   bottom>
@@ -175,6 +185,7 @@
 </template>
 
 <script>
+import ntFileExtension from '../../../json/NtFileExtension.json';
 export default {
   props: {
     file: {
@@ -240,6 +251,7 @@ export default {
     rangeSelectTimer: null,
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
+    fileToEditId: -1,
   }),
   computed: {
     fileId() {
@@ -247,6 +259,9 @@ export default {
     },
     fileName() {
       return this.file?.name;
+    },
+    fileNameToEdit() {
+      return this.file.name.includes('.') && !this.file.folder ? this.file.name.substring(0,this.file.name.lastIndexOf('.')):this.file.name;
     },
     fileIconClass() {
       return this.file?.icon?.class || 'fas fa-file';
@@ -292,6 +307,16 @@ export default {
     isFileOnlyReadable() {
       const type = this.mimeType || '';
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+    }, 
+    editNameMode() {
+      return this.fileId===this.fileToEditId;
+    },
+    fileType() {
+      let fileType = this.file.name.includes('.') && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
+      if (this.query && !this.extendedSearch){
+        fileType = this.highlightSearchResult(fileType,this.query);      
+      }
+      return fileType;
     },
   },
   watch: {
@@ -306,6 +331,8 @@ export default {
     this.$root.$on('select-all-documents', this.handleSelectAllDocuments);
     this.$root.$on('select-target-document', this.handleSelectTargetDocument);
     this.$root.$on('reset-selections', this.handleResetSelections);
+    this.$root.$on('update-file-name', this.editFileName);
+    this.$root.$on('cancel-edit-mode', this.cancelEditMode);
     this.fileImage = this.file?.image;
     this.initSelected();
   },
@@ -316,6 +343,8 @@ export default {
     this.$root.$off('select-all-documents', this.handleSelectAllDocuments);
     this.$root.$off('select-target-document', this.handleSelectTargetDocument);
     this.$root.$off('reset-selections', this.handleResetSelections);
+    this.$root.$off('update-file-name', this.editFileName);
+    this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   mounted() {
     document.addEventListener('mousedown', (event) => {
@@ -474,6 +503,16 @@ export default {
     },
     handleUpdateSelectionList() {
       this.show = this.selectedDocuments.length > 0;
+    },
+    editFileName(file) {
+      if (this.file.id === file.id){
+        this.fileToEditId = file.id;
+      }
+    },
+    cancelEditMode(file) {
+      if (this.file.id === file.id) {
+        this.fileToEditId = -1;
+      }
     }
   },
 };
