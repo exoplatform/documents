@@ -33,7 +33,8 @@
             v-if="document.isBreadcrumbItem && !document.isEllipsis"
             :key="index"
             :data-fileId="document.id"
-            :class="document.class">
+            :class="document.class"
+            class="document-breadcrumb-item">
             <v-tooltip max-width="300" bottom>
               <template #activator="{ on, attrs }">
                 <a
