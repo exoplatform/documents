@@ -261,7 +261,7 @@ export default {
       return this.file?.name;
     },
     fileNameToEdit() {
-      return this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(0,this.file.name.lastIndexOf('.')):this.file.name;
+      return this.file.name.includes('.') && !this.file.folder ? this.file.name.substring(0,this.file.name.lastIndexOf('.')):this.file.name;
     },
     fileIconClass() {
       return this.file?.icon?.class || 'fas fa-file';
@@ -312,7 +312,7 @@ export default {
       return this.fileId===this.fileToEditId;
     },
     fileType() {
-      let fileType = this.file.name.lastIndexOf('.') >= 0 && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
+      let fileType = this.file.name.includes('.') && !this.file.folder ? this.file.name.substring(this.file.name.lastIndexOf('.')) : ntFileExtension[this.file.mimeType] || '' ;
       if (this.query && !this.extendedSearch){
         fileType = this.highlightSearchResult(fileType,this.query);      
       }
