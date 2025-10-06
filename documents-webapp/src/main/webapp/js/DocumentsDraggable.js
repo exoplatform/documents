@@ -320,15 +320,15 @@
     }
 
     function getParentDragElement() {
-        return getBreadCrumbListElement().querySelector('div.documents-tree-item:last-child').cloneNode(true);
+        return getBreadCrumbListElement().querySelector('div.document-breadcrumb-item:last-child').cloneNode(true);
     }
 
     function getRootFolder() {
-        return getBreadCrumbListElement().querySelector('div.documents-tree-item:first-child').cloneNode(true);
+        return getBreadCrumbListElement().querySelector('div.document-breadcrumb-item:first-child').cloneNode(true);
     }
 
     function isRootFolder() {
-        return getBreadCrumbListElement().querySelectorAll('div.documents-tree-item')?.length === 1;
+        return getBreadCrumbListElement().querySelectorAll('div.document-breadcrumb-item')?.length === 1;
     }
 
     function canDropOnListFiles() {
