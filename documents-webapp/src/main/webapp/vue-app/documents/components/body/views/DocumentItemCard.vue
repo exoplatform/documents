@@ -84,7 +84,7 @@
               :max-width="(hover || selectedDocuments.length) && showDetails && !editNameMode ? '50%' : showDetails ? '90%': '80%'"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <documents-file-edit-name-cell
-                class="white-background"
+                class="white"
                 v-if="editNameMode"
                 :file="file"
                 :file-name="fileNameToEdit"
