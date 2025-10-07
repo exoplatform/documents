@@ -34,6 +34,33 @@ import io.meeds.portal.thumbnail.model.FileContent;
 public interface DocumentFileStorage {
 
   /**
+   * Retrieves the Root folder Path of a Space
+   * 
+   * @param spaceId {@link Space} technical identifier
+   * @param aclIdentity user willing to access the space's root folder
+   * @return the root {@link FolderNode} for the designated space
+   * @throws ObjectNotFoundException when the space doesn't exist
+   */
+  FolderNode getSpaceRootFolder(long spaceId, Identity aclIdentity) throws ObjectNotFoundException;
+
+  /**
+   * Retrieves the Root folder Path of a user
+   * 
+   * @param aclIdentity user willing to access his/her own root folder
+   * @return the root {@link FolderNode} for the designated user
+   */
+  FolderNode getPersonalRootFolder(Identity aclIdentity);
+
+  /**
+   * Return the root folder owner
+   * {@link org.exoplatform.social.core.identity.model.Identity} id
+   * 
+   * @param documentId JCR Node Id by example
+   * @return {@link org.exoplatform.social.core.identity.model.Identity} id
+   */
+  long getRootFolderOwnerId(String documentId);
+
+  /**
    * Retrieves a list of accessible files, for a selected user, by applying the
    * designated filter. The returned results will be of type {@link FileNode}
    * only. The ownerId of filter object will be used to select the list of
@@ -60,6 +87,15 @@ public interface DocumentFileStorage {
    * @return {@link List} of found {@link FileNode} available for user
    */
   List<FileNode> search(String keyword, Identity identity, int offset, int limit);
+
+  /**
+   * @param filter {@link DocumentTimelineFilter} to restrict search results
+   * @param identity User ACL {@link org.exoplatform.services.security.Identity}
+   * @param offset search offset
+   * @param limit search limit
+   * @return {@link List} of found {@link FileNode} available for user
+   */
+  List<FileNode> search(DocumentTimelineFilter filter, Identity identity, int offset, int limit);
 
   /**
    * Retrieves a list of biggest accessible files, for a selected user.
@@ -371,6 +407,14 @@ public interface DocumentFileStorage {
   String downloadFolder(String folderId);
 
   /**
+   * Returns a document file content as Text
+   * 
+   * @param documentId Document identifier
+   * @return the text representation of a file
+   */
+  String getFileContentAsText(String documentId);
+
+  /**
    * Import list of documents from an uploaded zip
    *
    * @param ownerId owner id
@@ -408,4 +452,5 @@ public interface DocumentFileStorage {
   }
 
   void clearSymlinksNavHistory();
+
 }
