@@ -130,6 +130,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
         const registration = await navigator?.serviceWorker?.getRegistration?.();
         this.pwaEnabled = !!registration;
         this.isFavoritesSynchronized = this.pwaEnabled && (await this.$documentOfflineService.isOfflineDocumentsEnabled());
+        await this.$utils.includeExtensions('DocumentsExtension');
       },
       async handleSettingsUpdate() {
         this.settings = JSON.parse(JSON.stringify(this.settings)); // Force update
@@ -177,7 +178,6 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
     vuetify: Vue.prototype.vuetifyOptions,
     i18n
   }, `#${appId}`, 'Documents');
-
 }
 
 async function getSubcategoryIds(categoryIds, depth) {

@@ -30,6 +30,7 @@
   <portlet>
     <name>Documents</name>
     <module>
+      <load-group>DocumentsGRP</load-group>
       <script>
         <minify>false</minify>
         <path>/js/documents.bundle.js</path>

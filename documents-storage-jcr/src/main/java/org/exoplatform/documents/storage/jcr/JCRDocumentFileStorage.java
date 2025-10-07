@@ -203,6 +203,62 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  @SneakyThrows
+  public FolderNode getSpaceRootFolder(long spaceId, Identity aclIdentity) throws ObjectNotFoundException {
+    Space space = spaceService.getSpaceById(spaceId);
+    if (space == null) {
+      throw new ObjectNotFoundException("Space with id %s doesn't exist".formatted(spaceId));
+    }
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                      identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+    SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                   manageableRepository);
+      Node rootNode = JCRDocumentsUtil.getIdentityRootNode(spaceService, nodeHierarchyCreator, spaceIdentity, session);
+      return toFolderNode(identityManager, aclIdentity, rootNode, "", spaceService);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
+  @SneakyThrows
+  public long getRootFolderOwnerId(String documentId) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    ManageableRepository repository = repositoryService.getCurrentRepository();
+    Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+    Node node = getNodeById(systemSession, documentId);
+    if (node != null) {
+      org.exoplatform.social.core.identity.model.Identity ownerIdentity = getOwnerIdentityFromNodePath(node.getPath(),
+                                                                                                       identityManager,
+                                                                                                       spaceService);
+      if (ownerIdentity != null) {
+        return ownerIdentity.getIdentityId();
+      }
+    }
+    return 0;
+  }
+
+  @Override
+  @SneakyThrows
+  public FolderNode getPersonalRootFolder(Identity aclIdentity) {
+    org.exoplatform.social.core.identity.model.Identity userIdentity =
+                                                                     identityManager.getOrCreateUserIdentity(aclIdentity.getUserId());
+    SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                   manageableRepository);
+      Node rootNode = JCRDocumentsUtil.getIdentityRootNode(spaceService, nodeHierarchyCreator, userIdentity, session);
+      return toFolderNode(identityManager, aclIdentity, rootNode, "", spaceService);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
   public List<FileNode> getFilesTimeline(DocumentTimelineFilter filter,
                                          Identity aclIdentity,
                                          int offset,
@@ -298,17 +354,46 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   @SneakyThrows
   public List<FileNode> search(String keyword, Identity identity, int offset, int limit) {
+    DocumentTimelineFilter filter = new DocumentTimelineFilter();
+    filter.setQuery(keyword);
+    filter.setMimeTypes(FILE_MIME_TYPES);
+
+    return search(filter, identity, offset, limit);
+  }
+
+  @Override
+  @SneakyThrows
+  public List<FileNode> search(DocumentTimelineFilter filter,
+                               Identity identity,
+                               int offset,
+                               int limit) {
     SessionProvider sessionProvider = null;
     try {
       sessionProvider = getUserSessionProvider(repositoryService, identity);
       ManageableRepository repository = repositoryService.getCurrentRepository();
       Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      DocumentTimelineFilter filter = new DocumentTimelineFilter();
-      filter.setQuery(keyword);
-      filter.setMimeTypes(FILE_MIME_TYPES);
+      String path = "/";
+      if (StringUtils.isNotBlank(filter.getParentFolderId())) {
+        Node parent = getNodeByIdentifier(session, filter.getParentFolderId());
+        if (parent != null && parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          parent = getNodeByIdentifier(session, sourceNodeId);
+        }
+        if (parent == null) {
+          return Collections.emptyList();
+        }
+        path = parent.getPath();
+      } else if (filter.getOwnerId() != null && filter.getOwnerId() > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(filter.getOwnerId());
+        Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, identity.getUserId(), ownerIdentity, sessionProvider);
+        if (identityRootNode == null) {
+          return Collections.emptyList();
+        }
+        path = identityRootNode.getPath();
+      }
       Collection<DocumentFileSearchResult> results = documentSearchServiceConnector.search(identity,
                                                                                            COLLABORATION,
-                                                                                           "/",
+                                                                                           path,
                                                                                            filter,
                                                                                            offset,
                                                                                            limit,
@@ -2388,6 +2473,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     return null;
   }
+
+  @Override
+  public String getFileContentAsText(String documentId) {
+    return documentSearchServiceConnector.getFileContentAsText(documentId);
+  }
+
   @Override
   public void unShareDocument(String documentId, long destId) {
     Node rootNode = null;

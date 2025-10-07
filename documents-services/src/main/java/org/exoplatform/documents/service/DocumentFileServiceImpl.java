@@ -38,7 +38,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
-import org.exoplatform.documents.plugins.DocumentCategoryPlugin;
+import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.ListenerService;
@@ -112,6 +112,36 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  @SneakyThrows
+  public FolderNode getSpaceRootFolder(long spaceId, org.exoplatform.services.security.Identity userAclIdentity) throws ObjectNotFoundException, IllegalAccessException {
+    Space space = spaceService.getSpaceById(spaceId);
+    if (space == null) {
+      throw new ObjectNotFoundException("Space with id %s doesn't exist".formatted(spaceId));
+    } else if (!spaceService.canViewSpace(space, userAclIdentity.getUserId())) {
+      throw new IllegalAccessException("Space with id %s isn't accessible for user %s".formatted(spaceId,
+                                                                                                 userAclIdentity.getUserId()));
+    }
+    return documentFileStorage.getSpaceRootFolder(spaceId, userAclIdentity);
+  }
+  @Override
+  @SneakyThrows
+  public FolderNode getPersonalRootFolder(org.exoplatform.services.security.Identity userAclIdentity) {
+    return documentFileStorage.getPersonalRootFolder(userAclIdentity);
+  }
+
+  @Override
+  @SneakyThrows
+  public long getRootFolderOwnerId(String documentId) {
+    return documentFileStorage.getRootFolderOwnerId(documentId);
+  }
+
+  @Override
+  @SneakyThrows
+  public String getFileContentAsText(String docId) {
+    return documentFileStorage.getFileContentAsText(docId);
+  }
+
+  @Override
   public List<? extends AbstractNode> getDocumentItems(FileListingType listingType,
                                                        DocumentNodeFilter filter,
                                                        int offset,
@@ -170,6 +200,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public List<FileNode> search(String keyword, org.exoplatform.services.security.Identity identity, int offset, int limit) {
     return documentFileStorage.search(keyword, identity, offset, limit);
+  }
+
+  @Override
+  public List<FileNode> search(DocumentTimelineFilter filter, org.exoplatform.services.security.Identity identity, int offset, int limit) {
+    return documentFileStorage.search(filter, identity, offset, limit);
   }
 
   @Override
