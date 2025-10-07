@@ -673,6 +673,18 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   },
 });
 
-
-
-
+extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
+  id: 'askAi',
+  labelKey: 'documents.label.askAi',
+  align: 'center',
+  sortable: true,
+  cssClass: 'text-truncate',
+  width: '190px',
+  rank: 93,
+  parent: 'actionsGroup',
+  enabled: (file) => file && !file.folder && !file.cloudDriveFolder,
+  enabledForMultiSelection: () => false,
+  componentOptions: {
+    vueComponent: Vue.options.components['ask-ai-action'],
+  },
+});

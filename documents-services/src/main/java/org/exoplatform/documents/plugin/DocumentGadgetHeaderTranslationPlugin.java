@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.documents.plugins;
+package org.exoplatform.documents.plugin;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

@@ -29,6 +29,7 @@
   <properties>
     <!-- 3rd party libraries versions -->
     <addon.exo.jcr.version>7.1.x-meeds-qaui-SNAPSHOT</addon.exo.jcr.version>
+    <addon.meeds.ai.version>7.1.x-meeds-qaui-SNAPSHOT</addon.meeds.ai.version>
     <net.lingala.zip4j.version>2.11.5</net.lingala.zip4j.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
@@ -40,6 +41,13 @@
         <groupId>org.exoplatform.jcr</groupId>
         <artifactId>jcr-parent</artifactId>
         <version>${addon.exo.jcr.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.meeds.ai</groupId>
+        <artifactId>ai</artifactId>
+        <version>${addon.meeds.ai.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

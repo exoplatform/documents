@@ -140,7 +140,7 @@
     <component-plugin>
       <name>documents-images</name>
       <set-method>addPlugin</set-method>
-      <type>org.exoplatform.documents.plugins.DocumentsImageThumbnailPlugin</type>
+      <type>org.exoplatform.documents.plugin.DocumentsImageThumbnailPlugin</type>
     </component-plugin>
   </external-component-plugins>
 

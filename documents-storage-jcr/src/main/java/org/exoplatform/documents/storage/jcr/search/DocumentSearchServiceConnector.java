@@ -54,6 +54,18 @@ public class DocumentSearchServiceConnector {
 
   private static final String          SEARCH_QUERY_FILE_PATH_PARAM = "query.file.path";
 
+  public static final String           SEARCH_DOCUMENT_BY_ID_PATTERN  = """
+      {
+        "size": 1,
+        "_source": ["attachment.content"],
+        "query": {
+          "match": {
+            "_id": "%s"
+          }
+        }
+      }
+      """;
+
   public static final String           SEARCH_QUERY_TERM            = "\"must\":{"
           + "    \"query_string\":{"
           + "    \"fields\": [\"title.whitespace\"],"
@@ -205,6 +217,41 @@ public class DocumentSearchServiceConnector {
     String esQuery = buildQueryStatement(userIdentity, workspace, path, filter, sortField, sortDirection, false, offset, limit);
     String jsonResponse = this.client.sendRequest(esQuery, this.index);
     return buildResult(jsonResponse);
+  }
+
+  @SuppressWarnings("rawtypes")
+  public String getFileContentAsText(String documentId) { // NOSONAR
+    String jsonResponse = this.client.sendRequest(SEARCH_DOCUMENT_BY_ID_PATTERN.formatted(documentId), this.index);
+    JSONParser parser = new JSONParser();
+    Map json;
+    try {
+      json = (Map) parser.parse(jsonResponse);
+      if (json.containsKey("hits")) {
+        JSONObject jsonResult = (JSONObject) json.get("hits");
+        if (jsonResult != null && jsonResult.containsKey("hits")) {
+          JSONArray jsonHits = (JSONArray) jsonResult.get("hits");
+          if (jsonHits != null && jsonHits.size() == 1) {
+            JSONObject jsonObject = (JSONObject) jsonHits.getFirst();
+            return getJsonString(jsonObject, 0, "_source", "attachment", "content");
+          }
+        }
+      }
+      return null;
+    } catch (ParseException e) {
+      throw new ElasticSearchException("Unable to parse JSON response for Document", e);
+    }
+  }
+
+  private static String getJsonString(JSONObject jsonObject, int index, String ...paths) {
+    String attrName = paths[index];
+    if (jsonObject != null && jsonObject.containsKey(attrName)) {
+      if (index == paths.length - 1) {
+        return (String) jsonObject.get(attrName);
+      } else {
+        return getJsonString((JSONObject) jsonObject.get(attrName), index + 1, paths);
+      }
+    }
+    return null;
   }
 
   public long getTotalSize(Identity userIdentity, String workspace, String path) {
@@ -680,4 +727,5 @@ public class DocumentSearchServiceConnector {
     }
     return result.toString();
   }
+
 }

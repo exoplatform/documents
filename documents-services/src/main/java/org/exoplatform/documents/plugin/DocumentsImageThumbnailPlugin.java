@@ -15,7 +15,7 @@
  * along with this program.  If not, see <gnu.org/licenses>.
  */
 
-package org.exoplatform.documents.plugins;
+package org.exoplatform.documents.plugin;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;

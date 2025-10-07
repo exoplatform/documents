@@ -29,6 +29,7 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.space.model.Space;
 
 import io.meeds.portal.thumbnail.model.FileContent;
 
@@ -66,6 +67,15 @@ public interface DocumentFileService {
    * @return {@link List} of found {@link FileNode} available for user
    */
   List<FileNode> search(String keyword, org.exoplatform.services.security.Identity identity, int offset, int limit);
+
+  /**
+   * @param filter {@link DocumentTimelineFilter} to restrict search results
+   * @param identity User ACL {@link org.exoplatform.services.security.Identity}
+   * @param offset search offset
+   * @param limit search limit
+   * @return {@link List} of found {@link FileNode} available for user
+   */
+  List<FileNode> search(DocumentTimelineFilter filter, org.exoplatform.services.security.Identity identity, int offset, int limit);
 
   /**
    * Retrieves a file by its identifier.
@@ -570,4 +580,39 @@ public interface DocumentFileService {
   default List<Long> getDocumentCategoryIds(long spaceIdentityId, String userName) {
     throw new UnsupportedOperationException();
   }
+
+  /**
+   * Retrieves the Root folder Path of a Space
+   * 
+   * @param spaceId {@link Space} technical identifier
+   * @param aclIdentity user willing to access the space's root folder
+   * @return the root {@link FolderNode} for the designated space
+   * @throws ObjectNotFoundException when the space doesn't exist
+   * @throws IllegalAccessException when the user isn't allowed to access
+   *           documents of the designated space
+   */
+  default FolderNode getSpaceRootFolder(long spaceId, org.exoplatform.services.security.Identity aclIdentity) throws ObjectNotFoundException, IllegalAccessException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Retrieves the Root folder Path of a user
+   * 
+   * @param aclIdentity user willing to access his/her own root folder
+   * @return the root {@link FolderNode} for the designated user
+   */
+  default FolderNode getPersonalRootFolder(org.exoplatform.services.security.Identity aclIdentity) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Returns a document file content as Text
+   * 
+   * @param documentId Document identifier
+   * @return the text representation of a file
+   */
+  default String getFileContentAsText(String documentId) {
+    throw new UnsupportedOperationException();
+  }
+
 }

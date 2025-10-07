@@ -25,33 +25,42 @@
       <artifactId>documents-api</artifactId>
       <scope>provided</scope>
     </dependency>
-
-      <dependency>
-          <groupId>io.meeds.social</groupId>
-          <artifactId>social-component-service</artifactId>
-          <scope>provided</scope>
-      </dependency>
-      <dependency>
-          <groupId>io.meeds.social</groupId>
-          <artifactId>social-component-notification</artifactId>
-          <scope>provided</scope>
-      </dependency>
-      <dependency>
-          <groupId>net.lingala.zip4j</groupId>
-          <artifactId>zip4j</artifactId>
-          <type>jar</type>
-          <scope>provided</scope>
-      </dependency>
-      <!-- Test -->
-      <dependency>
-          <groupId>io.meeds.social</groupId>
-          <artifactId>social-component-service</artifactId>
-          <type>test-jar</type>
-          <scope>test</scope>
-      </dependency>
-      <dependency>
-          <groupId>io.meeds.social</groupId>
-          <artifactId>social-component-notification</artifactId>
+    <dependency>
+      <groupId>net.sourceforge.cssbox</groupId>
+      <artifactId>pdf2dom</artifactId>
+      <version>2.0.3</version>
+    </dependency>
+    <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-service</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-notification</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.meeds.ai</groupId>
+      <artifactId>ai-tools</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.lingala.zip4j</groupId>
+      <artifactId>zip4j</artifactId>
+      <type>jar</type>
+      <scope>provided</scope>
+    </dependency>
+    <!-- Test -->
+    <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-service</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.meeds.social</groupId>
+      <artifactId>social-component-notification</artifactId>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
@@ -63,6 +72,15 @@
   <build>
     <finalName>documents-services</finalName>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs>
+            <arg>-parameters</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>io.openapitools.swagger</groupId>
         <artifactId>swagger-maven-plugin</artifactId>
