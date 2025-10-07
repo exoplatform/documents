@@ -4,7 +4,7 @@
     v-model="fileName"
     height="35px"
     type="text"
-    class="documentEditName text-color font-weight-bold width-full pt-0 pl-1"
+    class="documentEditName text-color font-weight-bold width-full pt-0 ms-1"
     :rules="nameRules"
     required
     autofocus

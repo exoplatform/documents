@@ -50,7 +50,6 @@
             v-if="editNameMode"
             :file="folder"
             :file-name="name"
-            file-type="folder"
             :is-mobile="isMobile"
             :edit-name-mode="editNameMode"
             card-view="true" />
@@ -132,6 +131,7 @@ export default {
     rangeSelectTimer: null,
     menuDisplayed: false,
     waitTimeUntilCloseMenu: 200,
+    folderToEditId: -1,
   }),
   computed: {
     folderId() {
@@ -147,7 +147,7 @@ export default {
       return this.folder?.avatarUrl;
     }, 
     editNameMode() {
-      return !this.folder.id || this.folder.id === -1;
+      return this.folder.id===this.folderToEditId;
     },
   },
   created() {
@@ -157,6 +157,8 @@ export default {
     this.$root.$on('select-all-documents', this.handleSelectAllDocuments);
     this.$root.$on('select-target-document', this.handleSelectTargetDocument);
     this.$root.$on('reset-selections', this.handleResetSelections);
+    this.$root.$on('update-file-name', this.editFolderName);
+    this.$root.$on('cancel-edit-mode', this.cancelEditMode);
     this.initSelected();
   },
   beforeDestroy() {
@@ -166,6 +168,8 @@ export default {
     this.$root.$off('select-all-documents', this.handleSelectAllDocuments);
     this.$root.$off('select-target-document', this.handleSelectTargetDocument);
     this.$root.$off('reset-selections', this.handleResetSelections);
+    this.$root.$off('update-file-name', this.editFolderName);
+    this.$root.$off('cancel-edit-mode', this.cancelEditMode);
   },
   mounted() {
     document.addEventListener('mousedown', (event) => {
@@ -287,7 +291,17 @@ export default {
     },
     handleUpdateSelectionList() {
       this.show = this.selectedDocuments.length > 0;
-    }
+    },
+    editFolderName(folder) {
+      if (this.folder.id === folder.id){
+        this.folderToEditId = folder.id;
+      }
+    },
+    cancelEditMode(folder) {
+      if (this.folder.id === folder.id) {
+        this.folderToEditId = -1;
+      }
+    },
   }
 };
 </script>
