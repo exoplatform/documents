@@ -23,7 +23,7 @@
       :folder-path="folderPath" />
     <v-card
       flat
-      :class="treeViewExpended ? 'col-9':'col-12'">
+      :class="!isMobile && treeViewExpended ? 'col-9':''">
       <documents-breadcrumb
         class="width-min-content"
         :is-mobile="isMobile"
