@@ -107,7 +107,7 @@
             <v-list-item-subtitle>{{ $t('documents.drawer.details.created') }}</v-list-item-subtitle>
             <v-list-item-title class="d-flex flex-row">
               <date-format
-                :value="lastUpdated"
+                :value="fileCreated"
                 :format="fullDateFormat" />
               <span class="mx-1">{{ $t('documents.drawer.details.by') }}</span>
               <exo-user-avatar
