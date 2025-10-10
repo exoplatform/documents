@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -87,6 +88,11 @@ public class DocumentContentLinkPlugin implements ContentLinkPlugin {
   public String getContentTitle(String objectId, Locale locale) {
     AbstractNode document = documentFileService.getDocumentById(objectId);
     return document instanceof FileNode ? document.getName() : null;
+  }
+
+  @Override
+  public boolean isId(String keyword) {
+    return StringUtils.isNotBlank(keyword) && keyword.matches("^[0-9a-fA-F]{32}$");
   }
 
   private ContentLinkSearchResult toContentLink(AbstractNode document) {
