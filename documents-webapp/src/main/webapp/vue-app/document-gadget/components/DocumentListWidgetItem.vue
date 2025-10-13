@@ -107,8 +107,12 @@ export default {
       this.loading = true;
       if (this.file?.folder) {
         this.$root.$emit('document-open-folder', this.file);
-      } else if (this.isFileEditable && this.canEdit) {
-        this.$root.openInEditMode(this.file);
+      } else if (this.isFileEditable)  {
+        if (this.canEdit) {
+          this.openInEditMode(this.file);
+        } else {
+          this.openInReadOnlyMode(this.file);
+        }        
       } else if (this.isFileOnlyReadable) {
         this.$root.openInReadOnlyMode(this.file);
       } else {
