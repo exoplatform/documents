@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.storage.jcr.util;
 
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -67,8 +69,6 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
 
 public class JCRDocumentsUtil {
   private static final Log                              LOG                           =
@@ -340,15 +340,24 @@ public class JCRDocumentsUtil {
       fileNode.setDatasource(JCR_DATASOURCE_NAME);
       fileNode.setCloudDriveFile(node.hasProperty("ecd:driveUUID"));
       retrieveFileProperties(identityManager, node, aclIdentity, fileNode, spaceService);
-      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-        retrieveSymlinkSize(node, fileNode);
-      }
-      retrieveViewsProperty(node, fileNode);
-      retrieveCategoryIdsProperty(node, fileNode);
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
         retrieveFileContentProperties(content, fileNode);
+      } else if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        if (StringUtils.isEmpty(fileNode.getSourceID())) {
+          String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          fileNode.setSourceID(sourceID);
+        }
+        Node source = getNodeByIdentifier(node.getSession(), fileNode.getSourceID());
+        if (source != null) {
+          if (source.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+            Node content = source.getNode(NodeTypeConstants.JCR_CONTENT);
+            retrieveFileContentProperties(content, fileNode);
+          }
+        }
       }
+      retrieveViewsProperty(node, fileNode);
+      retrieveCategoryIdsProperty(node, fileNode);
     } catch (Exception e) {
       try {
         LOG.warn("Error computing File Node for search result with path {}", node.getPath(), e);
@@ -382,16 +391,6 @@ public class JCRDocumentsUtil {
       }).filter(Objects::nonNull).collect(Collectors.toList());
     }
     fileNode.setCategoryIds(idsList);
-  }
-  
-  private static void retrieveSymlinkSize(Node node, FileNode fileNode) throws RepositoryException {
-    Node source = getNodeByIdentifier(node.getSession(), fileNode.getSourceID());
-    if (source != null && source.getNode(NodeTypeConstants.JCR_CONTENT) != null) {
-      Node content = source.getNode(NodeTypeConstants.JCR_CONTENT);
-      if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
-        fileNode.setSize(content.getProperty(NodeTypeConstants.JCR_DATA).getLength());
-      }
-    }
   }
 
   public static Node getNode(Session session,
