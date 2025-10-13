@@ -218,7 +218,7 @@ public class JCRDocumentsUtil {
           FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
           fileNodes.add(folderNode);
         }
-        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE) || node.isNodeType(NodeTypeConstants.EXO_SYMLINK))
+        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE))
             && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
           FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
           fileNode.setMimeType(getMimeType(sourceNode));
