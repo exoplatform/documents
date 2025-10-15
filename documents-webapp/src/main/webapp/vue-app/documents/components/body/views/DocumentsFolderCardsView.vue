@@ -54,47 +54,57 @@
           <v-icon class="ms-1" size="16">{{ sortDirectionIcon }}</v-icon>
         </v-btn>
       </div>
-      <v-card
-        :class="treeViewExpended && 'ms-2'"
-        class="d-flex flex-wrap border-box-sizing"
-        flat>
-        <div
-          v-for="folder in folderToDisplay"
-          :key="folder.id"
-          class=" flex-shrink-0 mb-3 me-3 pa-0">
-          <documents-folder-card
-            :folder="folder"
-            :files="folderToDisplay"
-            :select-all-checked="selectAll"
-            :selected-documents="selectedDocuments"
-            @document-selected="handleDocumentSelection"
-            @document-unselected="handleDocumentSelection" />
-        </div>
-      </v-card>
-      <v-card
-        :class="treeViewExpended && 'ms-2'"
-        class="d-flex flex-wrap border-box-sizing"
-        flat>
-        <div
-          v-for="(file, index) in filesToDisplay"
-          :key="file.id"
-          class=" flex-shrink-0 mb-3 me-3 pa-0">
-          <documents-item-card
-            :index="index"
-            :count="filesCount"
+      <div id="cardsView">
+        <v-card
+          :class="treeViewExpended && 'ms-2'"
+          class="d-flex flex-wrap border-box-sizing"
+          flat>
+          <div
+            v-for="folder in folderToDisplay"
+            :key="folder.id"
+            draggable="true"
+            :data-fileId="folder.id"
+            data-isFolder="true"
+            :data-canEdit="canEditFile(folder)? 'true': 'false'"
+            class="card-item flex-shrink-0 mb-3 me-3 pa-0">
+            <documents-folder-card
+              :folder="folder"
+              :files="folderToDisplay"
+              :select-all-checked="selectAll"
+              :selected-documents="selectedDocuments"
+              @document-selected="handleDocumentSelection"
+              @document-unselected="handleDocumentSelection" />
+          </div>
+        </v-card>
+        <v-card
+          :class="treeViewExpended && 'ms-2'"
+          class="d-flex flex-wrap border-box-sizing"
+          flat>
+          <div
+            v-for="(file, index) in filesToDisplay"
             :key="file.id"
-            :file="file"
-            :files="files"
-            :select-all-checked="selectAll"
-            :selected-documents="selectedDocuments"
-            @document-selected="handleDocumentSelection"
-            @document-unselected="handleDocumentSelection"
-            height="175px"
-            max-height="175px"
-            width="215px"
-            show-details />
-        </div>
-      </v-card>
+            :data-fileId="file.id"
+            data-isFolder="false"
+            :data-canEdit="canEditFile(file)? 'true': 'false'"
+            draggable="true"
+            class="card-item flex-shrink-0 mb-3 me-3 pa-0">
+              <documents-item-card            
+                :index="index"
+                :count="filesCount"
+                :key="file.id"
+                :file="file"
+                :files="files"
+                :select-all-checked="selectAll"
+                :selected-documents="selectedDocuments"
+                @document-selected="handleDocumentSelection"
+                @document-unselected="handleDocumentSelection"
+                height="175px"
+                max-height="175px"
+                width="215px"
+                show-details />
+          </div>
+        </v-card>
+      </div>
       <v-col
         v-if="hasMore"
         cols="12"
@@ -192,6 +202,9 @@ export default {
       return this.ascending ? 'fa-arrow-down' : 'fa-arrow-up';
     }
   },
+  mounted(){
+    DocumentsDraggable.invoke('cardsView', 'breadcrumb-list-items');
+  },
   created() {
     this.treeViewExpended =  localStorage.getItem('expendedTreeView')!=null ? localStorage.getItem('expendedTreeView') === 'true' : (this.$root.settings?.expendedTreeView !== null ? this.$root.settings.expendedTreeView : true);
     this.$root.$on('tree-view-expend', this.extendTreeView);
@@ -217,6 +230,9 @@ export default {
     },
     selectAllDocuments() {
       this.$root.$emit('select-all-documents', this.selectAll);
+    },
+    canEditFile(item) {
+      return item?.acl?.canEdit;
     },
   }
 };
