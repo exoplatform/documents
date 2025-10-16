@@ -16,11 +16,9 @@
  *
 */
 import DownloadDocument from './components/DownloadDocument.vue';
-import DownloadDocumentMain from './components/DownloadDocumentMain.vue';
 
 const components = {
   'download-document': DownloadDocument,
-  'download-document-main': DownloadDocumentMain
 };
 
 for (const key in components) {
