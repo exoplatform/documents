@@ -16,27 +16,194 @@
  *
 -->
 <template>
-  <download-document-main :params="jsonParams" />
+  <v-app class="mx-auto" style="max-width: 375px;">
+    <v-progress-circular
+      v-if="loading"
+      :size="50"
+      class="loader ma-auto"
+      color="primary"
+      indeterminate />
+    <div v-else>
+      <div
+        v-if="isAccessGranted"
+        :class="isMobile? 'mt-5': ''"
+        class="center">
+        <p>
+          <v-icon
+            class="mt-n1"
+            size="20"
+            :color="iconColor">
+            {{ iconClass }}
+          </v-icon>
+          {{ decodeURIComponent(this.documentName) }}
+        </p>
+        <p v-if="isDownloading">
+          {{ $t('document.public.access.download.inProgress.message') }}
+        </p>
+      </div>
+      <p
+        v-if="!isAccessGranted"
+        class="red--text center text-body-1">
+        <v-icon
+          size="20"
+          color="red">
+          fas fa-times-circle
+        </v-icon>
+        {{ $t('download.public.link.not.active.message') }}
+      </p>
+      <v-form
+        v-else-if="!isLinkExpired"
+        ref="form">
+        <div v-if="requirePassword">
+          <v-label
+            for="documentPassword">
+            <span class="text-body-2">
+              {{ $t('download.public.link.fill.password.message') }}
+            </span>
+          </v-label>
+          <v-text-field
+            v-if="requirePassword"
+            v-model="password"
+            :title="$t('portal.login.Password')"
+            :placeholder="$t('portal.login.Password')"
+            :type="passwordType"
+            :append-icon="showPassword ? 'fas fa-eye-slash subtitle-1 mt-0' : 'fas fa-eye subtitle-1 mt-0'"
+            :readonly="isDownloading"
+            prepend-inner-icon="fas fa-lock ms-n2 grey--text text--lighten-1"
+            class="pt-2 login-password border-box-sizing"
+            name="documentPassword"
+            :rules="[v => !!v || $t('documents.public.access.password.mandatory')]"
+            required
+            outlined
+            dense
+            @click:append="toggleShow" />
+        </div>
+        <div class="center">
+          <v-btn
+            :loading="isDownloading"
+            :disabled="requirePassword && !password"
+            class="btn btn-primary mt-4 primary"
+            @click="downloadDocument">
+            {{ $t('document.public.access.download.label') }}
+          </v-btn>
+        </div>
+      </v-form>
+      <p
+        v-else
+        class="red--text center text-body-1">
+        <v-icon
+          size="20"
+          color="red">
+          fas fa-times-circle
+        </v-icon>
+        {{ $t('download.public.link.expired.message') }}
+      </p>
+    </div>
+  </v-app>
 </template>
 
 <script>
 export default {
-  props: {
-    params: {
-      type: Object,
-      default: null,
+  data: () => ({
+    isDownloading: false,
+    iconColor: '#476A9C',
+    iconClass: 'fas fa-file',
+    password: null,
+    showPassword: false,
+    nodeId: null,
+    isAccessLocked: true,
+    isAccessExpired: true,
+    documentName: null,
+    documentType: null,
+    hasPublicLink: false,
+    loading: true,
+  }),
+  computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.width < 960;
+    },
+    passwordType(){
+      return this.showPassword ? 'text' :'password';
+    },
+    requirePassword() {
+      return this.isPublicAccessActive && this.isAccessLocked;
+    },
+    isLinkExpired() {
+      return this.isAccessExpired;
+    },
+    isPublicAccessActive() {
+      return this.hasPublicLink;
+    },
+    isAccessGranted() {
+      return this.documentName && this.hasPublicLink;
+    }
+  },
+  methods: {
+    validatePassword() {
+      return this.$refs.form.validate();
+    },
+    downloadDocument() {
+      if (this.$refs.form && !this.validatePassword()) {
+        return;
+      }
+      this.isDownloading = true;
+      this.$documentFileService.downloadPublicDocument(this.nodeId, this.password).then((response) => {
+        return response.blob();
+      }).then(blob => {
+        const element = document.createElement('a');
+        element.href = URL.createObjectURL(blob);
+        element.setAttribute('download', this.documentName);
+        element.click();
+        element.remove();
+      }).catch((error) => {
+        if (error.status === 401) {
+          this.$root.$emit('alert-message', this.$t('documents.public.access.password.wrong'), 'error');
+        }
+      }).finally(() => {
+        this.isDownloading = false;
+        this.$refs.form.reset();
+        this.$refs.form.resetValidation();
+      });
+    },
+    toggleShow() {
+      this.showPassword = !this.showPassword;
+    },
+    getFileIcon(mimeType) {
+      const extensions = this.$documentsIconsExtension;
+      let extension;
+      if (!mimeType) {
+        extension = extensions[0].get('folder');
+      } else {
+        extension = extensions[0].get(mimeType);
+        if (!extension) {
+          extension = extensions[0].get('file');
+        }
+      }
+      this.iconColor = extension.color;
+      this.iconClass = extension.class;
     },
   },
-  data() {
-    return {
-      jsonParams: {},
-    };
-  },
   created() {
-    this.jsonParams = JSON.parse(this.params);
-  },
-  mounted() {
-    this.$root.$applicationLoaded();
-  },
+    this.loading = true;
+    const segments = new URL(window.location).pathname.split('/');
+    this.nodeId = segments.pop() || segments.pop(); // Handle potential trailing slash
+    if (this.nodeId) {
+      this.$documentFileService.getPublicAccessLink(this.nodeId).then((resp) => {
+        this.hasPublicLink=resp.hasPublicLink;
+        this.isAccessLocked=resp.isAccessLocked;
+        this.isAccessExpired=resp.isAccessExpired;
+        this.documentName=resp.documentName;
+        this.documentType=resp.documentType;
+        this.loading = false;
+        if (!this.requirePassword) {
+          this.downloadDocument();
+        }
+      });
+    } else {
+      this.loading = false;
+      this.isAccessExpired = true;
+    }
+    this.getFileIcon(this.documentType);
+  }
 };
 </script>
