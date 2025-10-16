@@ -1657,10 +1657,7 @@ export default {
     },
     openFileInEditor(attachment,mode,tab) {
       if (attachment && attachment.id) {
-        let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${attachment.id}&backTo=${window.location.pathname}`;
-        if (mode) {
-          url += `&mode=${mode}`;
-        }
+        const url = this.$documentsUtils.getEditorUrl(attachment,mode);
         window.open(url,tab ? tab:'_blank');
       }
     },
