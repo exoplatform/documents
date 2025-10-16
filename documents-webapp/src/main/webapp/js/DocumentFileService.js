@@ -715,3 +715,18 @@ export function getUserProfile(userName) {
   });
 }
 
+export function getPublicAccessLink(nodeId) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/publicAccessDocument?nodeId=${nodeId}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.json();
+    }
+  });
+}
