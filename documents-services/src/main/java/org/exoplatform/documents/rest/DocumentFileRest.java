@@ -73,6 +73,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.json.JSONObject;
 
 @Path("/v1/documents")
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
@@ -1259,6 +1260,40 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @Path("/publicAccessDocument")
+  @Operation(summary = "Get public access information",
+      method = "GET",
+      description = "Get public access document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response publicAccessDocument(@Parameter(description = "public link node id", required = true)
+                                   @QueryParam("nodeId") String nodeId) {
+
+    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
+    DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
+
+    boolean hasPublicLink = publicDocumentAccess != null;
+    boolean isAccessLocked = hasPublicLink && publicDocumentAccess.getPasswordHashKey() != null;
+    boolean isAccessExpired = publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId);
+
+    JSONObject response = new JSONObject();
+    response.put("nodeId", nodeId);
+    response.put("hasPublicLink", hasPublicLink);
+    response.put("isAccessLocked", isAccessLocked);
+    response.put("isAccessExpired", isAccessExpired);
+    if (downloadItem != null) {
+      response.put("documentName", downloadItem.getItemName());
+      response.put("documentType", downloadItem.getMimeType());
+    }
+
+    return Response.ok(response.toString()).build();
+
+
+  }
 
   @GET
   @Produces

@@ -71,15 +71,6 @@
   </external-component-plugins>
 
   <external-component-plugins>
-    <target-component>org.exoplatform.web.WebAppController</target-component>
-    <component-plugin>
-      <name>PublicAccessDownloadDocumentHandler</name>
-      <set-method>register</set-method>
-      <type>org.exoplatform.documents.controller.PublicAccessDownloadDocumentHandler</type>
-    </component-plugin>
-  </external-component-plugins>
-
-  <external-component-plugins>
     <target-component>org.exoplatform.web.filter.ExtensibleFilter</target-component>
     <component-plugin>
       <name>Documents preview filter</name>
