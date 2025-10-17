@@ -209,12 +209,12 @@ export default {
   }),
   computed: {
     isFileEditable() {
-      const type = this.file && this.file.mimeType || '';
-      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+      const fileType = this.file && this.file.mimeType || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === fileType && !this.file.cloudDriveFile).length > 0;
     },
     isFileOnlyReadable() {
-      const type = this.file && this.file.mimeType || '';
-      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === type && !this.file.cloudDriveFile).length > 0;
+      const fileType = this.file && this.file.mimeType || '';
+      return this.$supportedDocuments && this.$supportedDocuments.filter(doc => !doc.edit && doc.mimeType === fileType && !this.file.cloudDriveFile).length > 0;
     },
     documentMultiSelectionActive() {
       return this.$vuetify.breakpoint.width >= 600 && !this.file.drive;
@@ -337,8 +337,12 @@ export default {
         this.$root.ownerId = this.file.identityId;
         this.$root.spaceId = this.file.spaceId;
         this.$root.$emit('document-open-folder', this.file);
-      } else if (this.isFileEditable && this.canEdit)  {
-        this.openInEditMode(this.file);
+      } else if (this.isFileEditable)  {
+        if (this.canEdit) {
+          this.openInEditMode(this.file);
+        } else {
+          this.openInReadOnlyMode(this.file);
+        }        
       } else if (this.isFileOnlyReadable) {
         this.openInReadOnlyMode(this.file);
       } else {
