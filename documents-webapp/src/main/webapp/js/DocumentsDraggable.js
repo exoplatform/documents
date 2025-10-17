@@ -59,7 +59,7 @@
         if (event.button !== 0) {
             return true;
         }
-        const target = getTargetRow(event.target);
+        const target = getTargetRow(event.target) || event.target;
         if (isEditModeActive(target)) {
             return ;
         }
@@ -184,15 +184,15 @@
     }
 
     function isEditModeActive(target) {
-        return target.querySelectorAll(".documentEditName").length;
+        return target?.querySelectorAll(".documentEditName").length;
     }
 
     function getTargetRow(target) {
         const elemName = target.tagName.toLowerCase();
-        if (elemName === 'tr') {
+        if (elemName === 'tr' || target.classList.contains('card-item')) {
             return target;
         } else {
-            return target.closest('tr');
+            return target.closest('tr') || target.closest('.card-item');
         }
     }
 
@@ -313,10 +313,12 @@
     }
 
     function getRows() {
-        if (!table) {
-            table = document.getElementById(tableId);
-        }
-        return table.querySelectorAll('tbody tr');
+    if (!table) {
+        table = document.getElementById(tableId);
+    }
+    let rows = table.querySelectorAll('tbody tr');
+    if (rows.length === 0) rows = table.querySelectorAll('.card-item');
+    return rows;
     }
 
     function getParentDragElement() {
