@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_SYMLINK;
 import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.File;
@@ -511,6 +512,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             && filter.getMaxSize() == null && filter.getMinSize() == null) {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
+          if (parent.isNodeType(EXO_SYMLINK)){
+            String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+            parent = getNodeByIdentifier(session, sourceNodeId);
+          }
           // Load folders + symlink of folders
           String statementOfFolders = getFolderDocumentsQuery(parent.getPath(),
                                                               sortField,
