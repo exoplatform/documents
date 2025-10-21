@@ -17,7 +17,13 @@
 -->
 <template>
   <v-app class="mx-auto" style="max-width: 375px;">
-    <div>
+    <v-progress-circular
+      v-if="loading"
+      :size="50"
+      class="loader ma-auto"
+      color="primary"
+      indeterminate />
+    <div v-else>
       <div
         v-if="isAccessGranted"
         :class="isMobile? 'mt-5': ''"
@@ -110,6 +116,7 @@ export default {
     documentName: null,
     documentType: null,
     hasPublicLink: false,
+    loading: true,
   }),
   computed: {
     isMobile() {
@@ -177,6 +184,7 @@ export default {
     },
   },
   created() {
+    this.loading = true;
     const segments = new URL(window.location).pathname.split('/');
     this.nodeId = segments.pop() || segments.pop(); // Handle potential trailing slash
     if (this.nodeId) {
@@ -186,11 +194,13 @@ export default {
         this.isAccessExpired=resp.isAccessExpired;
         this.documentName=resp.documentName;
         this.documentType=resp.documentType;
+        this.loading = false;
         if (!this.requirePassword) {
           this.downloadDocument();
         }
       });
     } else {
+      this.loading = false;
       this.isAccessExpired = true;
     }
     this.getFileIcon(this.documentType);
