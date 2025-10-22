@@ -2347,15 +2347,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
         }
         node.save();
-        if (!node.isCheckedOut()) {
-          node.checkout();
-        }
-        Version version = node.checkin();
-        node.checkout();
-        node.getSession().save();
-        fileVersion = JCRDocumentsUtil.toFileVersion(version, node, identityManager);
+        VersionHistoryUtils.createVersion(node);
       }
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       throw new IllegalStateException("Error while creating new version", e);
     }
     return fileVersion;
