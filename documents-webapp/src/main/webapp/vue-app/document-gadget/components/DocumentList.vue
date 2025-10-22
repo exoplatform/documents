@@ -222,13 +222,13 @@ export default {
         this.getFiles();
       }
     },
-    previewDocument(files, file) {
+    previewDocument(file) {
       const attachments = [];
-      files.forEach((item) => {
+      this.files.forEach((item) => {
         if (!item.folder && Vue.prototype?.$supportedDocuments.filter(doc =>doc.mimeType === item.mimeType).length === 0){
           attachments.push({'id': item.id,'filename': item.name,'mimetype': item.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${item.id}`, 'icon': this.$root.getFileIcon(item)});}
       });
-      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': files,'id': file.id }}));
+      document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': attachments,'id': file.id }}));
     },
   },
 };
