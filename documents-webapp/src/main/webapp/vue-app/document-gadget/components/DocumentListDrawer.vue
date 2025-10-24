@@ -161,7 +161,7 @@ export default {
         parentFolderId: this.selectedFoldersId,
       };
       return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.limit + 1, null).then(files => {
-        this.files = files;
+        this.files = files.filter(file => !file.folder);
       }).finally(() => this.loading = false);
     },
   },
