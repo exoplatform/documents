@@ -1254,7 +1254,7 @@ public class JCRDocumentFileStorageTest {
   }
   
   @Test
-  public void createNewVersion() throws RepositoryException {
+  public void createNewVersion() throws Exception {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     when(identityRegistry.getIdentity("user")).thenReturn(identity);
     ManageableRepository manageableRepository = mock(ManageableRepository.class);
@@ -1277,7 +1277,8 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileVersion(version, node, identityManager)).thenReturn(new FileVersion());
     jcrDocumentFileStorage.createNewVersion("123", "user", new ByteArrayInputStream("test".getBytes()));
     verify(node, times(1)).save();
-    verify(session, times(1)).save();
+    VERSION_HISTORY_UTILS.verify(() -> VersionHistoryUtils.createVersion(node), times(1));
+
   }
 
   @Test
