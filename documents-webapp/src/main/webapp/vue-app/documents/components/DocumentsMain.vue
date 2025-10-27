@@ -1545,6 +1545,7 @@ export default {
         this.previewMode = true;
         const documentPreviewId = queryParams.get('documentPreviewId');
         this.selectedView = 'folder';
+        this.showHidden = true;
         return this.showPreview(documentPreviewId)
           .then(attachment => {
             if (attachment?.path) {
