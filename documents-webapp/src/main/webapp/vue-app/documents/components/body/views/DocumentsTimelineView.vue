@@ -21,6 +21,7 @@
       :files="files"
       :has-more="hasMore"
       :loading="loading"
+      current-view="timeline"
       :selected-documents="selectedDocuments" />
     <documents-list-view
       v-else
