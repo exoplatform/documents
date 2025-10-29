@@ -1526,7 +1526,7 @@ export default {
         document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', { detail: {
           'sourceApp': 'NEW.APP',
           defaultDrive: this.$root.selectedDrive,
-          defaultFolder: this.$root.selectedPath.indexOf(this.$root.selectedDrive.path) !== -1 ? this.$root.selectedPath.split(this.$root.selectedDrive.path)[1] : this.$root.selectedPath,
+          defaultFolder: this.$root.selectedPath.indexOf(this.$root.selectedDrive?.path) !== -1 ? this.$root.selectedPath.split(this.$root.selectedDrive?.path)[1] : this.$root.selectedPath,
           files,
         }}));
       }
