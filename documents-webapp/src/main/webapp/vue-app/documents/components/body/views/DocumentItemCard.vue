@@ -286,7 +286,7 @@ export default {
       return this.file?.folder;
     },
     mimeType() {
-      return this.file?.mimetype;
+      return this.file?.mimeType;
     },
     isMediaFile() {
       return this.mimeType?.startsWith('video/') || this.mimeType?.startsWith('audio/');
