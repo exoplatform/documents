@@ -169,7 +169,7 @@ export default {
           filename: decodedName,
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
-          mimetype: file?.mimeType,
+          mimeType: file?.mimeType,
           sourceID: file?.sourceID,
           acl: file?.acl,
           image: this.$root.getImageUrl(file),
