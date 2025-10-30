@@ -85,7 +85,7 @@ export default {
       return this.file?.icon?.color || 'secondary';
     },
     mimeType() {
-      return this.file?.mimeType;
+      return this.file?.mimeType || this.file?.mimetype;
     },
     isFileEditable() {
       const type = this.mimeType || '';
