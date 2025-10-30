@@ -96,7 +96,7 @@ export default {
       return this.expanded ? 34 : 24;
     },
     fileType() {
-      return this.file?.mimetype || '';
+      return  this.file?.mimeType || this.file?.mimetype || '';
     },
     isFileEditable() {
       return this.$supportedDocuments?.filter?.(doc => doc.edit && doc.mimeType === this.fileType && !this.file?.cloudDrive)?.length;
