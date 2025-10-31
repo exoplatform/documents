@@ -941,7 +941,7 @@ export default {
         .catch(e => console.error(e));
     },
     redirectToSpacePath(space, folder) {
-      const folderPath = folder.path.includes('/Documents/') ? folder.path.split('/Documents/')[1] : '';
+      const folderPath = folder.path.includes('/Documents/') ? this.splitAtFirstOccurrence(folder.path,'/Documents/')[1] : '';
       const pathName = `${window.location.origin}/${eXo.env.portal.containerName}/g/`;
       const spaceGroup = space.groupId.replaceAll('/', ':');
       window.setTimeout(() => {
@@ -989,7 +989,7 @@ export default {
           if (appPageName!=='Documents'){
             newParentPath = newParentPath.replace('Documents', appPageName);
           }
-          let pathParts = newParentPath.split(nodeUri);
+          let pathParts = this.splitAtFirstOccurrence(newParentPath,nodeUri);
           if (pathParts.length>1){
             folderPath = pathParts[1];
           }
@@ -1005,7 +1005,7 @@ export default {
         const userPrivatePathPrefix = `${userName}/Private`;
         const userPublicPathPrefix = `${userName}/Public`;
         if (parentFolder.path?.includes(userPrivatePathPrefix)){
-          const pathParts = parentFolder.path.split(userPrivatePathPrefix);
+          const pathParts = this.splitAtFirstOccurrence(parentFolder.path,userPrivatePathPrefix);
           if (pathParts.length > 1){
             folderPath = pathParts[1];
           }
@@ -1013,7 +1013,7 @@ export default {
           window.history.pushState(parentFolder.name, parentFolder.title, `${window.location.pathname.split('/Private')[0]}/Private${folderPath}?view=folder`);
         }
         if (parentFolder.path?.includes(userPublicPathPrefix)){
-          const pathParts = parentFolder.path.split(userPublicPathPrefix);
+          const pathParts = this.splitAtFirstOccurrence(parentFolder.path,userPublicPathPrefix);
           if (pathParts.length>1){
             folderPath = pathParts[1];
           }
@@ -1350,7 +1350,7 @@ export default {
             message: file.folder ? this.$t('document.alert.success.label.moveFolder') : this.$t('document.alert.success.label.moveDocument')
           });
           if (this.recentViewSelected) {
-            const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents/') ? destFolder.path.split('/Documents/')[1] : destFolder.path.substring(destFolder.path.indexOf('Private/'));
+            const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents/') ? this.splitAtFirstOccurrence(destFolder.path,'/Documents/')[1] : destFolder.path.substring(destFolder.path.indexOf('Private/'));
             window.setTimeout(() => {
               window.location.href = `${window.location.pathname}/${folderPath}?view=folder`;
             }, 1000);
@@ -1387,7 +1387,7 @@ export default {
             if (isShortcutToDifferentSpace) {
               this.redirectTodestinationSpace(destFolder,space);
             } else {
-              const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents') ? destFolder.path.split('/Documents')[1] : destFolder.path.substring(destFolder.path.indexOf('/Private/'));
+              const folderPath = eXo.env.portal.spaceName && destFolder.path.includes('/Documents') ? this.splitAtFirstOccurrence(destFolder.path,'/Documents')[1] : destFolder.path.substring(destFolder.path.indexOf('/Private/'));
               window.location.href = `${window.location.pathname}/${folderPath}?view=folder`;
             }
           } else {
@@ -1526,7 +1526,7 @@ export default {
         document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', { detail: {
           'sourceApp': 'NEW.APP',
           defaultDrive: this.$root.selectedDrive,
-          defaultFolder: this.$root.selectedPath.indexOf(this.$root.selectedDrive?.path) !== -1 ? this.$root.selectedPath.split(this.$root.selectedDrive?.path)[1] : this.$root.selectedPath,
+          defaultFolder: this.$root.selectedPath.indexOf(this.$root.selectedDrive?.path) !== -1 ? this.splitAtFirstOccurrence(this.$root.selectedPath,this.$root.selectedDrive?.path)[1] : this.$root.selectedPath,
           files,
         }}));
       }
@@ -1568,7 +1568,7 @@ export default {
         if (!path) {
           path = window.location.pathname;
         }
-        const pathParts  = path.toLowerCase().includes('/drives') || path.toLowerCase().includes('/documents')? path.split( `${eXo.env.portal.selectedNodeUri.toLowerCase()}/`) : [path];
+        const pathParts  = path.toLowerCase().includes('/drives') || path.toLowerCase().includes('/documents')? this.splitAtFirstOccurrence(path,`${eXo.env.portal.selectedNodeUri.toLowerCase()}/`) : [path];
         if (pathParts.length > 1) {
           this.folderPath = pathParts[1];
           this.selectedView = 'folder';
@@ -1704,7 +1704,7 @@ export default {
       
     },
     redirectTodestinationSpace(destFolder, space) {
-      const folderPath = destFolder.path.split(`Groups${space.groupId}`)[1].replace('/Documents', '/documents');
+      const folderPath = this.splitAtFirstOccurrence(destFolder.path,`Groups${space.groupId}`)[1].replace('/Documents', '/documents');
       const pathName = `${eXo.env.portal.context}/g/${space.groupId.replaceAll('/', ':')}/${space.prettyName}`;
       window.location.replace(`${pathName}${folderPath}?view=folder`, window.location.pathname);
     },
@@ -1784,7 +1784,15 @@ export default {
       this.viewType = viewType;
       this.refreshFiles();
       this.$nextTick().then(() => this.$root.$emit('update-breadcrumb', this.folderPath));
-    }
+    },
+    splitAtFirstOccurrence(str, delimiter) {
+      const index = str.indexOf(delimiter);
+      if (index === -1) {return [str];}
+      return [
+        str.slice(0, index),
+        str.slice(index + delimiter.length)
+      ];
+    },
   },
 };
 </script>
