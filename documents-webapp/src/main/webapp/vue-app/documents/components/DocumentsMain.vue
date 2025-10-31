@@ -1787,7 +1787,7 @@ export default {
     },
     splitAtFirstOccurrence(str, delimiter) {
       const index = str.indexOf(delimiter);
-      if (index === -1) {return [str];} // delimiter not found
+      if (index === -1) {return [str];}
       return [
         str.slice(0, index),
         str.slice(index + delimiter.length)
