@@ -35,7 +35,6 @@ import io.meeds.social.cms.model.ContentLinkExtension;
 import io.meeds.social.cms.model.ContentLinkSearchResult;
 import io.meeds.social.cms.plugin.ContentLinkPlugin;
 import io.meeds.social.cms.service.ContentLinkPluginService;
-
 import jakarta.annotation.PostConstruct;
 import lombok.SneakyThrows;
 
@@ -80,7 +79,8 @@ public class DocumentContentLinkPlugin implements ContentLinkPlugin {
                                                           limit);
     return CollectionUtils.isEmpty(documents) ? Collections.emptyList() :
                                               documents.stream()
-                                                       .map(this::toContentLink)
+                                                      .filter(doc -> !doc.getPath().startsWith("/Users"))
+                                                      .map(this::toContentLink)
                                                        .toList();
   }
 
