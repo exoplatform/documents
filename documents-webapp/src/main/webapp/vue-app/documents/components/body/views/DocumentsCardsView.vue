@@ -58,6 +58,7 @@
             :key="file.id"
             :file="file"
             :files="files"
+            :current-view="currentView"
             :select-all-checked="selectAll"
             :selected-documents="selectedDocuments"
             @document-selected="handleDocumentSelection"
@@ -103,6 +104,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    currentView: {
+      type: String,
+      default: ''
+    },
   },
   data: () => ({
     sortMenu: false,
@@ -121,7 +126,7 @@ export default {
           filename: decodedName,
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
-          mimetype: file?.mimeType,
+          mimeType: file?.mimeType,
           sourceID: file?.sourceID,
           acl: file?.acl,
           image: this.$root.getImageUrl(file),
@@ -130,6 +135,11 @@ export default {
           editable: this.$root.isFileEditable(file),
           readable: this.$root.isFileReadable(file),
           path: file?.path,
+          versionable: file?.versionable,
+          cloudDriveFolder: file?.cloudDriveFolder,
+          creatorUserName: file?.creatorUserName,
+          folder: file?.folder,
+          canAdd: file?.canAdd,
           source: 'documents',
         };
       });
