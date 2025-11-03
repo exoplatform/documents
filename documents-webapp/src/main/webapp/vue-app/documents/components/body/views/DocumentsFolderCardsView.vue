@@ -70,6 +70,7 @@
             <documents-folder-card
               :folder="folder"
               :files="folderToDisplay"
+              current-view="folder"
               :select-all-checked="selectAll"
               :selected-documents="selectedDocuments"
               @document-selected="handleDocumentSelection"
@@ -94,6 +95,7 @@
                 :key="file.id"
                 :file="file"
                 :files="files"
+                current-view="folder"
                 :select-all-checked="selectAll"
                 :selected-documents="selectedDocuments"
                 @document-selected="handleDocumentSelection"
@@ -167,7 +169,7 @@ export default {
           filename: decodedName,
           modifiedDate: file?.modifiedDate,
           createdDate: file?.createdDate,
-          mimetype: file?.mimeType,
+          mimeType: file?.mimeType,
           sourceID: file?.sourceID,
           acl: file?.acl,
           image: this.$root.getImageUrl(file),
@@ -178,6 +180,10 @@ export default {
           path: file?.path,
           source: 'documents',
           folder: file.folder,
+          versionable: file?.versionable,
+          cloudDriveFolder: file?.cloudDriveFolder,
+          creatorUserName: file?.creatorUserName,
+          canAdd: file?.canAdd,
         };
       });
     },
