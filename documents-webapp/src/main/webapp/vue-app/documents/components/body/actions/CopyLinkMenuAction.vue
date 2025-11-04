@@ -44,14 +44,14 @@ export default {
         }
       } else if (this.isFileEditable())  {
         if (this.file?.acl?.canEdit){
-          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
         } else {
-          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
         }
       } else if (this.isFileReadable())  {
-        path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+        path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
       } else {
-        path = `${window.location.host}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
+        path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
       }
       if (navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(path).catch(() => {
