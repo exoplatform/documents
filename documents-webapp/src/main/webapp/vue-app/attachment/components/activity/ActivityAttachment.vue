@@ -67,7 +67,7 @@
             </v-avatar>
             <v-card             
               max-width="198px"
-              class="d-flex  px-1 my-auto  no-border elevation-0">
+              class="d-flex  px-1 my-auto transparent no-border elevation-0">
               <v-card-text
                 :title="attachment.name"
                 class="pa-0  my-auto white--text text-wrap text-break text-truncate"
