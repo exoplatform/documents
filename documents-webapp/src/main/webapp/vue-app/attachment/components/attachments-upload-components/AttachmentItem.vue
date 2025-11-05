@@ -74,7 +74,7 @@
           height="18"
           width="18"
           @click="detachFile(attachment)">
-          <i class="uiIconCloseCircled error--text"></i>
+          <i class="uiIconCloseCircled d-flex mx-auto error--text"></i>
         </v-btn>
         <div
           v-if="allowToDetach && canAccess"
