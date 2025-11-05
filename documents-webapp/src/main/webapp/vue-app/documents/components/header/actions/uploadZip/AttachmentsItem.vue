@@ -50,7 +50,7 @@
           small
           size="24"
           @click="removeAttachedFile(attachment)">
-          <i v-if="attachmentInProgress" class="uiIconCloseCircled error--text"></i>
+          <i v-if="attachmentInProgress" class="uiIconCloseCircled d-flex mx-auto error--text"></i>
           <v-icon
             v-else 
             small
