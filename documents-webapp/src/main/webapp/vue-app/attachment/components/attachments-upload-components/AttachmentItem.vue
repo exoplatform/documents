@@ -68,13 +68,13 @@
         </v-icon>
         <v-btn
           v-if="attachmentInProgress"
-          class="d-flex align-end"
-          outlined
+          class="d-flex align-end me-1"
+          icon
           x-small
           height="18"
           width="18"
           @click="detachFile(attachment)">
-          <i class="uiIconCloseCircled error--text"></i>
+          <i class="uiIconCloseCircled d-flex mx-auto error--text"></i>
         </v-btn>
         <div
           v-if="allowToDetach && canAccess"
@@ -84,7 +84,7 @@
           <v-btn
             :disabled="!canDetachAttachment"
             class="d-flex"
-            outlined
+            icon
             x-small
             height="24"
             width="24"
