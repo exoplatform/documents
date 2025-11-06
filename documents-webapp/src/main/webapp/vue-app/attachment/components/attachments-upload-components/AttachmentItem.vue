@@ -68,8 +68,8 @@
         </v-icon>
         <v-btn
           v-if="attachmentInProgress"
-          class="d-flex align-end"
-          outlined
+          class="d-flex align-end me-1"
+          icon
           x-small
           height="18"
           width="18"
@@ -84,7 +84,7 @@
           <v-btn
             :disabled="!canDetachAttachment"
             class="d-flex"
-            outlined
+            icon
             x-small
             height="24"
             width="24"
