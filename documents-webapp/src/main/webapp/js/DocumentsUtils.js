@@ -45,14 +45,15 @@ export function getThumbnailUrl(file, size, lastUpdated) {
         formData.append('lastModified', lastUpdated);
     }
     const params = new URLSearchParams(formData).toString();
+    const fileId = file.sourceID || file.id;
     if (file?.readable) {
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/officeThumbnail/${file.id}?${params}`;
+        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/officeThumbnail/${fileId}?${params}`;
     }
     if (file?.mimeType?.includes('image/')) {
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/imageThumbnail/${file.id}?${params}`;
+        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/imageThumbnail/${fileId}?${params}`;
     }
     if (file?.mimeType?.includes('video/')) {
-        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/videoThumbnail/${file.id}?${params}`;
+        return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/videoThumbnail/${fileId}?${params}`;
     }
     return null;
 }
