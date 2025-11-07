@@ -1546,7 +1546,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return null;
   }
 
-  public void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity){
+  public void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity) {
     SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
@@ -1559,7 +1559,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String owner = node.getProperty(NodeTypeConstants.EXO_OWNER).getString();
         permissions.put(owner, PermissionType.ALL);
       }
-      permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
+      if (!isPersonalDrive(node)) {
+        permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
+      }
       if (nodePermissionEntity.isPublic()) {
         permissions.put("any", new String[] {PermissionType.READ});
       }
@@ -2486,4 +2488,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     symlinksNavHistory.clear();
   }
 
+  public boolean isPersonalDrive(Node node) throws RepositoryException {
+    String nodePath = node.getPath();
+    return StringUtils.startsWith(nodePath, "/Users") && StringUtils.contains(nodePath, "/Private");
+  }
 }
