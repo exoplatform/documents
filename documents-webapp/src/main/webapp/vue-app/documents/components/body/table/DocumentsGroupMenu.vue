@@ -25,21 +25,13 @@
       offset-x
       close-on-click>
       <template #activator="{ on, attrs }">
-        <div
-          dark
-          icon
+        <document-action-item
           v-bind="attrs"
           v-on="on"
-          class="clickable ma-auto py-10px px-4"
-          @mousedown="disableLeftClick">
-          <v-icon
-            size="16"
-            class="pe-1">
-            {{ icon }}
-          </v-icon>
-          <span class="ps-2 pe-3 ml-n2px text-body menu-text-color">{{ $t(labelKey) }}</span>
-          <v-icon size="16" class="absolute-vertical-center r-3">fa-caret-right</v-icon>
-        </div>
+          :icon="icon"
+          :label=" $t(labelKey)"
+          is-group
+          @click="menuDisplayed = true" />
       </template>
       <documents-actions-menu
         :file="file"

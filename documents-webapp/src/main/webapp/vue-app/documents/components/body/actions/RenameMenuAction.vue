@@ -1,16 +1,8 @@
 <template>
-  <div>
-    <div
-      class="clickable py-10px px-4"
-      @click="editNameMode()">
-      <v-icon
-        size="16"
-        class="pe-1">
-        fas fa-pen
-      </v-icon>
-      <span class="text-body menu-text-color ps-1">{{ $t('document.label.rename') }}</span>
-    </div>
-  </div>
+  <document-action-item
+    icon="fas fa-pen"
+    :label="$t('document.label.rename')"
+    @click="editNameMode" />
 </template>
 <script>
 export default {

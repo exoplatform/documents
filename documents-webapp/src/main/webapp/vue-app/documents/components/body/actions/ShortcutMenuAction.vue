@@ -15,20 +15,11 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div>
-    <div
-      class="clickable py-10px px-4"
-      @click="addShortcut()">
-      <v-icon
-        size="16"
-        class="pe-1">
-        fas fa-share-square
-      </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.shortcut') }}</span>
-    </div>
-    <v-divider
-      class="mt-1 dividerStyle" />
-  </div>
+  <document-action-item
+    icon="fas fa-share-square"
+    :label="$t('documents.label.shortcut')"
+    show-divider
+    @click="addShortcut" />
 </template>
 <script>
 export default {

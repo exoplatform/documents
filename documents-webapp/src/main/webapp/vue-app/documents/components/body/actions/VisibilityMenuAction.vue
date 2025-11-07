@@ -1,14 +1,8 @@
 <template>
-  <div
-    class="clickable ma-auto py-10px px-4"
-    @click="changeVisibility()">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fas fa-shield-alt
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.visibility') }}</span>
-  </div>
+  <document-action-item
+    icon="fas fa-shield-alt"
+    :label="$t('documents.label.visibility')"
+    @click="changeVisibility" />
 </template>
 <script>
 export default {

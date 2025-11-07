@@ -16,18 +16,10 @@
  */
 
 <template>
-  <div>
-    <div
-      class="clickable py-10px px-4"
-      @click="copy()">
-      <v-icon
-        size="16"
-        class="pe-1">
-        fas fa-copy
-      </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.copy') }}</span>
-    </div>
-  </div>  
+  <document-action-item
+    icon="fas fa-copy"
+    :label="$t('documents.label.copy')"
+    @click="copy" />
 </template>
 <script>
 export default {
