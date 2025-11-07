@@ -142,8 +142,14 @@ export default {
       }
     },
     url() {
-      if (this.isFileEditable || this.isFileReadable) {
-        return `${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.file?.id}${this.isFileReadable && !this.isFileEditable && '&mode=view' || ''}&backTo=${window.location.pathname}`;
+      if (this.isFileEditable)  {
+        if (this.file?.acl?.canEdit){
+          return this.$documentsUtils.getEditorUrl(this.file,'');
+        } else {
+          return this.$documentsUtils.getEditorUrl(this.file,'view');
+        }
+      } else if (this.isFileReadable)  {
+        return this.$documentsUtils.getEditorUrl(this.file,'view');
       } else {
         return null;
       }
