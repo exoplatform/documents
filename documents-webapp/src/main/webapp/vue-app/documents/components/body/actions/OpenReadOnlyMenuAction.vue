@@ -1,14 +1,8 @@
 <template>
-  <div
-    class="clickable ma-auto py-10px px-4"
-    @click="openReadOnlyFile()">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fab fa-readme
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('document.label.open.read.only') }}</span>
-  </div>
+  <document-action-item
+    icon="fab fa-readme"
+    :label="$t('document.label.open.read.only')"
+    @click="openReadOnlyFile" />
 </template>
 <script>
 export default {

@@ -1,14 +1,8 @@
 <template>
-  <div
-    class="clickable py-10px px-4"
-    @click="openLocation()">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fa-external-link-alt
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('document.label.go.location') }}</span>
-  </div>
+  <document-action-item
+    icon="fa-external-link-alt"
+    :label="$t('document.label.go.location')"
+    @click="openLocation" />
 </template>
 <script>
 export default {
@@ -24,4 +18,4 @@ export default {
     },
   },
 };
-</script>./OpenLocationMenuAction.vue
+</script>

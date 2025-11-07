@@ -15,16 +15,10 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div
-    class="clickable py-10px px-4"
-    @click="addCategory">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fa-th-large
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.addCategories') }}</span>
-  </div>
+  <document-action-item
+    icon="fa-th-large"
+    :label="$t('documents.label.addCategories')"
+    @click="addCategory" />
 </template>
 <script>
 export default {

@@ -15,20 +15,11 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div>
-    <div
-      class="clickable py-10px px-4"
-      @click="uploadVersion">
-      <v-icon
-        size="16"
-        class="pe-1">
-        fas fa-upload
-      </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.upload.newVersion') }}</span>
-    </div>
-    <v-divider
-      class="mt-1 dividerStyle" />
-  </div>
+  <document-action-item
+    icon="fas fa-upload"
+    :label="$t('documents.label.upload.newVersion')"
+    show-divider
+    @click="uploadVersion" />
 </template>
 
 <script>
