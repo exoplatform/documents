@@ -192,8 +192,15 @@ export default {
   },
   methods: {
     openFilePreview() {
-      if (this.isFileEditable || this.isFileReadable) {
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.result.id}${this.isFileReadable && !this.isFileEditable && '&mode=view' || ''}&backTo=${window.location.pathname}`, '_blank');
+      this.result.path = this.result.nodePath;
+      if (this.isFileEditable)  {
+        if (this.result?.acl?.canEdit){
+          window.open(this.$documentsUtils.getEditorUrl(this.result,''), '_blank');
+        } else {
+          window.open(this.$documentsUtils.getEditorUrl(this.result,'view'), '_blank');
+        }
+      } else if (this.isFileReadable)  {
+        window.open(this.$documentsUtils.getEditorUrl(this.result,'view'), '_blank');
       } else {
         const file = {
           'id': this.fileId,
