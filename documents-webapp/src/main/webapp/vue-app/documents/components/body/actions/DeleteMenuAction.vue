@@ -1,19 +1,12 @@
 <template>
-  <div>
-    <v-divider
-      v-if="!isMobile"
-      class="mt-1 dividerStyle" />
-    <div
-      class="clickable py-10px px-4"
-      @click="deleteAction()">
-      <v-icon
-        size="16"
-        class="pe-1 error-color">
-        fas fa-trash
-      </v-icon>
-      <span class="ps-1 ml-n2px text-body error-color">{{ $t('documents.label.delete') }}</span>
-    </div>
-  </div>
+  <document-action-item
+    icon="fas fa-trash"
+    icon-extra-class="error-color"
+    label-extra-class="error-color"
+    :label="$t('documents.label.delete')"
+    :is-mobile="isMobile"
+    show-divider-above
+    @click="deleteAction" />
 </template>
 <script>
 export default {

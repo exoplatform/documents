@@ -1,14 +1,8 @@
 <template>
-  <div
-    class="clickable py-10px px-4"
-    @click="editFile()">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fas fa-edit
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('document.label.edit') }}</span>
-  </div>
+  <document-action-item
+    icon="fas fa-edit"
+    :label="$t('document.label.edit')"
+    @click="editFile" />
 </template>
 <script>
 export default {

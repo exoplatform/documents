@@ -1,14 +1,8 @@
 <template>
-  <div
-    class="clickable py-10px px-4"
-    @click="displayDetails()">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fa-info-circle
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('documents.drawer.details.title') }}</span>
-  </div>
+  <document-action-item
+    icon="fa-info-circle"
+    :label="$t('documents.drawer.details.title')"
+    @click="displayDetails" />
 </template>
 <script>
 export default {
