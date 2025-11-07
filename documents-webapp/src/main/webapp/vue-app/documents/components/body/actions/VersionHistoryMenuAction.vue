@@ -15,16 +15,10 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div
-    class="clickable py-10px px-4"
-    @click="showVersionHistory">
-    <v-icon
-      size="16"
-      class="pe-1">
-      fa fa-history
-    </v-icon>
-    <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.showVersionHistory') }}</span>
-  </div>
+  <document-action-item
+    icon="fa fa-history"
+    :label="$t('documents.label.showVersionHistory')"
+    @click="showVersionHistory" />
 </template>
 
 <script>
