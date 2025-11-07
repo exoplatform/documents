@@ -95,6 +95,7 @@ public class MailTemplateProvider extends TemplateProvider {
       templateContext.put("PROFILE_URL", encoder.encode(userProfile.getUrl()));
       templateContext.put("AVATAR", encoder.encode(LinkProviderUtils.getUserAvatarUrl(userProfile)));
 
+
       Calendar lastModified = Calendar.getInstance();
       lastModified.setTimeInMillis(notificationInfo.getLastModifiedDate());
       templateContext.put("LAST_UPDATED_TIME",
@@ -111,6 +112,7 @@ public class MailTemplateProvider extends TemplateProvider {
       templateContext.put("FIRST_NAME", encoder.encode(receiver.getProfile().getProperty(Profile.FIRST_NAME).toString()));
       // Footer
       templateContext.put("FOOTER_LINK", LinkProviderUtils.getRedirectUrl("notification_settings", receiver.getRemoteId()));
+      templateContext.put("COMPANY_LINK", LinkProviderUtils.getBaseUrl());
       String subject = TemplateUtils.processSubject(templateContext);
       String body = TemplateUtils.processGroovy(templateContext);
       notificationContext.setException(templateContext.getException());
