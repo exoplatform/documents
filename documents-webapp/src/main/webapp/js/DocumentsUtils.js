@@ -84,7 +84,7 @@ export function getParentFolderUrl(file) {
             const parentIndex = pathParts.indexOf('Private');
             if (parentIndex !== -1) {
                 folderPath = pathParts.slice(parentIndex, pathParts.length - 1).join('/');
-                folderPath = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/drives/${folderPath}`;
+                folderPath = `${window.location.pathname}/${folderPath}`;
             }
         }
         return folderPath;
@@ -92,7 +92,8 @@ export function getParentFolderUrl(file) {
 }
 
 export function getEditorUrl(file, mode) {
-    let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${file.id}&backTo=${getParentFolderUrl(file)}`;
+    const fileId = file.sourceID? file.sourceID: file.id;
+    let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}&backTo=${getParentFolderUrl(file)}`;
     if (mode) {
         url += `&mode=${mode}`;
     }

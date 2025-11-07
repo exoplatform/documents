@@ -826,7 +826,11 @@ export default {
       } else if (path.includes('Private/')) {
         this.folderPath = path.substring(path.indexOf('Private/') + 'Private/'.length);
         this.selectedView = 'folder';
+      } else if (path !== window.location.pathname){
+        this.folderPath = path;
+        this.selectedView = 'folder';
       }
+
     },
 
     importDocuments(uploadId,overrideMode){
@@ -958,6 +962,11 @@ export default {
       return this.$documentFileService
         .bulkMoveDocuments(actionId,this.selectedDocuments, this.$root.ownerId, destPath)
         .catch(e => console.error(e));
+    },
+    openFile(file) {
+      this.$attachmentService.getDocumentDetails(file.parentFolderId,'').then(folder => {
+        this.openFolder(folder);
+      });
     },
     openFolder(parentFolder) {
       this.$root.driveView = false;
@@ -1549,7 +1558,7 @@ export default {
         return this.showPreview(documentPreviewId)
           .then(attachment => {
             if (attachment?.path) {
-              this.selectFile(attachment.path);
+              this.openFile(attachment);
             }
           });
       }
@@ -1642,10 +1651,12 @@ export default {
             } else {
               this.openFileInEditor(attachment,'view','_self');
 
-            } } else {
+            }
+          } else {
             const file = {'id': attachment.id,'filename': attachment.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${attachment.id}`, 'icon': this.getFileIcon(attachment)};
             document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': documentPreviewId }}));
-            return attachment;}
+            return attachment;
+          }
         })
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
