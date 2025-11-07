@@ -105,7 +105,10 @@
       v-if="!file.drive"
       class="ma-auto"
       :id="`document-action-menu-cel-${file.id}`">
-      <v-tooltip bottom>
+      <v-tooltip
+        :disabled="menuDisplayed"
+        :open-delay="500"
+        bottom>
         <template #activator="{ on, attrs }">
           <v-btn
             icon
@@ -117,15 +120,18 @@
               :size="isMobile ? 14 : 18"
               class="clickable text-sub-title"
               :class="editNameMode ? '' : 'button-document-action'"
-              @click="displayActionMenu()">
+              @click="displayActionMenu($event)">
               mdi-dots-vertical
             </v-icon>
           </v-btn>
           <v-menu
             v-model="menuDisplayed"
-            :attach="`#document-action-menu-cel-${file.id}`"
             transition="slide-x-reverse-transition"
             :content-class="isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'"
+            :position-x="menuX"
+            :position-y="menuY"
+            :nudge-right="30"
+            :nudge-top="25"
             offset-y
             offset-x
             close-on-click
@@ -146,6 +152,7 @@
 </template>
 <script>
 import ntFileExtension from '../../../../json/NtFileExtension.json';
+
 export default {
 
   props: {
@@ -206,6 +213,8 @@ export default {
     },
     icon: null,
     touchTimer: null,
+    menuX: 0,
+    menuY: 0,
   }),
   computed: {
     isFileEditable() {
@@ -351,12 +360,19 @@ export default {
       this.loading = false;
       this.$root.$emit('mark-document-as-viewed', this.file);
     },
-    displayActionMenu() {
-      if (this.isMobile){
+    displayActionMenu(event) {
+      if (this.isMobile) {
         this.$root.$emit('open-file-action-menu', this.file);
       } else {
+        const rect = event.currentTarget.getBoundingClientRect();
+        this.menuX = rect.left;
+        this.menuY = rect.bottom;
+
         this.menuDisplayed = true;
-        $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().css('background', '#eee');
+
+        $(`#document-action-menu-cel-${this.file.id}`)
+          .parent().parent().parent().parent()
+          .css('background', '#eee');
       }
     },
     escapeRegExp(string) {

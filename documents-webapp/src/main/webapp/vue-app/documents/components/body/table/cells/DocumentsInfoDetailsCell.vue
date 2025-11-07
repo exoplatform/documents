@@ -1,6 +1,8 @@
 <template>
   <div :id="`info-cell-file-${fileId}`">
-    <v-tooltip bottom>
+    <v-tooltip
+      :open-delay="500"
+      bottom>
       <template #activator="{ on, attrs }">
         <v-btn
           icon
