@@ -16,18 +16,10 @@
 -->
 
 <template>
-  <div>
-    <div
-      class="clickable py-10px px-4"
-      @click="openComposerDrawer()">
-      <v-icon
-        size="16"
-        class="pe-1">
-        fa fas fa-stream
-      </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.post') }}</span>
-    </div>
-  </div>  
+  <document-action-item
+    icon="fa fas fa-stream"
+    :label="$t('documents.label.post')"
+    @click="openComposerDrawer" />
 </template>
 <script>
 export default {

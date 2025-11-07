@@ -1,19 +1,10 @@
 <template>
-  <div>
-    <div
-      class=" clickable py-10px px-4"
-      @click="download()">
-      <v-icon
-        size="16"
-        class="pe-1">
-        fas fa-download
-      </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('documents.label.download') }}</span>
-    </div>
-    <v-divider
-      v-if="!isMobile"
-      class="mt-1 dividerStyle" />
-  </div>
+  <document-action-item
+    icon="fas fa-download"
+    :label="$t('documents.label.download')"
+    :is-mobile="isMobile"
+    show-divider
+    @click="download" />
 </template>
 <script>
 export default {

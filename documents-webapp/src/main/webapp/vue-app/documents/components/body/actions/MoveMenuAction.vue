@@ -15,21 +15,11 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div>
-    <div
-      class="clickable py-10px px-4"
-      @click="moveDocument()">
-      <v-icon
-        size="16"
-        class="pe-1">
-        fa-arrows-alt
-      </v-icon>
-      <span class="ps-1 text-body menu-text-color">{{ $t('document.label.move') }}</span>
-    </div>
-    <v-divider
-      v-if="isMultiSelection"
-      class="mt-1" />
-  </div>
+  <document-action-item
+    icon="fa-arrows-alt"
+    :label="$t('document.label.move')"
+    :show-divider="isMultiSelection"
+    @click="moveDocument" />
 </template>
 <script>
 export default {
