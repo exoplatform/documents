@@ -70,34 +70,35 @@ export function getDownloadUrl(id, lastUpdated) {
 }
 
 export function getParentFolderUrl(file) {
-    if (file && file.id) {
-        let folderPath = window.location.pathname;
-        const pathParts = file.path.split('/');
-        const spaceIndex = pathParts.indexOf('spaces');
-        if (spaceIndex !== -1) {
-            if (pathParts[spaceIndex + 2] === 'Documents') {
-                pathParts[spaceIndex + 2] = 'documents';
-            }
-            folderPath = pathParts.slice(spaceIndex + 1, pathParts.length - 1).join('/');
-            folderPath = `${eXo.env.portal.context}/g/:spaces:${folderPath}`;
-        } else if (pathParts.indexOf('Users') !== -1) {
-            const parentIndex = pathParts.indexOf('Private');
-            if (parentIndex !== -1) {
-                folderPath = pathParts.slice(parentIndex, pathParts.length - 1).join('/');
-                folderPath = `${window.location.pathname}/${folderPath}`;
-            }
-        }
-        return folderPath;
+  if (file && file.id) {
+    let folderPath = window.location.pathname;
+    const pathParts = file.path.split('/');
+    const spaceIndex = pathParts.indexOf('spaces');
+    if (spaceIndex !== -1) {
+      if (pathParts[spaceIndex + 2] === 'Documents') {
+        pathParts[spaceIndex + 2] = 'documents';
+      }
+      folderPath = pathParts.slice(spaceIndex + 1, pathParts.length - 1).join('/');
+      folderPath = `${eXo.env.portal.context}/g/:spaces:${folderPath}`;
+    } else if (pathParts.indexOf('Users') !== -1) {
+      const parentIndex = pathParts.indexOf('Private');
+      if (parentIndex !== -1) {
+        folderPath = pathParts.slice(parentIndex, pathParts.length - 1).join('/');
+        folderPath = `${eXo.env.portal.context}/drives/${folderPath}`;
+      }
     }
+    return folderPath;
+  }
 }
 
 export function getEditorUrl(file, mode) {
-    const fileId = file.sourceID? file.sourceID: file.id;
-    let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}&backTo=${getParentFolderUrl(file)}`;
-    if (mode) {
-        url += `&mode=${mode}`;
-    }
-    return url;
+  const fileId = file.sourceID? file.sourceID: file.id;
+  let url = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${fileId}`;   
+  if (mode) {
+    url += `&mode=${mode}`;
+  }
+  url += `&backTo=${getParentFolderUrl(file)}`;
+  return url;
 }
 
 export function getViewType(appId) {
