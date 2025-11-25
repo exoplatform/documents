@@ -40,6 +40,9 @@ public class DocumentModeRedirectHandler implements Filter {
     String documentPreviewId = httpServletRequest.getParameter("documentPreviewId");
     String documentEditId = httpServletRequest.getParameter("docId");
     String viewer = httpServletRequest.getRemoteUser();
+    if (viewer == null) {
+      chain.doFilter(request, response);
+    }
 
     String documentId = documentPreviewId != null ? documentPreviewId : documentEditId;
 
