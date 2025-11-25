@@ -60,6 +60,12 @@
                 {{ $t('documents.settings.button.tooltip') }}
               </span>
             </v-tooltip>
+            <extension-registry-components
+              :params="params"
+              name="DocumentsHeader"
+              type="documents-header-right"
+              parent-element="div"
+              element="div" />
             <documents-offline-button
               v-if="!spaceId"
               btn-class="ms-4"
@@ -203,6 +209,15 @@ export default {
         { value: 'listView', icon: 'fas fa-th-list', label: this.$t('documents.label.viewType.list') },
         { value: 'cardsView', icon: 'fas fa-th-large', label: this.$t('documents.label.viewType.cards')},
       ];
+    },
+    params() {
+      return {
+        selectedDocuments: this.selectedDocuments,
+        selectedDrive: this.$root.selectedDrive,
+        selectedPath: this.$root.selectedPath,
+        spaceId: this.spaceId,
+        tab: this.tab,
+      };
     },
     selectedViewType() {
       const item = this.viewItemsTypes.find(i => i.value === this.viewType);
