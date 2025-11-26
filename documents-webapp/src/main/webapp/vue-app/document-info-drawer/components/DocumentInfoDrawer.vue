@@ -1,13 +1,20 @@
 <template>
   <exo-drawer 
     ref="documentInfoDrawer"
+    v-model="drawer"
     class="documentInfoDrawer"
     @closed="close"
     right>
-    <template slot="title">
+    <template #title>
       {{ $t('documents.drawer.details.title') }}
     </template>
-    <template #titleIcons>
+    <template v-if="drawer && file" #titleIcons>
+      <extension-registry-components
+        :params="params"
+        name="DocumentsInfo"
+        type="documents-info-header"
+        parent-element="div"
+        element="div" />
       <documents-favorite-button
         :id="fileId"
         :file="file"
@@ -40,7 +47,7 @@
         <span>{{ $t('documents.label.download') }}</span>
       </v-tooltip>
     </template>
-    <template v-if="file" slot="content">
+    <template v-if="drawer && file" #content>
       <v-card
         class="d-flex flex-column elevation-0 pt-2">
         <v-card
@@ -270,7 +277,7 @@
         </v-list-item>
       </v-card>
     </template>   
-    <template slot="footer">
+    <template v-if="drawer" #footer>
       <div v-if="displayEditor" class="d-flex">
         <v-spacer />
         <v-btn
@@ -308,6 +315,7 @@ export default {
       minute: '2-digit',
     },
     currentUser: eXo.env.portal.userName,
+    drawer: false,
     file: null,
     fileName: null,
     displayEditor: false,
@@ -380,6 +388,11 @@ export default {
     },
     fileWithVersionsSize() {
       return this.$documentsUtils.getSize(this.file.sizeWithVersions);
+    },
+    params() {
+      return {
+        file: this.file,
+      };
     },
   },
   watch: {
