@@ -78,6 +78,10 @@ export default {
       type: Boolean,
       default: () => true
     },
+    canFillAttachments: {
+      type: Boolean,
+      default: () => true
+    },
     allowToDetach: {
       type: Boolean,
       default: true
@@ -98,7 +102,7 @@ export default {
     },
     isFileFillable(attachment) {
       const type = attachment && attachment.mimetype || '';
-      return type === 'application/pdf';
+      return this.canFillAttachments && type === 'application/pdf';
     },
     isFileReadable(attachment) {
       const type = attachment && attachment.mimetype || '';
@@ -111,6 +115,7 @@ export default {
       this.$refs.attachmentsListDrawer.endLoading();
     },
     openAttachmentsListDrawer() {
+      console.log('openFile called');
       this.$refs.attachmentsListDrawer.open();
     },
     closeAttachmentsListDrawer() {

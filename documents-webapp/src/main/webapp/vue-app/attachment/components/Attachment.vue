@@ -23,7 +23,8 @@
         ref="attachmentsListDrawer"
         :supported-documents="supportedDocuments"
         :attachments="attachments"
-        :open-attachments-in-editor="openAttachmentsInEditor" />
+        :open-attachments-in-editor="openAttachmentsInEditor"
+        :can-fill-attachments="canFillAttachments" />
     </div>
   </v-app>
 </template>
@@ -152,6 +153,7 @@ export default {
       this.entityType = config.entityType;
       this.entityId = config.entityId;
       this.openAttachmentsInEditor = config.openAttachmentsInEditor || true;
+      this.canFillAttachments = config.canFillAttachments;
       this.displayUploadedFiles = config.displayUploadedFiles;
       this.createEntityTypeFolder = config.createEntityTypeFolder;
       this.showCustomDrawerOverlay = config.showCustomDrawerOverlay;
