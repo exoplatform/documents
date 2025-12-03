@@ -57,6 +57,7 @@ export default {
   methods: {
     getParams(extension) {
       return {
+        ...(extension.componentParams || {}),
         file: this.file,
         isMobile: this.isMobile,
         selectedDocuments: this.selectedDocuments,
