@@ -643,6 +643,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
         while (node != null && (!node.getPath().equals(homePath) || node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
           try {
+            if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK) && node.getPath().contains(SPACE_PATH_PREFIX)) {
+              String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
+              String homePathSymlink = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
+              for (int i = 0; i < parents.size(); i++) {
+                String pathActuel = parents.get(i).getPath();
+                pathActuel = pathActuel.replace(homePath,homePathSymlink);
+                parents.get(i).setPath(pathActuel);
+              }
+              homePath = homePathSymlink;
+            }
             if(node.getName().equals(USER_PUBLIC_ROOT_NODE)){
               node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
               if (node != null) {
