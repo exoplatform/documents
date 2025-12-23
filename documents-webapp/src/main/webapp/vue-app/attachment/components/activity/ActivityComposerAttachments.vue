@@ -60,7 +60,7 @@ export default {
   }),
   computed: {
     attachmentsLength() {
-      return this.attachedFiles.length;
+      return this.attachedFiles?.length;
     },
     displayAttachments() {
       return this.attachmentsLength > 0;
