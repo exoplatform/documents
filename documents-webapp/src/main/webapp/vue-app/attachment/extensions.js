@@ -32,7 +32,7 @@ export function installExtensions() {
     rank: 10,
   });
 
-  extensionRegistry.registerExtension('ActivityComposer', 'ckeditor-extensions', {
+  extensionRegistry.registerExtension('RichEditor', 'ckeditor-extensions', {
     id: 'attachFile',
     extraPlugin: 'attachFile',
     extraToolbarItem: 'attachFile'
