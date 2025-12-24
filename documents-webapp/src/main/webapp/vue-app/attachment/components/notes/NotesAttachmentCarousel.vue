@@ -91,8 +91,13 @@ export default {
       return this.attachments.length;
     },
   },
-  async created() {
-    this.files = await this.initEntityAttachmentsList();
+  watch: {
+    entityId: {
+      immediate: true,
+      async handler() {
+        this.files = await this.initEntityAttachmentsList();
+      },
+    }
   },
   methods: {
     async initEntityAttachmentsList() {

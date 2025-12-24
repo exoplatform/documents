@@ -142,6 +142,12 @@ export function installExtensions() {
   });
 }
 function installNotesExtensions() {
+  extensionRegistry.registerComponent('NotesDetailsFooter', 'notes-overview-extensions', {
+    id: 'notes-attachment-list',
+    vueComponent: Vue.options.components['notes-attachment-carousel'],
+    rank: 20,
+  });
+  
   extensionRegistry.registerExtension('NotesEditor', 'ckeditor-extensions', {
     id: 'attachFile',
     extraPlugin: 'attachFile',
