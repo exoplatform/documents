@@ -19,6 +19,8 @@ import AnalyticsTableCellDocumentOriginValue from './components/analytics/Analyt
 import ContentAttachmentList from './components/content/ContentAttachmentList.vue';
 import ContentAttachmentItem from './components/content/ContentAttachmentItem.vue';
 import NotesAttachment from './components/notes/NotesAttachment.vue';
+import NotesAttachmentCarousel from './components/notes/NotesAttachmentCarousel.vue';
+import NotesAttachmentItem from './components/notes/NotesAttachmentItem.vue';
 
 const components = {
   'attachments-drawer': AttachmentsDrawer,
@@ -41,7 +43,9 @@ const components = {
   'analytics-table-cell-document-origin-value': AnalyticsTableCellDocumentOriginValue,
   'content-attachment-list': ContentAttachmentList,
   'content-attachment-item': ContentAttachmentItem,
-  'notes-attachment': NotesAttachment
+  'notes-attachment': NotesAttachment,
+  'notes-attachment-carousel': NotesAttachmentCarousel,
+  'notes-attachment-item': NotesAttachmentItem,
 };
 
 for (const key in components) {

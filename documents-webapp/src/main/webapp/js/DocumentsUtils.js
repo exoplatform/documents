@@ -49,10 +49,10 @@ export function getThumbnailUrl(file, size, lastUpdated) {
     if (file?.readable) {
         return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/officeThumbnail/${fileId}?${params}`;
     }
-    if (file?.mimeType?.includes('image/')) {
+    if (file?.mimeType?.includes('image/') || file?.mimetype?.includes('image/')) {
         return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/imageThumbnail/${fileId}?${params}`;
     }
-    if (file?.mimeType?.includes('video/')) {
+    if (file?.mimeType?.includes('video/') || file?.mimetype?.includes('video/')) {
         return `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/videoThumbnail/${fileId}?${params}`;
     }
     return null;
