@@ -21,6 +21,7 @@ import ContentAttachmentItem from './components/content/ContentAttachmentItem.vu
 import NotesAttachment from './components/notes/NotesAttachment.vue';
 import NotesAttachmentCarousel from './components/notes/NotesAttachmentCarousel.vue';
 import NotesAttachmentItem from './components/notes/NotesAttachmentItem.vue';
+import NotesAttachmentButton from './components/notes/NotesAttachmentButton.vue';
 
 const components = {
   'attachments-drawer': AttachmentsDrawer,
@@ -46,6 +47,8 @@ const components = {
   'notes-attachment': NotesAttachment,
   'notes-attachment-carousel': NotesAttachmentCarousel,
   'notes-attachment-item': NotesAttachmentItem,
+  'notes-attachment-button': NotesAttachmentButton,
+  
 };
 
 for (const key in components) {
