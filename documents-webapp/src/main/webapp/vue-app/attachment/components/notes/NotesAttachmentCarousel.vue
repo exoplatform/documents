@@ -17,8 +17,11 @@
 -->
 
 <template>
-  <span v-if="displayAttachmentItem">
-    <card-carousel parent-class="note-files-parent">
+  <div 
+    v-if="displayAttachmentItem"
+    id="notesAttachment">
+    <card-carousel 
+      parent-class="note-files-parent">
       <notes-attachment-item
         v-for="(attachment, index) in attachments"
         :key="attachment.id"
@@ -30,7 +33,7 @@
         :preview-height="previewHeight"
         class="note-file-item" />
     </card-carousel>
-  </span>
+  </div>
 </template>
 <script>
 export default {
@@ -97,6 +100,16 @@ export default {
       async handler() {
         this.files = await this.initEntityAttachmentsList();
       },
+    },
+    displayAttachmentItem: {
+      immediate: true,
+      handler() {
+        if (this.displayAttachmentItem) {
+          document.dispatchEvent(new CustomEvent('file-attachments-enable'));
+        } else {
+          document.dispatchEvent(new CustomEvent('file-attachments-disable'));
+        }
+      }
     }
   },
   methods: {
