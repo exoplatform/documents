@@ -19,7 +19,7 @@
 <template>
   <span v-if="displayAttachmentIcon">
     <v-btn
-      :aria-label="$t('notes.open.attachments.list')"
+      :aria-label="$t('notes.details.title.button.label')"
       href="#notesAttachment"
       icon>
       <v-icon
