@@ -135,6 +135,11 @@ export function installExtensions() {
     vueComponent: Vue.options.components['notes-attachment'],
     rank: 40,
   });
+  extensionRegistry.registerComponent('NewsDetailTitle', 'content-details-extension', {
+    id: 'content-attachment-button',
+    vueComponent: Vue.options.components['notes-attachment-button'],
+    rank: 50,
+  });
   extensionRegistry.registerComponent('NewsDetailsFooter', 'content-details-extension', {
     id: 'content-attachment-list',
     vueComponent: Vue.options.components['notes-attachment-carousel'],
@@ -146,6 +151,12 @@ function installNotesExtensions() {
     id: 'notes-attachment-list',
     vueComponent: Vue.options.components['notes-attachment-carousel'],
     rank: 20,
+  });
+  
+  extensionRegistry.registerComponent('NotesDetailTitle', 'notes-overview-extensions', {
+    id: 'notes-attachment-button',
+    vueComponent: Vue.options.components['notes-attachment-button'],
+    rank: 30,
   });
   
   extensionRegistry.registerExtension('NotesEditor', 'ckeditor-extensions', {
