@@ -52,7 +52,10 @@ export default {
       return this.attachments?.length > 9 ? '9+' : this.attachments?.length;
     },
     attachmentTitle() {
-      return this.attachmentsCount.toString().concat(' ').concat(this.attachments?.length > 1 ? this.$t('attachments.list') : this.$t('attachments.item'));
+      if (!this.attachments?.length) {
+        return null;
+      }
+      return  this.attachments.length === 1 ? `1 ${this.$t('attachments.item')}` : `${this.attachments.length} ${this.$t('attachments.list')}`;
     },
   },
   async created() {
