@@ -19,6 +19,12 @@ export function installExtensions() {
     vueComponent: Vue.options.components['activity-attachments'],
     rank: 20,
   });
+  
+  extensionRegistry.registerComponent('ActivityLinkBottomRight', 'activity-link-extension', {
+    id: 'activityAttachmentCount',
+    vueComponent: Vue.options.components['activity-attachment-icon'],
+    rank: 30,
+  });
 
   extensionRegistry.registerComponent('TaskDrawer', 'task-drawer-action', {
     id: 'attachments',
