@@ -22,6 +22,7 @@ import NotesAttachment from './components/notes/NotesAttachment.vue';
 import NotesAttachmentCarousel from './components/notes/NotesAttachmentCarousel.vue';
 import NotesAttachmentItem from './components/notes/NotesAttachmentItem.vue';
 import NotesAttachmentButton from './components/notes/NotesAttachmentButton.vue';
+import ActivityAttachmentIcon from './components/activity/ActivityAttachmentIcon.vue';
 
 const components = {
   'attachments-drawer': AttachmentsDrawer,
@@ -37,6 +38,7 @@ const components = {
   'activity-attachments': ActivityAttachments,
   'activity-attachment': ActivityAttachment,
   'activity-composer-attachments': ActivityComposerAttachments,
+  'activity-attachment-icon': ActivityAttachmentIcon,
   'attachment-create-document-input': AttachmentCreateDocumentInput,
   'task-attachment': TaskAttachment,
   'analytics-table-cell-document-title-value': AnalyticsTableCellDocumentTitleValue,
