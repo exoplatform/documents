@@ -35,7 +35,8 @@ export function installExtensions() {
   extensionRegistry.registerExtension('RichEditor', 'ckeditor-extensions', {
     id: 'attachFile',
     extraPlugin: 'attachFile',
-    extraToolbarItem: 'attachFile'
+    extraToolbarItem: 'attachFile',
+    rank: 30,
   });
 
   extensionRegistry.registerExtension('WYSIWYGPlugins', 'image', {
