@@ -115,7 +115,7 @@ export default {
     openAttachmentDrawer() {
       this.originalAttachmentsList = [];
       this.attachments = [];
-      if (this.entityId > 0 && this.entityType && this.spaceId && !this.isEmptyNoteTranslation) {
+      if (this.entityId > 0 && this.entityType && !this.isEmptyNoteTranslation) {
         this.initDone = false;
         this.waitInit();
         this.initEntityAttachmentsList().then(() => {
