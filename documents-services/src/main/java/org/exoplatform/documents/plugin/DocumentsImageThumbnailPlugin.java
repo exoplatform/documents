@@ -23,6 +23,9 @@ import org.exoplatform.documents.service.DocumentFileService;
 
 import io.meeds.portal.thumbnail.model.FileContent;
 import io.meeds.portal.thumbnail.plugin.ImageThumbnailPlugin;
+import org.exoplatform.portal.config.UserACL;
+import org.exoplatform.services.security.Identity;
+import org.exoplatform.services.security.IdentityConstants;
 
 public class DocumentsImageThumbnailPlugin extends ImageThumbnailPlugin {
 
@@ -37,5 +40,15 @@ public class DocumentsImageThumbnailPlugin extends ImageThumbnailPlugin {
   public FileContent getImage(String fileId, String userName) throws ObjectNotFoundException {
     DocumentFileService documentFileService = CommonsUtils.getService(DocumentFileService.class);
     return documentFileService.getDocumentContent(fileId, userName);
+  }
+
+  @Override
+  public boolean hasAccessPermission(String fileId, String username) {
+    DocumentFileService documentFileService = CommonsUtils.getService(DocumentFileService.class);
+    Identity identityAcl = CommonsUtils.getService(UserACL.class).getUserIdentity(username);
+    if (identityAcl == null) {
+      identityAcl = new Identity(IdentityConstants.ANONIM);
+    }
+    return documentFileService.canAccess(fileId, identityAcl);
   }
 }

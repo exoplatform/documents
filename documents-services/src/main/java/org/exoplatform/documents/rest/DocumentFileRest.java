@@ -1552,7 +1552,6 @@ public class DocumentFileRest implements ResourceContainer {
 
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  @RolesAllowed("users")
   @Path("/{documentId}")
   @Operation(summary = "Get all details of a given document", method = "GET", description = "Get versions list of a a given document")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
@@ -1572,9 +1571,6 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-    if (userIdentityId == 0) {
-      return Response.status(Response.Status.UNAUTHORIZED).build();
-    }
     try {
       AbstractNodeEntity abstractNodeEntity =
                                             EntityBuilder.toDocumentItemEntity(documentFileService,
@@ -1602,7 +1598,6 @@ public class DocumentFileRest implements ResourceContainer {
 
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  @RolesAllowed("users")
   @Path("/{fileType}/{documentId}")
   @Operation(summary = "Get content of a given document", method = "GET", description = "Get content a a given document")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
