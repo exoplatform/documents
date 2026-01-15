@@ -19,9 +19,9 @@
 <div class="VuetifyApp">
   <div data-app="true"
     class="v-application transparent v-application--is-ltr theme--light"
-    id="restrictedDrive">
+    id="RestrictedDrive">
     <script type="text/javascript">
-      require(['PORTLET/documents-portlet/RestrictedDrive'], app =>app.init('<%=id%>'));
+      require(['PORTLET/documents-portlet/RestrictedDrive'], app =>app.init('RestrictedDrive'));
     </script>
   </div>
 </div>

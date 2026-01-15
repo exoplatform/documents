@@ -124,29 +124,6 @@
         </object-param>
       </init-params>
     </component-plugin>
-    <component-plugin>
-      <name>Restricted Drive filter</name>
-      <set-method>addFilterDefinitions</set-method>
-      <type>org.exoplatform.web.filter.FilterDefinitionPlugin</type>
-      <priority>2</priority>
-      <init-params>
-        <object-param>
-          <name>Registered restricted drive filter</name>
-          <object type="org.exoplatform.web.filter.FilterDefinition">
-            <field name="filter">
-              <object type="org.exoplatform.documents.filter.RestrictedDriveFilter" />
-            </field>
-            <field name="patterns">
-              <collection type="java.util.ArrayList" item-type="java.lang.String">
-                <value>
-                  <string>/.*/restricted-drive.*</string>
-                </value>
-              </collection>
-            </field>
-          </object>
-        </object-param>
-      </init-params>
-    </component-plugin>
   </external-component-plugins>
 
   <external-component-plugins>
