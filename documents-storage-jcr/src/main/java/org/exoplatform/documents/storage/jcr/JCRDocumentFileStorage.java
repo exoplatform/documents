@@ -1864,19 +1864,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Node node = getNodeByIdentifier(session, documentID);
-      if(node == null) return false;
-
-      String userId = aclIdentity.getUserId();
-      List<AccessControlEntry> permsList = ((ExtendedNode) node).getACL().getPermissionEntries();
-      boolean canAccess = false;
-      for (AccessControlEntry accessControlEntry : permsList) {
-        String nodeAclIdentity = accessControlEntry.getIdentity();
-        MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
-        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry) && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
-          canAccess = true;
-        }
-      }
-      return canAccess;
+      return node != null;
     } catch (AccessDeniedException | ItemNotFoundException e) {
       return false;
     } catch (Exception e) {
