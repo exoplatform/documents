@@ -42,6 +42,6 @@ export function init() {
       template: `<documents-restricted-drive id="${appId}" />`,
       vuetify: Vue.prototype.vuetifyOptions,
       i18n
-    }, `#${appId}`, 'Documents');
+    }, `#${appId}`, 'Restricted Drive');
   });
 }

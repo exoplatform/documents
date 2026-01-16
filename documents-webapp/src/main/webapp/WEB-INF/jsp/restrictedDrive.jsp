@@ -21,7 +21,7 @@
     class="v-application transparent v-application--is-ltr theme--light"
     id="RestrictedDrive">
     <script type="text/javascript">
-      require(['PORTLET/documents-portlet/RestrictedDrive'], app =>app.init('RestrictedDrive'));
+      require(['PORTLET/documents-portlet/RestrictedDrive'], app =>app.init());
     </script>
   </div>
 </div>
