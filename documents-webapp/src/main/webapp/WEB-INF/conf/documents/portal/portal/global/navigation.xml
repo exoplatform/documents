@@ -51,6 +51,12 @@
           <visibility>SYSTEM</visibility>
           <page-reference>portal::global::download-document</page-reference>
         </node>
+        <node>
+            <name>restricted-drive</name>
+            <label>#{portal.global.restricted-drive}</label>
+            <visibility>SYSTEM</visibility>
+            <page-reference>portal::global::restricted-drive</page-reference>
+        </node>
     </page-nodes>
 </node-navigation>
 
