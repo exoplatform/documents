@@ -14,7 +14,10 @@
     @blur="cancelEditNameMode()"
     @keyup="checkInput($event,fileName)"
     @contextmenu.stop.prevent>
-    <div v-if="!cardView" slot="append" class="d-flex">
+    <div
+      v-if="!cardView"
+      slot="append"
+      class="d-flex">
       <v-divider v-if="!isMobile" vertical />
       <v-icon
         class="primary--text ma-1 px-1"
