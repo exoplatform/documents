@@ -135,6 +135,31 @@
   </portlet>
 
   <portlet>
+    <name>RestrictedDrive</name>
+    <module>
+      <script>
+        <minify>false</minify>
+        <path>/js/restrictedDrive.bundle.js</path>
+      </script>
+      <depends>
+        <module>commonVueCometponents</module>
+      </depends>
+      <depends>
+        <module>vue</module>
+      </depends>
+      <depends>
+        <module>vuetify</module>
+      </depends>
+      <depends>
+        <module>eXoVueI18n</module>
+      </depends>
+      <depends>
+        <module>extensionRegistry</module>
+      </depends>
+    </module>
+  </portlet>
+
+  <portlet>
     <name>TrashManagement</name>
     <module>
       <script>
