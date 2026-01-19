@@ -248,4 +248,23 @@
           </section-columns>
         </container>
       </page>
+    <page>
+        <name>restricted-drive</name>
+        <title>restricted-drive</title>
+        <access-permissions>*:/platform/users;*:/platform/externals</access-permissions>
+        <edit-permission>manager:/platform/administrators</edit-permission>
+        <container template="system:/groovy/portal/webui/container/UIPageLayout.gtmpl">
+            <section-columns>
+                <column col-span="12">
+                    <portlet-application>
+                        <portlet>
+                            <application-ref>documents-portlet</application-ref>
+                            <portlet-ref>RestrictedDrive</portlet-ref>
+                        </portlet>
+                        <title>Restricted Drive</title>
+                    </portlet-application>
+                </column>
+            </section-columns>
+        </container>
+    </page>
 </page-set>
