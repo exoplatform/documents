@@ -51,6 +51,7 @@ module.exports = {
     documentsPwaExtension: './src/main/webapp/vue-app/documents-pwa-extension/main.js',
     documentGadget: './src/main/webapp/vue-app/document-gadget/main.js',
     filesSearch: './src/main/webapp/vue-app/files-search/main.js',
+    restrictedDrive: './src/main/webapp/vue-app/restricted-drive/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
