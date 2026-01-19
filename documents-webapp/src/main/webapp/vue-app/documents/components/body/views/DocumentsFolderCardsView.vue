@@ -89,21 +89,21 @@
             :data-canEdit="canEditFile(file)? 'true': 'false'"
             draggable="true"
             class="card-item flex-shrink-0 mb-3 me-3 pa-0">
-              <documents-item-card            
-                :index="index"
-                :count="filesCount"
-                :key="file.id"
-                :file="file"
-                :files="files"
-                current-view="folder"
-                :select-all-checked="selectAll"
-                :selected-documents="selectedDocuments"
-                @document-selected="handleDocumentSelection"
-                @document-unselected="handleDocumentSelection"
-                height="175px"
-                max-height="175px"
-                width="215px"
-                show-details />
+            <documents-item-card            
+              :index="index"
+              :count="filesCount"
+              :key="file.id"
+              :file="file"
+              :files="files"
+              current-view="folder"
+              :select-all-checked="selectAll"
+              :selected-documents="selectedDocuments"
+              @document-selected="handleDocumentSelection"
+              @document-unselected="handleDocumentSelection"
+              height="175px"
+              max-height="175px"
+              width="215px"
+              show-details />
           </div>
         </v-card>
       </div>
