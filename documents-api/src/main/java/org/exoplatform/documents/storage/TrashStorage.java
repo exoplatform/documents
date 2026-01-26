@@ -136,4 +136,19 @@ public interface TrashStorage {
    * @return the total count of deleted documents
    */
   int countDeletedDocuments();
+
+
+  /**
+   * Updates the restore paths of nodes in the trash workspace when a parent folder has been renamed.
+   * <p>
+   * This method searches for all nodes whose {@code exo:restoreWorkspace} property starts with the given
+   * {@code oldPath}, and replaces that prefix with {@code newPath}. This ensures that nodes in the trash
+   * can be restored correctly even after the original folder has been moved or renamed.
+   * </p>
+   *
+   * @param oldPath the old path prefix to look for in the {@code exo:restoreWorkspace} property
+   * @param newPath the new path prefix to replace the old path with
+   * @throws RepositoryException if an error occurs while accessing or updating nodes in the repository
+   */
+  void updateRestorePath(String oldPath, String newPath) throws RepositoryException;
 }

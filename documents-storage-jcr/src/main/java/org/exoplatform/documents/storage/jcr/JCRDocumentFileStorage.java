@@ -146,6 +146,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final BulkStorageActionService            bulkStorageActionService;
 
+  private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
+
   private final String                              DATE_FORMAT                 = "yyyy-MM-dd";
 
   private final String                              SPACE_PATH_PREFIX           = "/Groups/spaces/";
@@ -1050,6 +1052,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.setProperty(NodeTypeConstants.EXO_NAME, name);
       node.save();
+      listenerService.broadcast(EVENT_DOCUMENT_MOVED, srcPath, destPath);
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
@@ -1235,11 +1238,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     node.save();
 
     String srcPath = node.getPath();
-    if (session.itemExists(destPath + SLASH + node.getName())) {
+    String nodeDestinationPath = destPath + SLASH + node.getName();
+    if (session.itemExists(nodeDestinationPath)) {
       handleMoveDocConflict(session, node, srcPath, destPath, conflictAction);
     } else {
-      node.getSession().getWorkspace().move(srcPath, destPath + SLASH + node.getName());
+      node.getSession().getWorkspace().move(srcPath, nodeDestinationPath);
       node.save();
+      listenerService.broadcast(EVENT_DOCUMENT_MOVED, srcPath, nodeDestinationPath);
     }
   }
 
@@ -1329,6 +1334,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         destNode.setProperty(NodeTypeConstants.EXO_TITLE, exoTitle);
       }
       destNode.getSession().save();
+      listenerService.broadcast(EVENT_DOCUMENT_MOVED, srcPath, destPath);
     } else if (Objects.equals(conflictAction, CREATE_NEW_VERSION)) {
       Node destNode = (Node) session.getItem(destPath + SLASH + name);
       Node scrNode = (Node) session.getItem(srcPath);
