@@ -16,6 +16,7 @@
 */
 package org.exoplatform.documents.storage.jcr;
 
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.RESTORE_PATH;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -187,8 +188,8 @@ public class TrashStorageImplTest {
     Property pathProperty = Mockito.mock(Property.class);
     lenient().when(((Node) sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).getProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(property);
     lenient().when(((Node) sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).getProperty(NodeTypeConstants.RESTORE_WORKSPACE).getString()).thenReturn(currentRepository);
-    lenient().when(((Node) sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).getProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(pathProperty);
-    lenient().when(((Node) sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).getProperty(NodeTypeConstants.RESTORE_PATH).getString()).thenReturn(path);
+    lenient().when(((Node) sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).getProperty(RESTORE_PATH)).thenReturn(pathProperty);
+    lenient().when(((Node) sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).getProperty(RESTORE_PATH).getString()).thenReturn(path);
     lenient().when(sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getWorkspace().getName()).thenReturn(currentRepository);
     lenient().when(sessionProviderService.getSessionProvider(any())).thenReturn(sessionProvider);
     lenient().when(repositoryService.getCurrentRepository()).thenReturn(repository);
@@ -208,7 +209,7 @@ public class TrashStorageImplTest {
     lenient().when(session.itemExists(anyString())).thenReturn(true);
     lenient().when(session.getItem(anyString())).thenReturn(node);
     lenient().when(node.isNodeType(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(true);
-    lenient().when(node.isNodeType(NodeTypeConstants.RESTORE_PATH)).thenReturn(true);
+    lenient().when(node.isNodeType(RESTORE_PATH)).thenReturn(true);
     lenient().when(node.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE)).thenReturn(true);
     lenient().when(node.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)).thenReturn(true);
     lenient().when(node.getNodes()).thenReturn(nodeIterator);
@@ -296,4 +297,63 @@ public class TrashStorageImplTest {
     assertNotNull(result);
     assertEquals(2, result.size());
   }
+
+    @Test
+    public void testUpdateRestorePath() throws Exception {
+        String oldPath = "/old/folder";
+        String newPath = "/new/folder";
+
+        Workspace workspace = mock(Workspace.class);
+        QueryManager queryManager = mock(QueryManager.class);
+        Query query = mock(Query.class);
+        QueryResult queryResult = mock(QueryResult.class);
+        NodeIterator nodeIterator = mock(NodeIterator.class);
+        Node node1 = mock(Node.class);
+        Node node2 = mock(Node.class);
+        Property property1 = mock(Property.class);
+        Property property2 = mock(Property.class);
+
+        when(repositoryService.getCurrentRepository()).thenReturn(repository);
+        when(sessionProviderService.getSystemSessionProvider(null)).thenReturn(sessionProvider);
+        when(sessionProvider.getSession(anyString(), eq(repository))).thenReturn(session);
+        when(session.getWorkspace()).thenReturn(workspace);
+        when(workspace.getQueryManager()).thenReturn(queryManager);
+
+        when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenReturn(query);
+        when(query.execute()).thenReturn(queryResult);
+        when(queryResult.getNodes()).thenReturn(nodeIterator);
+
+        // Iterator behavior (2 nodes)
+        when(nodeIterator.hasNext()).thenReturn(true, true, false);
+        when(nodeIterator.nextNode()).thenReturn(node1, node2);
+
+        // Node 1 has restore path
+        when(node1.hasProperty(RESTORE_PATH)).thenReturn(true);
+        when(node1.getProperty(RESTORE_PATH)).thenReturn(property1);
+        when(property1.getString()).thenReturn("/old/folder/doc1");
+
+        // Node 2 has restore path
+        when(node2.hasProperty(RESTORE_PATH)).thenReturn(true);
+        when(node2.getProperty(RESTORE_PATH)).thenReturn(property2);
+        when(property2.getString()).thenReturn("/old/folder/sub/doc2");
+
+        // Execute
+        trashStorage.updateRestorePath(oldPath, newPath);
+
+        // Verify query execution
+        verify(queryManager).createQuery(anyString(), eq(Query.SQL));
+        verify(query).execute();
+        verify(queryResult).getNodes();
+
+        // Verify iteration
+        verify(nodeIterator, times(3)).hasNext();
+        verify(nodeIterator, times(2)).nextNode();
+
+        // Verify updates
+        verify(node1).setProperty(RESTORE_PATH, "/new/folder/doc1");
+        verify(node2).setProperty(RESTORE_PATH, "/new/folder/sub/doc2");
+
+        // Verify save
+        verify(session).save();
+    }
 }

@@ -1306,6 +1306,9 @@ public class JCRDocumentFileStorageTest {
     when(node.canAddMixin(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
     when(node.getPath()).thenReturn("path");
     when(node.getName()).thenReturn("test.docx");
+    NodeType nodeType = mock(NodeType.class);
+    when(nodeType.getName()).thenReturn("nt:file");
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
     when(session.itemExists(anyString())).thenReturn(false);
     when(node.getSession()).thenReturn(session);
     Workspace workspace = mock(Workspace.class);
