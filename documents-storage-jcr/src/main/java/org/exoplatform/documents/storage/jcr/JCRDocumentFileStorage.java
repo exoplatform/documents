@@ -17,8 +17,7 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_SYMLINK;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.File;
@@ -147,6 +146,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final BulkStorageActionService            bulkStorageActionService;
 
   private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
+
+  private final String                              DEST_PATH                   = "destPath";
+
+  private final String                              SRC_PATH                    = "srcPath";
 
   private final String                              DATE_FORMAT                 = "yyyy-MM-dd";
 
@@ -1052,7 +1055,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_TITLE, title);
       node.setProperty(NodeTypeConstants.EXO_NAME, name);
       node.save();
-      listenerService.broadcast(EVENT_DOCUMENT_MOVED, srcPath, destPath);
+      listenerService.broadcast(EVENT_DOCUMENT_MOVED,
+              Map.of(SRC_PATH, srcPath, DEST_PATH, destPath),
+              node.getPrimaryNodeType().getName());
+
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
@@ -1244,7 +1250,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } else {
       node.getSession().getWorkspace().move(srcPath, nodeDestinationPath);
       node.save();
-      listenerService.broadcast(EVENT_DOCUMENT_MOVED, srcPath, nodeDestinationPath);
+      listenerService.broadcast(EVENT_DOCUMENT_MOVED,
+                Map.of(SRC_PATH, srcPath, DEST_PATH, nodeDestinationPath),
+                node.getPrimaryNodeType().getName());
     }
   }
 
@@ -1334,7 +1342,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         destNode.setProperty(NodeTypeConstants.EXO_TITLE, exoTitle);
       }
       destNode.getSession().save();
-      listenerService.broadcast(EVENT_DOCUMENT_MOVED, srcPath, destPath);
+
+      listenerService.broadcast(EVENT_DOCUMENT_MOVED,
+                Map.of(SRC_PATH, srcPath, DEST_PATH, destPath),
+                node.getPrimaryNodeType().getName());
     } else if (Objects.equals(conflictAction, CREATE_NEW_VERSION)) {
       Node destNode = (Node) session.getItem(destPath + SLASH + name);
       Node scrNode = (Node) session.getItem(srcPath);
