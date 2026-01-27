@@ -45,6 +45,7 @@ export default {
       } else {
         path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
       }
+      path = encodeURI(path);
       if (navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(path).catch(() => {
           this.copy(path);
