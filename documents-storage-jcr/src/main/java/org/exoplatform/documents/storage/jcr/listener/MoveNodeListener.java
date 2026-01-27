@@ -24,9 +24,13 @@ import org.exoplatform.services.listener.Listener;
 import org.exoplatform.services.listener.ListenerService;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
+
 
 @Component
-public class MoveNodeListener extends Listener<String, String> {
+public class MoveNodeListener extends Listener<Map<String, String>, String> {
 
     private final TrashStorage trashStorage;
     private final ListenerService listenerService;
@@ -42,9 +46,13 @@ public class MoveNodeListener extends Listener<String, String> {
     }
 
     @Override
-    public void onEvent(Event<String, String> event) throws Exception {
-        String oldPath = event.getSource();
-        String newPath = event.getData();
-        trashStorage.updateRestorePath(oldPath, newPath);
+    public void onEvent(Event<Map<String, String>, String> event) throws Exception {
+        Map<String, String> source = event.getSource();
+        String newPath = source.get("destPath");
+        String oldPath = source.get("srcPath");
+        boolean isFolder = event.getData().equals(NT_FOLDER);
+        if (isFolder) {
+            trashStorage.updateRestorePath(oldPath, newPath);
+        }
     }
 }

@@ -26,6 +26,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.util.Map;
+
 @RunWith(MockitoJUnitRunner.class)
 public class MoveNodeListenerTest {
 
@@ -52,11 +54,15 @@ public class MoveNodeListenerTest {
         String oldPath = "/old/folder";
         String newPath = "/new/folder";
 
-        @SuppressWarnings("unchecked")
-        Event<String, String> event = mock(Event.class);
+        String nodeTypeName = "nt:folder";
 
-        when(event.getSource()).thenReturn(oldPath);
-        when(event.getData()).thenReturn(newPath);
+        Map<String, String> source = Map.of("srcPath", oldPath, "destPath", newPath);
+
+        @SuppressWarnings("unchecked")
+        Event<Map<String, String>, String> event = mock(Event.class);
+
+        when(event.getSource()).thenReturn(source);
+        when(event.getData()).thenReturn(nodeTypeName);
 
         moveNodeListener.onEvent(event);
         verify(trashStorage, times(1))

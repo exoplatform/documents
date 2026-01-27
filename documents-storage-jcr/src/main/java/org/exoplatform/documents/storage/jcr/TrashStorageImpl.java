@@ -647,7 +647,14 @@ public class TrashStorageImpl implements TrashStorage {
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
     Session session = sessionProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
 
-    String queryStr = "SELECT * FROM nt:base WHERE exo:restorePath LIKE '" + oldPath.replace("'", "''") + "%'";
+    String safePath = oldPath.startsWith("/") ? oldPath : "/" + oldPath;
+    String queryStr = """
+                        SELECT * FROM exo:restoreLocation
+                        WHERE jcr:path LIKE '%s/%%'
+                        AND exo:restorePath LIKE '%s%%'
+                        """.formatted(
+                          trashHome.replace("'", "''"),
+                          safePath.replace("'", "''"));
     QueryManager queryManager = session.getWorkspace().getQueryManager();
     Query query = queryManager.createQuery(queryStr, Query.SQL);
     QueryResult result = query.execute();
