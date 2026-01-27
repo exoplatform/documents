@@ -48,8 +48,7 @@ import javax.jcr.query.QueryResult;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_DATE_MODIFIED;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_TITLE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 
 public class TrashStorageImpl implements TrashStorage {
 
@@ -641,6 +640,37 @@ public class TrashStorageImpl implements TrashStorage {
 
     trashNodeSession.save();
     restoreSession.save();
+  }
+
+  @Override
+  public void updateRestorePath(String oldPath, String newPath) throws RepositoryException {
+    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    Session session = sessionProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
+
+    String safePath = oldPath.startsWith("/") ? oldPath : "/" + oldPath;
+    String queryStr = """
+                        SELECT * FROM exo:restoreLocation
+                        WHERE jcr:path LIKE '%s/%%'
+                        AND exo:restorePath LIKE '%s%%'
+                        """.formatted(
+                          trashHome.replace("'", "''"),
+                          safePath.replace("'", "''"));
+    QueryManager queryManager = session.getWorkspace().getQueryManager();
+    Query query = queryManager.createQuery(queryStr, Query.SQL);
+    QueryResult result = query.execute();
+
+    NodeIterator nodes = result.getNodes();
+    while (nodes.hasNext()) {
+      Node node = nodes.nextNode();
+      if (node.hasProperty(RESTORE_PATH)) {
+        String restorePath = node.getProperty(RESTORE_PATH).getString();
+
+        //Update path prefix
+        String updatedPath = restorePath.replaceFirst("^" + oldPath, newPath);
+        node.setProperty(RESTORE_PATH, updatedPath);
+      }
+    }
+    session.save();
   }
 
 }
