@@ -34,7 +34,7 @@
               }"
               class="position-absolute absolute-vertical-center pe-5 z-index-one">
               <v-btn
-                v-if="displaySeeMore"
+                v-if="displaySeeMore && filesCount !== 0"
                 :icon="hoverEdit"
                 :small="hoverEdit"
                 height="auto"
@@ -64,7 +64,7 @@
           </div>
         </template>
         <template v-if="initialized" #default>
-          <div>
+          <div v-if="filesCount !== 0">
             <v-list :class="!isCardsView && !!filesToDisplay && 'pb-4'" class="pa-0">
               <template v-if="isCardsView">
                 <card-carousel parent-class="activity-files-parent px-4">
@@ -87,6 +87,20 @@
               </template>
             </v-list>
           </div>
+          <v-card
+            v-else
+            class="d-flex flex-column flex-grow-1 justify-center align-center"
+            min-height="188"
+            flat>
+            <div class="mx-auto d-flex flex-column align-center justify-center full-width full-height">
+              <v-icon
+                color="tertiary"
+                size="60">
+                fas fa-file-alt
+              </v-icon>
+              <span class="mt-5">{{ $t('documents.documentGadget.placeholder') }}</span>
+            </div>
+          </v-card>
         </template>
       </widget-wrapper>
     </v-hover>
