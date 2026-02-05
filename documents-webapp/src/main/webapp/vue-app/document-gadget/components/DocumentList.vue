@@ -19,89 +19,89 @@
     <v-hover v-model="hover">
       <widget-wrapper
         :loading="loading"
-        extra-class="application-body position-static border-box-sizing"
-        no-margin>
+        extra-class="application-body">
         <template #title>
-          <div class="d-flex flex-grow-1 flex-shrink-1 width-full justify-space-between align-center position-relative pa-5">
-            <div
-              class="widget-text-header text-none text-truncate d-flex align-center">
-              {{ headerTitle }}
-            </div>
-            <div
-              :class="{
-                'l-0': $vuetify.rtl,
-                'r-0': !$vuetify.rtl,
-              }"
-              class="position-absolute absolute-vertical-center pe-5 z-index-one">
+          <span
+            class="widget-text-header text-truncate">
+            {{ headerTitle }}
+          </span>
+        </template>
+        <template #action>
+          <div>
+            <v-btn
+              v-if="!hover && displaySeeMore"
+              color="primary"
+              class="pa-0 text-font-size"
+              small
+              text
+              link>
+              <span class="primary--text text-none">
+                {{ $t('documents.documentGadget.seeMore') }}
+              </span>
+            </v-btn>
+            <div v-else>
               <v-btn
-                v-if="displaySeeMore && filesCount !== 0"
-                :icon="hoverEdit"
-                :small="hoverEdit"
-                height="auto"
-                min-width="auto"
-                class="pa-0"
-                text
+                v-if="hoverEdit"
+                :title="$t('documents.documentGadget.editTooltip')"
+                class="text-font-size"
+                small
+                link
+                icon
+                @click="$root.$emit('document-gadget-settings')">
+                <v-icon
+                  size="18">
+                  fas fa-cog
+                </v-icon>
+              </v-btn>
+              <v-btn
+                v-if="filesCount"
+                :title="$t('documents.documentGadget.seeMore')"
+                color="primary"
+                class="text-font-size"
+                small
+                link
+                icon
                 @click="$refs.listDrawer.open()">
                 <v-icon
-                  v-if="hoverEdit"
-                  size="18"
-                  color="primary">
-                  fa-external-link-alt
+                  size="18">
+                  fas fa-external-link-alt
                 </v-icon>
-                <span v-if="!hoverEdit && displaySeeMore" class="primary--text text-none">{{ $t('documents.documentGadget.seeMore') }}</span>
               </v-btn>
-              <v-fab-transition hide-on-leave>
-                <v-btn
-                  v-show="hoverEdit"
-                  :title="$t('documents.documentGadget.editTooltip')"
-                  small
-                  icon
-                  @click="$root.$emit('document-gadget-settings')">
-                  <v-icon size="18">fa-cog</v-icon>
-                </v-btn>
-              </v-fab-transition>
             </div>
           </div>
         </template>
-        <template v-if="initialized" #default>
-          <div v-if="filesCount !== 0">
-            <v-list :class="!isCardsView && !!filesToDisplay && 'pb-4'" class="pa-0">
-              <template v-if="isCardsView">
-                <card-carousel parent-class="activity-files-parent px-4">
-                  <document-list-widget-item-card
-                    v-for="(file, index) in filesToDisplay"
-                    :index="index"
-                    :count="filesCount"
-                    :key="file.id"
-                    :file="file"
-                    :files="filesToDisplay"
-                    extra-margin />
-                </card-carousel>
-              </template>
-              <template v-else>
-                <document-list-widget-item
-                  v-for="file in filesToDisplay"
+        <div v-if="filesCount">
+          <v-list :class="!isCardsView && !!filesToDisplay && 'pb-4'" class="pa-0">
+            <template v-if="isCardsView">
+              <card-carousel parent-class="activity-files-parent px-4">
+                <document-list-widget-item-card
+                  v-for="(file, index) in filesToDisplay"
+                  :index="index"
+                  :count="filesCount"
                   :key="file.id"
                   :file="file"
-                  :files="filesToDisplay" />
-              </template>
-            </v-list>
-          </div>
-          <v-card
-            v-else
-            class="d-flex flex-column flex-grow-1 justify-center align-center"
-            min-height="188"
-            flat>
-            <div class="mx-auto d-flex flex-column align-center justify-center full-width full-height">
-              <v-icon
-                color="tertiary"
-                size="60">
-                fas fa-file-alt
-              </v-icon>
-              <span class="mt-5">{{ $t('documents.documentGadget.placeholder') }}</span>
-            </div>
-          </v-card>
-        </template>
+                  :files="filesToDisplay"
+                  extra-margin />
+              </card-carousel>
+            </template>
+            <template v-else>
+              <document-list-widget-item
+                v-for="file in filesToDisplay"
+                :key="file.id"
+                :file="file"
+                :files="filesToDisplay" />
+            </template>
+          </v-list>        
+        </div>
+        <v-card
+          v-else
+          class="d-flex flex-column flex-grow-1 justify-center align-center"
+          min-height="188"
+          flat>
+          <document-list-empty-message
+            v-if="displayPlaceholder"
+            :title="$t('documents.documentGadget.placeholder')" />
+        </v-card>
       </widget-wrapper>
     </v-hover>
     <document-list-settings-drawer v-if="canEdit" @settings-updated="settingsUpdated" />
@@ -113,7 +113,6 @@ export default {
   data: () => ({
     hover: false,
     loading: false,
-    initialized: false,
     applicationMounted: false,
     files: [],
   }),
@@ -129,6 +128,9 @@ export default {
     },
     filesCount() {
       return this.files.length;
+    },
+    displayPlaceholder() {
+      return !this.filesCount && !this.loading;
     },
     filesToDisplay() {
       const files = this.files ?? [];
@@ -184,21 +186,12 @@ export default {
       return this.settings.spaceIdentityId;
     },
   },
-  watch: {
-    loading() {
-      if (!this.loading) {
-        this.initialized = true;
-      }
-    },
-    initialized() {
-      if (this.initialized) {
-        this.$root.$applicationLoaded();
-      }
-    },
-  },
   created() {
     this.$root.$on('documents-preview', this.previewDocument);
-    this.getFiles();
+    this.getFiles()
+      .finally(() => {
+        this.$root.$applicationLoaded();
+      });
   },
   mounted() {
     this.applicationMounted = true;
