@@ -22,7 +22,7 @@
     :loading="loading > 0"
     :right="!$vuetify.rtl">
     <template #title>
-      <div class="d-flex justify-space-between">
+      <div class="d-flex align-center justify-space-between">
         {{ $t('documents.documentGadget.title') }}
         <v-btn
           v-if="$root.settings.displayAccessDrive"
