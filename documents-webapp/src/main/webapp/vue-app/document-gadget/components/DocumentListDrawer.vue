@@ -20,11 +20,22 @@
     ref="drawer"
     v-model="drawer"
     :loading="loading > 0"
-    :right="!$vuetify.rtl"
-    allow-expand
-    @expand-updated="expanded = $event">
+    :right="!$vuetify.rtl">
     <template #title>
       {{ $t('documents.documentGadget.title') }}
+    </template>
+    <template #titleIcons>
+      <v-btn
+        :title="$t('documents.documentGadget.seeMore')"
+        v-if="$root.settings.displayAccessDrive"
+        link
+        icon
+        @click="openDrive">
+        <v-icon
+          size="20px">
+          fas fa-external-link-alt
+        </v-icon>
+      </v-btn> 
     </template>
     <template #content>
       <document-list-empty-message v-if="!hasDocuments && !loading" :title="noDocumentMessage" />
@@ -37,7 +48,7 @@
     </template>
     <template #footer>
       <div
-        v-if="hasMore && !expanded"
+        v-if="hasMore"
         class="d-flex justify-center">
         <v-btn
           :loading="loading > 0"
@@ -66,7 +77,6 @@ export default {
     drawer: false,
     loading: 0,
     files: [],
-    expanded: false
   }),
   computed: {
     filesToDisplay() {
@@ -163,6 +173,11 @@ export default {
       return this.$documentFileService.getDocumentItems(filter, this.selectedCategoryIds, this.excludedCategoryIds, 0, this.limit + 1, null).then(files => {
         this.files = files.filter(file => !file.folder);
       }).finally(() => this.loading = false);
+    },
+    openDrive() {
+      const target = this.$root?.settings?.opensInSameTab ? '_self' : '_blank';
+      const url = this.$root?.settings?.driveUrl;
+      window.open(url, target);
     },
   },
 };
