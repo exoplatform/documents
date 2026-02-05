@@ -22,7 +22,20 @@
     :loading="loading > 0"
     :right="!$vuetify.rtl">
     <template #title>
-      {{ $t('documents.documentGadget.title') }}
+      <div class="d-flex justify-space-between">
+        {{ $t('documents.documentGadget.title') }}
+        <v-btn
+          v-if="$root.settings.displayAccessDrive"
+          small
+          link
+          icon
+          @click="openDrive">
+          <v-icon
+            size="20px">
+            fas fa-external-link-alt
+          </v-icon>
+        </v-btn>
+      </div>
     </template>
     <template #titleIcons>
       <v-btn
