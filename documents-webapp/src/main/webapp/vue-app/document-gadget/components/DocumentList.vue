@@ -232,6 +232,9 @@ export default {
       this.$root.settings.spaceIdentityId = settings.spaceIdentityId;
       this.$root.settings.selectedFoldersId = settings.selectedFoldersId;
       this.$root.settings.headerTitle = headerTitle;
+      this.$root.settings.displayAccessDrive = settings.displayAccessDrive;
+      this.$root.settings.driveUrl = settings.driveUrl;
+      this.$root.settings.opensInSameTab = settings.opensInSameTab;
       if (refreshList) {
         this.getFiles();
       }
