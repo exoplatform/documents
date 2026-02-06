@@ -22,20 +22,20 @@
     :loading="loading > 0"
     :right="!$vuetify.rtl">
     <template #title>
-      <div class="d-flex align-center justify-space-between">
-        {{ $t('documents.documentGadget.title') }}
-        <v-btn
-          v-if="$root.settings.displayAccessDrive"
-          small
-          link
-          icon
-          @click="openDrive">
-          <v-icon
-            size="20px">
-            fas fa-external-link-alt
-          </v-icon>
-        </v-btn>
-      </div>
+      {{ $t('documents.documentGadget.title') }}
+    </template>
+    <template #titleIcons>
+      <v-btn
+        :title="$t('documents.documentGadget.seeMore')"
+        v-if="$root.settings.displayAccessDrive"
+        link
+        icon
+        @click="openDrive">
+        <v-icon
+          size="20px">
+          fas fa-external-link-alt
+        </v-icon>
+      </v-btn> 
     </template>
     <template #content>
       <document-list-empty-message v-if="!hasDocuments && !loading" :title="noDocumentMessage" />
