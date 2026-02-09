@@ -94,6 +94,39 @@
               editable />
           </div>
         </div>
+        <div class="my-2">
+          <div class="d-flex align-center justify-space-between">
+            <label class="text-color align-start">
+              {{ $t('documents.documentGadget.settings.additionalOptions.accessDriveFromAdvancedDrawer') }}
+            </label>
+            <div class="align-end">
+              <v-switch
+                v-model="displayAccessDrive"
+                color="primary"
+                class="pa-0 my-auto"
+                hide-details />
+            </div>
+          </div>
+          <v-text-field
+            v-if="displayAccessDrive"
+            v-model="driveUrl"
+            type="text"
+            class="mb-1 pt-2"
+            outlined
+            dense />
+          <div v-if="displayAccessDrive" class="d-flex align-center justify-space-between">
+            <label class="text-color align-start">
+              {{ $t('documents.documentGadget.settings.additionalOptions.opensInSameTab') }}
+            </label>
+            <div class="align-end">
+              <v-switch
+                v-model="opensInSameTab"
+                color="primary"
+                class="pa-0 my-auto"
+                hide-details />
+            </div>
+          </div>
+        </div>
         <div class="mb-2 text-header">{{ $t('documents.documentGadget.settings.documentListing') }}</div>
         <div class="font-weight-bold mb-2">{{ $t('documents.documentGadget.settings.documentSource') }}</div>
         <v-radio-group
@@ -288,6 +321,9 @@ export default {
     filterPerExcludeCategories: false,
     selectedFoldersId: '',
     selectedFoldersPath: 'Document',
+    displayAccessDrive: false,
+    driveUrl: `/${eXo.env.portal.containerName}/${eXo.env.portal.metaPortalName}/drive`,
+    opensInSameTab: true,
   }),
   computed: {
     saveSettingsUrl() {
@@ -336,6 +372,12 @@ export default {
     this.$root.$off('document-gadget-settings', this.open);
   },
   watch: {
+    displayAccessDrive() {
+      if (!this.displayAccessDrive) {
+        this.driveUrl = `/${eXo.env.portal.containerName}/${eXo.env.portal.metaPortalName}/drive`;
+        this.opensInSameTab = true;
+      }
+    },
     oneDriveSelected() {
       this.documentType = 'recentDocument';
       this.selectedFoldersId = '';
@@ -433,6 +475,9 @@ export default {
       this.documentType = this.settings?.documentType || 'recentDocument';
       this.customHeader = this.settings?.customHeader || false;
       this.displaySeeMore = this.settings?.displaySeeMore || false;
+      this.displayAccessDrive = this.settings?.displayAccessDrive;
+      this.driveUrl = this.settings?.driveUrl || this.driveUrl;
+      this.opensInSameTab = this.settings?.opensInSameTab;
       this.filterPerCategories = !!this.categoryIds?.length;
       this.filterPerExcludeCategories = !!this.excludeCategoryIds?.length;
       this.loading = false;
@@ -456,7 +501,10 @@ export default {
         categoryIds: JSON.stringify(this.categoryIds),
         excludeCategoryIds: JSON.stringify(this.excludeCategoryIds),
         selectedFoldersId: this.selectedFoldersId || '',
-        spaceIdentityId: this.spaceIdentityId
+        spaceIdentityId: this.spaceIdentityId,
+        displayAccessDrive: this.displayAccessDrive,
+        driveUrl: this.driveUrl,
+        opensInSameTab: this.opensInSameTab
       };
       this.$documentGadgetService.saveSettings(this.saveSettingsUrl, settings).then(() => {
         this.saveHeaderTranslations();

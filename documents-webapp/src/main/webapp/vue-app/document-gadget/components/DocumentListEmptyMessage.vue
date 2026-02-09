@@ -15,13 +15,13 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="d-flex flex-column align-center justify-center pa-6 mt-2">
+  <div class="mx-auto d-flex flex-column align-center justify-center full-width full-height">
     <v-icon
-      size="60"
-      color="secondary">
+      color="tertiary"
+      size="60">
       fas fa-file-alt
     </v-icon>
-    <div class="pa-5">{{ title }}</div>
+    <span class="mt-5">{{ title }}</span>
   </div>
 </template>
 <script>

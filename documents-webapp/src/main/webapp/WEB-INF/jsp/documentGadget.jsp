@@ -39,6 +39,10 @@
   String categoryIds = preferences.getValue("categoryIds", "[]").replace("\"", "`");
   String excludeCategoryIds = preferences.getValue("excludeCategoryIds", "[]").replace("\"", "`");
   String selectedFoldersId = preferences.getValue("selectedFoldersId", "");
+  boolean displayAccessDrive = Boolean.parseBoolean(preferences.getValue("displayAccessDrive", "false"));
+  String driveUrl = preferences.getValue("driveUrl", "");
+  boolean opensInSameTab = Boolean.parseBoolean(preferences.getValue("opensInSameTab", "true"));
+
 %>
 
 <div class="VuetifyApp">
@@ -60,7 +64,10 @@
         categoryIds: <%=categoryIds%>,
         excludeCategoryIds: <%=excludeCategoryIds%>,
         selectedFoldersId: '<%=selectedFoldersId%>',
-        saveSettingsUrl: '<%=saveSettingsUrl%>'
+        saveSettingsUrl: '<%=saveSettingsUrl%>',
+        displayAccessDrive: <%=displayAccessDrive%>,
+        driveUrl: '<%=driveUrl%>',
+        opensInSameTab: <%=opensInSameTab%>
       }));
     </script>
   </div>
