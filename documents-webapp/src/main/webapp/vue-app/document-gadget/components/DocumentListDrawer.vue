@@ -37,19 +37,6 @@
         </v-icon>
       </v-btn> 
     </template>
-    <template #titleIcons>
-      <v-btn
-        :title="$t('documents.documentGadget.seeMore')"
-        v-if="$root.settings.displayAccessDrive"
-        link
-        icon
-        @click="openDrive">
-        <v-icon
-          size="20px">
-          fas fa-external-link-alt
-        </v-icon>
-      </v-btn> 
-    </template>
     <template #content>
       <document-list-empty-message v-if="!hasDocuments && !loading" :title="noDocumentMessage" />
       <document-list-widget-item
