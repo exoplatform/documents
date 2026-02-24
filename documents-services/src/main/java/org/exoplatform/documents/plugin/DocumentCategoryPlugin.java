@@ -55,8 +55,8 @@ public class DocumentCategoryPlugin implements CategoryPlugin {
   }
 
   @Override
-  public List<Long> getCategoryIds(long spaceId) {
-    return documentFileService.getDocumentCategoryIds(spaceId, userAcl.getSuperUser());
+  public List<Long> getCategoryIds(long spaceId, String username) {
+    return documentFileService.getDocumentCategoryIds(spaceId, username);
   }
 
 }
