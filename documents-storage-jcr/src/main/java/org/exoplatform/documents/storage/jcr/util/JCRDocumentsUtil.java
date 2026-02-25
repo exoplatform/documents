@@ -926,7 +926,7 @@ public class JCRDocumentsUtil {
     Node jrcNode = node.getNode("jcr:content");
     InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
     String path = "";
-    String nodePath = node.getPath();
+    String nodePath = getPathWithTitles(node);
     if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
       nodePath = symlinkPath + nodePath.replace(sourcePath, "");
     }
@@ -942,6 +942,21 @@ public class JCRDocumentsUtil {
     }
   }
 
+  public static String getPathWithTitles(Node node){
+    boolean hasParent = true;
+    List<String> parents = new ArrayList<>();
+    while (hasParent) {
+      try {
+        parents.add(getTitle(node));
+        node = node.getParent();
+      } catch (RepositoryException e) {
+        hasParent = false;
+      }
+    }
+    Collections.reverse(parents);
+    return String.join("/", parents);
+  }
+
   public static void createTempFilesAndFolders(Node node,
                                                String symlinkPath,
                                                String sourcePath,
@@ -951,7 +966,7 @@ public class JCRDocumentsUtil {
       return;
     }
     if (JCRDocumentsUtil.isFolder(node)) {
-      String nodePath = node.getPath();
+      String nodePath = getPathWithTitles(node);
       if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
         nodePath = symlinkPath + nodePath.replace(sourcePath, "");
       }
@@ -967,7 +982,7 @@ public class JCRDocumentsUtil {
         String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
         if (sourceNode != null) {
-          createTempFilesAndFolders(sourceNode, node.getPath(), sourceNode.getPath(), tempFolderPath, parentPath);
+          createTempFilesAndFolders(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentPath);
         }
       } else {
         createFile(node, symlinkPath, sourcePath, tempFolderPath, parentPath);
