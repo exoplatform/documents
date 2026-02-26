@@ -42,8 +42,10 @@ export default {
     },
   },
   methods: {
-    openDialog() {
-      this.$root.$emit('open-in-desktop-dialog', this.protocol, this.file.path);
+    openDialog() {    
+      const pathParts = this.file.path.split('/');
+      pathParts.pop();
+      this.$root.$emit('open-in-desktop-dialog', this.protocol, `${pathParts.join('/')}/${this.file.name}`);
     },
   },
 };
