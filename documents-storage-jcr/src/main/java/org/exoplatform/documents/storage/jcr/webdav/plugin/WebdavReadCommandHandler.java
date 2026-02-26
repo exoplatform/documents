@@ -17,81 +17,25 @@
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
 import static org.exoplatform.documents.storage.jcr.util.ACLProperties.getReadOnlyACL;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_DATE_CREATED;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_DATE_MODIFIED;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_HIDDENABLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_LAST_MODIFIED_DATE;
+import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getTitle;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CREATED_DATE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_FROZEN_NODE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_MIME_TYPE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ROOT_VERSION;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_LOCKABLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_VERSIONABLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_UNSTRUCTURED;
 import static org.exoplatform.documents.storage.jcr.util.Utils.decodeString;
 import static org.exoplatform.documents.storage.jcr.util.Utils.getStringProperty;
-import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.IDENTITY_PATHS_FORMAT;
-import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.LOG;
-import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.PATHS_CONCAT_FORMAT;
-import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.PROPERTY_NAMES;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHILDCOUNT;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATIONDATE;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATION_PATTERN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTLENGTH;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTTYPE;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GET_ETAG;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HASCHILDREN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HREF;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISCOLLECTION;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISFOLDER;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISROOT;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISVERSIONED;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.LOCKDISCOVERY;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.OWNER;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PARENTNAME;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PREDECESSORSET;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.RESOURCETYPE;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUCCESSORSET;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDLOCK;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDMETHODSET;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getIsFolderItemProperty;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getLockDiscovery;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getSupportedLock;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getSupportedMethodSet;
+import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.*;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.*;
 
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import javax.jcr.Item;
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
+import javax.jcr.*;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
 import javax.xml.namespace.QName;
@@ -102,6 +46,7 @@ import org.springframework.stereotype.Component;
 
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.documents.storage.jcr.util.ACLProperties;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.webdav.model.JcrNamespaceContext;
 import org.exoplatform.documents.webdav.model.WebDavException;
@@ -110,6 +55,7 @@ import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.constant.FileConstants;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -211,7 +157,7 @@ public class WebdavReadCommandHandler {
     String mimeType = node.getNode(JCR_CONTENT).getProperty(JCR_MIME_TYPE).getString();
     InputStream inputStream = node.getNode(JCR_CONTENT).getProperty(JCR_DATA).getStream();
 
-    return new WebDavFileDownload(node.getName(),
+    return new WebDavFileDownload(getTitle(node),
                                   inputStream.available(),
                                   lastModifiedDate == null ? 0l : lastModifiedDate.getTimeInMillis(),
                                   mimeType,
@@ -269,6 +215,7 @@ public class WebdavReadCommandHandler {
   @SneakyThrows
   public boolean isFile(Session session, String webDavPath) {
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    jcrPath = checkResourceExists(session, jcrPath);
     if (session.itemExists(jcrPath)) {
       Item item = session.getItem(jcrPath);
       if (item instanceof Node node) {
@@ -328,10 +275,7 @@ public class WebdavReadCommandHandler {
       version = jcrPath.substring(jcrPath.indexOf(VERSION_QUERY_PARAM) + VERSION_QUERY_PARAM.length());
       jcrPath = jcrPath.substring(0, jcrPath.indexOf(VERSION_QUERY_PARAM));
     }
-    if (!session.itemExists(jcrPath)) {
-      throw new WebDavException(HttpStatus.SC_NOT_FOUND,
-                                String.format("Resource with path '%s' not found", jcrPath));
-    }
+    jcrPath = checkResourceExists(session, jcrPath);
     Item item = session.getItem(jcrPath);
     if (!(item instanceof Node node)) {
       throw new WebDavException(HttpStatus.SC_BAD_REQUEST,
@@ -452,7 +396,7 @@ public class WebdavReadCommandHandler {
     if (name.equals(DISPLAYNAME)) {
       return version == null ? new WebDavItemProperty(name,
                                                       String.format("%s%s",
-                                                                    decodeString(node.getName()),
+                                                                    decodeString(getTitle(node)),
                                                                     getNodeIndexSuffix(node))) :
                              new WebDavItemProperty(name, decodeString(version.getName()));
     } else if (VERSIONNAME.equals(name)) {
@@ -840,5 +784,26 @@ public class WebdavReadCommandHandler {
       return identity.getProfile().getFullName();
     }
   }
+
+  private String checkResourceExists(Session session, String jcrPath) throws RepositoryException, WebDavException {
+    if (!session.itemExists(jcrPath)) {
+      String[] parts = jcrPath.split("/");
+      String fileTitle = parts[parts.length - 1];
+      String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(fileTitle.toLowerCase(),NodeTypeConstants.NT_FILE));
+      parts[parts.length - 1] = cleanName;
+      jcrPath =  Arrays.stream(parts).collect(Collectors.joining("/"));
+      if (!session.itemExists(jcrPath)) {
+        cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(fileTitle.toLowerCase()));
+        parts[parts.length - 1] = cleanName;
+        jcrPath =  Arrays.stream(parts).collect(Collectors.joining("/"));
+      }
+      if (!session.itemExists(jcrPath)) {
+        throw new WebDavException(HttpStatus.SC_NOT_FOUND,
+                String.format("Resource with path '%s' not found", jcrPath));
+      }
+    }
+    return jcrPath;
+  }
+
 
 }
