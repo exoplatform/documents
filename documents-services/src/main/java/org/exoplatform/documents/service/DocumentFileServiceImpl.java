@@ -142,6 +142,12 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  @SneakyThrows
+  public InputStream getFileContentAsStream(String docId, long userIdentityId) {
+    return documentFileStorage.getFileContentAsStream(docId, getAclUserIdentity(userIdentityId));
+  }
+
+  @Override
   public List<? extends AbstractNode> getDocumentItems(FileListingType listingType,
                                                        DocumentNodeFilter filter,
                                                        int offset,
@@ -455,6 +461,16 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                         String description,
                                         long aclIdentity) throws IllegalStateException, IllegalAccessException, RepositoryException {
     documentFileStorage.updateDocumentDescription(ownerId, documentID, description, getAclUserIdentity(aclIdentity));
+  }
+
+  @Override
+  public void updateAudioTranscription(String documentId, String transcription, long aclIdentity) throws IllegalAccessException {
+    documentFileStorage.updateAudioTranscription(documentId, transcription, getAclUserIdentity(aclIdentity));
+  }
+
+  @Override
+  public String getAudioTranscription(String documentId, long aclIdentity) throws IllegalAccessException {
+    return documentFileStorage.getAudioTranscription(documentId, getAclUserIdentity(aclIdentity));
   }
 
   @Override
