@@ -20,6 +20,7 @@ import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 import static org.gatein.common.net.URLTools.SLASH;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,6 +48,7 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.commons.utils.IOUtil;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
@@ -91,7 +93,7 @@ import lombok.SneakyThrows;
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       COLLABORATION               = "collaboration";
-  
+
   private static final List<String>                 FOLDER_NODE_TYPES           = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
                                                                                           NodeTypeConstants.NT_FOLDER,
                                                                                           NodeTypeConstants.EXO_SYMLINK,
@@ -183,7 +185,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory          = new HashMap<>();
 
-  private static final Log LOG     = ExoLogger.getLogger(JCRDocumentFileStorage.class);
+  private static final Log                          LOG                         =
+                                                        ExoLogger.getLogger(JCRDocumentFileStorage.class);
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -281,7 +284,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node identityRootNode;
       if (StringUtils.isNotBlank(filter.getParentFolderId())) {
         ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-        Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(), manageableRepository);
+        Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
+                                                     manageableRepository);
         identityRootNode = getNodeByIdentifier(session, filter.getParentFolderId());
         if (identityRootNode != null && identityRootNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           String sourceNodeId = identityRootNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
@@ -298,17 +302,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
       if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
-          && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforeDate() == null
-          && filter.getMaxSize() == null && filter.getMinSize() == null) {
+          && StringUtils.isEmpty(filter.getFileTypes())
+          && filter.getAfterDate() == null
+          && filter.getBeforeDate() == null
+          && filter.getMaxSize() == null
+          && filter.getMinSize() == null) {
         String sortField = getSortField(filter, true);
         String sortDirection = getSortDirection(filter);
         String statement = getTimeLineQueryStatement(rootPath, sortField, sortDirection, filter, showHiddenFiles);
         Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
-        ((QueryImpl)jcrQuery).setOffset(offset);
-        ((QueryImpl)jcrQuery).setLimit(limit);
+        ((QueryImpl) jcrQuery).setOffset(offset);
+        ((QueryImpl) jcrQuery).setLimit(limit);
         QueryResult queryResult = jcrQuery.execute();
         NodeIterator nodeIterator = queryResult.getNodes();
-        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService,showHiddenFiles);
+        files = toFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, showHiddenFiles);
         return files;
       } else {
         String workspace = session.getWorkspace().getName();
@@ -390,7 +397,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         path = parent.getPath();
       } else if (filter.getOwnerId() != null && filter.getOwnerId() > 0) {
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(filter.getOwnerId());
-        Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, identity.getUserId(), ownerIdentity, sessionProvider);
+        Node identityRootNode = getIdentityRootNode(spaceService,
+                                                    nodeHierarchyCreator,
+                                                    identity.getUserId(),
+                                                    ownerIdentity,
+                                                    sessionProvider);
         if (identityRootNode == null) {
           return Collections.emptyList();
         }
@@ -418,7 +429,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public List<AbstractNode> getBiggestDocuments(Long ownerId, Identity aclIdentity, int offset, int limit) throws ObjectNotFoundException {
+  public List<AbstractNode> getBiggestDocuments(Long ownerId,
+                                                Identity aclIdentity,
+                                                int offset,
+                                                int limit) throws ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
     if (ownerIdentity == null) {
@@ -428,7 +442,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
       if (identityRootNode == null) {
-        return new ArrayList<> ();
+        return new ArrayList<>();
       }
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
@@ -443,9 +457,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                            "fileSizeWithVersions",
                                                                                            "DESC");
       return results.stream()
-                            .map(result -> (AbstractNode)toFileNode(identityManager, session, aclIdentity, result, spaceService))
-                            .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
-                            .toList();
+                    .map(result -> (AbstractNode) toFileNode(identityManager, session, aclIdentity, result, spaceService))
+                    .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
+                    .toList();
     } catch (Exception e) {
       throw new IllegalStateException("Error when getting the documents size for identity " + ownerId, e);
     } finally {
@@ -598,11 +612,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       if (parent != null) {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
-            && StringUtils.isEmpty(filter.getFileTypes()) && filter.getAfterDate() == null && filter.getBeforeDate() == null
-            && filter.getMaxSize() == null && filter.getMinSize() == null) {
+            && StringUtils.isEmpty(filter.getFileTypes())
+            && filter.getAfterDate() == null
+            && filter.getBeforeDate() == null
+            && filter.getMaxSize() == null
+            && filter.getMinSize() == null) {
           String sortField = getSortField(filter, true);
           String sortDirection = getSortDirection(filter);
-          if (parent.isNodeType(EXO_SYMLINK)){
+          if (parent.isNodeType(EXO_SYMLINK)) {
             String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
             parent = getNodeByIdentifier(session, sourceNodeId);
           }
@@ -615,20 +632,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                               filter.getExcludedCategoryIds(),
                                                               includeHiddenFiles);
           Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
-          ((QueryImpl)jcrQuery).setOffset(offset);
-          ((QueryImpl)jcrQuery).setLimit(limit);
+          ((QueryImpl) jcrQuery).setOffset(offset);
+          ((QueryImpl) jcrQuery).setLimit(limit);
           QueryResult queryResult = jcrQuery.execute();
           NodeIterator nodeIterator = queryResult.getNodes();
           List<AbstractNode> fileItems = new ArrayList<>(toNodes(identityManager,
-                                                 session,
-                                                 nodeIterator,
-                                                 aclIdentity,
-                                                 spaceService,
-                                                 includeHiddenFiles,
-                                                 filter).stream().filter(AbstractNode::isFolder).toList());
+                                                                 session,
+                                                                 nodeIterator,
+                                                                 aclIdentity,
+                                                                 spaceService,
+                                                                 includeHiddenFiles,
+                                                                 filter).stream().filter(AbstractNode::isFolder).toList());
           // load files + symlink of files
           int itemsSize = fileItems.size();
-          if(itemsSize < limit) {
+          if (itemsSize < limit) {
             String statementOfSymlinks =
                                        getFolderDocumentsQuery(parent.getPath(),
                                                                sortField,
@@ -638,19 +655,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                filter.getExcludedCategoryIds(),
                                                                includeHiddenFiles);
             jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfSymlinks, Query.SQL);
-            ((QueryImpl)jcrQuery).setOffset(0);
-            ((QueryImpl)jcrQuery).setLimit(limit);
+            ((QueryImpl) jcrQuery).setOffset(0);
+            ((QueryImpl) jcrQuery).setLimit(limit);
             queryResult = jcrQuery.execute();
             nodeIterator = queryResult.getNodes();
             List<AbstractNode> fileItemsToAdd = toNodes(identityManager,
-                                                   session,
-                                                   nodeIterator,
-                                                   aclIdentity,
-                                                   spaceService,
-                                                   includeHiddenFiles,
-                                                   filter).stream().filter(f -> !f.isFolder()).toList();
+                                                        session,
+                                                        nodeIterator,
+                                                        aclIdentity,
+                                                        spaceService,
+                                                        includeHiddenFiles,
+                                                        filter).stream().filter(f -> !f.isFolder()).toList();
             int limitToAdd = limit - itemsSize;
-            if(fileItemsToAdd.size() > limitToAdd) {
+            if (fileItemsToAdd.size() > limitToAdd) {
               fileItems.addAll(fileItemsToAdd.subList(0, limit - itemsSize));
             } else {
               fileItems.addAll(fileItemsToAdd);
@@ -712,24 +729,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String homePath = "";
       if (node != null) {
-        String nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+        String nodeName =
+                        node.hasProperty(NodeTypeConstants.EXO_TITLE) ?
+                                                                      node.getProperty(NodeTypeConstants.EXO_TITLE).getString() :
+                                                                      node.getName();
         parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                        nodeName,
                                        node.getName(),
                                        node.getPath(),
                                        node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
-                                       countNodeAccessList(node,aclIdentity)));
+                                       countNodeAccessList(node, aclIdentity)));
         if (node.getPath().contains(SPACE_PATH_PREFIX)) {
           String[] pathParts = node.getPath().split(SPACE_PATH_PREFIX)[1].split("/");
           homePath = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
         }
-        String userPrivatePathPrefix = username+"/"+USER_PRIVATE_ROOT_NODE;
-        String userPublicPathPrefix = username+"/"+USER_PUBLIC_ROOT_NODE;
+        String userPrivatePathPrefix = username + "/" + USER_PRIVATE_ROOT_NODE;
+        String userPublicPathPrefix = username + "/" + USER_PUBLIC_ROOT_NODE;
         if (node.getPath().contains(userPrivatePathPrefix)) {
-          homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPrivatePathPrefix)+userPrivatePathPrefix.length());
+          homePath = node.getPath()
+                         .substring(0, node.getPath().lastIndexOf(userPrivatePathPrefix) + userPrivatePathPrefix.length());
         }
         if (node.getPath().contains(userPublicPathPrefix)) {
-          homePath = node.getPath().substring(0,node.getPath().lastIndexOf(userPublicPathPrefix)+userPublicPathPrefix.length());
+          homePath =
+                   node.getPath().substring(0, node.getPath().lastIndexOf(userPublicPathPrefix) + userPublicPathPrefix.length());
         }
         while (node != null && (!node.getPath().equals(homePath) || node.getName().equals(USER_PUBLIC_ROOT_NODE))) {
           try {
@@ -738,32 +760,40 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
               String homePathSymlink = SPACE_PATH_PREFIX + pathParts[0] + "/" + pathParts[1];
               for (int i = 0; i < parents.size(); i++) {
                 String pathActuel = parents.get(i).getPath();
-                pathActuel = pathActuel.replace(homePath,homePathSymlink);
+                pathActuel = pathActuel.replace(homePath, homePathSymlink);
                 parents.get(i).setPath(pathActuel);
               }
               homePath = homePathSymlink;
             }
-            if(node.getName().equals(USER_PUBLIC_ROOT_NODE)){
+            if (node.getName().equals(USER_PUBLIC_ROOT_NODE)) {
               node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
               if (node != null) {
-                nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
+                nodeName =
+                         node.hasProperty(NodeTypeConstants.EXO_TITLE) ?
+                                                                       node.getProperty(NodeTypeConstants.EXO_TITLE).getString() :
+                                                                       node.getName();
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
                                                nodeName,
                                                node.getName(),
                                                node.getPath(),
                                                node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
-                                               countNodeAccessList(node,aclIdentity)));
+                                               countNodeAccessList(node, aclIdentity)));
               }
               break;
-            } else{
+            } else {
               Node parentNode = node.getParent();
               node = parentNode;
               node = checkSymlinkHistory(node, session, ownerId);
               if (node != null) {
-                nodeName= node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-                String identifier = ((NodeImpl)node).getIdentifier();
-                // If the symlink exists on the breadcrumb list, then the required node is the non-symlink node
-                if (parents.stream().anyMatch(breadCrumbItem -> breadCrumbItem.isSymlink() && breadCrumbItem.getId().equals(identifier))){
+                nodeName =
+                         node.hasProperty(NodeTypeConstants.EXO_TITLE) ?
+                                                                       node.getProperty(NodeTypeConstants.EXO_TITLE).getString() :
+                                                                       node.getName();
+                String identifier = ((NodeImpl) node).getIdentifier();
+                // If the symlink exists on the breadcrumb list, then the
+                // required node is the non-symlink node
+                if (parents.stream()
+                           .anyMatch(breadCrumbItem -> breadCrumbItem.isSymlink() && breadCrumbItem.getId().equals(identifier))) {
                   node = parentNode;
                 }
                 parents.add(new BreadCrumbItem(((NodeImpl) node).getIdentifier(),
@@ -771,7 +801,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                node.getName(),
                                                node.getPath(),
                                                node.isNodeType(NodeTypeConstants.EXO_SYMLINK),
-                                               countNodeAccessList(node,aclIdentity)));
+                                               countNodeAccessList(node, aclIdentity)));
               }
             }
           } catch (RepositoryException repositoryException) {
@@ -800,6 +830,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     return node;
   }
+
   @Override
   public List<FullTreeItem> getFullTreeData(long ownerId,
                                             String folderId,
@@ -825,7 +856,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           if (destinationFolderPath.contains(node.getName()) && !destinationFolderPath.endsWith(node.getName())) {
             destinationFolderPath = destinationFolderPath.split(node.getName())[1];
           }
-          if (node.hasNode(destinationFolderPath)){
+          if (node.hasNode(destinationFolderPath)) {
             destinationNode = node.getNode(destinationFolderPath);
           }
         }
@@ -833,10 +864,23 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node = getNodeByIdentifier(session, folderId);
       }
       if (node != null) {
-        String nodeName = node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString() : node.getName();
-        List<FullTreeItem> children = getAllFolderInNode(node, session, destinationNode, withChildren, showHidden, String.valueOf(ownerId));
+        String nodeName =
+                        node.hasProperty(NodeTypeConstants.EXO_TITLE) ?
+                                                                      node.getProperty(NodeTypeConstants.EXO_TITLE).getString() :
+                                                                      node.getName();
+        List<FullTreeItem> children = getAllFolderInNode(node,
+                                                         session,
+                                                         destinationNode,
+                                                         withChildren,
+                                                         showHidden,
+                                                         String.valueOf(ownerId));
 
-        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(), nodeName, node.getPath(), children, showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE), String.valueOf(ownerId)));
+        parents.add(new FullTreeItem(((NodeImpl) node).getIdentifier(),
+                                     nodeName,
+                                     node.getPath(),
+                                     children,
+                                     showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE),
+                                     String.valueOf(ownerId)));
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving tree folder'" + folderId, e);
@@ -848,21 +892,30 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return parents;
   }
 
-  private List<FullTreeItem> getAllFolderInNode(Node node, Session session, Node destinationNode, boolean withChildren, boolean showHidden, String ownerId) throws RepositoryException {
+  private List<FullTreeItem> getAllFolderInNode(Node node,
+                                                Session session,
+                                                Node destinationNode,
+                                                boolean withChildren,
+                                                boolean showHidden,
+                                                String ownerId) throws RepositoryException {
     List<FullTreeItem> folderListNodes = new ArrayList<>();
     NodeIterator nodeIter = node.getNodes();
     while (nodeIter.hasNext()) {
       Node childNode = nodeIter.nextNode();
       if (showHidden || !childNode.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)
-          && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || childNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK))) {
+                        && (childNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
+                            || childNode.isNodeType(NodeTypeConstants.NT_FOLDER)
+                            || childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK))) {
         String nodeName = childNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? childNode.getProperty(NodeTypeConstants.EXO_TITLE)
-                                                                                        .getString()
-                                                                             : childNode.getName();
+                                                                                        .getString() :
+                                                                             childNode.getName();
         if (childNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           Node parentNode = getNodeByIdentifier(session, childNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
-          // skip if the source is not a folder or that the symlink is inside its source folder
+          // skip if the source is not a folder or that the symlink is inside
+          // its source folder
           if (parentNode != null && (!parentNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
-              && !parentNode.isNodeType(NodeTypeConstants.NT_FOLDER) || childNode.getPath().contains(parentNode.getPath()))) {
+                                     && !parentNode.isNodeType(NodeTypeConstants.NT_FOLDER)
+                                     || childNode.getPath().contains(parentNode.getPath()))) {
             continue;
           } else {
             childNode = parentNode;
@@ -872,7 +925,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           List<FullTreeItem> folderChildListNodes = new ArrayList<>();
           if (withChildren || (destinationNode != null && destinationNode.getPath().contains(childNode.getPath()))) {
             folderChildListNodes = getAllFolderInNode(childNode, session, destinationNode, withChildren, showHidden, ownerId);
-          } else if (!hasFolderNodes(childNode,showHidden)) {
+          } else if (!hasFolderNodes(childNode, showHidden)) {
             folderChildListNodes = null;
           }
           folderListNodes.add(new FullTreeItem(((NodeImpl) childNode).getIdentifier(),
@@ -885,14 +938,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       }
     }
-    return folderListNodes.stream().sorted((fullTreeItem1, fullTreeItem2)-> new NaturalComparator().compare(fullTreeItem1.getName(), fullTreeItem2.getName())).toList();
+    return folderListNodes.stream()
+                          .sorted((fullTreeItem1, fullTreeItem2) -> new NaturalComparator().compare(fullTreeItem1.getName(),
+                                                                                                    fullTreeItem2.getName()))
+                          .toList();
   }
+
   @Override
   public AbstractNode createFolder(long ownerId,
-                           String folderId,
-                           String folderPath,
-                           String title,
-                           Identity aclIdentity) throws ObjectAlreadyExistsException, IllegalAccessException {
+                                   String folderId,
+                                   String folderPath,
+                                   String title,
+                                   Identity aclIdentity) throws ObjectAlreadyExistsException, IllegalAccessException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
       throw new IllegalArgumentException("folder title is not valid");
     }
@@ -917,14 +974,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
         }
       }
-      Map<String, Boolean> nodeAccessList = countNodeAccessList(node,aclIdentity) ;
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(node, aclIdentity);
       String canEdit = "canEdit";
-      if ( nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue() ) {
+      if (nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue()) {
         throw new IllegalAccessException("Permission to add folder is missing");
       }
-      //no need to this object later make it eligible to the garbage collactor
+      // no need to this object later make it eligible to the garbage collactor
       nodeAccessList = null;
-      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), NodeTypeConstants.NT_FOLDER ));
+      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), NodeTypeConstants.NT_FOLDER));
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
       }
@@ -935,7 +992,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       node.save();
       return toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService);
-    } catch (IllegalAccessException exception){
+    } catch (IllegalAccessException exception) {
       throw new IllegalAccessException(exception.getMessage());
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
@@ -947,19 +1004,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
   }
+
   @Override
   public String getNewName(long ownerId,
                            String folderId,
                            String folderPath,
                            String title) throws IllegalAccessException,
-                                                 ObjectAlreadyExistsException,
-                                                 ObjectNotFoundException {
+                                         ObjectAlreadyExistsException,
+                                         ObjectNotFoundException {
     SessionProvider systemSessionProvider = null;
     try {
       Node node = null;
       systemSessionProvider = SessionProvider.createSystemProvider();
       ManageableRepository repository = repositoryService.getCurrentRepository();
-      Session systemSession = systemSessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Session systemSession =
+                            systemSessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       if (StringUtils.isBlank(folderId) && ownerId > 0) {
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
         node = getIdentityRootNode(spaceService, nodeHierarchyCreator, ownerIdentity, systemSession);
@@ -967,7 +1026,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(systemSession, folderId);
       }
-      if(StringUtils.isNotBlank(folderPath)){
+      if (StringUtils.isNotBlank(folderPath)) {
         try {
           node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
         } catch (RepositoryException repositoryException) {
@@ -975,10 +1034,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), NodeTypeConstants.NT_FOLDER));
-      int i =0;
+      int i = 0;
       String newName = name;
       String newTitle = title;
-      while((node.hasNode(newName))){
+      while ((node.hasNode(newName))) {
         i++;
         newTitle = title + " (" + i + ")";
         newName = Text.escapeIllegalJcrChars(cleanName(newTitle.toLowerCase(), NodeTypeConstants.NT_FOLDER));
@@ -994,7 +1053,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws ObjectAlreadyExistsException {
+  public void renameDocument(long ownerId,
+                             String documentID,
+                             String title,
+                             Identity aclIdentity) throws ObjectAlreadyExistsException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
       throw new IllegalArgumentException("document title is not valid");
     }
@@ -1014,12 +1076,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), node.getPrimaryNodeType().getName()));
       name = cleanNameWithAccents(name, node.getPrimaryNodeType().getName());
-      //clean node name
+      // clean node name
       name = URLDecoder.decode(name, "UTF-8");
       if (name.indexOf('.') == -1) {
         String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE)
-            && node.hasProperty(NodeTypeConstants.EXO_TITLE) ? node.getProperty(NodeTypeConstants.EXO_TITLE).getString()
-                                                             : node.getName();
+                         && node.hasProperty(NodeTypeConstants.EXO_TITLE) ?
+                                                                          node.getProperty(NodeTypeConstants.EXO_TITLE)
+                                                                              .getString() :
+                                                                          node.getName();
         if (oldName.indexOf('.') != -1 && node.isNodeType(NodeTypeConstants.NT_FILE)) {
           String ext = oldName.substring(oldName.lastIndexOf('.'));
           title = title.concat(ext);
@@ -1045,7 +1109,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
       Node parent = node.getParent();
       String srcPath = node.getPath();
-      String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang3.StringUtils.EMPTY : parent.getPath()).concat(SLASH).concat(name);
+      String destPath = (parent.getPath().equals(SLASH) ? org.apache.commons.lang3.StringUtils.EMPTY :
+                                                        parent.getPath()).concat(SLASH).concat(name);
       if (!srcPath.equals(destPath)) {
         node.getSession().getWorkspace().move(srcPath, destPath);
       }
@@ -1056,8 +1121,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_NAME, name);
       node.save();
       listenerService.broadcast(EVENT_DOCUMENT_MOVED,
-              Map.of(SRC_PATH, srcPath, DEST_PATH, destPath),
-              node.getPrimaryNodeType().getName());
+                                Map.of(SRC_PATH, srcPath, DEST_PATH, destPath),
+                                node.getPrimaryNodeType().getName());
 
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
@@ -1071,7 +1136,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, Identity aclIdentity) throws ObjectAlreadyExistsException {
+  public void setDocumentVisibility(long ownerId,
+                                    String documentID,
+                                    Boolean hidden,
+                                    Identity aclIdentity) throws ObjectAlreadyExistsException {
     if (hidden == null) {
       throw new IllegalArgumentException("Hidden value should not be null");
     }
@@ -1147,8 +1215,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public AbstractNode duplicateDocument(long ownerId, String fileId, String prefixClone, Identity aclIdentity) throws IllegalAccessException,
-                                                                                           ObjectNotFoundException {
+  public AbstractNode duplicateDocument(long ownerId,
+                                        String fileId,
+                                        String prefixClone,
+                                        Identity aclIdentity) throws IllegalAccessException,
+                                                              ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
 
@@ -1230,7 +1301,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } else {
       node = getNodeByIdentifier(session, fileId);
     }
-    if(node == null) {
+    if (node == null) {
       return;
     }
     if (node.canAddMixin(NodeTypeConstants.EXO_MODIFY)) {
@@ -1251,8 +1322,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.getSession().getWorkspace().move(srcPath, nodeDestinationPath);
       node.save();
       listenerService.broadcast(EVENT_DOCUMENT_MOVED,
-                Map.of(SRC_PATH, srcPath, DEST_PATH, nodeDestinationPath),
-                node.getPrimaryNodeType().getName());
+                                Map.of(SRC_PATH, srcPath, DEST_PATH, nodeDestinationPath),
+                                node.getPrimaryNodeType().getName());
     }
   }
 
@@ -1285,16 +1356,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
     SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
     try {
-      Node identityRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, ownerIdentity.getRemoteId(), ownerIdentity, sessionProvider);
+      Node identityRootNode = getIdentityRootNode(spaceService,
+                                                  nodeHierarchyCreator,
+                                                  ownerIdentity.getRemoteId(),
+                                                  ownerIdentity,
+                                                  sessionProvider);
       if (identityRootNode == null) {
         return Collections.emptyList();
       }
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
       String query = "SELECT exo:categoryIds FROM nt:base " +
-              "WHERE 'mix:documentsCategory' IN jcr:mixinTypes " +
-              "AND jcr:path LIKE '" + rootPath + "/%' " +
-              "AND (jcr:primaryType = 'nt:file' OR jcr:primaryType = 'exo:symlink')";
+          "WHERE 'mix:documentsCategory' IN jcr:mixinTypes " +
+          "AND jcr:path LIKE '" + rootPath + "/%' " +
+          "AND (jcr:primaryType = 'nt:file' OR jcr:primaryType = 'exo:symlink')";
 
       Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(query, Query.SQL);
       QueryResult result = jcrQuery.execute();
@@ -1344,8 +1419,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       destNode.getSession().save();
 
       listenerService.broadcast(EVENT_DOCUMENT_MOVED,
-                Map.of(SRC_PATH, srcPath, DEST_PATH, destPath),
-                node.getPrimaryNodeType().getName());
+                                Map.of(SRC_PATH, srcPath, DEST_PATH, destPath),
+                                node.getPrimaryNodeType().getName());
     } else if (Objects.equals(conflictAction, CREATE_NEW_VERSION)) {
       Node destNode = (Node) session.getItem(destPath + SLASH + name);
       Node scrNode = (Node) session.getItem(srcPath);
@@ -1376,34 +1451,42 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private Node duplicateItem(Node oldNode, Node destinationNode, Node parentNode, String prefixClone) throws RepositoryException, UnsupportedEncodingException {
-    if (oldNode.isNodeType(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)){
+  private Node duplicateItem(Node oldNode,
+                             Node destinationNode,
+                             Node parentNode,
+                             String prefixClone) throws RepositoryException, UnsupportedEncodingException {
+    if (oldNode.isNodeType(NodeTypeConstants.EXO_THUMBNAILS_FOLDER)) {
       return null;
     }
-    if ((oldNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) && !oldNode.getParent().getPath().equals(destinationNode.getPath()) && oldNode.getPath().contains(destinationNode.getPath())) {
-      // If the destination node is a child of the node to copy, we should not duplicate it
+    if ((oldNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || oldNode.isNodeType(NodeTypeConstants.NT_FOLDER))
+        && !oldNode.getParent().getPath().equals(destinationNode.getPath())
+        && oldNode.getPath().contains(destinationNode.getPath())) {
+      // If the destination node is a child of the node to copy, we should not
+      // duplicate it
       throw new IllegalStateException("Cannot duplicate a node into its own child");
     }
     Node newNode = null;
     String name = oldNode.getName();
-    String title = oldNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString() : oldNode.getName();
-    if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())){
+    String title =
+                 oldNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString() :
+                                                                  oldNode.getName();
+    if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())) {
       if (StringUtils.isNotEmpty(prefixClone)) {
         name = prefixClone.concat(" ").concat(name);
         title = prefixClone.concat(" ").concat(title);
       }
       String newName = name;
-      int i =0;
-      while((destinationNode.hasNode(newName))){
+      int i = 0;
+      while ((destinationNode.hasNode(newName))) {
         i++;
         newName = name + " (" + i + ")";
       }
       name = newName.toLowerCase();
-      if(i>0){
+      if (i > 0) {
         title = title + " (" + i + ")";
       }
     }
-    name = URLDecoder.decode(name,"UTF-8");
+    name = URLDecoder.decode(name, "UTF-8");
     if (oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
       newNode = destinationNode.addNode(name.toLowerCase(), NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
@@ -1414,10 +1497,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     } else {
       newNode = destinationNode.addNode(name, oldNode.getPrimaryNodeType().getName());
-      addProperties(oldNode,newNode,title);
+      addProperties(oldNode, newNode, title);
     }
     return newNode;
   }
+
   private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {
     if (oldNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !newNode.isNodeType(NodeTypeConstants.MIX_VERSIONABLE))
       newNode.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
@@ -1435,26 +1519,27 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       newNode.addMixin(NodeTypeConstants.MIX_I18N);
 
     newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
-    if(oldNode.hasNode(NodeTypeConstants.JCR_CONTENT)){
+    if (oldNode.hasNode(NodeTypeConstants.JCR_CONTENT)) {
       Node resourceNode = newNode.addNode(NodeTypeConstants.JCR_CONTENT, NodeTypeConstants.NT_RESOURCE);
 
       Calendar now = Calendar.getInstance();
       resourceNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, now);
       resourceNode.setProperty(NodeTypeConstants.JCR_DATA,
-              oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
-                      .getProperty(NodeTypeConstants.JCR_DATA)
-                      .getStream());
+                               oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
+                                      .getProperty(NodeTypeConstants.JCR_DATA)
+                                      .getStream());
       resourceNode.setProperty(NodeTypeConstants.JCR_MIME_TYPE,
-              oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
-                      .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
-                      .getString());
+                               oldNode.getNode(NodeTypeConstants.JCR_CONTENT)
+                                      .getProperty(NodeTypeConstants.JCR_MIME_TYPE)
+                                      .getString());
       resourceNode.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
     }
 
-    if(oldNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+    if (oldNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
       newNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, oldNode.getSession().getWorkspace().getName());
       newNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, oldNode.getPrimaryNodeType().getName());
-      newNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, oldNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+      newNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID,
+                          oldNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
     }
   }
 
@@ -1471,24 +1556,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
     StringBuilder categoryFilter = new StringBuilder();
     if (CollectionUtils.isNotEmpty(filter.getCategoryIds())) {
-      String joinedConditions = filter.getCategoryIds().stream()
-              .map(id -> "exo:categoryIds = '" + id + "'")
-              .collect(Collectors.joining(" OR "));
+      String joinedConditions = filter.getCategoryIds()
+                                      .stream()
+                                      .map(id -> "exo:categoryIds = '" + id + "'")
+                                      .collect(Collectors.joining(" OR "));
 
       categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (")
-              .append(joinedConditions)
-              .append(")");
+                    .append(joinedConditions)
+                    .append(")");
     }
 
     // Exclude categories
     if (CollectionUtils.isNotEmpty(filter.getExcludedCategoryIds())) {
-      String joinedExclude = filter.getExcludedCategoryIds().stream()
-              .map(id -> "NOT exo:categoryIds = '" + id + "'")
-              .collect(Collectors.joining(" AND "));
+      String joinedExclude = filter.getExcludedCategoryIds()
+                                   .stream()
+                                   .map(id -> "NOT exo:categoryIds = '" + id + "'")
+                                   .collect(Collectors.joining(" AND "));
 
       categoryFilter.append(" AND (")
-              .append(joinedExclude)
-              .append(")");
+                    .append(joinedExclude)
+                    .append(")");
     }
 
     return new StringBuilder().append("SELECT * FROM ")
@@ -1506,7 +1593,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                               .toString();
   }
 
-  private String getFolderDocumentsQuery(String folderPath, String sortField, String sortDirection, List<String> types, List<Long> categoryIds, List<Long> excludedCategoryIds, boolean includeHiddenFiles) {
+  private String getFolderDocumentsQuery(String folderPath,
+                                         String sortField,
+                                         String sortDirection,
+                                         List<String> types,
+                                         List<Long> categoryIds,
+                                         List<Long> excludedCategoryIds,
+                                         boolean includeHiddenFiles) {
     String hiddenableQuery = includeHiddenFiles ? " " : " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable' ";
 
     if (CollectionUtils.isNotEmpty(categoryIds) && CollectionUtils.isNotEmpty(excludedCategoryIds)) {
@@ -1516,39 +1609,40 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     StringBuilder categoryFilter = new StringBuilder();
     if (CollectionUtils.isNotEmpty(categoryIds)) {
       String joinedConditions = categoryIds.stream()
-              .map(id -> "exo:categoryIds = '" + id + "'")
-              .collect(Collectors.joining(" OR "));
+                                           .map(id -> "exo:categoryIds = '" + id + "'")
+                                           .collect(Collectors.joining(" OR "));
 
       categoryFilter.append(" AND 'mix:documentsCategory' IN jcr:mixinTypes AND (")
-              .append(joinedConditions)
-              .append(")");
+                    .append(joinedConditions)
+                    .append(")");
     }
 
     // Exclude categories
     if (CollectionUtils.isNotEmpty(excludedCategoryIds)) {
       String joinedExclude = excludedCategoryIds.stream()
-              .map(id -> "NOT exo:categoryIds = '" + id + "'")
-              .collect(Collectors.joining(" AND "));
+                                                .map(id -> "NOT exo:categoryIds = '" + id + "'")
+                                                .collect(Collectors.joining(" AND "));
 
       categoryFilter.append(" AND (")
-              .append(joinedExclude)
-              .append(")");
+                    .append(joinedExclude)
+                    .append(")");
     }
-    
-    String typesStatement =" and (jcr:primaryType ='" + String.join("' OR jcr:primaryType ='", types) + "') ";
-    String sortQuery = StringUtils.isEmpty(sortField) && StringUtils.isEmpty(sortDirection) ? " " : " ORDER BY " + sortField + " " + sortDirection;
+
+    String typesStatement = " and (jcr:primaryType ='" + String.join("' OR jcr:primaryType ='", types) + "') ";
+    String sortQuery = StringUtils.isEmpty(sortField)
+                       && StringUtils.isEmpty(sortDirection) ? " " : " ORDER BY " + sortField + " " + sortDirection;
     return new StringBuilder().append("SELECT * FROM nt:base")
-            .append(" WHERE jcr:path LIKE '")
-            .append(folderPath)
-            .append("/%'")
-            .append(" AND NOT jcr:path LIKE '")
-            .append(folderPath)
-            .append("/%/%' ")
-            .append(typesStatement)
-            .append(hiddenableQuery)
-            .append(categoryFilter)
-            .append(sortQuery)
-            .toString();
+                              .append(" WHERE jcr:path LIKE '")
+                              .append(folderPath)
+                              .append("/%'")
+                              .append(" AND NOT jcr:path LIKE '")
+                              .append(folderPath)
+                              .append("/%/%' ")
+                              .append(typesStatement)
+                              .append(hiddenableQuery)
+                              .append(categoryFilter)
+                              .append(sortQuery)
+                              .toString();
   }
 
   private String getTimeLineGroupeSizeQueryStatement(String rootPath, Date before, Date after) {
@@ -1579,16 +1673,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String parentPath = "";
     try {
       parentPath = node.getPath();
-      String cleanedFolderPath = java.net.URLDecoder.decode(folderPath.startsWith(SLASH) ? folderPath.substring(1) : folderPath, StandardCharsets.UTF_8).replace("%", "%25");
-      // The node is the personal drive, and the folder path does not start with the user's root node name
-      if ((node.getName().equals(USER_PRIVATE_ROOT_NODE) || node.getName().equals(USER_PUBLIC_ROOT_NODE)) && node.hasNode(cleanedFolderPath)) {
+      String cleanedFolderPath = java.net.URLDecoder.decode(folderPath.startsWith(SLASH) ? folderPath.substring(1) : folderPath,
+                                                            StandardCharsets.UTF_8)
+                                                    .replace("%", "%25");
+      // The node is the personal drive, and the folder path does not start with
+      // the user's root node name
+      if ((node.getName().equals(USER_PRIVATE_ROOT_NODE) || node.getName().equals(USER_PUBLIC_ROOT_NODE))
+          && node.hasNode(cleanedFolderPath)) {
         return node.getNode(cleanedFolderPath);
       }
       if ((node.getName().equals(USER_PRIVATE_ROOT_NODE))) {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH)[1];
           folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
-          if(node.hasNode(folderPath)) {
+          if (node.hasNode(folderPath)) {
             return node.getNode(folderPath);
           } else {
             return node.getNode(folderPath.toLowerCase());
@@ -1600,7 +1698,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                    sessionProvider.getCurrentRepository());
           Node selectedNode = getNodeByIdentifier(systemSession, ((NodeImpl) node).getIdentifier());
           folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
-          if(selectedNode != null) {
+          if (selectedNode != null) {
             Node parent = selectedNode.getParent();
             if (parent.hasNode(folderPath)) {
               return parent.getNode(folderPath);
@@ -1613,7 +1711,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (folderPath.startsWith(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PRIVATE_ROOT_NODE + SLASH + USER_PUBLIC_ROOT_NODE + SLASH)[1];
           folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
-          if(node.hasNode(folderPath)) {
+          if (node.hasNode(folderPath)) {
             return node.getNode(folderPath);
           } else {
             return node.getNode(folderPath.toLowerCase());
@@ -1622,7 +1720,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (folderPath.startsWith(USER_PUBLIC_ROOT_NODE)) {
           folderPath = folderPath.split(USER_PUBLIC_ROOT_NODE + SLASH)[1];
           folderPath = java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25");
-          if(node.hasNode(folderPath)) {
+          if (node.hasNode(folderPath)) {
             return node.getNode(folderPath);
           } else {
             return node.getNode(folderPath.toLowerCase());
@@ -1630,18 +1728,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       } else {
         String[] splittedNodePath = folderPath.split(SLASH);
-        if(splittedNodePath.length == 0) {
+        if (splittedNodePath.length == 0) {
           return node;
         }
         Node currentNode = node;
-        for(String nodeName : splittedNodePath) {
-          if(StringUtils.isNotBlank(nodeName) && currentNode != null) {
+        for (String nodeName : splittedNodePath) {
+          if (StringUtils.isNotBlank(nodeName) && currentNode != null) {
             if (currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
               String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
               currentNode = getNodeByIdentifier(currentNode.getSession(), sourceNodeId);
             }
             nodeName = java.net.URLDecoder.decode(nodeName, StandardCharsets.UTF_8).replace("%", "%25");
-            if(currentNode != null) {
+            if (currentNode != null) {
               if (currentNode.hasNode(nodeName)) {
                 currentNode = currentNode.getNode(nodeName);
               } else {
@@ -1675,26 +1773,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
       }
       if (nodePermissionEntity.isPublic()) {
-        permissions.put("any", new String[] {PermissionType.READ});
+        permissions.put("any", new String[] { PermissionType.READ });
       }
-      for(PermissionEntry permission : permissionsList){
-        if(permission.getIdentity().getProviderId().equals(SPACE_PROVIDER_ID)) {
+      for (PermissionEntry permission : permissionsList) {
+        if (permission.getIdentity().getProviderId().equals(SPACE_PROVIDER_ID)) {
           Space space = spaceService.getSpaceByPrettyName(permission.getIdentity().getRemoteId());
           String groupId = space.getGroupId();
           if (permission.getPermission().equals("edit")) {
-            if(permission.getRole().equals(PermissionRole.ALL.name())){
+            if (permission.getRole().equals(PermissionRole.ALL.name())) {
               permissions.put("*:" + groupId, PermissionType.ALL);
             }
-            if(permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())){
-              permissions.put("manager:"+ groupId, PermissionType.ALL);
+            if (permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())) {
+              permissions.put("manager:" + groupId, PermissionType.ALL);
               permissions.put("redactor:" + groupId, PermissionType.ALL);
             }
           }
           if (permission.getPermission().equals("read")) {
-            if(permission.getRole().equals(PermissionRole.ALL.name())){
+            if (permission.getRole().equals(PermissionRole.ALL.name())) {
               permissions.put("*:" + groupId, new String[] { PermissionType.READ });
             }
-            if(permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())){
+            if (permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS.name())) {
               permissions.put("manager:" + groupId, new String[] { PermissionType.READ });
               permissions.put("redactor:" + groupId, new String[] { PermissionType.READ });
             }
@@ -1702,20 +1800,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         } else if (permission.getIdentity().getProviderId().equals("group")) {
           String groupId = permission.getIdentity().getRemoteId();
           if (permission.getPermission().equals("edit")) {
-            permissions.put("*:"+groupId, PermissionType.ALL);
+            permissions.put("*:" + groupId, PermissionType.ALL);
           }
           if (permission.getPermission().equals("read")) {
-            permissions.put("*:"+groupId, new String[]{PermissionType.READ});
+            permissions.put("*:" + groupId, new String[] { PermissionType.READ });
           }
         } else {
           if (permission.getPermission().equals("edit")) {
             permissions.put(permission.getIdentity().getRemoteId(), PermissionType.ALL);
           }
           if (permission.getPermission().equals("read")) {
-            permissions.put(permission.getIdentity().getRemoteId(), new String[]{PermissionType.READ});
+            permissions.put(permission.getIdentity().getRemoteId(), new String[] { PermissionType.READ });
           }
         }
-        }
+      }
       if (node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
@@ -1723,19 +1821,22 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, now);
       node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, now);
       node.save();
-      Map<Long,String> toUnShare = new HashMap<>();
+      Map<Long, String> toUnShare = new HashMap<>();
       ((ExtendedNode) node).getACL().getPermissionEntries().forEach(accessControlEntry -> {
-        if (!permissions.containsKey(accessControlEntry.getIdentity())){
-          if (!accessControlEntry.getIdentity().startsWith("*:") && !accessControlEntry.getIdentity().startsWith("redactor:/") && !accessControlEntry.getIdentity().startsWith("manager:/")){
-            org.exoplatform.social.core.identity.model.Identity userIdentity = identityManager.getOrCreateUserIdentity(accessControlEntry.getIdentity());
+        if (!permissions.containsKey(accessControlEntry.getIdentity())) {
+          if (!accessControlEntry.getIdentity().startsWith("*:") && !accessControlEntry.getIdentity().startsWith("redactor:/")
+              && !accessControlEntry.getIdentity().startsWith("manager:/")) {
+            org.exoplatform.social.core.identity.model.Identity userIdentity =
+                                                                             identityManager.getOrCreateUserIdentity(accessControlEntry.getIdentity());
             if (userIdentity != null) {
               toUnShare.put(Long.valueOf(userIdentity.getId()), accessControlEntry.getPermission());
             }
-          }else if (accessControlEntry.getIdentity().startsWith("*:/spaces")) {
-           Space space = spaceService.getSpaceByGroupId(accessControlEntry.getIdentity().substring(2)) ;
-           if (space != null) {
-             toUnShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(space.getPrettyName()).getId()), accessControlEntry.getPermission());
-           }
+          } else if (accessControlEntry.getIdentity().startsWith("*:/spaces")) {
+            Space space = spaceService.getSpaceByGroupId(accessControlEntry.getIdentity().substring(2));
+            if (space != null) {
+              toUnShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(space.getPrettyName()).getId()),
+                            accessControlEntry.getPermission());
+            }
           }
         }
       });
@@ -1744,7 +1845,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       session.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error updating permissi" +
-              "ons of document'" + documentID, e);
+          "ons of document'" + documentID, e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
@@ -1761,24 +1862,24 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository repository = repositoryService.getCurrentRepository();
       Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node currentNode = getNodeByIdentifier(session, documentId);
-      //add symlink to destination user
+      // add symlink to destination user
       org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
       rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, session);
-      if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
+      if (!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
         rootNode = rootNode.getNode("Documents");
       }
-      if(!rootNode.hasNode(SHARED_FOLDER_NAME)){
+      if (!rootNode.hasNode(SHARED_FOLDER_NAME)) {
         shared = rootNode.addNode(SHARED_FOLDER_NAME);
         rootNode.save();
-      }else{
+      } else {
         shared = rootNode.getNode(SHARED_FOLDER_NAME);
       }
-      if(destIdentity.isSpace()){
+      if (destIdentity.isSpace()) {
         sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
         session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
         shared = getNodeByIdentifier(session, ((ExtendedNode) shared).getIdentifier());
       }
-      if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+      if (currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         currentNode = getNodeByIdentifier(session, sourceNodeId);
       }
@@ -1796,11 +1897,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       linkNode.setProperty(NodeTypeConstants.EXO_WORKSPACE, repository.getConfiguration().getDefaultWorkspaceName());
       linkNode.setProperty(NodeTypeConstants.EXO_PRIMARY_TYPE, currentNode.getPrimaryNodeType().getName());
       linkNode.setProperty(NodeTypeConstants.EXO_SYMLINK_UUID, ((ExtendedNode) currentNode).getIdentifier());
-      if(linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
+      if (linkNode.canAddMixin(NodeTypeConstants.EXO_SORTABLE)) {
         linkNode.addMixin("exo:sortable");
       }
       if (currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-        linkNode.setProperty(NodeTypeConstants.EXO_TITLE,currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString());
+        linkNode.setProperty(NodeTypeConstants.EXO_TITLE, currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString());
       }
       linkNode.setProperty(NodeTypeConstants.EXO_NAME, currentNode.getName());
       String nodeMimeType = getMimeType(currentNode);
@@ -1814,16 +1915,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
         List<String> accessControlEntryPermession = new ArrayList<>();
         acc.stream().forEach(accessControlEntry -> {
-                      accessControlEntryPermession.add(accessControlEntry.getPermission());
-                      permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
-                    });
+          accessControlEntryPermession.add(accessControlEntry.getPermission());
+          permissions.put(accessControlEntry.getIdentity(),
+                          accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
+        });
       } else {
         List<AccessControlEntry> acc = ((ExtendedNode) currentNode).getACL().getPermissionEntries();
         List<String> accessControlEntryPermession = new ArrayList<>();
-        acc.stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destIdentity.getRemoteId())).toList()
+        acc.stream()
+           .filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destIdentity.getRemoteId()))
+           .toList()
            .forEach(accessControlEntry -> {
              accessControlEntryPermession.add(accessControlEntry.getPermission());
-             permissions.put(accessControlEntry.getIdentity(),accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
+             permissions.put(accessControlEntry.getIdentity(),
+                             accessControlEntryPermession.toArray(new String[accessControlEntryPermession.size()]));
            });
       }
       if (linkNode.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
@@ -1838,24 +1943,37 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
-    }finally {
+    } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
     }
   }
-  public boolean isDocumentSharedWithSamePermissions(Node currentNode, Node linkNode, org.exoplatform.social.core.identity.model.Identity destinationIdentity ) throws RepositoryException {
+
+  public boolean isDocumentSharedWithSamePermissions(Node currentNode,
+                                                     Node linkNode,
+                                                     org.exoplatform.social.core.identity.model.Identity destinationIdentity) throws RepositoryException {
     String destinationRemoteId;
     if (destinationIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
       destinationRemoteId = "*:" + spaceService.getSpaceByPrettyName(destinationIdentity.getRemoteId()).getGroupId();
-    } else destinationRemoteId = destinationIdentity.getRemoteId();
-    List<AccessControlEntry> currentNodeAcc = ((ExtendedNode) currentNode).getACL().getPermissionEntries()
-            .stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destinationRemoteId)).toList();
+    } else
+      destinationRemoteId = destinationIdentity.getRemoteId();
+    List<AccessControlEntry> currentNodeAcc = ((ExtendedNode) currentNode).getACL()
+                                                                          .getPermissionEntries()
+                                                                          .stream()
+                                                                          .filter(accessControlEntry -> accessControlEntry.getIdentity()
+                                                                                                                          .equals(destinationRemoteId))
+                                                                          .toList();
 
-    List<AccessControlEntry> linkNodeAcc = ((ExtendedNode) linkNode).getACL().getPermissionEntries()
-            .stream().filter(accessControlEntry -> accessControlEntry.getIdentity().equals(destinationRemoteId)).toList();
+    List<AccessControlEntry> linkNodeAcc = ((ExtendedNode) linkNode).getACL()
+                                                                    .getPermissionEntries()
+                                                                    .stream()
+                                                                    .filter(accessControlEntry -> accessControlEntry.getIdentity()
+                                                                                                                    .equals(destinationRemoteId))
+                                                                    .toList();
     return currentNodeAcc.equals(linkNodeAcc);
   }
+
   public void notifyMember(String documentId, long destId) {
     SessionProvider sessionProvider = null;
     try {
@@ -1867,7 +1985,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Utils.broadcast(listenerService, "share_document_event", destIdentity, currentNode);
     } catch (Exception e) {
       throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
-    }finally {
+    } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -1885,7 +2003,61 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (AccessDeniedException | ItemNotFoundException e) {
       return false;
     } catch (Exception e) {
-      throw new IllegalStateException("Error checking access rights for on document'" + documentID + " fro user " + aclIdentity.getUserId(), e);
+      throw new IllegalStateException("Error checking access rights for on document'" + documentID + " fro user " +
+          aclIdentity.getUserId(), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public String getAudioTranscription(String documentId, Identity aclIdentity) throws IllegalAccessException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)
+          && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION)) {
+        InputStream stream = node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION).getStream();
+        return IOUtil.getStreamContentAsString(stream);
+      } else {
+        return null;
+      }
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (Exception e) {
+      throw new IllegalStateException("Error renaming document'" + documentId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public void updateAudioTranscription(String documentId,
+                                       String transcription,
+                                       Identity aclIdentity) throws IllegalAccessException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new AccessDeniedException();
+      }
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION, new ByteArrayInputStream(transcription.getBytes()));
+      session.save();
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (Exception e) {
+      throw new IllegalStateException("Error renaming document'" + documentId, e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
@@ -1966,7 +2138,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
-  public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
+  public void createShortcut(String documentId,
+                             String destPath,
+                             String aclIdentity,
+                             String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
     Node rootNode;
     SessionProvider sessionProvider = null;
     Identity identity = identityRegistry.getIdentity(aclIdentity);
@@ -1975,14 +2150,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository repository = repositoryService.getCurrentRepository();
       Session session = sessionProvider.getSession(COLLABORATION, repository);
       Node currentNode = getNodeByIdentifier(session, documentId);
-      //add symlink to destination document
+      // add symlink to destination document
       rootNode = (Node) session.getItem(destPath);
       if (currentNode != null && currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         currentNode = getNodeByIdentifier(session, sourceNodeId);
       }
       // add referencable mixin to the node if isn't referencable
-      if (!currentNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE ) && currentNode.canAddMixin(NodeTypeConstants.MIX_REFERENCEABLE)) {
+      if (!currentNode.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE)
+          && currentNode.canAddMixin(NodeTypeConstants.MIX_REFERENCEABLE)) {
         currentNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
         currentNode.save();
       }
@@ -2026,7 +2202,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
-      throw new IllegalStateException("Error while creating a shortcut for document's id " + documentId + " to destination path" + destPath, e);
+      throw new IllegalStateException("Error while creating a shortcut for document's id " + documentId + " to destination path" +
+          destPath, e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
@@ -2034,8 +2211,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private Node handleShortcutDocConflict(Node rootNode, Node currentNode, String conflictAction) throws ObjectAlreadyExistsException,
-                                                                                         RepositoryException {
+  private Node handleShortcutDocConflict(Node rootNode,
+                                         Node currentNode,
+                                         String conflictAction) throws ObjectAlreadyExistsException,
+                                                                RepositoryException {
     Node linkNode = null;
     boolean created = false;
     int count = 0;
@@ -2061,7 +2240,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       if (linkNode.hasProperty(NodeTypeConstants.EXO_TITLE)) {
-        String exoTitle = getNewIndexedName(currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString(), "(" + (count) + ")");
+        String exoTitle =
+                        getNewIndexedName(currentNode.getProperty(NodeTypeConstants.EXO_TITLE).getString(), "(" + (count) + ")");
         linkNode.setProperty(NodeTypeConstants.EXO_TITLE, exoTitle);
       }
     } else {
@@ -2249,7 +2429,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public Map<String, Boolean> countNodeAccessList(Node node, Identity aclIdentity) throws RepositoryException {
 
     Map<String, Boolean> keyValuePermission = new HashMap<>();
-    if (node == null) return keyValuePermission;
+    if (node == null)
+      return keyValuePermission;
     boolean canAccess = false;
     boolean canEdit = false;
     boolean canDelete = false;
@@ -2263,17 +2444,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (StringUtils.equals(nodeAclIdentity, userId)
             || StringUtils.equals(IdentityConstants.ANY, userId)
             || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
-          canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.ADD_NODE) || accessControlEntry.getPermission()
-                                                                                                                         .contains(PermissionType.SET_PROPERTY);
+          canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.ADD_NODE)
+                    || accessControlEntry.getPermission()
+                                         .contains(PermissionType.SET_PROPERTY);
           canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
           canAccess = canAccess || accessControlEntry.getPermission().contains(PermissionType.READ);
         }
-        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId) || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry) && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
+        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId)
+            || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry)
+                && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
           canAccess = true;
         }
       }
     } catch (Exception e) {
-      throw new IllegalStateException("Error checking access permission for node'" + node.getUUID() + " for user " + aclIdentity.getUserId(), e);
+      throw new IllegalStateException("Error checking access permission for node'" + node.getUUID() + " for user " +
+          aclIdentity.getUserId(), e);
     }
     keyValuePermission.put("canAccess", canAccess);
     keyValuePermission.put("canEdit", canEdit);
@@ -2313,7 +2498,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
     ActionData actionData = bulkStorageActionService.getActionDataById(String.valueOf(actionId));
     if (actionData != null) {
-      if(!actionData.getIdentity().getUserId().equals(userName)){
+      if (!actionData.getIdentity().getUserId().equals(userName)) {
         throw new IOException("Current user is not allowed to get zip file");
       }
       File zipped = new File(actionData.getDownloadZipPath());
@@ -2336,7 +2521,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   public void cancelBulkAction(String actionId, String userName) throws IOException {
     ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
-    if(!actionData.getIdentity().getUserId().equals(userName)){
+    if (!actionData.getIdentity().getUserId().equals(userName)) {
       throw new IOException("Current user is not allowed to cancel the download action");
     }
     actionData.setStatus(ActionStatus.CANCELED.name());
@@ -2376,7 +2561,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public void moveDocuments(int actionId, long ownerId, List<AbstractNode> documents, String destPath, Identity userIdentity, long identityId) {
+  public void moveDocuments(int actionId,
+                            long ownerId,
+                            List<AbstractNode> documents,
+                            String destPath,
+                            Identity userIdentity,
+                            long identityId) {
     SessionProvider sessionProvider;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
@@ -2449,7 +2639,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return null;
   }
 
-
   /**
    * {@inheritDoc}
    */
@@ -2491,6 +2680,33 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public InputStream getFileContentAsStream(String documentId, Identity aclIdentity) throws IllegalAccessException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node.isNodeType(NodeTypeConstants.NT_FILE)
+          && node.hasNode(NodeTypeConstants.JCR_CONTENT)
+          && node.getNode(NodeTypeConstants.JCR_CONTENT).hasProperty(NodeTypeConstants.JCR_DATA)) {
+        return node.getNode(NodeTypeConstants.JCR_CONTENT).getProperty(NodeTypeConstants.JCR_DATA).getStream();
+      } else {
+        throw new IllegalStateException("File with id '%s' isn't a media file".formatted(documentId));
+      }
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (IllegalStateException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IllegalStateException("Error renaming document'" + documentId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
   public void unShareDocument(String documentId, long destId) {
     Node rootNode = null;
     Node shared = null;
@@ -2502,26 +2718,27 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node currentNode = getNodeByIdentifier(systemSession, documentId);
       org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
       rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
-      if(!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)){
+      if (!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
         rootNode = rootNode.getNode("Documents");
       }
-      if(!rootNode.hasNode(SHARED_FOLDER_NAME)){
+      if (!rootNode.hasNode(SHARED_FOLDER_NAME)) {
         return;
-      }else{
+      } else {
         shared = rootNode.getNode(SHARED_FOLDER_NAME);
       }
-      if(currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)){
+      if (currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceNodeId = currentNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         currentNode = getNodeByIdentifier(systemSession, sourceNodeId);
       }
-      if (shared.hasNode(currentNode.getName()) && shared.getNode(currentNode.getName()).isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      if (shared.hasNode(currentNode.getName())
+          && shared.getNode(currentNode.getName()).isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         Node link = shared.getNode(currentNode.getName());
         link.remove();
         systemSession.save();
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error when unsharing the document " + documentId + "with identity " + destId, e);
-    }finally {
+    } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -2589,6 +2806,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     QueryResult queryResult = jcrQuery.execute();
     return queryResult.getNodes().getSize() > 0;
   }
+
   @Override
   public void clearSymlinksNavHistory() {
     symlinksNavHistory.clear();

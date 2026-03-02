@@ -332,6 +332,34 @@ public interface DocumentFileService {
   }
 
   /**
+   * Updates the Text transcription of a Document
+   *
+   * @param documentId Video or Audio UUID
+   * @param transcription Media Audio Transcription Text
+   * @param aclIdentity current user Identity
+   * @throws IllegalAccessException when the current user can't edit the
+   *           designated document
+   */
+  default void updateAudioTranscription(String documentId,
+                                        String transcription,
+                                        long aclIdentity) throws IllegalAccessException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * A previously saved media Text transcription content
+   *
+   * @param documentId Video or Audio UUID
+   * @param aclIdentity current user Identity
+   * @return the transcription text
+   * @throws IllegalAccessException when the current user can't access the
+   *           designated document
+   */
+  default String getAudioTranscription(String documentId, long aclIdentity) throws IllegalAccessException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Creates a shortcut for a document
    *
    * @param documentId     document id
@@ -623,6 +651,17 @@ public interface DocumentFileService {
    * @return the text representation of a file
    */
   default String getFileContentAsText(String documentId) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Returns a document file content as Stream
+   *
+   * @param documentId Document identifier
+   * @param userIdentityId User Identity identifier accessing the file binary
+   * @return the file binary
+   */
+  default InputStream getFileContentAsStream(String documentId, long userIdentityId) {
     throw new UnsupportedOperationException();
   }
 
