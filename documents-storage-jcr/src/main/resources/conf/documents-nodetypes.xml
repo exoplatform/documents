@@ -1,0 +1,20 @@
+<nodeTypes xmlns:exo="http://www.exoplatform.com/jcr/exo/1.0">
+  <nodeType
+    name="exo:transcription"
+    isMixin="true"
+    hasOrderableChildNodes="false"
+    primaryItemName="">
+    <propertyDefinitions>
+      <propertyDefinition
+        name="exo:transcription"
+        requiredType="Binary"
+        autoCreated="false"
+        mandatory="true"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+    </propertyDefinitions>
+  </nodeType>
+</nodeTypes>

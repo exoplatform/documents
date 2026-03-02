@@ -277,6 +277,34 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * Updates the Text transcription of a Document
+   *
+   * @param documentId Video or Audio UUID
+   * @param transcription Media Audio Transcription Text
+   * @param aclIdentity current user Identity
+   * @throws IllegalAccessException when the current user can't edit the
+   *           designated document
+   */
+  default void updateAudioTranscription(String documentId,
+                                        String transcription,
+                                        Identity aclIdentity) throws IllegalAccessException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * A previously saved media Text transcription content
+   *
+   * @param documentId Video or Audio UUID
+   * @param aclIdentity current user Identity
+   * @return the transcription text
+   * @throws IllegalAccessException when the current user can't access the
+   *           designated document
+   */
+  default String getAudioTranscription(String documentId, Identity aclIdentity) throws IllegalAccessException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Creates a shortcut for a document
    *
    * @param documentId     document id
@@ -408,11 +436,25 @@ public interface DocumentFileStorage {
 
   /**
    * Returns a document file content as Text
-   * 
+   *
    * @param documentId Document identifier
    * @return the text representation of a file
    */
-  String getFileContentAsText(String documentId);
+  default String getFileContentAsText(String documentId) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Returns a document file content as Text
+   * 
+   * @param documentId Document identifier
+   * @param aclIdentity {@link Identity} of the user acessing file
+   * @return the {@link InputStream} of the binary
+   * @throws IllegalAccessException when user can't access document
+   */
+  default InputStream getFileContentAsStream(String documentId, Identity aclIdentity) throws IllegalAccessException {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Import list of documents from an uploaded zip
