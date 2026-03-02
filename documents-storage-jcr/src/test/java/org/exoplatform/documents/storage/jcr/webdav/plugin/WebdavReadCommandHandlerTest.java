@@ -38,6 +38,7 @@ import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 import javax.xml.namespace.QName;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -119,6 +120,11 @@ public class WebdavReadCommandHandlerTest {
 
   private WebdavReadCommandHandler handler;
   private static final MockedStatic<JCRDocumentsUtil> JCR_DOCUMENTS_UTIL = mockStatic(JCRDocumentsUtil.class);
+
+  @AfterClass
+  public static void afterRunBare() throws Exception { // NOSONAR
+    JCR_DOCUMENTS_UTIL.close();
+  }
 
   @Before
   @SneakyThrows
