@@ -474,6 +474,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public String getAudioTranscription(String documentId) {
+    return documentFileStorage.getAudioTranscription(documentId);
+  }
+
+  @Override
   public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
     documentFileStorage.createShortcut(documentId, destPath, aclIdentity, conflictAction);
   }

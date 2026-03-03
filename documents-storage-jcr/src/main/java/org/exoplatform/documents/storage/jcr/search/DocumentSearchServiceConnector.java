@@ -75,7 +75,7 @@ public class DocumentSearchServiceConnector {
 
   public static final String           EXTENDED_SEARCH_QUERY_TERM   = "\"must\":{"
           + "    \"query_string\":{"
-          + "    \"fields\": [\"title\",\"attachment.content\",\"dc:description\"],"
+          + "    \"fields\": [\"title\",\"attachment.content\",\"dc:description\",\"transcription\"],"
           + "    \"query\": \"*@term@*\""
           + "  }" + "},";
 
