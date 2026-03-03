@@ -1,0 +1,4 @@
+              2026-03-03 eXo Support <support@exoplatform.com>
+
+   # 7.1.2 Patches changelog:
+
