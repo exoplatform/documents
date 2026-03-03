@@ -360,6 +360,16 @@ public interface DocumentFileService {
   }
 
   /**
+   * A previously saved media Text transcription content
+   *
+   * @param documentId Video or Audio UUID
+   * @return the transcription text
+   */
+  default String getAudioTranscription(String documentId) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Creates a shortcut for a document
    *
    * @param documentId     document id

@@ -2038,6 +2038,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public String getAudioTranscription(String documentId) {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)
+          && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION)) {
+        InputStream stream = node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION).getStream();
+        return IOUtil.getStreamContentAsString(stream);
+      } else {
+        return null;
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Error renaming document'" + documentId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
   public void updateAudioTranscription(String documentId,
                                        String transcription,
                                        Identity aclIdentity) throws IllegalAccessException {
