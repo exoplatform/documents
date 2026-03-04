@@ -469,6 +469,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public void updateAudioTranscription(String documentId, String transcription) {
+    documentFileStorage.updateAudioTranscription(documentId, transcription);
+  }
+
+  @Override
   public String getAudioTranscription(String documentId, long aclIdentity) throws IllegalAccessException {
     return documentFileStorage.getAudioTranscription(documentId, getAclUserIdentity(aclIdentity));
   }
