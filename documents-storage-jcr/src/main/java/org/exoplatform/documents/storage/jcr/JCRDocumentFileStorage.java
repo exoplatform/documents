@@ -2039,10 +2039,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   @Override
   public String getAudioTranscription(String documentId) {
-    SessionProvider sessionProvider = null;
+    Session session = null;
     try {
-      sessionProvider = SessionProvider.createSystemProvider();
-      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+      session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getNodeByIdentifier(session, documentId);
       if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)
           && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION)) {
@@ -2054,8 +2054,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentId, e);
     } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
+      if (session != null) {
+        session.logout();
       }
     }
   }
@@ -2064,23 +2064,52 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public void updateAudioTranscription(String documentId,
                                        String transcription,
                                        Identity aclIdentity) throws IllegalAccessException {
+    String path = null;
     SessionProvider sessionProvider = null;
-    try {
+    try { // NOSONAR
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getNodeByIdentifier(session, documentId);
-      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
-        throw new AccessDeniedException();
+      path = node == null ? null : node.getPath();
+      if (node == null || !JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new IllegalAccessException("User doesn't have edit permission on file '%s'".formatted(path == null ? documentId :
+                                                                                                                 path));
       }
       if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)) {
         node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION);
       }
       node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION, new ByteArrayInputStream(transcription.getBytes()));
       session.save();
-    } catch (AccessDeniedException e) {
-      throw new IllegalAccessException(e.getMessage());
+    } catch (IllegalAccessException e) {
+      throw e;
     } catch (Exception e) {
-      throw new IllegalStateException("Error renaming document'" + documentId, e);
+      throw new IllegalStateException("Error transcribing media file '%s'".formatted(path == null ? documentId : path), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public void updateAudioTranscription(String documentId, String transcription) {
+    String path = null;
+    SessionProvider sessionProvider = null;
+    try { // NOSONAR
+      sessionProvider = SessionProvider.createSystemProvider();
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null) {
+        throw new ObjectNotFoundException("File with id '%s' wasn't found".formatted(documentId));
+      }
+      path = node.getPath();
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION, new ByteArrayInputStream(transcription.getBytes()));
+      session.save();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error transcribing media file '%s'".formatted(path == null ? documentId : path), e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();

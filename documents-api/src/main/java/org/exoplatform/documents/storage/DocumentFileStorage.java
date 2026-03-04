@@ -292,6 +292,17 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * Updates the Text transcription of a Document
+   *
+   * @param documentId Video or Audio UUID
+   * @param transcription Media Audio Transcription Text
+   */
+  default void updateAudioTranscription(String documentId,
+                                        String transcription) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * A previously saved media Text transcription content
    *
    * @param documentId Video or Audio UUID
