@@ -63,6 +63,7 @@
     <url-pattern>/drives/*</url-pattern>
   </filter-mapping>
 
+  <!-- Secure all methods except OPTIONS -->
   <security-constraint>
     <web-resource-collection>
       <web-resource-name>rest</web-resource-name>
@@ -75,6 +76,15 @@
     <user-data-constraint>
       <transport-guarantee>NONE</transport-guarantee>
     </user-data-constraint>
+  </security-constraint>
+
+  <!-- Explicitly allow OPTIONS requests (WebDAV discovery) -->
+  <security-constraint>
+    <web-resource-collection>
+      <web-resource-name>options</web-resource-name>
+      <url-pattern>/*</url-pattern>
+      <http-method>OPTIONS</http-method>
+    </web-resource-collection>
   </security-constraint>
 
   <login-config>
