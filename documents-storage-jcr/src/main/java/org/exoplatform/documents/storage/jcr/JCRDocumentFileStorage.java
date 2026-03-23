@@ -17,14 +17,11 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.*;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_SYMLINK;
 import static org.gatein.common.net.URLTools.SLASH;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -2706,8 +2703,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX + System.nanoTime()); // NOSONAR
         tempFolder.toFile().deleteOnExit();
         String tempFolderPath = tempFolder.toString();
-        String parentPath = node.getParent().getPath();
-        JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
+        Node parentNode = node.getParent();
+        JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
         String zipName = ZIP_PREFIX + folderId + ZIP_EXTENSION;
         String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
         zipFiles(zipPath, tempFolderPath);
