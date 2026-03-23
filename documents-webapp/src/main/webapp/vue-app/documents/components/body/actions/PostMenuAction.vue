@@ -36,7 +36,7 @@ export default {
       }
       const attachment = {
         eXoDrive: true,
-        id: this.file.id,
+        id: this.file?.sourceID || this.file?.id,
         name: this.file.name,
         isCloudFile: this.file.cloudDriveFile,
         isSelectedFromDrives: true,
