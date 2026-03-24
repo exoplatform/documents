@@ -27,6 +27,30 @@
     <overwrite>true</overwrite>
   </portlet-skin>
 
+  <module>
+    <name>DocumentsLeftHeaderExtension</name>
+    <load-group>documentLeftHeaderGRP</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentLeftHeader.js</path>
+    </script>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+  </module>
+
   <portlet>
     <name>Documents</name>
     <module>
@@ -66,6 +90,9 @@
       </depends>
       <depends>
         <module>DocumentsDraggable</module>
+      </depends>
+      <depends>
+        <module>DocumentsLeftHeaderExtension</module>
       </depends>
       <depends>
         <module>applicationToolbarComponent</module>
