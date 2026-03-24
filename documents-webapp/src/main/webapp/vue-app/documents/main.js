@@ -178,6 +178,7 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
     vuetify: Vue.prototype.vuetifyOptions,
     i18n
   }, `#${appId}`, 'Documents');
+  Vue.prototype.$utils.includeExtensions('LeftHeaderExtension');
 }
 
 async function getSubcategoryIds(categoryIds, depth) {
