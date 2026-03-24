@@ -131,7 +131,7 @@ public class ActionThread implements Runnable {
 
   private ActionData                     actionData;
 
-  private String                         parentPath;
+  private Node                           parentNode;
 
   private String                         tempFolderPath;
 
@@ -427,11 +427,11 @@ public class ActionThread implements Runnable {
           cleanFiles(folder);
           break;
         }
-        parentPath = node.getParent().getPath();
+        parentNode = node.getParent();
         if (hasFolders) {
-          JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath);
+          JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
         } else {
-          JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentPath);
+          JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentNode);
         }
 
       }
