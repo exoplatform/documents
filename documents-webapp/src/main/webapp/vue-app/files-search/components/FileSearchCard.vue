@@ -194,11 +194,7 @@ export default {
     openFilePreview() {
       this.result.path = this.result.nodePath;
       if (this.isFileEditable)  {
-        if (this.result?.acl?.canEdit){
-          window.open(this.$documentsUtils.getEditorUrl(this.result,''), '_blank');
-        } else {
-          window.open(this.$documentsUtils.getEditorUrl(this.result,'view'), '_blank');
-        }
+        window.open(this.$documentsUtils.getEditorUrl(this.result,''), '_blank');
       } else if (this.isFileReadable)  {
         window.open(this.$documentsUtils.getEditorUrl(this.result,'view'), '_blank');
       } else {
