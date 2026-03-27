@@ -919,7 +919,7 @@ public class JCRDocumentsUtil {
                                  String symlinkPath,
                                  String sourcePath,
                                  String tempFolderPath,
-                                 String parentPath) throws RepositoryException, IOException {
+                                 Node parentNode) throws RepositoryException, IOException {
     if (node == null) {
       return;
     }
@@ -927,6 +927,7 @@ public class JCRDocumentsUtil {
     InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
     String path = "";
     String nodePath = getPathWithTitles(node);
+    String parentPath = getPathWithTitles(parentNode);
     if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
       nodePath = symlinkPath + nodePath.replace(sourcePath, "");
     }
@@ -961,12 +962,13 @@ public class JCRDocumentsUtil {
                                                String symlinkPath,
                                                String sourcePath,
                                                String tempFolderPath,
-                                               String parentPath) throws Exception {
+                                               Node parentNode) throws Exception {
     if (node == null) {
       return;
     }
     if (JCRDocumentsUtil.isFolder(node)) {
       String nodePath = getPathWithTitles(node);
+      String parentPath = getPathWithTitles(parentNode);
       if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
         nodePath = symlinkPath + nodePath.replace(sourcePath, "");
       }
@@ -975,17 +977,17 @@ public class JCRDocumentsUtil {
       NodeIterator nodeIterator = node.getNodes();
       while (nodeIterator.hasNext()) {
         Node child = nodeIterator.nextNode();
-        createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath);
+        createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentNode);
       }
     } else {
       if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
         Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
         if (sourceNode != null) {
-          createTempFilesAndFolders(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentPath);
+          createTempFilesAndFolders(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentNode);
         }
       } else {
-        createFile(node, symlinkPath, sourcePath, tempFolderPath, parentPath);
+        createFile(node, symlinkPath, sourcePath, tempFolderPath, parentNode);
       }
     }
   }
