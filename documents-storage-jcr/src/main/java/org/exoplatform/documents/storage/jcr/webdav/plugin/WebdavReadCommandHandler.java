@@ -802,6 +802,9 @@ public class WebdavReadCommandHandler {
         String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i].toLowerCase(), NodeTypeConstants.NT_FILE));
         parentPath = jcrPath + "/" + cleanName;
         if (!session.itemExists(parentPath)) {
+          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase(), NodeTypeConstants.NT_FOLDER ));
+          parentPath = jcrPath + "/" + cleanName;
+        }if (!session.itemExists(parentPath)) {
           cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase()));
           parentPath = jcrPath + "/" + cleanName;
         }
