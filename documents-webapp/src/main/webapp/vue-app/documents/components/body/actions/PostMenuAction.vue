@@ -51,7 +51,9 @@ export default {
       this.file=null;
     });
   },
-
+  destroyed() {
+    this.file=null;
+  },
   methods: {
     openComposerDrawer() {
       this.$nextTick().then(() => new Promise(resolve => {
