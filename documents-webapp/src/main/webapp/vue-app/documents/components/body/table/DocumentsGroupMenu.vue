@@ -34,6 +34,7 @@
           @click="menuDisplayed = true" />
       </template>
       <documents-actions-menu
+        v-if="menuDisplayed"
         :file="file"
         :current-view="currentView"
         :is-search-result="isSearchResult"
@@ -90,7 +91,7 @@ export default {
 
   data: () => ({
     menuDisplayed: false,
-    waitTimeUntilCloseMenu: 100,
+    waitTimeUntilCloseMenu: 200,
   }),
   created() {
     $(document).on('mousedown', () => {      
