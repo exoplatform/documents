@@ -227,7 +227,7 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   enabled: (file) => {
     return file && file.acl.canEdit && !file.folder;
   },
-  enabledForMultiSelection: () => false,
+  enabledForMultiSelection: () => true,
   componentOptions: {
     vueComponent: Vue.options.components['add-category-menu-action'],
   },
