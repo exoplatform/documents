@@ -128,6 +128,7 @@
           class="d-none"
           accept="*/*"
           @change="handleUploadVersion" />
+        <categories-bulk-edit-drawer />
       </div>
     </v-hover>
   </v-app>
@@ -254,6 +255,7 @@ export default {
   created() {
     this.viewType = this.$documentsUtils.getViewType(this.$root.appId);
     document.addEventListener('categories-updated', this.refreshDocument);
+    document.addEventListener('categories-drawer-closed', this.resetMultiSelection);
 
     document.addEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
 
@@ -264,6 +266,7 @@ export default {
 
     this.$root.$on('documents-bulk-delete', this.bulkDeleteDocument);
     this.$root.$on('documents-bulk-download', this.bulkDownloadDocument);
+    this.$root.$on('documents-bulk-edit-categories', this.bulkEditCategories);
     this.$root.$on('documents-bulk-move', this.bulkMoveDocument);
     this.$root.$on('documents-zip-import', this.importDocuments);
     this.$root.$on('cancel-bulk-Action', (actionId) => {
@@ -938,6 +941,18 @@ export default {
       return this.$documentFileService
         .bulkDownloadDocument(actionId,this.selectedDocuments)
         .catch(e => console.error(e));
+    },
+    bulkEditCategories(){
+      this.setMultiActionLoading(true, 'categories');
+      document.dispatchEvent(new CustomEvent('bulk-edit-categories-drawer-open', {detail: {
+        objectType: 'document',
+        objectIds: this.selectedDocuments.map(document => document.id),
+        spaceId: eXo.env.portal.spaceId,
+        summary1: this.$t('documents.bulk.categories.summary1'),
+        summary2: this.$t('documents.bulk.categories.summary2'),
+        summary3: this.$t('documents.bulk.categories.summary3'),
+        categoryIds: [...new Set(this.selectedDocuments.flatMap(document => document.categoryIds))],
+      }}));
     },
     cancelBulkAction(actionId){
       return this.$documentFileService
@@ -1746,9 +1761,17 @@ export default {
         return extension;
       }
     },
+    resetMultiSelection() {
+      this.setMultiActionLoading(false);
+      this.resetSelections();
+    },
     refreshDocument(event) {
       const detail = event.detail;
-      if (detail?.objectType === 'document' && this.files.some(file => file.id === detail?.objectId)) {
+      if (detail?.objectType === 'document' &&  detail?.objectIds.length) {
+        this.refreshFiles();
+        this.setMultiActionLoading(false);
+        this.resetSelections();
+      } else if (detail?.objectType === 'document' && this.files.some(file => file.id === detail?.objectId)) {
         if (this.selectedCategoryIds.length) {
           this.refreshFiles();
         } else {
