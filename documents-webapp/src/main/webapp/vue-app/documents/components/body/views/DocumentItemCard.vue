@@ -44,6 +44,7 @@
           v-else-if="fileImage"
           :src="fileImage"
           class="ma-auto"
+          :alt="$t('documents.attach.image.alt', { 0:fileName})"
           @load="loading = false"
           @error="fileImage = fileImage !== downloadUrl ? downloadUrl : null">
         <v-icon
