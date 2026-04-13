@@ -26,7 +26,11 @@ export default {
     file: {
       type: Object,
       default: null,
-    }
+    },
+    isMultiSelection: {
+      type: Boolean,
+      default: false
+    },
   },
   computed: {
     spaceId() {
@@ -35,12 +39,17 @@ export default {
   },
   methods: {
     addCategory() {
-      document.dispatchEvent(new CustomEvent('category-form-drawer-open', {detail: {
-        objectType: 'document',
-        objectId: this.file.id,
-        spaceId: this.spaceId,
-        categoryIds: this.file?.categoryIds,
-      }}));
+      if (!this.isMultiSelection) {
+        document.dispatchEvent(new CustomEvent('category-form-drawer-open', {detail: {
+          objectType: 'document',
+          objectId: this.file.id,
+          spaceId: this.spaceId,
+          categoryIds: this.file?.categoryIds,
+        }}));
+      } else {
+        this.$root.$emit('documents-bulk-edit-categories');
+        this.$root.$emit('close-file-action-menu');
+      }     
     },
   },
 };
