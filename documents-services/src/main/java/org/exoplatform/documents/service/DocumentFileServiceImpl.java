@@ -35,6 +35,7 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.*;
@@ -419,6 +420,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                         String documentID,
                                         String description,
                                         long aclIdentity) throws IllegalStateException, IllegalAccessException, RepositoryException {
+    description = HTMLSanitizer.sanitize(description);
     documentFileStorage.updateDocumentDescription(ownerId, documentID, description, getAclUserIdentity(aclIdentity));
   }
 
