@@ -39,6 +39,7 @@ import org.apache.commons.lang3.StringUtils;
 import com.ibm.icu.text.Transliterator;
 
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
@@ -508,7 +509,8 @@ public class JCRDocumentsUtil {
   public static void retrieveFileContentProperties(Node content, FileNode fileNode) throws RepositoryException {
     if (content.hasProperty(NodeTypeConstants.DC_DESCRIPTION)
         && content.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues().length > 0) {
-      fileNode.setDescription(content.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());
+      String description = HTMLSanitizer.sanitize(content.getProperty(NodeTypeConstants.DC_DESCRIPTION).getValues()[0].getString());
+      fileNode.setDescription(description);
     }
     if (content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
       fileNode.setMimeType(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
