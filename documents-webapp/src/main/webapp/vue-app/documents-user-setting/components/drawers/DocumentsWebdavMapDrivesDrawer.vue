@@ -265,7 +265,7 @@ export default {
       } else if (this.driveType === 'PERSONAL') {
         return `${window.location.origin}/webdav/drives/d/(${eXo.env.portal.userIdentityId})`;
       } else if (this.driveType === 'SPACE' && this.spaceIdentityId) {
-        return `${window.location.origin}/webdav/drives/d/(${this.spaceIdentityId})`;
+        return `${window.location.origin}/webdav/drives/d/${this.spaceIdentity.displayName} (${this.spaceIdentityId})`;
       } else {
         return null;
       }
