@@ -90,6 +90,7 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
           permissions.put("*:" + space.getGroupId(), new String[] { PermissionType.READ });
           permissions.put("manager:" + space.getGroupId(), PermissionType.ALL);
           permissions.put("redactor:" + space.getGroupId(), PermissionType.ALL);
+          permissions.put("publisher:" + space.getGroupId(), PermissionType.ALL);
         } else {
           permissions.put("*:" + space.getGroupId(), PermissionType.ALL);
         }

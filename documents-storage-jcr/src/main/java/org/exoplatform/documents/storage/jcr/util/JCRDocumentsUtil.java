@@ -637,8 +637,8 @@ public class JCRDocumentsUtil {
   }
 
   private static String getPermissionRole (String membershipType){
-    if(membershipType.equals("manager") || membershipType.equals("redactor") ){
-      return PermissionRole.MANAGERS_REDACTORS.name();
+    if(membershipType.equals("manager") || membershipType.equals("redactor") || membershipType.equals("publisher") ){
+      return PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name();
     }
     return PermissionRole.ALL.name();
   }
