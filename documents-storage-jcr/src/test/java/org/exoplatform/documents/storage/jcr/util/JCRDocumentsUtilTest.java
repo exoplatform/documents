@@ -151,7 +151,7 @@ public class JCRDocumentsUtilTest {
     NodeImpl fileContent = mock(NodeImpl.class);
     when(file.getName()).thenReturn("document-test.pdf");
     when(file.getIdentifier()).thenReturn("fileIdentifier");
-    when(file.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(file.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
     when(file.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(fileContent);
     when(fileContent.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
     when(fileContent.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
@@ -163,14 +163,10 @@ public class JCRDocumentsUtilTest {
 
     // This file inside a folder's symlink will be converted and returned
     NodeImpl fileInFolderSymlink = mock(NodeImpl.class);
-    NodeImpl fileContentSymlink = mock(NodeImpl.class);
     when(fileInFolderSymlink.getName()).thenReturn("second-document-test.pdf");
     when(fileInFolderSymlink.getIdentifier()).thenReturn("fileIdentifierInsideSymlink");
-    when(fileInFolderSymlink.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(fileInFolderSymlink.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
     when(fileInFolderSymlink.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(fileContent);
-    when(fileContentSymlink.hasProperty(NodeTypeConstants.DC_DESCRIPTION)).thenReturn(false);
-    when(fileContentSymlink.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
-    when(fileContentSymlink.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
     when(fileInFolderSymlink.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(false);
     when(fileInFolderSymlink.getACL()).thenReturn(new AccessControlList());
 
