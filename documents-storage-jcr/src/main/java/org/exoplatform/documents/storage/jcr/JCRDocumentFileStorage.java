@@ -2338,10 +2338,23 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node node = getNodeByIdentifier(session, documentId);
       if (node == null) {
         throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
-      } else if (node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || node.isNodeType(NodeTypeConstants.NT_FOLDER)) {
-        return toFolderNode(identityManager, identity, node, "", spaceService);
+      } else {
+        if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          String nodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          if (StringUtils.isEmpty(nodeId)) {
+            throw new ItemNotFoundException();
+          } else {
+            node = getNodeByIdentifier(node.getSession(), nodeId);
+          }
+        }
+        if (node.isNodeType(NodeTypeConstants.NT_FILE) || node.isNodeType(NodeTypeConstants.NT_RESOURCE)) {
+          return toFileNode(identityManager, identity, node, "", spaceService);
+        } else if (node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) {
+          return toFolderNode(identityManager, identity, node, "", spaceService);
+        } else {
+          throw new ItemNotFoundException();
+        }
       }
-      return toFileNode(identityManager, identity, node, "", spaceService);
     } catch (ItemNotFoundException e) {
       throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
     } catch (RepositoryException e) {
