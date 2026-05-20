@@ -341,7 +341,9 @@ public class JCRDocumentsUtil {
       fileNode.setDatasource(JCR_DATASOURCE_NAME);
       fileNode.setCloudDriveFile(node.hasProperty("ecd:driveUUID"));
       retrieveFileProperties(identityManager, node, aclIdentity, fileNode, spaceService);
-      if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      if (node.isNodeType(NodeTypeConstants.NT_RESOURCE)) {
+        retrieveFileContentProperties(node, fileNode);
+      } else if (node.isNodeType(NodeTypeConstants.NT_FILE)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
         retrieveFileContentProperties(content, fileNode);
       } else if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
@@ -411,7 +413,7 @@ public class JCRDocumentsUtil {
     if (node.hasProperty(NodeTypeConstants.EXO_SYMLINK_UUID)) {
       String targetNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
       fileNode.setLinkedFileId(targetNodeId);
-      return getNodeById(session, targetNodeId);
+      return getNodeByIdentifier(session, targetNodeId);
     }
     return node;
   }
@@ -620,14 +622,7 @@ public class JCRDocumentsUtil {
   }
 
   public static Node getNodeById(Session session, String nodeId) {
-    try {
-      return session.getNodeByUUID(nodeId);
-    } catch (PathNotFoundException e) {
-      LOG.info("Node with UUID {} is not found. Ignore search result.", nodeId);
-    } catch (RepositoryException e) {
-      LOG.debug("Error retrieving node with UUID {}. Will attempt to retrieve it by path", nodeId, e);
-    }
-    return null;
+    return getNodeByIdentifier(session, nodeId);
   }
 
   public static Node getNodeByPath(Session session, String nodePath) {

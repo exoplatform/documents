@@ -64,6 +64,7 @@ import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
@@ -234,7 +235,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     ManageableRepository repository = repositoryService.getCurrentRepository();
     Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-    Node node = getNodeById(systemSession, documentId);
+    Node node = getNodeByIdentifier(systemSession, documentId);
     if (node != null) {
       org.exoplatform.social.core.identity.model.Identity ownerIdentity = getOwnerIdentityFromNodePath(node.getPath(),
                                                                                                        identityManager,
@@ -2335,13 +2336,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
-      Node node = getNodeByIdentifier(session, documentId);
-      if (node == null) {
+      AbstractNode abstractNode = getDocumentById(session, documentId, identity);
+      if (abstractNode == null) {
         throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
-      } else if (node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || node.isNodeType(NodeTypeConstants.NT_FOLDER)) {
-        return toFolderNode(identityManager, identity, node, "", spaceService);
+      }  else {
+        return abstractNode;
       }
-      return toFileNode(identityManager, identity, node, "", spaceService);
     } catch (ItemNotFoundException e) {
       throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
     } catch (RepositoryException e) {
@@ -2354,8 +2354,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
-      Node node = session.getNodeByUUID(documentId);
-      return node == null ? null : toFileNode(identityManager, null, node, "", spaceService);
+      return getDocumentById(session, documentId, null);
     } catch (RepositoryException e) {
       return null;
     } finally {
@@ -2865,4 +2864,28 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String nodePath = node.getPath();
     return StringUtils.startsWith(nodePath, "/Users") && StringUtils.contains(nodePath, "/Private");
   }
+
+  public AbstractNode getDocumentById(Session session, String documentId, Identity identity) throws RepositoryException {
+    Node node = getNodeByIdentifier(session, documentId);
+    if (node == null) {
+      return null;
+    } else {
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        String nodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+        if (StringUtils.isEmpty(nodeId)) {
+          throw new ItemNotFoundException();
+        } else {
+          node = getNodeByIdentifier(node.getSession(), nodeId);
+        }
+      }
+      if (node.isNodeType(NodeTypeConstants.NT_FILE) || node.isNodeType(NodeTypeConstants.NT_RESOURCE)) {
+        return toFileNode(identityManager, identity, node, "", spaceService);
+      } else if (node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) {
+        return toFolderNode(identityManager, identity, node, "", spaceService);
+      } else {
+        throw new ItemNotFoundException();
+      }
+    }
+  }
+
 }
