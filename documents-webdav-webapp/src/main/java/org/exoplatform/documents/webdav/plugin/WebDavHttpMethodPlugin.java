@@ -302,7 +302,15 @@ public abstract class WebDavHttpMethodPlugin {
     WebDavItemProperty rootProperty = null;
     LinkedList<WebDavItemProperty> curProperty = new LinkedList<>();
     try {
-      XMLInputFactory factory = XMLInputFactory.newInstance(); // NOSONAR
+      XMLInputFactory factory = XMLInputFactory.newInstance();
+      factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+      factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+      factory.setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false);
+
+      factory.setXMLResolver((publicID, systemID, baseURI, namespace) -> {
+        throw new XMLStreamException("External entities disabled");
+      });
+
       XMLEventReader reader = factory.createXMLEventReader(entityStream);
       XMLEventReader fReader = factory.createFilteredReader(reader,
                                                             event -> !(event.isCharacters()
