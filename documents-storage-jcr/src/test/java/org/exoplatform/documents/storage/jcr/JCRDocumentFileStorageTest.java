@@ -1082,14 +1082,24 @@ public class JCRDocumentFileStorageTest {
     QueryResult queryResult = mock(QueryResult.class);
     when(userSession.getWorkspace()).thenReturn(workspace);
 
-    Node folderAbc = createFolderMock("Abc", Calendar.getInstance(), userSession);
-    Node folderXyz = createFolderMock("Xyz", Calendar.getInstance(), userSession);
-    Node folderEfg = createFolderMock("Efg", Calendar.getInstance(), userSession);
+    // Explicitly spaced out timestamps (rather than successive
+    // Calendar.getInstance() calls) so the created/modified date sort
+    // assertions below don't depend on the clock resolution of the
+    // machine running the test.
+    Calendar folderAbcDate = Calendar.getInstance();
+    Calendar folderXyzDate = (Calendar) folderAbcDate.clone();
+    folderXyzDate.add(Calendar.MINUTE, 1);
+    Calendar folderEfgDate = (Calendar) folderAbcDate.clone();
+    folderEfgDate.add(Calendar.MINUTE, 2);
+
+    Node folderAbc = createFolderMock("Abc", folderAbcDate, userSession);
+    Node folderXyz = createFolderMock("Xyz", folderXyzDate, userSession);
+    Node folderEfg = createFolderMock("Efg", folderEfgDate, userSession);
     Node file1 = createFileMock("file1", Calendar.getInstance(), userSession);
     Node file2 = createFileMock("file2", Calendar.getInstance(), userSession);
     Node symlinkFile2 = createSymlinkMock("file2FileIdentifier", "file2");
 
-    Node symlinkFolderEfg = createSymlinkMock("EfgIdentifier", "Efg");
+    Node symlinkFolderEfg = createSymlinkMock("EfgIdentifier", "Efg", folderEfgDate);
 
     when(subItemsIterator.hasNext()).thenReturn(true, true, true, true, true, false);
     when(subItemsIterator.nextNode()).thenReturn(file1, symlinkFile2, folderXyz, folderAbc, symlinkFolderEfg);
@@ -1254,6 +1264,10 @@ public class JCRDocumentFileStorageTest {
   }
 
   private Node createSymlinkMock(String nodeIdentifier, String nodeName) throws RepositoryException {
+    return createSymlinkMock(nodeIdentifier, nodeName, Calendar.getInstance());
+  }
+
+  private Node createSymlinkMock(String nodeIdentifier, String nodeName, Calendar createdDate) throws RepositoryException {
     Node symlink = mock(NodeImpl.class);
     when(symlink.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
     Property symlinkUUIDProperty = mock(Property.class);
@@ -1261,9 +1275,9 @@ public class JCRDocumentFileStorageTest {
     when(symlink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkUUIDProperty);
     when(symlink.getName()).thenReturn(nodeName + ".lnk");
     when(symlink.getPath()).thenReturn("/path/to/" + nodeName);
-    Property createdDate = mock(Property.class);
-    when(createdDate.getDate()).thenReturn(Calendar.getInstance());
-    when(symlink.getProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(createdDate);
+    Property createdDateProperty = mock(Property.class);
+    when(createdDateProperty.getDate()).thenReturn(createdDate);
+    when(symlink.getProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(createdDateProperty);
     when(symlink.hasProperty(NodeTypeConstants.EXO_DATE_CREATED)).thenReturn(true);
     when(((NodeImpl)symlink).getIdentifier()).thenReturn(nodeName + "LinkIdentifier");
     return symlink;
@@ -1677,6 +1691,7 @@ public class JCRDocumentFileStorageTest {
     Value mimeTypeValue = mock(Value.class);
     when(dataProperty.getValue()).thenReturn(dataValue);
     when(dataValue.getStream()).thenReturn(inputStream);
+    when(dataProperty.getStream()).thenReturn(inputStream);
     when(mimeTypeProperty.getValue()).thenReturn(mimeTypeValue);
     when(mimeTypeValue.getString()).thenReturn("application/pdf");
     when(contentNode.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);

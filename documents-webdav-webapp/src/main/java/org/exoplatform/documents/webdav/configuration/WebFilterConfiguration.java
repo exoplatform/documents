@@ -16,6 +16,9 @@
  */
 package org.exoplatform.documents.webdav.configuration;
 
+import java.util.EnumSet;
+import java.util.List;
+
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,15 +28,20 @@ import io.meeds.spring.web.localization.HttpRequestLocaleFilter;
 import io.meeds.spring.web.security.PortalIdentityFilter;
 import io.meeds.spring.web.transaction.PortalTransactionFilter;
 
+import jakarta.servlet.DispatcherType;
+
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true, securedEnabled = true, jsr250Enabled = true)
 public class WebFilterConfiguration {
+
+  private static final String DRIVES_PATH_PATTERN = "/drives/*";
 
   @Bean
   public FilterRegistrationBean<PortalIdentityFilter> identityFilter() {
     FilterRegistrationBean<PortalIdentityFilter> registrationBean = new FilterRegistrationBean<>();
     registrationBean.setFilter(new PortalIdentityFilter());
-    registrationBean.addUrlPatterns("/drives/*");
+    registrationBean.setUrlPatterns(List.of(DRIVES_PATH_PATTERN));
+    registrationBean.setDispatcherTypes(EnumSet.allOf(DispatcherType.class));
     registrationBean.setOrder(2);
     return registrationBean;
   }
@@ -42,7 +50,7 @@ public class WebFilterConfiguration {
   public FilterRegistrationBean<HttpRequestLocaleFilter> httpRequestLocaleFilter() {
     FilterRegistrationBean<HttpRequestLocaleFilter> registrationBean = new FilterRegistrationBean<>();
     registrationBean.setFilter(new HttpRequestLocaleFilter());
-    registrationBean.addUrlPatterns("/drives/*");
+    registrationBean.setUrlPatterns(List.of(DRIVES_PATH_PATTERN));
     registrationBean.setOrder(4);
     return registrationBean;
   }
@@ -51,7 +59,7 @@ public class WebFilterConfiguration {
   public FilterRegistrationBean<PortalTransactionFilter> transactionFilter() {
     FilterRegistrationBean<PortalTransactionFilter> registrationBean = new FilterRegistrationBean<>();
     registrationBean.setFilter(new PortalTransactionFilter());
-    registrationBean.addUrlPatterns("/rest/*");
+    registrationBean.setUrlPatterns(List.of(DRIVES_PATH_PATTERN));
     registrationBean.setOrder(1);
     return registrationBean;
   }

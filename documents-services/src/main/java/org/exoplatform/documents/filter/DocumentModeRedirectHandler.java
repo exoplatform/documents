@@ -28,10 +28,13 @@ import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.web.filter.Filter;
 
+import io.meeds.common.ContainerTransactional;
+
 public class DocumentModeRedirectHandler implements Filter {
 
   @SneakyThrows
   @Override
+  @ContainerTransactional
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
     DocumentFileService documentFileService = ExoContainerContext.getService(DocumentFileService.class);
     IdentityManager identityManager = ExoContainerContext.getService(IdentityManager.class);

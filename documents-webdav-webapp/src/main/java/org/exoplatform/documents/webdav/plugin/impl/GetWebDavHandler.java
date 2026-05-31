@@ -33,7 +33,7 @@ import javax.ws.rs.core.HttpHeaders;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.MimeTypeUtils;
@@ -283,7 +283,7 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
 
   private List<Range> parseRanges(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
     String rangeHeader = httpRequest.getHeader(ExtHttpHeaders.RANGE);
-    if (StringUtils.startsWith(rangeHeader, "bytes=")) {
+    if (Strings.CI.startsWith(rangeHeader, "bytes=")) {
       List<Range> ranges = new ArrayList<>();
       String rangeString = rangeHeader.substring(rangeHeader.indexOf("=") + 1);
 

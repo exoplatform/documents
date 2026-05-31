@@ -17,8 +17,8 @@
 package org.exoplatform.documents.webdav;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration;
-import org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration;
+import org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration;
+import org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration;
 import org.springframework.context.annotation.PropertySource;
 
 import io.meeds.spring.AvailableIntegration;
@@ -28,8 +28,8 @@ import io.meeds.spring.kernel.PortalApplicationContextInitializer;
   WebdavApplication.MODULE_NAME,
   AvailableIntegration.KERNEL_MODULE,
 }, exclude = {
+  DataJpaRepositoriesAutoConfiguration.class,
   LiquibaseAutoConfiguration.class,
-  JpaRepositoriesAutoConfiguration.class,
 })
 @PropertySource("classpath:application.properties")
 @PropertySource("classpath:documents-webdav.properties")
