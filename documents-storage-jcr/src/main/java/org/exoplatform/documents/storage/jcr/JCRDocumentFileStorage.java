@@ -605,10 +605,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           symlinksNavHistory.put(filter.getOwnerId(), history);
         }
       }
-      if (StringUtils.isNotBlank(folderPath)) {
-        parent = getNodeByPath(parent, folderPath, sessionProvider);
+      if (parent != null && StringUtils.isNotBlank(folderPath)) {
+        Node relativeParent = getNodeByPath(parent, folderPath, sessionProvider);
+        if (relativeParent == null) {
+          throw new ObjectNotFoundException("Parent Relative Folder '%s' under '%s' doesn't exist".formatted(folderPath, parent.getPath()));
+        }
       }
-      if (parent != null) {
+      if (parent == null) {
+        throw new ObjectNotFoundException("Parent Folder '%s' doesn't exist".formatted(parentFolderId));
+      } else {
         if (StringUtils.isBlank(filter.getQuery()) && BooleanUtils.isNotTrue(filter.getFavorites())
             && StringUtils.isEmpty(filter.getFileTypes())
             && filter.getAfterDate() == null
@@ -690,9 +695,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 .collect(Collectors.toList());
         }
 
-      } else {
-        throw new ObjectNotFoundException("Folder with Id : " + parentFolderId + " isn't found");
       }
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
     } finally {
@@ -1272,7 +1277,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       VersionHistoryUtils.createVersion(newNode);
       return toFileNode(identityManager, aclIdentity, destintionNode, "", spaceService);
     } catch (ObjectNotFoundException e) {
-      throw new ObjectNotFoundException(e.getMessage());
+      throw e;
     } catch (Exception e) {
       throw new RuntimeException(e);
     } finally {
