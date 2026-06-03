@@ -63,6 +63,8 @@ public abstract class AbstractNode {
 
   private boolean        hidden;
 
+  private boolean        version;
+
   public  boolean isFolder(){
     return this instanceof FolderNode;
   }

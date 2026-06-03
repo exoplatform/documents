@@ -412,7 +412,9 @@ export default {
       }
     },
     markDocumentAsViewed(file) {
-      document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: file}}));
+      if (file && !file.version) {
+        document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: file}}));
+      }
     },
     getDocumentPublicAccessLink(nodeId) {
       if (window.ClipboardItem && navigator.clipboard.write) {
@@ -1644,12 +1646,12 @@ export default {
               file.downloadUrl =`/rest/jcr/repository/collaboration${attachment.path}?version=${version.versionNumber}`;
               file.path = attachment.path;
               file.mimeType = attachment.mimeType;
-              file.filename = file.name;
+              file.filename = attachment.name;
               file.source = 'documents';
               if (this.isFileReadable(attachment)){
                 this.openFileInEditor(file,'view');
               } else {
-                const versionFile = {'id': file.id,'filename': file.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': file.downloadUrl, 'icon': this.getFileIcon(attachment)};
+                const versionFile = {'id': file.id,'filename': attachment.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': file.downloadUrl, 'icon': this.getFileIcon(attachment)};
                 document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [versionFile],'id': file.id }}));
                 return attachment;}
             });
