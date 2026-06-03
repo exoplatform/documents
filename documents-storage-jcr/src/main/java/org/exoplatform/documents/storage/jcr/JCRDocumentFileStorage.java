@@ -2386,11 +2386,23 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+      long lastModified = 0;
+      if (node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)) {
+        lastModified = node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().getTimeInMillis();
+      } else if (node.hasProperty(NodeTypeConstants.EXO_DATE_CREATED)) {
+        lastModified = node.getProperty(NodeTypeConstants.EXO_DATE_CREATED).getDate().getTimeInMillis();
+      }
+
+      String mimeType = "";
+      if (content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
+        mimeType = content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString();
+      }
+
       return new FileContent(documentId,
-                             node.getProperty(NodeTypeConstants.EXO_TITLE).getString(),
-                             content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString(),
+                             JCRDocumentsUtil.getTitle(node),
+                             mimeType,
                              content.getProperty(NodeTypeConstants.JCR_DATA).getStream(),
-                             node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().getTime());
+                             new Date(lastModified));
     } catch (ItemNotFoundException e) {
       throw new ObjectNotFoundException("Document with id : " + documentId + " isn't found");
     } catch (RepositoryException e) {
@@ -2883,9 +2895,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           node = getNodeByIdentifier(node.getSession(), nodeId);
         }
       }
-      if (node.isNodeType(NodeTypeConstants.NT_FILE) || node.isNodeType(NodeTypeConstants.NT_RESOURCE)) {
+      if (JCRDocumentsUtil.isFile(node)) {
         return toFileNode(identityManager, identity, node, "", spaceService);
-      } else if (node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)) {
+      } else if (JCRDocumentsUtil.isFolder(node)) {
         return toFolderNode(identityManager, identity, node, "", spaceService);
       } else {
         throw new ItemNotFoundException();

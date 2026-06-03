@@ -346,6 +346,11 @@ public class JCRDocumentsUtil {
       } else if (node.isNodeType(NodeTypeConstants.NT_FILE)) {
         Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
         retrieveFileContentProperties(content, fileNode);
+      } else if (node.isNodeType(NodeTypeConstants.NT_FROZEN_NODE)) {
+        if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+          Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+          retrieveFileContentProperties(content, fileNode);
+        }
       } else if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         if (StringUtils.isEmpty(fileNode.getSourceID())) {
           String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
@@ -425,6 +430,9 @@ public class JCRDocumentsUtil {
                                             SpaceService spaceService) throws RepositoryException {
     documentNode.setId(((NodeImpl) node).getIdentifier());
     documentNode.setPath(node.getPath());
+    if (node.isNodeType(NodeTypeConstants.NT_FROZEN_NODE)) {
+      documentNode.setVersion(true);
+    }
 
     try {
       Node parent = node.getParent();
@@ -516,6 +524,10 @@ public class JCRDocumentsUtil {
     }
     if (content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
       fileNode.setMimeType(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
+    } else if (content.hasProperty("jcr:frozenPrimaryType") && content.getProperty("jcr:frozenPrimaryType").getString().equals(NodeTypeConstants.NT_RESOURCE)) {
+      if (content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
+        fileNode.setMimeType(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
+      }
     }
     if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
       long fileSize = content.getProperty(NodeTypeConstants.JCR_DATA).getLength();
@@ -852,7 +864,19 @@ public class JCRDocumentsUtil {
   }
 
   public static boolean isFolder(Node node) throws RepositoryException {
-    return node.isNodeType(NodeTypeConstants.NT_FOLDER) || node.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED);
+    String primaryType = node.getPrimaryNodeType().getName();
+    if (NodeTypeConstants.NT_FROZEN_NODE.equals(primaryType)) {
+      primaryType = node.getProperty("jcr:frozenPrimaryType").getString();
+    }
+    return NodeTypeConstants.NT_FOLDER.equals(primaryType) || NodeTypeConstants.NT_UNSTRUCTURED.equals(primaryType);
+  }
+
+  public static boolean isFile(Node node) throws RepositoryException {
+    String primaryType = node.getPrimaryNodeType().getName();
+    if (NodeTypeConstants.NT_FROZEN_NODE.equals(primaryType)) {
+      primaryType = node.getProperty("jcr:frozenPrimaryType").getString();
+    }
+    return NodeTypeConstants.NT_FILE.equals(primaryType) || NodeTypeConstants.NT_RESOURCE.equals(primaryType);
   }
 
   public static boolean hasEditPermission(Session session, Node node) {

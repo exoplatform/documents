@@ -104,9 +104,11 @@ export default {
     markAttachmentAsViewed(event) {
       const file = event.detail.file;
       const userName = eXo.env.portal.userName;
-      return Vue.prototype.$attachmentService.markAttachmentAsViewed(file.id, userName).then(views => {
-        document.dispatchEvent(new CustomEvent('document-views-updated', {detail: {file: file, views: views}}));
-      });
+      if (file && !file.version) {
+        return Vue.prototype.$attachmentService.markAttachmentAsViewed(file.id, userName).then(views => {
+          document.dispatchEvent(new CustomEvent('document-views-updated', {detail: {file: file, views: views}}));
+        });
+      }
     },
     refreshSupportedDocumentExtensions () {
       this.supportedDocuments = extensionRegistry.loadExtensions('documents', 'supported-document-types');

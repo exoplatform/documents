@@ -422,6 +422,7 @@ public class JCRDocumentsUtilTest {
     NodeImpl mockNode = mock(NodeImpl.class);
     Node contentNode = mock(Node.class);
     Property mockProperty = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
 
     when(mockNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
     when(mockNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(mockProperty);
@@ -446,6 +447,8 @@ public class JCRDocumentsUtilTest {
     when(mockProperty.getString()).thenReturn("Test Title").thenReturn("/restore/path").thenReturn("text/plain");
     when(mockNode.getName()).thenReturn("Test Node");
     when(mockNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(mockNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
 
     // Act
     TrashElementNode result = new TrashElementNode();
