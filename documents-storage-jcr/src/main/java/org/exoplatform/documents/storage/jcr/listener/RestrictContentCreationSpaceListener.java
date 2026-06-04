@@ -42,11 +42,13 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
   }
 
   @Override
+  public void spaceCreated(SpaceLifeCycleEvent event) {
+    applyRestrictPermissions(event);
+  }
+
+  @Override
   public void addRedactorUser(SpaceLifeCycleEvent event) {
-    Space space = event.getSpace();
-    if (space.getRedactors() != null && space.getRedactors().length == 1) {
-      changePermissionsForSpaceMembers(space, true);
-    }
+    applyRestrictPermissions(event);
   }
 
   @Override
@@ -54,6 +56,13 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
     Space space = event.getSpace();
     if (space.getRedactors() == null || space.getRedactors().length == 0) {
       changePermissionsForSpaceMembers(space, false);
+    }
+  }
+
+  private void applyRestrictPermissions(SpaceLifeCycleEvent event) {
+    Space space = event.getSpace();
+    if (space.getRedactors() != null && space.getRedactors().length == 1) {
+      changePermissionsForSpaceMembers(space, true);
     }
   }
 
