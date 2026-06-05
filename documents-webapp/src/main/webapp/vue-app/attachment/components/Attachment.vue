@@ -119,6 +119,9 @@ export default {
     readConfiguration(config) {
       config = config || {};
       this.spaceId = this.getURLQueryParam('spaceId') || config.spaceId || eXo.env.portal.spaceId;
+      this.defaultFolder = config.defaultFolder != null
+        ? config.defaultFolder
+        : (eXo.env.portal.spaceId && '/') || 'Public';
       if (this.spaceId) {
         this.$spaceService.getSpaceById(this.spaceId)
           .then(space => {
@@ -139,8 +142,6 @@ export default {
           title: eXo.env.portal.spaceDisplayName || 'Personal Documents'
         };
       }
-      this.defaultFolder = config.defaultFolder
-        || (eXo.env.portal.spaceId && '/') || 'Public';
       this.sourceApp = config.sourceApp || null;
       this.files = config.files || null;
       this.attachments = config.attachments || [];
