@@ -1086,6 +1086,7 @@ export default {
       this.extendedSearch=false;
       this.$root.$emit('set-documents-search', { 'extended': this.extendedSearch, 'query': this.query});
       this.$root.$emit('set-documents-filter', 'All');
+      this.$root.selectedCategoryId = null;
       this.checkDefaultViewOptions();
       const options = {'primaryFilter': this.primaryFilter};
       const deletedDocument = localStorage.getItem('deletedDocument');
