@@ -29,7 +29,6 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 
 import java.io.InputStream;
 import java.net.URI;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -710,7 +709,6 @@ public class WebdavReadCommandHandler {
     } else {
       String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
                                              .filter(StringUtils::isNotBlank)
-                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                              .map(this::encodeUrlString)
                                              .collect(Collectors.joining("/"));
       return String.format(PATHS_CONCAT_FORMAT, identityBaseUri, encodedNodeRelativePath);
@@ -733,7 +731,6 @@ public class WebdavReadCommandHandler {
     } else {
       String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
                                              .filter(StringUtils::isNotBlank)
-                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                              .map(this::encodeUrlString)
                                              .collect(Collectors.joining("/"));
       return String.format("/%s%s%s%s/%s",
@@ -801,6 +798,10 @@ public class WebdavReadCommandHandler {
       if (!session.itemExists(parentPath)) {
         String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i].toLowerCase(), NodeTypeConstants.NT_FILE));
         parentPath = jcrPath + "/" + cleanName;
+        if (!session.itemExists(parentPath)) {
+          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i], NodeTypeConstants.NT_FILE));
+          parentPath = jcrPath + "/" + cleanName;
+        }
         if (!session.itemExists(parentPath)) {
           cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase(), NodeTypeConstants.NT_FOLDER ));
           parentPath = jcrPath + "/" + cleanName;

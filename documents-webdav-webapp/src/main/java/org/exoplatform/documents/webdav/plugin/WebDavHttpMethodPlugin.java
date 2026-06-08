@@ -19,12 +19,18 @@ package org.exoplatform.documents.webdav.plugin;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DAV_ALLPROP_INCLUDE;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getStatusDescription;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -147,7 +153,7 @@ public abstract class WebDavHttpMethodPlugin {
 
   protected String getResourcePath(HttpServletRequest httpRequest) {
     String resourcePath = Arrays.stream(httpRequest.getRequestURI().substring(getBaseUri(httpRequest).length()).split("/"))
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(WebDavHttpMethodPlugin::decodeUrlSegment)
                                 .collect(Collectors.joining("/"));
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
   }
@@ -155,7 +161,6 @@ public abstract class WebDavHttpMethodPlugin {
   @SneakyThrows
   protected URI getResourceUri(HttpServletRequest httpRequest) {
     return new URI(getBaseUrl(httpRequest) + Arrays.stream(getResourcePath(httpRequest).split("/"))
-                                                   .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                                    .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20"))
                                                    .collect(Collectors.joining("/")));
   }
@@ -196,7 +201,7 @@ public abstract class WebDavHttpMethodPlugin {
                                                                  .split(getBaseUri(httpRequest)))
                                               .getLast()
                                               .split("/"))
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(WebDavHttpMethodPlugin::decodeUrlSegment)
                                 .collect(Collectors.joining("/"));
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
   }
@@ -357,6 +362,20 @@ public abstract class WebDavHttpMethodPlugin {
       } else {
         throw e;
       }
+    }
+  }
+
+  private static String decodeUrlSegment(String segment) {
+    String prepared = segment.replace("+", "%2B");
+    String isoString = URLDecoder.decode(prepared, StandardCharsets.ISO_8859_1);
+    byte[] bytes = isoString.getBytes(StandardCharsets.ISO_8859_1);
+    CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT);
+    try {
+      return decoder.decode(ByteBuffer.wrap(bytes)).toString();
+    } catch (CharacterCodingException e) {
+      return isoString;
     }
   }
 
