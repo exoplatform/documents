@@ -508,7 +508,8 @@ export default {
       }
     },
     initSettings() {
-      const lastView = eXo.env.portal.spaceId ? localStorage.getItem('lastView') : 'folder';
+      const lastViewStorageKey = eXo.env.portal.spaceId ? `lastView-${eXo.env.portal.spaceId}` : 'lastView';
+      const lastView = eXo.env.portal.spaceId ? localStorage.getItem(lastViewStorageKey) : 'folder';
       if (lastView && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === lastView)) {
         this.selectedView = lastView;
       } else if (this.$root.settings?.defaultView  && Object.values(this.viewExtensions).find(viewExtension => viewExtension.id === this.$root.settings.defaultView)) {
@@ -1075,7 +1076,7 @@ export default {
       params.forEach((value, key) => { url.searchParams.append(key, value); });
       window.history.replaceState('documents', 'Documents', url.toString());
       this.selectedView = view;
-      localStorage.setItem('lastView', view);
+      localStorage.setItem(eXo.env.portal.spaceId ? `lastView-${eXo.env.portal.spaceId}` : 'lastView', view);
       this.parentFolderId = null;
       this.folderPath = null;
       this.files = [];
@@ -1261,7 +1262,7 @@ export default {
       if (changed) {
         this.viewExtensions = Object.assign({}, this.viewExtensions);
         if (this.selectedView && !this.viewExtensions[this.selectedView]) {
-          const lastView = localStorage.getItem('lastView');
+          const lastView = localStorage.getItem(eXo.env.portal.spaceId ? `lastView-${eXo.env.portal.spaceId}` : 'lastView');
           if (lastView!=null && this.viewExtensions[lastView]){
             this.changeView(lastView) ;
           } else {
