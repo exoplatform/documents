@@ -129,7 +129,7 @@ public class WebdavReadCommandHandlerTest {
   @Before
   @SneakyThrows
   public void setUp() {
-    handler = new WebdavReadCommandHandler(identityManager, spaceService, pathCommandHandler);
+    handler = new WebdavReadCommandHandler(identityManager, spaceService, pathCommandHandler, null);
 
     when(pathCommandHandler.transformToJcrPath(anyString())).thenReturn("/jcr/path");
     when(session.itemExists(anyString())).thenReturn(true);

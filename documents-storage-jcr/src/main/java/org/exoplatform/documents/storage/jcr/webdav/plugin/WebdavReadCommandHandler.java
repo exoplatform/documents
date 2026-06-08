@@ -54,6 +54,8 @@ import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.constant.FileConstants;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -90,12 +92,16 @@ public class WebdavReadCommandHandler {
 
   private SpaceService            spaceService;
 
+  private RepositoryService       repositoryService;
+
   public WebdavReadCommandHandler(IdentityManager identityManager,
                                   SpaceService spaceService,
-                                  PathCommandHandler pathCommandHandler) {
+                                  PathCommandHandler pathCommandHandler,
+                                  RepositoryService repositoryService) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.pathCommandHandler = pathCommandHandler;
+    this.repositoryService = repositoryService;
   }
 
   public WebDavItem get(Session session, // NOSONAR
@@ -791,25 +797,30 @@ public class WebdavReadCommandHandler {
   }
 
   private String checkResourceExists(Session session, String path) throws RepositoryException, WebDavException {
+    Session systemSession = getSystemSession();
+    if (systemSession == null) {
+      systemSession = session;
+    }
     String[] parts = path.split("/");
     String jcrPath = "";
     for (int i = 1; i < parts.length; i++) {
       String parentPath = jcrPath + "/" + parts[i];
-      if (!session.itemExists(parentPath)) {
+      if (!systemSession.itemExists(parentPath)) {
         String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i].toLowerCase(), NodeTypeConstants.NT_FILE));
         parentPath = jcrPath + "/" + cleanName;
-        if (!session.itemExists(parentPath)) {
+        if (!systemSession.itemExists(parentPath)) {
           cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i], NodeTypeConstants.NT_FILE));
           parentPath = jcrPath + "/" + cleanName;
         }
-        if (!session.itemExists(parentPath)) {
-          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase(), NodeTypeConstants.NT_FOLDER ));
+        if (!systemSession.itemExists(parentPath)) {
+          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase(), NodeTypeConstants.NT_FOLDER));
           parentPath = jcrPath + "/" + cleanName;
-        }if (!session.itemExists(parentPath)) {
+        }
+        if (!systemSession.itemExists(parentPath)) {
           cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase()));
           parentPath = jcrPath + "/" + cleanName;
         }
-        if (!session.itemExists(parentPath)) {
+        if (!systemSession.itemExists(parentPath)) {
           throw new WebDavException(HttpStatus.SC_NOT_FOUND,
                   String.format("Resource with path '%s' not found", jcrPath));
         }
@@ -817,5 +828,14 @@ public class WebdavReadCommandHandler {
       jcrPath = parentPath;
     }
     return jcrPath;
+  }
+
+  @SneakyThrows
+  private Session getSystemSession() {
+    if (repositoryService == null) {
+      return null;
+    }
+    ManageableRepository repository = repositoryService.getDefaultRepository();
+    return repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
   }
 }
