@@ -81,7 +81,7 @@ public class WebDavItemEntity {
                           boolean file,
                           List<WebDavItemProperty> properties) {
     if (webDavPath.endsWith("/")) {
-      webDavPath = webDavPath.substring(webDavPath.length() - 1);
+      webDavPath = webDavPath.substring(0, webDavPath.length() - 1);
     }
     this.webDavPath = webDavPath;
     this.jcrPath = jcrPath;
