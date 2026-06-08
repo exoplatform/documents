@@ -20,7 +20,6 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.REQUEST_ALL_PROPS;
 
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -265,7 +264,6 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   private WebDavItemEntity findCacheEntry(String webDavPath) {
     String id = Arrays.stream(webDavPath.split("/"))
                       .filter(StringUtils::isNotBlank)
-                      .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                       .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
                                           .replace("+", "%20"))
                       .collect(Collectors.joining("/"));

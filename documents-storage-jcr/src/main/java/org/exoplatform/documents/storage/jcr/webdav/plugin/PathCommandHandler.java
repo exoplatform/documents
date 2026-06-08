@@ -41,8 +41,7 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
 
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -195,7 +194,6 @@ public class PathCommandHandler {
       String[] pathParts = webDavPath.split("/");
       String identityPart = Arrays.stream(pathParts)
                                   .filter(StringUtils::isNotBlank)
-                                  .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                   .findFirst()
                                   .orElse(null);
       String identityId = null;
@@ -237,7 +235,6 @@ public class PathCommandHandler {
     String[] pathParts = webDavPath.split("/");
     return Arrays.stream(pathParts)
                  .filter(StringUtils::isNotBlank)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                  .map(Utils::encodeNodeName)
                  .skip(1)
                  .collect(Collectors.joining("/"));
