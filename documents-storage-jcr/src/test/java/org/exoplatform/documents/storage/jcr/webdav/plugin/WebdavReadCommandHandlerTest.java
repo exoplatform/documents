@@ -17,7 +17,11 @@
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
@@ -42,6 +46,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -51,6 +56,8 @@ import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -62,64 +69,71 @@ import lombok.SneakyThrows;
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class WebdavReadCommandHandlerTest {
 
-  private static final String      IDENTITY_PATH            = "/Users/r/root/Private";
+  private static final String                         IDENTITY_PATH            = "/Users/r/root/Private";            // NOSONAR
 
-  private static final String      JCR_RELATIVE_PATH        = "/path/to/file";
+  private static final String                         JCR_RELATIVE_PATH        = "/path/to/file";                    // NOSONAR
 
-  private static final String      WEBDAV_PATH              = "/John Doe (1)" + JCR_RELATIVE_PATH;
+  private static final String                         WEBDAV_PATH              = "/John Doe (1)" + JCR_RELATIVE_PATH;
 
-  private static final String      JCR_PATH                 = IDENTITY_PATH + JCR_RELATIVE_PATH;
+  private static final String                         JCR_PATH                 = IDENTITY_PATH + JCR_RELATIVE_PATH;
 
-  private static final String      USERNAME                 = "username";
+  private static final String                         USERNAME                 = "username";
 
-  private static final String      BASE_URI                 = "baseUri";
+  private static final String                         BASE_URI                 = "baseUri";
 
-  private static final Set<QName>  REQUESTED_PROPERTY_NAMES = Collections.singleton(DISPLAYNAME);
-
-  @Mock
-  private IdentityManager          identityManager;
+  private static final Set<QName>                     REQUESTED_PROPERTY_NAMES = Collections.singleton(DISPLAYNAME);
 
   @Mock
-  private SpaceService             spaceService;
+  private IdentityManager                             identityManager;
 
   @Mock
-  private PathCommandHandler       pathCommandHandler;
+  private SpaceService                                spaceService;
 
   @Mock
-  private Session                  session;
+  private PathCommandHandler                          pathCommandHandler;
+
+  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+  private SessionProviderService                      sessionProviderService;
+
+  @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+  private RepositoryService                           repositoryService;
 
   @Mock
-  private Node                     node;
+  private Session                                     session;
 
   @Mock
-  private Node                     contentNode;
+  private Node                                        node;
 
   @Mock
-  private Property                 property;
+  private Node                                        contentNode;
 
   @Mock
-  private Version                  version;
+  private Property                                    property;
 
   @Mock
-  private VersionHistory           versionHistory;
+  private Version                                     version;
 
   @Mock
-  private VersionIterator          versionIterator;
+  private VersionHistory                              versionHistory;
 
   @Mock
-  private NodeIterator             nodeIterator;
+  private VersionIterator                             versionIterator;
 
   @Mock
-  private Identity                 identity;
+  private NodeIterator                                nodeIterator;
 
   @Mock
-  private Profile                  profile;
+  private Identity                                    identity;
 
   @Mock
-  private ListAccess<Space>        memberSpacesListAccess;
+  private Profile                                     profile;
 
-  private WebdavReadCommandHandler handler;
-  private static final MockedStatic<JCRDocumentsUtil> JCR_DOCUMENTS_UTIL = mockStatic(JCRDocumentsUtil.class);
+  @Mock
+  private ListAccess<Space>                           memberSpacesListAccess;
+
+  private WebdavReadCommandHandler                    handler;
+
+  private static final MockedStatic<JCRDocumentsUtil> JCR_DOCUMENTS_UTIL       = mockStatic(JCRDocumentsUtil.class);
 
   @AfterClass
   public static void afterRunBare() throws Exception { // NOSONAR
@@ -129,9 +143,15 @@ public class WebdavReadCommandHandlerTest {
   @Before
   @SneakyThrows
   public void setUp() {
-    handler = new WebdavReadCommandHandler(identityManager, spaceService, pathCommandHandler);
+    handler = new WebdavReadCommandHandler(identityManager,
+                                           spaceService,
+                                           sessionProviderService,
+                                           repositoryService,
+                                           pathCommandHandler);
 
     when(pathCommandHandler.transformToJcrPath(anyString())).thenReturn("/jcr/path");
+    when(repositoryService.getDefaultRepository().getConfiguration().getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProviderService.getSystemSessionProvider(null).getSession(anyString(), any())).thenReturn(session);
     when(session.itemExists(anyString())).thenReturn(true);
     when(session.getItem("/jcr/path")).thenReturn(node);
 
@@ -152,6 +172,7 @@ public class WebdavReadCommandHandlerTest {
     when(profile.getFullName()).thenReturn("John Doe");
     when(identity.getIdentityId()).thenReturn(1L);
     when(identityManager.getIdentity(anyLong())).thenReturn(identity);
+    when(pathCommandHandler.getIdentityIdFromWebDavPath(WEBDAV_PATH)).thenReturn(1L);
     when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(identity);
     when(spaceService.getMemberSpaces(USERNAME)).thenReturn(memberSpacesListAccess);
     when(node.getPath()).thenReturn(JCR_PATH);

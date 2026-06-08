@@ -19,24 +19,83 @@ package org.exoplatform.documents.storage.jcr.webdav.plugin;
 import static org.exoplatform.documents.storage.jcr.util.ACLProperties.getReadOnlyACL;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getPathWithTitles;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getTitle;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_DATE_CREATED;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_DATE_MODIFIED;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_HIDDENABLE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_LAST_MODIFIED_DATE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_TITLE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CREATED_DATE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_FROZEN_NODE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_MIME_TYPE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ROOT_VERSION;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_LOCKABLE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_VERSIONABLE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_UNSTRUCTURED;
 import static org.exoplatform.documents.storage.jcr.util.Utils.decodeString;
 import static org.exoplatform.documents.storage.jcr.util.Utils.getStringProperty;
-import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.*;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.*;
+import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.IDENTITY_PATHS_FORMAT;
+import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.LOG;
+import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.PATHS_CONCAT_FORMAT;
+import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.PROPERTY_NAMES;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHILDCOUNT;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATIONDATE;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATION_PATTERN;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTLENGTH;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTTYPE;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GET_ETAG;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HASCHILDREN;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HREF;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISCOLLECTION;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISFOLDER;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISROOT;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISVERSIONED;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.LOCKDISCOVERY;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.OWNER;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PARENTNAME;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PREDECESSORSET;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.RESOURCETYPE;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUCCESSORSET;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDLOCK;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDMETHODSET;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getIsFolderItemProperty;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getLockDiscovery;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getSupportedLock;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getSupportedMethodSet;
 
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import javax.jcr.*;
+import javax.jcr.AccessDeniedException;
+import javax.jcr.Item;
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
 import javax.xml.namespace.QName;
@@ -55,6 +114,10 @@ import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.constant.FileConstants;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.core.ManageableRepository;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -67,6 +130,10 @@ import lombok.SneakyThrows;
 
 @Component
 public class WebdavReadCommandHandler {
+
+  private static final String     ROOT_PATH               = "/";
+
+  private static final String     JCR_PATH_DELIMITER      = "/";
 
   private static final String     VERSION_QUERY_PARAM     = "?version=";
 
@@ -91,11 +158,19 @@ public class WebdavReadCommandHandler {
 
   private SpaceService            spaceService;
 
+  private SessionProviderService  sessionProviderService;
+
+  private RepositoryService       repositoryService;
+
   public WebdavReadCommandHandler(IdentityManager identityManager,
                                   SpaceService spaceService,
+                                  SessionProviderService sessionProviderService,
+                                  RepositoryService repositoryService,
                                   PathCommandHandler pathCommandHandler) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
+    this.sessionProviderService = sessionProviderService;
+    this.repositoryService = repositoryService;
     this.pathCommandHandler = pathCommandHandler;
   }
 
@@ -106,10 +181,10 @@ public class WebdavReadCommandHandler {
                         int depth,
                         String baseUri,
                         String username) throws WebDavException {
-    if (StringUtils.equals("/", webDavPath)) {
+    if (StringUtils.equals(ROOT_PATH, webDavPath)) {
       WebDavItem result = new WebDavItem();
-      result.setJcrPath("/");
-      result.setWebDavPath("/");
+      result.setJcrPath(ROOT_PATH);
+      result.setWebDavPath(ROOT_PATH);
       result.setFile(false);
       result.setIdentifier(getBaseUri(baseUri));
       result.addProperty(getIsFolderItemProperty());
@@ -216,7 +291,7 @@ public class WebdavReadCommandHandler {
   @SneakyThrows
   public boolean isFile(Session session, String webDavPath) {
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
-    jcrPath = checkResourceExists(session, jcrPath);
+    jcrPath = parsePath(jcrPath);
     if (session.itemExists(jcrPath)) {
       Item item = session.getItem(jcrPath);
       if (item instanceof Node node) {
@@ -276,7 +351,11 @@ public class WebdavReadCommandHandler {
       version = jcrPath.substring(jcrPath.indexOf(VERSION_QUERY_PARAM) + VERSION_QUERY_PARAM.length());
       jcrPath = jcrPath.substring(0, jcrPath.indexOf(VERSION_QUERY_PARAM));
     }
-    jcrPath = checkResourceExists(session, jcrPath);
+    jcrPath = parsePath(jcrPath);
+    if (!session.itemExists(jcrPath)) {
+      throw new WebDavException(HttpStatus.SC_NOT_FOUND,
+                                String.format("Resource with path '%s' not found", jcrPath));
+    }
     Item item = session.getItem(jcrPath);
     if (!(item instanceof Node node)) {
       throw new WebDavException(HttpStatus.SC_BAD_REQUEST,
@@ -486,9 +565,21 @@ public class WebdavReadCommandHandler {
     } else if (name.equals(ISFOLDER)) {
       return new WebDavItemProperty(name, isFolder(node) ? "1" : "0");
     } else if (name.equals(ISROOT)) {
-      return new WebDavItemProperty(name, node.getPath().equals("/") ? "1" : "0");
+      return new WebDavItemProperty(name, node.getPath().equals(ROOT_PATH) ? "1" : "0");
     } else if (name.equals(PARENTNAME)) {
-      return new WebDavItemProperty(name, node.getParent().getName());
+      String parentName;
+      try {
+        parentName = node.getParent().getName();
+      } catch (AccessDeniedException e) {
+        LOG.debug("Ignore retrieving inaccessible parent path of node '{}'", node.getPath());
+        String[] parentPaths = node.getPath().split(JCR_PATH_DELIMITER);
+        if (parentPaths.length > 1) {
+          parentName = parentPaths[parentPaths.length - 1];
+        } else {
+          parentName = "";
+        }
+      }
+      return new WebDavItemProperty(name, parentName);
     } else if (name.equals(RESOURCETYPE)) {
       if (isFolder(node)) {
         return getIsFolderItemProperty();
@@ -700,19 +791,19 @@ public class WebdavReadCommandHandler {
   private String getNodeUri(Node node, String identityBaseJcrPath, String identityBaseUri) {
     String jcrPath = node.getPath();
     if (node.hasProperty(EXO_TITLE)) {
-      String[] parts = jcrPath.split("/");
+      String[] parts = jcrPath.split(JCR_PATH_DELIMITER);
       parts[parts.length - 1] = node.getProperty(EXO_TITLE).getString();
-      jcrPath = Arrays.stream(parts).collect(Collectors.joining("/"));
+      jcrPath = Arrays.stream(parts).collect(Collectors.joining(JCR_PATH_DELIMITER));
     }
     String nodeRelativePath = jcrPath.replaceFirst(identityBaseJcrPath, "");
     if (StringUtils.isBlank(nodeRelativePath)) {
       return identityBaseUri;
     } else {
-      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
+      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split(JCR_PATH_DELIMITER))
                                              .filter(StringUtils::isNotBlank)
                                              .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                              .map(this::encodeUrlString)
-                                             .collect(Collectors.joining("/"));
+                                             .collect(Collectors.joining(JCR_PATH_DELIMITER));
       return String.format(PATHS_CONCAT_FORMAT, identityBaseUri, encodedNodeRelativePath);
     }
   }
@@ -731,11 +822,11 @@ public class WebdavReadCommandHandler {
                            identityId,
                            IDENTITY_ID_SUFFIX);
     } else {
-      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
+      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split(JCR_PATH_DELIMITER))
                                              .filter(StringUtils::isNotBlank)
                                              .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                              .map(this::encodeUrlString)
-                                             .collect(Collectors.joining("/"));
+                                             .collect(Collectors.joining(JCR_PATH_DELIMITER));
       return String.format("/%s%s%s%s/%s",
                            encodeUrlString(displayName),
                            IDENTITY_ID_PREFIX,
@@ -775,7 +866,7 @@ public class WebdavReadCommandHandler {
 
   @SneakyThrows
   private URI getBaseUri(String baseUri) {
-    return new URI(baseUri + "/"); // NOSONAR
+    return new URI(baseUri + JCR_PATH_DELIMITER); // NOSONAR
   }
 
   private String encodeUrlString(String s) {
@@ -793,28 +884,44 @@ public class WebdavReadCommandHandler {
     }
   }
 
-  private String checkResourceExists(Session session, String path) throws RepositoryException, WebDavException {
-    String[] parts = path.split("/");
-    String jcrPath = "";
-    for (int i = 1; i < parts.length; i++) {
-      String parentPath = jcrPath + "/" + parts[i];
-      if (!session.itemExists(parentPath)) {
-        String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i].toLowerCase(), NodeTypeConstants.NT_FILE));
-        parentPath = jcrPath + "/" + cleanName;
-        if (!session.itemExists(parentPath)) {
-          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase(), NodeTypeConstants.NT_FOLDER ));
-          parentPath = jcrPath + "/" + cleanName;
-        }if (!session.itemExists(parentPath)) {
-          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase()));
-          parentPath = jcrPath + "/" + cleanName;
+  private String parsePath(String path) throws RepositoryException, WebDavException {
+    Session systemSession = getSystemSession();
+    try {
+      String[] parts = path.split(JCR_PATH_DELIMITER);
+      String jcrPath = "";
+      for (int i = 1; i < parts.length; i++) {
+        String parentPath = jcrPath + JCR_PATH_DELIMITER + parts[i];
+        if (!systemSession.itemExists(parentPath)) {
+          String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i].toLowerCase(),
+                                                                                              NodeTypeConstants.NT_FILE));
+          parentPath = jcrPath + JCR_PATH_DELIMITER + cleanName;
+          if (!systemSession.itemExists(parentPath)) {
+            cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase(),
+                                                                              NodeTypeConstants.NT_FOLDER));
+            parentPath = jcrPath + JCR_PATH_DELIMITER + cleanName;
+          }
+          if (!systemSession.itemExists(parentPath)) {
+            cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase()));
+            parentPath = jcrPath + JCR_PATH_DELIMITER + cleanName;
+          }
+          if (!systemSession.itemExists(parentPath)) {
+            throw new WebDavException(HttpStatus.SC_NOT_FOUND,
+                                      String.format("Resource with path '%s' not found", jcrPath));
+          }
         }
-        if (!session.itemExists(parentPath)) {
-          throw new WebDavException(HttpStatus.SC_NOT_FOUND,
-                  String.format("Resource with path '%s' not found", jcrPath));
-        }
+        jcrPath = parentPath;
       }
-      jcrPath = parentPath;
+      return jcrPath;
+    } finally {
+      systemSession.logout();
     }
-    return jcrPath;
+  }
+
+  @SneakyThrows
+  private Session getSystemSession() {
+    SessionProvider systemSessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    ManageableRepository repository = repositoryService.getDefaultRepository();
+    return systemSessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(),
+                                            repository);
   }
 }
