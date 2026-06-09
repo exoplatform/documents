@@ -16,28 +16,38 @@
  */
 package org.exoplatform.documents.storage.jcr.util;
 
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
-import javax.jcr.*;
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.Property;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
+import javax.jcr.Value;
+import javax.jcr.ValueFormatException;
 import javax.jcr.nodetype.NodeType;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 
-import org.exoplatform.documents.model.TrashElementNode;
-import org.exoplatform.services.jcr.access.PermissionType;
-import org.exoplatform.services.jcr.impl.core.SessionImpl;
-import org.exoplatform.services.organization.Group;
-import org.exoplatform.services.organization.GroupHandler;
-import org.exoplatform.services.organization.OrganizationService;
-import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,13 +59,20 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FileVersion;
+import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.jcr.access.AccessControlList;
+import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.value.StringValue;
+import org.exoplatform.services.organization.Group;
+import org.exoplatform.services.organization.GroupHandler;
+import org.exoplatform.services.organization.OrganizationService;
 import org.exoplatform.services.security.Identity;
+import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
@@ -377,11 +394,9 @@ public class JCRDocumentsUtilTest {
     Node frozenNode = mock(Node.class);
     when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozenNode);
 
-    Value value = mock(Value.class);
-    when(value.getString()).thenReturn("__system");
-
     Property property= mock(Property.class);
-    when(property.getValue()).thenReturn(value);
+    when(property.getString()).thenReturn("__system");
+    when(frozenNode.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIER)).thenReturn(true);
     when(frozenNode.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER)).thenReturn(property);
 
 
