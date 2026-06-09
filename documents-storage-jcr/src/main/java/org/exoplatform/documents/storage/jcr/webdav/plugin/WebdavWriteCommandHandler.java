@@ -24,6 +24,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 import javax.jcr.*;
 import javax.jcr.lock.Lock;
@@ -133,10 +134,6 @@ public class WebdavWriteCommandHandler {
                            List<String> mixinTypes) {
     checkNotRoot(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
-    String folderName = jcrPath.substring(jcrPath.lastIndexOf("/") + 1);
-    jcrPath = jcrPath.substring(0, jcrPath.lastIndexOf("/"));
-    jcrPath = checkResourceExists(session, jcrPath);
-    jcrPath = jcrPath + "/" + folderName;
     Node node = addNode(session, jcrPath, NT_FOLDER);
     addMixins(node, mixinTypes);
     session.save();
@@ -150,10 +147,13 @@ public class WebdavWriteCommandHandler {
                        InputStream inputStream) {
     checkNotRoot(webDavPath);
     String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
-    String fileName = jcrPath.substring(jcrPath.lastIndexOf("/") + 1);
-    jcrPath = jcrPath.substring(0, jcrPath.lastIndexOf("/"));
-    jcrPath = checkResourceExists(session, jcrPath);
-    jcrPath = jcrPath + "/" + fileName;
+    if (!session.itemExists(jcrPath)) {
+      String[] parts = jcrPath.split("/");
+      String fileTitle = parts[parts.length - 1];
+      fileTitle = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(fileTitle.toLowerCase(), NodeTypeConstants.NT_FILE));
+      parts[parts.length - 1] = fileTitle;
+      jcrPath = Arrays.stream(parts).collect(Collectors.joining("/"));
+    }
     Node node = session.itemExists(jcrPath) ? (Node) session.getItem(jcrPath) : null;
     Calendar now = Calendar.getInstance();
     if (node == null) {
@@ -284,10 +284,6 @@ public class WebdavWriteCommandHandler {
       }
     }
     forceUnlock((Node) session.getItem(sourceJcrPath));
-    String fileName = targetJcrPath.substring(targetJcrPath.lastIndexOf("/") + 1);
-    targetJcrPath = targetJcrPath.substring(0, targetJcrPath.lastIndexOf("/"));
-    targetJcrPath = checkResourceExists(session, targetJcrPath);
-    targetJcrPath = targetJcrPath + "/" + fileName;
     session.move(sourceJcrPath, targetJcrPath);
     session.save();
     Node targetNode = (Node) session.getItem(targetJcrPath);
@@ -520,24 +516,21 @@ public class WebdavWriteCommandHandler {
     }
   }
 
-  private String checkResourceExists(Session session, String path) throws RepositoryException, WebDavException {
-    String[] parts = path.split("/");
-    String jcrPath = "";
-    for (int i = 1; i < parts.length; i++) {
-      String parentPath = jcrPath + "/" + parts[i];
-      if (!session.itemExists(parentPath)) {
-        String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i].toLowerCase(), NodeTypeConstants.NT_FILE));
-        parentPath = jcrPath + "/" + cleanName;
-        if (!session.itemExists(parentPath)) {
-          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase()));
-          parentPath = jcrPath + "/" + cleanName;
-        }
-        if (!session.itemExists(parentPath)) {
-          throw new WebDavException(HttpStatus.SC_NOT_FOUND,
-                  String.format("Resource with path '%s' not found", jcrPath));
-        }
+  private String checkResourceExists(Session session, String jcrPath) throws RepositoryException, WebDavException {
+    if (!session.itemExists(jcrPath)) {
+      String[] parts = jcrPath.split("/");
+      String fileTitle = parts[parts.length - 1];
+      String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(fileTitle.toLowerCase(),NodeTypeConstants.NT_FILE));
+      parts[parts.length - 1] = cleanName;
+      jcrPath =  Arrays.stream(parts).collect(Collectors.joining("/"));
+      if (!session.itemExists(jcrPath)) {
+        cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(fileTitle.toLowerCase(), NT_FOLDER));
+        parts[parts.length - 1] = cleanName;
+        jcrPath =  Arrays.stream(parts).collect(Collectors.joining("/"));
       }
-      jcrPath = parentPath;
+      if (!session.itemExists(jcrPath)) {
+        throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format(RESOURCE_WITH_PATH_S_NOT_FOUND, jcrPath));
+      }
     }
     return jcrPath;
   }

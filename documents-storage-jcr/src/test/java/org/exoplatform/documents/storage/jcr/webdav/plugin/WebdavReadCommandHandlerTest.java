@@ -17,10 +17,12 @@
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -38,16 +40,13 @@ import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 import javax.xml.namespace.QName;
 
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.utils.ListAccess;
-import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
@@ -119,12 +118,6 @@ public class WebdavReadCommandHandlerTest {
   private ListAccess<Space>        memberSpacesListAccess;
 
   private WebdavReadCommandHandler handler;
-  private static final MockedStatic<JCRDocumentsUtil> JCR_DOCUMENTS_UTIL = mockStatic(JCRDocumentsUtil.class);
-
-  @AfterClass
-  public static void afterRunBare() throws Exception { // NOSONAR
-    JCR_DOCUMENTS_UTIL.close();
-  }
 
   @Before
   @SneakyThrows
@@ -156,7 +149,6 @@ public class WebdavReadCommandHandlerTest {
     when(spaceService.getMemberSpaces(USERNAME)).thenReturn(memberSpacesListAccess);
     when(node.getPath()).thenReturn(JCR_PATH);
     when(pathCommandHandler.getIdentityBaseJcrPath(WEBDAV_PATH)).thenReturn(IDENTITY_PATH);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getPathWithTitles(node)).thenReturn(JCR_PATH);
   }
 
   @Test
