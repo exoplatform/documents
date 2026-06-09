@@ -19,7 +19,7 @@
 
 <template>
   <v-treeview
-    :open.sync="openLevel"
+    :open="openLevel"
     :items="items"
     :load-children="fetchChildren"
     class="treeView-item my-2"
@@ -41,7 +41,7 @@
         v-else
         class="d-flex clickable"
         @click="openFolder(item)">
-        <v-list-item-avatar 
+        <v-list-item-avatar
           v-if="item.avatarUrl"
           size="24"
           class="mx-0"
@@ -62,15 +62,15 @@
           :class="item.icon? '' : 'primary--text'">
           {{ item.icon ? item.icon : 'fas fa-folder' }}
         </v-icon>
-        <v-list-item-title 
+        <v-list-item-title
           class="body-1 mx-2 mt-1"
           :class="idItemActive === item.id ? 'primary--text font-weight-bold' : item.hidden ? 'text-light-color' : ''">
-          {{ displayName(item.name) }} 
+          {{ displayName(item.name) }}
           <v-icon
             v-if="item.hidden"
             size="13">
             fas fa-eye-slash
-          </v-icon>              
+          </v-icon>
         </v-list-item-title>
       </div>
     </template>
@@ -108,7 +108,7 @@ export default {
       return this.items && this.items.length ?  [...new Set(this.currentFolderPathTab)] : [];
     },
     idItemActive() {
-      return this.currentFolderPathTab && this.currentFolderPathTab.length ? this.currentFolderPathTab[this.currentFolderPathTab.length-1] : [];
+      return this.currentFolderPathTab?.length ? this.currentFolderPathTab[this.currentFolderPathTab.length-1] : [];
     }
   },
   created() {
@@ -130,31 +130,40 @@ export default {
       this.$nextTick()
         .then(() => {
         
-          const tab = this.currentDriveBreadCrumb;
-          if (tab.includes('space_drives') && documentsBreadcrumb[0]?.name === 'Private') {
+          if (this.currentDriveBreadCrumb.includes('space_drives') && documentsBreadcrumb[0]?.name === 'Private') {
             this.currentDriveBreadCrumb = documentsBreadcrumb.map(item => item.id);
-
+            return;
+          }
+          const tab = [...this.currentDriveBreadCrumb];
+          const drive = this.getDriveByIdentityId(documentsBreadcrumb[0].identityId);
+          if (drive && !tab.includes(drive.id)) {
+            tab.push(drive.id);
+          }
+          if (documentsBreadcrumb.length !== 1 || documentsBreadcrumb[0].id !== 'space_drives') {
+            let spaceDrivesTree = false;
+            documentsBreadcrumb.forEach(element => {
+              if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId){
+                if (element.path.includes('Groups/spaces')){
+                  spaceDrivesTree = true;
+                }
+              } 
+              if (!tab.includes(element.id)){
+                tab.push(element.id);}
+            });
+            if (spaceDrivesTree && !tab.includes('space_drives')){
+              tab.unshift('space_drives');
+            }
+          }
+          this.currentFolderPathTab = tab;
+          if (this.items?.length) {
+            this.expandBreadcrumbPath(tab);
           } else {
-            const drive = this.getDriveByIdentityId(documentsBreadcrumb[0].identityId);
-            if (drive) {
-              tab.push(drive.id);
-            }
-            if ( documentsBreadcrumb.length !== 1 || documentsBreadcrumb[0].id !== 'space_drives') {
-              let spaceDrivesTree = false;
-              documentsBreadcrumb.forEach(element => {
-                if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId){
-                  if (element.path.includes('Groups/spaces')){
-                    spaceDrivesTree = true;
-                  }
-                } 
-                if (!tab.includes(element.id)){
-                  tab.push(element.id);}
-              });
-              if (spaceDrivesTree && !tab.includes('space_drives')){
-                tab.unshift('space_drives');
+            const unwatch = this.$watch('items', () => {
+              if (this.items?.length) {
+                this.expandBreadcrumbPath(this.currentFolderPathTab);
+                unwatch();
               }
-            }
-            this.currentFolderPathTab = tab;
+            });
           }
         });
       
@@ -201,7 +210,6 @@ export default {
       if (this.currentFolderPathTab[this.currentFolderPathTab.length - 1] === folder.id) {
         return;
       }
-      
       if (folder.drives) {
         this.$root.$emit('document-show-drives', this.getNodeChildrenById('space_drives'));
       } else if (folder.drive) {
@@ -225,9 +233,12 @@ export default {
       
     },
     fetchChildren (item) {
+      if (item.fetching) {
+        return item.fetching;
+      }
       this.$root.$emit('tree-loading', true);
       const folderId = item.identityId ? null : item.id;
-      this.$documentFileService
+      const promise = this.$documentFileService
         .getFullTreeData(item.identityId,folderId).then(data => {
           if (data) {
             const newItems = data.map(obj => {
@@ -241,14 +252,47 @@ export default {
               child.spaceId = item.spaceId;
             }
             );
-            item.children.push(...newItems[0].children);
-            this.currentFolderPathTab.push(item.id);
-            if (item.drive && !this.currentFolderPathTab.includes('space_drives')){
-              this.currentFolderPathTab.unshift('space_drives');
-            }
+            const existingIds = new Set(item.children.map(c => c.id));
+            const toAdd = newItems[0].children.filter(c => !existingIds.has(c.id));
+            item.children.push(...toAdd);
           }
           this.$root.$emit('tree-loading', false);
         });
+      item.fetching = promise;
+      promise.then(() => {
+        item.fetching = null;
+      }).catch(() => {
+        item.fetching = null;
+      });
+      return promise;
+    },
+    findNodeById(nodes, id) {
+      for (const node of nodes) {
+        if (node.id === id) {
+          return node;
+        }
+        if (Array.isArray(node.children) && node.children.length) {
+          const found = this.findNodeById(node.children, id);
+          if (found) {
+            return found;
+          }
+        }
+      }
+      return null;
+    },
+    async expandBreadcrumbPath(pathIds, index = 0) {
+      if (!pathIds || index >= pathIds.length) {
+        return;
+      }
+      const id = pathIds[index];
+      const node = this.findNodeById(this.items, id);
+      if (node) {
+        if (!node.drives && !node.drive && (!Array.isArray(node.children) || !node.children.length)) {
+          await this.fetchChildren(node);
+        }
+        this.currentFolderPathTab = [...this.currentFolderPathTab];
+        await this.expandBreadcrumbPath(pathIds, index + 1);
+      }
     },
     removeItem(nodes, idToRemove) {
       return nodes
