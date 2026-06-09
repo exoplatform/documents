@@ -319,10 +319,8 @@ export default {
       params.set('folderId', folderId);
       params.forEach((value, key) => { url.searchParams.append(key, value); });
       window.history.replaceState('documents', 'Documents', url.toString());
+      this.parentFolderId = folderId;
       this.changeView('folder');
-      this.$root.$emit('resetSearch');
-      this.parentFolderId=folderId;
-      this.refreshFiles();
     });
     this.$root.$on('show-alert', (message) => {
       this.displayMessage(message);
@@ -1077,8 +1075,10 @@ export default {
       window.history.replaceState('documents', 'Documents', url.toString());
       this.selectedView = view;
       localStorage.setItem(eXo.env.portal.spaceId ? `lastView-${eXo.env.portal.spaceId}` : 'lastView', view);
-      this.parentFolderId = null;
-      this.folderPath = null;
+      if (view !== 'folder') {
+        this.parentFolderId = null;
+        this.folderPath = null;
+      }
       this.files = [];
       this.$root.$emit('resetSearch');
       this.resetSelections();
