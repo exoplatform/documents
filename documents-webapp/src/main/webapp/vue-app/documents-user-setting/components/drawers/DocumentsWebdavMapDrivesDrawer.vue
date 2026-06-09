@@ -129,12 +129,17 @@
               max-height="175"
               class="mt-2"
               contain />
-            <div class="d-flex flex-column align-start text-start mt-2">
-              <div>4. {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep4') }}</div>
+            <template v-if="password">
+              <div class="d-flex flex-column align-start text-start mt-2">
+                <div>4. {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep4') }}</div>
+              </div>
+              <documents-credential-inputs
+                :password="password"
+                class="mt-2 full-width text-start" />
+            </template>
+            <div v-else class="d-flex flex-column align-start text-start mt-2">
+              <div>4. {{ $t('UserSettings.documents.webdav.mapNetworkDeviceStep4.2') }}</div>
             </div>
-            <documents-credential-inputs
-              :password="password"
-              class="mt-2 full-width text-start" />
             <v-img
               v-if="step4ImageSrc"
               :src="step4ImageSrc"
