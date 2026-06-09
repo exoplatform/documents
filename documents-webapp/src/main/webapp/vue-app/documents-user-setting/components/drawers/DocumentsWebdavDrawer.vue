@@ -77,7 +77,11 @@ export default {
       this.$refs.drawer.open();
     },
     mapDrives() {
-      this.$refs.confirmAccessDrawer.open(this.$refs.mapDrivesDrawer, false);
+      if (this.hasApiKey) {
+        this.$refs.mapDrivesDrawer.open();
+      } else {
+        this.$refs.confirmAccessDrawer.open(this.$refs.mapDrivesDrawer, false);
+      }
     },
     regenerateAccess() {
       this.$refs.confirmAccessDrawer.open(this.$refs.regenerateAccessDrawer, true);
