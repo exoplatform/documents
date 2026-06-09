@@ -17,7 +17,6 @@
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
 import static org.exoplatform.documents.storage.jcr.util.ACLProperties.getReadOnlyACL;
-import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getPathWithTitles;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getTitle;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
@@ -698,13 +697,7 @@ public class WebdavReadCommandHandler {
 
   @SneakyThrows
   private String getNodeUri(Node node, String identityBaseJcrPath, String identityBaseUri) {
-    String jcrPath = node.getPath();
-    if (node.hasProperty(EXO_TITLE)) {
-      String[] parts = jcrPath.split("/");
-      parts[parts.length - 1] = node.getProperty(EXO_TITLE).getString();
-      jcrPath = Arrays.stream(parts).collect(Collectors.joining("/"));
-    }
-    String nodeRelativePath = jcrPath.replaceFirst(identityBaseJcrPath, "");
+    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
     if (StringUtils.isBlank(nodeRelativePath)) {
       return identityBaseUri;
     } else {
@@ -722,8 +715,7 @@ public class WebdavReadCommandHandler {
                                     String identityBaseJcrPath,
                                     long identityId,
                                     String displayName) {
-
-    String nodeRelativePath = getPathWithTitles(node).replaceFirst(identityBaseJcrPath, "");
+    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
     if (StringUtils.isBlank(nodeRelativePath)) {
       return String.format("/%s%s%s%s",
                            encodeUrlString(displayName),
@@ -793,25 +785,25 @@ public class WebdavReadCommandHandler {
     }
   }
 
-  private String checkResourceExists(Session session, String path) throws RepositoryException, WebDavException {
-    String[] parts = path.split("/");
-    String jcrPath = "";
-    for (int i = 1; i < parts.length; i++) {
-      String parentPath = jcrPath + "/" + parts[i];
-      if (!session.itemExists(parentPath)) {
-        String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(parts[i].toLowerCase(), NodeTypeConstants.NT_FILE));
-        parentPath = jcrPath + "/" + cleanName;
-        if (!session.itemExists(parentPath)) {
-          cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(parts[i].toLowerCase()));
-          parentPath = jcrPath + "/" + cleanName;
-        }
-        if (!session.itemExists(parentPath)) {
-          throw new WebDavException(HttpStatus.SC_NOT_FOUND,
-                  String.format("Resource with path '%s' not found", jcrPath));
-        }
+  private String checkResourceExists(Session session, String jcrPath) throws RepositoryException, WebDavException {
+    if (!session.itemExists(jcrPath)) {
+      String[] parts = jcrPath.split("/");
+      String fileTitle = parts[parts.length - 1];
+      String cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanNameWithAccents(fileTitle.toLowerCase(),NodeTypeConstants.NT_FILE));
+      parts[parts.length - 1] = cleanName;
+      jcrPath =  Arrays.stream(parts).collect(Collectors.joining("/"));
+      if (!session.itemExists(jcrPath)) {
+        cleanName = Text.escapeIllegalJcrChars(JCRDocumentsUtil.cleanName(fileTitle.toLowerCase()));
+        parts[parts.length - 1] = cleanName;
+        jcrPath =  Arrays.stream(parts).collect(Collectors.joining("/"));
       }
-      jcrPath = parentPath;
+      if (!session.itemExists(jcrPath)) {
+        throw new WebDavException(HttpStatus.SC_NOT_FOUND,
+                String.format("Resource with path '%s' not found", jcrPath));
+      }
     }
     return jcrPath;
   }
+
+
 }
