@@ -180,6 +180,7 @@ export default {
     password: null,
     stepper: 1,
     driveType: 'ALL',
+    userIdentity: null,
     spaceIdentity: null,
     spaceIdentityId: null,
     hrefCopied: false,
@@ -228,6 +229,9 @@ export default {
     isMobile() {
       return this.$vuetify.breakpoint.mobile;
     },
+    userFullName() {
+      return this.userIdentity?.profile?.fullname;
+    },
     tips() {
       if (this.$utils.isLinuxOs()) {
         return this.tipsByOs.linux;
@@ -263,7 +267,7 @@ export default {
       if (this.driveType === 'ALL') {
         return `${window.location.origin}/webdav/drives`;
       } else if (this.driveType === 'PERSONAL') {
-        return `${window.location.origin}/webdav/drives/d/(${eXo.env.portal.userIdentityId})`;
+        return `${window.location.origin}/webdav/drives/d/${this.userFullName} (${eXo.env.portal.userIdentityId})`;
       } else if (this.driveType === 'SPACE' && this.spaceIdentityId) {
         return `${window.location.origin}/webdav/drives/d/${this.spaceIdentity.displayName} (${this.spaceIdentityId})`;
       } else {
@@ -296,6 +300,9 @@ export default {
       this.spaceIdentity = null;
       this.driveType = 'ALL';
       this.$refs.drawer.open();
+      if (this.userIdentity == null) {
+        this.userIdentity = await this.$identityService.getIdentityByProviderIdAndRemoteId('organization', eXo.env.portal.userName);
+      }
       if (!navigator?.clipboard?.writeText
           && navigator?.permissions?.query) {
         const status = await navigator.permissions.query({name: 'clipboard-write'});
