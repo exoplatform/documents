@@ -48,8 +48,8 @@ export default {
         }}));
       } else {
         this.$root.$emit('documents-bulk-edit-categories');
-        this.$root.$emit('close-file-action-menu');
-      }     
+      }
+      this.$root.$emit('close-file-action-menu');
     },
   },
 };
