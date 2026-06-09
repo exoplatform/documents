@@ -22,9 +22,7 @@ export default {
   methods: {
     editNameMode(){
       this.$root.$emit('update-file-name', this.file);
-      if ( this.isMobile ) {
-        this.$root.$emit('close-file-action-menu');
-      }
+      this.$root.$emit('close-file-action-menu');
     }
   },
 };
