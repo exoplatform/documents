@@ -15,6 +15,7 @@ export default {
   methods: {
     openLocation() {
       this.$root.$emit('open-folder-by-id', this.file.parentFolderId);
+      this.$root.$emit('close-file-action-menu');
     },
   },
 };

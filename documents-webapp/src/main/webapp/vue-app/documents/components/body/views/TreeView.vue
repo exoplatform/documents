@@ -252,9 +252,9 @@ export default {
               child.spaceId = item.spaceId;
             }
             );
-            const existingIds = new Set(item.children.map(c => c.id));
-            const toAdd = newItems[0].children.filter(c => !existingIds.has(c.id));
-            item.children.push(...toAdd);
+            const existingIds = new Set(item?.children?.map(c => c.id));
+            const toAdd = newItems[0]?.children?.filter(c => !existingIds.has(c.id));
+            item?.children?.push(...toAdd);
           }
           this.$root.$emit('tree-loading', false);
         });
