@@ -17,6 +17,10 @@
 package org.exoplatform.documents.storage.jcr.util;
 
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.DOCUMENT_CATEGORY_IDS;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_DATE_MODIFIED;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_LAST_MODIFIED_DATE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -25,6 +29,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -70,6 +75,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+
+import lombok.SneakyThrows;
 
 public class JCRDocumentsUtil {
   private static final Log                              LOG                           =
@@ -475,29 +482,10 @@ public class JCRDocumentsUtil {
       documentNode.setCreatorUserName(owner);
       documentNode.setCreatorId(getUserIdentityId(identityManager, owner));
     }
-    if (node.hasProperty(NodeTypeConstants.EXO_DATE_MODIFIED)) {
-      Node nodeToModify = node;
-      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-        RepositoryService repositoryService = CommonsUtils.getService(RepositoryService.class);
-        SessionProvider sessionProvider = SessionProvider.createSystemProvider();
-        ManageableRepository repository = repositoryService.getCurrentRepository();
-        Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-        String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-        Node sourceNode = getNodeByIdentifier(systemSession, sourceNodeId);
-        if (sourceNode != null && sourceNode.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate().compareTo(node.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED).getDate()) > 0) {
-          nodeToModify = sourceNode;
-        }
-      }
-      long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_DATE_MODIFIED)
-              .getDate()
-              .getTimeInMillis();
-      documentNode.setModifiedDate(modifiedDate);
-      String modifier = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
-      documentNode.setModifierId(getUserIdentityId(identityManager, modifier));
-    } else {
-      documentNode.setModifiedDate(documentNode.getCreatedDate());
-      documentNode.setModifierId(documentNode.getCreatorId());
-    }
+    long lastModifiedDate = getLastModifiedDate(Objects.requireNonNullElse(versionNode, node));
+    documentNode.setModifiedDate(lastModifiedDate == 0l ? documentNode.getCreatedDate() : lastModifiedDate);
+    String modifierUsername = getLastModifier(Objects.requireNonNullElse(versionNode, node));
+    documentNode.setModifierId(modifierUsername == null ? documentNode.getCreatorId() : getUserIdentityId(identityManager, modifierUsername));
     if (node.hasProperty(NodeTypeConstants.DC_DESCRIPTION)) {
       try {
         documentNode.setDescription(node.getProperty(NodeTypeConstants.DC_DESCRIPTION).getString());
@@ -542,6 +530,39 @@ public class JCRDocumentsUtil {
         fileNode.setSizeWithVersions(fileSize);
       }
 
+    }
+  }
+
+  public static long getLastModifiedDate(Node node) throws RepositoryException { // NOSONAR
+    Calendar modifiedCalendar = Stream.of("jcr:content/jcr:lastModified",
+                                          "jcr:content/exo:dateModified",
+                                          "jcr:content/exo:lastModifiedDate",
+                                          "jcr:lastModified",
+                                          "exo:dateModified",
+                                          "exo:lastModifiedDate")
+                                      .filter(p -> hasProperty(node, p))
+                                      .map(p -> getPropertyDate(node, p))
+                                      .findFirst()
+                                      .orElse(null);
+    return modifiedCalendar == null ? 0l : modifiedCalendar.getTimeInMillis();
+  }
+
+  public static String getLastModifierOrCreator(Node node) throws RepositoryException {
+    String lastModifier = getLastModifier(node);
+    if (lastModifier != null) {
+      return lastModifier;
+    } else if (node.hasProperty(NodeTypeConstants.EXO_OWNER)) {
+      return node.getProperty(NodeTypeConstants.EXO_OWNER).getString();
+    } else {
+      return null;
+    }
+  }
+
+  public static String getLastModifier(Node node) throws RepositoryException {
+    if (node.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIER)) {
+      return node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getString();
+    } else {
+      return null;
     }
   }
 
@@ -826,9 +847,10 @@ public class JCRDocumentsUtil {
     String currentVersionName = node.getBaseVersion().getName();
     Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
     versionFileNode.setTitle(getTitle(node));
-    String userName = frozen.getProperty(NodeTypeConstants.EXO_LAST_MODIFIER).getValue().getString();
-    org.exoplatform.social.core.identity.model.Identity
-        identity = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, userName);
+    String userName = getLastModifierOrCreator(frozen);
+    org.exoplatform.social.core.identity.model.Identity identity = userName != null ?
+                                                                                    identityManager.getOrCreateUserIdentity(userName) :
+                                                                                    null;
     Profile profile = identity != null ? identity.getProfile() : null;
     String[] summary = node.getVersionHistory().getVersionLabels(version);
     if (summary.length > 0) {
@@ -1124,6 +1146,16 @@ public class JCRDocumentsUtil {
     } else {
       return title;
     }
+  }
+
+  @SneakyThrows
+  private static boolean hasProperty(Node node, String propertyName) {
+    return node.hasProperty(propertyName);
+  }
+
+  @SneakyThrows
+  private static Calendar getPropertyDate(Node node, String propertyName) {
+    return node.getProperty(propertyName).getDate();
   }
 
 }
