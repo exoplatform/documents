@@ -51,10 +51,13 @@ const urls = [
 ];
 
 Vue.prototype.$nextTick(() => {
-  Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
-    Vue.prototype.$shareDocumentSuspended = rules.sharedDocumentStatus === 'true';
-    Vue.prototype.$downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
-  });
+  if (!window.transferRulesFetched) {
+    window.transferRulesFetched = true;
+    Vue.prototype.$transferRulesService.getDocumentsTransferRules().then(rules => {
+      Vue.prototype.$shareDocumentSuspended = rules.sharedDocumentStatus === 'true';
+      Vue.prototype.$downloadDocumentSuspended = rules.downloadDocumentStatus === 'true';
+    });
+  }
 });
 
 export async function init(appId, canEdit,  settings, settingsSaveUrl) {
