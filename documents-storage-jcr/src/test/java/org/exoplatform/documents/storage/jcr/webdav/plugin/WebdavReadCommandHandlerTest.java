@@ -21,8 +21,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -48,6 +50,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
+import org.exoplatform.documents.storage.jcr.webdav.WebDavPathMappingService;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -61,11 +64,13 @@ import lombok.SneakyThrows;
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class WebdavReadCommandHandlerTest {
 
-  private static final String      IDENTITY_PATH            = "/Users/r/root/Private";
+  private static final String      IDENTITY_PATH            = "/Users/r/root/Private";                    // NOSONAR
 
-  private static final String      JCR_RELATIVE_PATH        = "/path/to/file";
+  private static final String      JCR_RELATIVE_PATH        = "/path/to/file";                            // NOSONAR
 
-  private static final String      WEBDAV_PATH              = "/John Doe (1)" + JCR_RELATIVE_PATH;
+  private static final String      WEBDAV_PATH              = "/John%20Doe%20%281%29" + JCR_RELATIVE_PATH;// NOSONAR
+
+  private static final String      ENCODED_WEBDAV_PATH      = "/John%20Doe%20%281%29" + JCR_RELATIVE_PATH;// NOSONAR
 
   private static final String      JCR_PATH                 = IDENTITY_PATH + JCR_RELATIVE_PATH;
 
@@ -83,6 +88,9 @@ public class WebdavReadCommandHandlerTest {
 
   @Mock
   private PathCommandHandler       pathCommandHandler;
+
+  @Mock
+  private WebDavPathMappingService webDavPathMappingService;
 
   @Mock
   private Session                  session;
@@ -122,15 +130,24 @@ public class WebdavReadCommandHandlerTest {
   @Before
   @SneakyThrows
   public void setUp() {
-    handler = new WebdavReadCommandHandler(identityManager, spaceService, pathCommandHandler);
+    handler = new WebdavReadCommandHandler(identityManager, spaceService, pathCommandHandler, webDavPathMappingService);
 
-    when(pathCommandHandler.transformToJcrPath(anyString())).thenReturn("/jcr/path");
+    when(pathCommandHandler.resolveToJcrPath(eq(session), anyString())).thenReturn(JCR_PATH);
+    when(pathCommandHandler.isIdentityRootWebDavPath(WEBDAV_PATH)).thenReturn(false);
+    when(pathCommandHandler.getIdentityIdFromWebDavPath(WEBDAV_PATH)).thenReturn(1L);
+    when(pathCommandHandler.getIdentityBaseJcrPath(WEBDAV_PATH)).thenReturn(IDENTITY_PATH);
+    when(pathCommandHandler.getIdentityBaseJcrPath(1L)).thenReturn(IDENTITY_PATH);
+
     when(session.itemExists(anyString())).thenReturn(true);
-    when(session.getItem("/jcr/path")).thenReturn(node);
+    when(session.getItem(JCR_PATH)).thenReturn(node);
+    when(session.getItem(IDENTITY_PATH)).thenReturn(node);
 
-    when(node.isNodeType(anyString())).thenReturn(false); // default
-    when(node.getName()).thenReturn("path");
+    when(node.isNodeType(anyString())).thenReturn(false);
+    when(node.getName()).thenReturn("file");
+    when(node.getPath()).thenReturn(JCR_PATH);
+    when(node.hasNodes()).thenReturn(false);
     when(node.getNode("jcr:content")).thenReturn(contentNode);
+    when(node.hasProperty(anyString())).thenReturn(false);
     when(contentNode.hasProperty(anyString())).thenReturn(true);
     when(contentNode.getProperty(anyString())).thenReturn(property);
     when(property.getString()).thenReturn("text/plain");
@@ -142,13 +159,22 @@ public class WebdavReadCommandHandlerTest {
     when(property.getDate()).thenReturn(cal);
 
     when(identity.getProfile()).thenReturn(profile);
-    when(profile.getFullName()).thenReturn("John Doe");
     when(identity.getIdentityId()).thenReturn(1L);
+    when(identity.getId()).thenReturn("1");
+    when(profile.getFullName()).thenReturn("John Doe");
     when(identityManager.getIdentity(anyLong())).thenReturn(identity);
     when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(identity);
     when(spaceService.getMemberSpaces(USERNAME)).thenReturn(memberSpacesListAccess);
-    when(node.getPath()).thenReturn(JCR_PATH);
-    when(pathCommandHandler.getIdentityBaseJcrPath(WEBDAV_PATH)).thenReturn(IDENTITY_PATH);
+
+    when(webDavPathMappingService.getVisibleName(any(Node.class))).thenReturn("file");
+    when(webDavPathMappingService.getParentVisibleNodeName(any(Node.class))).thenReturn("path");
+
+    when(webDavPathMappingService.getOrCreateWebDavPath(eq("1"),
+                                                        eq(IDENTITY_PATH),
+                                                        eq("/John%20Doe%20%281%29"),
+                                                        any(Node.class),
+                                                        anyString()))
+                                                                     .thenReturn(ENCODED_WEBDAV_PATH);
   }
 
   @Test
@@ -158,7 +184,7 @@ public class WebdavReadCommandHandlerTest {
                                         "/",
                                         REQUESTED_PROPERTY_NAMES,
                                         false,
-                                        5,
+                                        0,
                                         BASE_URI,
                                         USERNAME);
     assertNotNull(webDavItem);
@@ -171,17 +197,17 @@ public class WebdavReadCommandHandlerTest {
 
   @Test
   @SneakyThrows
-  public void testGetWithNodePath() {
+  public void testGetWithNodePathUsesMappedWebDavPath() {
     WebDavItem webDavItem = handler.get(session,
                                         WEBDAV_PATH,
                                         REQUESTED_PROPERTY_NAMES,
                                         false,
-                                        5,
+                                        0,
                                         BASE_URI,
                                         USERNAME);
     assertNotNull(webDavItem);
     assertEquals(JCR_PATH, webDavItem.getJcrPath());
-    assertEquals(WEBDAV_PATH.replace(" ", "%20"), webDavItem.getWebDavPath());
+    assertEquals(ENCODED_WEBDAV_PATH, webDavItem.getWebDavPath());
     assertFalse(webDavItem.isFile());
     assertNotNull(webDavItem.getIdentifier());
   }
@@ -231,7 +257,7 @@ public class WebdavReadCommandHandlerTest {
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
     when(node.getVersionHistory()).thenReturn(versionHistory);
     when(versionHistory.getAllVersions()).thenReturn(versionIterator);
-    when(versionIterator.hasNext()).thenReturn(false); // no versions
+    when(versionIterator.hasNext()).thenReturn(false);
     List<WebDavItem> result = handler.getVersions(session, WEBDAV_PATH, Collections.emptySet(), BASE_URI);
     assertNotNull(result);
   }

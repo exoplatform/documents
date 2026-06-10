@@ -105,7 +105,7 @@ public class JcrWebDavService implements DocumentWebDavService {
   @Override
   @SneakyThrows
   public boolean isFile(String webDavPath) {
-    Session session = getSession();
+    Session session = getSystemSession();
     try {
       return readCommandHandler.isFile(session, webDavPath);
     } finally {
@@ -128,7 +128,7 @@ public class JcrWebDavService implements DocumentWebDavService {
 
   @Override
   public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
-    Session session = getSession();
+    Session session = getSystemSession();
     try {
       return readCommandHandler.getLastModifiedDate(session,
                                                     webDavPath,
@@ -408,7 +408,7 @@ public class JcrWebDavService implements DocumentWebDavService {
   public void unlockTimedOutNodes() {
     List<String> nodePaths = writeCommandHandler.getOutdatedLockedNodePaths();
     if (CollectionUtils.isNotEmpty(nodePaths)) {
-      Session session = getSession();
+      Session session = getSystemSession();
       nodePaths.forEach(jcrPath -> {
         try {
           writeCommandHandler.unlockNode(session, jcrPath);
@@ -421,6 +421,21 @@ public class JcrWebDavService implements DocumentWebDavService {
         }
       });
     }
+  }
+
+  @SneakyThrows
+  public Session getSession(String username) {
+    ManageableRepository repository = repositoryService.getDefaultRepository();
+    RepositoryContainer repositoryContainer = repositoryService.getRepositoryContainer(REPOSITORY_NAME);
+    WorkspaceContainer workspaceContainer = repositoryContainer.getWorkspaceContainer(repository.getConfiguration()
+                                                                                                .getDefaultWorkspaceName());
+    return newSession(username, repository, workspaceContainer);
+  }
+
+  @SneakyThrows
+  public Session getSystemSession() {
+    ManageableRepository repository = repositoryService.getDefaultRepository();
+    return repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
   }
 
   @SneakyThrows
@@ -439,21 +454,6 @@ public class JcrWebDavService implements DocumentWebDavService {
       prefixes.put(u, p);
     }
     return new JcrNamespaceContext(prefixes, namespaces);
-  }
-
-  @SneakyThrows
-  protected Session getSession(String username) {
-    ManageableRepository repository = repositoryService.getDefaultRepository();
-    RepositoryContainer repositoryContainer = repositoryService.getRepositoryContainer(REPOSITORY_NAME);
-    WorkspaceContainer workspaceContainer = repositoryContainer.getWorkspaceContainer(repository.getConfiguration()
-                                                                                                .getDefaultWorkspaceName());
-    return newSession(username, repository, workspaceContainer);
-  }
-
-  @SneakyThrows
-  protected Session getSession() {
-    ManageableRepository repository = repositoryService.getDefaultRepository();
-    return repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
   }
 
   @SneakyThrows

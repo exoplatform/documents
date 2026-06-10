@@ -1,0 +1,44 @@
+/**
+ * Copyright (C) 2026 eXo Platform SAS
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <gnu.org/licenses>.
+ */
+package org.exoplatform.documents.storage.jcr.webdav.dao;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.exoplatform.documents.storage.jcr.webdav.entity.WebDavPathMappingEntity;
+import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface WebDavPathMappingRepository extends ElasticsearchRepository<WebDavPathMappingEntity, String> {
+
+  Optional<WebDavPathMappingEntity> findByJcrPath(String jcrPath);
+
+  Optional<WebDavPathMappingEntity> findByNodeIdentifier(String nodeIdentifier);
+
+  Optional<WebDavPathMappingEntity> findByParentJcrPathAndNormalizedVisibleName(String parentJcrPath,
+                                                                                String normalizedVisibleName);
+
+  List<WebDavPathMappingEntity> findByParentJcrPath(String parentJcrPath);
+
+  List<WebDavPathMappingEntity> findByJcrPathStartingWith(String jcrPathPrefix);
+
+  List<WebDavPathMappingEntity> findByParentWebDavPath(String parentWebDavPath);
+
+  Optional<WebDavPathMappingEntity> findByWebDavPath(String webDavPath);
+
+}

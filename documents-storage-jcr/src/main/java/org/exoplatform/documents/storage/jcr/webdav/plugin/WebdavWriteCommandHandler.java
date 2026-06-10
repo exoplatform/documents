@@ -16,7 +16,10 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_NAME;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_SORTABLE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_TITLE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
@@ -70,6 +73,7 @@ import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.utils.MimeTypeResolver;
 import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.storage.jcr.webdav.WebDavPathMappingService;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemOrder;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
@@ -102,46 +106,52 @@ import lombok.SneakyThrows;
 @Component
 public class WebdavWriteCommandHandler {
 
-  protected static final Log      LOG                            = ExoLogger.getLogger(WebdavWriteCommandHandler.class);
+  protected static final Log       LOG                            = ExoLogger.getLogger(WebdavWriteCommandHandler.class);
 
-  private static final Set<QName> READ_ONLY_PROPS                = Collections.singleton(PropertyConstants.JCR_DATA);
+  private static final Set<QName>  READ_ONLY_PROPS                = Collections.singleton(PropertyConstants.JCR_DATA);
 
-  private static final Set<QName> NON_REMOVING_PROPS             = new HashSet<>(Arrays.asList(PropertyConstants.CREATIONDATE,
-                                                                                               PropertyConstants.DISPLAYNAME,
-                                                                                               PropertyConstants.GETCONTENTLANGUAGE,
-                                                                                               PropertyConstants.GETCONTENTLENGTH,
-                                                                                               PropertyConstants.GETCONTENTTYPE,
-                                                                                               PropertyConstants.GETLASTMODIFIED,
-                                                                                               PropertyConstants.JCR_DATA));
+  private static final Set<QName>  NON_REMOVING_PROPS             = new HashSet<>(Arrays.asList(PropertyConstants.CREATIONDATE,
+                                                                                                PropertyConstants.DISPLAYNAME,
+                                                                                                PropertyConstants.GETCONTENTLANGUAGE,
+                                                                                                PropertyConstants.GETCONTENTLENGTH,
+                                                                                                PropertyConstants.GETCONTENTTYPE,
+                                                                                                PropertyConstants.GETLASTMODIFIED,
+                                                                                                PropertyConstants.JCR_DATA));
 
-  private static final String     RESOURCE_WITH_PATH_S_NOT_FOUND = "Resource with path '%s' not found";
+  private static final String      RESOURCE_WITH_PATH_S_NOT_FOUND = "Resource with path '%s' not found";
 
-  private static final Context    LOCK_CONTEXT                   = Context.GLOBAL.id("WebDav");
+  private static final String      PATH_AND_NAME_PATTERN          = "%s/%s";
 
-  private static final Scope      LOCK_SCOPE                     = Scope.APPLICATION.id("WebDavLock");
+  private static final Context     LOCK_CONTEXT                   = Context.GLOBAL.id("WebDav");
 
-  private MimeTypeResolver        mimeTypeResolver               = new MimeTypeResolver();
+  private static final Scope       LOCK_SCOPE                     = Scope.APPLICATION.id("WebDavLock");
 
-  private RepositoryService       repositoryService;
+  private MimeTypeResolver         mimeTypeResolver               = new MimeTypeResolver();
 
-  private TrashStorage            trashStorage;
+  private RepositoryService        repositoryService;
 
-  private SessionProviderService  sessionProviderService;
+  private TrashStorage             trashStorage;
 
-  private SettingService          settingService;
+  private SessionProviderService   sessionProviderService;
 
-  private PathCommandHandler      pathCommandHandler;
+  private SettingService           settingService;
+
+  private PathCommandHandler       pathCommandHandler;
+
+  private WebDavPathMappingService webDavPathMappingService;
 
   public WebdavWriteCommandHandler(SessionProviderService sessionProviderService,
                                    RepositoryService repositoryService,
                                    TrashStorage trashStorage,
                                    SettingService settingService,
-                                   PathCommandHandler pathCommandHandler) {
+                                   PathCommandHandler pathCommandHandler,
+                                   WebDavPathMappingService webDavPathMappingService) {
     this.sessionProviderService = sessionProviderService;
     this.repositoryService = repositoryService;
     this.trashStorage = trashStorage;
     this.settingService = settingService;
     this.pathCommandHandler = pathCommandHandler;
+    this.webDavPathMappingService = webDavPathMappingService;
   }
 
   @PostConstruct
@@ -154,8 +164,17 @@ public class WebdavWriteCommandHandler {
                            String webDavPath,
                            List<String> mixinTypes) {
     checkNotRoot(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String parentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavPath));
+    String visibleName = pathCommandHandler.getLastVisibleSegment(webDavPath);
+    String technicalName = webDavPathMappingService.allocateTechnicalName(session, parentJcrPath, visibleName);
+    String jcrPath = String.format(PATH_AND_NAME_PATTERN, parentJcrPath, technicalName);
     Node node = addNode(session, jcrPath, NT_FOLDER);
+    if (node.canAddMixin(EXO_SORTABLE)) {
+      node.addMixin(EXO_SORTABLE);
+    }
+    node.setProperty(EXO_NAME, getNodeName(node));
+    node.setProperty(EXO_TITLE, visibleName);
+    webDavPathMappingService.saveMapping(session, webDavPath, visibleName, node);
     addMixins(node, mixinTypes);
     session.save();
   }
@@ -167,8 +186,19 @@ public class WebdavWriteCommandHandler {
                        List<String> mixinTypes,
                        InputStream inputStream) {
     checkNotRoot(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
-    Node node = session.itemExists(jcrPath) ? (Node) session.getItem(jcrPath) : null;
+    String jcrPath = null;
+    Node node = null;
+    try {
+      jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
+      if (session.itemExists(jcrPath)) {
+        node = (Node) session.getItem(jcrPath);
+      }
+    } catch (WebDavException e) {
+      String parentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavPath));
+      String visibleName = pathCommandHandler.getLastVisibleSegment(webDavPath);
+      String technicalName = webDavPathMappingService.allocateTechnicalName(session, parentJcrPath, visibleName);
+      jcrPath = String.format(PATH_AND_NAME_PATTERN, parentJcrPath, technicalName);
+    }
     Calendar now = Calendar.getInstance();
     if (node == null) {
       node = addNode(session, jcrPath, NT_FILE);
@@ -182,8 +212,10 @@ public class WebdavWriteCommandHandler {
       if (node.canAddMixin(EXO_SORTABLE)) {
         node.addMixin(EXO_SORTABLE);
       }
-      node.setProperty(EXO_NAME, node.getName());
-      node.setProperty(EXO_TITLE, node.getName());
+      String visibleName = pathCommandHandler.getLastVisibleSegment(webDavPath);
+      node.setProperty(EXO_NAME, getNodeName(node));
+      node.setProperty(EXO_TITLE, visibleName);
+      webDavPathMappingService.saveMapping(session, webDavPath, visibleName, node);
     } else {
       forceUnlock(node);
       VersionHistoryUtils.createVersion(node);
@@ -199,7 +231,7 @@ public class WebdavWriteCommandHandler {
                                                                     List<WebDavItemProperty> propertiesToSave,
                                                                     List<WebDavItemProperty> propertiesToRemove) throws WebDavException {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
     Map<String, Collection<WebDavItemProperty>> result = new HashMap<>();
@@ -263,7 +295,7 @@ public class WebdavWriteCommandHandler {
   public void delete(Session session,
                      String webDavPath) throws WebDavException {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
 
     Node node = (Node) session.getItem(jcrPath);
@@ -271,6 +303,7 @@ public class WebdavWriteCommandHandler {
     if (canRemoveNode(node)) {
       trashStorage.moveToTrash(node,
                                new SessionProvider(((SessionImpl) session).getUserState()));
+      webDavPathMappingService.deleteMapping(jcrPath);
     } else {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN, String.format("Resource with path '%s' can't be removed", jcrPath));
     }
@@ -284,8 +317,11 @@ public class WebdavWriteCommandHandler {
                       boolean overwrite) throws WebDavException {
     checkNotReadOnly(webDavSourcePath);
     checkNotRoot(webDavTargetPath);
-    String sourceJcrPath = pathCommandHandler.transformToJcrPath(webDavSourcePath);
-    String targetJcrPath = pathCommandHandler.transformToJcrPath(webDavTargetPath);
+    String sourceJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavSourcePath);
+    String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
+    String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    String targetTechnicalName = webDavPathMappingService.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
+    String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
     checkResourceExists(session, sourceJcrPath);
     boolean itemExists = session.itemExists(targetJcrPath);
     if (itemExists) {
@@ -302,10 +338,12 @@ public class WebdavWriteCommandHandler {
     session.save();
     Node targetNode = (Node) session.getItem(targetJcrPath);
     if (targetNode.isNodeType(EXO_SORTABLE)) {
-      targetNode.setProperty(EXO_NAME, targetNode.getName());
-      targetNode.setProperty(EXO_TITLE, targetNode.getName());
-      session.save();
+      targetNode.setProperty(EXO_NAME, getNodeName(targetNode));
+      targetNode.setProperty(EXO_TITLE, targetVisibleName);
     }
+    webDavPathMappingService.deleteMapping(sourceJcrPath);
+    webDavPathMappingService.saveMapping(session, webDavTargetPath, targetVisibleName, targetNode);
+    session.save();
     return itemExists;
   }
 
@@ -317,8 +355,11 @@ public class WebdavWriteCommandHandler {
                    boolean removeDestination) throws WebDavException {
     checkNotRoot(webDavSourcePath);
     checkNotRoot(webDavTargetPath);
-    String sourceJcrPath = pathCommandHandler.transformToJcrPath(webDavSourcePath);
-    String targetJcrPath = pathCommandHandler.transformToJcrPath(webDavTargetPath);
+    String sourceJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavSourcePath);
+    String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
+    String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    String targetTechnicalName = webDavPathMappingService.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
+    String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
     checkResourceExists(session, sourceJcrPath);
     boolean itemExists = session.itemExists(targetJcrPath);
     if (itemExists && removeDestination) {
@@ -330,13 +371,20 @@ public class WebdavWriteCommandHandler {
     }
     Workspace workspace = session.getWorkspace();
     workspace.copy(sourceJcrPath, targetJcrPath);
+    Node targetNode = (Node) session.getItem(targetJcrPath);
+    if (targetNode.isNodeType(EXO_SORTABLE)) {
+      targetNode.setProperty(EXO_NAME, getNodeName(targetNode));
+      targetNode.setProperty(EXO_TITLE, targetVisibleName);
+    }
+    webDavPathMappingService.saveMapping(session, webDavTargetPath, targetVisibleName, targetNode);
+    session.save();
   }
 
   @SneakyThrows
   public void enableVersioning(Session session,
                                String webDavPath) {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
     forceUnlock(node);
@@ -350,7 +398,7 @@ public class WebdavWriteCommandHandler {
   public void checkin(Session session,
                       String webDavPath) {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
     forceUnlock(node);
@@ -361,7 +409,7 @@ public class WebdavWriteCommandHandler {
   public void checkout(Session session,
                        String webDavPath) throws WebDavException {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
     node.checkout();
@@ -371,7 +419,7 @@ public class WebdavWriteCommandHandler {
   public void uncheckout(Session session,
                          String webDavPath) throws WebDavException {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
     Version restoreVersion = node.getBaseVersion();
@@ -386,7 +434,7 @@ public class WebdavWriteCommandHandler {
                                  boolean bodyIsEmpty,
                                  String username) {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
     if (!node.isNodeType(MIX_LOCKABLE) && node.canAddMixin(MIX_LOCKABLE)) {
@@ -417,7 +465,7 @@ public class WebdavWriteCommandHandler {
   @SneakyThrows
   public void unlock(Session session, String webDavPath, List<String> lockTokens) {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     try {
       unlockNode(session, jcrPath);
@@ -445,7 +493,7 @@ public class WebdavWriteCommandHandler {
                        String webDavPath,
                        List<WebDavItemOrder> members) throws WebDavException {
     checkNotReadOnly(webDavPath);
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     checkResourceExists(session, jcrPath);
     Node node = (Node) session.getItem(jcrPath);
 
@@ -554,7 +602,7 @@ public class WebdavWriteCommandHandler {
                                   .trim();
       mediaType = mediaTypeParts[0].trim();
     }
-    String resolvedMimeType = mimeTypeResolver.getMimeType(node.getName());
+    String resolvedMimeType = mimeTypeResolver.getMimeType(getVisibleNodeName(node));
     if (StringUtils.isNotBlank(resolvedMimeType)
         && !StringUtils.equals(resolvedMimeType, mimeTypeResolver.getDefaultMimeType())) {
       handleJcrOperation(() -> content.setProperty(JCR_MIME_TYPE, resolvedMimeType), path);
@@ -600,13 +648,13 @@ public class WebdavWriteCommandHandler {
     while (nodeIter.hasNext()) {
       Node currentNode = nodeIter.nextNode();
       if (new QName("DAV:", "first").equals(member.getPosition())) {
-        return currentNode.getName();
+        return getVisibleNodeName(currentNode);
       } else if (new QName("DAV:", "before").equals(member.getPosition())
                  && previousNode != null
-                 && currentNode.getName().equals(member.getPositionSegment())) {
-        return previousNode.getName();
+                 && getVisibleNodeName(currentNode).equals(member.getPositionSegment())) {
+        return getVisibleNodeName(previousNode);
       } else if (new QName("DAV:", "after").equals(member.getPosition())
-                 && currentNode.getName().equals(member.getPositionSegment())
+                 && getVisibleNodeName(currentNode).equals(member.getPositionSegment())
                  && nodeIter.hasNext()) {
         return nodeIter.nextNode().getName();
       }
@@ -717,6 +765,15 @@ public class WebdavWriteCommandHandler {
     }
   }
 
+  public String getParentWebDavPath(String webDavPath) {
+    if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
+      return "/";
+    }
+    String normalizedPath = StringUtils.removeEnd(webDavPath, "/");
+    int index = normalizedPath.lastIndexOf('/');
+    return index <= 0 ? "/" : normalizedPath.substring(0, index);
+  }
+
   private boolean canRemoveNode(Node node) {
     return checkPermission(node, PermissionType.REMOVE);
   }
@@ -742,6 +799,14 @@ public class WebdavWriteCommandHandler {
                path,
                e);
     }
+  }
+
+  private String getNodeName(Node node) throws RepositoryException {
+    return node.getName();
+  }
+
+  private String getVisibleNodeName(Node node) throws RepositoryException {
+    return webDavPathMappingService.getVisibleName(node);
   }
 
   @FunctionalInterface

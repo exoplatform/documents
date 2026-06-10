@@ -20,15 +20,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.util.Arrays;
 import java.util.Collections;
 
 import javax.jcr.Node;
+import javax.jcr.Property;
 import javax.jcr.lock.Lock;
 import javax.jcr.version.Version;
 
@@ -39,8 +40,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.storage.jcr.webdav.WebDavPathMappingService;
+import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
@@ -52,7 +57,19 @@ import lombok.SneakyThrows;
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class WebdavWriteCommandHandlerTest {
 
-  private static final String       JCR_PATH = "/jcr/path";
+  private static final String       JCR_CONTENT        = "jcr:content";
+
+  private static final String       JCR_PATH           = "/jcr/path";                 // NOSONAR
+
+  private static final String       PARENT_JCR_PATH    = "/jcr";                      // NOSONAR
+
+  private static final String       WEBDAV_FILE_PATH   = "/John%20Doe%20%281%29/New%20File.txt";// NOSONAR
+
+  private static final String       WEBDAV_PARENT_PATH = "/John%20Doe%20%281%29";     // NOSONAR
+
+  private static final String       VISIBLE_NAME       = "New File.txt";
+
+  private static final String       TECHNICAL_NAME     = "New_File.txt";
 
   @Mock
   private RepositoryService         repositoryService;
@@ -64,7 +81,13 @@ public class WebdavWriteCommandHandlerTest {
   private TrashStorage              trashStorage;
 
   @Mock
+  private SettingService            settingService;
+
+  @Mock
   private PathCommandHandler        pathCommandHandler;
+
+  @Mock
+  private WebDavPathMappingService  webDavPathMappingService;
 
   @Mock
   private SessionImpl               session;
@@ -73,10 +96,16 @@ public class WebdavWriteCommandHandlerTest {
   private NodeImpl                  node;
 
   @Mock
-  private ConversationState         conversationState;
+  private NodeImpl                  parentNode;
 
   @Mock
-  private Node                      destNode;
+  private Node                      contentNode;
+
+  @Mock
+  private Property                  property;
+
+  @Mock
+  private ConversationState         conversationState;
 
   @Mock
   private Lock                      lock;
@@ -90,41 +119,89 @@ public class WebdavWriteCommandHandlerTest {
   @Before
   @SneakyThrows
   public void setUp() {
-    // Common stubs
-    when(pathCommandHandler.transformToJcrPath(anyString())).thenReturn(JCR_PATH);
+    when(pathCommandHandler.resolveToJcrPath(eq(session), eq(JCR_PATH))).thenReturn(JCR_PATH);
+    when(pathCommandHandler.resolveToJcrPath(eq(session), eq(WEBDAV_PARENT_PATH))).thenReturn(PARENT_JCR_PATH);
+    when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(VISIBLE_NAME);
+    when(webDavPathMappingService.allocateTechnicalName(eq(session), eq(PARENT_JCR_PATH), anyString())).thenReturn(TECHNICAL_NAME);
+
     when(session.itemExists(anyString())).thenReturn(true);
     when(session.getItem(JCR_PATH)).thenReturn(node);
+    when(session.getItem(PARENT_JCR_PATH)).thenReturn(parentNode);
+    when(session.getItem(PARENT_JCR_PATH + "/" + TECHNICAL_NAME)).thenReturn(node);
+
+    when(parentNode.addNode(TECHNICAL_NAME, "nt:file")).thenReturn(node);
+    when(parentNode.addNode(TECHNICAL_NAME, "nt:folder")).thenReturn(node);
+
     when(node.getSession()).thenReturn(session);
-    when(node.getPath()).thenReturn(JCR_PATH);
-    when(node.getName()).thenReturn(Arrays.asList(JCR_PATH.split("/")).getLast());
+    when(node.getPath()).thenReturn(PARENT_JCR_PATH + "/" + TECHNICAL_NAME);
+    when(node.getName()).thenReturn(TECHNICAL_NAME);
+    when(node.getParent()).thenReturn(parentNode);
+    when(node.hasNode(JCR_CONTENT)).thenReturn(false);
+    when(node.addNode(JCR_CONTENT, "nt:resource")).thenReturn(contentNode);
+    when(node.getNode(JCR_CONTENT)).thenReturn(contentNode);
+    when(node.canAddMixin(anyString())).thenReturn(false);
+    when(node.isLocked()).thenReturn(false);
+    when(node.isNodeType(anyString())).thenReturn(false);
+    when(node.setProperty(anyString(), anyString())).thenReturn(property);
+
+    when(contentNode.setProperty(anyString(), anyString())).thenReturn(property);
+    when(contentNode.setProperty(anyString(), any(InputStream.class))).thenReturn(property);
+    when(contentNode.setProperty(eq("jcr:lastModified"), any(java.util.Calendar.class))).thenReturn(property);
   }
 
   @Test
   @SneakyThrows
-  public void testSaveFile() {
-    when(node.addNode("file", "nt:file")).thenReturn(destNode);
-    when(destNode.addNode("jcr:content", "nt:resource")).thenReturn(destNode);
-    when(destNode.setProperty(eq("jcr:data"), any(InputStream.class))).thenReturn(null);
-    handler.saveFile(session, JCR_PATH, "text/plain", Collections.emptyList(), new ByteArrayInputStream("data".getBytes()));
+  public void testSaveFileCreatesMappingForNewVisiblePath() {
+    when(pathCommandHandler.resolveToJcrPath(eq(session), eq(WEBDAV_FILE_PATH)))
+                                                                                .thenThrow(new WebDavException(404, "missing"));
+    when(webDavPathMappingService.getVisibleName(node)).thenReturn(TECHNICAL_NAME);
+    handler.saveFile(session,
+                     WEBDAV_FILE_PATH,
+                     "text/plain",
+                     Collections.emptyList(),
+                     new ByteArrayInputStream("data".getBytes()));
+
+    verify(parentNode).addNode(TECHNICAL_NAME, "nt:file");
+    verify(node).setProperty("exo:title", VISIBLE_NAME);
+    verify(webDavPathMappingService).saveMapping(session, WEBDAV_FILE_PATH, VISIBLE_NAME, node);
     verify(session, atLeastOnce()).save();
   }
 
   @Test
   @SneakyThrows
-  public void testDelete() {
-    when(session.getUserState()).thenReturn(conversationState);
-    handler.delete(session, JCR_PATH);
-    verify(trashStorage).moveToTrash(eq(node), any(SessionProvider.class));
+  public void testCreateFolderCreatesMappingForVisiblePath() {
+    handler.createFolder(session, WEBDAV_FILE_PATH, Collections.emptyList());
+
+    verify(parentNode).addNode(TECHNICAL_NAME, "nt:folder");
+    verify(node).setProperty("exo:title", VISIBLE_NAME);
+    verify(webDavPathMappingService).saveMapping(session, WEBDAV_FILE_PATH, VISIBLE_NAME, node);
     verify(session).save();
   }
 
   @Test
   @SneakyThrows
-  public void testEnableVersioning() {
-    when(node.isNodeType("mix:versionable")).thenReturn(false);
-    handler.enableVersioning(session, JCR_PATH);
-    verify(node).addMixin("mix:versionable");
+  public void testDeleteDeletesPathMapping() {
+    when(session.getUserState()).thenReturn(conversationState);
+    when(node.getPath()).thenReturn(JCR_PATH);
+    doNothing().when(node).checkPermission(PermissionType.REMOVE);
+
+    handler.delete(session, JCR_PATH);
+
+    verify(trashStorage).moveToTrash(eq(node), any(SessionProvider.class));
+    verify(webDavPathMappingService).deleteMapping(JCR_PATH);
     verify(session).save();
   }
 
+  @Test
+  @SneakyThrows
+  public void testEnableVersioningUsesResolvedJcrPath() {
+    when(node.getPath()).thenReturn(JCR_PATH);
+    when(node.isNodeType("mix:versionable")).thenReturn(false);
+
+    handler.enableVersioning(session, JCR_PATH);
+
+    verify(pathCommandHandler).resolveToJcrPath(session, JCR_PATH);
+    verify(node).addMixin("mix:versionable");
+    verify(session).save();
+  }
 }

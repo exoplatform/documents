@@ -85,7 +85,9 @@ public class WebDavItemEntity {
     }
     this.webDavPath = webDavPath;
     this.jcrPath = jcrPath;
-    this.parentWebDavPath = webDavPath.substring(0, webDavPath.lastIndexOf("/"));
+    if (webDavPath.lastIndexOf("/") > 0) {
+      this.parentWebDavPath = webDavPath.substring(0, webDavPath.lastIndexOf("/"));
+    }
     this.identifier = identifier == null ? null : identifier.toASCIIString();
     this.file = file;
     if (properties != null) {

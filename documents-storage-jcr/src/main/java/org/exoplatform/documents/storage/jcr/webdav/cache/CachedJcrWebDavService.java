@@ -285,7 +285,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
 
   @SneakyThrows
   private void addCacheEventListener() {
-    Session session = getSession();
+    Session session = getSystemSession();
     try {
       ObservationManager observation = session.getWorkspace().getObservationManager();
       WebDavCacheUpdaterAction.SUPPORTED_PATHS.forEach(path -> addCacheEventListener(observation,

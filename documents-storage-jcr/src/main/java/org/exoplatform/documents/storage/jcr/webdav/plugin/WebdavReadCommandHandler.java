@@ -37,7 +37,6 @@ import static org.exoplatform.documents.storage.jcr.util.Utils.decodeString;
 import static org.exoplatform.documents.storage.jcr.util.Utils.getStringProperty;
 import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.IDENTITY_PATHS_FORMAT;
 import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.LOG;
-import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.PATHS_CONCAT_FORMAT;
 import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.PROPERTY_NAMES;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
@@ -73,7 +72,6 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 
 import java.io.InputStream;
 import java.net.URI;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -84,7 +82,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import javax.jcr.Item;
@@ -103,6 +100,7 @@ import org.springframework.stereotype.Component;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.documents.storage.jcr.util.ACLProperties;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
+import org.exoplatform.documents.storage.jcr.webdav.WebDavPathMappingService;
 import org.exoplatform.documents.storage.jcr.webdav.model.JcrNamespaceContext;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
@@ -121,35 +119,39 @@ import lombok.SneakyThrows;
 @Component
 public class WebdavReadCommandHandler {
 
-  private static final String     VERSION_QUERY_PARAM     = "?version=";
+  private static final String      VERSION_QUERY_PARAM     = "?version=";
 
-  private static final String     IDENTITY_ID_PREFIX      = "%20(";
+  private static final String      IDENTITY_ID_PREFIX      = "%20%28";
 
-  private static final String     IDENTITY_ID_SUFFIX      = ")";
+  private static final String      IDENTITY_ID_SUFFIX      = "%29";
 
-  private static final String     EXO_HIDDEN_PROPERTY     = "exo:hidden";
+  private static final String      EXO_HIDDEN_PROPERTY     = "exo:hidden";
 
-  private static final String     WINDOWS_HIDDEN_PROPERTY = "lp1:win32FileAttributes";
+  private static final String      WINDOWS_HIDDEN_PROPERTY = "lp1:win32FileAttributes";
 
-  private static final Set<QName> SEARCH_PROPERTIES       = new HashSet<>(Arrays.asList(DISPLAYNAME,
-                                                                                        RESOURCETYPE,
-                                                                                        CREATIONDATE,
-                                                                                        GETLASTMODIFIED,
-                                                                                        GETCONTENTLENGTH,
-                                                                                        GETCONTENTTYPE));
+  private static final Set<QName>  SEARCH_PROPERTIES       = new HashSet<>(Arrays.asList(DISPLAYNAME,
+                                                                                         RESOURCETYPE,
+                                                                                         CREATIONDATE,
+                                                                                         GETLASTMODIFIED,
+                                                                                         GETCONTENTLENGTH,
+                                                                                         GETCONTENTTYPE));
 
-  private PathCommandHandler      pathCommandHandler;
+  private PathCommandHandler       pathCommandHandler;
 
-  private IdentityManager         identityManager;
+  private IdentityManager          identityManager;
 
-  private SpaceService            spaceService;
+  private SpaceService             spaceService;
+
+  private WebDavPathMappingService webDavPathMappingService;
 
   public WebdavReadCommandHandler(IdentityManager identityManager,
                                   SpaceService spaceService,
-                                  PathCommandHandler pathCommandHandler) {
+                                  PathCommandHandler pathCommandHandler,
+                                  WebDavPathMappingService webDavPathMappingService) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.pathCommandHandler = pathCommandHandler;
+    this.webDavPathMappingService = webDavPathMappingService;
   }
 
   public WebDavItem get(Session session, // NOSONAR
@@ -190,7 +192,7 @@ public class WebdavReadCommandHandler {
       if (identity == null) {
         throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't find an identity Id from path %s", webDavPath));
       } else {
-        return get(getNode(session, pathCommandHandler.transformToJcrPath(webDavPath)),
+        return get(getNode(session, pathCommandHandler.resolveToJcrPath(session, webDavPath)),
                    pathCommandHandler.getIdentityBaseJcrPath(webDavPath),
                    identity.getIdentityId(),
                    identity.getProfile().getFullName(),
@@ -206,12 +208,11 @@ public class WebdavReadCommandHandler {
   public WebDavFileDownload download(Session session,
                                      String webDavPath,
                                      String version) {
-    Node node = getNode(session, pathCommandHandler.transformToJcrPath(webDavPath), version);
+    Node node = getNode(session, pathCommandHandler.resolveToJcrPath(session, webDavPath), version);
     Calendar lastModifiedDate = getLastModifiedDate(node);
     String mimeType = node.getNode(JCR_CONTENT).getProperty(JCR_MIME_TYPE).getString();
     InputStream inputStream = node.getNode(JCR_CONTENT).getProperty(JCR_DATA).getStream();
-
-    return new WebDavFileDownload(node.getName(),
+    return new WebDavFileDownload(getVisibleNodeName(node),
                                   inputStream.available(),
                                   lastModifiedDate == null ? 0l : lastModifiedDate.getTimeInMillis(),
                                   mimeType,
@@ -240,7 +241,7 @@ public class WebdavReadCommandHandler {
   @SneakyThrows
   @SuppressWarnings("unchecked")
   public List<WebDavItem> getVersions(Session session, String webDavPath, Set<QName> requestedPropertyNames, String baseUri) {
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     Node node = getNode(session, jcrPath);
     if (node.isNodeType(MIX_VERSIONABLE)) {
       VersionIterator versions = node.getVersionHistory().getAllVersions();
@@ -268,7 +269,7 @@ public class WebdavReadCommandHandler {
 
   @SneakyThrows
   public boolean isFile(Session session, String webDavPath) {
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     if (session.itemExists(jcrPath)) {
       Item item = session.getItem(jcrPath);
       if (item instanceof Node node) {
@@ -282,7 +283,7 @@ public class WebdavReadCommandHandler {
   public long getLastModifiedDate(Session session,
                                   String webDavPath,
                                   String version) {
-    String jcrPath = pathCommandHandler.transformToJcrPath(webDavPath);
+    String jcrPath = pathCommandHandler.resolveToJcrPath(session, webDavPath);
     Node node = getNode(session, jcrPath, version);
     Calendar lastModifiedDate = getLastModifiedDate(node);
     return lastModifiedDate == null ? 0l : lastModifiedDate.getTimeInMillis();
@@ -379,8 +380,14 @@ public class WebdavReadCommandHandler {
     }
     WebDavItem result = new WebDavItem();
     result.setFile(isFile(node));
-    result.setIdentifier(new URI(getNodeUri(node, identityBaseJcrPath, identityBaseUri)));
-    result.setWebDavPath(getRelativeNodeUri(node, identityBaseJcrPath, identityId, displayName));
+    String webDavPath = getMappedWebDavPath(node, identityBaseJcrPath, identityId, displayName);
+    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, displayName);
+    String identifier = identityBaseUri;
+    if (!StringUtils.equals(webDavPath, identityRootWebDavPath)) {
+      identifier = identityBaseUri + webDavPath.substring(identityRootWebDavPath.length());
+    }
+    result.setIdentifier(new URI(identifier));
+    result.setWebDavPath(webDavPath);
     result.setJcrPath(node.getPath());
     addChildren(result,
                 node,
@@ -452,7 +459,7 @@ public class WebdavReadCommandHandler {
     if (name.equals(DISPLAYNAME)) {
       return version == null ? new WebDavItemProperty(name,
                                                       String.format("%s%s",
-                                                                    decodeString(node.getName()),
+                                                                    getVisibleNodeName(node),
                                                                     getNodeIndexSuffix(node))) :
                              new WebDavItemProperty(name, decodeString(version.getName()));
     } else if (VERSIONNAME.equals(name)) {
@@ -541,9 +548,10 @@ public class WebdavReadCommandHandler {
     } else if (name.equals(ISFOLDER)) {
       return new WebDavItemProperty(name, isFolder(node) ? "1" : "0");
     } else if (name.equals(ISROOT)) {
-      return new WebDavItemProperty(name, node.getPath().equals("/") ? "1" : "0");
+      String identityJcrPath = pathCommandHandler.getIdentityBaseFromJcrPath(node.getPath(), node.getSession().getUserID());
+      return new WebDavItemProperty(name, node.getPath().equals("/") || node.getPath().equals(identityJcrPath) ? "1" : "0");
     } else if (name.equals(PARENTNAME)) {
-      return new WebDavItemProperty(name, node.getParent().getName());
+      return new WebDavItemProperty(name, getParentVisibleNodeName(node));
     } else if (name.equals(RESOURCETYPE)) {
       if (isFolder(node)) {
         return getIsFolderItemProperty();
@@ -664,7 +672,6 @@ public class WebdavReadCommandHandler {
     }
   }
 
-  @SneakyThrows
   private WebDavItem getWebDavIdentityItem(Session session,
                                            Identity identity,
                                            Set<QName> requestedPropertyNames,
@@ -706,10 +713,10 @@ public class WebdavReadCommandHandler {
     if (session.itemExists(identityBaseJcrPath)) {
       Node identityParentNode = (Node) session.getItem(identityBaseJcrPath);
       identityWebDavItem.setJcrPath(identityParentNode.getPath());
-      identityWebDavItem.setWebDavPath(getRelativeNodeUri(identityParentNode,
-                                                          identityBaseJcrPath,
-                                                          identityId,
-                                                          displayName));
+      identityWebDavItem.setWebDavPath(getMappedWebDavPath(identityParentNode,
+                                                           identityBaseJcrPath,
+                                                           identityId,
+                                                           displayName));
       addProperties(identityWebDavItem,
                     identityParentNode,
                     requestedPropertyNames,
@@ -751,46 +758,28 @@ public class WebdavReadCommandHandler {
     }
   }
 
-  @SneakyThrows
-  private String getNodeUri(Node node, String identityBaseJcrPath, String identityBaseUri) {
-    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
-    if (StringUtils.isBlank(nodeRelativePath)) {
-      return identityBaseUri;
-    } else {
-      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
-                                             .filter(StringUtils::isNotBlank)
-                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                                             .map(this::encodeUrlString)
-                                             .collect(Collectors.joining("/"));
-      return String.format(PATHS_CONCAT_FORMAT, identityBaseUri, encodedNodeRelativePath);
-    }
+  private String getIdentityRootWebDavPath(long identityId, String displayName) {
+    return String.format("/%s%s%s%s",
+                         encodeUrlString(displayName),
+                         IDENTITY_ID_PREFIX,
+                         identityId,
+                         IDENTITY_ID_SUFFIX);
   }
 
   @SneakyThrows
-  private String getRelativeNodeUri(Node node,
-                                    String identityBaseJcrPath,
-                                    long identityId,
-                                    String displayName) {
-    String nodeRelativePath = node.getPath().replaceFirst(identityBaseJcrPath, "");
-    if (StringUtils.isBlank(nodeRelativePath)) {
-      return String.format("/%s%s%s%s",
-                           encodeUrlString(displayName),
-                           IDENTITY_ID_PREFIX,
-                           identityId,
-                           IDENTITY_ID_SUFFIX);
-    } else {
-      String encodedNodeRelativePath = Arrays.stream(nodeRelativePath.split("/"))
-                                             .filter(StringUtils::isNotBlank)
-                                             .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                                             .map(this::encodeUrlString)
-                                             .collect(Collectors.joining("/"));
-      return String.format("/%s%s%s%s/%s",
-                           encodeUrlString(displayName),
-                           IDENTITY_ID_PREFIX,
-                           identityId,
-                           IDENTITY_ID_SUFFIX,
-                           encodedNodeRelativePath);
+  private String getMappedWebDavPath(Node node,
+                                     String identityBaseJcrPath,
+                                     long identityId,
+                                     String displayName) {
+    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, displayName);
+    if (StringUtils.equals(node.getPath(), identityBaseJcrPath)) {
+      return identityRootWebDavPath;
     }
+    return webDavPathMappingService.getOrCreateWebDavPath(String.valueOf(identityId),
+                                                          identityBaseJcrPath,
+                                                          identityRootWebDavPath,
+                                                          node,
+                                                          getVisibleNodeName(node));
   }
 
   private Identity getIdentityFromWebDavPath(String webDavPath) {
@@ -839,6 +828,14 @@ public class WebdavReadCommandHandler {
     } else {
       return identity.getProfile().getFullName();
     }
+  }
+
+  private String getVisibleNodeName(Node node) throws RepositoryException {
+    return webDavPathMappingService.getVisibleName(node);
+  }
+
+  private String getParentVisibleNodeName(Node node) throws RepositoryException {
+    return webDavPathMappingService.getParentVisibleNodeName(node);
   }
 
 }
