@@ -91,13 +91,12 @@ export default {
     computing: false,
     protocol: null,
     relativePath: null,
-    identityId: null,
     password: null,
     hasApiKey: false,
   }),
   computed: {
     href() {
-      return this.relativePath && this.identityId && this.protocol ? `${this.protocol}${window.origin}/webdav/drives/(${this.identityId})/${this.relativePath}` : null;
+      return this.relativePath && this.protocol ? `${this.protocol}${window.origin}/webdav/drives${this.relativePath}` : null;
     },
     apiKeyRegenerate() {
       return !this.password && !this.hasApiKey;
@@ -143,7 +142,6 @@ export default {
   methods: {
     async open(protocol, path) {
       this.protocol = protocol;
-      this.identityId = null;
       this.relativePath = null;
       this.dialog = true;
       await this.$nextTick();
@@ -158,21 +156,13 @@ export default {
     async computePath(path) {
       this.computing = true;
       try {
-        let providerId;
-        let remoteId;
-        if (path.startsWith('/Groups/spaces/')) {
-          providerId = 'space';
-          const groupName = path.replace('/Groups/spaces/', '').split('/').shift();
-          const space = await this.$spaceService.getSpaceByGroupId(`/spaces/${groupName}`);
-          remoteId = space.prettyName;
-          this.relativePath = path.replace(`/Groups/spaces/${groupName}/Documents/`, '');
-        } else {
-          providerId = 'organization';
-          remoteId = eXo.env.portal.userName;
-          this.relativePath = path.substring(path.indexOf(`/${eXo.env.portal.userName}/`) + `/${eXo.env.portal.userName}/Private/`.length);
+        const response = await fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/webdav-path?jcrPath=${encodeURIComponent(path)}`, {
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
         }
-        const identity = await this.$identityService.getIdentityByProviderIdAndRemoteId(providerId, remoteId);
-        this.identityId = identity.id;
+        this.relativePath = await response.text();
       } finally {
         this.computing = false;
       }

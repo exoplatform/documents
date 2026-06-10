@@ -97,7 +97,7 @@ public class JcrWebDavServiceTest {
 
   private static final String       FILE_VERSION             = "v1";
 
-  private static final String       WEBDAV_PATH              = "/path/to/file";
+  private static final String       WEBDAV_PATH              = "/path/to/file";                       // NOSONAR
 
   private static final String       LOCKED                   = "/locked";
 

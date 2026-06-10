@@ -39,7 +39,7 @@ import lombok.ToString;
 
 @Data
 @NoArgsConstructor
-@Document(indexName = "webdav_nodes", createIndex = true)
+@Document(indexName = "webdav_items_cache", createIndex = true)
 @Mapping(dateDetection = Detection.FALSE, numericDetection = Detection.FALSE)
 @Setting(replicas = 0, shards = 1)
 public class WebDavItemEntity {
@@ -47,6 +47,7 @@ public class WebDavItemEntity {
   @Id
   private String                         webDavPath;
 
+  @Field(type = FieldType.Keyword)
   private String                         jcrPath;
 
   @Field(type = FieldType.Keyword)
@@ -85,7 +86,9 @@ public class WebDavItemEntity {
     }
     this.webDavPath = webDavPath;
     this.jcrPath = jcrPath;
-    this.parentWebDavPath = webDavPath.substring(0, webDavPath.lastIndexOf("/"));
+    if (webDavPath.lastIndexOf("/") > 0) {
+      this.parentWebDavPath = webDavPath.substring(0, webDavPath.lastIndexOf("/"));
+    }
     this.identifier = identifier == null ? null : identifier.toASCIIString();
     this.file = file;
     if (properties != null) {
