@@ -851,12 +851,9 @@ export default {
 
 
     duplicateDocument(documents){
-      this.parentFolderId = documents.id;
       return this.$documentFileService
-        .duplicateDocument(this.parentFolderId,null,this.$root.ownerId,this.prefixClone)
+        .duplicateDocument(documents.id,null,this.$root.ownerId,this.prefixClone)
         .then( () => {
-          this.parentFolderId=null;
-          this.getFolderPath(this.folderPath);
           this.refreshFiles();
           if (documents.folder){
             this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.duplicateFolder')});
@@ -871,8 +868,6 @@ export default {
       return this.$documentFileService
         .duplicateDocument(documentId,destFolderId,this.$root.ownerId)
         .then( () => {
-          this.parentFolderId=null;
-          this.getFolderPath(this.folderPath);
           this.refreshFiles();
           this.$root.$emit('show-alert', {type: 'success',message: this.$t('documents.alert.success.label.pasted')});
         }).catch(() => {
