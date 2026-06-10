@@ -46,13 +46,14 @@
           <documents-credential-inputs
             :password="password" />
         </template>
+        <div v-else-if="hasApiKey" v-sanitized-html="existingKeyDescription"></div>
         <documents-confirm-access-input
           v-else
           ref="confirmAccessInput"
           @loading="loading = $event"
           @validated="password = $event" />
       </v-card-text>
-      <v-card-actions v-if="password">
+      <v-card-actions v-if="hasApiKey">
         <v-spacer />
         <v-btn
           :loading="computing"
@@ -63,9 +64,19 @@
           {{ $t('documents.label.openInDesktop.dialog.openFile') }}
         </v-btn>
         <v-btn
+          v-if="password"
           class="btn ms-2"
           @click="close">
           {{ $t('documents.label.openInDesktop.dialog.cancel') }}
+        </v-btn>
+        <v-btn
+          v-else
+          color="primary"
+          elevation="0"
+          class="ms-2"
+          outlined
+          @click="regenerateAccess">
+          {{ $t('UserSettings.documents.webdav.regenerateAccess') }}
         </v-btn>
         <v-spacer />
       </v-card-actions>
@@ -82,10 +93,17 @@ export default {
     relativePath: null,
     identityId: null,
     password: null,
+    hasApiKey: false,
   }),
   computed: {
     href() {
       return this.relativePath && this.identityId && this.protocol ? `${this.protocol}${window.origin}/webdav/drives/(${this.identityId})/${this.relativePath}` : null;
+    },
+    apiKeyRegenerate() {
+      return !this.password && !this.hasApiKey;
+    },
+    existingKeyDescription() {
+      return this.$t('documents.label.openInDesktop.dialog.descriptionNoCredentials').replaceAll('\\n', '<br>');
     },
   },
   watch: {
@@ -96,10 +114,28 @@ export default {
         document.dispatchEvent(new CustomEvent('modalClosed'));
       }
       this.$emit('input', this.dialog);
+      this.password = null;
+    },
+    password() {
+      if (this.password && !this.hasApiKey) {
+        this.hasApiKey = true;
+      }
+    },
+    hasApiKey() {
+      if (this.password && !this.hasApiKey) {
+        this.password = null;
+      }
+    },
+    async apiKeyRegenerate() {
+      await this.$nextTick();
+      if (this.$refs.confirmAccessInput) {
+        this.$refs.confirmAccessInput.init();
+      }
     },
   },
-  created() {
+  async created() {
     this.$root.$on('open-in-desktop-dialog', this.open);
+    this.hasApiKey = await this.$apiKeyService.hasPassword();
   },
   beforeDestroy() {
     this.$root.$off('open-in-desktop-dialog', this.open);
@@ -115,6 +151,9 @@ export default {
         this.$refs.confirmAccessInput.init();
       }
       await this.computePath(path);
+    },
+    regenerateAccess() {
+      this.hasApiKey = false;
     },
     async computePath(path) {
       this.computing = true;
