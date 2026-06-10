@@ -138,6 +138,7 @@
 export default {
   data: () => ({
     canAdd: false,
+    spaceCanAdd: false,
     versions: [],
     versionableFile: {},
     allVersions: [],
@@ -239,6 +240,9 @@ export default {
     excludeCategoryIds() {
       return this.$root.excludeCategoryIds;
     },
+    canEditCurrentFolder() {
+      return this.currentFolder?.accessList?.canEdit;
+    }
   },
   watch: {
     recentViewSelected() {
@@ -1556,6 +1560,7 @@ export default {
     },
     setCurrentFolder(folder) {
       this.currentFolder = folder;
+      this.canAdd = this.spaceCanAdd || folder?.accessList?.canEdit;
     },
     getDocumentDataFromUrl(path) {
       const currentUrlSearchParams = window.location.search;
@@ -1719,14 +1724,15 @@ export default {
     canAddDocument(){
       const spaceId= eXo.env.portal.spaceId;
       if (!spaceId){
+        this.spaceCanAdd = true;
         this.canAdd = true;
       } else {
         this.$documentFileService.canAddDocument(spaceId)
           .then(canAdd => {
-            this.canAdd = canAdd;
+            this.spaceCanAdd = canAdd;
+            this.canAdd = canAdd || this.canEditCurrentFolder;
           });
       }
-      
     },
     redirectTodestinationSpace(destFolder, space) {
       const folderPath = this.splitAtFirstOccurrence(destFolder.path,`Groups${space.groupId}`)[1].replace('/Documents', '/documents');
