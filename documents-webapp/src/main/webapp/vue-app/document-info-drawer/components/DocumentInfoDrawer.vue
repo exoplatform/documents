@@ -33,7 +33,9 @@
         </template>
         <span>{{ $t('documents.label.copy.link') }}</span>
       </v-tooltip>
-      <v-tooltip bottom>
+      <v-tooltip
+        v-if="!$downloadDocumentSuspended"
+        bottom>
         <template #activator="{on, bind}">
           <v-btn
             :href="downloadUrl"
