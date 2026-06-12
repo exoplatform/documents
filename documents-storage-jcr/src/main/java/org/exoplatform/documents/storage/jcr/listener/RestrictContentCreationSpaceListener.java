@@ -23,17 +23,21 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getGroupNode;
 
 public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
-  private static final Log       LOG = ExoLogger.getExoLogger(RestrictContentCreationSpaceListener.class);
+  private static final Log                 LOG               = ExoLogger.getExoLogger(RestrictContentCreationSpaceListener.class);
 
-  private RepositoryService      repositoryService;
+  private RepositoryService                repositoryService;
 
-  private NodeHierarchyCreator   nodeHierarchyCreator;
+  private NodeHierarchyCreator             nodeHierarchyCreator;
 
-  private SessionProviderService sessionProviderService;
+  private SessionProviderService           sessionProviderService;
+
+  private final Map<String, AtomicBoolean> pendingOperations = new ConcurrentHashMap<>();
 
   public RestrictContentCreationSpaceListener(RepositoryService repositoryService,
                                               NodeHierarchyCreator nodeHierarchyCreator,
@@ -56,6 +60,11 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
   @Override
   public void removeRedactorUser(SpaceLifeCycleEvent event) {
     Space space = event.getSpace();
+    AtomicBoolean cancelFlag = pendingOperations.get(space.getId());
+    if (cancelFlag != null) {
+      LOG.info("Cancelling in-progress permission restriction for space {}", space.getPrettyName());
+      cancelFlag.set(true);
+    }
     if (space.getRedactors() == null || space.getRedactors().length == 0) {
       changePermissionsForSpaceMembers(space, false);
     }
@@ -76,10 +85,38 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
       Session session = sessionProvider.getSession("collaboration", repository);
       Node spaceRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
       if (spaceRootNode != null) {
-        Map<String, String[]> permissions = buildPermissions(spaceRootNode, space, readOnlyForMembers);
-        ((ExtendedNode) spaceRootNode).setPermissions(permissions);
-        applyPermissionsRecursively(spaceRootNode, space, readOnlyForMembers);
-        session.save();
+        boolean spaceIsOpen = isSpaceOpenToAll(spaceRootNode, space.getGroupId());
+        if (readOnlyForMembers && !spaceIsOpen) {
+          LOG.info("Space {} is already restricted, skipping permission update", space.getPrettyName());
+          return;
+        }
+        if (!readOnlyForMembers && spaceIsOpen) {
+          LOG.info("Space {} is already open, skipping permission update", space.getPrettyName());
+          return;
+        }
+
+        AtomicBoolean cancelFlag = null;
+        if (readOnlyForMembers) {
+          cancelFlag = new AtomicBoolean(false);
+          pendingOperations.put(space.getId(), cancelFlag);
+        }
+
+        try {
+          Map<String, String[]> permissions = buildPermissions(spaceRootNode, space, readOnlyForMembers);
+          ((ExtendedNode) spaceRootNode).setPermissions(permissions);
+          applyPermissionsRecursively(spaceRootNode, space, readOnlyForMembers, cancelFlag);
+          if (cancelFlag != null && cancelFlag.get()) {
+            LOG.info("Permission restriction for space {} was cancelled, discarding changes",
+                     space.getPrettyName());
+            session.refresh(false);
+          } else {
+            session.save();
+          }
+        } finally {
+          if (cancelFlag != null) {
+            pendingOperations.remove(space.getId());
+          }
+        }
       }
     } catch (Exception e) {
       LOG.error("Error updating permissions of the root Node of the space {}", space.getPrettyName(), e);
@@ -90,16 +127,42 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
     }
   }
 
-  private void applyPermissionsRecursively(Node parentNode, Space space, boolean readOnlyForMembers) throws RepositoryException {
-    NodeIterator children = parentNode.getNodes();
-    while (children.hasNext()) {
-      Node child = children.nextNode();
-      if (child.isNodeType("exo:privilegeable")) {
-        Map<String, String[]> permissions = buildPermissions(child, space, readOnlyForMembers);
-        ((ExtendedNode) child).setPermissions(permissions);
+  private void applyPermissionsRecursively(Node parentNode,
+                                           Space space,
+                                           boolean readOnlyForMembers,
+                                           AtomicBoolean cancelFlag) {
+    try {
+      NodeIterator children = parentNode.getNodes();
+      while (children.hasNext()) {
+        if (cancelFlag != null && cancelFlag.get()) {
+          LOG.info("Permission restriction cancelled for space {}, stopping recursion",
+                   space.getPrettyName());
+          return;
+        }
+        Node child = children.nextNode();
+        try {
+          if (child.isNodeType("exo:privilegeable")) {
+            Map<String, String[]> permissions = buildPermissions(child, space, readOnlyForMembers);
+            ((ExtendedNode) child).setPermissions(permissions);
+          }
+        } catch (Exception e) {
+          LOG.warn("Error applying permissions to a child node in space {}, continuing",
+                   space.getPrettyName(), e);
+        }
+        applyPermissionsRecursively(child, space, readOnlyForMembers, cancelFlag);
       }
-      applyPermissionsRecursively(child, space, readOnlyForMembers);
+    } catch (RepositoryException e) {
+      LOG.error("Error iterating children for space {}", space.getPrettyName(), e);
     }
+  }
+
+  private boolean isSpaceOpenToAll(Node node, String groupId) throws RepositoryException {
+    for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+      if (entry.getIdentity().equals("*:" + groupId)) {
+        return !PermissionType.READ.equals(entry.getPermission());
+      }
+    }
+    return false;
   }
 
   private Map<String, String[]> buildPermissions(Node node, Space space, boolean readOnlyForMembers) throws RepositoryException {
