@@ -32,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import javax.jcr.NamespaceRegistry;
@@ -49,9 +50,9 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.documents.storage.jcr.webdav.JcrWebDavService;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.dao.WebDavItemDao;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemEntity;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemPropertyEntity;
-import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.repository.WebDavItemRepository;
 import org.exoplatform.documents.storage.jcr.webdav.cache.listener.WebDavCacheUpdaterAction;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
@@ -70,7 +71,7 @@ import lombok.SneakyThrows;
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class CachedJcrWebDavServiceTest {
 
-  private static final String       FILE_PATH       = "/test";
+  private static final String       FILE_PATH       = "/test";                         // NOSONAR
 
   private static final String       WS_NAME         = "test";
 
@@ -89,7 +90,7 @@ public class CachedJcrWebDavServiceTest {
   private UserACL                   userAcl;
 
   @Mock
-  private WebDavItemRepository      webDavItemRepository;
+  private WebDavItemDao             webDavItemRepository;
 
   @Mock
   private ManageableRepository      repository;
@@ -213,11 +214,11 @@ public class CachedJcrWebDavServiceTest {
     WebDavItemEntity entity = new WebDavItemEntity();
     entity.setModified(false);
 
-    when(webDavItemRepository.findByJcrPath(FILE_PATH)).thenReturn(entity);
+    when(webDavItemRepository.findAllByJcrPath(FILE_PATH)).thenReturn(List.of(entity));
 
     service.clearCache(FILE_PATH, true);
 
-    verify(webDavItemRepository).delete(entity);
+    verify(webDavItemRepository).deleteAll(List.of(entity));
   }
 
   @Test
@@ -225,7 +226,7 @@ public class CachedJcrWebDavServiceTest {
   public void testClearCacheWhenEntityExistsAndDropFalseShouldMarkModified() {
     WebDavItemEntity entity = new WebDavItemEntity();
     entity.setModified(false);
-    when(webDavItemRepository.findByJcrPath(FILE_PATH)).thenReturn(entity);
+    when(webDavItemRepository.findAllByJcrPath(FILE_PATH)).thenReturn(List.of(entity));
 
     service.clearCache(FILE_PATH, false);
 

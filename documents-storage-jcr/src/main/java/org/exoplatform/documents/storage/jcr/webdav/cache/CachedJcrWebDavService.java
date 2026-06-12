@@ -43,9 +43,9 @@ import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.utils.Tools;
 import org.exoplatform.documents.storage.jcr.webdav.JcrWebDavService;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.dao.WebDavItemDao;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemEntity;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemPropertyEntity;
-import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.repository.WebDavItemRepository;
 import org.exoplatform.documents.storage.jcr.webdav.cache.listener.WebDavCacheUpdaterAction;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
@@ -63,23 +63,23 @@ import lombok.SneakyThrows;
 @Service
 public class CachedJcrWebDavService extends JcrWebDavService {
 
-  protected static final Log   LOG = ExoLogger.getLogger(CachedJcrWebDavService.class);
+  protected static final Log LOG = ExoLogger.getLogger(CachedJcrWebDavService.class);
 
-  private WebDavItemRepository webDavItemRepository;
+  private WebDavItemDao      webDavItemDao;
 
   public CachedJcrWebDavService(WebdavReadCommandHandler readCommandHandler,
                                 WebdavWriteCommandHandler writeCommandHandler,
                                 RepositoryServiceImpl repositoryService,
                                 UserACL userAcl,
-                                WebDavItemRepository webDavItemRepository) {
+                                WebDavItemDao webDavItemRepository) {
     super(readCommandHandler, writeCommandHandler, repositoryService, userAcl);
-    this.webDavItemRepository = webDavItemRepository;
+    this.webDavItemDao = webDavItemRepository;
   }
 
   @PostConstruct
   public void init() {
     // Clear stored Cache on startup
-    webDavItemRepository.deleteAll();
+    webDavItemDao.deleteAll();
     // Add Cache Clear Event Listener
     addCacheEventListener();
   }
@@ -165,34 +165,62 @@ public class CachedJcrWebDavService extends JcrWebDavService {
 
   @SneakyThrows
   public void clearCache(String jcrPath, boolean drop) {
-    WebDavItemEntity webDavItemEntity = webDavItemRepository.findByJcrPath(jcrPath);
-    if (webDavItemEntity != null) {
-      LOG.debug("Clear WebDav Item from ES Cache with path '{}' and option drop = '{}'", jcrPath, drop);
+    if (StringUtils.isBlank(jcrPath) || StringUtils.equals(jcrPath, "/")) {
+      return;
+    }
+
+    List<WebDavItemEntity> webDavItemEntities = webDavItemDao.findAllByJcrPath(jcrPath);
+    if (CollectionUtils.isNotEmpty(webDavItemEntities)) {
+      LOG.debug("Clear {} WebDav Item(s) from ES Cache with JCR path '{}' and option drop = '{}'",
+                webDavItemEntities.size(),
+                jcrPath,
+                drop);
       if (drop) {
-        webDavItemRepository.delete(webDavItemEntity);
-      } else if (!webDavItemEntity.isModified()) {
-        webDavItemEntity.setModified(true);
-        webDavItemRepository.save(webDavItemEntity);
+        webDavItemDao.deleteAll(webDavItemEntities);
+      } else {
+        webDavItemEntities.stream()
+                          .filter(e -> !e.isModified())
+                          .forEach(e -> {
+                            e.setModified(true);
+                            webDavItemDao.save(e);
+                          });
       }
     }
-    String parentJcrPath = jcrPath.substring(0, jcrPath.lastIndexOf("/"));
-    WebDavItemEntity parentWebDavItemEntity = webDavItemRepository.findByJcrPath(parentJcrPath);
-    if (parentWebDavItemEntity != null && !parentWebDavItemEntity.isModified() && drop) {
-      LOG.debug("Clear WebDav Item from ES Cache with path '{}'", jcrPath);
-      parentWebDavItemEntity.setModified(true);
-      parentWebDavItemEntity.setDeep(false);
-      webDavItemRepository.save(parentWebDavItemEntity);
+
+    markParentCachesModified(jcrPath, drop);
+  }
+
+  private void markParentCachesModified(String jcrPath, boolean drop) {
+    String parentJcrPath = getParentJcrPath(jcrPath);
+    if (StringUtils.isBlank(parentJcrPath) || StringUtils.equals(parentJcrPath, jcrPath)) {
+      return;
+    }
+
+    List<WebDavItemEntity> parentWebDavItemEntities = webDavItemDao.findAllByJcrPath(parentJcrPath);
+    if (CollectionUtils.isNotEmpty(parentWebDavItemEntities)) {
+      parentWebDavItemEntities.stream()
+                              .filter(e -> !e.isModified() || e.isDeep())
+                              .forEach(e -> {
+                                LOG.debug("Mark WebDav parent cache '{}' as modified after JCR path '{}' changed",
+                                          e.getWebDavPath(),
+                                          jcrPath);
+                                e.setModified(true);
+                                if (drop) {
+                                  e.setDeep(false);
+                                }
+                                webDavItemDao.save(e);
+                              });
     }
   }
 
   private void addChildren(WebDavItem webDavItem, int depth, String baseUri, String username) { // NOSONAR
-    List<WebDavItemEntity> children = webDavItemRepository.findByParentWebDavPath(webDavItem.getWebDavPath());
+    List<WebDavItemEntity> children = webDavItemDao.findByParentWebDavPath(normalizeWebDavPath(webDavItem.getWebDavPath()));
     int childrenDepth = depth - 1;
     children.stream()
             .map(c -> {
               WebDavItem childWebDavItem = null;
               if (!c.isModified()
-                  && c.getUsernames().contains(username)
+                  && CollectionUtils.emptyIfNull(c.getUsernames()).contains(username)
                   && (c.isDeep() || childrenDepth == 0)) {
                 childWebDavItem = c.toWebDavItem();
               } else {
@@ -233,17 +261,17 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     if (forceRefreshUsers) {
       webDavItemEntity.setUsernames(Collections.singleton(username));
     } else {
-      WebDavItemEntity existingWebDavItemEntity = webDavItemRepository.findById(webDavItemEntity.getIdentifier()).orElse(null);
+      WebDavItemEntity existingWebDavItemEntity = webDavItemDao.findById(webDavItemEntity.getWebDavPath()).orElse(null);
       if (existingWebDavItemEntity == null) {
         webDavItemEntity.setUsernames(Collections.singleton(username));
       } else {
-        Set<String> usernames = new HashSet<>(existingWebDavItemEntity.getUsernames());
+        Set<String> usernames = new HashSet<>(CollectionUtils.emptyIfNull(existingWebDavItemEntity.getUsernames()));
         usernames.add(username);
         webDavItemEntity.setUsernames(usernames);
         webDavItemEntity.setDeep(existingWebDavItemEntity.isDeep() || depth > 0);
       }
     }
-    webDavItemEntity = webDavItemRepository.save(webDavItemEntity);
+    webDavItemEntity = webDavItemDao.save(webDavItemEntity);
     if (CollectionUtils.isNotEmpty(webDavItem.getChildren())) {
       int childrenDepth = depth - 1;
       webDavItem.getChildren().forEach(c -> saveWebDavItem(c, username, forceRefreshUsers, childrenDepth));
@@ -263,13 +291,28 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   }
 
   private WebDavItemEntity findCacheEntry(String webDavPath) {
-    String id = Arrays.stream(webDavPath.split("/"))
-                      .filter(StringUtils::isNotBlank)
-                      .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
-                      .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
-                                          .replace("+", "%20"))
-                      .collect(Collectors.joining("/"));
-    return webDavItemRepository.findById("/" + id).orElse(null);
+    return webDavItemDao.findById(normalizeWebDavPath(webDavPath)).orElse(null);
+  }
+
+  private String normalizeWebDavPath(String webDavPath) {
+    if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
+      return "/";
+    }
+    String normalized = Arrays.stream(webDavPath.split("/"))
+                              .filter(StringUtils::isNotBlank)
+                              .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                              .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
+                                                  .replace("+", "%20"))
+                              .collect(Collectors.joining("/"));
+    return "/" + normalized;
+  }
+
+  private String getParentJcrPath(String jcrPath) {
+    if (StringUtils.isBlank(jcrPath) || StringUtils.equals(jcrPath, "/")) {
+      return null;
+    }
+    int index = jcrPath.lastIndexOf('/');
+    return index <= 0 ? "/" : jcrPath.substring(0, index);
   }
 
   private boolean isMustReloadUsers(WebDavItemEntity webDavItemEntity) {
@@ -280,12 +323,12 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     return webDavItemEntity == null
            || webDavItemEntity.isModified()
            || (depth > 0 && !webDavItemEntity.isDeep())
-           || !webDavItemEntity.getUsernames().contains(username);
+           || !CollectionUtils.emptyIfNull(webDavItemEntity.getUsernames()).contains(username);
   }
 
   @SneakyThrows
   private void addCacheEventListener() {
-    Session session = getSession();
+    Session session = getSystemSession();
     try {
       ObservationManager observation = session.getWorkspace().getObservationManager();
       WebDavCacheUpdaterAction.SUPPORTED_PATHS.forEach(path -> addCacheEventListener(observation,

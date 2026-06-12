@@ -381,4 +381,14 @@ public interface DocumentWebDavService {
    */
   void unlock(String resourcePath, List<String> lockTokens, String username) throws WebDavException;
 
+  /**
+   * Returns the WebDav Path of a given JCR Path
+   * 
+   * @param jcrPath JCR Full Path
+   * @param username user login accessing the file
+   * @return WebDav Path
+   * @throws WebDavException when not permitted or not found
+   */
+  String getWebDavPath(String jcrPath, String username) throws WebDavException;
+
 }

@@ -22,17 +22,35 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Base64;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
-import javax.ws.rs.*;
-import javax.ws.rs.core.*;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.CacheControl;
+import javax.ws.rs.core.EntityTag;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Request;
+import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriInfo;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.json.JSONObject;
 
 import org.exoplatform.common.http.HTTPStatus;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -44,13 +62,29 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
-import org.exoplatform.documents.model.*;
-import org.exoplatform.documents.rest.model.*;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.DocumentFavoriteFilter;
+import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentGroupsSize;
+import org.exoplatform.documents.model.DocumentNodeFilter;
+import org.exoplatform.documents.model.DocumentTimelineFilter;
+import org.exoplatform.documents.model.DownloadItem;
+import org.exoplatform.documents.model.PublicDocumentAccess;
+import org.exoplatform.documents.model.TrashElementNode;
+import org.exoplatform.documents.model.TrashElementNodeFilter;
+import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.DocumentsUserSettings;
+import org.exoplatform.documents.rest.model.FileNodeEntity;
+import org.exoplatform.documents.rest.model.NodePermissionEntity;
+import org.exoplatform.documents.rest.model.PublicDocumentAccessOptionsEntity;
+import org.exoplatform.documents.rest.model.TrashElementEntity;
+import org.exoplatform.documents.rest.model.Visibility;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.ExternalDownloadService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
+import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.portal.rest.CollectionEntity;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.log.ExoLogger;
@@ -65,6 +99,7 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.MetadataService;
 
 import io.meeds.portal.thumbnail.model.FileContent;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -73,7 +108,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import org.json.JSONObject;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Path("/v1/documents")
 @Tag(name = "/v1/documents", description = "Manages documents associated to users and spaces") // NOSONAR
@@ -103,14 +138,16 @@ public class DocumentFileRest implements ResourceContainer {
 
   private final ExternalDownloadService     externalDownloadService;
 
+  private final DocumentWebDavService       documentWebDavService;
 
-  public DocumentFileRest(DocumentFileService documentFileService,
+  public DocumentFileRest(DocumentFileService documentFileService, // NOSONAR
                           SpaceService spaceService,
                           IdentityManager identityManager,
                           MetadataService metadataService,
                           SettingService settingService,
                           PublicDocumentAccessService publicDocumentAccessService,
-                          ExternalDownloadService externalDownloadService) {
+                          ExternalDownloadService externalDownloadService,
+                          DocumentWebDavService documentWebDavService) {
     this.documentFileService = documentFileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
@@ -118,6 +155,38 @@ public class DocumentFileRest implements ResourceContainer {
     this.settingService = settingService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.externalDownloadService = externalDownloadService;
+    this.documentWebDavService = documentWebDavService;
+  }
+
+  @GET
+  @Produces(MediaType.TEXT_PLAIN)
+  @RolesAllowed("users")
+  @Path("/webdav-path")
+  @Operation(summary = "Get WebDAV path from JCR path", method = "GET", description = "Resolves a JCR path into the visible WebDAV path used by desktop clients.")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "404", description = "Resource not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getWebDavPath(@Parameter(description = "JCR path of the document or folder", required = true)
+                                @QueryParam("jcrPath")
+                                String jcrPath) {
+    if (StringUtils.isBlank(jcrPath)) {
+      return Response.status(Status.BAD_REQUEST).entity("jcrPath_is_mandatory").build();
+    }
+    try {
+      return Response.ok(documentWebDavService.getWebDavPath(jcrPath, RestUtils.getCurrentUser())).build();
+    } catch (org.exoplatform.documents.webdav.model.WebDavException e) {
+      int httpError = e.getHttpError();
+      if (httpError == HttpServletResponse.SC_FORBIDDEN) {
+        httpError = HttpServletResponse.SC_NOT_FOUND;
+      }
+      return Response.status(httpError).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving WebDAV path for JCR path '{}'", jcrPath, e);
+      return Response.serverError().entity(e.getMessage()).build();
+    }
   }
 
   @GET

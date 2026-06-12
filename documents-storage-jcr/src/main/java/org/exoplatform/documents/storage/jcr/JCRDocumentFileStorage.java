@@ -517,7 +517,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         thisWeek.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY);
 
         Calendar thisMonth = GregorianCalendar.getInstance();
-        thisMonth.set(Calendar.DAY_OF_MONTH, 0);
+        thisMonth.set(Calendar.DAY_OF_MONTH, 1);
 
         Calendar thisYear = GregorianCalendar.getInstance();
         thisYear.set(Calendar.DAY_OF_YEAR, 0);

@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see<http://www.gnu.org/licenses/>.
  */
-package org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.repository;
+package org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.dao;
 
 import java.util.List;
 
@@ -24,10 +24,10 @@ import org.springframework.stereotype.Repository;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemEntity;
 
 @Repository
-public interface WebDavItemRepository extends ElasticsearchRepository<WebDavItemEntity, String> {
+public interface WebDavItemDao extends ElasticsearchRepository<WebDavItemEntity, String> {
 
   List<WebDavItemEntity> findByParentWebDavPath(String parentWebDavPath);
 
-  WebDavItemEntity findByJcrPath(String jcrPath);
+  List<WebDavItemEntity> findAllByJcrPath(String jcrPath);
 
 }

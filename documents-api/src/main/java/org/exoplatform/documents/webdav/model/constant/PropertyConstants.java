@@ -35,7 +35,7 @@ public class PropertyConstants {
   public static final String                  ALLOW_METHODS              =
                                                             "CANCELUPLOAD, CHECKIN, CHECKOUT, COPY, DELETE, GET, HEAD, LOCK, MKCALENDAR, MKCOL, MOVE, OPTIONS, POST, PROPFIND, PROPPATCH, PUT, REPORT, SEARCH, UNCHECKOUT, UNLOCK, UPDATE, VERSION-CONTROL";
 
-  public static final List<String>            ALLOW_METHODS_LIST         = Arrays.stream(ALLOW_METHODS.split(","))                                                                                                                                               // NOSONAR
+  public static final List<String>            ALLOW_METHODS_LIST         = Arrays.stream(ALLOW_METHODS.split(","))                                                                                                                                          // NOSONAR
                                                                                  .map(String::trim)
                                                                                  .toList();
 

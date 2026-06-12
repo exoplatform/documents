@@ -32,6 +32,7 @@ import org.springframework.util.MimeTypeUtils;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.documents.webdav.model.constant.PropertyConstants;
 import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.documents.webdav.util.PropertyWriteUtil;
 
@@ -45,12 +46,12 @@ public class SearchWebDavHandler extends WebDavHttpMethodPlugin {
   private static final Set<QName> REQUESTED_PROPERTIES = new HashSet<>();
 
   static {
-    REQUESTED_PROPERTIES.add(new QName("DAV:", "displayname"));
-    REQUESTED_PROPERTIES.add(new QName("DAV:", "resourcetype"));
-    REQUESTED_PROPERTIES.add(new QName("DAV:", "creationdate"));
-    REQUESTED_PROPERTIES.add(new QName("DAV:", "getlastmodified"));
-    REQUESTED_PROPERTIES.add(new QName("DAV:", "getcontentlength"));
-    REQUESTED_PROPERTIES.add(new QName("DAV:", "getcontenttype"));
+    REQUESTED_PROPERTIES.add(PropertyConstants.DISPLAYNAME);
+    REQUESTED_PROPERTIES.add(PropertyConstants.RESOURCETYPE);
+    REQUESTED_PROPERTIES.add(PropertyConstants.CREATIONDATE);
+    REQUESTED_PROPERTIES.add(PropertyConstants.GETLASTMODIFIED);
+    REQUESTED_PROPERTIES.add(PropertyConstants.GETCONTENTLENGTH);
+    REQUESTED_PROPERTIES.add(PropertyConstants.GETCONTENTTYPE);
   }
 
   public SearchWebDavHandler() {
