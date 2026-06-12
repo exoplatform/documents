@@ -15,6 +15,8 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceLifeCycleEvent;
 
 import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import java.util.ArrayList;
@@ -73,28 +75,10 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
       sessionProvider = sessionProviderService.getSystemSessionProvider(null);
       Session session = sessionProvider.getSession("collaboration", repository);
       Node spaceRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
-      Map<String, String[]> permissions = new HashMap<>();
       if (spaceRootNode != null) {
-        for (AccessControlEntry accessEntry : ((ExtendedNode) spaceRootNode).getACL().getPermissionEntries()) {
-          if (!accessEntry.getIdentity().endsWith(":" + space.getGroupId())) {
-            if (permissions.get(accessEntry.getIdentity()) == null) {
-              permissions.put(accessEntry.getIdentity(), new String[] { accessEntry.getPermission() });
-            } else {
-              List<String> existingPermissions = new ArrayList<>(List.of(permissions.get(accessEntry.getIdentity())));
-              existingPermissions.add(accessEntry.getPermission());
-              permissions.put(accessEntry.getIdentity(), existingPermissions.toArray(new String[0]));
-            }
-          }
-        }
-        if (readOnlyForMembers) {
-          permissions.put("*:" + space.getGroupId(), new String[] { PermissionType.READ });
-          permissions.put("manager:" + space.getGroupId(), PermissionType.ALL);
-          permissions.put("redactor:" + space.getGroupId(), PermissionType.ALL);
-          permissions.put("publisher:" + space.getGroupId(), PermissionType.ALL);
-        } else {
-          permissions.put("*:" + space.getGroupId(), PermissionType.ALL);
-        }
+        Map<String, String[]> permissions = buildPermissions(spaceRootNode, space, readOnlyForMembers);
         ((ExtendedNode) spaceRootNode).setPermissions(permissions);
+        applyPermissionsRecursively(spaceRootNode, space, readOnlyForMembers);
         session.save();
       }
     } catch (Exception e) {
@@ -104,5 +88,41 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
         sessionProvider.close();
       }
     }
+  }
+
+  private void applyPermissionsRecursively(Node parentNode, Space space, boolean readOnlyForMembers) throws RepositoryException {
+    NodeIterator children = parentNode.getNodes();
+    while (children.hasNext()) {
+      Node child = children.nextNode();
+      if (child.isNodeType("exo:privilegeable")) {
+        Map<String, String[]> permissions = buildPermissions(child, space, readOnlyForMembers);
+        ((ExtendedNode) child).setPermissions(permissions);
+      }
+      applyPermissionsRecursively(child, space, readOnlyForMembers);
+    }
+  }
+
+  private Map<String, String[]> buildPermissions(Node node, Space space, boolean readOnlyForMembers) throws RepositoryException {
+    Map<String, String[]> permissions = new HashMap<>();
+    for (AccessControlEntry accessEntry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+      if (!accessEntry.getIdentity().endsWith(":" + space.getGroupId())) {
+        if (permissions.get(accessEntry.getIdentity()) == null) {
+          permissions.put(accessEntry.getIdentity(), new String[] { accessEntry.getPermission() });
+        } else {
+          List<String> existingPermissions = new ArrayList<>(List.of(permissions.get(accessEntry.getIdentity())));
+          existingPermissions.add(accessEntry.getPermission());
+          permissions.put(accessEntry.getIdentity(), existingPermissions.toArray(new String[0]));
+        }
+      }
+    }
+    if (readOnlyForMembers) {
+      permissions.put("*:" + space.getGroupId(), new String[] { PermissionType.READ });
+      permissions.put("manager:" + space.getGroupId(), PermissionType.ALL);
+      permissions.put("redactor:" + space.getGroupId(), PermissionType.ALL);
+      permissions.put("publisher:" + space.getGroupId(), PermissionType.ALL);
+    } else {
+      permissions.put("*:" + space.getGroupId(), PermissionType.ALL);
+    }
+    return permissions;
   }
 }

@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
@@ -73,6 +74,9 @@ class RestrictContentCreationSpaceListenerTest {
     when(session.itemExists(anyString())).thenReturn(true);
     when(session.getItem(anyString())).thenReturn(groupNode);
     when(systemSessionProvider.getSession(anyString(), any())).thenReturn(session);
+    NodeIterator nodeIterator = mock(NodeIterator.class);
+    when(nodeIterator.hasNext()).thenReturn(false);
+    when(groupNode.getNodes()).thenReturn(nodeIterator);
     this.restrictContentCreationSpaceListener = new RestrictContentCreationSpaceListener(repositoryService,
                                                                                          nodeHierarchyCreator,
                                                                                          sessionProviderService);
