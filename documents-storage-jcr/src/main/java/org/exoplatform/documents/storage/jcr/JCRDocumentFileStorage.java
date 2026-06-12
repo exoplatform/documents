@@ -610,6 +610,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (relativeParent == null) {
           throw new ObjectNotFoundException("Parent Relative Folder '%s' under '%s' doesn't exist".formatted(folderPath, parent.getPath()));
         }
+        parent = relativeParent;
       }
       if (parent == null) {
         throw new ObjectNotFoundException("Parent Folder '%s' doesn't exist".formatted(parentFolderId));
