@@ -13,10 +13,12 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceLifeCycleEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
@@ -30,7 +32,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@RunWith(MockitoJUnitRunner.Silent.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class RestrictContentCreationSpaceListenerTest {
 
   RestrictContentCreationSpaceListener restrictContentCreationSpaceListener;
@@ -114,9 +117,10 @@ class RestrictContentCreationSpaceListenerTest {
     space.setGroupId(groupId);
     space.setRedactors(new String[] { "root" });
 
-    List<AccessControlEntry> entries = new ArrayList<>(permissionEntries);
-    entries.add(new AccessControlEntry(groupIdRef, "add_node"));
-    when(acl.getPermissionEntries()).thenReturn(entries);
+    // Mock the node as 'Open' (standard)
+    permissionEntries.add(new AccessControlEntry(groupIdRef, "add_node"));
+    when(acl.getPermissionEntries()).thenReturn(permissionEntries);
+    when(groupNode.isNodeType("exo:privilegeable")).thenReturn(true);
     when(groupNode.getACL()).thenReturn(acl);
 
     SpaceLifeCycleEvent event = new SpaceLifeCycleEvent(space, userId, SpaceLifeCycleEvent.Type.ADD_REDACTOR_USER);
@@ -133,9 +137,8 @@ class RestrictContentCreationSpaceListenerTest {
     Space space = new Space();
     space.setGroupId(groupId);
 
-    List<AccessControlEntry> entries = new ArrayList<>(permissionEntries);
-    entries.add(new AccessControlEntry(groupIdRef, PermissionType.READ));
-    when(acl.getPermissionEntries()).thenReturn(entries);
+    // Mock the node as non-privilegeable (standard)
+    when(groupNode.isNodeType("exo:privilegeable")).thenReturn(false);
     when(groupNode.getACL()).thenReturn(acl);
 
     SpaceLifeCycleEvent event = new SpaceLifeCycleEvent(space, userId, SpaceLifeCycleEvent.Type.REMOVE_REDACTOR_USER);
@@ -145,5 +148,49 @@ class RestrictContentCreationSpaceListenerTest {
     Map<String, String[]> capturedArgument = argumentCaptor.getValue();
     assertNotNull(capturedArgument);
     assertArrayEquals(PermissionType.ALL, capturedArgument.get("*:/spaces/groupOne"));
+  }
+
+  @Test
+  void addRedactorUser_alreadyRestricted() throws RepositoryException {
+    Space space = new Space();
+    space.setGroupId(groupId);
+    space.setRedactors(new String[] { "root" });
+
+    // Mock the node to already have restricted permissions
+    List<AccessControlEntry> entries = new ArrayList<>(permissionEntries);
+    entries.add(new AccessControlEntry(groupIdRef, PermissionType.READ));
+    for (String permission : PermissionType.ALL) {
+      entries.add(new AccessControlEntry(managerRef, permission));
+      entries.add(new AccessControlEntry(redactorRef, permission));
+      entries.add(new AccessControlEntry(publisherRef, permission));
+    }
+    when(acl.getPermissionEntries()).thenReturn(entries);
+    when(groupNode.getACL()).thenReturn(acl);
+
+    SpaceLifeCycleEvent event = new SpaceLifeCycleEvent(space, userId, SpaceLifeCycleEvent.Type.ADD_REDACTOR_USER);
+    restrictContentCreationSpaceListener.addRedactorUser(event);
+
+    // Verify setPermissions was NEVER called because it's already restricted
+    verify(groupNode, never()).setPermissions(any());
+  }
+
+  @Test
+  void addRedactorUser_respectsCustomPermissions() throws RepositoryException {
+    Space space = new Space();
+    space.setGroupId(groupId);
+    space.setRedactors(new String[] { "root" });
+
+    // Mock a node to have a custom permission (e.g. for a specific user "bob")
+    List<AccessControlEntry> entries = new ArrayList<>(permissionEntries);
+    entries.add(new AccessControlEntry("bob", "read")); // Custom entry!
+    when(acl.getPermissionEntries()).thenReturn(entries);
+    when(groupNode.getACL()).thenReturn(acl);
+    when(groupNode.isNodeType("exo:privilegeable")).thenReturn(true);
+
+    SpaceLifeCycleEvent event = new SpaceLifeCycleEvent(space, userId, SpaceLifeCycleEvent.Type.ADD_REDACTOR_USER);
+    restrictContentCreationSpaceListener.addRedactorUser(event);
+
+    // Verify setPermissions was NEVER called because it has custom permissions
+    verify(groupNode, never()).setPermissions(any());
   }
 }
