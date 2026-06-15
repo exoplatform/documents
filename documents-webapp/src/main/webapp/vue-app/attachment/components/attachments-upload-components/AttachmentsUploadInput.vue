@@ -157,7 +157,7 @@ export default {
     uploadFile: function () {
       this.$refs.uploadInput.click();
     },
-    handleFileUpload: function (files) {
+    async handleFileUpload(files) {
       if (this.$refs.uploadInput){
         this.abortUploading = false;
         const newFilesArray = Array.from(files);
@@ -168,24 +168,30 @@ export default {
 
         this.newUploadedFiles = [];
         const newAttachedFiles = [];
-        newFilesArray.forEach(file => {
+        await Promise.all(newFilesArray.map(async file => {
+          let safeFile = file;
+          if (file.type === 'image/svg+xml') {
+            const text = await file.text();
+            const safeSVG = DOMPurify.sanitize(text, { USE_PROFILES: { svg: true } });
+            safeFile = new File([safeSVG], file.name, { type: 'image/svg+xml' });
+          }
           const controller = new AbortController();
           const signal = controller.signal;
           newAttachedFiles.push({
-            originalFileObject: file,
+            originalFileObject: safeFile,
             fileDrive: this.currentDrive,
-            title: file.name,
-            size: file.size,
-            mimetype: file.type,
-            acl: file.acl,
+            title: safeFile.name,
+            size: safeFile.size,
+            mimetype: safeFile.type,
+            acl: safeFile.acl,
             uploadId: this.getNewUploadId(),
             uploadProgress: 0,
-            destinationFolder: file.destinationFolder? `${this.pathDestinationFolder}/${file.destinationFolder}` :this.pathDestinationFolder,
+            destinationFolder: safeFile.destinationFolder? `${this.pathDestinationFolder}/${safeFile.destinationFolder}` :this.pathDestinationFolder,
             pathDestinationFolderForFile: '',
             isPublic: true,
             signal: signal
           });
-        });
+        }));
 
         const existingAttachedFiles = newAttachedFiles.filter(file => this.attachments.some(f => f.title === file.title && f.destinationFolder === file.destinationFolder));
         if (existingAttachedFiles.length > 0) {

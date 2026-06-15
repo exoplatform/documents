@@ -4,7 +4,8 @@
   ],
   "globals": {
     "documentPreview": true,
-    "DocumentsDraggable": true
+    "DocumentsDraggable": true,
+    "DOMPurify": true
   },
   "rules": {
     "vue/no-mutating-props": "warn",
