@@ -2896,7 +2896,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         if (StringUtils.isEmpty(nodeId)) {
           throw new ItemNotFoundException();
         } else {
-          node = getNodeByIdentifier(node.getSession(), nodeId);
+          String symlinkPath = node.getPath();
+          Node targetNode = getNodeByIdentifier(node.getSession(), nodeId);
+          if (JCRDocumentsUtil.isFile(targetNode)) {
+            AbstractNode fileNode = toFileNode(identityManager, identity, targetNode, "", spaceService);
+            fileNode.setPath(symlinkPath);
+            return fileNode;
+          } else if (JCRDocumentsUtil.isFolder(targetNode)) {
+            AbstractNode folderNode = toFolderNode(identityManager, identity, targetNode, "", spaceService);
+            folderNode.setPath(symlinkPath);
+            return folderNode;
+          } else {
+            throw new ItemNotFoundException();
+          }
         }
       }
       if (JCRDocumentsUtil.isFile(node)) {
