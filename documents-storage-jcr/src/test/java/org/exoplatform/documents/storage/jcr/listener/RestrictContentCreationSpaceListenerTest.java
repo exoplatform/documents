@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
@@ -48,15 +49,25 @@ class RestrictContentCreationSpaceListenerTest {
 
   ExtendedNode                         groupNode   = Mockito.mock(ExtendedNode.class);
 
-  AccessControlList                    acl         = mock(AccessControlList.class);
+  AccessControlList                    acl                 = mock(AccessControlList.class);
 
-  String                               memberShip1 = "member:/spaces/groupOne";
+  List<AccessControlEntry>             permissionEntries   = new ArrayList<>();
+
+  String                               memberShip1         = "member:/spaces/groupOne";
 
   String                               memberShip2 = "*:/platform/users";
 
   String                               memberShip3 = "member:/organization/board";
 
   String                               groupId     = "/spaces/groupOne";
+
+  String                               groupIdRef  = "*:" + groupId;
+
+  String                               managerRef  = "manager:" + groupId;
+
+  String                               redactorRef = "redactor:" + groupId;
+
+  String                               publisherRef = "publisher:" + groupId;
 
   @BeforeEach
   void setUp() throws RepositoryException {
@@ -73,11 +84,14 @@ class RestrictContentCreationSpaceListenerTest {
     when(session.itemExists(anyString())).thenReturn(true);
     when(session.getItem(anyString())).thenReturn(groupNode);
     when(systemSessionProvider.getSession(anyString(), any())).thenReturn(session);
+    NodeIterator nodeIterator = mock(NodeIterator.class);
+    when(nodeIterator.hasNext()).thenReturn(false);
+    when(groupNode.getNodes()).thenReturn(nodeIterator);
     this.restrictContentCreationSpaceListener = new RestrictContentCreationSpaceListener(repositoryService,
                                                                                          nodeHierarchyCreator,
                                                                                          sessionProviderService);
 
-    List<AccessControlEntry> permissionEntries = new ArrayList<>();
+    permissionEntries.clear();
     permissionEntries.add(new AccessControlEntry("root", "read"));
     permissionEntries.add(new AccessControlEntry("root", "add_node"));
     permissionEntries.add(new AccessControlEntry("root", "set_property"));
@@ -99,6 +113,10 @@ class RestrictContentCreationSpaceListenerTest {
     Space space = new Space();
     space.setGroupId(groupId);
     space.setRedactors(new String[] { "root" });
+
+    List<AccessControlEntry> entries = new ArrayList<>(permissionEntries);
+    entries.add(new AccessControlEntry(groupIdRef, "add_node"));
+    when(acl.getPermissionEntries()).thenReturn(entries);
     when(groupNode.getACL()).thenReturn(acl);
 
     SpaceLifeCycleEvent event = new SpaceLifeCycleEvent(space, userId, SpaceLifeCycleEvent.Type.ADD_REDACTOR_USER);
@@ -115,6 +133,9 @@ class RestrictContentCreationSpaceListenerTest {
     Space space = new Space();
     space.setGroupId(groupId);
 
+    List<AccessControlEntry> entries = new ArrayList<>(permissionEntries);
+    entries.add(new AccessControlEntry(groupIdRef, PermissionType.READ));
+    when(acl.getPermissionEntries()).thenReturn(entries);
     when(groupNode.getACL()).thenReturn(acl);
 
     SpaceLifeCycleEvent event = new SpaceLifeCycleEvent(space, userId, SpaceLifeCycleEvent.Type.REMOVE_REDACTOR_USER);

@@ -533,8 +533,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     Space space = spaceService.getSpaceById(spaceId);
     boolean canAdd = false;
     if (space != null) {
-      canAdd = !spaceService.hasRedactor(space) || spaceService.hasRedactor(space)
-          && (spaceService.isRedactor(space, currentUserName) || spaceService.isManager(space, currentUserName));
+      canAdd = spaceService.canRedactOnSpace(space, currentUserName);
     }
     return canAdd;
   }

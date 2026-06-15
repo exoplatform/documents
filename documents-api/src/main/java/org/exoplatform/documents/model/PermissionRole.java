@@ -18,5 +18,5 @@ package org.exoplatform.documents.model;
 
 public enum PermissionRole {
   ALL,
-  MANAGERS_REDACTORS;
+  MANAGERS_REDACTORS_PUBLISHERS;
 }
