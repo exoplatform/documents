@@ -30,29 +30,40 @@ import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.space.SpaceListenerPlugin;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceLifeCycleEvent;
+import org.exoplatform.social.core.space.spi.SpaceService;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getGroupNode;
 
 public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
 
-  private static final Log          LOG               = ExoLogger.getExoLogger(RestrictContentCreationSpaceListener.class);
+  private static final Log             LOG = ExoLogger.getExoLogger(RestrictContentCreationSpaceListener.class);
 
-  private RepositoryService         repositoryService;
+  private final SpaceService           spaceService;
 
-  private NodeHierarchyCreator      nodeHierarchyCreator;
+  private final RepositoryService      repositoryService;
 
-  private SessionProviderService    sessionProviderService;
+  private final NodeHierarchyCreator   nodeHierarchyCreator;
 
-  public RestrictContentCreationSpaceListener(RepositoryService repositoryService,
+  private final SessionProviderService sessionProviderService;
+
+  public RestrictContentCreationSpaceListener(SpaceService spaceService,
+                                              RepositoryService repositoryService,
                                               NodeHierarchyCreator nodeHierarchyCreator,
                                               SessionProviderService sessionProviderService) {
+    this.spaceService = spaceService;
     this.repositoryService = repositoryService;
     this.nodeHierarchyCreator = nodeHierarchyCreator;
     this.sessionProviderService = sessionProviderService;
@@ -60,59 +71,45 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
 
   @Override
   public void spaceCreated(SpaceLifeCycleEvent event) {
-    applyRestrictPermissions(event);
+    Space space = event.getSpace();
+    synchronizeSpacePermissions(space, isRedactionalSpace(space));
   }
 
   @Override
   public void addRedactorUser(SpaceLifeCycleEvent event) {
-    applyRestrictPermissions(event);
+    Space space = event.getSpace();
+    if (isRedactionalSpace(space)) {
+      synchronizeSpacePermissions(space, true);
+    }
   }
 
   @Override
   public void removeRedactorUser(SpaceLifeCycleEvent event) {
     Space space = event.getSpace();
-    if (space.getRedactors() == null || space.getRedactors().length == 0) {
-      changePermissionsForSpaceMembers(space, false);
+    if (!isRedactionalSpace(space)) {
+      synchronizeSpacePermissions(space, false);
     }
   }
 
-  private void applyRestrictPermissions(SpaceLifeCycleEvent event) {
-    Space space = event.getSpace();
-    if (space.getRedactors() != null && space.getRedactors().length == 1) {
-      changePermissionsForSpaceMembers(space, true);
+  private void synchronizeSpacePermissions(Space space, boolean targetRedactionalMode) {
+    if (space == null) {
+      return;
     }
-  }
-
-  private void changePermissionsForSpaceMembers(Space space, boolean readOnlyForMembers) {
     SessionProvider sessionProvider = null;
     try {
       ManageableRepository repository = repositoryService.getCurrentRepository();
       sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+
       Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node spaceRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
       if (spaceRootNode != null) {
-        boolean spaceIsOpen = isSpaceOpenToAll(spaceRootNode, space.getGroupId());
-        if (readOnlyForMembers && !spaceIsOpen) {
-          throw new OperationCancelledException();
-        }
-        if (!readOnlyForMembers && spaceIsOpen) {
-          throw new OperationCancelledException();
-        }
-        try {
-          if (isStandardModel(spaceRootNode, space.getGroupId(), !readOnlyForMembers)) {
-            Map<String, String[]> permissions = buildPermissions(spaceRootNode, space, readOnlyForMembers);
-            ((ExtendedNode) spaceRootNode).setPermissions(permissions);
-          }
-          applyPermissionsRecursively(spaceRootNode, space, readOnlyForMembers, spaceRootNode, spaceIsOpen);
-          spaceRootNode.save();
-        } catch (OperationCancelledException e) {
-          LOG.info("Permission restriction for space {} was cancelled, discarding changes", space.getPrettyName());
-        }
+        synchronizeNodePermissions(space, targetRedactionalMode, spaceRootNode);
+        synchronizeChildrenPermissions(space, targetRedactionalMode, spaceRootNode);
       }
     } catch (OperationCancelledException e) {
-      LOG.info("Permission update cancelled for space {}", space.getPrettyName());
+      LOG.info("Permission update cancelled for space width id '{}'", space.getId());
     } catch (Exception e) {
-      LOG.error("Error updating permissions of the root Node of the space {}", space.getPrettyName(), e);
+      LOG.error("Error updating permissions of space width id '{}'", space.getId(), e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
@@ -120,89 +117,148 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
     }
   }
 
-  private void applyPermissionsRecursively(Node parentNode,
-                                           Space space,
-                                           boolean readOnlyForMembers,
-                                           Node spaceRootNode,
-                                           boolean spaceIsOpen) throws OperationCancelledException, RepositoryException {
+  private void synchronizeChildrenPermissions(Space space,
+                                              boolean targetRedactionalMode,
+                                              Node parentNode) throws RepositoryException,
+          OperationCancelledException {
     NodeIterator children = parentNode.getNodes();
     while (children.hasNext()) {
-      if (isSpaceOpenToAll(spaceRootNode, space.getGroupId()) != spaceIsOpen) {
-        throw new OperationCancelledException();
-      }
       Node child = children.nextNode();
       try {
-        if (isStandardModel(child, space.getGroupId(), !readOnlyForMembers)) {
-          Map<String, String[]> permissions = buildPermissions(child, space, readOnlyForMembers);
-          ((ExtendedNode) child).setPermissions(permissions);
-          child.save();
-        }
-        applyPermissionsRecursively(child, space, readOnlyForMembers, spaceRootNode, spaceIsOpen);
+        synchronizeNodePermissions(space, targetRedactionalMode, child);
+        synchronizeChildrenPermissions(space, targetRedactionalMode, child);
       } catch (OperationCancelledException e) {
         throw e;
       } catch (Exception e) {
-        LOG.warn("Error applying permissions to a child node in space {}, continuing", space.getPrettyName(), e);
+        LOG.warn("Error applying permissions to a child node in space width id '{}', continuing", space.getId(), e);
       }
     }
   }
 
-  private boolean isStandardModel(Node node, String groupId, boolean mode) throws RepositoryException {
+  private void synchronizeNodePermissions(Space space,
+                                          boolean targetRedactionalMode,
+                                          Node node) throws RepositoryException,
+          OperationCancelledException {
+    assertRedactionalModeStillExpected(space, targetRedactionalMode);
+    if (shouldRewriteSpacePermissions(node, space.getGroupId(), targetRedactionalMode)) {
+      Map<String, String[]> permissions = buildPermissionsForTargetMode(node, space.getGroupId(), targetRedactionalMode);
+      ((ExtendedNode) node).setPermissions(permissions);
+      node.save();
+    }
+  }
+
+  private void assertRedactionalModeStillExpected(Space space,
+                                                  boolean expectedRedactionalMode) throws OperationCancelledException {
+    Space currentSpace = spaceService.getSpaceById(space.getSpaceId());
+    if (isRedactionalSpace(currentSpace) != expectedRedactionalMode) {
+      throw new OperationCancelledException();
+    }
+  }
+
+  /**
+   * Rewrite only nodes whose space ACL still has the exact previous default
+   * shape. targetRedactionalMode = true: previous expected ACL is the standard
+   * non-redactional ACL. targetRedactionalMode = false: previous expected ACL
+   * is the standard redactional ACL. Any additional, missing, or different
+   * space-related permission is considered a customization, so the node is
+   * skipped.
+   *
+   * @param node JCR Node
+   * @param groupId Space Group Id
+   * @param targetRedactionalMode true if space has become redactional else
+   *          false
+   * @return whether should rewrite permissions on node or not
+   * @throws RepositoryException when a JCR exception is thrown
+   */
+  private boolean shouldRewriteSpacePermissions(Node node,
+                                                String groupId,
+                                                boolean targetRedactionalMode) throws RepositoryException {
     if (!node.isNodeType("exo:privilegeable")) {
-      return true;
+      return false;
     }
-    return hasTargetPermissions(node, groupId, mode);
+    Map<String, Set<String>> currentSpacePermissions = getSpacePermissions(node, groupId);
+    Map<String, Set<String>> expectedPreviousPermissions = targetRedactionalMode ? buildStandardOpenSpacePermissions(groupId) :
+            buildStandardRedactionalSpacePermissions(groupId);
+
+    return currentSpacePermissions.equals(expectedPreviousPermissions);
   }
 
-  private boolean hasTargetPermissions(Node node, String groupId, boolean readOnlyForMembers) throws RepositoryException {
-    if (readOnlyForMembers) {
-      return !isSpaceOpenToAll(node, groupId) && hasPermission(node, "manager:" + groupId)
-          && hasPermission(node, "redactor:" + groupId) && hasPermission(node, "publisher:" + groupId);
-    } else {
-      return isSpaceOpenToAll(node, groupId);
-    }
+  private Map<String, String[]> buildPermissionsForTargetMode(Node node,
+                                                              String groupId,
+                                                              boolean targetRedactionalMode) throws RepositoryException {
+    Map<String, Set<String>> permissions = getNonSpacePermissions(node, groupId);
+    Map<String, Set<String>> targetSpacePermissions = targetRedactionalMode ? buildStandardRedactionalSpacePermissions(groupId) :
+            buildStandardOpenSpacePermissions(groupId);
+
+    permissions.putAll(targetSpacePermissions);
+    return toPermissionArrayMap(permissions);
   }
 
-  private boolean hasPermission(Node node, String identity) throws RepositoryException {
-    List<String> currentPermissions = new ArrayList<>();
+  private Map<String, Set<String>> getNonSpacePermissions(Node node, String groupId) throws RepositoryException {
+    Map<String, Set<String>> permissions = new LinkedHashMap<>();
     for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
-      if (entry.getIdentity().equals(identity)) {
-        currentPermissions.add(entry.getPermission());
+      if (!isSpacePermission(entry.getIdentity(), groupId)) {
+        addPermission(permissions, entry.getIdentity(), entry.getPermission());
       }
-    }
-    List<String> expectedList = Arrays.asList(PermissionType.ALL);
-    return currentPermissions.size() == expectedList.size() && new HashSet<>(currentPermissions).containsAll(expectedList);
-  }
-
-  private boolean isSpaceOpenToAll(Node node, String groupId) throws RepositoryException {
-    for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
-      if (entry.getIdentity().equals("*:" + groupId)) {
-        return !PermissionType.READ.equals(entry.getPermission());
-      }
-    }
-    return false;
-  }
-
-  private Map<String, String[]> buildPermissions(Node node, Space space, boolean readOnlyForMembers) throws RepositoryException {
-    Map<String, String[]> permissions = new HashMap<>();
-    for (AccessControlEntry accessEntry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
-      if (!accessEntry.getIdentity().endsWith(":" + space.getGroupId())) {
-        if (permissions.get(accessEntry.getIdentity()) == null) {
-          permissions.put(accessEntry.getIdentity(), new String[] { accessEntry.getPermission() });
-        } else {
-          List<String> existingPermissions = new ArrayList<>(List.of(permissions.get(accessEntry.getIdentity())));
-          existingPermissions.add(accessEntry.getPermission());
-          permissions.put(accessEntry.getIdentity(), existingPermissions.toArray(new String[0]));
-        }
-      }
-    }
-    if (readOnlyForMembers) {
-      permissions.put("*:" + space.getGroupId(), new String[] { PermissionType.READ });
-      permissions.put("manager:" + space.getGroupId(), PermissionType.ALL);
-      permissions.put("redactor:" + space.getGroupId(), PermissionType.ALL);
-      permissions.put("publisher:" + space.getGroupId(), PermissionType.ALL);
-    } else {
-      permissions.put("*:" + space.getGroupId(), PermissionType.ALL);
     }
     return permissions;
+  }
+
+  private Map<String, Set<String>> getSpacePermissions(Node node, String groupId) throws RepositoryException {
+    Map<String, Set<String>> permissions = new LinkedHashMap<>();
+    for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+      if (isSpacePermission(entry.getIdentity(), groupId)) {
+        addPermission(permissions, entry.getIdentity(), entry.getPermission());
+      }
+    }
+    return permissions;
+  }
+
+  private boolean isSpacePermission(String identity, String groupId) {
+    return identity.endsWith(":" + groupId);
+  }
+
+  private Map<String, Set<String>> buildStandardOpenSpacePermissions(String groupId) {
+    Map<String, Set<String>> permissions = new LinkedHashMap<>();
+    permissions.put("*:" + groupId, toPermissionSet(PermissionType.ALL));
+    return permissions;
+  }
+
+  private Map<String, Set<String>> buildStandardRedactionalSpacePermissions(String groupId) {
+    Map<String, Set<String>> permissions = new LinkedHashMap<>();
+    permissions.put("*:" + groupId, toPermissionSet(PermissionType.READ));
+    permissions.put("manager:" + groupId, toPermissionSet(PermissionType.ALL));
+    permissions.put("redactor:" + groupId, toPermissionSet(PermissionType.ALL));
+    permissions.put("publisher:" + groupId, toPermissionSet(PermissionType.ALL));
+    return permissions;
+  }
+
+  private void addPermission(Map<String, Set<String>> permissions, String identity, String permission) {
+    permissions.computeIfAbsent(identity, key -> new LinkedHashSet<>()).add(permission);
+  }
+
+  private Set<String> toPermissionSet(String permission) {
+    Set<String> permissions = new LinkedHashSet<>();
+    permissions.add(permission);
+    return permissions;
+  }
+
+  private Set<String> toPermissionSet(String[] permissions) {
+    return new LinkedHashSet<>(Arrays.asList(permissions));
+  }
+
+  private Map<String, String[]> toPermissionArrayMap(Map<String, Set<String>> permissions) {
+    Map<String, String[]> result = new LinkedHashMap<>();
+
+    for (Map.Entry<String, Set<String>> entry : permissions.entrySet()) {
+      List<String> permissionList = new ArrayList<>(entry.getValue());
+      result.put(entry.getKey(), permissionList.toArray(new String[0]));
+    }
+
+    return result;
+  }
+
+  private boolean isRedactionalSpace(Space space) {
+    return space != null && spaceService.hasRedactor(space);
   }
 }
