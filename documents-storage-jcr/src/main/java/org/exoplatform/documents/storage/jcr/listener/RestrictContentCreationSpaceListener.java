@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2026 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.exoplatform.documents.storage.jcr.listener;
 
 import org.exoplatform.documents.webdav.model.OperationCancelledException;
@@ -21,7 +37,6 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getGroupNode;
 
@@ -34,8 +49,6 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
   private NodeHierarchyCreator      nodeHierarchyCreator;
 
   private SessionProviderService    sessionProviderService;
-
-  private final Map<String, String> pendingOperations = new ConcurrentHashMap<>();
 
   public RestrictContentCreationSpaceListener(RepositoryService repositoryService,
                                               NodeHierarchyCreator nodeHierarchyCreator,
@@ -85,22 +98,16 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
         if (!readOnlyForMembers && spaceIsOpen) {
           return;
         }
-
-        String operationId = UUID.randomUUID().toString();
-        pendingOperations.put(space.getId(), operationId);
-
         try {
-          if (isStandardModel(spaceRootNode, space.getGroupId())) {
+          if (isStandardModel(spaceRootNode, space.getGroupId(), !readOnlyForMembers)) {
             Map<String, String[]> permissions = buildPermissions(spaceRootNode, space, readOnlyForMembers);
             ((ExtendedNode) spaceRootNode).setPermissions(permissions);
           }
-          applyPermissionsRecursively(spaceRootNode, space, readOnlyForMembers, operationId);
+          applyPermissionsRecursively(spaceRootNode, space, readOnlyForMembers, spaceRootNode, spaceIsOpen);
           session.save();
         } catch (OperationCancelledException e) {
           LOG.info("Permission restriction for space {} was cancelled, discarding changes", space.getPrettyName());
           session.refresh(false);
-        } finally {
-          pendingOperations.remove(space.getId(), operationId);
         }
       }
     } catch (Exception e) {
@@ -115,31 +122,31 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
   private void applyPermissionsRecursively(Node parentNode,
                                            Space space,
                                            boolean readOnlyForMembers,
-                                           String operationId) throws OperationCancelledException, RepositoryException {
+                                           Node spaceRootNode,
+                                           boolean spaceIsOpen) throws OperationCancelledException, RepositoryException {
     NodeIterator children = parentNode.getNodes();
     while (children.hasNext()) {
-      String currentOpId = pendingOperations.get(space.getId());
-      if (operationId != null && !operationId.equals(currentOpId)) {
+      if (isSpaceOpenToAll(spaceRootNode, space.getGroupId()) != spaceIsOpen) {
         throw new OperationCancelledException();
       }
       Node child = children.nextNode();
       try {
-        if (isStandardModel(child, space.getGroupId()) && !hasTargetPermissions(child, space.getGroupId(), readOnlyForMembers)) {
+        if (isStandardModel(child, space.getGroupId(), !readOnlyForMembers)) {
           Map<String, String[]> permissions = buildPermissions(child, space, readOnlyForMembers);
           ((ExtendedNode) child).setPermissions(permissions);
         }
       } catch (Exception e) {
         LOG.warn("Error applying permissions to a child node in space {}, continuing", space.getPrettyName(), e);
       }
-      applyPermissionsRecursively(child, space, readOnlyForMembers, operationId);
+      applyPermissionsRecursively(child, space, readOnlyForMembers, spaceRootNode, spaceIsOpen);
     }
   }
 
-  private boolean isStandardModel(Node node, String groupId) throws RepositoryException {
+  private boolean isStandardModel(Node node, String groupId, boolean mode) throws RepositoryException {
     if (!node.isNodeType("exo:privilegeable")) {
       return true;
     }
-    return hasTargetPermissions(node, groupId, true) || hasTargetPermissions(node, groupId, false);
+    return hasTargetPermissions(node, groupId, mode);
   }
 
   private boolean hasTargetPermissions(Node node, String groupId, boolean readOnlyForMembers) throws RepositoryException {
