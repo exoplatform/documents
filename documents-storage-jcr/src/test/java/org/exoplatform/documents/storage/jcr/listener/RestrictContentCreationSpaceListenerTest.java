@@ -20,6 +20,7 @@ import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
@@ -35,6 +36,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.repository.config.RepositoryConfiguration;
 
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
@@ -60,6 +62,8 @@ class RestrictContentCreationSpaceListenerTest {
   NodeHierarchyCreator                 nodeHierarchyCreator;
 
   ManageableRepository                 repository;
+
+  RepositoryEntry                      repositoryEntry;
 
   SessionProviderService               sessionProviderService;
 
@@ -92,6 +96,9 @@ class RestrictContentCreationSpaceListenerTest {
     repositoryService = mock(RepositoryService.class);
     nodeHierarchyCreator = mock(NodeHierarchyCreator.class);
     repository = mock(ManageableRepository.class);
+    repositoryEntry = mock(RepositoryEntry.class);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("defaultWorkspace");
     systemSessionProvider = mock(SessionProvider.class);
     sessionProviderService = mock(SessionProviderService.class);
 

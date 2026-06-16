@@ -88,15 +88,15 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
     try {
       ManageableRepository repository = repositoryService.getCurrentRepository();
       sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-      Session session = sessionProvider.getSession("collaboration", repository);
+      Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node spaceRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
       if (spaceRootNode != null) {
         boolean spaceIsOpen = isSpaceOpenToAll(spaceRootNode, space.getGroupId());
         if (readOnlyForMembers && !spaceIsOpen) {
-          return;
+          throw new OperationCancelledException();
         }
         if (!readOnlyForMembers && spaceIsOpen) {
-          return;
+          throw new OperationCancelledException();
         }
         try {
           if (isStandardModel(spaceRootNode, space.getGroupId(), !readOnlyForMembers)) {
@@ -104,12 +104,13 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
             ((ExtendedNode) spaceRootNode).setPermissions(permissions);
           }
           applyPermissionsRecursively(spaceRootNode, space, readOnlyForMembers, spaceRootNode, spaceIsOpen);
-          session.save();
+          spaceRootNode.save();
         } catch (OperationCancelledException e) {
           LOG.info("Permission restriction for space {} was cancelled, discarding changes", space.getPrettyName());
-          session.refresh(false);
         }
       }
+    } catch (OperationCancelledException e) {
+      LOG.info("Permission update cancelled for space {}", space.getPrettyName());
     } catch (Exception e) {
       LOG.error("Error updating permissions of the root Node of the space {}", space.getPrettyName(), e);
     } finally {
@@ -134,11 +135,14 @@ public class RestrictContentCreationSpaceListener extends SpaceListenerPlugin {
         if (isStandardModel(child, space.getGroupId(), !readOnlyForMembers)) {
           Map<String, String[]> permissions = buildPermissions(child, space, readOnlyForMembers);
           ((ExtendedNode) child).setPermissions(permissions);
+          child.save();
         }
+        applyPermissionsRecursively(child, space, readOnlyForMembers, spaceRootNode, spaceIsOpen);
+      } catch (OperationCancelledException e) {
+        throw e;
       } catch (Exception e) {
         LOG.warn("Error applying permissions to a child node in space {}, continuing", space.getPrettyName(), e);
       }
-      applyPermissionsRecursively(child, space, readOnlyForMembers, spaceRootNode, spaceIsOpen);
     }
   }
 
