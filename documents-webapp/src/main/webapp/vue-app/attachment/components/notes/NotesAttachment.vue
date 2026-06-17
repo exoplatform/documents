@@ -123,7 +123,16 @@ export default {
           document.dispatchEvent(new CustomEvent('end-loading-attachment-drawer'));
         });
       }
+      this.retrieveAttachmentsFromLocalStorage();
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: this.attachmentAppConfiguration}));
+    },
+    retrieveAttachmentsFromLocalStorage() {
+      const files = JSON.parse(localStorage.getItem('activity-composer-files'));
+      localStorage.removeItem('activity-composer-files');
+      if (!files?.length) {
+        return;
+      }
+      this.attachments.push(...files);
     },
     openAttachmentsList() {
       this.$root.$emit('open-attachments-list-drawer');
