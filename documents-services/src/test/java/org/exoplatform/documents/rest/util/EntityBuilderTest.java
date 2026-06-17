@@ -76,7 +76,7 @@ public class EntityBuilderTest {
         nodePermissionEntity.setAllMembersCanEdit(false);
         NodePermission specificCollabotratorsNodePermission = EntityBuilder.toNodePermission(abstractNodeEntity,documentFileService, spaceService, identityManager);
         assertNotNull(specificCollabotratorsNodePermission);
-        assertEquals(PermissionRole.MANAGERS_REDACTORS.name(), specificCollabotratorsNodePermission.getPermissions().get(0).getRole());
+        assertEquals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name(), specificCollabotratorsNodePermission.getPermissions().get(0).getRole());
         assertEquals(identity.getRemoteId(), specificCollabotratorsNodePermission.getPermissions().get(0).getIdentity().getRemoteId());
         assertEquals("edit", specificCollabotratorsNodePermission.getPermissions().get(0).getPermission());
 

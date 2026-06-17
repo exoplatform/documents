@@ -1513,7 +1513,7 @@ public class JCRDocumentFileStorageTest {
     permissionsList.add(new PermissionEntry(identity, "read", null));
     permissionsList.add(new PermissionEntry(identity1, "edit", null));
     // permissionsList including space manager and redactor permission
-    permissionsList.add(new PermissionEntry(spaceIdentity, "edit", PermissionRole.MANAGERS_REDACTORS.name()));
+    permissionsList.add(new PermissionEntry(spaceIdentity, "edit", PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()));
     nodePermission.setPermissions(permissionsList);
     when(node.getACL()).thenReturn(new AccessControlList("root", new ArrayList<>()));
     //When
