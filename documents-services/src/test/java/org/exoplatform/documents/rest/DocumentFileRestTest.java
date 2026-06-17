@@ -60,6 +60,9 @@ import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.portal.rest.CollectionEntity;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
@@ -120,6 +123,12 @@ public class DocumentFileRestTest {
 
   private AnalyticsService                   analyticsService;
 
+  private RepositoryService                  repositoryService;
+
+  private NodeHierarchyCreator               nodeHierarchyCreator;
+
+  private SessionProviderService             sessionProviderService;
+
   @Before
   public void setUp() {
     spaceService = mock(SpaceService.class);
@@ -135,15 +144,21 @@ public class DocumentFileRestTest {
     externalDownloadService = mock(ExternalDownloadService.class);
     imageThumbnailService = mock(ImageThumbnailService.class);
     documentWebDavService = mock(DocumentWebDavService.class);
+    repositoryService = mock(RepositoryService.class);
+    nodeHierarchyCreator = mock(NodeHierarchyCreator.class);
+    sessionProviderService = mock(SessionProviderService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
-                                                      jcrDeleteFileStorage,
-                                                      authenticator,
-                                                      spaceService,
-                                                      identityManager,
-                                                      identityRegistry,
-                                                      listenerService,
-                                                      analyticsService,
-                                                      imageThumbnailService);
+                                                       jcrDeleteFileStorage,
+                                                       authenticator,
+                                                       spaceService,
+                                                       identityManager,
+                                                       identityRegistry,
+                                                       listenerService,
+                                                       analyticsService,
+                                                       imageThumbnailService,
+                                                       repositoryService,
+                                                       nodeHierarchyCreator,
+                                                       sessionProviderService);
     documentFileRest = new DocumentFileRest(documentFileService,
                                             spaceService,
                                             identityManager,

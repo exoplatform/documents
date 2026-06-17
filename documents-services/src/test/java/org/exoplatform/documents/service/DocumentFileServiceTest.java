@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
+import io.meeds.analytics.api.service.AnalyticsService;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -50,10 +51,11 @@ import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
-import org.exoplatform.social.core.storage.api.ActivityStorage;
 import org.exoplatform.social.core.storage.cache.CachedActivityStorage;
 
-import io.meeds.analytics.api.service.AnalyticsService;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 
 public class DocumentFileServiceTest {
 
@@ -71,15 +73,19 @@ public class DocumentFileServiceTest {
 
   private JCRDeleteFileStorage    jcrDeleteFileStorage;
 
-  private ActivityStorage         activityStorage;
-
   private ListenerService         listenerService;
 
-  private ImageThumbnailService imageThumbnailService;
+  private ImageThumbnailService   imageThumbnailService;
 
   private CachedActivityStorage   cachedActivityStorage;
 
   private AnalyticsService        analyticsService;
+
+  private RepositoryService       repositoryService;
+
+  private NodeHierarchyCreator    nodeHierarchyCreator;
+
+  private SessionProviderService  sessionProviderService;
 
   private Identity                currentIdentity;
 
@@ -94,12 +100,14 @@ public class DocumentFileServiceTest {
     identityRegistry = mock(IdentityRegistry.class);
     authenticator = mock(Authenticator.class);
     documentFileStorage = mock(DocumentFileStorage.class);
-    activityStorage = mock(ActivityStorage.class);
     listenerService = mock(ListenerService.class);
     jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     cachedActivityStorage = mock(CachedActivityStorage.class);
     analyticsService = mock(AnalyticsService.class);
     imageThumbnailService = mock(ImageThumbnailService.class);
+    repositoryService = mock(RepositoryService.class);
+    nodeHierarchyCreator = mock(NodeHierarchyCreator.class);
+    sessionProviderService = mock(SessionProviderService.class);
     documentFileService = new DocumentFileServiceImpl(documentFileStorage,
                                                       jcrDeleteFileStorage,
                                                       authenticator,
@@ -108,7 +116,10 @@ public class DocumentFileServiceTest {
                                                       identityRegistry,
                                                       listenerService,
                                                       analyticsService,
-                                                      imageThumbnailService);
+                                                      imageThumbnailService,
+                                                      repositoryService,
+                                                      nodeHierarchyCreator,
+                                                      sessionProviderService);
 
     currentIdentity = new Identity(OrganizationIdentityProvider.NAME, userName);
     currentIdentity.setId(String.valueOf(currentOwnerId));
@@ -140,38 +151,58 @@ public class DocumentFileServiceTest {
     org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(userName);
     DocumentTimelineFilter filter = null;
     Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, null, 0, 0, Long.valueOf(currentIdentity.getId()),false);
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, null, 0, 0, Long.valueOf(currentIdentity.getId()), false);
     });
     assertEquals(exception.getMessage(), "File filter is mandatory");
 
     filter = new DocumentTimelineFilter(0L, null);
     DocumentTimelineFilter finalFilter1 = filter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter1, 0, 0, Long.valueOf(currentIdentity.getId()),false);
+      documentFileService.getDocumentItems(FileListingType.TIMELINE,
+                                           finalFilter1,
+                                           0,
+                                           0,
+                                           Long.valueOf(currentIdentity.getId()),
+                                           false);
     });
     assertEquals(exception.getMessage(), "OwnerId is mandatory");
 
     filter = new DocumentTimelineFilter(Long.valueOf(currentIdentity.getId()), null);
     DocumentTimelineFilter finalFilter = filter;
     exception = assertThrows(IllegalAccessException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter, 0, 0, 0,false);
+      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalFilter, 0, 0, 0, false);
     });
     assertEquals(exception.getMessage(), "User Identity is mandatory");
 
     DocumentFolderFilter docFilter = new DocumentFolderFilter("", "", 0L, "");
     DocumentFolderFilter finalDocFilter = docFilter;
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.TIMELINE, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
+      documentFileService.getDocumentItems(FileListingType.TIMELINE,
+                                           finalDocFilter,
+                                           0,
+                                           0,
+                                           Long.valueOf(currentIdentity.getId()),
+                                           false);
     });
     assertEquals(exception.getMessage(), "filter must be an instance of DocumentTimelineFilter");
 
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.FOLDER, finalFilter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
+      documentFileService.getDocumentItems(FileListingType.FOLDER,
+                                           finalFilter,
+                                           0,
+                                           0,
+                                           Long.valueOf(currentIdentity.getId()),
+                                           false);
     });
     assertEquals(exception.getMessage(), "filter must be an instance of DocumentFolderFilter");
 
     exception = assertThrows(IllegalArgumentException.class, () -> {
-      documentFileService.getDocumentItems(FileListingType.FOLDER, finalDocFilter, 0, 0, Long.valueOf(currentIdentity.getId()),false);
+      documentFileService.getDocumentItems(FileListingType.FOLDER,
+                                           finalDocFilter,
+                                           0,
+                                           0,
+                                           Long.valueOf(currentIdentity.getId()),
+                                           false);
     });
     assertEquals(exception.getMessage(), "ParentFolderId or OwnerId is mandatory");
 
@@ -200,7 +231,12 @@ public class DocumentFileServiceTest {
     files.add(file4);
 
     when(documentFileStorage.getFilesTimeline(filter, spaceID, 0, 0)).thenReturn(files);
-    List<? extends AbstractNode> documentItems = documentFileService.getDocumentItems(FileListingType.TIMELINE, filter, 0, 0, Long.parseLong(currentIdentity.getId()),false);
+    List<? extends AbstractNode> documentItems = documentFileService.getDocumentItems(FileListingType.TIMELINE,
+                                                                                      filter,
+                                                                                      0,
+                                                                                      0,
+                                                                                      Long.parseLong(currentIdentity.getId()),
+                                                                                      false);
     assertEquals(documentItems.size(), 4);
   }
 
@@ -399,8 +435,8 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity(username)).thenReturn(userID);
     when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
 
-    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "Folder1", "", false,new HashMap<>());
-    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "Folder1", "", false,new HashMap<>());
+    BreadCrumbItem breadCrumbItem1 = new BreadCrumbItem("1", "Folder1", "Folder1", "", false, new HashMap<>());
+    BreadCrumbItem breadCrumbItem2 = new BreadCrumbItem("2", "Folder2", "Folder1", "", false, new HashMap<>());
     BreadCrumbItem breadCrumbItem3 = new BreadCrumbItem();
     breadCrumbItem3.setId("3");
     breadCrumbItem3.setName("Folder3");
@@ -443,14 +479,14 @@ public class DocumentFileServiceTest {
     when(identityManager.getIdentity(1)).thenReturn(socialIdentity);
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
-    verify(documentFileStorage, times(1)).shareDocument("123", 1L,identity, false);
+    verify(documentFileStorage, times(1)).shareDocument("123", 1L, identity, false);
     //
     Map<Long, String> toNotify = new HashMap<>();
     toNotify.put(1L, "read");
     nodePermission.setToNotify(toNotify);
     documentFileService.updatePermissions("123", nodePermission, 1L);
     verify(documentFileStorage, atLeast(1)).updatePermissions("123", nodePermission, identity);
-    verify(documentFileStorage, atLeast(1)).shareDocument("123", 1L,identity, true);
+    verify(documentFileStorage, atLeast(1)).shareDocument("123", 1L, identity, true);
 
   }
 
@@ -546,7 +582,7 @@ public class DocumentFileServiceTest {
     when(identityManager.getIdentity(1)).thenReturn(socialIdentity);
 
     when(documentFileStorage.getDownloadZipBytes(123456, "userName")).thenReturn(null);
-    documentFileService.getDownloadZipBytes(123456,"userName");
+    documentFileService.getDownloadZipBytes(123456, "userName");
     verify(documentFileStorage, times(1)).getDownloadZipBytes(123456, "userName");
   }
 
