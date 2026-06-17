@@ -426,11 +426,11 @@ public class EntityBuilder {
         if(nodePermissionEntity.isAllMembersCanEdit()){
           permissions.add(new PermissionEntry(identity,"edit",PermissionRole.ALL.name()));
         } else {
-          permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS.name()));
+          permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()));
         }
       }
       if (nodePermissionEntity.getVisibilityChoice().equals(Visibility.SPECIFIC_COLLABORATOR.name())) {
-        permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS.name()));
+        permissions.add(new PermissionEntry(identity,"edit",PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()));
       }
       return new NodePermission(nodePermissionEntity.isCanAccess(),
                                 nodePermissionEntity.isCanEdit(),
