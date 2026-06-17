@@ -21,17 +21,25 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
+import javax.jcr.Session;
 
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.utils.DocumentUtils;
+import org.exoplatform.documents.webdav.model.OperationCancelledException;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ManageableRepository;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.utils.CommonsUtils;
@@ -88,9 +96,23 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private CategoryLinkService   categoryLinkService;
 
-  String                        dateFormat                   = "MM-dd-yyyy";
+  private RepositoryService      repositoryService;
 
-  SimpleDateFormat              simpleDateFormat             = new SimpleDateFormat(dateFormat);
+  private NodeHierarchyCreator   nodeHierarchyCreator;
+
+  private SessionProviderService sessionProviderService;
+
+  private static final String    DEFAULT_GROUPS_HOME_PATH = "/Groups";
+
+  private static final String    GROUPS_PATH_ALIAS        = "groupsPath";
+
+  private static final String    DOCUMENTS_NODE           = "Documents";
+
+  private static String          groupsPath               = null;
+
+  String                         dateFormat               = "MM-dd-yyyy";
+
+  SimpleDateFormat               simpleDateFormat         = new SimpleDateFormat(dateFormat);
 
   public DocumentFileServiceImpl(DocumentFileStorage documentFileStorage, // NOSONAR
                                  JCRDeleteFileStorage jcrDeleteFileStorage,
@@ -100,7 +122,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                  IdentityRegistry identityRegistry,
                                  ListenerService listenerService,
                                  AnalyticsService analyticsService,
-                                 ImageThumbnailService imageThumbnailService) {
+                                 ImageThumbnailService imageThumbnailService,
+                                 RepositoryService repositoryService,
+                                 NodeHierarchyCreator nodeHierarchyCreator,
+                                 SessionProviderService sessionProviderService) {
     this.documentFileStorage = documentFileStorage;
     this.jcrDeleteFileStorage = jcrDeleteFileStorage;
     this.spaceService = spaceService;
@@ -110,6 +135,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     this.listenerService = listenerService;
     this.analyticsService = analyticsService;
     this.imageThumbnailService = imageThumbnailService;
+    this.repositoryService = repositoryService;
+    this.nodeHierarchyCreator = nodeHierarchyCreator;
+    this.sessionProviderService = sessionProviderService;
   }
 
   @Override
@@ -533,8 +561,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     Space space = spaceService.getSpaceById(spaceId);
     boolean canAdd = false;
     if (space != null) {
-      canAdd = !spaceService.hasRedactor(space) || spaceService.hasRedactor(space)
-          && (spaceService.isRedactor(space, currentUserName) || spaceService.isManager(space, currentUserName));
+      canAdd = spaceService.canRedactOnSpace(space, currentUserName);
     }
     return canAdd;
   }
@@ -813,5 +840,97 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       categoryLinkService = CommonsUtils.getService(CategoryLinkService.class);
     }
     return categoryLinkService;
+  }
+
+  @Override
+  public void synchronizeSpacePermissions(Space space) {
+    synchronizeSpacePermissions(space, isRedactionalSpace(space));
+  }
+
+  public void synchronizeSpacePermissions(Space space, boolean targetRedactionalMode) {
+    if (space == null) {
+      return;
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      sessionProvider = sessionProviderService.getSystemSessionProvider(null);
+      Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node spaceRootNode = getGroupNode(session, space.getGroupId());
+      if (spaceRootNode != null) {
+        synchronizeNodePermissions(space, targetRedactionalMode, spaceRootNode);
+        synchronizeChildrenPermissions(space, targetRedactionalMode, spaceRootNode);
+      }
+    } catch (OperationCancelledException e) {
+      LOG.info("Permission update cancelled for space width id '{}'", space.getId());
+    } catch (Exception e) {
+      LOG.error("Error updating permissions of space width id '{}'", space.getId(), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  private void synchronizeChildrenPermissions(Space space,
+                                              boolean targetRedactionalMode,
+                                              Node parentNode) throws RepositoryException,
+          OperationCancelledException {
+    NodeIterator children = parentNode.getNodes();
+    while (children.hasNext()) {
+      Node child = children.nextNode();
+      try {
+        synchronizeNodePermissions(space, targetRedactionalMode, child);
+        synchronizeChildrenPermissions(space, targetRedactionalMode, child);
+      } catch (OperationCancelledException e) {
+        throw e;
+      } catch (Exception e) {
+        LOG.warn("Error applying permissions to a child node in space width id '{}', continuing", space.getId(), e);
+      }
+    }
+  }
+
+  private void synchronizeNodePermissions(Space space,
+                                          boolean targetRedactionalMode,
+                                          Node node) throws RepositoryException,
+          OperationCancelledException {
+    assertRedactionalModeStillExpected(space, targetRedactionalMode);
+    if (DocumentUtils.shouldRewriteSpacePermissions(node, space.getGroupId(), targetRedactionalMode)) {
+      Map<String, String[]> permissions = DocumentUtils.buildPermissionsForTargetMode(node, space.getGroupId(), targetRedactionalMode);
+      ((ExtendedNode) node).setPermissions(permissions);
+      node.save();
+    }
+  }
+
+  private void assertRedactionalModeStillExpected(Space space,
+                                                  boolean expectedRedactionalMode) throws OperationCancelledException {
+    Space currentSpace = spaceService.getSpaceById(space.getSpaceId());
+    if (isRedactionalSpace(currentSpace) != expectedRedactionalMode) {
+      throw new OperationCancelledException();
+    }
+  }
+
+  private boolean isRedactionalSpace(Space space) {
+    return space != null && spaceService.hasRedactor(space);
+  }
+
+  private Node getGroupNode(Session session, String groupId) throws RepositoryException {
+    String groupsHomePath = getGroupsPath();
+    String groupPath = groupsHomePath + groupId + "/" + DOCUMENTS_NODE;
+    if (session.itemExists(groupPath)) {
+      return (Node) session.getItem(groupPath);
+    }
+    return null;
+  }
+
+  private String getGroupsPath() {
+    if (groupsPath != null) {
+      return groupsPath;
+    }
+    groupsPath = nodeHierarchyCreator.getJcrPath(GROUPS_PATH_ALIAS);
+    if (StringUtils.isBlank(groupsPath)) {
+      groupsPath = DEFAULT_GROUPS_HOME_PATH;
+    }
+    return groupsPath;
   }
 }

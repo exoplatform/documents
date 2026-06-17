@@ -686,4 +686,14 @@ public interface DocumentFileService {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Synchronizes JCR node permissions for a space, automatically detecting
+   * whether the space is in redactional mode based on
+   * {@link Space}. Rewrites node ACLs from open
+   * to redactional or vice versa when the space still has standard
+   * (uncustomized) permissions.
+   *
+   * @param space Space
+   */
+  void synchronizeSpacePermissions(Space space);
 }
