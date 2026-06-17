@@ -56,7 +56,8 @@ export default {
       originalAttachmentsList: [],
       attachmentListUpdated: false,
       isDrawerClosedEventHandled: false,
-      initDone: false
+      initDone: false,
+      hasLocalStoredAttachments: false,
     };
   },
   watch: {
@@ -94,6 +95,9 @@ export default {
       return this.attachmentListUpdated && !this.attachToEntity;
     },
   },
+  mounted() {
+    this.retrieveAttachmentsFromLocalStorage();
+  },
   created() {
     if (!this.editMode) {
       this.initEntityAttachmentsList();
@@ -114,7 +118,7 @@ export default {
   methods: {
     openAttachmentDrawer() {
       this.originalAttachmentsList = [];
-      this.attachments = [];
+      this.attachments = this.hasLocalStoredAttachments && this.attachments || [];
       if (this.entityId > 0 && this.entityType && !this.isEmptyNoteTranslation) {
         this.initDone = false;
         this.waitInit();
@@ -123,7 +127,18 @@ export default {
           document.dispatchEvent(new CustomEvent('end-loading-attachment-drawer'));
         });
       }
+      this.hasLocalStoredAttachments = false;
       document.dispatchEvent(new CustomEvent('open-attachments-app-drawer', {detail: this.attachmentAppConfiguration}));
+    },
+    retrieveAttachmentsFromLocalStorage() {
+      const files = JSON.parse(localStorage.getItem('activity-composer-files'));
+      localStorage.removeItem('activity-composer-files');
+      if (!files?.length) {
+        return;
+      }
+      this.hasLocalStoredAttachments = true;
+      this.attachments.push(...files);
+      this.emitEditorExtensionsDataUpdatedEvent();
     },
     openAttachmentsList() {
       this.$root.$emit('open-attachments-list-drawer');
