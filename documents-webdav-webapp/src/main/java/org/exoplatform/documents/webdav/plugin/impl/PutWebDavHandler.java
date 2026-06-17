@@ -17,14 +17,18 @@
 package org.exoplatform.documents.webdav.plugin.impl;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.fileupload2.core.FileUploadException;
 import org.apache.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
+import org.exoplatform.container.PortalContainer;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.services.rest.ExtHttpHeaders;
+import org.exoplatform.upload.UploadFileValidator;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,8 +37,13 @@ import lombok.SneakyThrows;
 @Component
 public class PutWebDavHandler extends WebDavHttpMethodPlugin {
 
-  public PutWebDavHandler() {
+  private PortalContainer           portalContainer;
+
+  private List<UploadFileValidator> uploadFileValidators;
+
+  public PutWebDavHandler(PortalContainer portalContainer) {
     super("PUT");
+    this.portalContainer = portalContainer;
   }
 
   @Override
@@ -48,6 +57,8 @@ public class PutWebDavHandler extends WebDavHttpMethodPlugin {
     String mediaType = httpRequest.getHeader(HttpHeaders.CONTENT_TYPE);
     InputStream inputStream = httpRequest.getInputStream();
 
+    String fileName = resourcePath.substring(resourcePath.lastIndexOf("/") + 1);
+    validateUploadedFile(inputStream, fileName, mediaType);
     documentWebDavService.saveFile(resourcePath,
                                    fileType,
                                    contentNodeType,
@@ -57,6 +68,28 @@ public class PutWebDavHandler extends WebDavHttpMethodPlugin {
                                    lockTokens,
                                    httpRequest.getRemoteUser());
     httpResponse.setStatus(HttpServletResponse.SC_CREATED);
+  }
+
+  private void validateUploadedFile(InputStream inputStream,
+                                    String fileName,
+                                    String mimeType) throws FileUploadException {
+    for (UploadFileValidator uploadFileValidator : getUploadFileValidators()) {
+      if (uploadFileValidator.supports(fileName, mimeType)) {
+        uploadFileValidator.validate(fileName, mimeType, inputStream);
+      }
+    }
+  }
+
+  private List<UploadFileValidator> getUploadFileValidators() {
+    if (uploadFileValidators == null) {
+      List<UploadFileValidator> services = portalContainer.getComponentInstancesOfType(UploadFileValidator.class);
+      if (services == null) {
+        uploadFileValidators = new ArrayList<>();
+      } else {
+        uploadFileValidators = new ArrayList<>(services);
+      }
+    }
+    return uploadFileValidators;
   }
 
 }
