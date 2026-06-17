@@ -24,6 +24,9 @@ import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 import javax.jcr.Node;
@@ -64,6 +67,12 @@ public class ActionThread implements Runnable {
   private static final String            ZIP_PREFIX          = "downloadzip";
 
   private static final String            TEMP_DIRECTORY_PATH = "java.io.tmpdir";
+
+  private static final int               BUFFER_SIZE          = 8192;
+
+  private static final int               UNIX_FILE_TYPE_MASK  = 0170000;
+
+  private static final int               UNIX_SYMLINK_FLAG    = 0120000;
 
   public static final String             NT_FILE                = "nt:file";
 
@@ -295,29 +304,138 @@ public class ActionThread implements Runnable {
   }
 
   public static void fixAndExtractZip(File zipFile, File outputDir) throws IOException {
-    if (!outputDir.exists()) outputDir.mkdirs();
+    if (!outputDir.exists() && !outputDir.mkdirs()) {
+      throw new IOException("Cannot create ZIP extraction directory: " + outputDir);
+    }
+
     try (ZipFile zip = new ZipFile(zipFile)) {
       List<FileHeader> headers = zip.getFileHeaders();
       for (FileHeader header : headers) {
         byte[] rawBytes = header.getFileName().getBytes(StandardCharsets.ISO_8859_1);
         String fixedName = pickBestEncoding(rawBytes);
-        File outFile = new File(outputDir, fixedName);
-        if (header.isDirectory()) {
-          if (!outFile.exists()) outFile.mkdirs();
-        } else {
-          File parent = outFile.getParentFile();
-          if (parent != null && !parent.exists()) parent.mkdirs();
-
-          try (InputStream is = zip.getInputStream(header);
-               OutputStream os = new FileOutputStream(outFile)) {
-            byte[] buffer = new byte[4096];
-            int len;
-            while ((len = is.read(buffer)) != -1) {
-              os.write(buffer, 0, len);
-            }
-          }
-        }
+        extractZipEntry(zip, header, outputDir, fixedName);
       }
+    }
+
+    ensureNoSymlinks(outputDir);
+  }
+
+  private static void safeExtractZip(File zipFile, File outputDir, Charset charset) throws IOException {
+    if (!outputDir.exists() && !outputDir.mkdirs()) {
+      throw new IOException("Cannot create ZIP extraction directory: " + outputDir);
+    }
+
+    try (ZipFile zip = new ZipFile(zipFile)) {
+      zip.setCharset(charset);
+      List<FileHeader> headers = zip.getFileHeaders();
+      for (FileHeader header : headers) {
+        extractZipEntry(zip, header, outputDir, header.getFileName());
+      }
+    }
+
+    ensureNoSymlinks(outputDir);
+  }
+
+  private static void extractZipEntry(ZipFile zip, FileHeader header, File outputDir, String entryName) throws IOException {
+    if (isSymlink(header)) {
+      throw new SecurityException("ZIP archive contains symbolic links: " + entryName);
+    }
+
+    File outFile = validateZipEntry(outputDir, entryName);
+    Path outPath = outFile.toPath();
+
+    if (header.isDirectory()) {
+      Files.createDirectories(outPath);
+      ensureNoSymlinks(outFile);
+      return;
+    }
+
+    File parent = outFile.getParentFile();
+    if (parent != null) {
+      Files.createDirectories(parent.toPath());
+      ensureNoSymlinks(parent);
+    }
+
+    if (Files.exists(outPath, LinkOption.NOFOLLOW_LINKS)) {
+      throw new SecurityException("Duplicate or unsafe ZIP entry: " + entryName);
+    }
+
+    try (InputStream is = zip.getInputStream(header);
+         OutputStream os = Files.newOutputStream(outPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+      byte[] buffer = new byte[BUFFER_SIZE];
+      int len;
+      while ((len = is.read(buffer)) != -1) {
+        os.write(buffer, 0, len);
+      }
+    }
+  }
+
+  private static File validateZipEntry(File destinationDir, String entryName) throws IOException {
+    if (StringUtils.isBlank(entryName) || entryName.indexOf('\0') >= 0) {
+      throw new SecurityException("ZIP entry has an invalid name");
+    }
+
+    String normalizedName = entryName.replace('\\', '/');
+    if (normalizedName.startsWith("/") || normalizedName.startsWith("../") || normalizedName.contains("/../")) {
+      throw new SecurityException("ZIP entry outside target directory: " + entryName);
+    }
+
+    Path destinationPath = destinationDir.toPath().toAbsolutePath().normalize();
+    Path targetPath = destinationPath.resolve(normalizedName).normalize();
+    if (!targetPath.startsWith(destinationPath)) {
+      throw new SecurityException("ZIP entry outside target directory: " + entryName);
+    }
+
+    File targetFile = targetPath.toFile();
+    String destDirPath = destinationDir.getCanonicalPath();
+    String targetCanonicalPath = targetFile.getCanonicalPath();
+    if (!targetCanonicalPath.equals(destDirPath) && !targetCanonicalPath.startsWith(destDirPath + File.separator)) {
+      throw new SecurityException("ZIP entry outside target directory: " + entryName);
+    }
+
+    return targetFile;
+  }
+
+  private static boolean isSymlink(FileHeader header) {
+    byte[] attributes = header.getExternalFileAttributes();
+    if (attributes == null || attributes.length < 4) {
+      return false;
+    }
+
+    int littleEndianAttributes = ((attributes[0] & 0xff))
+        | ((attributes[1] & 0xff) << 8)
+        | ((attributes[2] & 0xff) << 16)
+        | ((attributes[3] & 0xff) << 24);
+    int bigEndianAttributes = ((attributes[3] & 0xff))
+        | ((attributes[2] & 0xff) << 8)
+        | ((attributes[1] & 0xff) << 16)
+        | ((attributes[0] & 0xff) << 24);
+
+    return isUnixSymlink(littleEndianAttributes) || isUnixSymlink(bigEndianAttributes);
+  }
+
+  private static boolean isUnixSymlink(int externalAttributes) {
+    int unixMode = (externalAttributes >>> 16) & 0xffff;
+    return (unixMode & UNIX_FILE_TYPE_MASK) == UNIX_SYMLINK_FLAG;
+  }
+
+  private static void ensureNoSymlinks(File root) throws IOException {
+    if (root == null || !root.exists()) {
+      return;
+    }
+
+    Path rootPath = root.toPath();
+    if (Files.isSymbolicLink(rootPath)) {
+      throw new SecurityException("ZIP archive contains symbolic links");
+    }
+
+    File[] files = root.listFiles();
+    if (files == null) {
+      return;
+    }
+
+    for (File file : files) {
+      ensureNoSymlinks(file);
     }
   }
 
@@ -475,11 +593,8 @@ public class ActionThread implements Runnable {
       brodcastEvent();
       String zipFilePath = uploadService.getUploadResource(actionData.getActionId()).getStoreLocation();
       List<String> files = new ArrayList<>();
-      try (ZipFile zip = new ZipFile(zipFilePath)) {
-        zip.setCharset(StandardCharsets.UTF_8);
-        zip.extractAll(tempFolder);
-        listFiles(new File(tempFolder), files);
-      }
+      safeExtractZip(new File(zipFilePath), new File(tempFolder), StandardCharsets.UTF_8);
+      listFiles(new File(tempFolder), files);
       if (files.isEmpty() || files.stream().anyMatch(s -> s.indexOf('�') >= 0)) {
         fixedTempFolder = tempFolder + "_fixed";
         fixAndExtractZip(new File(zipFilePath), new File(fixedTempFolder));
@@ -491,13 +606,21 @@ public class ActionThread implements Runnable {
       actionData.setStatus(ActionStatus.CREATING_DOCUMENTS.name());
       brodcastEvent();
       createItems(fixedTempFolder.isEmpty() ? tempFolder : fixedTempFolder);
+    } catch (SecurityException e) {
+      actionData.setStatus(ActionStatus.CANNOT_UNZIP_FILE.name());
+      log.error("Security: malicious ZIP archive import attempt detected", e);
+      brodcastEvent();
     } catch (Exception e) {
       actionData.setStatus(ActionStatus.CANNOT_UNZIP_FILE.name());
       log.error("Cannot unzip the zip file", e);
       brodcastEvent();
     } finally {
-      cleanFiles(new File(tempFolder));
-      cleanFiles(new File(fixedTempFolder));
+      if (StringUtils.isNotBlank(tempFolder)) {
+        cleanFiles(new File(tempFolder));
+      }
+      if (StringUtils.isNotBlank(fixedTempFolder)) {
+        cleanFiles(new File(fixedTempFolder));
+      }
       bulkStorageActionService.removeActionData(actionData);
     }
   }
