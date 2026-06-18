@@ -622,14 +622,14 @@ export default {
       let path;
       if (this.isFileEditable)  {
         if (this.file?.acl?.canEdit){
-          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
         } else {
-          path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
         }
       } else if (this.isFileReadable)  {
-        path =  `${window.location.host}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+        path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
       } else {
-        path = `${window.location.host}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.fileId}`;
+        path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.fileId}`;
       }
       const input = document.createElement('input');
       input.value = path;
