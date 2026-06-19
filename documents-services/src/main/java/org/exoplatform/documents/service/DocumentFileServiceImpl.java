@@ -672,7 +672,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
     if (ownerIdentity.isSpace()) {
       Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
-      statisticData.addParameter("spaceId", space.getId());
+      statisticData.setSpaceId(space.getSpaceId());
       if (!spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())) {
         throw new IllegalAccessException("Current user with identity id : " + userIdentityId
             + " attempts to calculate size of documents of space with identity id " + ownerId + " while it's not a member");
@@ -684,8 +684,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     statisticData.setSubModule("Documents");
     statisticData.setOperation("documentsSize");
     statisticData.setTimestamp(new Date().getTime());
-    statisticData.addParameter("ownerId", ownerId);
-    statisticData.addParameter("size", size);
+    statisticData.addKeyword("ownerId", ownerId);
+    statisticData.addLong("size", size);
     AnalyticsUtils.addStatisticData(statisticData);
     DocumentsSize documentsSize = getDocumentsSizeStat(ownerId, userIdentityId);
     documentsSize.setTodaySize(true);
