@@ -16,6 +16,7 @@
         parent-element="div"
         element="div" />
       <documents-favorite-button
+        v-if="!file.folder"
         :id="fileId"
         :file="file"
         :small="false"
