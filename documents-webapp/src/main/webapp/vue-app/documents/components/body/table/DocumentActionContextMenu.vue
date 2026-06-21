@@ -47,6 +47,7 @@ export default {
     document.addEventListener('contextmenu', this.handleMenuClose);
     this.$root.$on('open-action-context-menu', this.openMenu);
     this.$root.$on('prevent-action-context-menu', this.handlePreventMenu);
+    this.$root.$on('close-action-context-menu', this.handlePreventMenu);
     this.$root.$on('selection-documents-list-updated', this.handleUpdateSelected);
     this.$root.$on('set-action-loading', this.closeMenu);
     this.$root.$on('close-file-action-menu', this.closeMenu);
@@ -54,6 +55,7 @@ export default {
   beforeDestroy() {
     this.$root.$off('open-action-context-menu', this.openMenu);
     this.$root.$off('selection-documents-list-updated', this.handleUpdateSelected);
+    this.$root.$off('close-action-context-menu', this.openMenu);
     this.$root.$off('prevent-action-context-menu', this.handlePreventMenu);
     this.$root.$off('set-action-loading', this.closeMenu);
     this.$root.$off('close-file-action-menu', this.closeMenu);
