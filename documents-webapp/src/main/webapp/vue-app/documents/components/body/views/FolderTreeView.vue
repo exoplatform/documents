@@ -26,24 +26,19 @@
     <v-card-title class="pa-0 border-bottom-color"> 
       <span v-if="!treeViewExpended" class="text-header">{{ $t('documents.tree.title') }}</span>
       <v-spacer />
-      <v-tooltip bottom>
-        <template #activator="{ on, attrs }">
-          <v-btn
-            icon
-            v-bind="attrs"
-            v-on="on"
-            @click.stop.prevent="$root.$emit('tree-view-expend', false)">
-            <img
-              src="/social/images/sidebar.svg"
-              class="icon-default-color mb-1"
-              height="20px"
-              width="20px">
-          </v-btn>
-        </template>
-        <span class="caption">
-          {{ $t('documents.tooltip.close.tree') }}
-        </span>
-      </v-tooltip>
+      <v-btn
+        icon
+        v-bind="attrs"
+        v-on="on"
+        @click.stop.prevent="$root.$emit('tree-view-expend', false)">
+        <img
+          alt=""
+          :title="$t('documents.tooltip.close.tree')"
+          src="/social/images/sidebar.svg"
+          class="icon-default-color mb-1"
+          height="20px"
+          width="20px">
+      </v-btn>
     </v-card-title>
     <v-card-text class="px-0">
       <document-tree-view
