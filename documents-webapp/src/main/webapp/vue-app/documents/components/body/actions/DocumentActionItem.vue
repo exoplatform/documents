@@ -26,7 +26,7 @@
       dense
       link
       class="ps-3"
-      @click.stop.prevent="$emit('click')">
+      @click.stop.prevent="handleClick">
       <v-list-item-icon class="me-2">
         <v-icon
           :class="iconExtraClass"
@@ -88,6 +88,14 @@ export default {
       type: Boolean,
       default: false
     }
-  }
+  },
+  methods: {
+    handleClick() {
+      this.$emit('click');
+      if (!this.isGroup) {
+        this.$root.$emit('close-action-context-menu');
+      }
+    },
+  },
 };
 </script>
