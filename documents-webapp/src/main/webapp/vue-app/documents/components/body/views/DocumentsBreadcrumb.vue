@@ -1,26 +1,22 @@
 <template>
   <div v-if="documentsBreadcrumbList.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-tooltip v-if="!treeViewExpended || isMobile" bottom>
-        <template #activator="{ on, attrs }">
-          <v-btn
-            icon
-            v-bind="attrs"
-            v-on="on"
-            class="me-2 ms-n2"
-            :disabled="disabledIconTree"
-            @click.stop.prevent="openTreeView()">
-            <img
-              src="/social/images/sidebar.svg"
-              class="icon-default-color pb-1"
-              height="20px"
-              width="20px">
-          </v-btn>
-        </template>
-        <span class="caption">
-          {{ $t('documents.tooltip.open.tree') }}
-        </span>
-      </v-tooltip>
+      <v-btn
+        v-if="!treeViewExpended || isMobile"
+        icon
+        v-bind="attrs"
+        v-on="on"
+        class="me-2 ms-n2"
+        :disabled="disabledIconTree"
+        @click.stop.prevent="openTreeView()">
+        <img
+          alt=""
+          :title="$t('documents.tooltip.open.tree')"
+          src="/social/images/sidebar.svg"
+          class="icon-default-color pb-1"
+          height="20px"
+          width="20px">
+      </v-btn>
       <div
         v-if="!isMobile"
         id="breadcrumb-list-items"
