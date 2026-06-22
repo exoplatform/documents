@@ -638,13 +638,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!stats.isEmpty()) {
       StatisticData toStat = stats.get(0);
       documentsSize.setOwnerId(ownerId);
-      documentsSize.setToSize(Long.parseLong(String.valueOf(toStat.getParameters().get("size"))));
+      documentsSize.setToSize(Long.parseLong(String.valueOf(getStatisticParameter(toStat, "size"))));
       documentsSize.setToSizeDate(toStat.getTimestamp());
       documentsSize.setTodaySize(simpleDateFormat.format(new Date())
                                                  .equals(simpleDateFormat.format(new Date(toStat.getTimestamp()))));
       if (stats.size() > 1) {
         StatisticData fromStat = stats.get(stats.size() - 1);
-        documentsSize.setFromSize(Long.parseLong(String.valueOf(fromStat.getParameters().get("size"))));
+        documentsSize.setFromSize(Long.parseLong(String.valueOf(getStatisticParameter(fromStat, "size"))));
         documentsSize.setFromSizeDate(fromStat.getTimestamp());
         LocalDateTime date = LocalDateTime.ofInstant(Instant.ofEpochMilli(fromStat.getTimestamp()), ZoneId.systemDefault());
         long diff = ChronoUnit.DAYS.between(date, to);
@@ -672,7 +672,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
     if (ownerIdentity.isSpace()) {
       Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
-      statisticData.addParameter("spaceId", space.getId());
+      statisticData.setSpaceId(space.getSpaceId());
       if (!spaceService.hasAccessPermission(space, currentUserIdentity.getRemoteId())) {
         throw new IllegalAccessException("Current user with identity id : " + userIdentityId
             + " attempts to calculate size of documents of space with identity id " + ownerId + " while it's not a member");
@@ -684,8 +684,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     statisticData.setSubModule("Documents");
     statisticData.setOperation("documentsSize");
     statisticData.setTimestamp(new Date().getTime());
-    statisticData.addParameter("ownerId", ownerId);
-    statisticData.addParameter("size", size);
+    statisticData.addKeyword("ownerId", ownerId);
+    statisticData.addLong("size", size);
     AnalyticsUtils.addStatisticData(statisticData);
     DocumentsSize documentsSize = getDocumentsSizeStat(ownerId, userIdentityId);
     documentsSize.setTodaySize(true);
@@ -833,6 +833,20 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public List<Long> getDocumentCategoryIds(long spaceIdentityId, String userName) {
     return documentFileStorage.getDocumentCategoryIds(spaceIdentityId, getAclUserIdentity(userName));
+  }
+
+  private Object getStatisticParameter(StatisticData statisticData, String fieldName) {
+    if (statisticData == null || statisticData.getParameters() == null || StringUtils.isBlank(fieldName)) {
+      return null;
+    }
+    Map<String, Object> parameters = statisticData.getParameters();
+    for (int i = AnalyticsUtils.MAX_ALTERNATIVE_FIELD_COUNT; i >= 1; i--) {
+      String alternativeFieldName = AnalyticsUtils.getAlternativeFieldName(fieldName, i);
+      if (parameters.containsKey(alternativeFieldName)) {
+        return parameters.get(alternativeFieldName);
+      }
+    }
+    return parameters.get(fieldName);
   }
 
   private CategoryLinkService getCategoryLinkService() {
