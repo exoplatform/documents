@@ -21,178 +21,72 @@
       class="documentVisibilityDrawer"
       @closed="close"
       right>
-      <template slot="title">
-        <span :title="visibilityTitle" class="text-truncate">{{ visibilityTitle }}</span>
+      <template #title>
+        <span class="text-truncate">{{ $t('documents.label.visibility') }}</span>
       </template>
-      <template slot="content">
+      <template #content>
         <v-list-item>
           <v-list-item-content class="my-1">
+            <div class="d-flex align-center">
+              <v-icon
+                size="28"
+                class="me-3"
+                :color="fileIconColor">
+                {{ fileIconClass }}
+              </v-icon>
+              <span class="text-truncate text-subtitle-1 font-weight-bold">{{ file.name }}</span>
+            </div>
+          </v-list-item-content>
+        </v-list-item>
+        <div class="px-4 pt-2">
+          <p class="text-header text-sub-title mb-3">
+            {{ $t('documents.label.document.access.header') }}
+          </p>
+          <div class="d-flex flex-row align-center mt-2">
+            <v-label>
+              <span class="text-body mr-2">{{ $t('documents.label.owner.display') }}:</span>
+            </v-label>
             <exo-user-avatar
               :identity="ownerIdentity"
-              avatar-class="me-2"
-              size="42"
-              bold-title>
-              <template slot="subTitle">
-                <span class="caption font-italic">
-                  {{ $t('documents.label.owner') }}
-                </span>
-              </template>
-            </exo-user-avatar>
-          </v-list-item-content>
-        </v-list-item>
-
-        <v-divider dark class="mx-4" />
-
-        <v-list-item>
-          <v-list-item-content class="my-1">
-            <div class="my-4">
-              <v-label for="choice">
-                <span v-if="!file.folder" class="font-weight-bold text-start text-body">{{ $t('documents.label.visibility.choice') + ' :' }}</span>
-                <span v-else class="font-weight-bold text-start text-body">{{ $t('documents.label.folders.visibility.choice') + ' :' }}</span>
+              fullname
+              bold-title
+              link-style />
+          </div>
+          <div class="mt-4">
+            <v-label for="visibility">
+              <span class="text-body font-weight-bold">{{ $t('documents.label.who.can.view') }}</span>
+            </v-label>
+            <v-select
+              v-model="visibilityChoice"
+              :items="visibilityLabel"
+              item-text="text"
+              item-value="value"
+              dense
+              class="caption pt-3"
+              outlined />
+            <p class="text-subtitle text-break mb-0">
+              {{ choiceInfo }}
+            </p>
+          </div>
+          <div v-if="showEditSwitch" class="mt-4">
+            <v-label for="edit">
+              <span class="text-body font-weight-bold">{{ $t('documents.label.who.can.edit') }}</span>
+            </v-label>
+            <div class="d-flex flex-row align-center mt-2">
+              <v-label>
+                <span class="text-body mr-6">{{ $t('documents.label.visibility.allowEveryone') }}</span>
               </v-label>
-              <v-select
-                v-model="visibilityChoice"
-                :items="visibilityLabel"
-                item-text="text"
-                item-value="value"
-                dense
-                class="caption"
-                outlined />
-              <p
-                class="text-subtitle text-break">
-                {{ choiceInfo }}
-              </p>
+              <v-spacer />
+              <v-switch
+                v-model="allMembersCanEdit"
+                class="mt-0 me-1" />
             </div>
-            <div
-              v-if="showPublicAccessOption"
-              class="d-block">
-              <div class="d-flex flex-row">
-                <div class="d-flex flex-column full-width pb-4">
-                  <v-label for="publicAccess">
-                    <span class="text-body mr-6">
-                      {{ $t('document.visibility.publicAccess.message') }}
-                    </span>
-                    <p class="text-subtitle pe-8"> {{ $t('document.visibility.publicAccess.choice.info') }} </p>
-                  </v-label>
-                </div>
-                <div class="d-flex flex-column">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs}">
-                      <v-btn
-                        v-bind="attrs"
-                        v-on="on"
-                        class="ms-n9 mt-n1"
-                        color="primary"
-                        icon
-                        @click="copyPublicAccessLink">
-                        <v-icon
-                          size="18">
-                          fas fa-clone
-                        </v-icon>
-                      </v-btn>
-                    </template>
-                    {{ $t('document.visibility.publicAccess.copyLink.message') }}
-                  </v-tooltip>
-                </div>
-              </div>
-              <div class="d-flex flex-row pb-4">
-                <div class="d-flex flex-column full-width">
-                  <v-label for="publicAccessOptions">
-                    <span class="text-body mr-6">
-                      {{ $t('documents.public.access.options.message') }}
-                    </span>
-                    <p class="text-subtitle">
-                      <span v-if="!hasPublicAccessPassword">
-                        {{ $t('documents.public.access.options.undefined.password') }}
-                      </span>
-                      <span v-else>
-                        {{ $t('documents.public.access.password.active.label') }}
-                      </span>
-                      <span v-if="!hasPublicAccessExpirationDate">
-                        - {{ $t('documents.public.access.options.undefined.expirationDate') }}
-                      </span>
-                      <span
-                        v-else-if="!isPublicAccessExpired">
-                        - {{ $t('documents.public.access.expiration.label', {0: publicAccessExpirationDate}) }}
-                      </span>
-                      <span
-                        v-else>-
-                        <span class="red--text">
-                          {{ $t('documents.public.access.expired.label') }}
-                        </span>
-                      </span>
-                    </p>
-                  </v-label>
-                </div>
-                <div class="d-flex flex-column">
-                  <v-tooltip bottom>
-                    <template #activator="{ on, attrs}">
-                      <v-btn
-                        v-bind="attrs"
-                        v-on="on"
-                        class="ms-n9 mt-n1"
-                        color="primary"
-                        icon
-                        @click="openEditLinkDrawer">
-                        <v-icon
-                          size="18">
-                          fas fa-edit
-                        </v-icon>
-                      </v-btn>
-                    </template>
-                    {{ $t('documents.public.access.options.tooltip') }}
-                  </v-tooltip>
-                </div>
-              </div>
-            </div>
-            <div
-              v-if="showSwitch"
-              class="mt-4">
-              <p class="font-weight-bold text-start text-body">
-                {{ $t(`document.visibility.who.canEdit.${fileGenderLabel}.message`) }}
-              </p>
-              <div class="d-flex flex-row my-4">
-                <v-label for="visibility">
-                  <span class="text-body mr-6">
-                    {{ $t('documents.label.visibility.allowEveryone') }}
-                  </span>
-                  <p class="text-subtitle"> {{ infoMessage }} </p>
-                </v-label>
-                <v-spacer />
-                <v-switch
-                  v-model="allMembersCanEdit"
-                  class="mt-0 me-1" />
-              </div>
-            </div>
-          </v-list-item-content>
-        </v-list-item>
-
-        <v-divider dark class="mx-4" />
-
-        <v-list-item class="d-block">
-          <v-list-item-content class="my-1">
-            <div class="d-flex">
-              <v-label for="collaborator">
-                <span class="font-weight-bold text-start text-body">{{ $t('documents.label.visibility.collaborator') }}</span>
-              </v-label>
-              <v-tooltip bottom v-if="!isMobile">
-                <template #activator="{ on, attrs }">
-                  <v-icon
-                    color="grey lighten-1"
-                    dark
-                    v-bind="attrs"
-                    v-on="on"
-                    size="16"
-                    class="px-2 iconStyle"
-                    @mouseenter="applyItemClass()">
-                    fa-info-circle
-                  </v-icon>
-                </template>
-                <span v-if="!file.folder" class="center lotfi">{{ $t('documents.label.visibility.collaborator.info') }}</span>
-                <span v-else class="center lotfi">{{ $t('documents.label.folders.visibility.collaborator.info') }}</span>
-              </v-tooltip>
-            </div>
-          </v-list-item-content>
+          </div>
+        </div>
+        <div class="pa-4">
+          <p class="text-header text-sub-title mb-3">
+            {{ $t('documents.label.external.access.header') }}
+          </p>
           <exo-identity-suggester
             ref="invitedCollaborators"
             :labels="suggesterLabels"
@@ -208,26 +102,41 @@
             include-users
             include-spaces
             include-groups />
-        </v-list-item>
-        <div v-if="users.length">
-          <documents-visibility-collaborators
-            v-for="user in usersToDisplay"
-            :key="user"
-            :user="user"
-            :is-mobile="isMobile" 
-            @remove-user="removeUser"
-            @set-visibility="setUserVisibility" />
-          <div class="seeMoreUsers">
-            <div
-              v-if="users.length > maxUsersToShow"
-              class="seeMoreItem  clickable center "
-              @click="displayAllListUsers()">
-              <span class="seeMoreUsersList text-sub-title clickable">+{{ showMoreUsersNumber }}</span>
+          <div v-if="users.length" class="mt-2">
+            <documents-visibility-collaborators
+              v-for="user in usersToDisplay"
+              :key="user"
+              :user="user"
+              :is-mobile="isMobile"
+              @remove-user="removeUser"
+              @set-visibility="setUserVisibility" />
+            <div class="seeMoreUsers">
+              <div
+                v-if="users.length > maxUsersToShow"
+                class="seeMoreItem clickable center"
+                @click="displayAllListUsers()">
+                <span class="seeMoreUsersList text-sub-title clickable">+{{ showMoreUsersNumber }}</span>
+              </div>
             </div>
           </div>
         </div>
+        <v-divider dark class="mx-4" />
+        <div class="pa-4">
+          <div class="d-flex">
+            <p class="text-body font-weight-bold">
+              {{ $t('documents.label.public.link.header') }}
+            </p>
+            <v-spacer />
+            <v-switch
+              v-model="publicLinkEnabled"
+              class="mt-0 me-1" />
+          </div>
+          <template v-if="publicLinkEnabled">
+            <public-document-options ref="publicDocumentOptions" :file="file" :existing-public-access="existingPublicAccess" @change="onPublicOptionsChange" />
+          </template>
+        </div>
       </template>
-      <template slot="footer">
+      <template #footer>
         <div class="d-flex">
           <v-spacer />
           <v-btn
@@ -278,129 +187,90 @@ export default {
         visibilityChoice: 'ALL_MEMBERS'
       }
     },
+    icon: null,
     collaborators: [],
     searchOptions: {
       currentUser: '',
     },
     originalFileProperties: {
       visibilityChoice: '',
-      publicDocumentAccess: {
-        decodedPassword: null,
-        expirationDate: 0,
-        hasPassword: false,
-      },
+      publicLinkEnabled: false,
+      publicLinkPassword: null,
+      publicLinkExpiration: 0,
       allMembersCanEdit: false,
       collaborators: '',
     },
     actualFileProperties: {
       visibilityChoice: '',
-      publicDocumentAccess: {
-        decodedPassword: null,
-        expirationDate: 0,
-        hasPassword: false,
-      },
+      publicLinkEnabled: false,
+      publicLinkPassword: null,
+      publicLinkExpiration: 0,
       allMembersCanEdit: false,
       collaborators: '',
     },
     users: [],
-    publicDocumentAccess: null,
-    publicDocumentAccessOptions: null,
-    isEditingPublicAccessOptions: false,
+    existingPublicAccess: null,
     visibilityChoice: null,
     allMembersCanEdit: false,
+    publicLinkEnabled: false,
+    hasPassword: false,
+    showPasswordInput: false,
+    showPassword: false,
+    showConfirmPassword: false,
+    confirmPassword: null,
+    publicLinkPassword: null,
+    hasExpirationDate: false,
+    expirationDate: null,
+    expirationDateMenu: false,
+    publicLinkOptionsChanged: false,
+    publicOptionsValid: false,
+    lang: eXo.env.portal.language,
   }),
   computed: {
-    publicAccessExpirationDate() {
-      return this.isEditingPublicAccessOptions && this.newPublicAccessExpirationDate
-                                               || this.hasPublicAccessExpirationDate
-                                               && new Date(this.publicDocumentAccess.expirationDate.time).toLocaleDateString(eXo.env.portal.language);
+    fileIconClass() {
+      return this.icon?.class;
     },
-    newPublicAccessExpirationDate() {
-      return this.publicDocumentAccessOptions?.expirationDate && new Date(this.publicDocumentAccessOptions.expirationDate).toLocaleDateString(eXo.env.portal.language);
-    },
-    hasNewPublicAccessPassword() {
-      return this.publicDocumentAccessOptions?.password;
-    },
-    hasPublicAccessPassword() {
-      return this.isEditingPublicAccessOptions && this.hasNewPublicAccessPassword
-                                               || this.publicDocumentAccess?.hasPassword;
-    },
-    isPublicAccessExpired() {
-      return !this.isEditingPublicAccessOptions && this.hasPublicAccessExpirationDate
-                                                && this.publicDocumentAccess.expirationDate.time < new Date().getTime();
-    },
-    hasPublicAccessExpirationDate() {
-      return this.isEditingPublicAccessOptions && this.newPublicAccessExpirationDate
-                                               || (!this.isEditingPublicAccessOptions && this.publicDocumentAccess?.expirationDate);
-    },
-    fileGenderLabel() {
-      return this.file.folder? 'folder': 'document';
+    fileIconColor() {
+      return this.icon?.color;
     },
     ignoreItems() {
       return eXo.env.portal.spaceName && [`space:${eXo.env.portal.spaceName}`] || [];
     },
-    visibilityTitle(){
-      return this.$t('documents.label.visibilityTitle', {0: this.file?.name});
-    },
     choiceInfo() {
       switch (this.visibilityChoice) {
       case 'SPECIFIC_COLLABORATOR':
-        return eXo.env.portal.spaceGroup ? this.$t('document.visibility.collaborators.choice.info'):
+        return eXo.env.portal.spaceGroup ? this.$t('document.visibility.collaborators.choice.info') :
           this.$t('document.myDrive.visibility.collaborators.choice.info');
       case 'ALL_MEMBERS':
         return this.$t('document.visibility.allMembers.choice.info');
-      case 'COLLABORATORS_AND_PUBLIC_ACCESS':
-        return eXo.env.portal.spaceGroup ? this.$t('document.visibility.publicAccess.and.spaceMembers.choice.info'):
-          this.$t('document.myDrive.visibility.publicAccess.choice.info');
+      case 'ANYONE':
+        return eXo.env.portal.spaceGroup ? this.$t('documents.visibility.anyone.choice.info') :
+          this.$t('documents.myDrive.visibility.anyone.choice.info');
       default:
         return this.$t('document.visibility.collaborators.choice.info');
       }
     },
-    visibilityLabel(){
-      return eXo?.env?.portal?.spaceGroup && [
-        {
+    visibilityLabel() {
+      const labels = [];
+      if (eXo?.env?.portal?.spaceGroup) {
+        labels.push({
           text: this.$t('documents.label.visibility.allMembers'),
           value: 'ALL_MEMBERS',
-        },
-        {
-          text: this.$t('documents.label.visibility.specific'),
-          value: 'SPECIFIC_COLLABORATOR',
-        },
-        {
-          text: this.$t('document.visibility.publicAccess.and.spaceMembers.message'),
-          value: 'COLLABORATORS_AND_PUBLIC_ACCESS',
-        }
-      ] || [
-        {
-          text: this.$t('documents.myDrive.visibility.specific.collaborators'),
-          value: 'SPECIFIC_COLLABORATOR',
-        },
-        {
-          text: this.$t('documents.myDrive.visibility.public.access'),
-          value: 'COLLABORATORS_AND_PUBLIC_ACCESS',
-        }
-      ];
-    },
-    infoMessage(){
-      switch (this.visibilityChoice) {
-      case 'SPECIFIC_COLLABORATOR':
-        if (!this.file.folder) {
-          return this.$t('documents.label.visibility.user.info');
-        } else {
-          return this.$t('documents.label.folders.visibility.user.info');
-        }
-      case 'ALL_MEMBERS':
-      case 'COLLABORATORS_AND_PUBLIC_ACCESS':
-        return this.file.acl.allMembersCanEdit ? this.$t('documents.label.visibility.allMembers.info') : this.$t('documents.label.visibility.specific.info');
-      default:
-        return this.$t('documents.label.visibility.allMembers.info');
+        });
       }
+      labels.push({
+        text: this.$t('documents.label.visibility.specific'),
+        value: 'SPECIFIC_COLLABORATOR',
+      });
+      labels.push({
+        text: eXo.env.portal.spaceGroup ? this.$t('documents.label.visibility.anyone') :
+          this.$t('documents.myDrive.label.visibility.anyone'),
+        value: 'ANYONE',
+      });
+      return labels;
     },
-    showSwitch(){
-      return eXo.env.portal.spaceGroup && ['ALL_MEMBERS', 'COLLABORATORS_AND_PUBLIC_ACCESS'].includes(this.visibilityChoice);
-    },
-    showPublicAccessOption(){
-      return this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
+    showEditSwitch() {
+      return eXo?.env?.portal?.spaceGroup && ['ALL_MEMBERS', 'ANYONE'].includes(this.visibilityChoice);
     },
     suggesterLabels() {
       return {
@@ -409,10 +279,10 @@ export default {
         noDataLabel: this.$t('documents.label.visibility.noDataLabel'),
       };
     },
-    maxUsersToShow(){
+    maxUsersToShow() {
       return this.$vuetify.breakpoint.width < 1600 ? 2 : 4;
     },
-    usersToDisplay () {
+    usersToDisplay() {
       if (this.users.length > this.maxUsersToShow) {
         return this.users.slice(0, this.maxUsersToShow);
       } else {
@@ -420,10 +290,16 @@ export default {
       }
     },
     showMoreUsersNumber() {
-      return `${this.users.length - this.maxUsersToShow  } ${  this.$t('documents.label.visibility.others')}`;
+      return `${this.users.length - this.maxUsersToShow} ${this.$t('documents.label.visibility.others')}`;
     },
     isDisabled() {
-      return JSON.stringify(this.originalFileProperties) === JSON.stringify(this.actualFileProperties);
+      const noChanges = this.originalFileProperties.visibilityChoice === this.visibilityChoice
+        && this.originalFileProperties.publicLinkEnabled === this.publicLinkEnabled
+        && this.originalFileProperties.allMembersCanEdit === this.allMembersCanEdit
+        && this.originalFileProperties.collaborators === this.stringifyArray(this.users)
+        && !this.publicLinkOptionsChanged;
+      const invalid = this.publicLinkEnabled && this.publicLinkOptionsChanged && !this.publicOptionsValid;
+      return noChanges || invalid;
     },
   },
   watch: {
@@ -443,39 +319,25 @@ export default {
       }
       this.collaborators = null;
     },
-    originalFileProperties() {
-      this.actualFileProperties = { ...this.originalFileProperties};
+    visibilityChoice(newVal) {
+      this.actualFileProperties = { ...this.actualFileProperties, visibilityChoice: newVal };
     },
-    visibilityChoice() {
-      this.actualFileProperties = { ...this.actualFileProperties,visibilityChoice: this.visibilityChoice};
+    publicLinkEnabled(newVal) {
+      this.actualFileProperties = { ...this.actualFileProperties, publicLinkEnabled: newVal };
     },
     allMembersCanEdit(newVal) {
       this.file.acl.allMembersCanEdit = newVal;
-      this.actualFileProperties = { ...this.actualFileProperties,allMembersCanEdit: newVal };
+      this.actualFileProperties = { ...this.actualFileProperties, allMembersCanEdit: newVal };
     },
-    showPublicAccessOption() {
-      if (!this.showPublicAccessOption) {
-        this.actualFileProperties = {
-          ...this.actualFileProperties,
-          publicDocumentAccess: {
-            ...this.actualFileProperties.publicDocumentAccess,
-            decodedPassword: this.originalFileProperties.publicDocumentAccess.decodedPassword,
-            expirationDate: this.originalFileProperties.publicDocumentAccess.expirationDate,
-            hasPassword: this.originalFileProperties.publicDocumentAccess.hasPassword
-          }
-        };
-      } 
+    hasPassword() {
+      if (!this.hasPassword) {
+        this.publicLinkPassword = null;
+        this.confirmPassword = null;
+        this.showPasswordInput = false;
+      }
     },
-    showSwitch() {
-      this.actualFileProperties = this.showSwitch ? { ...this.actualFileProperties,allMembersCanEdit: this.file.acl.allMembersCanEdit }
-        : { ...this.actualFileProperties,allMembersCanEdit: this.originalFileProperties.allMembersCanEdit };
-    },
-    usersToDisplay() {
-      this.actualFileProperties = { ... this.actualFileProperties, collaborators: this.stringifyArray(this.usersToDisplay) };
-    }
   },
   created() {
-    this.$root.$on('set-document-public-access-options', this.setDocumentPublicAccessOptions);
     this.$root.$on('open-visibility-drawer', file => {
       this.open(file);
     });
@@ -486,38 +348,49 @@ export default {
     });
   },
   methods: {
-    setDocumentPublicAccessOptions(options) {
-      this.actualFileProperties = {
-        ...this.actualFileProperties,
-        publicDocumentAccess: {
-          ...this.actualFileProperties.publicDocumentAccess,
-          decodedPassword: options.decodedPassword ? options.decodedPassword : null,
-          expirationDate: options.expirationDate === null ? 0 : options.expirationDate,
-          hasPassword: options.hasPassword
-        }
-      };
-      this.isEditingPublicAccessOptions = true;
-      this.publicDocumentAccessOptions = this.publicDocumentAccess = options;
-    },
     getDocumentPublicAccessInfo() {
       this.$documentFileService.getDocumentPublicAccess(this.file.id).then(publicDocumentAccess => {
+        const hasLink = publicDocumentAccess && publicDocumentAccess.nodeId;
+        this.publicLinkEnabled = hasLink;
+        this.hasPassword = hasLink && publicDocumentAccess.hasPassword;
+        this.hasExpirationDate = hasLink && !!publicDocumentAccess.expirationDate;
+        if (hasLink && publicDocumentAccess.expirationDate) {
+          const expDate = new Date(publicDocumentAccess.expirationDate.time);
+          this.expirationDate = expDate.toISOString().slice(0, 10);
+        }
+        this.existingPublicAccess = publicDocumentAccess;
         this.originalFileProperties = {
           ...this.originalFileProperties,
-          publicDocumentAccess: {
-            ...this.originalFileProperties.publicDocumentAccess,
-            decodedPassword: publicDocumentAccess.decodedPassword ? publicDocumentAccess.decodedPassword : null,
-            expirationDate: publicDocumentAccess.expirationDate === null ? 0 : publicDocumentAccess.expirationDate.time,
-            hasPassword: publicDocumentAccess.hasPassword
-          }
+          visibilityChoice: this.visibilityChoice,
+          publicLinkEnabled: hasLink,
+          allMembersCanEdit: this.allMembersCanEdit,
+          collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users)))
         };
-        this.publicDocumentAccess = publicDocumentAccess;
+        if (publicDocumentAccess) {
+          this.originalFileProperties = {
+            ...this.originalFileProperties,
+            publicLinkPassword: publicDocumentAccess.decodedPassword || null,
+            publicLinkExpiration: publicDocumentAccess.expirationDate?.time || 0,
+          };
+        }
+        this.actualFileProperties = { ...this.originalFileProperties };
+        this.$refs.documentVisibilityDrawer.open();
+      }).catch(() => {
+        this.publicLinkEnabled = false;
+        this.hasPassword = false;
+        this.hasExpirationDate = false;
+        this.expirationDate = null;
+        this.existingPublicAccess = null;
+        this.originalFileProperties = {
+          ...this.originalFileProperties,
+          visibilityChoice: this.visibilityChoice,
+          publicLinkEnabled: false,
+          allMembersCanEdit: this.allMembersCanEdit,
+          collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users)))
+        };
+        this.actualFileProperties = { ...this.originalFileProperties };
+        this.$refs.documentVisibilityDrawer.open();
       });
-    },
-    openEditLinkDrawer() {
-      this.$root.$emit('open-public-document-options-drawer', this.publicDocumentAccess);
-    },
-    copyPublicAccessLink() {
-      this.$root.$emit('copy-public-access-link', this.file.id);
     },
     mapCollaborator(collaborator) {
       const fullName = collaborator.profile
@@ -533,62 +406,55 @@ export default {
         'remoteId': collaborator.providerId === 'group' ? collaborator.spaceId : collaborator.remoteId,
         'providerId': collaborator.providerId,
         'avatar': collaborator.profile.avatarUrl
-
       };
-    },
-    applyItemClass(){
-      window.setTimeout(() => {
-        const elements = document.getElementsByClassName('v-tooltip__content');
-        for (let i = 0; i < elements.length; i++){
-          if (elements[i].innerText.includes(this.$t('documents.label.visibility.collaborator.info'))){
-            elements[i].style.left = '880px';
-          }
-        }
-      }, 100);
     },
     open(file) {
       this.file = file;
+      this.getFileIcon();
       this.allMembersCanEdit = this.file.acl.allMembersCanEdit;
-      this.visibilityChoice = this.file.acl.visibilityChoice;
-      this.publicDocumentAccess = null;
-      this.publicDocumentAccessOptions = null;
-      if (this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS'){
-        this.getDocumentPublicAccessInfo();
-      }
-      if (this.file?.creatorIdentity?.remoteId){
+      this.visibilityChoice = this.file.acl.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS' ? 'ANYONE' : this.file.acl.visibilityChoice;
+      this.publicLinkEnabled = false;
+      this.hasPassword = false;
+      this.showPasswordInput = false;
+      this.publicLinkPassword = null;
+      this.confirmPassword = null;
+      this.hasExpirationDate = false;
+      this.expirationDate = null;
+      this.publicLinkOptionsChanged = false;
+      this.existingPublicAccess = null;
+      if (this.file?.creatorIdentity?.remoteId) {
         this.$userService.getUser(this.file.creatorIdentity.remoteId).then(user => {
           this.ownerIdentity = user;
         });
       }
       this.users = [];
-      for (const collaborator of file.acl.collaborators){
+      for (const collaborator of file.acl.collaborators) {
         const user = collaborator.identity;
         user.permission = collaborator.permission;
         this.users.push(user);
       }
-      this.originalFileProperties = { ...this.originalFileProperties, 
-        visibilityChoice: this.file.acl.visibilityChoice,
-        allMembersCanEdit: this.file.acl.allMembersCanEdit,
-        collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users)))
-      };
-      this.$refs.documentVisibilityDrawer.open();
+      this.getDocumentPublicAccessInfo();
     },
     close() {
-      this.isEditingPublicAccessOptions = false;
-      this.publicDocumentAccessOptions = {};
-      this.originalFileProperties.publicDocumentAccess = {};
       this.$refs.documentVisibilityDrawer.close();
-
     },
-    displayAllListUsers(){
+    displayAllListUsers() {
       this.$root.$emit('open-all-users-visibility-drawer', this.file);
     },
-    saveVisibility(){
+    onPublicOptionsChange(valid) {
+      this.publicLinkOptionsChanged = true;
+      this.publicOptionsValid = valid;
+    },
+    saveVisibility() {
+      const publicOptions = this.$refs.publicDocumentOptions?.getAccessOptions();
+      if (publicOptions === null) {
+        return;
+      }
       this.loading = true;
       this.$refs.documentVisibilityDrawer.startLoading();
       const collaborators = [];
-      for (const user of  this.users) {
-        const  collaborator= {
+      for (const user of this.users) {
+        const collaborator = {
           'permission': user.permission || 'read',
           'identity': {
             'id': user.id,
@@ -604,14 +470,14 @@ export default {
         if (user.groupId) {
           collaborator.identity.groupId = user.groupId;
         }
-        collaborators.push(collaborator);      }
-      this.file.acl.collaborators=collaborators;
-      if (this.visibilityChoice==='SPECIFIC_COLLABORATOR'){
-        this.file.acl.allMembersCanEdit=false;
+        collaborators.push(collaborator);
       }
-      const publicAccess = this.isPublicAccess();
+      this.file.acl.collaborators = collaborators;
+      if (this.visibilityChoice === 'SPECIFIC_COLLABORATOR') {
+        this.file.acl.allMembersCanEdit = false;
+      }
       this.file.acl.visibilityChoice = this.visibilityChoice;
-      this.$root.$emit('save-visibility',this.file, publicAccess, this.publicDocumentAccessOptions);
+      this.$root.$emit('save-visibility', this.file, this.publicLinkEnabled, publicOptions || {});
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {
@@ -626,9 +492,9 @@ export default {
         return user.remoteId === addedUser.remoteId;
       });
       if (index >= 0) {
-        this.users[index].permission=user.permission;
+        this.users[index].permission = user.permission;
       }
-      this.actualFileProperties = { ... this.actualFileProperties, collaborators: this.stringifyArray(this.usersToDisplay) };
+      this.actualFileProperties = { ...this.actualFileProperties, collaborators: this.stringifyArray(this.usersToDisplay) };
     },
     stringifyArray(collaborators) {
       if (!collaborators) {
@@ -640,14 +506,20 @@ export default {
           const { id, permission, remoteId, providerId } = c;
           return JSON.stringify({ id, permission, remoteId, providerId });
         });
-      
       return JSON.stringify(collaborators.sort());
     },
-    isPublicAccess() {
-      return this.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS' 
-              && (JSON.stringify(this.originalFileProperties.publicDocumentAccess) !== JSON.stringify(this.actualFileProperties.publicDocumentAccess)
-              || this.originalFileProperties.visibilityChoice !== this.actualFileProperties.visibilityChoice);
-    }
+    getFileIcon() {
+      const extensions = this.$documentsIconsExtension;
+      if (this.file?.folder) {
+        this.icon = extensions[0].get('folder');
+      } else {
+        let extension = extensions[0].get(this.file?.mimeType);
+        if (!extension) {
+          extension = extensions[0].get('file');
+        }
+        this.icon = extension;
+      }
+    },
   }
 };
 </script>
