@@ -616,6 +616,18 @@ export function getDocumentPublicAccess(nodeId) {
   });
 }
 
+export function revokeDocumentPublicAccess(nodeId) {
+  const params = new URLSearchParams({ nodeId }).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/publicAccessLink?${params}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw resp;
+    }
+  });
+}
+
 export function downloadPublicDocument(nodeId, password) {
   const formData = new FormData();
   if (nodeId) {

@@ -78,7 +78,7 @@ import org.exoplatform.documents.rest.model.FileNodeEntity;
 import org.exoplatform.documents.rest.model.NodePermissionEntity;
 import org.exoplatform.documents.rest.model.PublicDocumentAccessOptionsEntity;
 import org.exoplatform.documents.rest.model.TrashElementEntity;
-import org.exoplatform.documents.rest.model.Visibility;
+
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
@@ -984,9 +984,6 @@ public class DocumentFileRest implements ResourceContainer {
 
     try {
       documentFileService.updatePermissions(nodeEntity.getId(),EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager), userIdentityId);
-      if (!nodeEntity.getAcl().getVisibilityChoice().equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name())) {
-        publicDocumentAccessService.revokeDocumentPublicAccess(nodeEntity.getId());
-      }
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     }
@@ -1291,6 +1288,38 @@ public class DocumentFileRest implements ResourceContainer {
 
     } catch (Exception e) {
       LOG.error("Error while creating a document public access for document: {}", nodeId, e);
+      return Response.serverError().build();
+    }
+  }
+
+  @DELETE
+  @RolesAllowed("users")
+  @Path("/publicAccessLink")
+  @Operation(summary = "Revoke public access link for a document",
+      method = "DELETE",
+      description = "Revoke public access link for a document")
+  @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response revokePublicAccessLink(@Parameter(description = "target file node identifier", required = true)
+                                         @QueryParam("nodeId") String nodeId) {
+    if (StringUtils.isBlank(nodeId)) {
+      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    if (userIdentityId == 0) {
+      return Response.status(Response.Status.UNAUTHORIZED).build();
+    }
+    try {
+      boolean hasEditPermission = documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId);
+      if (!hasEditPermission) {
+        return Response.status(Response.Status.UNAUTHORIZED).build();
+      }
+      publicDocumentAccessService.revokeDocumentPublicAccess(nodeId);
+      return Response.noContent().build();
+    } catch (Exception e) {
+      LOG.error("Error while revoking public access link for document: {}", nodeId, e);
       return Response.serverError().build();
     }
   }
