@@ -371,9 +371,17 @@ public class EntityBuilder {
 
       }
     }
-    String visibilityChoice = allCanRead ? Visibility.ALL_MEMBERS.name() : Visibility.SPECIFIC_COLLABORATOR.name();
-    if (publicDocumentAccessService.hasDocumentPublicAccess(node.getId())) {
+    boolean isPublic = nodePermission.isPublic();
+    boolean hasPublicAccessLink = publicDocumentAccessService.hasDocumentPublicAccess(node.getId());
+    String visibilityChoice;
+    if (isPublic && !hasPublicAccessLink) {
+      visibilityChoice = Visibility.ANYONE.name();
+    } else if (isPublic && hasPublicAccessLink) {
       visibilityChoice = Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name();
+    } else if (allCanRead) {
+      visibilityChoice = Visibility.ALL_MEMBERS.name();
+    } else {
+      visibilityChoice = Visibility.SPECIFIC_COLLABORATOR.name();
     }
     return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, visibilityChoice, new ArrayList<>(map.values()));
   }
@@ -421,7 +429,8 @@ public class EntityBuilder {
         }
       }
       if (nodePermissionEntity.getVisibilityChoice().equals(Visibility.ALL_MEMBERS.name())
-          || nodePermissionEntity.getVisibilityChoice().equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name())) {
+          || nodePermissionEntity.getVisibilityChoice().equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name())
+          || nodePermissionEntity.getVisibilityChoice().equals(Visibility.ANYONE.name())) {
         permissions.add(new PermissionEntry(identity,"read", PermissionRole.ALL.name()));
         if(nodePermissionEntity.isAllMembersCanEdit()){
           permissions.add(new PermissionEntry(identity,"edit",PermissionRole.ALL.name()));
@@ -436,7 +445,9 @@ public class EntityBuilder {
                                 nodePermissionEntity.isCanEdit(),
                                 nodePermissionEntity.isCanDelete(),
                                 nodePermissionEntity.getVisibilityChoice()
-                                                    .equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name()),
+                                                    .equals(Visibility.ANYONE.name())
+                                                    || nodePermissionEntity.getVisibilityChoice()
+                                                                           .equals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name()),
                                 permissions,
                                 toShare,
                                 toNotify,
