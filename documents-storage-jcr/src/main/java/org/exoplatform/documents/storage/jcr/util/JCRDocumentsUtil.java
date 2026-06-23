@@ -604,7 +604,7 @@ public class JCRDocumentsUtil {
     for (AccessControlEntry accessControlEntry : permsList) {
       String nodeAclIdentity = accessControlEntry.getIdentity();
       MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
-      isPublic = StringUtils.equals(IdentityConstants.ANY, nodeAclIdentity);
+      isPublic = isPublic || StringUtils.equals(IdentityConstants.ANY, nodeAclIdentity);
       if (StringUtils.equals(nodeAclIdentity, userId)
           || StringUtils.equals(IdentityConstants.ANY, userId)
           || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {

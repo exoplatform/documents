@@ -15,8 +15,8 @@
 * along with this program.  If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div class="d-flex">
-    <div class="profile-popover user-wrapper pl-4 pt-2 pb-2">
+  <div class="d-flex pt-2">
+    <div class="profile-popover user-wrapper">
       <a
         class="d-flex not-clickable flex-nowrap flex-grow-1 text-truncate container--fluid align-center">
         <v-icon

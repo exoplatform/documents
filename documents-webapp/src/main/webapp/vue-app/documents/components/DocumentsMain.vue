@@ -1503,14 +1503,21 @@ export default {
         }
       }));
     },
-    saveVisibility(file, publicAccess, publicOptions) {
+    saveVisibility(file, publicLinkEnabled, publicOptions) {
       this.$documentFileService.saveVisibility(file)
         .then(() => {
-          if (publicAccess) {
-            this.createDocumentPublicAccessLink(file, publicOptions);
-          } else {
-            this.refreshFiles();
+          if (publicLinkEnabled && publicOptions) {
+            return this.$documentFileService.createDocumentPublicAccess(file.id, {
+              password: publicOptions.password,
+              expirationDate: publicOptions.expirationDate || 0,
+              hasPassword: publicOptions.hasPassword,
+            });
+          } else if (!publicLinkEnabled) {
+            return this.$documentFileService.revokeDocumentPublicAccess(file.id);
           }
+        })
+        .then(() => {
+          this.refreshFiles();
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
           this.$root.$emit('visibility-saved');
         })
@@ -1519,8 +1526,7 @@ export default {
         })
         .finally(() => {
           this.loading = false;
-        }
-        );
+        });
     },
     openDrawer(files) {
 
