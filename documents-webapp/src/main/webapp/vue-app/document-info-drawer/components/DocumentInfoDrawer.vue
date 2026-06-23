@@ -567,7 +567,7 @@ export default {
         const parentIndex = pathParts.indexOf('Private');
         if (parentIndex!== -1){
           folderPath = pathParts.slice(parentIndex, pathParts.length ).join('/');
-          folderPath = `${eXo.env.portal.context}/${eXo.env.portal.portalName}/drives/${folderPath}`;   
+          folderPath = `${eXo.env.portal.defaultPath}/dashboard/drive/${folderPath}`;   
         }
       }
       window.open(folderPath,'_self');
@@ -645,7 +645,7 @@ export default {
         const spaceId = this.file?.ownerIdentity?.avatar.split('social/spaces/')[1].split('/avatar')[0];
         return `${eXo.env.portal.context}/s/${spaceId}/documents`;
       } 
-      return `${eXo.env.portal.context}/${eXo.env.portal.portalName}/documents`;
+      return `${eXo.env.portal.defaultPath}/dashboard/drive`;
     },
   },
 };
