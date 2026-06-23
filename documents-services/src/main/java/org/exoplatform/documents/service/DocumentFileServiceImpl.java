@@ -100,8 +100,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private NodeHierarchyCreator   nodeHierarchyCreator;
 
-  private SessionProviderService sessionProviderService;
-
   private static final String    DEFAULT_GROUPS_HOME_PATH = "/Groups";
 
   private static final String    GROUPS_PATH_ALIAS        = "groupsPath";
@@ -137,7 +135,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     this.imageThumbnailService = imageThumbnailService;
     this.repositoryService = repositoryService;
     this.nodeHierarchyCreator = nodeHierarchyCreator;
-    this.sessionProviderService = sessionProviderService;
   }
 
   @Override
@@ -865,11 +862,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (space == null) {
       return;
     }
-    SessionProvider sessionProvider = null;
+    Session session = null;
     try {
       ManageableRepository repository = repositoryService.getCurrentRepository();
-      sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-      Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      session = repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
       Node spaceRootNode = getGroupNode(session, space.getGroupId());
       if (spaceRootNode != null) {
         synchronizeNodePermissions(space, targetRedactionalMode, spaceRootNode);
@@ -880,8 +876,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     } catch (Exception e) {
       LOG.error("Error updating permissions of space width id '{}'", space.getId(), e);
     } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
+      if (session != null) {
+        session.logout();
       }
     }
   }
