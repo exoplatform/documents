@@ -84,7 +84,7 @@ export function getParentFolderUrl(file) {
       const parentIndex = pathParts.indexOf('Private');
       if (parentIndex !== -1) {
         folderPath = pathParts.slice(parentIndex, pathParts.length - 1).join('/');
-        folderPath = `${eXo.env.portal.context}/${eXo.env.portal.portalName}${eXo.env.portal.selectedNodeUri}/${folderPath}`;
+        folderPath = `${eXo.env.portal.defaultPath}/dashboard/drive/${folderPath}`;
       }
     }
     return folderPath;
