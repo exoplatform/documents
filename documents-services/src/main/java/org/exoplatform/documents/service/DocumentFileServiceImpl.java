@@ -19,9 +19,18 @@ package org.exoplatform.documents.service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
-import java.time.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -32,24 +41,36 @@ import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.documents.utils.DocumentUtils;
-import org.exoplatform.documents.webdav.model.OperationCancelledException;
-import org.exoplatform.services.jcr.RepositoryService;
-import org.exoplatform.services.jcr.core.ExtendedNode;
-import org.exoplatform.services.jcr.core.ManageableRepository;
-import org.exoplatform.services.jcr.ext.app.SessionProviderService;
-import org.exoplatform.services.jcr.ext.common.SessionProvider;
-import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
-import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.BreadCrumbItem;
+import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentGroupsSize;
+import org.exoplatform.documents.model.DocumentNodeFilter;
+import org.exoplatform.documents.model.DocumentTimelineFilter;
+import org.exoplatform.documents.model.DocumentsSize;
+import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.FileVersion;
+import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.documents.model.TrashElementNode;
+import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.documents.utils.DocumentUtils;
+import org.exoplatform.documents.webdav.model.OperationCancelledException;
+import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ManageableRepository;
+import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -68,6 +89,7 @@ import io.meeds.analytics.utils.AnalyticsUtils;
 import io.meeds.portal.thumbnail.model.FileContent;
 import io.meeds.social.category.model.CategoryObject;
 import io.meeds.social.category.service.CategoryLinkService;
+
 import lombok.SneakyThrows;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
@@ -99,8 +121,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   private RepositoryService      repositoryService;
 
   private NodeHierarchyCreator   nodeHierarchyCreator;
-
-  private SessionProviderService sessionProviderService;
 
   private static final String    DEFAULT_GROUPS_HOME_PATH = "/Groups";
 
@@ -137,7 +157,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     this.imageThumbnailService = imageThumbnailService;
     this.repositoryService = repositoryService;
     this.nodeHierarchyCreator = nodeHierarchyCreator;
-    this.sessionProviderService = sessionProviderService;
   }
 
   @Override
@@ -865,11 +884,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (space == null) {
       return;
     }
-    SessionProvider sessionProvider = null;
+    Session session = null;
     try {
       ManageableRepository repository = repositoryService.getCurrentRepository();
-      sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-      Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      session = repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
       Node spaceRootNode = getGroupNode(session, space.getGroupId());
       if (spaceRootNode != null) {
         synchronizeNodePermissions(space, targetRedactionalMode, spaceRootNode);
@@ -880,8 +898,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     } catch (Exception e) {
       LOG.error("Error updating permissions of space width id '{}'", space.getId(), e);
     } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
+      if (session != null) {
+        session.logout();
       }
     }
   }
