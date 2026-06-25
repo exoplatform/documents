@@ -360,7 +360,8 @@ public class DocumentSearchServiceConnector {
       sb.append("      }");
     }
     sb.append("\n");
-    sb.append("    ]\n");
+    sb.append("    ],\n");
+    sb.append("    \"minimum_should_match\": 1\n");
     sb.append("  }\n");
     sb.append("}");
     return sb.toString();

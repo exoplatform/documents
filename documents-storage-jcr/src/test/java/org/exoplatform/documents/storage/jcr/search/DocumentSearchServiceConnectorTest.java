@@ -131,7 +131,8 @@ public class DocumentSearchServiceConnectorTest {
                         "          }\n" +
                         "        }\n" +
                         "      }\n" +
-                        "    ]\n" +
+                        "    ],\n" +
+                        "    \"minimum_should_match\": 1\n" +
                         "  }\n" +
                         "}";
     String expectedQuery = SEARCH_QUERY.replace("@term_query@", SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, filter.getQuery()))

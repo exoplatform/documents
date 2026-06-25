@@ -434,7 +434,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private List<String> findSymlinkTargetPaths(Session session, String path) throws RepositoryException {
     List<String> targetPaths = new ArrayList<>();
-    String query = "SELECT * FROM nt:base WHERE jcr:path LIKE '" + path + "/%' AND jcr:primaryType = 'exo:symlink'";
+    String query = "SELECT * FROM exo:symlink WHERE jcr:path LIKE '" + path + "/%'";
     Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(query, Query.SQL);
     QueryResult queryResult = jcrQuery.execute();
     NodeIterator nodeIterator = queryResult.getNodes();
@@ -442,17 +442,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     while (nodeIterator.hasNext()) {
       Node symlink = nodeIterator.nextNode();
       try {
-        Node targetNode = getNodeByIdentifier(session, symlink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
-        if (targetNode == null) {
-          continue;
-        }
-        while (targetNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-          targetNode = getNodeByIdentifier(session, targetNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
-          if (targetNode == null) {
-            break;
-          }
-        }
-        if (targetNode == null || targetNode.isNodeType(NodeTypeConstants.NT_FILE)) {
+        Node targetNode = resolveSymlinks(session, symlink);
+        if (targetNode == null || !(targetNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || targetNode.isNodeType(NodeTypeConstants.NT_FOLDER))) {
           continue;
         }
         String targetPath = targetNode.getPath();
@@ -2964,6 +2955,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         throw new ItemNotFoundException();
       }
     }
+  }
+
+  private Node resolveSymlinks(Session session, Node symlink) throws RepositoryException {
+    Node targetNode = getNodeByIdentifier(session, symlink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+    if (targetNode == null) {
+      return null;
+    }
+    List<String> nodeIds = new ArrayList<>();
+    while (targetNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      String nodeId = targetNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+      if (nodeIds.contains(nodeId)) {
+        break;
+      }
+      nodeIds.add(nodeId);
+      targetNode = getNodeByIdentifier(session, nodeId);
+      if (targetNode == null) {
+        break;
+      }
+    }
+    return targetNode;
   }
 
 }
