@@ -63,19 +63,7 @@
                   ]
                 }
               },
-              {
-                "bool": {
-                  "should": [
-                    {
-                      "prefix": {
-                        "path": {
-                          "value": "@path@"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
+              @path_filter@
             ]
           }
         }
