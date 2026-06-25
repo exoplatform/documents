@@ -1,29 +1,13 @@
 <template>
   <div v-if="documentsBreadcrumbList.length" class="documents-breadcrumb-wrapper">
     <div class="documents-tree-items d-flex align-center">
-      <v-btn
-        v-if="!treeViewExpended || isMobile"
-        icon
-        v-bind="attrs"
-        v-on="on"
-        class="me-2 ms-n2"
-        :disabled="disabledIconTree"
-        @click.stop.prevent="openTreeView()">
-        <img
-          alt=""
-          :title="$t('documents.tooltip.open.tree')"
-          src="/social/images/sidebar.svg"
-          class="icon-default-color pb-1"
-          height="20px"
-          width="20px">
-      </v-btn>
       <div
         v-if="!isMobile"
         id="breadcrumb-list-items"
         data-isfolder="true"
         :data-fileId="documentsBreadcrumbToDisplay[0].id"
         :data-canEdit="canEditFile(documentsBreadcrumbToDisplay[0])? 'true': 'false'"
-        class="d-flex align-center width-full pa-1 mb-1">
+        class="d-flex align-center width-full pa-1 mb-1 ps-0">
         <template v-for="(document, index) in documentsBreadcrumbList">
           <div
             v-if="document.isBreadcrumbItem && !document.isEllipsis"
@@ -111,10 +95,6 @@ export default {
     move: {
       type: Boolean,
       default: false,
-    },
-    treeViewExpended: {
-      type: String,
-      default: null,
     },
     isMobile: {
       type: Boolean,
@@ -354,14 +334,6 @@ export default {
         this.getFolderPath(folderPath);
       } else {
         this.getDocumentDataFromUrl();
-      }
-    },
-    openTreeView() {
-      if (this.isMobile) {
-        this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
-        this.$root.$emit('openTreeFolderDrawer',this.showHidden);
-      } else {
-        this.$root.$emit('tree-view-expend', true);
       }
     },
     initDocumentsBreadcrumb() {
