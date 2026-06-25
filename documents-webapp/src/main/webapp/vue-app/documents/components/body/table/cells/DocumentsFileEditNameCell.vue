@@ -84,6 +84,12 @@ export default {
       }
     });
   },
+  mounted() {
+    this.$root.$emit('documents-file-name-edit', true);
+  },
+  beforeDestroy() {
+    this.$root.$emit('documents-file-name-edit', false);
+  },
   methods: {
     editTitle(){
       this.editNameMode=true;
