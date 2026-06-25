@@ -185,6 +185,17 @@ public class DocumentSearchServiceConnector {
                                                      int limit,
                                                      String sortField,
                                                      String sortDirection) {
+    return search(userIdentity, workspace, List.of(path), filter, offset, limit, sortField, sortDirection);
+  }
+
+  public Collection<DocumentFileSearchResult> search(Identity userIdentity,
+                                                     String workspace,
+                                                     List<String> paths,
+                                                     DocumentNodeFilter filter,
+                                                     int offset,
+                                                     int limit,
+                                                     String sortField,
+                                                     String sortDirection) {
     if (userIdentity == null) {
       throw new IllegalArgumentException("Viewer identity is mandatory");
     }
@@ -214,7 +225,7 @@ public class DocumentSearchServiceConnector {
         sortField = "_score";
     }
 
-    String esQuery = buildQueryStatement(userIdentity, workspace, path, filter, sortField, sortDirection, false, offset, limit);
+    String esQuery = buildQueryStatement(userIdentity, workspace, paths, filter, sortField, sortDirection, false, offset, limit);
     String jsonResponse = this.client.sendRequest(esQuery, this.index);
     return buildResult(jsonResponse);
   }
@@ -255,12 +266,16 @@ public class DocumentSearchServiceConnector {
   }
 
   public long getTotalSize(Identity userIdentity, String workspace, String path) {
+    return getTotalSize(userIdentity, workspace, List.of(path));
+  }
+
+  public long getTotalSize(Identity userIdentity, String workspace, List<String> paths) {
     if (userIdentity == null) {
       throw new IllegalArgumentException("Viewer identity is mandatory");
     }
     String esQuery = buildQueryStatement(userIdentity,
                                          workspace,
-                                         path,
+                                         paths,
                                          new DocumentTimelineFilter(),
                                          "lastUpdatedDate",
                                          "ASC",
@@ -293,7 +308,7 @@ public class DocumentSearchServiceConnector {
 
   private String buildQueryStatement(Identity userIdentity,
                                      String workspace,
-                                     String path,
+                                     List<String> paths,
                                      DocumentNodeFilter filter,
                                      String sortField,
                                      String sortDirection,
@@ -307,9 +322,6 @@ public class DocumentSearchServiceConnector {
     String termQuery = buildTermQueryStatement(filter.getQuery(), BooleanUtils.isTrue(filter.isExtendedSearch()));
     String favoriteQuery = buildFavoriteQueryStatement(metadataFilters.get(FavoriteService.METADATA_TYPE.getName()));
     String categoryQuery = buildCategoryIdQueryStatement(filter);
-    if (StringUtils.isNotEmpty(path) && !path.endsWith("/")) {
-      path += "/";
-    }
     return retrieveSearchQuery().replace("@term_query@", termQuery)
                                 .replace("@favorite_query@", favoriteQuery)
                                 .replace("@category_query@", categoryQuery)
@@ -317,13 +329,41 @@ public class DocumentSearchServiceConnector {
                                 .replace("@fileTypes_query@", getFileTypesQuery(filter))
                                 .replace("@size_query@", getSizeQuery(filter))
                                 .replace("@date_query@", getDatesQuery(filter))
-                                .replace("@path@", path)
+                                .replace("@path_filter@", buildPathFilter(paths))
                                 .replace("@workspace@", workspace)
                                 .replace("@size_agg@", getSizeAgg(getTotalSize))
                                 .replace("@sort_field@", sortField)
                                 .replace("@sort_direction@", sortDirection)
                                 .replace("@offset@", String.valueOf(offset))
                                 .replace("@limit@", getLimit(limit));
+  }
+
+  private String buildPathFilter(List<String> paths) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{\n");
+    sb.append("  \"bool\": {\n");
+    sb.append("    \"should\": [\n");
+    for (int i = 0; i < paths.size(); i++) {
+      String path = paths.get(i);
+      if (StringUtils.isNotEmpty(path) && !path.endsWith("/")) {
+        path += "/";
+      }
+      if (i > 0) {
+        sb.append(",\n");
+      }
+      sb.append("      {\n");
+      sb.append("        \"prefix\": {\n");
+      sb.append("          \"path\": {\n");
+      sb.append("            \"value\": \"").append(path).append("\"\n");
+      sb.append("          }\n");
+      sb.append("        }\n");
+      sb.append("      }");
+    }
+    sb.append("\n");
+    sb.append("    ]\n");
+    sb.append("  }\n");
+    sb.append("}");
+    return sb.toString();
   }
 
   private String getFileTypesQuery(DocumentNodeFilter filter) {

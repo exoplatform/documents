@@ -121,6 +121,19 @@ public class DocumentSearchServiceConnectorTest {
     String path = "/Groups/spaces/test/Documents/";
     String sort_field = "title";
     String sort_direction = "ASC";
+    String pathFilter = "{\n" +
+                        "  \"bool\": {\n" +
+                        "    \"should\": [\n" +
+                        "      {\n" +
+                        "        \"prefix\": {\n" +
+                        "          \"path\": {\n" +
+                        "            \"value\": \"" + path + "\"\n" +
+                        "          }\n" +
+                        "        }\n" +
+                        "      }\n" +
+                        "    ]\n" +
+                        "  }\n" +
+                        "}";
     String expectedQuery = SEARCH_QUERY.replace("@term_query@", SEARCH_QUERY_TERM.replace(QUERY_TAG_TERM, filter.getQuery()))
                                        .replace("@favorite_query@", "")
                                        .replace("@category_query@", "")
@@ -128,7 +141,7 @@ public class DocumentSearchServiceConnectorTest {
                                        .replace("@fileTypes_query@", "")
                                        .replace("@size_query@", "")
                                        .replace("@date_query@", "")
-                                       .replace("@path@", path)
+                                       .replace("@path_filter@", pathFilter)
                                        .replace("@workspace@", WORKSPACE)
                                        .replace("@size_agg@", getSizeAgg(false))
                                        .replace("@sort_field@", sort_field + ".raw")
