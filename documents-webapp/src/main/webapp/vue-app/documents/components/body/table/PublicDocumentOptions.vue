@@ -387,7 +387,17 @@ export default {
         this.$emit('change', this.getValidationState());
       }
     },
+    confirmPassword() {
+      if (this.initialized) {
+        this.$emit('change', this.getValidationState());
+      }
+    },
     expirationDate() {
+      if (this.initialized) {
+        this.$emit('change', this.getValidationState());
+      }
+    },
+    expirationDateType() {
       if (this.initialized) {
         this.$emit('change', this.getValidationState());
       }
@@ -470,11 +480,15 @@ export default {
     getValidationState() {
       let passwordValid;
       if (this.showPasswordInput) {
-        passwordValid = !!this.password && !!this.confirmPassword && this.password === this.confirmPassword;
+        passwordValid = !!this.password && this.passwordRegex.test(this.password)
+                                        && !!this.confirmPassword
+                                        && this.password === this.confirmPassword;
       } else {
         passwordValid = !this.hasPassword || !!this.publicDocumentAccess?.decodedPassword;
       }
-      const expirationValid = !this.showExpirationDateInput || !!this.expirationDate;
+      const expirationValid = !this.showExpirationDateInput
+          || (this.expirationDateType === 'delayDate' && !!this.delayTypeTimes)
+          || !!this.expirationDate;
       return passwordValid && expirationValid;
     },
     getAccessOptions() {
