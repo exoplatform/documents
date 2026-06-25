@@ -97,10 +97,10 @@
                   :key="item.id">
                   <tr
                     :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
-                    draggable="true"
                     :data-fileId="item.id"
                     :data-isFolder="item.folder? 'true': 'false'"
                     :data-canEdit="canEditFile(item)? 'true': 'false'"
+                    :draggable="!editName"
                     @mouseover="showSelectionInput(item)"
                     @mouseleave="hideSelectionInput(item)"
                     @contextmenu="openContextMenu($event, item)">
@@ -277,6 +277,7 @@ export default {
     showSelectInputTimer: null,
     treeViewExpended: true,
     hoverTable: false,
+    editName: false,
   }),
   computed: {
     isXScreen() {
@@ -360,6 +361,7 @@ export default {
     this.$root.$on('documents-filter', this.updateFilter);
     this.$root.$on('tree-view-expend', this.extendTreeView );
     this.$root.$on('loading-documents', this.setLoading);
+    this.$root.$on('documents-file-name-edit', this.setEditName);
   },
   mounted(){
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
@@ -370,8 +372,12 @@ export default {
     this.$root.$off('tree-view-expend', this.extendTreeView);
     this.$root.$off('openTreeFolderDrawer', this.folderTreeDrawer);
     this.$root.$off('loading-documents', this.setLoading);
+    this.$root.$off('documents-file-name-edit', this.setEditName);
   },
   methods: {
+    setEditName(value) {
+      this.editName = value;
+    },
     extendTreeView(value) {
       this.treeViewExpended = value;
       localStorage.setItem('expendedTreeView', value);
