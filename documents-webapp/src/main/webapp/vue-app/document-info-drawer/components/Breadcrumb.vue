@@ -32,8 +32,8 @@
               <v-btn
                 height="20px"
                 min-width="20px"
-                class="pa-0 text-truncate flex-shrink-1 clickable"
-                text
+                class="pa-0"
+                icon
                 v-bind="attrs"
                 v-on="on"
                 @click="openFolder(folder)">
@@ -55,7 +55,7 @@
                 <v-icon
                   v-else
                   size="18"
-                  class="pa-0 pe-2">
+                  class="pa-0 pe-4">
                   fas fa-home
                 </v-icon>
                 <v-icon
