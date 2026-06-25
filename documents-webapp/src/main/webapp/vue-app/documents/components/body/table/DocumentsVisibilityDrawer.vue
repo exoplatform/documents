@@ -132,7 +132,11 @@
               class="mt-0 me-1" />
           </div>
           <template v-if="publicLinkEnabled">
-            <public-document-options ref="publicDocumentOptions" :file="file" :existing-public-access="existingPublicAccess" @change="onPublicOptionsChange" />
+            <public-document-options
+              ref="publicDocumentOptions"
+              :file="file"
+              :existing-public-access="existingPublicAccess"
+              @change="onPublicOptionsChange" />
           </template>
         </div>
       </template>
@@ -349,48 +353,61 @@ export default {
   },
   methods: {
     getDocumentPublicAccessInfo() {
-      this.$documentFileService.getDocumentPublicAccess(this.file.id).then(publicDocumentAccess => {
-        const hasLink = publicDocumentAccess && publicDocumentAccess.nodeId;
-        this.publicLinkEnabled = hasLink;
-        this.hasPassword = hasLink && publicDocumentAccess.hasPassword;
-        this.hasExpirationDate = hasLink && !!publicDocumentAccess.expirationDate;
-        if (hasLink && publicDocumentAccess.expirationDate) {
-          const expDate = new Date(publicDocumentAccess.expirationDate.time);
-          this.expirationDate = expDate.toISOString().slice(0, 10);
-        }
-        this.existingPublicAccess = publicDocumentAccess;
-        this.originalFileProperties = {
-          ...this.originalFileProperties,
-          visibilityChoice: this.visibilityChoice,
-          publicLinkEnabled: hasLink,
-          allMembersCanEdit: this.allMembersCanEdit,
-          collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users)))
-        };
-        if (publicDocumentAccess) {
-          this.originalFileProperties = {
-            ...this.originalFileProperties,
-            publicLinkPassword: publicDocumentAccess.decodedPassword || null,
-            publicLinkExpiration: publicDocumentAccess.expirationDate?.time || 0,
-          };
-        }
-        this.actualFileProperties = { ...this.originalFileProperties };
-        this.$refs.documentVisibilityDrawer.open();
-      }).catch(() => {
-        this.publicLinkEnabled = false;
-        this.hasPassword = false;
-        this.hasExpirationDate = false;
-        this.expirationDate = null;
-        this.existingPublicAccess = null;
-        this.originalFileProperties = {
-          ...this.originalFileProperties,
-          visibilityChoice: this.visibilityChoice,
-          publicLinkEnabled: false,
-          allMembersCanEdit: this.allMembersCanEdit,
-          collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users)))
-        };
-        this.actualFileProperties = { ...this.originalFileProperties };
-        this.$refs.documentVisibilityDrawer.open();
-      });
+      this.$documentFileService.getPublicAccessLink(this.file.id)
+        .then(info => {
+          if (info?.hasPublicLink) {
+            return this.$documentFileService.getDocumentPublicAccess(this.file.id)
+              .then(this.onPublicAccessLoaded);
+          } else {
+            this.resetPublicAccessState();
+            this.openDrawer();
+          }
+        })
+        .catch(this.onPublicAccessLoadError);
+    },
+    onPublicAccessLoaded(publicDocumentAccess) {
+      const hasLink = publicDocumentAccess && publicDocumentAccess.nodeId;
+      this.publicLinkEnabled = hasLink;
+      this.hasPassword = hasLink && publicDocumentAccess.hasPassword;
+      this.hasExpirationDate = hasLink && !!publicDocumentAccess.expirationDate;
+      if (hasLink && publicDocumentAccess.expirationDate) {
+        const expDate = new Date(publicDocumentAccess.expirationDate.time);
+        this.expirationDate = expDate.toISOString().slice(0, 10);
+      }
+      this.existingPublicAccess = publicDocumentAccess;
+      this.originalFileProperties = {
+        ...this.originalFileProperties,
+        visibilityChoice: this.visibilityChoice,
+        publicLinkEnabled: hasLink,
+        allMembersCanEdit: this.allMembersCanEdit,
+        collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users))),
+        publicLinkPassword: publicDocumentAccess?.decodedPassword || null,
+        publicLinkExpiration: publicDocumentAccess?.expirationDate?.time || 0,
+      };
+      this.actualFileProperties = { ...this.originalFileProperties };
+      this.openDrawer();
+    },
+    onPublicAccessLoadError() {
+      this.resetPublicAccessState();
+      this.openDrawer();
+    },
+    resetPublicAccessState() {
+      this.publicLinkEnabled = false;
+      this.hasPassword = false;
+      this.hasExpirationDate = false;
+      this.expirationDate = null;
+      this.existingPublicAccess = null;
+      this.originalFileProperties = {
+        ...this.originalFileProperties,
+        visibilityChoice: this.visibilityChoice,
+        publicLinkEnabled: false,
+        allMembersCanEdit: this.allMembersCanEdit,
+        collaborators: this.stringifyArray(JSON.parse(JSON.stringify(this.users))),
+      };
+      this.actualFileProperties = { ...this.originalFileProperties };
+    },
+    openDrawer() {
+      this.$refs.documentVisibilityDrawer.open();
     },
     mapCollaborator(collaborator) {
       const fullName = collaborator.profile
