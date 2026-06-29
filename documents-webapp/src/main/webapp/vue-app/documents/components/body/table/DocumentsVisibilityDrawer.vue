@@ -353,13 +353,16 @@ export default {
   },
   methods: {
     getDocumentPublicAccessInfo() {
-      if (this.file?.acl?.visibilityChoice !== 'COLLABORATORS_AND_PUBLIC_ACCESS') {
-        this.resetPublicAccessState();
-        this.openDrawer();
-        return;
-      }
-      this.$documentFileService.getDocumentPublicAccess(this.file.id)
-        .then(this.onPublicAccessLoaded)
+      this.$documentFileService.getPublicAccessLink(this.file.id)
+        .then(info => {
+          if (info?.hasPublicLink) {
+            return this.$documentFileService.getDocumentPublicAccess(this.file.id)
+              .then(this.onPublicAccessLoaded);
+          } else {
+            this.resetPublicAccessState();
+            this.openDrawer();
+          }
+        })
         .catch(this.onPublicAccessLoadError);
     },
     onPublicAccessLoaded(publicDocumentAccess) {
