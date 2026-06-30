@@ -405,26 +405,23 @@ public class EntityBuilder {
       String invitedGroupId = null;
 
       for(PermissionEntryEntity permissionEntryEntity : collaborators){
-        Identity ownerId = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
-        if(ownerId != null && !ownerId.getId().equals(permissionEntryEntity.getIdentity().getId())) {
-          if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
-            toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
+        if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
+          toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
+          permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
+        } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
             permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-          } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
-              permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-          } else {
-            try {
-              //check if the owner is a space and the destination is a member of this space
-              if (ownerId.isSpace() && spaceService.isMember(spaceService.getSpaceByPrettyName(ownerId.getRemoteId()), permissionEntryEntity.getIdentity().getRemoteId())) {
-                toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
-                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
-              } else {
-                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
-              }
-              permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-            } catch (Exception exception) {
-              LOG.error(exception.getMessage(), exception);
+        } else {
+          try {
+            //check if the owner is a space and the destination is a member of this space
+            if (identity.isSpace() && spaceService.isMember(spaceService.getSpaceByPrettyName(identity.getRemoteId()), permissionEntryEntity.getIdentity().getRemoteId())) {
+              toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+              toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+            } else {
+              toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
             }
+            permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
+          } catch (Exception exception) {
+            LOG.error(exception.getMessage(), exception);
           }
         }
       }
