@@ -21,109 +21,122 @@
     :label="$t('documents.label.post')"
     @click="openComposerDrawer" />
 </template>
+
 <script>
+const ACTIVITY_APP_ID = 'activity-stream-quick-actions';
+
+const ACTIVITY_I18N_URLS = lang => [
+  `/social/i18n/locale.portlet.Portlets?lang=${lang}`,
+  `/social/i18n/locale.commons.Commons?lang=${lang}`,
+  `/social/i18n/locale.social.Webui?lang=${lang}`,
+];
+
+function buildAttachment(file) {
+  return {
+    eXoDrive: true,
+    id: file.sourceID || file.id,
+    name: file.name,
+    isCloudFile: file.cloudDriveFile,
+    isSelectedFromDrives: true,
+    mimetype: file.mimeType,
+    size: file.size,
+    path: file.path,
+    title: file.title || file.name,
+  };
+}
+
 export default {
   props: {
     file: {
       type: Object,
       default: null,
-    }
+    },
   },
   methods: {
     openComposerDrawer() {
+      // Capture file immediately — the component may be destroyed before
+      // activity-composer-ready fires (e.g. context menu closes on the same click).
       const file = this.file;
       this.$nextTick().then(() => new Promise(resolve => {
-        window.require(['SHARED/eXoVueI18n', 'SHARED/ActivityStream'], exoi18n => this.initActivityDrawer(exoi18n, resolve, file));
-      }),);
+        window.require(['SHARED/eXoVueI18n', 'SHARED/ActivityStream'],
+          exoi18n => this.openDrawer(exoi18n, resolve, file));
+      }));
     },
-    async initActivityDrawer(exoi18n, callback, file) {
-      const appId = 'activity-stream-quick-actions';
-      if (!document.querySelector(`#${appId}`)) {
-        const parent = document.createElement('div');
-        parent.id = appId;
-        document.querySelector('#vuetify-apps').appendChild(parent);
-        await this.initActivityDrawerApp(appId, exoi18n, eXo.env.portal.maxFileSize);
+
+    async openDrawer(exoi18n, callback, file) {
+      if (!document.querySelector(`#${ACTIVITY_APP_ID}`)) {
+        const container = document.createElement('div');
+        container.id = ACTIVITY_APP_ID;
+        document.querySelector('#vuetify-apps').appendChild(container);
+        await this.createActivityDrawerApp(exoi18n);
       }
-      const onComposerReady = () => {
-        document.removeEventListener('activity-composer-ready', onComposerReady);
-        if (!file) {
-          return;
+
+      // Register before opening so activity-composer-ready is never missed.
+      document.addEventListener('activity-composer-ready', function onReady() {
+        document.removeEventListener('activity-composer-ready', onReady);
+        if (file) {
+          document.dispatchEvent(new CustomEvent('init-attachments', {
+            detail: { attachment: buildAttachment(file) },
+          }));
         }
-        const attachment = {
-          eXoDrive: true,
-          id: file?.sourceID || file?.id,
-          name: file.name,
-          isCloudFile: file.cloudDriveFile,
-          isSelectedFromDrives: true,
-          mimetype: file.mimeType,
-          size: file.size,
-          path: file.path,
-          title: file.title || file.name,
-        };
-        document.dispatchEvent(new CustomEvent('init-attachments', {detail: {
-          attachment: attachment
-        }}));
-      };
-      document.addEventListener('activity-composer-ready', onComposerReady);
+      });
+
       document.dispatchEvent(new CustomEvent('activity-composer-drawer-open'));
       callback();
     },
 
-    initActivityDrawerApp(appId, exoi18n, maxFileSize) {
+    createActivityDrawerApp(exoi18n) {
       const lang = eXo.env.portal.language;
-      const urls = [
-        `/social/i18n/locale.portlet.Portlets?lang=${lang}`,
-        `/social/i18n/locale.commons.Commons?lang=${lang}`,
-        `/social/i18n/locale.social.Webui?lang=${lang}`,
-      ];
-      return new Promise(resolveInit => exoi18n.loadLanguageAsync(lang, urls)
-        .then(i18n => Vue.createApp({
-          data: {
-            maxFileSize,
-            activityTypes: {},
-            activityActions: {},
-            commentActions: {},
-            extensionApp: 'activity',
-            activityTypeExtension: 'type',
-            activityActionExtension: 'action',
-            commentActionExtension: 'comment-action',
-          },
-          computed: {
-            isMobile() {
-              return this.$vuetify?.breakpoint?.mobile;
+      return new Promise(resolve =>
+        exoi18n.loadLanguageAsync(lang, ACTIVITY_I18N_URLS(lang))
+          .then(i18n => Vue.createApp({
+            data: {
+              maxFileSize: eXo.env.portal.maxFileSize,
+              activityTypes: {},
+              activityActions: {},
+              commentActions: {},
+              extensionApp: 'activity',
+              activityTypeExtension: 'type',
+              activityActionExtension: 'action',
+              commentActionExtension: 'comment-action',
             },
-            drawerParams() {
-              return {
-                activityTypes: this.activityTypes,
-                activityActions: this.activityActions,
-                commentTypes: this.activityTypes,
-                commentActions: this.commentActions,
-              };
+            computed: {
+              isMobile() {
+                return this.$vuetify?.breakpoint?.mobile;
+              },
+              drawerParams() {
+                return {
+                  activityTypes: this.activityTypes,
+                  activityActions: this.activityActions,
+                  commentTypes: this.activityTypes,
+                  commentActions: this.commentActions,
+                };
+              },
             },
-          },
-          created() {
-            this.activityTypes = extensionRegistry.loadExtensions(this.extensionApp, this.activityTypeExtension);
-            this.activityActions = extensionRegistry.loadExtensions(this.extensionApp, this.activityActionExtension);
-            this.commentActions = extensionRegistry.loadExtensions(this.extensionApp, this.commentActionExtension);
-          },
-          mounted() {
-            resolveInit();
-          },
-          template: `
-        <extension-registry-components
-          id="${appId}"
-          :params="drawerParams"
-          name="ActivityStream"
-          type="activity-stream-drawers"
-          parent-element="div"
-          element="div"
-          class="drawer-parent" />
-      `,
-          vuetify: Vue.prototype.vuetifyOptions,
-          i18n,
-        }, `#${appId}`, 'Activity Composer Quick Action'))
-        .finally(() => Vue.prototype.$utils.includeExtensions('ActivityStreamExtension')));
-    }
+            created() {
+              this.activityTypes = extensionRegistry.loadExtensions(this.extensionApp, this.activityTypeExtension);
+              this.activityActions = extensionRegistry.loadExtensions(this.extensionApp, this.activityActionExtension);
+              this.commentActions = extensionRegistry.loadExtensions(this.extensionApp, this.commentActionExtension);
+            },
+            mounted() {
+              resolve();
+            },
+            template: `
+              <extension-registry-components
+                id="${ACTIVITY_APP_ID}"
+                :params="drawerParams"
+                name="ActivityStream"
+                type="activity-stream-drawers"
+                parent-element="div"
+                element="div"
+                class="drawer-parent" />
+            `,
+            vuetify: Vue.prototype.vuetifyOptions,
+            i18n,
+          }, `#${ACTIVITY_APP_ID}`, 'Activity Composer Quick Action'))
+          .finally(() => Vue.prototype.$utils.includeExtensions('ActivityStreamExtension'))
+      );
+    },
   },
 };
 </script>
