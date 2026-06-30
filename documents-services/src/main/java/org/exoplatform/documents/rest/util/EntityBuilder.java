@@ -349,7 +349,11 @@ public class EntityBuilder {
     Map<String, PermissionEntryEntity> map = new HashMap<>();
     List<PermissionEntry> permissions = nodePermission.getPermissions();
     for(PermissionEntry permissionEntry : permissions){
-      if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))){
+      // the creator always implicitly gets full access on its own node, so hide that
+      // default grant from the collaborators list. Only when it was narrowed down to
+      // "read" is it the result of the creator being explicitly added as a collaborator.
+      if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))
+          && isEditPermission(permissionEntry.getPermission())){
         continue;
       }
       if(identity != null && permissionEntry.getIdentity().getId().equals(identity.getId())){
@@ -405,26 +409,23 @@ public class EntityBuilder {
       String invitedGroupId = null;
 
       for(PermissionEntryEntity permissionEntryEntity : collaborators){
-        Identity ownerId = getOwnerIdentityFromNodePath(node.getPath(), identityManager, spaceService);
-        if(ownerId != null && !ownerId.getId().equals(permissionEntryEntity.getIdentity().getId())) {
-          if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
-            toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
+        if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
+          toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
+          permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
+        } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
             permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-          } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
-              permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-          } else {
-            try {
-              //check if the owner is a space and the destination is a member of this space
-              if (ownerId.isSpace() && spaceService.isMember(spaceService.getSpaceByPrettyName(ownerId.getRemoteId()), permissionEntryEntity.getIdentity().getRemoteId())) {
-                toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
-                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
-              } else {
-                toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
-              }
-              permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
-            } catch (Exception exception) {
-              LOG.error(exception.getMessage(), exception);
+        } else {
+          try {
+            //check if the owner is a space and the destination is a member of this space
+            if (identity.isSpace() && spaceService.isMember(spaceService.getSpaceByPrettyName(identity.getRemoteId()), permissionEntryEntity.getIdentity().getRemoteId())) {
+              toNotify.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+              toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
+            } else {
+              toShare.put(Long.valueOf(identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()),permissionEntryEntity.getPermission());
             }
+            permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
+          } catch (Exception exception) {
+            LOG.error(exception.getMessage(), exception);
           }
         }
       }
