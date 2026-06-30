@@ -76,9 +76,13 @@ public class EntityBuilderTest {
         nodePermissionEntity.setAllMembersCanEdit(false);
         NodePermission specificCollabotratorsNodePermission = EntityBuilder.toNodePermission(abstractNodeEntity,documentFileService, spaceService, identityManager);
         assertNotNull(specificCollabotratorsNodePermission);
-        assertEquals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name(), specificCollabotratorsNodePermission.getPermissions().get(0).getRole());
-        assertEquals(identity.getRemoteId(), specificCollabotratorsNodePermission.getPermissions().get(0).getIdentity().getRemoteId());
-        assertEquals("edit", specificCollabotratorsNodePermission.getPermissions().get(0).getPermission());
+        assertEquals(2, specificCollabotratorsNodePermission.getPermissions().size());
+        // collaborator entry is processed first
+        assertEquals(PermissionRole.ALL.name(), specificCollabotratorsNodePermission.getPermissions().get(0).getRole());
+        // space-wide managers/redactors permission is appended after collaborators
+        assertEquals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name(), specificCollabotratorsNodePermission.getPermissions().get(1).getRole());
+        assertEquals(identity.getRemoteId(), specificCollabotratorsNodePermission.getPermissions().get(1).getIdentity().getRemoteId());
+        assertEquals("edit", specificCollabotratorsNodePermission.getPermissions().get(1).getPermission());
 
         IdentityEntity useridentityEntity = new IdentityEntity();
         useridentityEntity.setId("1");
