@@ -40,7 +40,6 @@ import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavori
 import DocumentsFavoriteAction from './components/body/table/action/DocumentFavoriteAction.vue';
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
-import SelectPeriod from './components/header/filters/SelectPeriod.vue';
 import DocumentActionMenu from './components/body/table/DocumentActionMenu.vue';
 import DocumentActionMenuMobile from './components/body/table/DocumentActionMenuMobile.vue';
 import DocumentDownloadDrawer from './components/body/table/DocumentDownloadDrawer.vue';
@@ -134,7 +133,6 @@ const components = {
   'documents-setting-drawer': DocumentSettingsDrawer,
   'documents-filter-menu-mobile': DocumentFilterMenuMobile,
   'documents-download-drawer': DocumentDownloadDrawer,
-  'documents-select-period': SelectPeriod,
   'document-tree-selector-drawer': DocumentsTreeSelectorDrawer,
   'documents-move-spaces': DocumentsMoveSpaces,
   'documents-visibility-drawer': DocumentsVisibilityDrawer,
