@@ -491,7 +491,7 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getSortDirection(filter)).thenCallRealMethod();
     jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
     verify(documentSearchServiceConnector,
-           times(1)).search(identity, "collaboration", "/documents/path", filter, 0, 0, "lastUpdatedDate", "ASC");
+           times(1)).search(identity, "collaboration", List.of("/documents/path"), filter, 0, 0, "lastUpdatedDate", "ASC");
 
   }
 
