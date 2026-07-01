@@ -29,38 +29,14 @@ export default {
       default: null,
     }
   },
-  created() {
-    document.addEventListener('activity-composer-ready', () => {
-      if (!this.file) {
-        return;
-      }
-      const attachment = {
-        eXoDrive: true,
-        id: this.file?.sourceID || this.file?.id,
-        name: this.file.name,
-        isCloudFile: this.file.cloudDriveFile,
-        isSelectedFromDrives: true,
-        mimetype: this.file.mimeType,
-        size: this.file.size,
-        path: this.file.path,
-        title: this.file.title || this.file.name,
-      };
-      document.dispatchEvent(new CustomEvent('init-attachments', {detail: {
-        attachment: attachment
-      }}));
-      this.file=null;
-    });
-  },
-  destroyed() {
-    this.file=null;
-  },
   methods: {
     openComposerDrawer() {
+      const file = this.file;
       this.$nextTick().then(() => new Promise(resolve => {
-        window.require(['SHARED/eXoVueI18n', 'SHARED/ActivityStream'], exoi18n => this.initActivityDrawer(exoi18n, resolve));          
+        window.require(['SHARED/eXoVueI18n', 'SHARED/ActivityStream'], exoi18n => this.initActivityDrawer(exoi18n, resolve, file));
       }),);
     },
-    async initActivityDrawer(exoi18n, callback) {
+    async initActivityDrawer(exoi18n, callback, file) {
       const appId = 'activity-stream-quick-actions';
       if (!document.querySelector(`#${appId}`)) {
         const parent = document.createElement('div');
@@ -68,6 +44,27 @@ export default {
         document.querySelector('#vuetify-apps').appendChild(parent);
         await this.initActivityDrawerApp(appId, exoi18n, eXo.env.portal.maxFileSize);
       }
+      const onComposerReady = () => {
+        document.removeEventListener('activity-composer-ready', onComposerReady);
+        if (!file) {
+          return;
+        }
+        const attachment = {
+          eXoDrive: true,
+          id: file?.sourceID || file?.id,
+          name: file.name,
+          isCloudFile: file.cloudDriveFile,
+          isSelectedFromDrives: true,
+          mimetype: file.mimeType,
+          size: file.size,
+          path: file.path,
+          title: file.title || file.name,
+        };
+        document.dispatchEvent(new CustomEvent('init-attachments', {detail: {
+          attachment: attachment
+        }}));
+      };
+      document.addEventListener('activity-composer-ready', onComposerReady);
       document.dispatchEvent(new CustomEvent('activity-composer-drawer-open'));
       callback();
     },
@@ -113,15 +110,15 @@ export default {
             resolveInit();
           },
           template: `
-        <extension-registry-components
-          id="${appId}"
-          :params="drawerParams"
-          name="ActivityStream"
-          type="activity-stream-drawers"
-          parent-element="div"
-          element="div"
-          class="drawer-parent" />
-      `,
+              <extension-registry-components
+                  id="${appId}"
+                  :params="drawerParams"
+                  name="ActivityStream"
+                  type="activity-stream-drawers"
+                  parent-element="div"
+                  element="div"
+                  class="drawer-parent" />
+            `,
           vuetify: Vue.prototype.vuetifyOptions,
           i18n,
         }, `#${appId}`, 'Activity Composer Quick Action'))
