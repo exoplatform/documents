@@ -92,6 +92,9 @@ export default {
     document.addEventListener('attachment-removed', this.removeAttachment);
     document.addEventListener('message-composer-opened', this.openComposerChangesReminder);
     document.dispatchEvent(new CustomEvent('activity-composer-ready'));
+    if (this.files?.length) {
+      this.retrieveAttachments();
+    }
   },
   beforeDestroy() {
     document.removeEventListener('open-activity-attachments', this.openAttachmentDrawer);
