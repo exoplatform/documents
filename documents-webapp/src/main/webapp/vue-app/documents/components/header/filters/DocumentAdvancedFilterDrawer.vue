@@ -152,7 +152,21 @@
 
         <div class="text-header  px-2 py-2">{{ $t('documents.advanced.filter.drawer.update.date') }}</div>
 
-        <documents-select-period v-model="tempAdvancedFilter.selectedPeriod" />
+        <select-period
+          v-model="tempAdvancedFilter.selectedPeriod"
+          :labels="{
+            from: $t('documents.label.from'),
+            to: $t('documents.label.to'),
+            today: $t('documents.label.today'),
+            thisWeek: $t('documents.label.thisWeek'),
+            thisMonth: $t('documents.label.thisMonth'),
+            thisQuarter: $t('documents.label.thisQuarter'),
+            thisSemester: $t('documents.label.thisSemester'),
+            thisYear: $t('documents.label.thisYear'),
+          }"
+          :placeholder="$t('documents.advanced.filter.drawer.range.placeholder')"
+          default-period=""
+          hide-time />
 
         <div class="text-header px-2 pb-1 pt-7">{{ $t('documents.advanced.filter.drawer.file.size') }}</div>
          
