@@ -349,7 +349,11 @@ public class EntityBuilder {
     Map<String, PermissionEntryEntity> map = new HashMap<>();
     List<PermissionEntry> permissions = nodePermission.getPermissions();
     for(PermissionEntry permissionEntry : permissions){
-      if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))){
+      // the creator always implicitly gets full access on its own node, so hide that
+      // default grant from the collaborators list. Only when it was narrowed down to
+      // "read" is it the result of the creator being explicitly added as a collaborator.
+      if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))
+          && isEditPermission(permissionEntry.getPermission())){
         continue;
       }
       if(identity != null && permissionEntry.getIdentity().getId().equals(identity.getId())){
