@@ -173,4 +173,34 @@ public class EntityBuilderTest {
         method.setAccessible(true);
         return (NodePermissionEntity) method.invoke(null, node, identityManager, spaceService, publicDocumentAccessService);
     }
+
+    @Test
+    public void encodeNamePreservesPlusSign() throws Exception {
+        // A literal '+' must survive: URLDecoder would otherwise turn it into a space.
+        FileNode node = new FileNode();
+        node.setName("ABD + DEF.docx");
+        assertEquals("ABD + DEF.docx", invokeEncodeName(node));
+    }
+
+    @Test
+    public void encodeNameStillDecodesPercentEncodedCharacters() throws Exception {
+        // Genuine percent-encoded illegal JCR characters must still be decoded.
+        FileNode node = new FileNode();
+        node.setName("report%5b1%5d.docx");
+        assertEquals("report[1].docx", invokeEncodeName(node));
+    }
+
+    @Test
+    public void encodeNameKeepsPlusWhileDecodingPercentEncodedCharacters() throws Exception {
+        FileNode node = new FileNode();
+        node.setName("A + B %5bcopy%5d.docx");
+        assertEquals("A + B [copy].docx", invokeEncodeName(node));
+    }
+
+    private String invokeEncodeName(FileNode node) throws Exception {
+        Method method = EntityBuilder.class.getDeclaredMethod("encodeName",
+                                                              org.exoplatform.documents.model.AbstractNode.class);
+        method.setAccessible(true);
+        return (String) method.invoke(null, node);
+    }
 }

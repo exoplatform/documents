@@ -328,7 +328,11 @@ public class EntityBuilder {
     String nodeName = node.getName();
     if(StringUtils.isNotBlank(nodeName)) {
       try {
-        nodeName = URLDecoder.decode(node.getName(), StandardCharsets.UTF_8);
+        // URLDecoder uses application/x-www-form-urlencoded semantics, which turns a
+        // literal '+' into a space. File names such as "ABD + DEF.docx" would therefore
+        // lose their '+'. Escaping '+' to "%2B" before decoding keeps the literal '+'
+        // while still decoding genuine percent-encoded sequences (e.g. "%5b" -> "[").
+        nodeName = URLDecoder.decode(nodeName.replace("+", "%2B"), StandardCharsets.UTF_8);
       } catch (IllegalArgumentException iae) {
         // nothing to do
       }
