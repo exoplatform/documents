@@ -217,6 +217,378 @@
         "idempotentHint": true,
         "openWorldHint": false
       }
+    },
+    {
+      "name": "list_folder_children",
+      "title": "List DMS folder children",
+      "description": "Lists the direct child files and folders of a folder. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder to list."
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Pagination offset for result listing."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return."
+          }
+        },
+        "required": ["folder_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_folder_breadcrumb",
+      "title": "Get DMS folder breadcrumb",
+      "description": "Returns the ancestor path (breadcrumb, from the drive root down to the folder) of a folder. Call get_documents_by_folder_id first to get a folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder."
+          }
+        },
+        "required": ["folder_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_folder_tree",
+      "title": "Get DMS folder tree",
+      "description": "Returns the nested folder tree rooted at a folder. Call get_root_folder_for_user or get_documents_by_folder_id first to get a folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the root folder of the tree."
+          },
+          "with_children": {
+            "type": "boolean",
+            "description": "If true (default), include the child folders recursively."
+          }
+        },
+        "required": ["folder_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_document_versions",
+      "title": "List DMS file versions",
+      "description": "Lists the versions of a versioned file, newest last. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file."
+          }
+        },
+        "required": ["document_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_documents_size",
+      "title": "Get DMS drive size",
+      "description": "Returns the total storage size (in bytes) of a user or space drive. When owner_id is omitted, returns the size of the current user's personal drive.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner_id": {
+            "type": "integer",
+            "description": "Identity id of the user or space whose drive size is requested. Optional; defaults to the current user."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "create_folder",
+      "title": "Create a DMS folder",
+      "description": "Creates a new folder under a parent folder. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the parent folder."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the folder to create."
+          }
+        },
+        "required": ["parent_folder_id", "name"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "rename_document",
+      "title": "Rename a DMS file or folder",
+      "description": "Renames a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to rename."
+          },
+          "new_name": {
+            "type": "string",
+            "description": "The new name."
+          }
+        },
+        "required": ["document_id", "new_name"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "move_document",
+      "title": "Move a DMS file or folder",
+      "description": "Moves a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to move."
+          },
+          "destination_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the destination folder."
+          },
+          "conflict_action": {
+            "type": "string",
+            "description": "Behaviour when a document with the same name exists in the destination. Defaults to 'rename'."
+          }
+        },
+        "required": ["document_id", "destination_folder_id"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "copy_document",
+      "title": "Copy a DMS file or folder",
+      "description": "Copies a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to copy."
+          },
+          "destination_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the destination folder."
+          }
+        },
+        "required": ["document_id", "destination_folder_id"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "duplicate_document",
+      "title": "Duplicate a DMS file or folder",
+      "description": "Creates a copy of a file or folder in the same parent folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to duplicate."
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Optional prefix added to the duplicated name (e.g. 'Copy of')."
+          }
+        },
+        "required": ["document_id"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "delete_document",
+      "title": "Delete a DMS file or folder",
+      "description": "Moves a file or folder to the trash. It can be restored with undo_delete_document. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to delete."
+          }
+        },
+        "required": ["document_id"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "undo_delete_document",
+      "title": "Restore a deleted DMS document",
+      "description": "Cancels a previous delete_document and restores the document from the trash.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the previously deleted document."
+          }
+        },
+        "required": ["document_id"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "restore_document_version",
+      "title": "Restore a DMS file version",
+      "description": "Restores a previous version of a file as the current one. Call list_document_versions first to get a version_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "description": "The unique identifier of the version to restore."
+          }
+        },
+        "required": ["version_id"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "update_version_summary",
+      "title": "Update a DMS file version summary",
+      "description": "Updates the summary (change note) of a specific file version. Call list_document_versions first to get the version_id; the document_id is the file the version belongs to.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file the version belongs to."
+          },
+          "version_id": {
+            "type": "string",
+            "description": "The unique identifier of the version to update."
+          },
+          "summary": {
+            "type": "string",
+            "description": "The new summary text."
+          }
+        },
+        "required": ["document_id", "version_id", "summary"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "set_document_visibility",
+      "title": "Set DMS document visibility",
+      "description": "Hides or shows a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "true to hide the document, false to make it visible."
+          }
+        },
+        "required": ["document_id", "hidden"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
     }
   ]
 }

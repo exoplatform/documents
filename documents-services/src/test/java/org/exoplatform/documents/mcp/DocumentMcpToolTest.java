@@ -19,15 +19,18 @@ package org.exoplatform.documents.mcp;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -36,12 +39,20 @@ import org.junit.Test;
 import org.mockito.Mockito;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
+import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
+import org.exoplatform.documents.mcp.model.DocumentVersionModel;
+import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.BreadCrumbItem;
+import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.model.FullTreeItem;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
@@ -253,6 +264,245 @@ public class DocumentMcpToolTest {
     documentMcpTool.attachDocumentToContent(DOCUMENT_ID, "activity", 77L);
 
     verify(attachmentService).linkAttachmentToEntity(eq(USER_IDENTITY_ID), eq(77L), eq("activity"), eq(DOCUMENT_ID));
+  }
+
+  // ---------------------------------------------------------------------------
+  // New folder-navigation and content-management tools
+  // ---------------------------------------------------------------------------
+
+  private static final long OWNER_ID = 55L;
+
+  private FileVersion fileVersion() {
+    FileVersion version = new FileVersion();
+    version.setId("version-1");
+    version.setVersionNumber(2);
+    version.setTitle("report.pdf");
+    version.setSummary("initial upload");
+    version.setAuthor(USERNAME);
+    version.setAuthorFullName("Test User");
+    version.setCreatedDate(new Date());
+    version.setCurrent(true);
+    version.setSize(2048L);
+    return version;
+  }
+
+  @Test
+  public void listFolderChildren() throws Exception {
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(fileNode(DOCUMENT_ID,
+                                                                                                                    "application/pdf"),
+                                                                                                           folderNode(FOLDER_ID)));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null);
+
+    assertNotNull(models);
+    assertEquals(2, models.size());
+  }
+
+  @Test
+  public void listFolderChildrenBlankFolderFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.listFolderChildren(" ", null, null));
+  }
+
+  @Test
+  public void getFolderBreadcrumb() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.getBreadcrumb(eq(OWNER_ID), eq(FOLDER_ID), anyString(), eq(USER_IDENTITY_ID)))
+        .thenReturn(List.of(new BreadCrumbItem(FOLDER_ID, "Projects", "Projects", "/documents/Projects", false, null)));
+
+    List<BreadcrumbItemModel> models = documentMcpTool.getFolderBreadcrumb(FOLDER_ID);
+
+    assertEquals(1, models.size());
+    assertEquals(FOLDER_ID, models.get(0).id());
+    assertEquals("Projects", models.get(0).name());
+  }
+
+  @Test
+  public void getFolderBreadcrumbUnknownFolderFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenThrow(new ObjectNotFoundException("not found"));
+
+    assertThrows(ObjectNotFoundException.class, () -> documentMcpTool.getFolderBreadcrumb(FOLDER_ID));
+  }
+
+  @Test
+  public void getFolderTree() throws Exception {
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    FullTreeItem child = new FullTreeItem("child-1", "Sub", "/documents/Projects/Sub", null, false, String.valueOf(OWNER_ID));
+    FullTreeItem root = new FullTreeItem(FOLDER_ID, "Projects", "/documents/Projects", List.of(child), false, String.valueOf(OWNER_ID));
+    when(documentFileService.getFullTreeData(eq(OWNER_ID), eq(FOLDER_ID), any(), eq(USER_IDENTITY_ID), anyBoolean(), anyBoolean()))
+        .thenReturn(List.of(root));
+
+    List<DocumentTreeItemModel> tree = documentMcpTool.getFolderTree(FOLDER_ID, true);
+
+    assertEquals(1, tree.size());
+    assertEquals(FOLDER_ID, tree.get(0).id());
+    assertEquals(1, tree.get(0).children().size());
+    assertEquals("child-1", tree.get(0).children().get(0).id());
+  }
+
+  @Test
+  public void listDocumentVersions() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileVersions(DOCUMENT_ID, USERNAME)).thenReturn(List.of(fileVersion()));
+
+    List<DocumentVersionModel> versions = documentMcpTool.listDocumentVersions(DOCUMENT_ID);
+
+    assertEquals(1, versions.size());
+    assertEquals("version-1", versions.get(0).id());
+    assertTrue(versions.get(0).current());
+  }
+
+  @Test
+  public void getDocumentsSizeDefaultsToCurrentUser() throws Exception {
+    when(documentFileService.getDocumentsSizeStat(USER_IDENTITY_ID, USER_IDENTITY_ID)).thenReturn(new DocumentsSize(USER_IDENTITY_ID,
+                                                                                                                    4096L,
+                                                                                                                    0L,
+                                                                                                                    0L,
+                                                                                                                    0L,
+                                                                                                                    true,
+                                                                                                                    0L));
+
+    DocumentsSizeModel model = documentMcpTool.getDocumentsSize(null);
+
+    assertNotNull(model);
+    assertEquals(USER_IDENTITY_ID, model.ownerId());
+    assertEquals(4096L, model.sizeInBytes());
+  }
+
+  @Test
+  public void createFolder() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), eq("/documents/Projects"), eq("New"), eq(USER_IDENTITY_ID)))
+        .thenReturn(folderNode("new-folder"));
+
+    DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "New");
+
+    assertNotNull(model);
+    assertEquals("new-folder", model.getId());
+  }
+
+  @Test
+  public void createFolderBlankNameFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createFolder(FOLDER_ID, " "));
+  }
+
+  @Test
+  public void renameDocument() throws Exception {
+    when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+
+    documentMcpTool.renameDocument(DOCUMENT_ID, "renamed.pdf");
+
+    verify(documentFileService).renameDocument(eq(OWNER_ID), eq(DOCUMENT_ID), eq("renamed.pdf"), eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void moveDocumentDefaultsConflictActionToRename() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+
+    documentMcpTool.moveDocument(DOCUMENT_ID, FOLDER_ID, null);
+
+    verify(documentFileService).moveDocument(eq(OWNER_ID),
+                                             eq(DOCUMENT_ID),
+                                             eq("/documents/Projects"),
+                                             eq(USER_IDENTITY_ID),
+                                             eq("rename"));
+  }
+
+  @Test
+  public void moveDocumentBlankDestinationFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.moveDocument(DOCUMENT_ID, " ", null));
+  }
+
+  @Test
+  public void copyDocument() throws Exception {
+    when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(fileNode("copy-1", "application/pdf"));
+
+    DocumentModel model = documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID);
+
+    assertNotNull(model);
+    assertEquals("copy-1", model.getId());
+  }
+
+  @Test
+  public void duplicateDocument() throws Exception {
+    when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.duplicateDocument(OWNER_ID, DOCUMENT_ID, "Copy of", USER_IDENTITY_ID)).thenReturn(fileNode("dup-1",
+                                                                                                                        "application/pdf"));
+
+    DocumentModel model = documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of");
+
+    assertNotNull(model);
+    assertEquals("dup-1", model.getId());
+  }
+
+  @Test
+  public void deleteDocumentMovesToTrashImmediately() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+
+    documentMcpTool.deleteDocument(DOCUMENT_ID);
+
+    verify(documentFileService).deleteDocument(eq("/documents/report.pdf"),
+                                               eq(DOCUMENT_ID),
+                                               eq(false),
+                                               eq(0L),
+                                               eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void deleteDocumentUnknownFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenThrow(new ObjectNotFoundException("not found"));
+
+    assertThrows(ObjectNotFoundException.class, () -> documentMcpTool.deleteDocument(DOCUMENT_ID));
+  }
+
+  @Test
+  public void undoDeleteDocument() {
+    documentMcpTool.undoDeleteDocument(DOCUMENT_ID);
+
+    verify(documentFileService).undoDeleteDocument(eq(DOCUMENT_ID), eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void restoreDocumentVersion() {
+    when(documentFileService.restoreVersion("version-1", USERNAME)).thenReturn(fileVersion());
+
+    DocumentVersionModel model = documentMcpTool.restoreDocumentVersion("version-1");
+
+    assertNotNull(model);
+    assertEquals("version-1", model.id());
+  }
+
+  @Test
+  public void restoreDocumentVersionBlankFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.restoreDocumentVersion(" "));
+  }
+
+  @Test
+  public void updateVersionSummary() {
+    FileVersion updated = fileVersion();
+    updated.setSummary("new summary");
+    when(documentFileService.updateVersionSummary(DOCUMENT_ID, "version-1", "new summary", USERNAME)).thenReturn(updated);
+
+    DocumentVersionModel model = documentMcpTool.updateVersionSummary(DOCUMENT_ID, "version-1", "new summary");
+
+    assertNotNull(model);
+    assertEquals("new summary", model.summary());
+  }
+
+  @Test
+  public void setDocumentVisibility() throws Exception {
+    when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+
+    documentMcpTool.setDocumentVisibility(DOCUMENT_ID, Boolean.TRUE);
+
+    verify(documentFileService).setDocumentVisibility(eq(OWNER_ID), eq(DOCUMENT_ID), eq(Boolean.TRUE), eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void setDocumentVisibilityNullHiddenFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.setDocumentVisibility(DOCUMENT_ID, null));
   }
 
 }
