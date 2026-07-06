@@ -24,8 +24,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -307,7 +307,7 @@ public class DocumentMcpToolTest {
   public void getFolderBreadcrumb() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getBreadcrumb(eq(OWNER_ID), eq(FOLDER_ID), anyString(), eq(USER_IDENTITY_ID)))
+    when(documentFileService.getBreadcrumb(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq(USER_IDENTITY_ID)))
         .thenReturn(List.of(new BreadCrumbItem(FOLDER_ID, "Projects", "Projects", "/documents/Projects", false, null)));
 
     List<BreadcrumbItemModel> models = documentMcpTool.getFolderBreadcrumb(FOLDER_ID);
@@ -373,13 +373,38 @@ public class DocumentMcpToolTest {
   public void createFolder() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), eq("/documents/Projects"), eq("New"), eq(USER_IDENTITY_ID)))
+    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq("New"), eq(USER_IDENTITY_ID)))
         .thenReturn(folderNode("new-folder"));
 
     DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "New");
 
     assertNotNull(model);
     assertEquals("new-folder", model.getId());
+  }
+
+  @Test
+  public void createFolderUnderRootFolderPassesNullFolderPath() throws Exception {
+    // Reproduces the live bug: creating a folder under the user's ROOT folder
+    // (e.g. "Private", whose absolute JCR path is /Users/.../root/Private). The
+    // parent folder id already identifies the JCR node, so the storage-level
+    // 'folderPath' must be null; passing the absolute path made the JCR storage
+    // throw ObjectNotFoundException "Folder with path ... isn't found".
+    FolderNode rootFolder = new FolderNode();
+    rootFolder.setId(FOLDER_ID);
+    rootFolder.setName("Private");
+    rootFolder.setPath("/Users/t___/te___/tes___/testuser1/Private");
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(rootFolder);
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq("MCPJam-Test"), eq(USER_IDENTITY_ID)))
+        .thenReturn(folderNode("new-folder"));
+
+    DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "MCPJam-Test");
+
+    assertNotNull(model);
+    assertEquals("new-folder", model.getId());
+    // folderPath must be null (not the absolute root path) so the storage resolves
+    // the parent purely from the folder id.
+    verify(documentFileService).createFolder(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq("MCPJam-Test"), eq(USER_IDENTITY_ID));
   }
 
   @Test

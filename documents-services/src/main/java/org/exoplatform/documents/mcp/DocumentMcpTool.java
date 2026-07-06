@@ -236,10 +236,16 @@ public class DocumentMcpTool implements McpToolPlugin {
   public List<BreadcrumbItemModel> getFolderBreadcrumb(String folderId) throws ObjectNotFoundException,
                                                                         IllegalAccessException {
     checkFolderIdParameter(folderId);
-    AbstractNode folder = getNode(folderId);
+    // Validate the folder exists and is readable by the user, so a bad id fails
+    // with a clean ObjectNotFoundException / IllegalAccessException.
+    getNode(folderId);
+    // folderId already identifies the JCR node uniquely; the storage 'folderPath'
+    // argument is a RELATIVE sub-path resolved *from* that node (getNodeByPath),
+    // so it must stay empty. Passing the absolute node path makes the storage try
+    // to navigate further down and fail with "Folder with path ... isn't found".
     List<BreadCrumbItem> breadcrumb = documentFileService.getBreadcrumb(getOwnerId(folderId),
                                                                         folderId,
-                                                                        folder.getPath(),
+                                                                        null,
                                                                         getCurrentUserIdentityId());
     return breadcrumb.stream()
                      .map(item -> new BreadcrumbItemModel(item.getId(), item.getName(), item.getPath()))
@@ -282,11 +288,19 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(name)) {
       throw new IllegalArgumentException("The 'name' parameter is mandatory to create a folder. Ask the user for a folder name.");
     }
-    AbstractNode parent = getNode(parentFolderId);
+    // Validate the parent folder exists and is readable by the user, so a bad id
+    // fails with a clean ObjectNotFoundException / IllegalAccessException before
+    // reaching the JCR storage.
+    getNode(parentFolderId);
     try {
+      // parentFolderId already identifies the parent JCR node uniquely; the
+      // storage 'folderPath' argument is a RELATIVE sub-path resolved *from* that
+      // node (node.getNode(folderPath)), so it must stay empty. Passing the
+      // absolute node path made root-folder creation fail with
+      // "Folder with path : /Users/.../Private isn't found".
       AbstractNode folder = documentFileService.createFolder(getOwnerId(parentFolderId),
                                                              parentFolderId,
-                                                             parent.getPath(),
+                                                             null,
                                                              name,
                                                              getCurrentUserIdentityId());
       return toDocumentModel(folder);
