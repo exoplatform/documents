@@ -1,0 +1,222 @@
+{
+  "tools": [
+    {
+      "name": "get_root_folder_by_space",
+      "title": "Get DMS root folder of a given space",
+      "description": "Retrieves the root folder associated with a specific space.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "space_id": {
+            "type": "integer",
+            "description": "space id for which the root folder is requested."
+          }
+        },
+        "required": ["space_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_documents_by_folder_id",
+      "title": "Get DMS files and/or folders under a given folder",
+      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string"
+          },
+          "files_only": {
+            "type": "boolean"
+          },
+          "folders_only": {
+            "type": "boolean"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Pagination offset for result listing."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return."
+          }
+        },
+        "required": ["folder_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_root_folder_for_user",
+      "title": "Get DMS root personal folder",
+      "description": "Retrieves the root folder belonging to the currently authenticated user.",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_document_by_id",
+      "title": "Get DMS folder or file by its id",
+      "description": "Fetches the metadata of a document given its unique identifier.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the document."
+          }
+        },
+        "required": ["document_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_document_content_by_id",
+      "title": "Get DMS file content",
+      "description": "Retrieves the textual or Markdown content of a document by its unique identifier.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the document."
+          }
+        },
+        "required": ["document_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "attach_document_to_content",
+      "title": "Link DMS file to a content",
+      "description": "Attach a file to a given content identified by its type (note, new, activity...) and its id",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": { "type": "string" },
+          "content_type": { "type": "string" },
+          "content_id": { "type": "integer" }
+        },
+        "required": ["document_id", "content_type", "content_id"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "update_document_description",
+      "title": "Update DMS file summary",
+      "description": "Updates the file summary. This will not change the content of the file.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "html_description": {
+            "type": "string"
+          }
+        },
+        "required": ["document_id", "html_description"]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "get_document_transcription_by_id",
+      "title": "Transcript an Audio DMS file",
+      "description": "Get the file transcription when it's an audio/video media content",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        },
+        "required": ["document_id"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_documents",
+      "title": "Search for files",
+      "description": "Searches for documents matching the specified query and optional filters.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Full-text search query string."
+          },
+          "space_id": {
+            "type": "integer",
+            "description": "Optional space identifier to restrict search scope."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "description": "Optional parent folder ID to filter results."
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Pagination offset for result listing."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return."
+          },
+          "is_favorites": {
+            "type": "boolean",
+            "description": "If true, restricts results to favorite documents."
+          }
+        },
+        "required": ["query"]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ]
+}
