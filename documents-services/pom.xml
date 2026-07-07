@@ -41,10 +41,13 @@
       <type>jar</type>
       <scope>provided</scope>
     </dependency>
-    <!-- MCP Server API (used by the document MCP tools exposed to the AI agent) -->
+    <!-- MCP Server API (used by the document MCP tools exposed to the AI agent).
+         Pinned to the ai-contribution build that ships UploadToolUtils (create/upload
+         document tools); the platform-managed 7.3.x-SNAPSHOT does not have it yet. -->
     <dependency>
       <groupId>io.meeds.mcp-server</groupId>
       <artifactId>mcp-server-tools</artifactId>
+      <version>7.3.x-ai-contribution-SNAPSHOT</version>
       <scope>provided</scope>
     </dependency>
     <!-- AttachmentService, used by attach_document_to_content -->

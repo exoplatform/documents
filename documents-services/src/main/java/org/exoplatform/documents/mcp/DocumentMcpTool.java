@@ -19,7 +19,12 @@ package org.exoplatform.documents.mcp;
 import static io.meeds.mcp.server.tool.util.McpToolPluginUtils.getInteger;
 import static io.meeds.mcp.server.util.McpToolUtils.formatDate;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Profile;
@@ -54,12 +59,14 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.upload.UploadService;
 import org.exoplatform.wiki.WikiException;
 import org.exoplatform.wiki.model.Page;
 import org.exoplatform.wiki.service.NoteService;
 
 import io.meeds.mcp.server.plugin.McpToolPlugin;
 import io.meeds.mcp.server.tool.model.UserModel;
+import io.meeds.mcp.server.tool.util.UploadToolUtils;
 import io.meeds.mcp.server.tool.util.UserToolUtils;
 import io.meeds.social.translation.service.TranslationService;
 
@@ -96,6 +103,8 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private final UserPortalConfigService portalConfigService;
 
+  private final UploadService       uploadService;
+
   public DocumentMcpTool(DocumentFileService documentFileService,
                          AttachmentService attachmentService,
                          IdentityManager identityManager,
@@ -103,7 +112,8 @@ public class DocumentMcpTool implements McpToolPlugin {
                          TranslationService translationService,
                          ProfilePropertyService profilePropertyService,
                          UserACL userAcl,
-                         UserPortalConfigService portalConfigService) {
+                         UserPortalConfigService portalConfigService,
+                         UploadService uploadService) {
     this.documentFileService = documentFileService;
     this.attachmentService = attachmentService;
     this.identityManager = identityManager;
@@ -112,6 +122,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     this.profilePropertyService = profilePropertyService;
     this.userAcl = userAcl;
     this.portalConfigService = portalConfigService;
+    this.uploadService = uploadService;
   }
 
   public DocumentFolderModel getRootFolderBySpace(long spaceId) throws ObjectNotFoundException, IllegalAccessException {
@@ -308,6 +319,79 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalStateException("A folder named '%s' already exists under this parent folder. Tell the user to pick a different name."
           .formatted(name));
     }
+  }
+
+  /**
+   * Creates a text-based document (markdown, HTML, plain text, CSV, JSON…) from
+   * a chat-authored <code>content</code> string. This is the chat-native way to
+   * turn generated text into a real file in the Documents app.
+   *
+   * @param parentFolderId the folder where the document is created (get it from
+   *          get_root_folder_for_user / get_root_folder_by_space /
+   *          get_documents_by_folder_id)
+   * @param name the document file name (an extension is appended from the mime
+   *          type when missing, e.g. 'notes' + text/markdown -&gt; 'notes.md')
+   * @param content the text / markdown / HTML body
+   * @param mimeType optional mime type; defaults from the name extension
+   * @return the created document
+   */
+  public DocumentModel createDocument(String parentFolderId,
+                                      String name,
+                                      String content,
+                                      String mimeType) throws IllegalAccessException, ObjectNotFoundException {
+    checkFolderIdParameter(parentFolderId);
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("The 'name' parameter is mandatory to create a document (e.g. 'meeting-notes.md'). Ask the user for a document name.");
+    }
+    if (content == null) {
+      throw new IllegalArgumentException("The 'content' parameter is mandatory. Provide the text, markdown or HTML body of the document.");
+    }
+    String resolvedMime = resolveMimeType(name, mimeType);
+    String fileName = ensureExtension(name, resolvedMime);
+    return importContent(parentFolderId, fileName, content.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Uploads a real / binary document (PDF, image, office file…) from exactly one
+   * of a base64 payload or an http(s) URL. The URL is fetched server-side behind
+   * an SSRF guard.
+   *
+   * @param parentFolderId the destination folder id (get it from
+   *          get_root_folder_for_user / get_root_folder_by_space /
+   *          get_documents_by_folder_id)
+   * @param name the document file name including its extension (e.g.
+   *          'report.pdf'); when uploading from a URL it may be left blank to
+   *          reuse the name from the URL
+   * @param base64 the file bytes encoded in base64 (mutually exclusive with url)
+   * @param url an http(s) URL to download the file from (mutually exclusive with
+   *          base64)
+   * @return the created document
+   */
+  public DocumentModel uploadDocument(String parentFolderId,
+                                      String name,
+                                      String base64,
+                                      String url) throws IllegalAccessException, ObjectNotFoundException {
+    checkFolderIdParameter(parentFolderId);
+    boolean hasBase64 = StringUtils.isNotBlank(base64);
+    boolean hasUrl = StringUtils.isNotBlank(url);
+    if (hasBase64 == hasUrl) {
+      throw new IllegalArgumentException("Provide exactly one of 'base64' or 'url' to upload a document.");
+    }
+    byte[] bytes;
+    String fileName = name;
+    if (hasBase64) {
+      if (StringUtils.isBlank(name)) {
+        throw new IllegalArgumentException("The 'name' parameter is mandatory when uploading from base64; it becomes the document file name (e.g. 'report.pdf').");
+      }
+      bytes = UploadToolUtils.decodeBase64(base64);
+    } else {
+      UploadToolUtils.FetchedImage fetched = UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, name);
+      bytes = fetched.bytes();
+      if (StringUtils.isBlank(fileName)) {
+        fileName = fetched.fileName();
+      }
+    }
+    return importContent(parentFolderId, fileName, bytes);
   }
 
   public void renameDocument(String documentId, String newName) throws IllegalAccessException, ObjectNotFoundException {
@@ -552,6 +636,155 @@ public class DocumentMcpTool implements McpToolPlugin {
       return "WIKI_PAGE_VERSIONS";
     } else {
       return contentType;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Content creation / upload helpers
+  // ---------------------------------------------------------------------------
+
+  private static final int  IMPORT_POLL_MAX_ATTEMPTS = 20;
+
+  private static final long IMPORT_POLL_INTERVAL_MS  = 500L;
+
+  private static final int  IMPORT_POLL_PAGE_SIZE    = 200;
+
+  /**
+   * Stages the given bytes as a single file and imports it into the folder,
+   * then resolves and returns the created document. {@code importFiles} expects
+   * a zip and unzips it, so the file is wrapped in a one-entry zip whose entry
+   * name becomes the created document title.
+   */
+  private DocumentModel importContent(String parentFolderId,
+                                      String fileName,
+                                      byte[] bytes) throws IllegalAccessException, ObjectNotFoundException {
+    if (bytes == null || bytes.length == 0) {
+      throw new IllegalArgumentException("The document content is empty; there is nothing to create.");
+    }
+    // Validate the parent folder exists and is readable before staging anything,
+    // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
+    getNode(parentFolderId);
+    String entryName = sanitizeFileName(fileName);
+    String ownerId = String.valueOf(getOwnerId(parentFolderId));
+    long userIdentityId = getCurrentUserIdentityId();
+    String uploadId = null;
+    try {
+      uploadId = UploadToolUtils.materialize(uploadService,
+                                             zipSingleEntry(entryName, bytes),
+                                             entryName + ".zip",
+                                             "application/zip");
+      // folderPath stays null: parentFolderId already identifies the JCR node
+      // (same rule as createFolder). conflict "rename" keeps existing documents
+      // untouched on a name clash.
+      documentFileService.importFiles(ownerId,
+                                      parentFolderId,
+                                      null,
+                                      uploadId,
+                                      "rename",
+                                      getCurrentUserAclIdentity(),
+                                      userIdentityId);
+      // On success the asynchronous import owns the upload resource and releases
+      // it once the file is created, so it must not be released here.
+      uploadId = null;
+    } catch (IllegalAccessException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IllegalStateException("Could not create the document '%s': %s".formatted(entryName, e.getMessage()));
+    } finally {
+      if (uploadId != null) {
+        UploadToolUtils.release(uploadService, uploadId);
+      }
+    }
+    return findImportedDocument(parentFolderId, entryName);
+  }
+
+  /**
+   * The import runs on a background thread, so the created file is polled for in
+   * the destination folder until it appears (or a short timeout elapses).
+   */
+  private DocumentModel findImportedDocument(String parentFolderId,
+                                             String fileName) throws ObjectNotFoundException, IllegalAccessException {
+    long userIdentityId = getCurrentUserIdentityId();
+    DocumentFolderFilter filter = new DocumentFolderFilter(parentFolderId, null, null, null);
+    for (int attempt = 0; attempt < IMPORT_POLL_MAX_ATTEMPTS; attempt++) {
+      List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, userIdentityId);
+      DocumentFileModel match = children.stream()
+                                        .filter(FileNode.class::isInstance)
+                                        .map(FileNode.class::cast)
+                                        .filter(file -> StringUtils.equalsIgnoreCase(file.getName(), fileName))
+                                        .reduce((first, second) -> second)
+                                        .map(this::toDocumentFileModel)
+                                        .orElse(null);
+      if (match != null) {
+        return match;
+      }
+      sleepQuietly(IMPORT_POLL_INTERVAL_MS);
+    }
+    throw new IllegalStateException("""
+        The document '%s' was uploaded and is being created in the background.
+        Call list_folder_children on folder %s in a few seconds to retrieve it.
+        """.formatted(fileName, parentFolderId));
+  }
+
+  private static byte[] zipSingleEntry(String entryName, byte[] content) {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    try (ZipOutputStream zip = new ZipOutputStream(output)) {
+      zip.putNextEntry(new ZipEntry(entryName));
+      zip.write(content);
+      zip.closeEntry();
+    } catch (IOException e) {
+      throw new IllegalStateException("Could not package the document content: " + e.getMessage());
+    }
+    return output.toByteArray();
+  }
+
+  private static String sanitizeFileName(String fileName) {
+    String cleaned = StringUtils.trimToEmpty(fileName).replaceAll("[/\\\\]", "_");
+    return cleaned.isEmpty() ? "document" : cleaned;
+  }
+
+  private static String resolveMimeType(String name, String provided) {
+    if (StringUtils.isNotBlank(provided)) {
+      return provided;
+    }
+    String lower = StringUtils.lowerCase(name);
+    if (lower == null) {
+      return "text/plain";
+    } else if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
+      return "text/markdown";
+    } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+      return "text/html";
+    } else if (lower.endsWith(".csv")) {
+      return "text/csv";
+    } else if (lower.endsWith(".json")) {
+      return "application/json";
+    } else if (lower.endsWith(".xml")) {
+      return "application/xml";
+    } else {
+      return "text/plain";
+    }
+  }
+
+  private static String ensureExtension(String name, String mimeType) {
+    if (StringUtils.contains(name, '.')) {
+      return name;
+    }
+    String extension = switch (StringUtils.lowerCase(StringUtils.trimToEmpty(mimeType))) {
+    case "text/markdown" -> ".md";
+    case "text/html" -> ".html";
+    case "text/csv" -> ".csv";
+    case "application/json" -> ".json";
+    case "application/xml" -> ".xml";
+    default -> ".txt";
+    };
+    return name + extension;
+  }
+
+  private static void sleepQuietly(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 

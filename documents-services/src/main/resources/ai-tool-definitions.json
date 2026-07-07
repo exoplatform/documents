@@ -12,7 +12,9 @@
             "description": "space id for which the root folder is requested."
           }
         },
-        "required": ["space_id"]
+        "required": [
+          "space_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -46,7 +48,9 @@
             "description": "Maximum number of results to return."
           }
         },
-        "required": ["folder_id"]
+        "required": [
+          "folder_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -82,7 +86,9 @@
             "description": "The unique identifier of the document."
           }
         },
-        "required": ["document_id"]
+        "required": [
+          "document_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -103,7 +109,9 @@
             "description": "The unique identifier of the document."
           }
         },
-        "required": ["document_id"]
+        "required": [
+          "document_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -119,11 +127,21 @@
       "input_schema": {
         "type": "object",
         "properties": {
-          "document_id": { "type": "string" },
-          "content_type": { "type": "string" },
-          "content_id": { "type": "integer" }
+          "document_id": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "content_id": {
+            "type": "integer"
+          }
         },
-        "required": ["document_id", "content_type", "content_id"]
+        "required": [
+          "document_id",
+          "content_type",
+          "content_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -147,7 +165,10 @@
             "type": "string"
           }
         },
-        "required": ["document_id", "html_description"]
+        "required": [
+          "document_id",
+          "html_description"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -168,7 +189,9 @@
             "type": "string"
           }
         },
-        "required": ["document_id"]
+        "required": [
+          "document_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -209,7 +232,9 @@
             "description": "If true, restricts results to favorite documents."
           }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -238,7 +263,9 @@
             "description": "Maximum number of results to return."
           }
         },
-        "required": ["folder_id"]
+        "required": [
+          "folder_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -259,7 +286,9 @@
             "description": "The unique identifier of the folder."
           }
         },
-        "required": ["folder_id"]
+        "required": [
+          "folder_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -284,7 +313,9 @@
             "description": "If true (default), include the child folders recursively."
           }
         },
-        "required": ["folder_id"]
+        "required": [
+          "folder_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -305,7 +336,9 @@
             "description": "The unique identifier of the file."
           }
         },
-        "required": ["document_id"]
+        "required": [
+          "document_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -350,13 +383,90 @@
             "description": "Name of the folder to create."
           }
         },
-        "required": ["parent_folder_id", "name"]
+        "required": [
+          "parent_folder_id",
+          "name"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
         "idempotentHint": false,
         "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "create_document",
+      "title": "Create a text document in the DMS",
+      "description": "Creates a text-based document (markdown, HTML, plain text, CSV or JSON) from a content string authored in the chat. Use this to turn generated text into a real file in the Documents app. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For binary files (PDF, images, office files) use upload_document instead.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder where the document is created."
+          },
+          "name": {
+            "type": "string",
+            "description": "The document file name. If no extension is given, one is appended based on the mime type (e.g. 'notes' with text/markdown becomes 'notes.md')."
+          },
+          "content": {
+            "type": "string",
+            "description": "The text, markdown or HTML body of the document."
+          },
+          "mime_type": {
+            "type": "string",
+            "description": "Optional mime type (e.g. text/markdown, text/html, text/plain). Defaults from the name extension when omitted."
+          }
+        },
+        "required": [
+          "parent_folder_id",
+          "name",
+          "content"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "upload_document",
+      "title": "Upload a file to the DMS",
+      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the destination folder."
+          },
+          "name": {
+            "type": "string",
+            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with url (the name is then derived from the URL)."
+          },
+          "base64": {
+            "type": "string",
+            "description": "The file bytes encoded in base64. Provide either base64 or url, not both."
+          },
+          "url": {
+            "type": "string",
+            "description": "An http(s) URL to download the file from. Provide either base64 or url, not both."
+          }
+        },
+        "required": [
+          "parent_folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
       },
       "require_approval": true
     },
@@ -376,7 +486,10 @@
             "description": "The new name."
           }
         },
-        "required": ["document_id", "new_name"]
+        "required": [
+          "document_id",
+          "new_name"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -406,7 +519,10 @@
             "description": "Behaviour when a document with the same name exists in the destination. Defaults to 'rename'."
           }
         },
-        "required": ["document_id", "destination_folder_id"]
+        "required": [
+          "document_id",
+          "destination_folder_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -432,7 +548,10 @@
             "description": "The unique identifier of the destination folder."
           }
         },
-        "required": ["document_id", "destination_folder_id"]
+        "required": [
+          "document_id",
+          "destination_folder_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -458,7 +577,9 @@
             "description": "Optional prefix added to the duplicated name (e.g. 'Copy of')."
           }
         },
-        "required": ["document_id"]
+        "required": [
+          "document_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -480,7 +601,9 @@
             "description": "The unique identifier of the file or folder to delete."
           }
         },
-        "required": ["document_id"]
+        "required": [
+          "document_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -502,7 +625,9 @@
             "description": "The unique identifier of the previously deleted document."
           }
         },
-        "required": ["document_id"]
+        "required": [
+          "document_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -524,7 +649,9 @@
             "description": "The unique identifier of the version to restore."
           }
         },
-        "required": ["version_id"]
+        "required": [
+          "version_id"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -554,7 +681,11 @@
             "description": "The new summary text."
           }
         },
-        "required": ["document_id", "version_id", "summary"]
+        "required": [
+          "document_id",
+          "version_id",
+          "summary"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -580,7 +711,10 @@
             "description": "true to hide the document, false to make it visible."
           }
         },
-        "required": ["document_id", "hidden"]
+        "required": [
+          "document_id",
+          "hidden"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,

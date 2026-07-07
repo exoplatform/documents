@@ -62,6 +62,7 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.upload.UploadService;
 
 import io.meeds.social.translation.service.TranslationService;
 
@@ -99,6 +100,7 @@ public class DocumentMcpToolTest {
     ProfilePropertyService profilePropertyService = Mockito.mock(ProfilePropertyService.class);
     UserACL userAcl = Mockito.mock(UserACL.class);
     UserPortalConfigService portalConfigService = Mockito.mock(UserPortalConfigService.class);
+    UploadService uploadService = Mockito.mock(UploadService.class);
     currentIdentity = new Identity(USERNAME);
 
     org.exoplatform.social.core.identity.model.Identity socialIdentity =
@@ -112,7 +114,8 @@ public class DocumentMcpToolTest {
                                           translationService,
                                           profilePropertyService,
                                           userAcl,
-                                          portalConfigService) {
+                                          portalConfigService,
+                                          uploadService) {
       @Override
       public Identity getCurrentUserAclIdentity() {
         return currentIdentity;
@@ -410,6 +413,85 @@ public class DocumentMcpToolTest {
   @Test
   public void createFolderBlankNameFails() {
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createFolder(FOLDER_ID, " "));
+  }
+
+  private FileNode fileNodeNamed(String id, String name) {
+    FileNode fileNode = new FileNode();
+    fileNode.setId(id);
+    fileNode.setName(name);
+    fileNode.setPath("/documents/Projects/" + name);
+    fileNode.setMimeType("text/plain");
+    fileNode.setSize(16L);
+    return fileNode;
+  }
+
+  @Test
+  public void createDocumentAppendsExtensionAndImports() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    // 'notes' has no extension: with text/markdown it becomes 'notes.md'.
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of(fileNodeNamed("doc-created", "notes.md")));
+
+    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes", "# Hello", "text/markdown");
+
+    assertNotNull(model);
+    assertEquals("doc-created", model.getId());
+    // folderPath must be null (parent resolved from the folder id) and conflict "rename".
+    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
+                                            eq(FOLDER_ID),
+                                            isNull(),
+                                            any(),
+                                            eq("rename"),
+                                            eq(currentIdentity),
+                                            eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void createDocumentBlankNameFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocument(FOLDER_ID, " ", "body", null));
+  }
+
+  @Test
+  public void createDocumentNullContentFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", null, null));
+  }
+
+  @Test
+  public void uploadDocumentFromBase64() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of(fileNodeNamed("upl-1", "hello.txt")));
+    String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
+
+    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null);
+
+    assertNotNull(model);
+    assertEquals("upl-1", model.getId());
+    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
+                                            eq(FOLDER_ID),
+                                            isNull(),
+                                            any(),
+                                            eq("rename"),
+                                            eq(currentIdentity),
+                                            eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void uploadDocumentRequiresExactlyOneSource() {
+    String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
+    // neither base64 nor url
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, null));
+    // both base64 and url
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, "https://example.com/x.txt"));
+  }
+
+  @Test
+  public void uploadDocumentBase64RequiresName() {
+    String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, " ", base64, null));
   }
 
   @Test
