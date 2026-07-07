@@ -28,26 +28,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import javax.xml.namespace.QName;
-import javax.xml.stream.FactoryConfigurationError;
-import javax.xml.stream.XMLEventReader;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.*;
 import javax.xml.stream.events.Characters;
 import javax.xml.stream.events.StartElement;
 import javax.xml.stream.events.XMLEvent;
@@ -147,7 +132,7 @@ public abstract class WebDavHttpMethodPlugin {
 
   protected String getResourcePath(HttpServletRequest httpRequest) {
     String resourcePath = Arrays.stream(httpRequest.getRequestURI().substring(getBaseUri(httpRequest).length()).split("/"))
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(WebDavHttpMethodPlugin::decodePathSegment)
                                 .collect(Collectors.joining("/"));
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
   }
@@ -155,9 +140,18 @@ public abstract class WebDavHttpMethodPlugin {
   @SneakyThrows
   protected URI getResourceUri(HttpServletRequest httpRequest) {
     return new URI(getBaseUrl(httpRequest) + Arrays.stream(getResourcePath(httpRequest).split("/"))
-                                                   .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
                                                    .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20"))
                                                    .collect(Collectors.joining("/")));
+  }
+
+  /**
+   * Decodes a raw URI path segment. Unlike {@link URLDecoder#decode(String, java.nio.charset.Charset)},
+   * which implements {@code application/x-www-form-urlencoded} semantics and wrongly turns a literal
+   * '+' into a space, this only unescapes percent-encoded sequences and leaves literal '+' untouched,
+   * since '+' has no special meaning in a URI path segment (RFC 3986).
+   */
+  protected static String decodePathSegment(String segment) {
+    return URLDecoder.decode(segment.replace("+", "%2B"), StandardCharsets.UTF_8);
   }
 
   protected String getBaseUrl(HttpServletRequest httpRequest) {
@@ -196,7 +190,7 @@ public abstract class WebDavHttpMethodPlugin {
                                                                  .split(getBaseUri(httpRequest)))
                                               .getLast()
                                               .split("/"))
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(WebDavHttpMethodPlugin::decodePathSegment)
                                 .collect(Collectors.joining("/"));
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
   }
