@@ -491,13 +491,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  public void updateDocumentMimeType(String documentId,
-                                     String mimeType,
-                                     long aclIdentity) throws IllegalStateException, IllegalAccessException, RepositoryException {
-    documentFileStorage.updateDocumentMimeType(documentId, mimeType, getAclUserIdentity(aclIdentity));
-  }
-
-  @Override
   public void updateAudioTranscription(String documentId, String transcription, long aclIdentity) throws IllegalAccessException {
     documentFileStorage.updateAudioTranscription(documentId, transcription, getAclUserIdentity(aclIdentity));
   }

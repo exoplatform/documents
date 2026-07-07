@@ -440,8 +440,6 @@ public class DocumentMcpToolTest {
     // 'notes' has no extension: with text/markdown it becomes 'notes.md'.
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(List.of(fileNodeNamed("doc-created", "notes.md")));
-    // After the mime override the tool re-reads the created document by id.
-    when(documentFileService.getDocumentById("doc-created", USERNAME)).thenReturn(fileNodeNamed("doc-created", "notes.md"));
 
     DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes", "# Hello", "text/markdown");
 
@@ -455,9 +453,6 @@ public class DocumentMcpToolTest {
                                             eq("rename"),
                                             eq(currentIdentity),
                                             eq(USER_IDENTITY_ID));
-    // The requested mime type is forced on the stored file (importFiles would
-    // otherwise leave .md as application/octet-stream).
-    verify(documentFileService).updateDocumentMimeType(eq("doc-created"), eq("text/markdown"), eq(USER_IDENTITY_ID));
   }
 
   @Test

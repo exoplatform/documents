@@ -347,7 +347,14 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param name the document file name (an extension is appended from the mime
    *          type when missing, e.g. 'notes' + text/markdown -&gt; 'notes.md')
    * @param content the text / markdown / HTML body
-   * @param mimeType optional mime type; defaults from the name extension
+   * @param mimeType optional mime type; only used to infer a file extension when
+   *          the name has none (advisory). The stored content type is derived
+   *          from the file extension by the platform MimeTypeResolver: use a
+   *          registered extension (.txt, .html, .docx, .pdf, image types…) so the
+   *          file has the correct type and is readable via
+   *          get_document_content_by_id; an unregistered extension like .md is
+   *          stored as application/octet-stream and its text won't be
+   *          extractable.
    * @return the created document
    */
   public DocumentModel createDocument(String parentFolderId,
@@ -363,13 +370,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     String resolvedMime = resolveMimeType(name, mimeType);
     String fileName = ensureExtension(name, resolvedMime);
-    DocumentModel document = importContent(parentFolderId, fileName, content.getBytes(StandardCharsets.UTF_8));
-    // importFiles derives the stored mime type from the file extension, which
-    // yields application/octet-stream for extensions the platform does not
-    // register (e.g. .md). Force the requested/resolved mime so the file reports
-    // the right content type (get_document_content_by_id relies on it).
-    setMimeType(document.getId(), resolvedMime);
-    return getDocumentById(document.getId());
+    return importContent(parentFolderId, fileName, content.getBytes(StandardCharsets.UTF_8));
   }
 
   /**
@@ -754,25 +755,6 @@ public class DocumentMcpTool implements McpToolPlugin {
       }
     }
     return findImportedDocument(parentFolderId, entryName);
-  }
-
-  /**
-   * Forces the stored mime type of a freshly created document. The import
-   * pipeline derives the mime from the file extension, so text formats whose
-   * extension the platform does not register (e.g. .md) end up as
-   * application/octet-stream; this overrides it with the requested value.
-   */
-  private void setMimeType(String documentId, String mimeType) {
-    if (StringUtils.isBlank(mimeType)) {
-      return;
-    }
-    try {
-      documentFileService.updateDocumentMimeType(documentId, mimeType, getCurrentUserIdentityId());
-    } catch (Exception e) {
-      // The document was created successfully; only the mime override failed.
-      throw new IllegalStateException("The document was created but its content type could not be set to '%s': %s".formatted(mimeType,
-                                                                                                                             e.getMessage()));
-    }
   }
 
   /**

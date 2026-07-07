@@ -399,7 +399,7 @@
     {
       "name": "create_document",
       "title": "Create a text document in the DMS",
-      "description": "Creates a text-based document (markdown, HTML, plain text, CSV or JSON) from a content string authored in the chat. Use this to turn generated text into a real file in the Documents app. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For binary files (PDF, images, office files) use upload_document instead.",
+      "description": "Creates a text-based document (markdown, HTML, plain text, CSV or JSON) from a content string authored in the chat. Use this to turn generated text into a real file in the Documents app. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The stored content type is derived from the file extension by the platform: use a registered extension (.txt, .html, .docx, .pdf, image types, etc.) so the file has the correct type and is readable via get_document_content_by_id; an unregistered extension like .md is stored as application/octet-stream and its text won't be extractable. For binary files (PDF, images, office files) use upload_document instead.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -417,7 +417,7 @@
           },
           "mime_type": {
             "type": "string",
-            "description": "Optional mime type (e.g. text/markdown, text/html, text/plain). Defaults from the name extension when omitted."
+            "description": "Optional, advisory. Only used to infer a file extension when the name has none; the stored content type is derived from the file extension by the platform, not from this value."
           }
         },
         "required": [

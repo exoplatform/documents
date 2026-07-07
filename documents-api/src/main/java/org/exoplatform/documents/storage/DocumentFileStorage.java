@@ -276,12 +276,6 @@ public interface DocumentFileStorage {
     throw new IllegalStateException("updateDocumentDescription not implemented in the target classs");
   }
 
-  default void updateDocumentMimeType(String documentId,
-                                      String mimeType,
-                                      Identity aclIdentity) throws IllegalStateException, RepositoryException {
-    throw new IllegalStateException("updateDocumentMimeType not implemented in the target class");
-  }
-
   /**
    * Updates the Text transcription of a Document
    *
