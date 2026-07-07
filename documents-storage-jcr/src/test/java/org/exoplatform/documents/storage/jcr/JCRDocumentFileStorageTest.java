@@ -1267,6 +1267,7 @@ public class JCRDocumentFileStorageTest {
     Node contentNode = mock(Node.class);
     Version version = mock(Version.class);
     when(session.getNodeByUUID("123")).thenReturn(node);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
     when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
     when(contentNode.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
@@ -1279,6 +1280,36 @@ public class JCRDocumentFileStorageTest {
     verify(node, times(1)).save();
     VERSION_HISTORY_UTILS.verify(() -> VersionHistoryUtils.createVersion(node), times(1));
 
+  }
+
+  @Test
+  public void createNewVersionAddsVersionableMixinWhenMissing() throws Exception {
+    // A file that isn't yet mix:versionable must be made versionable (and checked
+    // out) before writing, otherwise the whole version write was silently skipped.
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node node = mock(Node.class);
+    Node contentNode = mock(Node.class);
+    when(session.getNodeByUUID("123")).thenReturn(node);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    // Not versionable initially, then versionable after the mixin is added.
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false, true);
+    when(node.canAddMixin(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
+    when(contentNode.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    when(node.isCheckedOut()).thenReturn(true);
+    when(node.getSession()).thenReturn(session);
+
+    jcrDocumentFileStorage.createNewVersion("123", "user", new ByteArrayInputStream("test".getBytes()));
+
+    verify(node, times(1)).addMixin(NodeTypeConstants.MIX_VERSIONABLE);
+    VERSION_HISTORY_UTILS.verify(() -> VersionHistoryUtils.createVersion(node), times(1));
   }
 
   @Test

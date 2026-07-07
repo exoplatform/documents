@@ -2643,18 +2643,30 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(nodeId);
-      if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && node.getNode(NodeTypeConstants.JCR_CONTENT) != null) {
-        Node contentNode = node.getNode(NodeTypeConstants.JCR_CONTENT);
-        if (contentNode.hasProperty(NodeTypeConstants.JCR_DATA)) {
-          contentNode.setProperty(NodeTypeConstants.JCR_DATA, newContent);
-          contentNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, Calendar.getInstance());
+      if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+        // Make the file versionable if it isn't yet: otherwise the whole write was
+        // silently skipped and no version was ever created (mirror
+        // ActionThread.createFile which adds mix:versionable on file creation).
+        if (!node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && node.canAddMixin(NodeTypeConstants.MIX_VERSIONABLE)) {
+          node.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
+          node.save();
         }
-        if (node.isNodeType(NodeTypeConstants.EXO_MODIFY)) {
-          node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
-          node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
+        if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+          if (!node.isCheckedOut()) {
+            node.checkout();
+          }
+          Node contentNode = node.getNode(NodeTypeConstants.JCR_CONTENT);
+          if (contentNode.hasProperty(NodeTypeConstants.JCR_DATA)) {
+            contentNode.setProperty(NodeTypeConstants.JCR_DATA, newContent);
+            contentNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, Calendar.getInstance());
+          }
+          if (node.isNodeType(NodeTypeConstants.EXO_MODIFY)) {
+            node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
+            node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
+          }
+          node.save();
+          VersionHistoryUtils.createVersion(node);
         }
-        node.save();
-        VersionHistoryUtils.createVersion(node);
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error while creating new version", e);

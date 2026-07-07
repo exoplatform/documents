@@ -24,10 +24,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+
+import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Profile;
@@ -55,11 +59,15 @@ import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.documents.model.PermissionEntry;
+import org.exoplatform.documents.model.PermissionRole;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
+import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.attachments.service.AttachmentService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -104,11 +112,21 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
 
-  /** Favorite object type for files, matching {@code DocumentAclPlugin.OBJECT_TYPE}. */
-  private static final String      FAVORITE_TYPE_DOCUMENT = "document";
+  /**
+   * Same password policy DocumentFileRest applies to public-link passwords
+   * (min length 9), so a link created here is openable with the given password.
+   */
+  private static final UserFieldValidator PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
 
-  /** Favorite object type for folders, matching {@code FolderAclPlugin.OBJECT_TYPE}. */
-  private static final String      FAVORITE_TYPE_FOLDER   = "folder";
+  /**
+   * Favorite object type for files. Ground truth: the Documents app reads/writes
+   * file favorites as {@code metadataService} metadata "favorites" on object type
+   * {@code "file"} + the JCR node id (see {@code EntityBuilder}, the
+   * {@code DocumentsFavoriteButton.vue} button and the favorites drawer
+   * registration). Writing any other type produces a favorite that no surface in
+   * the app ever shows.
+   */
+  private static final String      FAVORITE_TYPE_FILE     = "file";
 
   /**
    * Structured / binary office and PDF formats that cannot be produced from a
@@ -218,7 +236,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                                       true);
     return documentItems.stream()
                         .filter(d -> (filesOnly == null || !filesOnly || d instanceof FileNode)
-                                     || (foldersOnly == null || !foldersOnly || d instanceof FolderNode))
+                                     && (foldersOnly == null || !foldersOnly || d instanceof FolderNode))
                         .map(this::toDocumentModel)
                         .toList();
   }
@@ -341,8 +359,17 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   public DocumentsSizeModel getDocumentsSize(Long ownerId) throws ObjectNotFoundException, IllegalAccessException {
     long resolvedOwnerId = ownerId == null || ownerId <= 0 ? getCurrentUserIdentityId() : ownerId;
-    DocumentsSize size = documentFileService.getDocumentsSizeStat(resolvedOwnerId, getCurrentUserIdentityId());
-    return new DocumentsSizeModel(size.getOwnerId(), size.getToSize());
+    long userIdentityId = getCurrentUserIdentityId();
+    DocumentsSize size = documentFileService.getDocumentsSizeStat(resolvedOwnerId, userIdentityId);
+    // getDocumentsSizeStat only reads a previously computed analytics "documentsSize"
+    // stat (the size gadget POSTs addDocumentsSizeStat on demand). When no stat has
+    // been written yet, or it is stale (not from today), the read yields owner_id 0 /
+    // size 0, which is misleading. Trigger the on-demand computation so the tool
+    // returns the real current size for the correct owner.
+    if (size == null || size.getOwnerId() <= 0 || size.getToSize() <= 0 || !size.isTodaySize()) {
+      size = documentFileService.addDocumentsSizeStat(resolvedOwnerId, userIdentityId);
+    }
+    return new DocumentsSizeModel(resolvedOwnerId, size == null ? 0L : size.getToSize());
   }
 
   // ---------------------------------------------------------------------------
@@ -535,9 +562,9 @@ public class DocumentMcpTool implements McpToolPlugin {
                                        documentId,
                                        destination.getPath(),
                                        getCurrentUserIdentityId(),
-                                       StringUtils.isBlank(conflictAction) ? "rename" : conflictAction);
+                                       StringUtils.isBlank(conflictAction) ? "keepBoth" : conflictAction);
     } catch (ObjectAlreadyExistsException e) {
-      throw new IllegalStateException("A document with the same name already exists in the destination folder. Retry with conflict_action set to 'rename'.");
+      throw new IllegalStateException("A document with the same name already exists in the destination folder. Retry with conflict_action set to 'keepBoth' (move as a renamed copy) or 'createNewVersion' (replace the existing file's content, keeping its history).");
     }
   }
 
@@ -547,30 +574,66 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
-    AbstractNode copy = documentFileService.copyDocument(documentId, destinationFolderId, getCurrentUserIdentityId());
-    return toDocumentModel(copy);
+    // The storage copyDocument returns the DESTINATION folder node, not the copy,
+    // so snapshot the destination's file ids first and resolve the newly added
+    // file afterwards to return the actual copied document.
+    Set<String> beforeFileIds = currentChildFileIds(destinationFolderId);
+    AbstractNode copyReturn = documentFileService.copyDocument(documentId, destinationFolderId, getCurrentUserIdentityId());
+    DocumentModel copied = resolveAddedChildFile(destinationFolderId, beforeFileIds);
+    return copied != null ? copied : toDocumentModel(copyReturn);
   }
 
   public DocumentModel duplicateDocument(String documentId,
                                          String prefix) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    AbstractNode duplicate = documentFileService.duplicateDocument(getOwnerId(documentId),
-                                                                   documentId,
-                                                                   prefix,
-                                                                   getCurrentUserIdentityId());
-    return toDocumentModel(duplicate);
+    // The storage duplicateDocument returns the PARENT folder node, not the
+    // duplicate, so snapshot the parent's file ids first and resolve the newly
+    // added (suffixed/prefixed) file afterwards to return the actual duplicate.
+    AbstractNode source = getNode(documentId);
+    String parentFolderId = source.getParentFolderId();
+    Set<String> beforeFileIds = StringUtils.isBlank(parentFolderId) ? Set.of() : currentChildFileIds(parentFolderId);
+    AbstractNode duplicateReturn = documentFileService.duplicateDocument(getOwnerId(documentId),
+                                                                         documentId,
+                                                                         prefix,
+                                                                         getCurrentUserIdentityId());
+    DocumentModel duplicate = StringUtils.isBlank(parentFolderId) ? null
+                                                                  : resolveAddedChildFile(parentFolderId, beforeFileIds);
+    return duplicate != null ? duplicate : toDocumentModel(duplicateReturn);
   }
 
   public void deleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode document = checkCanAccessDocument(documentId);
-    // delay = 0: move to trash immediately. favorite = false: the flag only
-    // triggers removal from the favorites list, which we don't manage here.
-    documentFileService.deleteDocument(document.getPath(), documentId, false, 0, getCurrentUserIdentityId());
+    // delay = 0: move to trash immediately. favorite = true: also drop the file
+    // from the user's favorites (storage cleanup uses object type "file"), so a
+    // trashed favorite doesn't linger in the favorites view.
+    documentFileService.deleteDocument(document.getPath(), documentId, true, 0, getCurrentUserIdentityId());
   }
 
-  public void undoDeleteDocument(String documentId) {
+  /**
+   * Restores a document that was deleted with {@code delete_document}: since that
+   * tool trashes immediately (delay 0), the delayed-delete cancel path is a no-op,
+   * so the node is resolved from trash (it keeps its id/uuid after the move) and
+   * restored to its original location.
+   */
+  public void undoDeleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    documentFileService.undoDeleteDocument(documentId, getCurrentUserIdentityId());
+    AbstractNode trashedNode;
+    try {
+      trashedNode = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    } catch (ObjectNotFoundException e) {
+      throw new IllegalStateException(("Document %s can no longer be found (it may have been permanently deleted from the trash), "
+          + "so it cannot be restored.").formatted(documentId));
+    }
+    if (trashedNode == null) {
+      throw new IllegalStateException(("Document %s can no longer be found (it may have been permanently deleted from the trash), "
+          + "so it cannot be restored.").formatted(documentId));
+    }
+    try {
+      documentFileService.restoreDocumentFromTrash(trashedNode.getPath());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException(("Could not restore document %s from trash: %s. It may not be in the trash "
+          + "(only documents deleted via delete_document can be restored this way).").formatted(documentId, e.getMessage()));
+    }
   }
 
   public DocumentVersionModel restoreDocumentVersion(String versionId) {
@@ -586,8 +649,15 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(versionId)) {
       throw new IllegalArgumentException("The 'versionId' parameter is mandatory. Call list_document_versions first to get a version_id.");
     }
-    FileVersion version = documentFileService.updateVersionSummary(documentId, versionId, summary, getCurrentUserName());
-    return toVersionModel(version);
+    FileVersion stamped = documentFileService.updateVersionSummary(documentId, versionId, summary, getCurrentUserName());
+    // The storage updateVersionSummary returns a near-empty FileVersion (only id +
+    // summary), so re-read the full version to return number/author/dates/size/etc.
+    FileVersion full = documentFileService.getFileVersions(documentId, getCurrentUserName())
+                                          .stream()
+                                          .filter(v -> StringUtils.equals(v.getId(), versionId))
+                                          .findFirst()
+                                          .orElse(stamped);
+    return toVersionModel(full);
   }
 
   @SneakyThrows
@@ -674,6 +744,14 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot create a public link for it."
           .formatted(documentId));
     }
+    if (StringUtils.isNotBlank(password)) {
+      // Apply the same password policy as DocumentFileRest (min 9 chars, etc.), so
+      // a link the LLM creates can actually be opened with the given password.
+      String error = PASSWORD_VALIDATOR.validate(getCurrentUserLocale(), password);
+      if (StringUtils.isNotBlank(error)) {
+        throw new IllegalArgumentException("The public link password is invalid: " + error);
+      }
+    }
     long expiration = expirationDate == null ? 0L : expirationDate.longValue();
     PublicDocumentAccess access = publicDocumentAccessService.createPublicDocumentAccess(userIdentityId,
                                                                                         documentId,
@@ -701,7 +779,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          (get it from get_root_folder_for_user / get_root_folder_by_space /
    *          get_documents_by_folder_id)
    * @param conflictAction behaviour when a node with the same name already exists
-   *          in the destination; defaults to 'rename'
+   *          in the destination; only 'keepBoth' is honoured, defaults to
+   *          'keepBoth'
    */
   public void createDocumentShortcut(String documentId,
                                      String destinationFolderId,
@@ -718,17 +797,17 @@ public class DocumentMcpTool implements McpToolPlugin {
       documentFileService.createShortcut(documentId,
                                          destination.getPath(),
                                          getCurrentUserName(),
-                                         StringUtils.isBlank(conflictAction) ? "rename" : conflictAction);
+                                         StringUtils.isBlank(conflictAction) ? "keepBoth" : conflictAction);
     } catch (ObjectAlreadyExistsException e) {
-      throw new IllegalStateException("A node with the same name already exists in the destination folder. Retry with conflict_action set to 'rename'.");
+      throw new IllegalStateException("A node with the same name already exists in the destination folder. Retry with conflict_action set to 'keepBoth' to create the shortcut under a renamed entry.");
     }
   }
 
   /**
-   * Shares a document with another user or with a space: the recipient gets the
-   * file in their "Shared" folder with the document's own permissions. Provide
-   * exactly one of <code>username</code> or <code>spaceId</code>. Requires edit
-   * permission on the document.
+   * Shares a document with another user or with a space: the recipient is GRANTED
+   * read access to the file and gets it in their "Shared" folder. Provide exactly
+   * one of <code>username</code> or <code>spaceId</code>. Requires edit permission
+   * on the document.
    *
    * @param documentId the id of the file to share (get it from the read tools)
    * @param username the username to share the document with (mutually exclusive
@@ -741,7 +820,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                             String username,
                             Long spaceId,
                             Boolean notify) throws IllegalAccessException, ObjectNotFoundException {
-    checkCanAccessDocument(documentId);
+    AbstractNode node = checkCanAccessDocument(documentId);
     boolean hasUser = StringUtils.isNotBlank(username);
     boolean hasSpace = spaceId != null && spaceId > 0;
     if (hasUser == hasSpace) {
@@ -750,23 +829,84 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot share it.".formatted(documentId));
     }
-    long destId;
+    Identity destIdentity;
     if (hasUser) {
-      Identity userIdentity = identityManager.getOrCreateUserIdentity(username);
-      if (userIdentity == null) {
+      destIdentity = identityManager.getOrCreateUserIdentity(username);
+      if (destIdentity == null) {
         throw new ObjectNotFoundException("No user found with username '%s'. Use search_users to find the exact username."
             .formatted(username));
       }
-      destId = userIdentity.getIdentityId();
     } else {
       Space space = spaceService.getSpaceById(String.valueOf(spaceId));
       if (space == null) {
         throw new ObjectNotFoundException("Space with id %s not found. Use get_my_spaces to check accessible spaces."
             .formatted(spaceId));
       }
-      destId = identityManager.getOrCreateSpaceIdentity(space.getPrettyName()).getIdentityId();
+      destIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
     }
-    documentFileService.shareDocument(documentId, destId, getCurrentUserIdentityId(), notify == null || notify.booleanValue());
+    long destId = destIdentity.getIdentityId();
+    // Route through updatePermissions like the REST does: shareDocument alone only
+    // copies the recipient's EXISTING permissions onto the symlink, so a recipient
+    // without prior access still can't open the file. updatePermissions GRANTS the
+    // recipient read access on the node (permissions + toShare) and then shares
+    // (creates the symlink). The current collaborators are preserved so they are
+    // not unshared by the storage's replace-then-unshare logic.
+    List<PermissionEntry> permissions = preserveExistingCollaborators(node.getAcl());
+    permissions.add(new PermissionEntry(destIdentity, "read", PermissionRole.ALL.name()));
+    Map<Long, String> toShare = new HashMap<>();
+    toShare.put(destId, "read");
+    Map<Long, String> toNotify = new HashMap<>();
+    if (notify == null || notify.booleanValue()) {
+      toNotify.put(destId, "read");
+    }
+    NodePermission nodePermission = node.getAcl() == null ? new NodePermission(true, false, false, false, permissions, toShare, toNotify, null)
+                                                          : new NodePermission(node.getAcl().isCanAccess(),
+                                                                               node.getAcl().isCanEdit(),
+                                                                               node.getAcl().isCanDelete(),
+                                                                               node.getAcl().isPublic(),
+                                                                               permissions,
+                                                                               toShare,
+                                                                               toNotify,
+                                                                               null);
+    documentFileService.updatePermissions(documentId, nodePermission, getCurrentUserIdentityId());
+  }
+
+  /**
+   * Rebuilds the document's current collaborator list (as read/edit
+   * {@link PermissionEntry}) from its resolved ACL, so a share can be added
+   * through {@code updatePermissions} without the storage's replace-then-unshare
+   * logic dropping the users/spaces that already had access. Mirrors the
+   * read/edit derivation the REST layer uses ({@code EntityBuilder}).
+   */
+  private List<PermissionEntry> preserveExistingCollaborators(NodePermission acl) {
+    List<PermissionEntry> result = new java.util.ArrayList<>();
+    if (acl == null || acl.getPermissions() == null) {
+      return result;
+    }
+    // Collapse the per-permission ACL entries (each identity appears once per raw
+    // JCR permission) into one entry per identity+role, marking it "edit" when any
+    // of its raw permissions is a write permission, else "read".
+    Map<String, Identity> identityByKey = new java.util.LinkedHashMap<>();
+    Map<String, Boolean> editByKey = new HashMap<>();
+    for (PermissionEntry entry : acl.getPermissions()) {
+      Identity identity = entry.getIdentity();
+      if (identity == null) {
+        continue;
+      }
+      String key = identity.getProviderId() + "|" + identity.getRemoteId() + "|" + entry.getRole();
+      identityByKey.putIfAbsent(key, identity);
+      editByKey.merge(key, isEditAclPermission(entry.getPermission()), Boolean::logicalOr);
+    }
+    identityByKey.forEach((key, identity) -> {
+      String role = key.substring(key.lastIndexOf('|') + 1);
+      result.add(new PermissionEntry(identity, Boolean.TRUE.equals(editByKey.get(key)) ? "edit" : "read", role));
+    });
+    return result;
+  }
+
+  private static boolean isEditAclPermission(String permission) {
+    return permission != null
+           && (permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove"));
   }
 
   /**
@@ -800,8 +940,13 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private Favorite toFavorite(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode node = checkCanAccessDocument(documentId);
-    String objectType = node instanceof FileNode ? FAVORITE_TYPE_DOCUMENT : FAVORITE_TYPE_FOLDER;
-    return new Favorite(objectType, documentId, null, getCurrentUserIdentityId());
+    if (!(node instanceof FileNode)) {
+      // Folders have no favorite surface in the Documents app (the favorite
+      // button and drawer only exist for files, object type "file"). Writing a
+      // "folder" favorite would silently never appear anywhere, so reject it.
+      throw new IllegalArgumentException("Only files can be favorited; folders have no favorites view.");
+    }
+    return new Favorite(FAVORITE_TYPE_FILE, documentId, null, getCurrentUserIdentityId());
   }
 
   /**
@@ -1053,6 +1198,10 @@ public class DocumentMcpTool implements McpToolPlugin {
     String entryName = sanitizeFileName(fileName);
     String ownerId = String.valueOf(getOwnerId(parentFolderId));
     long userIdentityId = getCurrentUserIdentityId();
+    // Snapshot the destination file ids before the import so the created node can
+    // be identified even when a same-name file already exists and the import
+    // creates a renamed ("duplicate") copy with a different, suffixed name.
+    Set<String> beforeFileIds = currentChildFileIds(parentFolderId);
     String uploadId = null;
     try {
       uploadId = UploadToolUtils.materialize(uploadService,
@@ -1060,13 +1209,15 @@ public class DocumentMcpTool implements McpToolPlugin {
                                              entryName + ".zip",
                                              "application/zip");
       // folderPath stays null: parentFolderId already identifies the JCR node
-      // (same rule as createFolder). conflict "rename" keeps existing documents
-      // untouched on a name clash.
+      // (same rule as createFolder). conflict "duplicate": on a name clash the
+      // import creates a renamed (keep-both) copy. NOT "rename" — the async import
+      // thread only understands "updateAll"/"duplicate", so "rename" would fall
+      // through to ignoredFiles and silently create nothing.
       documentFileService.importFiles(ownerId,
                                       parentFolderId,
                                       null,
                                       uploadId,
-                                      "rename",
+                                      "duplicate",
                                       getCurrentUserAclIdentity(),
                                       userIdentityId);
       // On success the asynchronous import owns the upload resource and releases
@@ -1081,26 +1232,22 @@ public class DocumentMcpTool implements McpToolPlugin {
         UploadToolUtils.release(uploadService, uploadId);
       }
     }
-    return findImportedDocument(parentFolderId, entryName);
+    return findImportedDocument(parentFolderId, entryName, beforeFileIds);
   }
 
   /**
    * The import runs on a background thread, so the created file is polled for in
-   * the destination folder until it appears (or a short timeout elapses).
+   * the destination folder until it appears (or a short timeout elapses). The
+   * newly created node is identified as the file whose id was not present before
+   * the import, so it resolves the just-created (possibly suffixed) file rather
+   * than a pre-existing same-name document.
    */
   private DocumentModel findImportedDocument(String parentFolderId,
-                                             String fileName) throws ObjectNotFoundException, IllegalAccessException {
-    long userIdentityId = getCurrentUserIdentityId();
-    DocumentFolderFilter filter = new DocumentFolderFilter(parentFolderId, null, null, null);
+                                             String fileName,
+                                             Set<String> beforeFileIds) throws ObjectNotFoundException,
+                                                                        IllegalAccessException {
     for (int attempt = 0; attempt < IMPORT_POLL_MAX_ATTEMPTS; attempt++) {
-      List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, userIdentityId);
-      DocumentFileModel match = children.stream()
-                                        .filter(FileNode.class::isInstance)
-                                        .map(FileNode.class::cast)
-                                        .filter(file -> StringUtils.equalsIgnoreCase(file.getName(), fileName))
-                                        .reduce((first, second) -> second)
-                                        .map(this::toDocumentFileModel)
-                                        .orElse(null);
+      DocumentModel match = resolveAddedChildFile(parentFolderId, beforeFileIds);
       if (match != null) {
         return match;
       }
@@ -1110,6 +1257,40 @@ public class DocumentMcpTool implements McpToolPlugin {
         The document '%s' was uploaded and is being created in the background.
         Call list_folder_children on folder %s in a few seconds to retrieve it.
         """.formatted(fileName, parentFolderId));
+  }
+
+  /**
+   * Lists the file ids currently under a folder, used to snapshot a destination
+   * before an operation that adds a file (import / copy / duplicate) so the newly
+   * created node can be identified afterwards.
+   */
+  private Set<String> currentChildFileIds(String folderId) throws ObjectNotFoundException, IllegalAccessException {
+    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
+    return documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, getCurrentUserIdentityId())
+                              .stream()
+                              .filter(FileNode.class::isInstance)
+                              .map(AbstractNode::getId)
+                              .collect(java.util.stream.Collectors.toSet());
+  }
+
+  /**
+   * Resolves the file that was just added to a folder as the child file whose id
+   * is not in the pre-operation snapshot; returns {@code null} if none is found
+   * yet.
+   */
+  private DocumentModel resolveAddedChildFile(String folderId,
+                                              Set<String> beforeFileIds) throws ObjectNotFoundException,
+                                                                         IllegalAccessException {
+    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
+    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE,
+                                                                          getCurrentUserIdentityId());
+    return children.stream()
+                   .filter(FileNode.class::isInstance)
+                   .map(FileNode.class::cast)
+                   .filter(file -> !beforeFileIds.contains(file.getId()))
+                   .reduce((first, second) -> second)
+                   .map(this::toDocumentFileModel)
+                   .orElse(null);
   }
 
   private static byte[] zipSingleEntry(String entryName, byte[] content) {

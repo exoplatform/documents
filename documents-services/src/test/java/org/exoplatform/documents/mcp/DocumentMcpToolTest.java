@@ -20,17 +20,22 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -56,6 +61,7 @@ import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.NodePermission;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
@@ -243,6 +249,32 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void getDocumentsByFolderIdFilesOnlyExcludesFolders() throws Exception {
+    List<AbstractNode> items = List.of(fileNode(DOCUMENT_ID, "application/pdf"), folderNode(FOLDER_ID));
+    Mockito.<List<? extends AbstractNode>>when(documentFileService.getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean()))
+           .thenReturn(items);
+
+    List<DocumentModel> models = documentMcpTool.getDocumentsByFolderId(FOLDER_ID, Boolean.TRUE, null, null, null);
+
+    // files_only=true must keep only the file, dropping the folder.
+    assertEquals(1, models.size());
+    assertEquals(DOCUMENT_ID, models.get(0).getId());
+  }
+
+  @Test
+  public void getDocumentsByFolderIdFoldersOnlyExcludesFiles() throws Exception {
+    List<AbstractNode> items = List.of(fileNode(DOCUMENT_ID, "application/pdf"), folderNode(FOLDER_ID));
+    Mockito.<List<? extends AbstractNode>>when(documentFileService.getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean()))
+           .thenReturn(items);
+
+    List<DocumentModel> models = documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, Boolean.TRUE, null, null);
+
+    // folders_only=true must keep only the folder, dropping the file.
+    assertEquals(1, models.size());
+    assertEquals(FOLDER_ID, models.get(0).getId());
+  }
+
+  @Test
   public void searchDocuments() throws Exception {
     when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
                                     eq(currentIdentity),
@@ -393,6 +425,25 @@ public class DocumentMcpToolTest {
     assertNotNull(model);
     assertEquals(USER_IDENTITY_ID, model.ownerId());
     assertEquals(4096L, model.sizeInBytes());
+    // Fresh, non-zero, today's stat -> no on-demand compute needed.
+    verify(documentFileService, never()).addDocumentsSizeStat(anyLong(), anyLong());
+  }
+
+  @Test
+  public void getDocumentsSizeComputesWhenStatMissing() throws Exception {
+    // No stat written yet -> getDocumentsSizeStat returns an empty (owner 0, size 0) value.
+    when(documentFileService.getDocumentsSizeStat(USER_IDENTITY_ID, USER_IDENTITY_ID))
+        .thenReturn(new DocumentsSize(0L, 0L, 0L, 0L, 0L, false, 0L));
+    when(documentFileService.addDocumentsSizeStat(USER_IDENTITY_ID, USER_IDENTITY_ID))
+        .thenReturn(new DocumentsSize(USER_IDENTITY_ID, 8192L, 0L, 0L, 0L, true, 0L));
+
+    DocumentsSizeModel model = documentMcpTool.getDocumentsSize(null);
+
+    // The tool must trigger the compute path and return the real size for the correct owner,
+    // never the misleading owner_id 0 / size 0.
+    verify(documentFileService).addDocumentsSizeStat(USER_IDENTITY_ID, USER_IDENTITY_ID);
+    assertEquals(USER_IDENTITY_ID, model.ownerId());
+    assertEquals(8192L, model.sizeInBytes());
   }
 
   @Test
@@ -452,7 +503,9 @@ public class DocumentMcpToolTest {
   public void createDocumentTextExtensionSucceeds() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    // First call = pre-import snapshot (empty), second call = after import (the new file).
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
         .thenReturn(List.of(fileNodeNamed("doc-txt", "notes.txt")));
 
     // The name is used as-is (it already carries a .txt extension).
@@ -460,12 +513,14 @@ public class DocumentMcpToolTest {
 
     assertNotNull(model);
     assertEquals("doc-txt", model.getId());
-    // folderPath must be null (parent resolved from the folder id) and conflict "rename".
+    // folderPath must be null (parent resolved from the folder id) and conflict
+    // "duplicate" (NOT "rename": the async import thread only understands
+    // "updateAll"/"duplicate", so "rename" silently creates nothing on a clash).
     verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
                                             eq(FOLDER_ID),
                                             isNull(),
                                             any(),
-                                            eq("rename"),
+                                            eq("duplicate"),
                                             eq(currentIdentity),
                                             eq(USER_IDENTITY_ID));
   }
@@ -519,6 +574,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
         .thenReturn(List.of(fileNodeNamed("upl-1", "hello.txt")));
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
 
@@ -530,7 +586,7 @@ public class DocumentMcpToolTest {
                                             eq(FOLDER_ID),
                                             isNull(),
                                             any(),
-                                            eq("rename"),
+                                            eq("duplicate"),
                                             eq(currentIdentity),
                                             eq(USER_IDENTITY_ID));
   }
@@ -540,6 +596,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
         .thenReturn(List.of(fileNodeNamed("upl-att", "screenshot.png")));
     // The client injects a platform attachment reference; the tool resolves its
     // bytes as the current user (ACL enforced) via the social AttachmentService.
@@ -562,7 +619,7 @@ public class DocumentMcpToolTest {
                                             eq(FOLDER_ID),
                                             isNull(),
                                             any(),
-                                            eq("rename"),
+                                            eq("duplicate"),
                                             eq(currentIdentity),
                                             eq(USER_IDENTITY_ID));
   }
@@ -605,17 +662,19 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void moveDocumentDefaultsConflictActionToRename() throws Exception {
+  public void moveDocumentDefaultsConflictActionToKeepBoth() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
 
     documentMcpTool.moveDocument(DOCUMENT_ID, FOLDER_ID, null);
 
+    // "keepBoth" is the only rename-style conflict value the storage honours;
+    // the old default "rename" was ignored (fell through to ObjectAlreadyExists).
     verify(documentFileService).moveDocument(eq(OWNER_ID),
                                              eq(DOCUMENT_ID),
                                              eq("/documents/Projects"),
                                              eq(USER_IDENTITY_ID),
-                                             eq("rename"));
+                                             eq("keepBoth"));
   }
 
   @Test
@@ -624,25 +683,41 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void copyDocument() throws Exception {
-    when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(fileNode("copy-1", "application/pdf"));
+  public void copyDocumentReturnsResolvedCopyNotDestinationFolder() throws Exception {
+    // The storage copyDocument returns the DESTINATION FOLDER node (not the copy);
+    // the tool must re-resolve the newly added file in the destination folder.
+    when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
+        .thenReturn(List.of(fileNodeNamed("copy-1", "report.pdf")));
 
     DocumentModel model = documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID);
 
     assertNotNull(model);
+    // Must be the resolved copied file, NOT the destination folder id the storage returned.
     assertEquals("copy-1", model.getId());
+    assertFalse(FOLDER_ID.equals(model.getId()));
   }
 
   @Test
-  public void duplicateDocument() throws Exception {
+  public void duplicateDocumentReturnsResolvedDuplicateNotParentFolder() throws Exception {
+    // The storage duplicateDocument returns the PARENT FOLDER node (not the
+    // duplicate); the tool must re-resolve the newly added file in the parent.
+    FileNode source = fileNode(DOCUMENT_ID, "application/pdf");
+    source.setParentFolderId(FOLDER_ID);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(source);
     when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.duplicateDocument(OWNER_ID, DOCUMENT_ID, "Copy of", USER_IDENTITY_ID)).thenReturn(fileNode("dup-1",
-                                                                                                                        "application/pdf"));
+    when(documentFileService.duplicateDocument(OWNER_ID, DOCUMENT_ID, "Copy of", USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of(source))
+        .thenReturn(List.of(source, fileNodeNamed("dup-1", "report(1).pdf")));
 
     DocumentModel model = documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of");
 
     assertNotNull(model);
+    // Must be the resolved duplicate (the newly added file), NOT the parent folder.
     assertEquals("dup-1", model.getId());
+    assertFalse(FOLDER_ID.equals(model.getId()));
   }
 
   @Test
@@ -651,9 +726,11 @@ public class DocumentMcpToolTest {
 
     documentMcpTool.deleteDocument(DOCUMENT_ID);
 
+    // favorite=true so a favorited file is also dropped from favorites on delete
+    // (the storage cleanup uses object type "file").
     verify(documentFileService).deleteDocument(eq("/documents/report.pdf"),
                                                eq(DOCUMENT_ID),
-                                               eq(false),
+                                               eq(true),
                                                eq(0L),
                                                eq(USER_IDENTITY_ID));
   }
@@ -666,10 +743,26 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void undoDeleteDocument() {
+  public void undoDeleteDocumentRestoresFromTrash() throws Exception {
+    // After an immediate delete the node lives in trash but keeps its id; undo must
+    // actually restore it from trash (the delayed-delete cancel path is a no-op).
+    FileNode trashed = fileNode(DOCUMENT_ID, "application/pdf");
+    trashed.setPath("/Trash/report.pdf");
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(trashed);
+
     documentMcpTool.undoDeleteDocument(DOCUMENT_ID);
 
-    verify(documentFileService).undoDeleteDocument(eq(DOCUMENT_ID), eq(USER_IDENTITY_ID));
+    verify(documentFileService).restoreDocumentFromTrash(eq("/Trash/report.pdf"));
+    // It must NOT rely on the no-op delayed-delete cancel.
+    verify(documentFileService, never()).undoDeleteDocument(anyString(), anyLong());
+  }
+
+  @Test
+  public void undoDeleteDocumentNotFoundFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenThrow(new ObjectNotFoundException("gone"));
+
+    // Never silently succeed: a document no longer in trash must surface a clear error.
+    assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
   }
 
   @Test
@@ -688,15 +781,25 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void updateVersionSummary() {
-    FileVersion updated = fileVersion();
-    updated.setSummary("new summary");
-    when(documentFileService.updateVersionSummary(DOCUMENT_ID, "version-1", "new summary", USERNAME)).thenReturn(updated);
+  public void updateVersionSummaryRereadsFullVersion() {
+    // Storage updateVersionSummary returns a near-empty FileVersion (only id + summary);
+    // the tool must re-read the full version so number/author/dates/size are populated.
+    FileVersion stamped = new FileVersion();
+    stamped.setId("version-1");
+    stamped.setSummary("new summary");
+    when(documentFileService.updateVersionSummary(DOCUMENT_ID, "version-1", "new summary", USERNAME)).thenReturn(stamped);
+    FileVersion full = fileVersion();
+    full.setSummary("new summary");
+    when(documentFileService.getFileVersions(DOCUMENT_ID, USERNAME)).thenReturn(List.of(full));
 
     DocumentVersionModel model = documentMcpTool.updateVersionSummary(DOCUMENT_ID, "version-1", "new summary");
 
     assertNotNull(model);
     assertEquals("new summary", model.summary());
+    // Fields that only the full re-read carries:
+    assertEquals(2, model.versionNumber());
+    assertEquals("Test User", model.authorFullName());
+    assertTrue(model.current());
   }
 
   @Test
@@ -775,19 +878,29 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
     Date expiration = new Date(1893456000000L);
     PublicDocumentAccess access = new PublicDocumentAccess(1L, DOCUMENT_ID, null, null, expiration);
-    access.setDecodedPassword("s3cret");
+    access.setDecodedPassword("s3cretPass");
     when(publicDocumentAccessService.createPublicDocumentAccess(eq(USER_IDENTITY_ID),
                                                                eq(DOCUMENT_ID),
-                                                               eq("s3cret"),
+                                                               eq("s3cretPass"),
                                                                anyLong(),
                                                                anyBoolean())).thenReturn(access);
 
-    DocumentPublicLinkModel model = documentMcpTool.createPublicLink(DOCUMENT_ID, "s3cret", expiration.getTime());
+    DocumentPublicLinkModel model = documentMcpTool.createPublicLink(DOCUMENT_ID, "s3cretPass", expiration.getTime());
 
     assertNotNull(model);
     assertEquals("/portal/download-document/" + DOCUMENT_ID, model.url());
-    assertEquals("s3cret", model.password());
+    assertEquals("s3cretPass", model.password());
     assertNotNull(model.expirationDate());
+  }
+
+  @Test
+  public void createPublicLinkRejectsInvalidPassword() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    // Too short for the same password policy DocumentFileRest applies (min 9 chars).
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createPublicLink(DOCUMENT_ID, "short", null));
+    verify(publicDocumentAccessService, never()).createPublicDocumentAccess(anyLong(), anyString(), anyString(), anyLong(), anyBoolean());
   }
 
   @Test
@@ -799,13 +912,15 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void createDocumentShortcutDefaultsConflictToRename() throws Exception {
+  public void createDocumentShortcutDefaultsConflictToKeepBoth() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
 
     documentMcpTool.createDocumentShortcut(DOCUMENT_ID, FOLDER_ID, null);
 
-    verify(documentFileService).createShortcut(eq(DOCUMENT_ID), eq("/documents/Projects"), eq(USERNAME), eq("rename"));
+    // "keepBoth" is the only value the storage handleShortcutDocConflict honours;
+    // the old default "rename" fell through to ObjectAlreadyExists on a clash.
+    verify(documentFileService).createShortcut(eq(DOCUMENT_ID), eq("/documents/Projects"), eq(USERNAME), eq("keepBoth"));
   }
 
   @Test
@@ -823,7 +938,18 @@ public class DocumentMcpToolTest {
 
     documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null);
 
-    verify(documentFileService).shareDocument(eq(DOCUMENT_ID), eq(200L), eq(USER_IDENTITY_ID), eq(true));
+    // Must route through updatePermissions (grant + share), not the bare shareDocument
+    // that only copies the recipient's pre-existing permissions onto the symlink.
+    verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
+                                                  argThat((NodePermission np) -> np.getToShare().containsKey(200L)
+                                                                                 && np.getToNotify().containsKey(200L)
+                                                                                 && np.getPermissions()
+                                                                                      .stream()
+                                                                                      .anyMatch(p -> p.getIdentity()
+                                                                                                      .getIdentityId() == 200L
+                                                                                                     && "read".equals(p.getPermission()))),
+                                                  eq(USER_IDENTITY_ID));
+    verify(documentFileService, never()).shareDocument(anyString(), anyLong(), anyLong(), anyBoolean());
   }
 
   @Test
@@ -840,7 +966,11 @@ public class DocumentMcpToolTest {
 
     documentMcpTool.shareDocument(DOCUMENT_ID, null, SPACE_ID, false);
 
-    verify(documentFileService).shareDocument(eq(DOCUMENT_ID), eq(300L), eq(USER_IDENTITY_ID), eq(false));
+    // notify=false -> the recipient is in toShare (granted access) but not in toNotify.
+    verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
+                                                  argThat((NodePermission np) -> np.getToShare().containsKey(300L)
+                                                                                 && np.getToNotify().isEmpty()),
+                                                  eq(USER_IDENTITY_ID));
   }
 
   @Test
@@ -867,22 +997,29 @@ public class DocumentMcpToolTest {
 
     documentMcpTool.favoriteDocument(DOCUMENT_ID);
 
-    org.mockito.ArgumentCaptor<Favorite> captor = org.mockito.ArgumentCaptor.forClass(Favorite.class);
-    verify(favoriteService).createFavorite(captor.capture());
-    assertEquals("document", captor.getValue().getObjectType());
-    assertEquals(DOCUMENT_ID, captor.getValue().getObjectId());
-    assertEquals(USER_IDENTITY_ID, captor.getValue().getUserIdentityId());
+    // Ground truth: file favorites are stored under object type "file" (the JCR node
+    // id), which is what the app's favorite button / drawer read. Not "document".
+    verify(favoriteService).createFavorite(argThat(f -> "file".equals(f.getObjectType())
+                                                        && DOCUMENT_ID.equals(f.getObjectId())
+                                                        && f.getUserIdentityId() == USER_IDENTITY_ID));
   }
 
   @Test
-  public void favoriteFolderUsesFolderObjectType() throws Exception {
+  public void favoriteFolderIsRejected() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
 
-    documentMcpTool.favoriteDocument(FOLDER_ID);
+    // Folders have no favorite surface in the app; favoriting one must throw rather
+    // than writing a "folder" favorite that nothing ever shows.
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.favoriteDocument(FOLDER_ID));
+    verify(favoriteService, never()).createFavorite(any());
+  }
 
-    org.mockito.ArgumentCaptor<Favorite> captor = org.mockito.ArgumentCaptor.forClass(Favorite.class);
-    verify(favoriteService).createFavorite(captor.capture());
-    assertEquals("folder", captor.getValue().getObjectType());
+  @Test
+  public void unfavoriteFolderIsRejected() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.unfavoriteDocument(FOLDER_ID));
+    verify(favoriteService, never()).deleteFavorite(any());
   }
 
   @Test

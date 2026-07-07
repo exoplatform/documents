@@ -327,7 +327,7 @@
     {
       "name": "list_document_versions",
       "title": "List DMS file versions",
-      "description": "Lists the versions of a versioned file, newest last. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "description": "Lists the versions of a versioned file, newest first. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -520,7 +520,8 @@
           },
           "conflict_action": {
             "type": "string",
-            "description": "Behaviour when a document with the same name exists in the destination. Defaults to 'rename'."
+            "enum": ["keepBoth", "createNewVersion"],
+            "description": "Behaviour when a document with the same name exists in the destination: 'keepBoth' moves it as a renamed copy, 'createNewVersion' replaces the existing file's content (keeping its version history). Defaults to 'keepBoth'."
           }
         },
         "required": [
@@ -825,7 +826,8 @@
           },
           "conflict_action": {
             "type": "string",
-            "description": "Behaviour when a node with the same name already exists in the destination. Defaults to 'rename'."
+            "enum": ["keepBoth"],
+            "description": "Behaviour when a node with the same name already exists in the destination: only 'keepBoth' is supported (creates the shortcut under a renamed entry). Defaults to 'keepBoth'."
           }
         },
         "required": [
@@ -844,7 +846,7 @@
     {
       "name": "share_document",
       "title": "Share a DMS file with a user or space",
-      "description": "Shares a document with another user or with a space: the recipient gets the file in their 'Shared' folder with the document's own permissions. Provide exactly one recipient: either username or space_id. Requires edit permission on the document. Call get_document_by_id first to get the document_id, search_users for a username, or get_my_spaces for a space_id.",
+      "description": "Shares a document with another user or with a space: the recipient is granted read access and gets the file in their 'Shared' folder. Provide exactly one recipient: either username or space_id. Requires edit permission on the document. Call get_document_by_id first to get the document_id, search_users for a username, or get_my_spaces for a space_id.",
       "input_schema": {
         "type": "object",
         "properties": {
