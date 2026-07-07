@@ -51,6 +51,8 @@ import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
+import org.exoplatform.services.cms.documents.NewDocumentTemplate;
+import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.activity.model.ExoSocialActivity;
@@ -229,6 +231,51 @@ public class JCRDocumentFileStorageTest {
     // Assert that the shared document event was not broadcast for member
     UTILS.verify(() -> Utils.broadcast(listenerService, "share_document_event", identity, currentNode), atLeast(0));
     verify(sessionProvider, atLeast(1)).close();
+  }
+
+  @Test
+  public void createDocumentFromTemplateMatchesDottedExtension() throws Exception {
+    // Regression: onlyoffice stores the template extension WITH a leading dot
+    // (".docx"). The caller passes "docx" (dot-stripped). The match must normalize
+    // the dot on both sides, otherwise ".docx".equalsIgnoreCase("docx") is always
+    // false and every call wrongly throws ObjectNotFoundException.
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(folderNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle("Q3 report.docx")).thenReturn(true);
+    // Grant the user edit access so countNodeAccessList reports canEdit=true.
+    AccessControlEntry editEntry = new AccessControlEntry("john", PermissionType.ADD_NODE);
+    when(folderNode.getACL()).thenReturn(new AccessControlList("john", Arrays.asList(editEntry)));
+
+    // A template whose extension carries the leading dot, as onlyoffice stores it.
+    NewDocumentTemplate template = mock(NewDocumentTemplate.class);
+    when(template.getExtension()).thenReturn(".docx");
+    NewDocumentTemplateProvider provider = mock(NewDocumentTemplateProvider.class);
+    when(provider.getTemplates()).thenReturn(Arrays.asList(template));
+    when(documentService.getNewDocumentTemplateProviders()).thenReturn(Arrays.asList(provider));
+
+    Node createdNode = mock(Node.class);
+    when(documentService.createDocumentFromTemplate(folderNode, "Q3 report.docx", template)).thenReturn(createdNode);
+    FileNode expected = new FileNode();
+    expected.setId("created-1");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, aclIdentity, createdNode, "", spaceService))
+                      .thenReturn(expected);
+
+    AbstractNode result = jcrDocumentFileStorage.createDocumentFromTemplate(0L, "1", null, "Q3 report.docx", "docx", aclIdentity);
+
+    // The dotted template must be matched (no ObjectNotFoundException) and used to
+    // create the document.
+    assertNotNull(result);
+    assertEquals("created-1", result.getId());
+    verify(documentService).createDocumentFromTemplate(folderNode, "Q3 report.docx", template);
   }
 
   @Test

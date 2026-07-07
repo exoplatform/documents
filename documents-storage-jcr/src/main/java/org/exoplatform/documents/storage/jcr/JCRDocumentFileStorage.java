@@ -1108,7 +1108,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             continue;
           }
           availableExtensions.add(candidate.getExtension());
-          if (candidate.getExtension().equalsIgnoreCase(extension)) {
+          // onlyoffice stores extensions with a leading dot (".docx"); the
+          // caller-provided extension is already dot-stripped above, so strip
+          // the candidate's dot too before comparing.
+          if (StringUtils.removeStart(candidate.getExtension(), ".").equalsIgnoreCase(extension)) {
             template = candidate;
             break;
           }

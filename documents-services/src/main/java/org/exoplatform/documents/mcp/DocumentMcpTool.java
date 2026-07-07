@@ -146,7 +146,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    * depends on the installed document editor add-on (onlyoffice).
    */
   private static final Set<String> SUPPORTED_TEMPLATE_TYPES =
-                                                            Set.of("docx", "xlsx", "pptx", "odt", "ods", "odp");
+                                                            Set.of("docx", "xlsx", "pptx");
 
   private final DocumentFileService documentFileService;
 
@@ -469,8 +469,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          get_documents_by_folder_id)
    * @param name the document name, WITHOUT extension (e.g. 'Q3 report'); the
    *          extension is appended automatically from documentType
-   * @param documentType the office document type: one of docx, xlsx, pptx, odt,
-   *          ods, odp. Availability depends on the installed editor add-on.
+   * @param documentType the office document type: one of docx, xlsx, pptx.
+   *          Availability depends on the installed editor add-on (onlyoffice).
    * @return the created document
    */
   public DocumentModel createDocumentFromTemplate(String parentFolderId,
@@ -693,13 +693,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public void undoDeleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    AbstractNode trashedNode;
-    try {
-      trashedNode = documentFileService.getDocumentById(documentId, getCurrentUserName());
-    } catch (ObjectNotFoundException e) {
-      throw new IllegalStateException(("Document %s can no longer be found (it may have been permanently deleted from the trash), "
-          + "so it cannot be restored.").formatted(documentId));
-    }
+    // Resolve the trashed node through the SYSTEM-session overload: all trash
+    // access in storage uses a system session, and a regular user session cannot
+    // read a node once it has been moved to trash. Using the user-session overload
+    // here would return null even though the node still exists, yielding a
+    // misleading "permanently deleted" error.
+    AbstractNode trashedNode = documentFileService.getDocumentById(documentId);
     if (trashedNode == null) {
       throw new IllegalStateException(("Document %s can no longer be found (it may have been permanently deleted from the trash), "
           + "so it cannot be restored.").formatted(documentId));
@@ -928,7 +927,14 @@ public class DocumentMcpTool implements McpToolPlugin {
     // (creates the symlink). The current collaborators are preserved so they are
     // not unshared by the storage's replace-then-unshare logic.
     List<PermissionEntry> permissions = preserveExistingCollaborators(node.getAcl());
-    permissions.add(new PermissionEntry(destIdentity, "read", PermissionRole.ALL.name()));
+    // Only grant the recipient "read" if it is not already a collaborator with an
+    // equal-or-greater permission. updatePermissions writes the map in list order,
+    // so appending (recipient,"read") after preserveExistingCollaborators already
+    // emitted (recipient,"edit") would silently DOWNGRADE the recipient to read
+    // (this also happens when a space document is shared back to its own space).
+    if (!alreadyGrantsAccess(permissions, destIdentity)) {
+      permissions.add(new PermissionEntry(destIdentity, "read", PermissionRole.ALL.name()));
+    }
     Map<Long, String> toShare = new HashMap<>();
     toShare.put(destId, "read");
     Map<Long, String> toNotify = new HashMap<>();
@@ -986,9 +992,27 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Adds a document (file or folder) to the current user's favorites.
+   * Whether the reconstructed collaborator list already contains the given
+   * identity with any grant (read or edit). When true, the share must NOT append
+   * a (recipient,"read") entry, as that would overwrite an existing higher grant
+   * (edit) when the storage writes the permissions map in list order.
+   */
+  private static boolean alreadyGrantsAccess(List<PermissionEntry> permissions, Identity identity) {
+    if (permissions == null || identity == null) {
+      return false;
+    }
+    return permissions.stream().anyMatch(entry -> {
+      Identity existing = entry.getIdentity();
+      return existing != null && StringUtils.equals(existing.getProviderId(), identity.getProviderId())
+             && StringUtils.equals(existing.getRemoteId(), identity.getRemoteId());
+    });
+  }
+
+  /**
+   * Adds a file to the current user's favorites. Only files can be favorited;
+   * folders have no favorites view in the Documents app.
    *
-   * @param documentId the id of the file or folder to mark as favorite
+   * @param documentId the id of the file to mark as favorite
    */
   public void favoriteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     Favorite favorite = toFavorite(documentId);
@@ -1000,9 +1024,10 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Removes a document (file or folder) from the current user's favorites.
+   * Removes a file from the current user's favorites. Only files can be
+   * favorited; folders have no favorites view in the Documents app.
    *
-   * @param documentId the id of the file or folder to remove from favorites
+   * @param documentId the id of the file to remove from favorites
    */
   public void unfavoriteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     Favorite favorite = toFavorite(documentId);

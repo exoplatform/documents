@@ -433,7 +433,7 @@
     {
       "name": "create_document_from_template",
       "title": "Create an empty office document from a template",
-      "description": "Creates a NEW EMPTY office document (Word, Excel, PowerPoint, or ODF) from the platform's blank template, ready to edit in the online editor. Use this when the user wants a blank Word/Excel/PowerPoint document to fill in — create_document CANNOT produce office files (they are structured packages, not text) and upload_document needs the real file bytes. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The file extension is added automatically from document_type, so pass 'name' without an extension. Availability of a given type depends on the installed document editor add-on (onlyoffice).",
+      "description": "Creates a NEW EMPTY office document (Word, Excel, or PowerPoint) from the platform's blank template, ready to edit in the online editor. Use this when the user wants a blank Word/Excel/PowerPoint document to fill in — create_document CANNOT produce office files (they are structured packages, not text) and upload_document needs the real file bytes. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The file extension is added automatically from document_type, so pass 'name' without an extension. Availability of a given type depends on the installed document editor add-on (onlyoffice).",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -451,10 +451,7 @@
             "enum": [
               "docx",
               "xlsx",
-              "pptx",
-              "odt",
-              "ods",
-              "odp"
+              "pptx"
             ]
           }
         },
@@ -923,14 +920,14 @@
     },
     {
       "name": "favorite_document",
-      "title": "Add a DMS file or folder to favorites",
-      "description": "Adds a document (file or folder) to the current user's favorites. Call get_document_by_id or get_documents_by_folder_id first to get the document_id.",
+      "title": "Add a DMS file to favorites",
+      "description": "Adds a file to the current user's favorites. Only files can be favorited; folders have no favorites view. Call get_document_by_id or get_documents_by_folder_id first to get the document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
           "document_id": {
             "type": "string",
-            "description": "The unique identifier of the file or folder to mark as favorite."
+            "description": "The unique identifier of the file to mark as favorite."
           }
         },
         "required": [
@@ -947,14 +944,14 @@
     },
     {
       "name": "unfavorite_document",
-      "title": "Remove a DMS file or folder from favorites",
-      "description": "Removes a document (file or folder) from the current user's favorites. Call get_document_by_id or get_documents_by_folder_id first to get the document_id.",
+      "title": "Remove a DMS file from favorites",
+      "description": "Removes a file from the current user's favorites. Only files can be favorited; folders have no favorites view. Call get_document_by_id or get_documents_by_folder_id first to get the document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
           "document_id": {
             "type": "string",
-            "description": "The unique identifier of the file or folder to remove from favorites."
+            "description": "The unique identifier of the file to remove from favorites."
           }
         },
         "required": [

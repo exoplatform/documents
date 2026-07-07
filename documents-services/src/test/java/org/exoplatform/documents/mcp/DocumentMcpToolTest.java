@@ -62,6 +62,8 @@ import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
 import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.documents.model.PermissionEntry;
+import org.exoplatform.documents.model.PermissionRole;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
@@ -852,18 +854,26 @@ public class DocumentMcpToolTest {
     // actually restore it from trash (the delayed-delete cancel path is a no-op).
     FileNode trashed = fileNode(DOCUMENT_ID, "application/pdf");
     trashed.setPath("/Trash/report.pdf");
-    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(trashed);
+    // The trashed node must be resolved through the SYSTEM-session overload
+    // (getDocumentById(id)), not the user-session one: trash lives under a system
+    // session and a regular user session cannot read the trashed node.
+    when(documentFileService.getDocumentById(DOCUMENT_ID)).thenReturn(trashed);
 
     documentMcpTool.undoDeleteDocument(DOCUMENT_ID);
 
     verify(documentFileService).restoreDocumentFromTrash(eq("/Trash/report.pdf"));
+    // It must use the system-session overload, NOT the user-session one (which would
+    // false-negative on a trashed node).
+    verify(documentFileService).getDocumentById(DOCUMENT_ID);
+    verify(documentFileService, never()).getDocumentById(DOCUMENT_ID, USERNAME);
     // It must NOT rely on the no-op delayed-delete cancel.
     verify(documentFileService, never()).undoDeleteDocument(anyString(), anyLong());
   }
 
   @Test
   public void undoDeleteDocumentNotFoundFails() throws Exception {
-    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenThrow(new ObjectNotFoundException("gone"));
+    // The system-session overload returns null when the node is genuinely gone.
+    when(documentFileService.getDocumentById(DOCUMENT_ID)).thenReturn(null);
 
     // Never silently succeed: a document no longer in trash must surface a clear error.
     assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
@@ -1093,6 +1103,50 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
 
     assertThrows(IllegalAccessException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null));
+  }
+
+  @Test
+  public void shareDocumentDoesNotDowngradeExistingEditor() throws Exception {
+    // The recipient already collaborates on the document with EDIT (an "add_node"
+    // raw JCR permission). Sharing must not append a (recipient,"read") entry after
+    // the preserved (recipient,"edit"), which the storage's list-ordered write would
+    // otherwise use to silently DOWNGRADE the recipient to read.
+    org.exoplatform.social.core.identity.model.Identity bob =
+                                                             new org.exoplatform.social.core.identity.model.Identity("200");
+    bob.setProviderId("organization");
+    bob.setRemoteId("bob");
+    when(identityManager.getOrCreateUserIdentity("bob")).thenReturn(bob);
+
+    org.exoplatform.social.core.identity.model.Identity bobInAcl =
+                                                                  new org.exoplatform.social.core.identity.model.Identity("200");
+    bobInAcl.setProviderId("organization");
+    bobInAcl.setRemoteId("bob");
+    FileNode node = fileNode(DOCUMENT_ID, "application/pdf");
+    node.setAcl(new NodePermission(true,
+                                   true,
+                                   false,
+                                   false,
+                                   List.of(new PermissionEntry(bobInAcl, "add_node", PermissionRole.ALL.name())),
+                                   new java.util.HashMap<>(),
+                                   new java.util.HashMap<>(),
+                                   null));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(node);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null);
+
+    verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
+                                                  argThat((NodePermission np) -> np.getPermissions()
+                                                                                   .stream()
+                                                                                   .anyMatch(p -> p.getIdentity()
+                                                                                                   .getIdentityId() == 200L
+                                                                                                  && "edit".equals(p.getPermission()))
+                                                                                 && np.getPermissions()
+                                                                                      .stream()
+                                                                                      .noneMatch(p -> p.getIdentity()
+                                                                                                       .getIdentityId() == 200L
+                                                                                                      && "read".equals(p.getPermission()))),
+                                                  eq(USER_IDENTITY_ID));
   }
 
   @Test
