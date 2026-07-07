@@ -456,13 +456,55 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void createDocumentTextExtensionSucceeds() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of(fileNodeNamed("doc-txt", "notes.txt")));
+
+    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "plain text body", "text/plain");
+
+    assertNotNull(model);
+    assertEquals("doc-txt", model.getId());
+    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
+                                            eq(FOLDER_ID),
+                                            isNull(),
+                                            any(),
+                                            eq("rename"),
+                                            eq(currentIdentity),
+                                            eq(USER_IDENTITY_ID));
+  }
+
+  @Test
   public void createDocumentBlankNameFails() {
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocument(FOLDER_ID, " ", "body", null));
   }
 
   @Test
-  public void createDocumentNullContentFails() {
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", null, null));
+  public void createDocumentOfficeExtensionFails() {
+    // .docx / .xlsx / .pptx / .pdf are structured/binary formats that cannot be
+    // built from a text string: fail up front with an LLM-directed message that
+    // names the extension and points to upload_document.
+    for (String name : new String[] { "report.docx", "budget.xlsx", "deck.pptx", "doc.pdf" }) {
+      IllegalArgumentException ex =
+                                   assertThrows(IllegalArgumentException.class,
+                                                () -> documentMcpTool.createDocument(FOLDER_ID, name, "some content", null));
+      String ext = name.substring(name.lastIndexOf('.') + 1);
+      assertTrue(ex.getMessage().contains("'" + ext + "'"));
+      assertTrue(ex.getMessage().contains("upload_document"));
+    }
+  }
+
+  @Test
+  public void createDocumentBlankContentFails() {
+    IllegalArgumentException nullContent =
+                                         assertThrows(IllegalArgumentException.class,
+                                                      () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", null, null));
+    assertTrue(nullContent.getMessage().contains("content is required"));
+    IllegalArgumentException blankContent =
+                                          assertThrows(IllegalArgumentException.class,
+                                                       () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", "  ", null));
+    assertTrue(blankContent.getMessage().contains("content is required"));
   }
 
   @Test

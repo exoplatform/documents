@@ -23,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -87,6 +88,17 @@ public class DocumentMcpTool implements McpToolPlugin {
   public static final String       FOLDER_URL_FORMAT = "/portal/dw/documents?folderId=%s";
 
   public static final String       FILE_URL_FORMAT   = "/portal/dw/documents?documentPreviewId=%s";
+
+  /**
+   * Structured / binary office and PDF formats that cannot be produced from a
+   * plain text string: they are zipped packages (OOXML/ODF) or a binary layout
+   * (PDF), so writing text content as the file body would yield a corrupt file.
+   * {@link #createDocument} rejects these up front and points to
+   * {@code upload_document} (real file bytes) instead.
+   */
+  private static final Set<String> UNSUPPORTED_BINARY_EXTENSIONS =
+                                                                 Set.of("docx", "xlsx", "pptx", "ppsx", "potx", "dotx", "xltx",
+                                                                        "xls", "doc", "ppt", "odt", "ods", "odp", "pdf");
 
   private final DocumentFileService documentFileService;
 
@@ -365,8 +377,15 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(name)) {
       throw new IllegalArgumentException("The 'name' parameter is mandatory to create a document (e.g. 'meeting-notes.md'). Ask the user for a document name.");
     }
-    if (content == null) {
-      throw new IllegalArgumentException("The 'content' parameter is mandatory. Provide the text, markdown or HTML body of the document.");
+    String extension = StringUtils.substringAfterLast(StringUtils.lowerCase(StringUtils.trimToEmpty(name)), ".");
+    if (UNSUPPORTED_BINARY_EXTENSIONS.contains(extension)) {
+      throw new IllegalArgumentException(("create_document writes text content as the file body, so it cannot produce a valid"
+          + " '%s' file — office and PDF formats are structured packages, not text. Creating an empty office document from a"
+          + " template isn't supported yet. For text use .txt/.md/.html, or use upload_document with the real file bytes"
+          + " (base64, url, or a file attached in the conversation).").formatted(extension));
+    }
+    if (StringUtils.isBlank(content)) {
+      throw new IllegalArgumentException("content is required to create a document (the text to write into the file).");
     }
     String resolvedMime = resolveMimeType(name, mimeType);
     String fileName = ensureExtension(name, resolvedMime);
@@ -421,34 +440,44 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     byte[] bytes;
     String fileName = name;
-    if (hasAttachment) {
-      // Reuse UploadToolUtils.resolveImage's attachment branch: it resolves the
-      // referenced file to its raw bytes as the current user (ACL enforced) and,
-      // unlike its base64/url branches, does NOT constrain to image mime types —
-      // so any attached file works. Pass null url/base64 to stay on that branch.
-      UploadToolUtils.FetchedContent fetched = UploadToolUtils.resolveImage(socialAttachmentService,
-                                                                          fileService,
-                                                                          getCurrentUserAclIdentity(),
-                                                                          null,
-                                                                          null,
-                                                                          attachmentObjectType,
-                                                                          attachmentObjectId,
-                                                                          UploadToolUtils.DEFAULT_MAX_BYTES);
-      bytes = fetched.bytes();
-      if (StringUtils.isBlank(fileName)) {
-        fileName = fetched.fileName();
+    try {
+      if (hasAttachment) {
+        // Reuse UploadToolUtils.resolveImage's attachment branch: it resolves the
+        // referenced file to its raw bytes as the current user (ACL enforced) and,
+        // unlike its base64/url branches, does NOT constrain to image mime types —
+        // so any attached file works. Pass null url/base64 to stay on that branch.
+        UploadToolUtils.FetchedContent fetched = UploadToolUtils.resolveImage(socialAttachmentService,
+                                                                            fileService,
+                                                                            getCurrentUserAclIdentity(),
+                                                                            null,
+                                                                            null,
+                                                                            attachmentObjectType,
+                                                                            attachmentObjectId,
+                                                                            UploadToolUtils.DEFAULT_MAX_BYTES);
+        bytes = fetched.bytes();
+        if (StringUtils.isBlank(fileName)) {
+          fileName = fetched.fileName();
+        }
+      } else if (hasBase64) {
+        if (StringUtils.isBlank(name)) {
+          throw new IllegalArgumentException("The 'name' parameter is mandatory when uploading from base64; it becomes the document file name (e.g. 'report.pdf').");
+        }
+        bytes = UploadToolUtils.decodeBase64(base64);
+      } else {
+        UploadToolUtils.FetchedContent fetched = UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, name);
+        bytes = fetched.bytes();
+        if (StringUtils.isBlank(fileName)) {
+          fileName = fetched.fileName();
+        }
       }
-    } else if (hasBase64) {
-      if (StringUtils.isBlank(name)) {
-        throw new IllegalArgumentException("The 'name' parameter is mandatory when uploading from base64; it becomes the document file name (e.g. 'report.pdf').");
-      }
-      bytes = UploadToolUtils.decodeBase64(base64);
-    } else {
-      UploadToolUtils.FetchedContent fetched = UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, name);
-      bytes = fetched.bytes();
-      if (StringUtils.isBlank(fileName)) {
-        fileName = fetched.fileName();
-      }
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      // Already an LLM-directed message (bad source, HTTP error, SSRF block,
+      // size cap, invalid base64…): the MCP wrapper passes these through verbatim.
+      throw e;
+    } catch (RuntimeException e) {
+      // Any other unexpected failure of the resolve/fetch path: rethrow as an
+      // LLM-directed type so it isn't swallowed by the generic wrapper message.
+      throw new IllegalStateException("Could not read the file to upload from the given source: " + e.getMessage());
     }
     return importContent(parentFolderId, fileName, bytes);
   }
