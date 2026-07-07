@@ -147,15 +147,31 @@ public abstract class WebDavHttpMethodPlugin {
 
   protected String getResourcePath(HttpServletRequest httpRequest) {
     String resourcePath = Arrays.stream(httpRequest.getRequestURI().substring(getBaseUri(httpRequest).length()).split("/"))
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(s -> decodePathSegment(s))
                                 .collect(Collectors.joining("/"));
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
+  }
+
+  /**
+   * Decodes a WebDAV URL path segment while preserving literal "+" characters.
+   * URLDecoder.decode() applies application/x-www-form-urlencoded rules and
+   * turns "+" into a space, which is wrong for URL path segments where "+" is a
+   * literal character (e.g. a file named "test + test.pdf"). Escaping "+" to
+   * "%2B" first keeps it intact while still decoding genuine percent-encoded
+   * sequences. The operation is idempotent so it stays correct even when a
+   * value is decoded again further down the WebDAV path pipeline.
+   *
+   * @param segment URL-encoded path segment
+   * @return decoded segment with literal "+" preserved
+   */
+  protected static String decodePathSegment(String segment) {
+    return URLDecoder.decode(segment.replace("+", "%2B"), StandardCharsets.UTF_8);
   }
 
   @SneakyThrows
   protected URI getResourceUri(HttpServletRequest httpRequest) {
     return new URI(getBaseUrl(httpRequest) + Arrays.stream(getResourcePath(httpRequest).split("/"))
-                                                   .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                                   .map(s -> decodePathSegment(s))
                                                    .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20"))
                                                    .collect(Collectors.joining("/")));
   }
@@ -196,7 +212,7 @@ public abstract class WebDavHttpMethodPlugin {
                                                                  .split(getBaseUri(httpRequest)))
                                               .getLast()
                                               .split("/"))
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(s -> decodePathSegment(s))
                                 .collect(Collectors.joining("/"));
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
   }

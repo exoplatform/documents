@@ -29,13 +29,12 @@ import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_V
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FILE;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_RESOURCE;
+import static org.exoplatform.documents.storage.jcr.util.Utils.decodeUrlPreservingPlus;
 import static org.exoplatform.documents.storage.jcr.util.Utils.encodeNodeName;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getStatusDescription;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
@@ -196,7 +195,7 @@ public class WebdavWriteCommandHandler {
     if (session.itemExists(jcrPath)) {
       Node existingNode = (Node) session.getItem(jcrPath);
       String existingNodeWebDavPath = pathCommandHandler.getOrCreateWebDavPath(existingNode);
-      if (StringUtils.equals(URLDecoder.decode(existingNodeWebDavPath, StandardCharsets.UTF_8),
+      if (StringUtils.equals(decodeUrlPreservingPlus(existingNodeWebDavPath),
                              webDavPath)) {
         node = existingNode;
       } else {

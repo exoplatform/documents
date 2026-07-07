@@ -84,4 +84,24 @@ public class Utils {
                .replace("*", "%2a");
   }
 
+  /**
+   * Decodes a URL-encoded value while preserving literal "+" characters.
+   * URLDecoder.decode() follows application/x-www-form-urlencoded rules and
+   * turns "+" into a space, which is wrong for URL path segments (and file or
+   * folder names) where "+" is a literal character - e.g. "test + test.pdf".
+   * Escaping "+" to "%2B" before decoding keeps it intact while still decoding
+   * genuine percent-encoded sequences (e.g. "%5b" -> "["). The operation is
+   * idempotent, so it stays correct even when a value is decoded more than once
+   * (the WebDAV path pipeline decodes segments at several layers).
+   *
+   * @param value URL-encoded value (may be null)
+   * @return decoded value with literal "+" preserved, or null if the input was null
+   */
+  public static String decodeUrlPreservingPlus(String value) {
+    if (value == null) {
+      return null;
+    }
+    return URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
+  }
+
 }

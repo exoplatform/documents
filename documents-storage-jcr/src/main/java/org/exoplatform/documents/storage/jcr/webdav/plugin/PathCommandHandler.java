@@ -41,7 +41,6 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
 
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -248,7 +247,7 @@ public class PathCommandHandler {
       String[] pathParts = webDavPath.split("/");
       String identityPart = Arrays.stream(pathParts)
                                   .filter(StringUtils::isNotBlank)
-                                  .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                  .map(s -> Utils.decodeUrlPreservingPlus(s))
                                   .findFirst()
                                   .orElse(null);
       String identityId = null;
@@ -292,7 +291,7 @@ public class PathCommandHandler {
         Item existingItem = session.getItem(legacyChildJcrPath);
         if (existingItem instanceof Node existingNode) {
           String existingWebDavPath = getOrCreateWebDavPath(existingNode);
-          String decodedExistingWebDavPath = URLDecoder.decode(existingWebDavPath, StandardCharsets.UTF_8);
+          String decodedExistingWebDavPath = Utils.decodeUrlPreservingPlus(existingWebDavPath);
           String decodedExistingWebDavPathPrefix = StringUtils.removeEnd(decodedExistingWebDavPath, "/") + "/"; // NOSONAR
           if (webDavPath.startsWith(decodedExistingWebDavPathPrefix)
               || webDavPath.equals(decodedExistingWebDavPath)) {
@@ -314,7 +313,7 @@ public class PathCommandHandler {
     return Arrays.stream(webDavPath.split("/"))
                  .filter(StringUtils::isNotBlank)
                  .reduce((first, second) -> second)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(s -> Utils.decodeUrlPreservingPlus(s))
                  .orElse("");
   }
 
@@ -516,7 +515,7 @@ public class PathCommandHandler {
   private List<String> splitDecodedSegments(String relativeWebDavPath) {
     return Arrays.stream(relativeWebDavPath.split("/"))
                  .filter(StringUtils::isNotBlank)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(s -> Utils.decodeUrlPreservingPlus(s))
                  .toList();
   }
 
@@ -524,7 +523,7 @@ public class PathCommandHandler {
     String[] pathParts = webDavPath.split("/");
     return Arrays.stream(pathParts)
                  .filter(StringUtils::isNotBlank)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(s -> Utils.decodeUrlPreservingPlus(s))
                  .map(Utils::encodeNodeName)
                  .skip(1)
                  .collect(Collectors.joining("/"));
@@ -692,7 +691,7 @@ public class PathCommandHandler {
     }
     String normalized = Arrays.stream(webDavPath.split("/"))
                               .filter(StringUtils::isNotBlank)
-                              .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                              .map(s -> Utils.decodeUrlPreservingPlus(s))
                               .map(this::encodeUrlString)
                               .collect(Collectors.joining("/"));
     return "/" + normalized;
@@ -708,7 +707,7 @@ public class PathCommandHandler {
     String firstSegment = Arrays.stream(webDavPath.split("/"))
                                 .filter(StringUtils::isNotBlank)
                                 .findFirst()
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(s -> Utils.decodeUrlPreservingPlus(s))
                                 .orElse(null);
     if (firstSegment != null && firstSegment.endsWith(")") && firstSegment.contains("(")) {
       return firstSegment.substring(firstSegment.lastIndexOf('(') + 1, firstSegment.lastIndexOf(')'));
@@ -728,7 +727,7 @@ public class PathCommandHandler {
     return Arrays.stream(StringUtils.defaultString(webDavPath).split("/"))
                  .filter(StringUtils::isNotBlank)
                  .reduce((first, second) -> second)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(s -> Utils.decodeUrlPreservingPlus(s))
                  .orElse(null);
   }
 
