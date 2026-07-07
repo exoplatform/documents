@@ -82,6 +82,10 @@ public class DocumentMcpToolTest {
 
   private AttachmentService              attachmentService;
 
+  private org.exoplatform.social.attachment.AttachmentService socialAttachmentService;
+
+  private org.exoplatform.commons.file.services.FileService    fileService;
+
   private IdentityManager                identityManager;
 
   private SpaceService                   spaceService;
@@ -94,6 +98,8 @@ public class DocumentMcpToolTest {
   public void setUp() {
     documentFileService = Mockito.mock(DocumentFileService.class);
     attachmentService = Mockito.mock(AttachmentService.class);
+    socialAttachmentService = Mockito.mock(org.exoplatform.social.attachment.AttachmentService.class);
+    fileService = Mockito.mock(org.exoplatform.commons.file.services.FileService.class);
     identityManager = Mockito.mock(IdentityManager.class);
     spaceService = Mockito.mock(SpaceService.class);
     TranslationService translationService = Mockito.mock(TranslationService.class);
@@ -109,6 +115,8 @@ public class DocumentMcpToolTest {
 
     documentMcpTool = new DocumentMcpTool(documentFileService,
                                           attachmentService,
+                                          socialAttachmentService,
+                                          fileService,
                                           identityManager,
                                           spaceService,
                                           translationService,
@@ -432,6 +440,8 @@ public class DocumentMcpToolTest {
     // 'notes' has no extension: with text/markdown it becomes 'notes.md'.
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(List.of(fileNodeNamed("doc-created", "notes.md")));
+    // After the mime override the tool re-reads the created document by id.
+    when(documentFileService.getDocumentById("doc-created", USERNAME)).thenReturn(fileNodeNamed("doc-created", "notes.md"));
 
     DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes", "# Hello", "text/markdown");
 
@@ -445,6 +455,9 @@ public class DocumentMcpToolTest {
                                             eq("rename"),
                                             eq(currentIdentity),
                                             eq(USER_IDENTITY_ID));
+    // The requested mime type is forced on the stored file (importFiles would
+    // otherwise leave .md as application/octet-stream).
+    verify(documentFileService).updateDocumentMimeType(eq("doc-created"), eq("text/markdown"), eq(USER_IDENTITY_ID));
   }
 
   @Test
@@ -465,7 +478,7 @@ public class DocumentMcpToolTest {
         .thenReturn(List.of(fileNodeNamed("upl-1", "hello.txt")));
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
 
-    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null);
+    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null);
 
     assertNotNull(model);
     assertEquals("upl-1", model.getId());
@@ -479,19 +492,63 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void uploadDocumentFromChatAttachment() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of(fileNodeNamed("upl-att", "screenshot.png")));
+    // The client injects a platform attachment reference; the tool resolves its
+    // bytes as the current user (ACL enforced) via the social AttachmentService.
+    when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity)))
+        .thenReturn(List.of("999"));
+    org.exoplatform.commons.file.model.FileItem fileItem = Mockito.mock(org.exoplatform.commons.file.model.FileItem.class);
+    org.exoplatform.commons.file.model.FileInfo fileInfo = Mockito.mock(org.exoplatform.commons.file.model.FileInfo.class);
+    when(fileItem.getAsByte()).thenReturn("PNGBYTES".getBytes());
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(fileInfo.getMimetype()).thenReturn("image/png");
+    when(fileInfo.getName()).thenReturn("screenshot.png");
+    when(fileService.getFile(999L)).thenReturn(fileItem);
+
+    // name left blank -> reused from the resolved attachment file name.
+    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77");
+
+    assertNotNull(model);
+    assertEquals("upl-att", model.getId());
+    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
+                                            eq(FOLDER_ID),
+                                            isNull(),
+                                            any(),
+                                            eq("rename"),
+                                            eq(currentIdentity),
+                                            eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void uploadDocumentUnknownAttachmentFails() throws Exception {
+    when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity)))
+        .thenReturn(java.util.Collections.emptyList());
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77"));
+  }
+
+  @Test
   public void uploadDocumentRequiresExactlyOneSource() {
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
-    // neither base64 nor url
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, null));
+    // no source at all
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, null, null, null));
     // both base64 and url
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, "https://example.com/x.txt"));
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, "https://example.com/x.txt", null, null));
+    // both an attachment and base64
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, null, "activity", "77"));
   }
 
   @Test
   public void uploadDocumentBase64RequiresName() {
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, " ", base64, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, " ", base64, null, null, null));
   }
 
   @Test

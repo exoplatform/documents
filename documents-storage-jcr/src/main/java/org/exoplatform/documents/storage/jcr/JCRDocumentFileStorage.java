@@ -2135,6 +2135,41 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public void updateDocumentMimeType(String documentId,
+                                     String mimeType,
+                                     Identity aclIdentity) throws IllegalStateException, RepositoryException {
+    String path = null;
+    SessionProvider sessionProvider = null;
+    try { // NOSONAR
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      path = node == null ? null : node.getPath();
+      if (node == null || !JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new AccessDeniedException("User doesn't have edit permission on file '%s'".formatted(path == null ? documentId
+                                                                                                               : path));
+      }
+      // The binary + its mime type live on the nt:resource child node
+      // (jcr:content / jcr:mimeType), not on the nt:file node itself.
+      if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+        Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+        content.setProperty(NodeTypeConstants.JCR_MIME_TYPE, mimeType);
+        session.save();
+      }
+    } catch (AccessDeniedException e) {
+      throw e;
+    } catch (RepositoryException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IllegalStateException("Error updating mime type of document '%s'".formatted(path == null ? documentId : path), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
   public void updateAudioTranscription(String documentId, String transcription) {
     String path = null;
     SessionProvider sessionProvider = null;

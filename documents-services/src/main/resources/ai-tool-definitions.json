@@ -437,7 +437,7 @@
     {
       "name": "upload_document",
       "title": "Upload a file to the DMS",
-      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
+      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder. Use this when the user attaches a file or image in the conversation and asks to save it to the Documents app (the attachment is resolved automatically server-side), or from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -447,15 +447,23 @@
           },
           "name": {
             "type": "string",
-            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with url (the name is then derived from the URL)."
+            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with url or a chat attachment (the name is then derived from the source file)."
           },
           "base64": {
             "type": "string",
-            "description": "The file bytes encoded in base64. Provide either base64 or url, not both."
+            "description": "The file bytes encoded in base64. Provide exactly one source: the chat attachment, base64 or url."
           },
           "url": {
             "type": "string",
-            "description": "An http(s) URL to download the file from. Provide either base64 or url, not both."
+            "description": "An http(s) URL to download the file from. Provide exactly one source: the chat attachment, base64 or url."
+          },
+          "attachment_object_type": {
+            "type": "string",
+            "description": "Internal: object type of an existing platform attachment to upload (set automatically by the client from the file/image the user attached in the conversation — do not fill this yourself). Read as the current user, so its ACL is enforced."
+          },
+          "attachment_object_id": {
+            "type": "string",
+            "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, base64 or url."
           }
         },
         "required": [

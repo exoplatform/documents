@@ -332,6 +332,21 @@ public interface DocumentFileService {
   }
 
   /**
+   * Overrides the stored mime type of a document. Used after an import, whose
+   * mime is derived from the file extension, to force a requested content type.
+   *
+   * @param documentId the document (file) UUID
+   * @param mimeType the mime type to store (e.g. text/markdown)
+   * @param aclIdentity the authenticated user identity id, whose edit permission
+   *          is enforced
+   */
+  default void updateDocumentMimeType(String documentId,
+                                      String mimeType,
+                                      long aclIdentity) throws IllegalStateException, IllegalAccessException, RepositoryException {
+    throw new IllegalStateException("updateDocumentMimeType method not implemented in the target class");
+  }
+
+  /**
    * Updates the Text transcription of a Document
    *
    * @param documentId Video or Audio UUID

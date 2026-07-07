@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.file.services.FileService;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
@@ -91,6 +92,16 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private final AttachmentService   attachmentService;
 
+  /**
+   * Social attachment service (distinct from the ecms {@link AttachmentService}
+   * above), used to resolve a chat-attached file referenced by
+   * <code>attachment_object_type</code> / <code>attachment_object_id</code> back
+   * to its stored bytes, as the current user, so its ACL is enforced.
+   */
+  private final org.exoplatform.social.attachment.AttachmentService socialAttachmentService;
+
+  private final FileService         fileService;
+
   private final IdentityManager     identityManager;
 
   private final SpaceService        spaceService;
@@ -107,6 +118,8 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   public DocumentMcpTool(DocumentFileService documentFileService,
                          AttachmentService attachmentService,
+                         org.exoplatform.social.attachment.AttachmentService socialAttachmentService,
+                         FileService fileService,
                          IdentityManager identityManager,
                          SpaceService spaceService,
                          TranslationService translationService,
@@ -116,6 +129,8 @@ public class DocumentMcpTool implements McpToolPlugin {
                          UploadService uploadService) {
     this.documentFileService = documentFileService;
     this.attachmentService = attachmentService;
+    this.socialAttachmentService = socialAttachmentService;
+    this.fileService = fileService;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.translationService = translationService;
@@ -348,38 +363,81 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     String resolvedMime = resolveMimeType(name, mimeType);
     String fileName = ensureExtension(name, resolvedMime);
-    return importContent(parentFolderId, fileName, content.getBytes(StandardCharsets.UTF_8));
+    DocumentModel document = importContent(parentFolderId, fileName, content.getBytes(StandardCharsets.UTF_8));
+    // importFiles derives the stored mime type from the file extension, which
+    // yields application/octet-stream for extensions the platform does not
+    // register (e.g. .md). Force the requested/resolved mime so the file reports
+    // the right content type (get_document_content_by_id relies on it).
+    setMimeType(document.getId(), resolvedMime);
+    return getDocumentById(document.getId());
   }
 
   /**
    * Uploads a real / binary document (PDF, image, office file…) from exactly one
-   * of a base64 payload or an http(s) URL. The URL is fetched server-side behind
-   * an SSRF guard.
+   * of three sources: a file/image the user attached in the chat conversation
+   * (resolved server-side as the current user via
+   * <code>attachment_object_type</code> / <code>attachment_object_id</code>), a
+   * base64 payload, or an http(s) URL (fetched server-side behind an SSRF
+   * guard).
    *
    * @param parentFolderId the destination folder id (get it from
    *          get_root_folder_for_user / get_root_folder_by_space /
    *          get_documents_by_folder_id)
    * @param name the document file name including its extension (e.g.
-   *          'report.pdf'); when uploading from a URL it may be left blank to
-   *          reuse the name from the URL
-   * @param base64 the file bytes encoded in base64 (mutually exclusive with url)
+   *          'report.pdf'); when uploading from a URL or a chat attachment it may
+   *          be left blank to reuse the source file name
+   * @param base64 the file bytes encoded in base64 (mutually exclusive with url /
+   *          the chat attachment)
    * @param url an http(s) URL to download the file from (mutually exclusive with
-   *          base64)
+   *          base64 / the chat attachment)
+   * @param attachmentObjectType the object type of the file the user attached in
+   *          chat; set automatically by the client — do not fill it from the
+   *          model
+   * @param attachmentObjectId the object id of the file the user attached in
+   *          chat; set automatically by the client — do not fill it from the
+   *          model
    * @return the created document
    */
   public DocumentModel uploadDocument(String parentFolderId,
                                       String name,
                                       String base64,
-                                      String url) throws IllegalAccessException, ObjectNotFoundException {
+                                      String url,
+                                      String attachmentObjectType,
+                                      String attachmentObjectId) throws IllegalAccessException, ObjectNotFoundException {
     checkFolderIdParameter(parentFolderId);
+    boolean hasAttachment = StringUtils.isNotBlank(attachmentObjectId);
     boolean hasBase64 = StringUtils.isNotBlank(base64);
     boolean hasUrl = StringUtils.isNotBlank(url);
-    if (hasBase64 == hasUrl) {
-      throw new IllegalArgumentException("Provide exactly one of 'base64' or 'url' to upload a document.");
+    int sources = (hasAttachment ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0);
+    if (sources == 0) {
+      throw new IllegalArgumentException("""
+          Provide a file to upload from exactly one source:
+          a file/image the user attached in the conversation, a 'base64' payload, or an http(s) 'url'.
+          """);
+    }
+    if (sources > 1) {
+      throw new IllegalArgumentException("Provide the file to upload from only one source: the chat attachment, 'base64' or 'url' — not several.");
     }
     byte[] bytes;
     String fileName = name;
-    if (hasBase64) {
+    if (hasAttachment) {
+      // Reuse UploadToolUtils.resolveImage's attachment branch: it resolves the
+      // referenced file to its raw bytes as the current user (ACL enforced) and,
+      // unlike its base64/url branches, does NOT constrain to image mime types —
+      // so any attached file works. Pass null url/base64 to stay on that branch.
+      UploadToolUtils.FetchedImage fetched = UploadToolUtils.resolveImage(socialAttachmentService,
+                                                                          fileService,
+                                                                          getCurrentUserAclIdentity(),
+                                                                          null,
+                                                                          null,
+                                                                          attachmentObjectType,
+                                                                          attachmentObjectId,
+                                                                          UploadToolUtils.DEFAULT_MAX_BYTES);
+      bytes = fetched.bytes();
+      if (StringUtils.isBlank(fileName)) {
+        fileName = fetched.fileName();
+      }
+    } else if (hasBase64) {
       if (StringUtils.isBlank(name)) {
         throw new IllegalArgumentException("The 'name' parameter is mandatory when uploading from base64; it becomes the document file name (e.g. 'report.pdf').");
       }
@@ -696,6 +754,25 @@ public class DocumentMcpTool implements McpToolPlugin {
       }
     }
     return findImportedDocument(parentFolderId, entryName);
+  }
+
+  /**
+   * Forces the stored mime type of a freshly created document. The import
+   * pipeline derives the mime from the file extension, so text formats whose
+   * extension the platform does not register (e.g. .md) end up as
+   * application/octet-stream; this overrides it with the requested value.
+   */
+  private void setMimeType(String documentId, String mimeType) {
+    if (StringUtils.isBlank(mimeType)) {
+      return;
+    }
+    try {
+      documentFileService.updateDocumentMimeType(documentId, mimeType, getCurrentUserIdentityId());
+    } catch (Exception e) {
+      // The document was created successfully; only the mime override failed.
+      throw new IllegalStateException("The document was created but its content type could not be set to '%s': %s".formatted(mimeType,
+                                                                                                                             e.getMessage()));
+    }
   }
 
   /**
