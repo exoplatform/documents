@@ -399,7 +399,7 @@
     {
       "name": "create_document",
       "title": "Create a text document in the DMS",
-      "description": "Creates a TEXT-based document (plain text, markdown, HTML, CSV, JSON, XML) by writing the provided content string as-is into the file body. Use this to turn chat-generated text into a real file in the Documents app; use .txt, .md or .html for the file name. It CANNOT produce binary formats: office documents (.docx, .xlsx, .pptx, .odt, etc.) and PDF are structured packages, not text, so they cannot be created here — and neither can an empty template document; use upload_document with the real file bytes (base64, url or a chat attachment) for those. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The stored content type is derived from the file extension by the platform: use a registered text extension (.txt, .html, .csv, etc.) so the file has the correct type and is readable via get_document_content_by_id; an unregistered extension like .md is stored as application/octet-stream and its text won't be extractable.",
+      "description": "Creates a TEXT-based document (plain text, markdown, HTML, CSV, JSON, XML) by writing the provided content string as-is into the file body. Use this to turn chat-generated text into a real file in the Documents app. The name must be a filename WITH an extension (e.g. 'notes.md', 'report.txt', 'page.html') — the extension sets the file's content type. It writes text as the file body, so use a text extension (.txt, .md, .html). It CANNOT produce binary formats: office documents (.docx, .xlsx, .pptx, .odt, etc.) and PDF are structured packages, not text, so they cannot be created here — and neither can an empty template document; use upload_document with the real file bytes (base64, url or a chat attachment) for those. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The stored content type is derived from the file extension by the platform: use a registered text extension (.txt, .html, .csv, etc.) so the file has the correct type and is readable via get_document_content_by_id; an unregistered extension like .md is stored as application/octet-stream and its text won't be extractable.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -409,15 +409,11 @@
           },
           "name": {
             "type": "string",
-            "description": "The document file name. If no extension is given, one is appended based on the mime type (e.g. 'notes' with text/markdown becomes 'notes.md')."
+            "description": "The document file name, including its extension (e.g. 'notes.md', 'report.txt', 'page.html'). The extension determines the file's content type; the name is used as-is."
           },
           "content": {
             "type": "string",
             "description": "The text, markdown or HTML body of the document."
-          },
-          "mime_type": {
-            "type": "string",
-            "description": "Optional, advisory. Only used to infer a file extension when the name has none; the stored content type is derived from the file extension by the platform, not from this value."
           }
         },
         "required": [

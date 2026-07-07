@@ -434,17 +434,17 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void createDocumentAppendsExtensionAndImports() throws Exception {
+  public void createDocumentTextExtensionSucceeds() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    // 'notes' has no extension: with text/markdown it becomes 'notes.md'.
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
-        .thenReturn(List.of(fileNodeNamed("doc-created", "notes.md")));
+        .thenReturn(List.of(fileNodeNamed("doc-txt", "notes.txt")));
 
-    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes", "# Hello", "text/markdown");
+    // The name is used as-is (it already carries a .txt extension).
+    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "plain text body");
 
     assertNotNull(model);
-    assertEquals("doc-created", model.getId());
+    assertEquals("doc-txt", model.getId());
     // folderPath must be null (parent resolved from the folder id) and conflict "rename".
     verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
                                             eq(FOLDER_ID),
@@ -456,28 +456,20 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void createDocumentTextExtensionSucceeds() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
-        .thenReturn(List.of(fileNodeNamed("doc-txt", "notes.txt")));
-
-    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "plain text body", "text/plain");
-
-    assertNotNull(model);
-    assertEquals("doc-txt", model.getId());
-    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
-                                            eq(FOLDER_ID),
-                                            isNull(),
-                                            any(),
-                                            eq("rename"),
-                                            eq(currentIdentity),
-                                            eq(USER_IDENTITY_ID));
+  public void createDocumentBlankNameFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocument(FOLDER_ID, " ", "body"));
   }
 
   @Test
-  public void createDocumentBlankNameFails() {
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocument(FOLDER_ID, " ", "body", null));
+  public void createDocumentMissingExtensionFails() {
+    // A name with no extension (and a trailing-dot name, which also has no
+    // extension) must fail: the extension drives the stored content type.
+    for (String name : new String[] { "notes", "my.notes.", "report " }) {
+      IllegalArgumentException ex =
+                                  assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.createDocument(FOLDER_ID, name, "some content"));
+      assertTrue(ex.getMessage().contains("must include a file extension"));
+    }
   }
 
   @Test
@@ -488,7 +480,7 @@ public class DocumentMcpToolTest {
     for (String name : new String[] { "report.docx", "budget.xlsx", "deck.pptx", "doc.pdf" }) {
       IllegalArgumentException ex =
                                    assertThrows(IllegalArgumentException.class,
-                                                () -> documentMcpTool.createDocument(FOLDER_ID, name, "some content", null));
+                                                () -> documentMcpTool.createDocument(FOLDER_ID, name, "some content"));
       String ext = name.substring(name.lastIndexOf('.') + 1);
       assertTrue(ex.getMessage().contains("'" + ext + "'"));
       assertTrue(ex.getMessage().contains("upload_document"));
@@ -499,11 +491,11 @@ public class DocumentMcpToolTest {
   public void createDocumentBlankContentFails() {
     IllegalArgumentException nullContent =
                                          assertThrows(IllegalArgumentException.class,
-                                                      () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", null, null));
+                                                      () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", null));
     assertTrue(nullContent.getMessage().contains("content is required"));
     IllegalArgumentException blankContent =
                                           assertThrows(IllegalArgumentException.class,
-                                                       () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", "  ", null));
+                                                       () -> documentMcpTool.createDocument(FOLDER_ID, "notes.md", "  "));
     assertTrue(blankContent.getMessage().contains("content is required"));
   }
 

@@ -351,33 +351,33 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * Creates a text-based document (markdown, HTML, plain text, CSV, JSON…) from
    * a chat-authored <code>content</code> string. This is the chat-native way to
-   * turn generated text into a real file in the Documents app.
+   * turn generated text into a real file in the Documents app. The
+   * <code>name</code> must include a file extension: the extension drives the
+   * stored content type via the platform MimeTypeResolver, so use a registered
+   * text extension (.txt, .html, .csv, .json, .xml…) so the file has the correct
+   * type and is readable via get_document_content_by_id.
    *
    * @param parentFolderId the folder where the document is created (get it from
    *          get_root_folder_for_user / get_root_folder_by_space /
    *          get_documents_by_folder_id)
-   * @param name the document file name (an extension is appended from the mime
-   *          type when missing, e.g. 'notes' + text/markdown -&gt; 'notes.md')
+   * @param name the document file name, including its extension (e.g.
+   *          'notes.md', 'report.txt', 'page.html'). The extension determines the
+   *          file's content type (via the platform MimeTypeResolver); the name is
+   *          used as-is.
    * @param content the text / markdown / HTML body
-   * @param mimeType optional mime type; only used to infer a file extension when
-   *          the name has none (advisory). The stored content type is derived
-   *          from the file extension by the platform MimeTypeResolver: use a
-   *          registered extension (.txt, .html, .docx, .pdf, image types…) so the
-   *          file has the correct type and is readable via
-   *          get_document_content_by_id; an unregistered extension like .md is
-   *          stored as application/octet-stream and its text won't be
-   *          extractable.
    * @return the created document
    */
   public DocumentModel createDocument(String parentFolderId,
                                       String name,
-                                      String content,
-                                      String mimeType) throws IllegalAccessException, ObjectNotFoundException {
+                                      String content) throws IllegalAccessException, ObjectNotFoundException {
     checkFolderIdParameter(parentFolderId);
     if (StringUtils.isBlank(name)) {
       throw new IllegalArgumentException("The 'name' parameter is mandatory to create a document (e.g. 'meeting-notes.md'). Ask the user for a document name.");
     }
     String extension = StringUtils.substringAfterLast(StringUtils.lowerCase(StringUtils.trimToEmpty(name)), ".");
+    if (StringUtils.isBlank(extension)) {
+      throw new IllegalArgumentException("The document name must include a file extension (e.g. 'notes.md', 'report.txt', 'page.html') — the extension determines the file's content type.");
+    }
     if (UNSUPPORTED_BINARY_EXTENSIONS.contains(extension)) {
       throw new IllegalArgumentException(("create_document writes text content as the file body, so it cannot produce a valid"
           + " '%s' file — office and PDF formats are structured packages, not text. Creating an empty office document from a"
@@ -387,9 +387,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(content)) {
       throw new IllegalArgumentException("content is required to create a document (the text to write into the file).");
     }
-    String resolvedMime = resolveMimeType(name, mimeType);
-    String fileName = ensureExtension(name, resolvedMime);
-    return importContent(parentFolderId, fileName, content.getBytes(StandardCharsets.UTF_8));
+    return importContent(parentFolderId, name, content.getBytes(StandardCharsets.UTF_8));
   }
 
   /**
@@ -829,43 +827,6 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static String sanitizeFileName(String fileName) {
     String cleaned = StringUtils.trimToEmpty(fileName).replaceAll("[/\\\\]", "_");
     return cleaned.isEmpty() ? "document" : cleaned;
-  }
-
-  private static String resolveMimeType(String name, String provided) {
-    if (StringUtils.isNotBlank(provided)) {
-      return provided;
-    }
-    String lower = StringUtils.lowerCase(name);
-    if (lower == null) {
-      return "text/plain";
-    } else if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
-      return "text/markdown";
-    } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
-      return "text/html";
-    } else if (lower.endsWith(".csv")) {
-      return "text/csv";
-    } else if (lower.endsWith(".json")) {
-      return "application/json";
-    } else if (lower.endsWith(".xml")) {
-      return "application/xml";
-    } else {
-      return "text/plain";
-    }
-  }
-
-  private static String ensureExtension(String name, String mimeType) {
-    if (StringUtils.contains(name, '.')) {
-      return name;
-    }
-    String extension = switch (StringUtils.lowerCase(StringUtils.trimToEmpty(mimeType))) {
-    case "text/markdown" -> ".md";
-    case "text/html" -> ".html";
-    case "text/csv" -> ".csv";
-    case "application/json" -> ".json";
-    case "application/xml" -> ".xml";
-    default -> ".txt";
-    };
-    return name + extension;
   }
 
   private static void sleepQuietly(long millis) {
