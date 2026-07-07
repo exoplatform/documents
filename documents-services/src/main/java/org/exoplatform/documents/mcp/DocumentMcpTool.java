@@ -426,7 +426,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       // referenced file to its raw bytes as the current user (ACL enforced) and,
       // unlike its base64/url branches, does NOT constrain to image mime types —
       // so any attached file works. Pass null url/base64 to stay on that branch.
-      UploadToolUtils.FetchedImage fetched = UploadToolUtils.resolveImage(socialAttachmentService,
+      UploadToolUtils.FetchedContent fetched = UploadToolUtils.resolveImage(socialAttachmentService,
                                                                           fileService,
                                                                           getCurrentUserAclIdentity(),
                                                                           null,
@@ -444,7 +444,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       }
       bytes = UploadToolUtils.decodeBase64(base64);
     } else {
-      UploadToolUtils.FetchedImage fetched = UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, name);
+      UploadToolUtils.FetchedContent fetched = UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, name);
       bytes = fetched.bytes();
       if (StringUtils.isBlank(fileName)) {
         fileName = fetched.fileName();
