@@ -328,7 +328,7 @@ public class EntityBuilder {
     String nodeName = node.getName();
     if(StringUtils.isNotBlank(nodeName)) {
       try {
-        nodeName = URLDecoder.decode(node.getName(), StandardCharsets.UTF_8);
+        nodeName = URLDecoder.decode(nodeName.replace("+", "%2B"), StandardCharsets.UTF_8);
       } catch (IllegalArgumentException iae) {
         // nothing to do
       }
