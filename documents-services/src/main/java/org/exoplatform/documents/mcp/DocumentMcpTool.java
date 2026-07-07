@@ -19,9 +19,11 @@ package org.exoplatform.documents.mcp;
 import static io.meeds.mcp.server.tool.util.McpToolPluginUtils.getInteger;
 import static io.meeds.mcp.server.util.McpToolUtils.formatDate;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -40,6 +42,7 @@ import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
+import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
 import org.exoplatform.documents.mcp.model.DocumentVersionModel;
 import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
@@ -52,7 +55,9 @@ import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.services.attachments.service.AttachmentService;
@@ -61,6 +66,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.metadata.favorite.FavoriteService;
+import org.exoplatform.social.metadata.favorite.model.Favorite;
 import org.exoplatform.upload.UploadService;
 import org.exoplatform.wiki.WikiException;
 import org.exoplatform.wiki.model.Page;
@@ -88,6 +95,20 @@ public class DocumentMcpTool implements McpToolPlugin {
   public static final String       FOLDER_URL_FORMAT = "/portal/dw/documents?folderId=%s";
 
   public static final String       FILE_URL_FORMAT   = "/portal/dw/documents?documentPreviewId=%s";
+
+  /**
+   * Path of the anonymous public-download portal page (global page
+   * <code>download-document</code>); the document node id is appended as an
+   * extra path segment, mirroring how the Documents front-end builds the
+   * shareable link (<code>{origin}/{containerName}/download-document/{nodeId}</code>).
+   */
+  public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
+
+  /** Favorite object type for files, matching {@code DocumentAclPlugin.OBJECT_TYPE}. */
+  private static final String      FAVORITE_TYPE_DOCUMENT = "document";
+
+  /** Favorite object type for folders, matching {@code FolderAclPlugin.OBJECT_TYPE}. */
+  private static final String      FAVORITE_TYPE_FOLDER   = "folder";
 
   /**
    * Structured / binary office and PDF formats that cannot be produced from a
@@ -128,6 +149,10 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private final UploadService       uploadService;
 
+  private final PublicDocumentAccessService publicDocumentAccessService;
+
+  private final FavoriteService     favoriteService;
+
   public DocumentMcpTool(DocumentFileService documentFileService,
                          AttachmentService attachmentService,
                          org.exoplatform.social.attachment.AttachmentService socialAttachmentService,
@@ -138,7 +163,9 @@ public class DocumentMcpTool implements McpToolPlugin {
                          ProfilePropertyService profilePropertyService,
                          UserACL userAcl,
                          UserPortalConfigService portalConfigService,
-                         UploadService uploadService) {
+                         UploadService uploadService,
+                         PublicDocumentAccessService publicDocumentAccessService,
+                         FavoriteService favoriteService) {
     this.documentFileService = documentFileService;
     this.attachmentService = attachmentService;
     this.socialAttachmentService = socialAttachmentService;
@@ -150,6 +177,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     this.userAcl = userAcl;
     this.portalConfigService = portalConfigService;
     this.uploadService = uploadService;
+    this.publicDocumentAccessService = publicDocumentAccessService;
+    this.favoriteService = favoriteService;
   }
 
   public DocumentFolderModel getRootFolderBySpace(long spaceId) throws ObjectNotFoundException, IllegalAccessException {
@@ -568,6 +597,277 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalArgumentException("The 'hidden' parameter is mandatory (true to hide the document, false to make it visible).");
     }
     documentFileService.setDocumentVisibility(getOwnerId(documentId), documentId, hidden, getCurrentUserIdentityId());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Versioning, sharing, public links and favorites (writes, require approval)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Uploads updated content onto an EXISTING file, creating a NEW version of it
+   * (the previous content stays retrievable via list_document_versions /
+   * restore_document_version). The new bytes come from exactly one source: a
+   * chat-authored text <code>content</code> string, a <code>base64</code>
+   * payload, an http(s) <code>url</code>, or a file the user attached in the
+   * conversation. The file's name and type are unchanged; only its content and
+   * version history are updated.
+   *
+   * @param documentId the id of the existing file to add a version to (get it
+   *          from get_document_by_id / get_documents_by_folder_id /
+   *          search_documents)
+   * @param content plain text / markdown / HTML body to write as the new version
+   *          (use for text files)
+   * @param base64 the new file bytes encoded in base64
+   * @param url an http(s) URL to download the new content from (fetched
+   *          server-side behind an SSRF guard)
+   * @param attachmentObjectType the object type of the file the user attached in
+   *          chat; set automatically by the client — do not fill it from the model
+   * @param attachmentObjectId the object id of the file the user attached in
+   *          chat; set automatically by the client — do not fill it from the model
+   * @param versionSummary an optional change note stored on the new version
+   * @return the updated document (with its refreshed size / modification info)
+   */
+  public DocumentModel addDocumentVersion(String documentId,
+                                          String content,
+                                          String base64,
+                                          String url,
+                                          String attachmentObjectType,
+                                          String attachmentObjectId,
+                                          String versionSummary) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode node = checkCanAccessDocument(documentId);
+    if (!(node instanceof FileNode)) {
+      throw new IllegalArgumentException("Only a file can have versions; the id %s points to a folder. Provide a file document_id."
+          .formatted(documentId));
+    }
+    if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
+      throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot add a new version to it."
+          .formatted(documentId));
+    }
+    byte[] bytes = resolveContentBytes(content, base64, url, attachmentObjectType, attachmentObjectId);
+    documentFileService.createNewVersion(documentId, getCurrentUserName(), new ByteArrayInputStream(bytes));
+    if (StringUtils.isNotBlank(versionSummary)) {
+      applyVersionSummary(documentId, versionSummary);
+    }
+    return getDocumentById(documentId);
+  }
+
+  /**
+   * Creates (or refreshes) an anonymous public share link for a document so it
+   * can be downloaded without signing in, optionally protected by a password
+   * and/or an expiration date. Requires edit permission on the document.
+   *
+   * @param documentId the id of the file to share publicly (get it from the read
+   *          tools)
+   * @param password an optional password required to open the link
+   * @param expirationDate an optional expiration date, as epoch milliseconds;
+   *          after it the link stops working. Leave blank for a link that never
+   *          expires.
+   * @return the shareable link, together with its password and expiration
+   */
+  public DocumentPublicLinkModel createPublicLink(String documentId,
+                                                  String password,
+                                                  Long expirationDate) throws IllegalAccessException,
+                                                                       ObjectNotFoundException {
+    checkCanAccessDocument(documentId);
+    long userIdentityId = getCurrentUserIdentityId();
+    if (!documentFileService.hasEditPermissionOnDocument(documentId, userIdentityId)) {
+      throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot create a public link for it."
+          .formatted(documentId));
+    }
+    long expiration = expirationDate == null ? 0L : expirationDate.longValue();
+    PublicDocumentAccess access = publicDocumentAccessService.createPublicDocumentAccess(userIdentityId,
+                                                                                        documentId,
+                                                                                        StringUtils.isBlank(password) ? null
+                                                                                                                      : password,
+                                                                                        expiration,
+                                                                                        false);
+    if (access == null) {
+      throw new IllegalStateException("The public link could not be created for document %s. Verify the document id and retry."
+          .formatted(documentId));
+    }
+    Date expirationValue = access.getExpirationDate();
+    return new DocumentPublicLinkModel(documentId,
+                                       PUBLIC_LINK_URL_FORMAT.formatted(documentId),
+                                       access.getDecodedPassword(),
+                                       expirationValue == null ? null : formatDate(expirationValue));
+  }
+
+  /**
+   * Creates a shortcut (symlink) to a document inside another folder, so the same
+   * file appears in a second location without being copied.
+   *
+   * @param documentId the id of the file or folder to create a shortcut to
+   * @param destinationFolderId the id of the folder where the shortcut is placed
+   *          (get it from get_root_folder_for_user / get_root_folder_by_space /
+   *          get_documents_by_folder_id)
+   * @param conflictAction behaviour when a node with the same name already exists
+   *          in the destination; defaults to 'rename'
+   */
+  public void createDocumentShortcut(String documentId,
+                                     String destinationFolderId,
+                                     String conflictAction) throws IllegalAccessException, ObjectNotFoundException {
+    checkDocumentIdParameter(documentId);
+    if (StringUtils.isBlank(destinationFolderId)) {
+      throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_documents_by_folder_id or get_root_folder_for_user to find the target folder id.");
+    }
+    // Validate the source and the destination folder exist and are readable by
+    // the user before touching the JCR storage.
+    checkCanAccessDocument(documentId);
+    AbstractNode destination = getNode(destinationFolderId);
+    try {
+      documentFileService.createShortcut(documentId,
+                                         destination.getPath(),
+                                         getCurrentUserName(),
+                                         StringUtils.isBlank(conflictAction) ? "rename" : conflictAction);
+    } catch (ObjectAlreadyExistsException e) {
+      throw new IllegalStateException("A node with the same name already exists in the destination folder. Retry with conflict_action set to 'rename'.");
+    }
+  }
+
+  /**
+   * Shares a document with another user or with a space: the recipient gets the
+   * file in their "Shared" folder with the document's own permissions. Provide
+   * exactly one of <code>username</code> or <code>spaceId</code>. Requires edit
+   * permission on the document.
+   *
+   * @param documentId the id of the file to share (get it from the read tools)
+   * @param username the username to share the document with (mutually exclusive
+   *          with space_id)
+   * @param spaceId the id of the space to share the document with (mutually
+   *          exclusive with username)
+   * @param notify whether to notify the recipient; defaults to true
+   */
+  public void shareDocument(String documentId,
+                            String username,
+                            Long spaceId,
+                            Boolean notify) throws IllegalAccessException, ObjectNotFoundException {
+    checkCanAccessDocument(documentId);
+    boolean hasUser = StringUtils.isNotBlank(username);
+    boolean hasSpace = spaceId != null && spaceId > 0;
+    if (hasUser == hasSpace) {
+      throw new IllegalArgumentException("Provide exactly one recipient: either 'username' or 'space_id', not both and not none.");
+    }
+    if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
+      throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot share it.".formatted(documentId));
+    }
+    long destId;
+    if (hasUser) {
+      Identity userIdentity = identityManager.getOrCreateUserIdentity(username);
+      if (userIdentity == null) {
+        throw new ObjectNotFoundException("No user found with username '%s'. Use search_users to find the exact username."
+            .formatted(username));
+      }
+      destId = userIdentity.getIdentityId();
+    } else {
+      Space space = spaceService.getSpaceById(String.valueOf(spaceId));
+      if (space == null) {
+        throw new ObjectNotFoundException("Space with id %s not found. Use get_my_spaces to check accessible spaces."
+            .formatted(spaceId));
+      }
+      destId = identityManager.getOrCreateSpaceIdentity(space.getPrettyName()).getIdentityId();
+    }
+    documentFileService.shareDocument(documentId, destId, getCurrentUserIdentityId(), notify == null || notify.booleanValue());
+  }
+
+  /**
+   * Adds a document (file or folder) to the current user's favorites.
+   *
+   * @param documentId the id of the file or folder to mark as favorite
+   */
+  public void favoriteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+    Favorite favorite = toFavorite(documentId);
+    try {
+      favoriteService.createFavorite(favorite);
+    } catch (ObjectAlreadyExistsException e) {
+      throw new IllegalStateException("The document %s is already in the user's favorites.".formatted(documentId));
+    }
+  }
+
+  /**
+   * Removes a document (file or folder) from the current user's favorites.
+   *
+   * @param documentId the id of the file or folder to remove from favorites
+   */
+  public void unfavoriteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+    Favorite favorite = toFavorite(documentId);
+    try {
+      favoriteService.deleteFavorite(favorite);
+    } catch (ObjectNotFoundException e) {
+      throw new IllegalStateException("The document %s is not in the user's favorites, so it cannot be removed from them."
+          .formatted(documentId));
+    }
+  }
+
+  private Favorite toFavorite(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode node = checkCanAccessDocument(documentId);
+    String objectType = node instanceof FileNode ? FAVORITE_TYPE_DOCUMENT : FAVORITE_TYPE_FOLDER;
+    return new Favorite(objectType, documentId, null, getCurrentUserIdentityId());
+  }
+
+  /**
+   * Resolves the raw bytes for a new file version from exactly one of the
+   * supported sources (chat text, base64, url or a chat attachment), reusing
+   * {@code upload_document}'s attachment/url resolution so the same ACL and SSRF
+   * guards apply.
+   */
+  private byte[] resolveContentBytes(String content,
+                                     String base64,
+                                     String url,
+                                     String attachmentObjectType,
+                                     String attachmentObjectId) throws IllegalAccessException, ObjectNotFoundException {
+    boolean hasContent = StringUtils.isNotBlank(content);
+    boolean hasBase64 = StringUtils.isNotBlank(base64);
+    boolean hasUrl = StringUtils.isNotBlank(url);
+    boolean hasAttachment = StringUtils.isNotBlank(attachmentObjectId);
+    int sources = (hasContent ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0) + (hasAttachment ? 1 : 0);
+    if (sources == 0) {
+      throw new IllegalArgumentException("""
+          Provide the new version content from exactly one source:
+          a text 'content' string, a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation.
+          """);
+    }
+    if (sources > 1) {
+      throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'base64', 'url' or the chat attachment — not several.");
+    }
+    try {
+      if (hasContent) {
+        return content.getBytes(StandardCharsets.UTF_8);
+      } else if (hasBase64) {
+        return UploadToolUtils.decodeBase64(base64);
+      } else if (hasAttachment) {
+        return UploadToolUtils.resolveImage(socialAttachmentService,
+                                            fileService,
+                                            getCurrentUserAclIdentity(),
+                                            null,
+                                            null,
+                                            attachmentObjectType,
+                                            attachmentObjectId,
+                                            UploadToolUtils.DEFAULT_MAX_BYTES)
+                              .bytes();
+      } else {
+        return UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, null).bytes();
+      }
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      throw e;
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Could not read the new version content from the given source: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Stamps the summary onto the version that {@code createNewVersion} just made:
+   * that storage call returns an empty {@link FileVersion}, so the current
+   * version is looked up and its summary updated.
+   */
+  private void applyVersionSummary(String documentId, String versionSummary) {
+    List<FileVersion> versions = documentFileService.getFileVersions(documentId, getCurrentUserName());
+    versions.stream()
+            .filter(FileVersion::isCurrent)
+            .findFirst()
+            .ifPresent(current -> documentFileService.updateVersionSummary(documentId,
+                                                                           current.getId(),
+                                                                           versionSummary,
+                                                                           getCurrentUserName()));
   }
 
   private UserModel toUserModel(long identityId) {

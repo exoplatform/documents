@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,11 +39,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
+import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
 import org.exoplatform.documents.mcp.model.DocumentVersionModel;
 import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
@@ -53,7 +56,9 @@ import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
+import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.services.attachments.service.AttachmentService;
@@ -62,6 +67,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+import org.exoplatform.social.metadata.favorite.FavoriteService;
+import org.exoplatform.social.metadata.favorite.model.Favorite;
 import org.exoplatform.upload.UploadService;
 
 import io.meeds.social.translation.service.TranslationService;
@@ -90,6 +97,10 @@ public class DocumentMcpToolTest {
 
   private SpaceService                   spaceService;
 
+  private PublicDocumentAccessService    publicDocumentAccessService;
+
+  private FavoriteService                favoriteService;
+
   private Identity                       currentIdentity;
 
   private DocumentMcpTool                documentMcpTool;
@@ -107,6 +118,8 @@ public class DocumentMcpToolTest {
     UserACL userAcl = Mockito.mock(UserACL.class);
     UserPortalConfigService portalConfigService = Mockito.mock(UserPortalConfigService.class);
     UploadService uploadService = Mockito.mock(UploadService.class);
+    publicDocumentAccessService = Mockito.mock(PublicDocumentAccessService.class);
+    favoriteService = Mockito.mock(FavoriteService.class);
     currentIdentity = new Identity(USERNAME);
 
     org.exoplatform.social.core.identity.model.Identity socialIdentity =
@@ -123,7 +136,9 @@ public class DocumentMcpToolTest {
                                           profilePropertyService,
                                           userAcl,
                                           portalConfigService,
-                                          uploadService) {
+                                          uploadService,
+                                          publicDocumentAccessService,
+                                          favoriteService) {
       @Override
       public Identity getCurrentUserAclIdentity() {
         return currentIdentity;
@@ -696,6 +711,203 @@ public class DocumentMcpToolTest {
   @Test
   public void setDocumentVisibilityNullHiddenFails() {
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.setDocumentVisibility(DOCUMENT_ID, null));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Versioning, sharing, public links and favorites
+  // ---------------------------------------------------------------------------
+
+  @Test
+  public void addDocumentVersionFromContent() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    DocumentModel model = documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, null);
+
+    assertNotNull(model);
+    assertEquals(DOCUMENT_ID, model.getId());
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+    // No summary provided -> the version summary is not touched.
+    verify(documentFileService, Mockito.never()).updateVersionSummary(any(), any(), any(), any());
+  }
+
+  @Test
+  public void addDocumentVersionWithSummaryStampsCurrentVersion() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(documentFileService.getFileVersions(DOCUMENT_ID, USERNAME)).thenReturn(List.of(fileVersion()));
+
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, "reworded intro");
+
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+    verify(documentFileService).updateVersionSummary(eq(DOCUMENT_ID), eq("version-1"), eq("reworded intro"), eq(USERNAME));
+  }
+
+  @Test
+  public void addDocumentVersionNoSourceFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null));
+  }
+
+  @Test
+  public void addDocumentVersionOnFolderFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(FOLDER_ID, "body", null, null, null, null, null));
+  }
+
+  @Test
+  public void addDocumentVersionWithoutEditPermissionFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null));
+  }
+
+  @Test
+  public void createPublicLink() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    Date expiration = new Date(1893456000000L);
+    PublicDocumentAccess access = new PublicDocumentAccess(1L, DOCUMENT_ID, null, null, expiration);
+    access.setDecodedPassword("s3cret");
+    when(publicDocumentAccessService.createPublicDocumentAccess(eq(USER_IDENTITY_ID),
+                                                               eq(DOCUMENT_ID),
+                                                               eq("s3cret"),
+                                                               anyLong(),
+                                                               anyBoolean())).thenReturn(access);
+
+    DocumentPublicLinkModel model = documentMcpTool.createPublicLink(DOCUMENT_ID, "s3cret", expiration.getTime());
+
+    assertNotNull(model);
+    assertEquals("/portal/download-document/" + DOCUMENT_ID, model.url());
+    assertEquals("s3cret", model.password());
+    assertNotNull(model.expirationDate());
+  }
+
+  @Test
+  public void createPublicLinkWithoutEditPermissionFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.createPublicLink(DOCUMENT_ID, null, null));
+  }
+
+  @Test
+  public void createDocumentShortcutDefaultsConflictToRename() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+
+    documentMcpTool.createDocumentShortcut(DOCUMENT_ID, FOLDER_ID, null);
+
+    verify(documentFileService).createShortcut(eq(DOCUMENT_ID), eq("/documents/Projects"), eq(USERNAME), eq("rename"));
+  }
+
+  @Test
+  public void createDocumentShortcutBlankDestinationFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, " ", null));
+  }
+
+  @Test
+  public void shareDocumentWithUser() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    org.exoplatform.social.core.identity.model.Identity bob =
+                                                             new org.exoplatform.social.core.identity.model.Identity("200");
+    when(identityManager.getOrCreateUserIdentity("bob")).thenReturn(bob);
+
+    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null);
+
+    verify(documentFileService).shareDocument(eq(DOCUMENT_ID), eq(200L), eq(USER_IDENTITY_ID), eq(true));
+  }
+
+  @Test
+  public void shareDocumentWithSpace() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    Space space = new Space();
+    space.setId(String.valueOf(SPACE_ID));
+    space.setPrettyName("engineering");
+    when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(space);
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                       new org.exoplatform.social.core.identity.model.Identity("300");
+    when(identityManager.getOrCreateSpaceIdentity("engineering")).thenReturn(spaceIdentity);
+
+    documentMcpTool.shareDocument(DOCUMENT_ID, null, SPACE_ID, false);
+
+    verify(documentFileService).shareDocument(eq(DOCUMENT_ID), eq(300L), eq(USER_IDENTITY_ID), eq(false));
+  }
+
+  @Test
+  public void shareDocumentRequiresExactlyOneRecipient() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+
+    // neither recipient
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, null, null));
+    // both recipients
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", SPACE_ID, null));
+  }
+
+  @Test
+  public void shareDocumentWithoutEditPermissionFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null));
+  }
+
+  @Test
+  public void favoriteDocumentCreatesFavorite() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+
+    documentMcpTool.favoriteDocument(DOCUMENT_ID);
+
+    org.mockito.ArgumentCaptor<Favorite> captor = org.mockito.ArgumentCaptor.forClass(Favorite.class);
+    verify(favoriteService).createFavorite(captor.capture());
+    assertEquals("document", captor.getValue().getObjectType());
+    assertEquals(DOCUMENT_ID, captor.getValue().getObjectId());
+    assertEquals(USER_IDENTITY_ID, captor.getValue().getUserIdentityId());
+  }
+
+  @Test
+  public void favoriteFolderUsesFolderObjectType() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+
+    documentMcpTool.favoriteDocument(FOLDER_ID);
+
+    org.mockito.ArgumentCaptor<Favorite> captor = org.mockito.ArgumentCaptor.forClass(Favorite.class);
+    verify(favoriteService).createFavorite(captor.capture());
+    assertEquals("folder", captor.getValue().getObjectType());
+  }
+
+  @Test
+  public void favoriteDocumentAlreadyFavoriteFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    doThrow(new ObjectAlreadyExistsException(DOCUMENT_ID)).when(favoriteService).createFavorite(any());
+
+    assertThrows(IllegalStateException.class, () -> documentMcpTool.favoriteDocument(DOCUMENT_ID));
+  }
+
+  @Test
+  public void unfavoriteDocumentDeletesFavorite() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+
+    documentMcpTool.unfavoriteDocument(DOCUMENT_ID);
+
+    verify(favoriteService).deleteFavorite(any());
+  }
+
+  @Test
+  public void unfavoriteDocumentNotFavoriteFails() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    doThrow(new ObjectNotFoundException("not a favorite")).when(favoriteService).deleteFavorite(any());
+
+    assertThrows(IllegalStateException.class, () -> documentMcpTool.unfavoriteDocument(DOCUMENT_ID));
   }
 
 }
