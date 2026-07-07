@@ -139,6 +139,15 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                  Set.of("docx", "xlsx", "pptx", "ppsx", "potx", "dotx", "xltx",
                                                                         "xls", "doc", "ppt", "odt", "ods", "odp", "pdf");
 
+  /**
+   * Office document types that {@link #createDocumentFromTemplate} can create as a
+   * new empty file from the platform's blank template (via the ecms
+   * {@code DocumentService}). Availability of a given type at runtime still
+   * depends on the installed document editor add-on (onlyoffice).
+   */
+  private static final Set<String> SUPPORTED_TEMPLATE_TYPES =
+                                                            Set.of("docx", "xlsx", "pptx", "odt", "ods", "odp");
+
   private final DocumentFileService documentFileService;
 
   private final AttachmentService   attachmentService;
@@ -436,14 +445,81 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     if (UNSUPPORTED_BINARY_EXTENSIONS.contains(extension)) {
       throw new IllegalArgumentException(("create_document writes text content as the file body, so it cannot produce a valid"
-          + " '%s' file — office and PDF formats are structured packages, not text. Creating an empty office document from a"
-          + " template isn't supported yet. For text use .txt/.md/.html, or use upload_document with the real file bytes"
-          + " (base64, url, or a file attached in the conversation).").formatted(extension));
+          + " '%s' file — office and PDF formats are structured packages, not text. To create a NEW EMPTY office document"
+          + " (Word/Excel/PowerPoint/ODF) use create_document_from_template. For text use .txt/.md/.html, or use"
+          + " upload_document with the real file bytes (base64, url, or a file attached in the conversation).").formatted(extension));
     }
     if (StringUtils.isBlank(content)) {
       throw new IllegalArgumentException("content is required to create a document (the text to write into the file).");
     }
     return importContent(parentFolderId, name, content.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Creates a NEW EMPTY office document (Word/Excel/PowerPoint, or ODF) from the
+   * platform's blank template, by delegating to the ecms {@code DocumentService}.
+   * Use this when the user wants a blank Word/Excel/PowerPoint document to fill in
+   * (e.g. via the online editor): create_document cannot produce office files
+   * (they are structured packages, not text) and upload_document needs the real
+   * file bytes. The template is created synchronously; the file extension is added
+   * automatically from <code>documentType</code>.
+   *
+   * @param parentFolderId the folder where the document is created (get it from
+   *          get_root_folder_for_user / get_root_folder_by_space /
+   *          get_documents_by_folder_id)
+   * @param name the document name, WITHOUT extension (e.g. 'Q3 report'); the
+   *          extension is appended automatically from documentType
+   * @param documentType the office document type: one of docx, xlsx, pptx, odt,
+   *          ods, odp. Availability depends on the installed editor add-on.
+   * @return the created document
+   */
+  public DocumentModel createDocumentFromTemplate(String parentFolderId,
+                                                  String name,
+                                                  String documentType) throws IllegalAccessException, ObjectNotFoundException {
+    checkFolderIdParameter(parentFolderId);
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("The 'name' parameter is mandatory to create a document (e.g. 'Q3 report'). Ask the user for a document name.");
+    }
+    if (StringUtils.isBlank(documentType)) {
+      throw new IllegalArgumentException("The 'document_type' parameter is mandatory: the office document type to create. Supported types: "
+          + SUPPORTED_TEMPLATE_TYPES + ".");
+    }
+    String type = StringUtils.lowerCase(StringUtils.trimToEmpty(documentType));
+    if (type.startsWith(".")) {
+      type = type.substring(1);
+    }
+    if (!SUPPORTED_TEMPLATE_TYPES.contains(type)) {
+      throw new IllegalArgumentException("Unsupported document_type '%s'. Supported office document types are: %s.".formatted(documentType,
+                                                                                                                              SUPPORTED_TEMPLATE_TYPES));
+    }
+    // Validate the parent folder exists and is readable by the user, so a bad id
+    // fails with a clean ObjectNotFoundException / IllegalAccessException before
+    // reaching the JCR storage.
+    getNode(parentFolderId);
+    // ecms names the file after the title and does NOT append the extension, so
+    // build a title that ends with '.<type>' (stripping a duplicate extension the
+    // user may have typed to avoid 'report.docx.docx').
+    String baseName = StringUtils.trimToEmpty(name);
+    String suffix = "." + type;
+    if (StringUtils.endsWithIgnoreCase(baseName, suffix)) {
+      baseName = baseName.substring(0, baseName.length() - suffix.length());
+    }
+    String title = baseName + suffix;
+    try {
+      // parentFolderId already identifies the parent JCR node uniquely; the storage
+      // 'folderPath' is a RELATIVE sub-path resolved from that node, so keep it null
+      // (same rule as createFolder).
+      AbstractNode document = documentFileService.createDocumentFromTemplate(getOwnerId(parentFolderId),
+                                                                            parentFolderId,
+                                                                            null,
+                                                                            title,
+                                                                            type,
+                                                                            getCurrentUserIdentityId());
+      return toDocumentModel(document);
+    } catch (ObjectAlreadyExistsException e) {
+      throw new IllegalStateException("A document named '%s' already exists under this parent folder. Tell the user to pick a different name."
+          .formatted(title));
+    }
   }
 
   /**

@@ -112,6 +112,9 @@ public class JCRDocumentFileStorageTest {
   @Mock
   private BulkStorageActionService                       bulkStorageActionService;
 
+  @Mock
+  private org.exoplatform.services.cms.documents.DocumentService documentService;
+
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
@@ -135,7 +138,8 @@ public class JCRDocumentFileStorageTest {
                                                              uploadService,
                                                              identityRegistry,
                                                              activityManager,
-                                                             bulkStorageActionService);
+                                                             bulkStorageActionService,
+                                                             documentService);
   }
 
   @Test

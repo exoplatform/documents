@@ -54,6 +54,9 @@ import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnect
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
+import org.exoplatform.services.cms.documents.DocumentService;
+import org.exoplatform.services.cms.documents.NewDocumentTemplate;
+import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -145,6 +148,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final BulkStorageActionService            bulkStorageActionService;
 
+  private final DocumentService                     documentService;
+
   private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
 
   private final String                              DEST_PATH                   = "destPath";
@@ -195,7 +200,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 UploadService uploadService,
                                 IdentityRegistry identityRegistry,
                                 ActivityManager activityManager,
-                                BulkStorageActionService bulkStorageActionService) {
+                                BulkStorageActionService bulkStorageActionService,
+                                DocumentService documentService) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.repositoryService = repositoryService;
@@ -206,6 +212,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     this.identityRegistry = identityRegistry;
     this.activityManager = activityManager;
     this.bulkStorageActionService = bulkStorageActionService;
+    this.documentService = documentService;
   }
 
   @Override
@@ -1038,6 +1045,94 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public AbstractNode createDocumentFromTemplate(long ownerId,
+                                                 String folderId,
+                                                 String folderPath,
+                                                 String title,
+                                                 String documentType,
+                                                 Identity aclIdentity) throws IllegalAccessException,
+                                                                       ObjectNotFoundException,
+                                                                       ObjectAlreadyExistsException {
+    if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
+      throw new IllegalArgumentException("document title is not valid");
+    }
+    String extension = StringUtils.isBlank(documentType) ? "" : documentType.trim();
+    if (extension.startsWith(".")) {
+      extension = extension.substring(1);
+    }
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(folderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        folderId = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, folderId);
+      }
+      if (StringUtils.isNotBlank(folderPath)) {
+        try {
+          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
+        } catch (RepositoryException repositoryException) {
+          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+        }
+      }
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(node, aclIdentity);
+      String canEdit = "canEdit";
+      if (nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue()) {
+        throw new IllegalAccessException("Permission to add document is missing");
+      }
+      // no need to this object later make it eligible to the garbage collactor
+      nodeAccessList = null;
+      // Resolve the template from the installed document editor add-on providers
+      NewDocumentTemplate template = null;
+      List<String> availableExtensions = new ArrayList<>();
+      for (NewDocumentTemplateProvider provider : documentService.getNewDocumentTemplateProviders()) {
+        if (provider == null || provider.getTemplates() == null) {
+          continue;
+        }
+        for (NewDocumentTemplate candidate : provider.getTemplates()) {
+          if (candidate == null || candidate.getExtension() == null) {
+            continue;
+          }
+          availableExtensions.add(candidate.getExtension());
+          if (candidate.getExtension().equalsIgnoreCase(extension)) {
+            template = candidate;
+            break;
+          }
+        }
+        if (template != null) {
+          break;
+        }
+      }
+      if (template == null) {
+        throw new ObjectNotFoundException("No document template found for extension '" + extension
+            + "'. Available template extensions: " + availableExtensions);
+      }
+      Node createdNode = documentService.createDocumentFromTemplate(node, title, template);
+      // defensive save (ecms saves internally, but the parent may still hold pending state)
+      node.save();
+      return toFileNode(identityManager, aclIdentity, createdNode, "", spaceService);
+    } catch (IllegalAccessException exception) {
+      throw new IllegalAccessException(exception.getMessage());
+    } catch (ObjectNotFoundException e) {
+      throw new ObjectNotFoundException(e.getMessage());
+    } catch (javax.jcr.ItemExistsException e) {
+      throw new ObjectAlreadyExistsException("A document named '" + title + "' already exists in the target folder");
+    } catch (Exception e) {
+      throw new IllegalStateException("Error creating document from template in folder '" + folderId + "'", e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();

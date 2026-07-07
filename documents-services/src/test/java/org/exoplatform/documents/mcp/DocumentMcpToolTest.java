@@ -570,6 +570,110 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void createDocumentFromTemplateSucceeds() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    // ecms names the file after the title (with the extension), so the tool builds
+    // "Q3 report.docx" and passes the normalized type "docx".
+    when(documentFileService.createDocumentFromTemplate(eq(OWNER_ID),
+                                                        eq(FOLDER_ID),
+                                                        isNull(),
+                                                        eq("Q3 report.docx"),
+                                                        eq("docx"),
+                                                        eq(USER_IDENTITY_ID)))
+        .thenReturn(fileNodeNamed("doc-tpl", "q3 report.docx"));
+
+    DocumentModel model = documentMcpTool.createDocumentFromTemplate(FOLDER_ID, "Q3 report", "docx");
+
+    assertNotNull(model);
+    assertEquals("doc-tpl", model.getId());
+    verify(documentFileService).createDocumentFromTemplate(eq(OWNER_ID),
+                                                           eq(FOLDER_ID),
+                                                           isNull(),
+                                                           eq("Q3 report.docx"),
+                                                           eq("docx"),
+                                                           eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void createDocumentFromTemplateStripsDuplicateExtensionAndNormalizesType() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.createDocumentFromTemplate(eq(OWNER_ID),
+                                                        eq(FOLDER_ID),
+                                                        isNull(),
+                                                        eq("budget.xlsx"),
+                                                        eq("xlsx"),
+                                                        eq(USER_IDENTITY_ID)))
+        .thenReturn(fileNodeNamed("doc-xls", "budget.xlsx"));
+
+    // name already carries the extension and document_type is upper-cased with a
+    // leading dot: the tool must not produce "budget.xlsx.xlsx" nor pass ".XLSX".
+    DocumentModel model = documentMcpTool.createDocumentFromTemplate(FOLDER_ID, "budget.xlsx", ".XLSX");
+
+    assertNotNull(model);
+    assertEquals("doc-xls", model.getId());
+    verify(documentFileService).createDocumentFromTemplate(eq(OWNER_ID),
+                                                           eq(FOLDER_ID),
+                                                           isNull(),
+                                                           eq("budget.xlsx"),
+                                                           eq("xlsx"),
+                                                           eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void createDocumentFromTemplateBlankNameFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocumentFromTemplate(FOLDER_ID, " ", "docx"));
+  }
+
+  @Test
+  public void createDocumentFromTemplateBlankTypeFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocumentFromTemplate(FOLDER_ID, "report", " "));
+  }
+
+  @Test
+  public void createDocumentFromTemplateUnsupportedTypeFails() {
+    IllegalArgumentException ex =
+                                assertThrows(IllegalArgumentException.class,
+                                             () -> documentMcpTool.createDocumentFromTemplate(FOLDER_ID, "report", "pdf"));
+    assertTrue(ex.getMessage().contains("Unsupported document_type"));
+  }
+
+  @Test
+  public void createDocumentFromTemplateBlankFolderFails() {
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createDocumentFromTemplate(" ", "report", "docx"));
+  }
+
+  @Test
+  public void createDocumentFromTemplateBadFolderFails() throws Exception {
+    when(documentFileService.getDocumentById("missing", USERNAME)).thenThrow(new ObjectNotFoundException("no node"));
+    assertThrows(ObjectNotFoundException.class,
+                 () -> documentMcpTool.createDocumentFromTemplate("missing", "report", "docx"));
+  }
+
+  @Test
+  public void createDocumentFromTemplateNoEditPermissionFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.createDocumentFromTemplate(anyLong(), anyString(), isNull(), anyString(), anyString(), anyLong()))
+        .thenThrow(new IllegalAccessException("Permission to add document is missing"));
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.createDocumentFromTemplate(FOLDER_ID, "report", "docx"));
+  }
+
+  @Test
+  public void createDocumentFromTemplateNameClashFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.createDocumentFromTemplate(anyLong(), anyString(), isNull(), anyString(), anyString(), anyLong()))
+        .thenThrow(new ObjectAlreadyExistsException("exists"));
+    IllegalStateException ex =
+                             assertThrows(IllegalStateException.class,
+                                          () -> documentMcpTool.createDocumentFromTemplate(FOLDER_ID, "report", "docx"));
+    assertTrue(ex.getMessage().contains("already exists"));
+  }
+
+  @Test
   public void uploadDocumentFromBase64() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
