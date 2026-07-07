@@ -16,30 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHILDCOUNT;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CREATIONDATE;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTLENGTH;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETCONTENTTYPE;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GET_ETAG;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HASCHILDREN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISCOLLECTION;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISFOLDER;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISROOT;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.ISVERSIONED;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.LOCKDISCOVERY;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.OWNER;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PARENTNAME;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PREDECESSORSET;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.RESOURCETYPE;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUCCESSORSET;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDLOCK;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDMETHODSET;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONHISTORY;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.VERSIONNAME;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.*;
 
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -50,11 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import javax.jcr.AccessDeniedException;
-import javax.jcr.Item;
-import javax.jcr.Node;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
+import javax.jcr.*;
 import javax.jcr.observation.ObservationManager;
 import javax.xml.namespace.QName;
 
@@ -248,7 +221,7 @@ public class PathCommandHandler {
       String[] pathParts = webDavPath.split("/");
       String identityPart = Arrays.stream(pathParts)
                                   .filter(StringUtils::isNotBlank)
-                                  .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                  .map(this::decodeUrlString)
                                   .findFirst()
                                   .orElse(null);
       String identityId = null;
@@ -292,7 +265,7 @@ public class PathCommandHandler {
         Item existingItem = session.getItem(legacyChildJcrPath);
         if (existingItem instanceof Node existingNode) {
           String existingWebDavPath = getOrCreateWebDavPath(existingNode);
-          String decodedExistingWebDavPath = URLDecoder.decode(existingWebDavPath, StandardCharsets.UTF_8);
+          String decodedExistingWebDavPath = decodeUrlString(existingWebDavPath);
           String decodedExistingWebDavPathPrefix = StringUtils.removeEnd(decodedExistingWebDavPath, "/") + "/"; // NOSONAR
           if (webDavPath.startsWith(decodedExistingWebDavPathPrefix)
               || webDavPath.equals(decodedExistingWebDavPath)) {
@@ -314,7 +287,7 @@ public class PathCommandHandler {
     return Arrays.stream(webDavPath.split("/"))
                  .filter(StringUtils::isNotBlank)
                  .reduce((first, second) -> second)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(this::decodeUrlString)
                  .orElse("");
   }
 
@@ -516,7 +489,7 @@ public class PathCommandHandler {
   private List<String> splitDecodedSegments(String relativeWebDavPath) {
     return Arrays.stream(relativeWebDavPath.split("/"))
                  .filter(StringUtils::isNotBlank)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(this::decodeUrlString)
                  .toList();
   }
 
@@ -524,7 +497,7 @@ public class PathCommandHandler {
     String[] pathParts = webDavPath.split("/");
     return Arrays.stream(pathParts)
                  .filter(StringUtils::isNotBlank)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(this::decodeUrlString)
                  .map(Utils::encodeNodeName)
                  .skip(1)
                  .collect(Collectors.joining("/"));
@@ -686,13 +659,22 @@ public class PathCommandHandler {
     return URLEncoder.encode(s, StandardCharsets.UTF_8).replace("+", "%20");
   }
 
+  /**
+   * Decodes a raw WebDAV path segment. Unlike {@link URLDecoder#decode(String, java.nio.charset.Charset)},
+   * which implements {@code application/x-www-form-urlencoded} semantics and wrongly turns a literal
+   * '+' into a space, this only unescapes percent-encoded sequences and leaves literal '+' untouched.
+   */
+  String decodeUrlString(String s) {
+    return URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8);
+  }
+
   private String normalizeWebDavPath(String webDavPath) {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return "/";
     }
     String normalized = Arrays.stream(webDavPath.split("/"))
                               .filter(StringUtils::isNotBlank)
-                              .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                              .map(this::decodeUrlString)
                               .map(this::encodeUrlString)
                               .collect(Collectors.joining("/"));
     return "/" + normalized;
@@ -708,7 +690,7 @@ public class PathCommandHandler {
     String firstSegment = Arrays.stream(webDavPath.split("/"))
                                 .filter(StringUtils::isNotBlank)
                                 .findFirst()
-                                .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                                .map(this::decodeUrlString)
                                 .orElse(null);
     if (firstSegment != null && firstSegment.endsWith(")") && firstSegment.contains("(")) {
       return firstSegment.substring(firstSegment.lastIndexOf('(') + 1, firstSegment.lastIndexOf(')'));
@@ -728,7 +710,7 @@ public class PathCommandHandler {
     return Arrays.stream(StringUtils.defaultString(webDavPath).split("/"))
                  .filter(StringUtils::isNotBlank)
                  .reduce((first, second) -> second)
-                 .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                 .map(this::decodeUrlString)
                  .orElse(null);
   }
 
