@@ -39,31 +39,26 @@ export default {
           this.$root.$emit('close-file-action-menu');
           return;
         }
-        this.$attachmentService.getAttachmentById(this.file.id)
-          .then(attachment => {
-            this.downloadUrl = attachment.downloadUrl.replaceAll('%', '%25').replaceAll('+', '%2B');
-          })
-          .catch(e => console.error(e))
-          .finally(() => {
-            const urlDownload = this.downloadUrl;
-            const fileName = this.file.name;
-            if (urlDownload.indexOf('/') > 0 && !urlDownload.includes(window.location.hostname)) {
-              return;
-            }
-            const a = document.createElement('a');
-            a.href = urlDownload;
-            a.download = fileName.replace(/\[[0-9]*\]$/g, '');
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            document.dispatchEvent(new CustomEvent('download-file', {
-              detail: {
-                'type': 'file',
-                'id': this.file.id,
-                'spaceId': this.spaceId,
-              }
-            }));
-          });
+        // Download through the document content REST endpoint, which references the
+        // document by its id. The file name never appears in the URL path (it is
+        // returned by the server in the Content-Disposition header), so names
+        // containing special characters such as "+" download correctly instead of
+        // returning a 404.
+        const urlDownload = this.$documentsUtils.getDownloadUrl(this.file.id, this.file.lastModified);
+        const fileName = this.file.name;
+        const a = document.createElement('a');
+        a.href = urlDownload;
+        a.download = fileName.replace(/\[[0-9]*\]$/g, '');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        document.dispatchEvent(new CustomEvent('download-file', {
+          detail: {
+            'type': 'file',
+            'id': this.file.id,
+            'spaceId': this.spaceId,
+          }
+        }));
         if ( this.isMobile ) {
           this.$root.$emit('close-file-action-menu');
         }
