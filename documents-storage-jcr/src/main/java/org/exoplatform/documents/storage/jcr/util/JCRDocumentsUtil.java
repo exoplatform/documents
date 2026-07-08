@@ -966,6 +966,14 @@ public class JCRDocumentsUtil {
     if (node == null) {
       return;
     }
+    if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+      Node sourceNode = getNodeByIdentifier(node.getSession(), sourceID);
+      if (sourceNode != null) {
+        createFile(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentNode);
+      }
+      return;
+    }
     Node jrcNode = node.getNode("jcr:content");
     InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
     String path = "";
