@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.PermissionEntry;
+
 import org.exoplatform.documents.model.PermissionRole;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.junit.Before;
@@ -164,13 +165,27 @@ public class EntityBuilderTest {
         assertEquals(0, editResult.getCollaborators().size());
     }
 
-    private NodePermissionEntity invokeToNodePermissionEntity(FileNode node) throws Exception {
-        Method method = EntityBuilder.class.getDeclaredMethod("toNodePermissionEntity",
-                                                               org.exoplatform.documents.model.AbstractNode.class,
-                                                               IdentityManager.class,
-                                                               SpaceService.class,
-                                                               PublicDocumentAccessService.class);
-        method.setAccessible(true);
-        return (NodePermissionEntity) method.invoke(null, node, identityManager, spaceService, publicDocumentAccessService);
-    }
+  @Test
+  public void encodeNamePreservesPlusSign() throws Exception {
+    FileNode node = new FileNode();
+    node.setName("ABD + DEF.docx");
+    assertEquals("ABD + DEF.docx", invokeEncodeName(node));
+  }
+
+  private NodePermissionEntity invokeToNodePermissionEntity(FileNode node) throws Exception {
+    Method method = EntityBuilder.class.getDeclaredMethod("toNodePermissionEntity",
+                                                          org.exoplatform.documents.model.AbstractNode.class,
+                                                          IdentityManager.class,
+                                                          SpaceService.class,
+                                                          PublicDocumentAccessService.class);
+    method.setAccessible(true);
+    return (NodePermissionEntity) method.invoke(null, node, identityManager, spaceService, publicDocumentAccessService);
+  }
+
+  private String invokeEncodeName(FileNode node) throws Exception {
+    Method method = EntityBuilder.class.getDeclaredMethod("encodeName",
+                                                          org.exoplatform.documents.model.AbstractNode.class);
+    method.setAccessible(true);
+    return (String) method.invoke(null, node);
+  }
 }
