@@ -16,46 +16,16 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_NAME;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_SORTABLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.EXO_TITLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_CONTENT;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_DATA;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_ENCODING;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_LAST_MODIFIED;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_MIME_TYPE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_LOCKABLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.MIX_VERSIONABLE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FILE;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
-import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_RESOURCE;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 import static org.exoplatform.documents.storage.jcr.util.Utils.encodeNodeName;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getStatusDescription;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
-import javax.jcr.AccessDeniedException;
-import javax.jcr.Item;
-import javax.jcr.ItemNotFoundException;
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
-import javax.jcr.PathNotFoundException;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
-import javax.jcr.Workspace;
+import javax.jcr.*;
 import javax.jcr.lock.Lock;
 import javax.jcr.lock.LockException;
 import javax.jcr.version.Version;
@@ -196,7 +166,7 @@ public class WebdavWriteCommandHandler {
     if (session.itemExists(jcrPath)) {
       Node existingNode = (Node) session.getItem(jcrPath);
       String existingNodeWebDavPath = pathCommandHandler.getOrCreateWebDavPath(existingNode);
-      if (StringUtils.equals(URLDecoder.decode(existingNodeWebDavPath, StandardCharsets.UTF_8),
+      if (StringUtils.equals(pathCommandHandler.decodeUrlString(existingNodeWebDavPath),
                              webDavPath)) {
         node = existingNode;
       } else {
