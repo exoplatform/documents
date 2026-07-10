@@ -16,21 +16,13 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.cache;
 
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.MODIFICATION_PATTERN;
-import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.REQUEST_ALL_PROPS;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.*;
 
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import javax.jcr.Session;
@@ -300,11 +292,20 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     }
     String normalized = Arrays.stream(webDavPath.split("/"))
                               .filter(StringUtils::isNotBlank)
-                              .map(s -> URLDecoder.decode(s, StandardCharsets.UTF_8))
+                              .map(CachedJcrWebDavService::decodeUrlString)
                               .map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)
                                                   .replace("+", "%20"))
                               .collect(Collectors.joining("/"));
     return "/" + normalized;
+  }
+
+  /**
+   * Decodes a raw WebDAV path segment. Unlike {@link URLDecoder#decode(String, java.nio.charset.Charset)},
+   * which implements {@code application/x-www-form-urlencoded} semantics and wrongly turns a literal
+   * '+' into a space, this only unescapes percent-encoded sequences and leaves literal '+' untouched.
+   */
+  private static String decodeUrlString(String s) {
+    return URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8);
   }
 
   private String getParentJcrPath(String jcrPath) {
