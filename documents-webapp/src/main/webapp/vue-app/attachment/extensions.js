@@ -78,7 +78,7 @@ export function installExtensions() {
           icon: 'fa-download',
           labelKey: 'documents.label.download',
           isEnabled: activity => {
-            if (activity.templateParams) {
+            if (!activity.publicationStartTime && activity.templateParams) {
               const docPaths = activity.templateParams.DOCPATH && activity.templateParams.DOCPATH.split('|@|')
                               || (activity.templateParams.nodePath && [activity.templateParams.nodePath]);
               return docPaths && docPaths.length === 1;
@@ -92,7 +92,7 @@ export function installExtensions() {
           labelKey: 'documents.label.downloadAll',
           icon: 'fa-download',
           isEnabled: activity => {
-            if (activity.templateParams) {
+            if (!activity.publicationStartTime && activity.templateParams) {
               const docPaths = activity.templateParams.DOCPATH && activity.templateParams.DOCPATH.split('|@|')
                               || (activity.templateParams.nodePath && [activity.templateParams.nodePath]);
               return docPaths && docPaths.length > 1;
