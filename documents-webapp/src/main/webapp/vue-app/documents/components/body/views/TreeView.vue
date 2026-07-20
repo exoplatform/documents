@@ -19,7 +19,8 @@
 
 <template>
   <v-treeview
-    :open="openLevel"
+    :open.sync="openNodes"
+    :active.sync="activeNodes"
     :items="items"
     :load-children="fetchChildren"
     class="treeView-item my-2"
@@ -27,7 +28,6 @@
     hoverable
     activatable
     open-on-click
-    open-all
     transition>
     <template #label="{ item }">
       <div class="d-flex clickable" v-if="item.isLoadMore">
@@ -102,14 +102,30 @@ export default {
     offset: 0,
     limit: 0,
     currentDriveBreadCrumb: [],
+    // Two-way bound so programmatic expansion (documentsBreadcrumbUpdated) and
+    // user expand/collapse both actually open v-treeview nodes.
+    openNodes: [],
+    activeNodes: [],
   }),
-  computed: {   
+  computed: {
     openLevel() {
       return this.items && this.items.length ?  [...new Set(this.currentFolderPathTab)] : [];
     },
     idItemActive() {
       return this.currentFolderPathTab?.length ? this.currentFolderPathTab[this.currentFolderPathTab.length-1] : [];
     }
+  },
+  watch: {
+    // When the breadcrumb path is (re)computed, open every ancestor down to the
+    // current folder, mark it active, and scroll it into view.
+    currentFolderPathTab: {
+      handler() {
+        this.openNodes = this.openLevel;
+        this.activeNodes = this.idItemActive ? [this.idItemActive] : [];
+        this.$nextTick(this.scrollToActiveNode);
+      },
+      deep: true,
+    },
   },
   created() {
     this.$root.$on('documentsBreadcrumb',this.documentsBreadcrumbUpdated);
@@ -126,47 +142,33 @@ export default {
     this.$root.$off('load-more-drives', this.loadMoreDrives);
   },
   methods: {
+    // Scrolls the currently active (current folder) tree node into view.
+    scrollToActiveNode() {
+      const el = this.$el && this.$el.querySelector && this.$el.querySelector('.v-treeview-node--active');
+      if (el && el.scrollIntoView) {
+        el.scrollIntoView({block: 'center', behavior: 'smooth'});
+      }
+    },
+    // Entry point when the current-folder breadcrumb is (re)emitted: auto-expand
+    // the tree down to - and highlight - the current folder. The root items are
+    // loaded asynchronously when the drawer opens, so if they are not there yet we
+    // wait for them before expanding.
     documentsBreadcrumbUpdated(documentsBreadcrumb) {
-      this.$nextTick()
-        .then(() => {
-        
-          if (this.currentDriveBreadCrumb.includes('space_drives') && documentsBreadcrumb[0]?.name === 'Private') {
-            this.currentDriveBreadCrumb = documentsBreadcrumb.map(item => item.id);
-            return;
-          }
-          const tab = [...this.currentDriveBreadCrumb];
-          const drive = this.getDriveByIdentityId(documentsBreadcrumb[0].identityId);
-          if (drive && !tab.includes(drive.id)) {
-            tab.push(drive.id);
-          }
-          if (documentsBreadcrumb.length !== 1 || documentsBreadcrumb[0].id !== 'space_drives') {
-            let spaceDrivesTree = false;
-            documentsBreadcrumb.forEach(element => {
-              if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId){
-                if (element.path.includes('Groups/spaces')){
-                  spaceDrivesTree = true;
-                }
-              } 
-              if (!tab.includes(element.id)){
-                tab.push(element.id);}
-            });
-            if (spaceDrivesTree && !tab.includes('space_drives')){
-              tab.unshift('space_drives');
+      if (!documentsBreadcrumb || !documentsBreadcrumb.length) {
+        return;
+      }
+      this.$nextTick().then(() => {
+        if (this.items?.length) {
+          this.expandToCurrentFolder(documentsBreadcrumb);
+        } else {
+          const unwatch = this.$watch('items', () => {
+            if (this.items?.length) {
+              unwatch();
+              this.expandToCurrentFolder(documentsBreadcrumb);
             }
-          }
-          this.currentFolderPathTab = tab;
-          if (this.items?.length) {
-            this.expandBreadcrumbPath(tab);
-          } else {
-            const unwatch = this.$watch('items', () => {
-              if (this.items?.length) {
-                this.expandBreadcrumbPath(this.currentFolderPathTab);
-                unwatch();
-              }
-            });
-          }
-        });
-      
+          });
+        }
+      });
     },
     folderCreated(createdFolder) {
       this.addChildren(this.items, createdFolder.parentFolderId, createdFolder);
@@ -240,21 +242,28 @@ export default {
       const folderId = item.identityId ? null : item.id;
       const promise = this.$documentFileService
         .getFullTreeData(item.identityId,folderId).then(data => {
-          if (data) {
+          if (data && data.length) {
             const newItems = data.map(obj => {
-              return JSON.parse(JSON.stringify(obj, (key, value) => 
+              return JSON.parse(JSON.stringify(obj, (key, value) =>
               // eslint-disable-next-line no-undefined
-                (value === null ? undefined : value) 
+                (value === null ? undefined : value)
               ));
             });
             newItems[0].spaceId = item.spaceId;
-            newItems[0].children.map(child => {
+            // The backend returns children === null for leaf folders (no
+            // subfolders); the clone above strips it (-> undefined). Coerce to an
+            // array so empty drives/folders don't throw on map/filter and so the
+            // node always ends up with a real children array (never null).
+            newItems[0].children = newItems[0].children || [];
+            newItems[0].children.forEach(child => {
               child.spaceId = item.spaceId;
+            });
+            if (!Array.isArray(item.children)) {
+              this.$set(item, 'children', []);
             }
-            );
-            const existingIds = new Set(item?.children?.map(c => c.id));
-            const toAdd = newItems[0]?.children?.filter(c => !existingIds.has(c.id));
-            item?.children?.push(...toAdd);
+            const existingIds = new Set(item.children.map(c => c.id));
+            const toAdd = newItems[0].children.filter(c => !existingIds.has(c.id));
+            item.children.push(...toAdd);
           }
           this.$root.$emit('tree-loading', false);
         });
@@ -266,33 +275,87 @@ export default {
       });
       return promise;
     },
-    findNodeById(nodes, id) {
-      for (const node of nodes) {
-        if (node.id === id) {
-          return node;
-        }
-        if (Array.isArray(node.children) && node.children.length) {
-          const found = this.findNodeById(node.children, id);
-          if (found) {
-            return found;
-          }
-        }
-      }
-      return null;
-    },
-    async expandBreadcrumbPath(pathIds, index = 0) {
-      if (!pathIds || index >= pathIds.length) {
+    // Lazily loads a node's children (once) so the next level of the path can be
+    // resolved. The "Space Drives" group (node.drives) has its children loaded
+    // statically, so it is never fetched.
+    async ensureChildrenLoaded(node) {
+      if (!node || node.drives) {
         return;
       }
-      const id = pathIds[index];
-      const node = this.findNodeById(this.items, id);
-      if (node) {
-        if (!node.drives && !node.drive && (!Array.isArray(node.children) || !node.children.length)) {
-          await this.fetchChildren(node);
-        }
-        this.currentFolderPathTab = [...this.currentFolderPathTab];
-        await this.expandBreadcrumbPath(pathIds, index + 1);
+      if (Array.isArray(node.children) && node.children.length) {
+        return;
       }
+      await this.fetchChildren(node);
+    },
+    // Progressively expands the tree from the correct root down to the current
+    // folder, then highlights it and scrolls it into view.
+    //
+    // Why progressive (and not just setting :open with the breadcrumb ids):
+    //  - v-treeview only opens nodes that already exist in `items`; descendants
+    //    are lazy-loaded, so each ancestor's children must be fetched+inserted
+    //    BEFORE the next level's id can be found/opened. Feeding :open ids of
+    //    not-yet-loaded nodes is silently dropped (and :open.sync strips them).
+    //  - A SPACE drive node stands in for that space's "Documents" root: fetching
+    //    a drive hoists the root's children directly under the drive node (the
+    //    root node itself is skipped). So for a space we start from the drive node
+    //    (matched by space identityId) and skip breadcrumb[0] (the drive root).
+    async expandToCurrentFolder(breadcrumb) {
+      if (!breadcrumb || !breadcrumb.length || !this.items || !this.items.length) {
+        return;
+      }
+      const openIds = [];
+      let currentNode = null;
+      const isSpacePath = breadcrumb.some(crumb => crumb.path && crumb.path.includes('/Groups/spaces'));
+      if (isSpacePath && !eXo.env.portal.spaceIdentityId) {
+        // Attachment picker / documents home (non-space page): the target space
+        // lives under the "Space Drives" group. Start from its drive node.
+        const drivesGroup = this.items.find(node => node.drives);
+        if (drivesGroup) {
+          openIds.push(drivesGroup.id);
+        }
+        const identityId = breadcrumb[0].identityId || this.$root.ownerId;
+        currentNode = this.getDriveByIdentityId(identityId);
+        if (!currentNode) {
+          // Target drive not loaded yet (e.g. beyond the first drives page):
+          // expand the group only so the user can find it.
+          this.currentFolderPathTab = [...openIds];
+          return;
+        }
+        openIds.push(currentNode.id);
+      } else {
+        // Personal home, or a space page: items[0] is the home root and matches
+        // breadcrumb[0].
+        currentNode = this.items[0];
+        openIds.push(currentNode.id);
+      }
+      // The drive-root crumb is represented by the root/drive node itself, so the
+      // walk always starts at breadcrumb index 1.
+      await this.ensureChildrenLoaded(currentNode);
+      let activeId = currentNode.id;
+      for (let i = 1; i < breadcrumb.length; i++) {
+        const child = (currentNode.children || []).find(node => node.id === breadcrumb[i].id);
+        if (!child) {
+          break;
+        }
+        currentNode = child;
+        activeId = child.id;
+        // Only ancestors need expanding/loading: open this node and load its
+        // children so the NEXT crumb can be resolved. The current folder itself
+        // (last crumb) is left as-is - just highlighted. The awaits are
+        // intentionally sequential: each level depends on its parent's children
+        // being loaded first.
+        if (i < breadcrumb.length - 1) {
+          openIds.push(child.id);
+          // eslint-disable-next-line no-await-in-loop
+          await this.ensureChildrenLoaded(currentNode);
+        }
+      }
+      // Let v-treeview render the newly-inserted nodes before we open them, then a
+      // single clean assignment of REAL, loaded ids: the currentFolderPathTab
+      // watcher opens exactly these nodes, marks the current folder active and
+      // scrolls it into view. No phantom ids -> :open.sync cannot strip them.
+      await this.$nextTick();
+      this.currentFolderPathTab = [...new Set([...openIds, activeId])];
     },
     removeItem(nodes, idToRemove) {
       return nodes

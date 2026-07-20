@@ -101,11 +101,6 @@
           margin: 0 2px;
         }
 
-        .foldersHistory {
-          flex: 1 1 42%;
-          min-width: 0;
-        }
-
         .folders-menu {
           width: fit-content;
         }
@@ -124,22 +119,6 @@
               box-shadow: none;
             }
           }
-
-          .uiIconCloseServerAttachments {
-            font-size: 14px;
-            padding: 10px 15px 13px 15px;
-            border: 1px solid #b3b3b3;
-            border-left: 0;
-            border-radius: 0 5px 5px 0;
-            cursor: pointer;
-
-            &::before {
-              color: #476A9C;
-              content: "\f12a";
-              font-family: 'IONIC-FONT';
-              font-size: 12px;
-            }
-          }
         }
 
         .searchInput {
@@ -148,7 +127,7 @@
           display: none;
         }
 
-        .uiIconFilter, .uiIconAddFolder {
+        .uiIconAddFolder {
           border: 1px solid #b3b3b3;
           padding: 10px;
           border-radius: 15%;
@@ -206,18 +185,8 @@
           }
         }
 
-        .boxOfFolder {
-          background-color: @greyColorDefault;
-          border-radius: 5px;
-        }
-
         .folderSelection {
           width: 20%;
-
-          .boxNewFolder {
-            border-radius: 5px;
-            background-color: @greyColorDefault;
-          }
 
             i {
               font-size: 41px;
@@ -278,48 +247,6 @@
           }
         }
 
-        .fileSelection {
-          width: 20%;
-          margin: 7px;
-          cursor: pointer;
-          height: fit-content;
-
-          .attachment {
-            flex-direction: column;
-            align-items: center;
-
-            .v-avatar {
-              margin-right: 0;
-            }
-
-            .serverFileContent {
-              width: 100%;
-              align-items: center;
-            }
-
-            .serverFileTitle {
-              font-size: 12px;
-            }
-
-            .fileDetails {
-              margin: 0;
-
-              .fileSize {
-                display: none;
-              }
-
-              .fileNameLabel {
-                font-size: 12px;
-                text-align: center;
-              }
-            }
-          }
-
-          &.selected {
-            border-radius: 5px;
-            background-color: #E1E8EE;
-          }
-        }
       }
 
       .categorizedDrives {
@@ -733,4 +660,48 @@
 .make-icons-size();
 .noteAttachmentsIcon {
   color: @greyColorLighten1Default !important;
+}
+
+/* Simple, container-relative rows for the drive explorer: icon far-left and
+   vertically centered, name on top, date on a muted secondary line left-aligned
+   with the name. No vw units (fits the ~380px drawer at any window width), no
+   visibility badge / 3-dots. */
+.driveExplorerDrawer {
+  /* Very simple rows: [checkbox (files)] [icon] [name] on one line, left-aligned
+     and vertically centered. No dividers, no date. */
+  .drive-explorer-list {
+    .drive-explorer-row {
+      padding: 6px 4px;
+      cursor: pointer;
+      justify-content: flex-start;
+      text-align: left;
+
+      &:hover {
+        background-color: #f7f7f7;
+      }
+
+      &.selected-row {
+        background-color: #E1E8EE;
+      }
+
+      /* Match the Documents list row name size (the drawer's inherited default
+         renders smaller than the Documents app list name). */
+      .drive-explorer-row-name {
+        color: @textColor;
+        font-size: 16px;
+      }
+    }
+  }
+
+  /* Header breadcrumb (reused documents-breadcrumb, mobile branch). */
+  .attachments-drive-breadcrumb {
+    min-width: 0;
+  }
+
+  /* Equalize the header action icons: the use-filter funnel reads heavier than
+     the close (x) at the same size, so shrink the funnel (first icon; the close
+     is the last-child) to match its visual weight. */
+  .drawerIcons .v-btn:not(:last-child) .v-icon {
+    font-size: 18px !important;
+  }
 }
