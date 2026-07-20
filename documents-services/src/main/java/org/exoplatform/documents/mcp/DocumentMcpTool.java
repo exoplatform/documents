@@ -213,9 +213,21 @@ public class DocumentMcpTool implements McpToolPlugin {
     return toDocumentFolderModel(spaceRootFolder);
   }
 
+  /**
+   * Links an existing document to another content entity (an activity, a note, …)
+   * as an attachment, acting as the current user. Validates the document id and the
+   * user's read access on it first — matching every sibling tool method — so a
+   * blank or inaccessible id fails cleanly instead of reaching the attachment
+   * service with an unchecked reference.
+   *
+   * @param documentId the id of the document to attach
+   * @param contentType the target content type the document is attached to
+   * @param contentId the target content id the document is attached to
+   */
   public void attachDocumentToContent(String documentId,
                                       String contentType,
-                                      long contentId) throws IllegalAccessException {
+                                      long contentId) throws IllegalAccessException, ObjectNotFoundException {
+    checkCanAccessDocument(documentId);
     // FIXME Why using this content type name ??!!
     contentId = fixNoteContentId(contentType, contentId);
     // FIXME Why using this content type name ??!!
@@ -652,11 +664,16 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     // The storage copyDocument returns the DESTINATION folder node, not the copy,
     // so snapshot the destination's file ids first and resolve the newly added
-    // file afterwards to return the actual copied document.
+    // file by NAME afterwards to return the actual copied document. The copy keeps
+    // the source's name (or, when copied into the source's own folder, gets a
+    // " (n)" counter suffix), so it is matched name-aware: this stays correct even
+    // if another file lands in the destination concurrently (a blind folder-diff
+    // would otherwise return the wrong document).
+    AbstractNode source = getNode(documentId);
+    String expectedName = source.getName();
     Set<String> beforeFileIds = currentChildFileIds(destinationFolderId);
-    AbstractNode copyReturn = documentFileService.copyDocument(documentId, destinationFolderId, getCurrentUserIdentityId());
-    DocumentModel copied = resolveAddedChildFile(destinationFolderId, beforeFileIds);
-    return copied != null ? copied : toDocumentModel(copyReturn);
+    documentFileService.copyDocument(documentId, destinationFolderId, getCurrentUserIdentityId());
+    return requireResolvedChildFile(destinationFolderId, beforeFileIds, expectedName, "copied");
   }
 
   public DocumentModel duplicateDocument(String documentId,
@@ -664,17 +681,26 @@ public class DocumentMcpTool implements McpToolPlugin {
     checkDocumentIdParameter(documentId);
     // The storage duplicateDocument returns the PARENT folder node, not the
     // duplicate, so snapshot the parent's file ids first and resolve the newly
-    // added (suffixed/prefixed) file afterwards to return the actual duplicate.
+    // added file by NAME afterwards to return the actual duplicate. The duplicate
+    // is named "[<prefix> ]<source name>" with a " (n)" counter appended on a name
+    // clash (there is always at least one, since the source itself is present), so
+    // it is matched name-aware to stay correct under a concurrent add.
     AbstractNode source = getNode(documentId);
     String parentFolderId = source.getParentFolderId();
-    Set<String> beforeFileIds = StringUtils.isBlank(parentFolderId) ? Set.of() : currentChildFileIds(parentFolderId);
-    AbstractNode duplicateReturn = documentFileService.duplicateDocument(getOwnerId(documentId),
-                                                                         documentId,
-                                                                         prefix,
-                                                                         getCurrentUserIdentityId());
-    DocumentModel duplicate = StringUtils.isBlank(parentFolderId) ? null
-                                                                  : resolveAddedChildFile(parentFolderId, beforeFileIds);
-    return duplicate != null ? duplicate : toDocumentModel(duplicateReturn);
+    String expectedName = StringUtils.isBlank(prefix) ? source.getName()
+                                                      : StringUtils.trimToEmpty(prefix) + " " + source.getName();
+    if (StringUtils.isBlank(parentFolderId)) {
+      // No resolvable parent (e.g. a root node): the folder-diff resolution is not
+      // possible, so fall back to the storage return.
+      AbstractNode duplicateReturn = documentFileService.duplicateDocument(getOwnerId(documentId),
+                                                                           documentId,
+                                                                           prefix,
+                                                                           getCurrentUserIdentityId());
+      return toDocumentModel(duplicateReturn);
+    }
+    Set<String> beforeFileIds = currentChildFileIds(parentFolderId);
+    documentFileService.duplicateDocument(getOwnerId(documentId), documentId, prefix, getCurrentUserIdentityId());
+    return requireResolvedChildFile(parentFolderId, beforeFileIds, expectedName, "duplicated");
   }
 
   public void deleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
@@ -1348,7 +1374,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                              Set<String> beforeFileIds) throws ObjectNotFoundException,
                                                                         IllegalAccessException {
     for (int attempt = 0; attempt < IMPORT_POLL_MAX_ATTEMPTS; attempt++) {
-      DocumentModel match = resolveAddedChildFile(parentFolderId, beforeFileIds);
+      DocumentModel match = resolveAddedChildFile(parentFolderId, beforeFileIds, fileName);
       if (match != null) {
         return match;
       }
@@ -1375,23 +1401,136 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Resolves the file that was just added to a folder as the child file whose id
-   * is not in the pre-operation snapshot; returns {@code null} if none is found
-   * yet.
+   * Resolves the file that was just added to a folder by an operation (import /
+   * copy / duplicate) as the child file whose id is not in the pre-operation
+   * snapshot AND whose name matches the expected created name. Narrowing by name
+   * (rather than blindly collapsing the id-diff with {@code reduce((a,b)->b)})
+   * keeps the result correct when the folder gains another, differently-named file
+   * concurrently (a parallel upload, a copy/import by another user, a retry).
+   * <p>
+   * Returns {@code null} when no added file matches yet (so a poller can retry),
+   * and throws an {@link IllegalStateException} when MORE THAN ONE added file
+   * matches the expected name — the operation cannot then be resolved
+   * deterministically, and guessing one would risk returning the wrong document.
+   *
+   * @param folderId the folder to resolve the created file in
+   * @param beforeFileIds the folder's file ids snapshotted before the operation
+   * @param expectedName the name the created file is expected to carry (the source
+   *          name for copy/duplicate, the uploaded file name for import); may be
+   *          blank, in which case any single added file is accepted
+   * @return the resolved created document, or {@code null} if none matches yet
    */
   private DocumentModel resolveAddedChildFile(String folderId,
-                                              Set<String> beforeFileIds) throws ObjectNotFoundException,
-                                                                         IllegalAccessException {
+                                              Set<String> beforeFileIds,
+                                              String expectedName) throws ObjectNotFoundException,
+                                                                   IllegalAccessException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
     List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE,
                                                                           getCurrentUserIdentityId());
-    return children.stream()
-                   .filter(FileNode.class::isInstance)
-                   .map(FileNode.class::cast)
-                   .filter(file -> !beforeFileIds.contains(file.getId()))
-                   .reduce((first, second) -> second)
-                   .map(this::toDocumentFileModel)
-                   .orElse(null);
+    List<FileNode> candidates = children.stream()
+                                        .filter(FileNode.class::isInstance)
+                                        .map(FileNode.class::cast)
+                                        .filter(file -> !beforeFileIds.contains(file.getId()))
+                                        .filter(file -> nameMatchesExpected(file.getName(), expectedName))
+                                        .toList();
+    if (candidates.isEmpty()) {
+      return null;
+    }
+    if (candidates.size() > 1) {
+      throw new IllegalStateException(("Could not unambiguously resolve the created document in folder %s "
+          + "(multiple candidates matched '%s'); please retry.").formatted(folderId, expectedName));
+    }
+    return toDocumentFileModel(candidates.get(0));
+  }
+
+  /**
+   * Resolves the single file added to a folder by a synchronous operation
+   * (copy / duplicate) and fails clearly when it cannot be found, rather than
+   * returning the storage's folder node or silently guessing. The ambiguity guard
+   * (more than one match) is enforced by {@link #resolveAddedChildFile}; a
+   * {@code null} here means no added file matched the expected name, which is
+   * surfaced as an actionable error instead of a wrong document.
+   *
+   * @param folderId the folder the operation added a file to
+   * @param beforeFileIds the folder's file ids snapshotted before the operation
+   * @param expectedName the expected name of the created file
+   * @param operation a short label for the operation ("copied" / "duplicated"),
+   *          used only in the error message
+   * @return the resolved created document (never {@code null})
+   */
+  private DocumentModel requireResolvedChildFile(String folderId,
+                                                 Set<String> beforeFileIds,
+                                                 String expectedName,
+                                                 String operation) throws ObjectNotFoundException, IllegalAccessException {
+    DocumentModel resolved = resolveAddedChildFile(folderId, beforeFileIds, expectedName);
+    if (resolved == null) {
+      throw new IllegalStateException(("Could not locate the %s document '%s' in folder %s after the operation. "
+          + "Call list_folder_children on that folder to find it.").formatted(operation, expectedName, folderId));
+    }
+    return resolved;
+  }
+
+  /**
+   * Regex of the trailing copy counter the platform appends on a name clash, e.g.
+   * the " (1)" in "report.pdf (1)" (see the JCR storage's {@code duplicateItem} /
+   * {@code getNewName}); matched at the very end of the name.
+   */
+  private static final java.util.regex.Pattern COUNTER_SUFFIX = java.util.regex.Pattern.compile("\\s*\\(\\d+\\)$");
+
+  /**
+   * Whether a folder child's actual name matches the name a created file is
+   * expected to carry. Matches robustly against the platform's naming rules:
+   * an exact (case-insensitive) match; the expected name plus a trailing " (n)"
+   * copy counter ("report.pdf (1)"); or the same-extension "base (n).ext" variant
+   * ("report (1).pdf"). A blank expected name accepts any candidate (fallback).
+   */
+  private static boolean nameMatchesExpected(String candidate, String expected) {
+    String actual = StringUtils.trimToEmpty(candidate);
+    String wanted = StringUtils.trimToEmpty(expected);
+    if (StringUtils.isBlank(wanted)) {
+      return true;
+    }
+    if (actual.equalsIgnoreCase(wanted)) {
+      return true;
+    }
+    // Counter appended at the very end of the whole name: "report.pdf (1)".
+    if (stripCounter(actual).equalsIgnoreCase(wanted)) {
+      return true;
+    }
+    // Counter inserted before the extension: "report (1).pdf" vs "report.pdf".
+    String wantedExtension = extension(wanted);
+    if (StringUtils.isNotBlank(wantedExtension) && wantedExtension.equalsIgnoreCase(extension(actual))) {
+      return stripCounter(baseName(actual)).equalsIgnoreCase(baseName(wanted));
+    }
+    return false;
+  }
+
+  /**
+   * Strips a trailing " (n)" copy counter from a name, returning the name
+   * unchanged when it carries none.
+   */
+  private static String stripCounter(String name) {
+    return COUNTER_SUFFIX.matcher(StringUtils.trimToEmpty(name)).replaceAll("");
+  }
+
+  /**
+   * Returns the base name of a file name (everything before the last dot), or the
+   * whole name when it has no extension.
+   */
+  private static String baseName(String name) {
+    String trimmed = StringUtils.trimToEmpty(name);
+    int dot = trimmed.lastIndexOf('.');
+    return dot > 0 ? trimmed.substring(0, dot) : trimmed;
+  }
+
+  /**
+   * Returns the lower-cased extension of a file name (everything after the last
+   * dot), or an empty string when it has none.
+   */
+  private static String extension(String name) {
+    String trimmed = StringUtils.trimToEmpty(name);
+    int dot = trimmed.lastIndexOf('.');
+    return dot > 0 ? StringUtils.lowerCase(trimmed.substring(dot + 1)) : "";
   }
 
   private static byte[] zipSingleEntry(String entryName, byte[] content) {

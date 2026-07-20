@@ -321,9 +321,18 @@ public class DocumentMcpToolTest {
 
   @Test
   public void attachDocumentToContent() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+
     documentMcpTool.attachDocumentToContent(DOCUMENT_ID, "activity", 77L);
 
     verify(attachmentService).linkAttachmentToEntity(eq(USER_IDENTITY_ID), eq(77L), eq("activity"), eq(DOCUMENT_ID));
+  }
+
+  @Test
+  public void attachDocumentToContentBlankIdFails() {
+    // The nit: attach must apply the same id validation every sibling method does,
+    // so a blank id fails cleanly before reaching the attachment service.
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.attachDocumentToContent("  ", "activity", 77L));
   }
 
   // ---------------------------------------------------------------------------
@@ -525,6 +534,24 @@ public class DocumentMcpToolTest {
                                             eq("duplicate"),
                                             eq(currentIdentity),
                                             eq(USER_IDENTITY_ID));
+  }
+
+  @Test
+  public void createDocumentResolvesByNameIgnoringConcurrentDifferentFile() throws Exception {
+    // Concurrency on the import/create path: while "notes.txt" is being created,
+    // another user drops a DIFFERENT-named file ("other.txt") into the same folder.
+    // The name-aware resolver must return the created "notes.txt", not the last
+    // added id ("other.txt") that the old reduce((a,b)->b) heuristic would pick.
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
+        .thenReturn(List.of(fileNodeNamed("doc-txt", "notes.txt"), fileNodeNamed("concurrent-1", "other.txt")));
+
+    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "plain text body");
+
+    assertNotNull(model);
+    assertEquals("doc-txt", model.getId());
   }
 
   @Test
@@ -791,7 +818,9 @@ public class DocumentMcpToolTest {
   @Test
   public void copyDocumentReturnsResolvedCopyNotDestinationFolder() throws Exception {
     // The storage copyDocument returns the DESTINATION FOLDER node (not the copy);
-    // the tool must re-resolve the newly added file in the destination folder.
+    // the tool must re-resolve the newly added file in the destination folder, by
+    // name (the copy keeps the source's "report.pdf" name).
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -806,9 +835,44 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void copyDocumentResolvesByNameIgnoringConcurrentDifferentFile() throws Exception {
+    // Concurrency: while the copy of "report.pdf" is created, another user drops a
+    // DIFFERENT-named file ("other.pdf") into the same destination. The old blind
+    // folder-diff + reduce((a,b)->b) heuristic returns the last added id (here the
+    // concurrent "other.pdf"); the name-aware resolver must return the real copy.
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
+        .thenReturn(List.of(fileNodeNamed("copy-1", "report.pdf"), fileNodeNamed("concurrent-1", "other.pdf")));
+
+    DocumentModel model = documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID);
+
+    assertNotNull(model);
+    assertEquals("copy-1", model.getId());
+  }
+
+  @Test
+  public void copyDocumentThrowsWhenMultipleCandidatesMatch() throws Exception {
+    // Ambiguity guard (B): two newly-added files both match the expected copy name
+    // ("report.pdf" and its " (1)" counter variant). The resolver must refuse to
+    // guess and throw a clear error rather than silently return one of them.
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
+        .thenReturn(List.of(fileNodeNamed("copy-1", "report.pdf"), fileNodeNamed("copy-2", "report.pdf (1)")));
+
+    IllegalStateException ex = assertThrows(IllegalStateException.class,
+                                            () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
+    assertTrue(ex.getMessage().contains("multiple candidates"));
+  }
+
+  @Test
   public void duplicateDocumentReturnsResolvedDuplicateNotParentFolder() throws Exception {
     // The storage duplicateDocument returns the PARENT FOLDER node (not the
-    // duplicate); the tool must re-resolve the newly added file in the parent.
+    // duplicate); the tool must re-resolve the newly added file in the parent, by
+    // name (the duplicate is named "<prefix> <source name>" = "Copy of report.pdf").
     FileNode source = fileNode(DOCUMENT_ID, "application/pdf");
     source.setParentFolderId(FOLDER_ID);
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(source);
@@ -816,7 +880,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.duplicateDocument(OWNER_ID, DOCUMENT_ID, "Copy of", USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(List.of(source))
-        .thenReturn(List.of(source, fileNodeNamed("dup-1", "report(1).pdf")));
+        .thenReturn(List.of(source, fileNodeNamed("dup-1", "Copy of report.pdf")));
 
     DocumentModel model = documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of");
 
@@ -824,6 +888,29 @@ public class DocumentMcpToolTest {
     // Must be the resolved duplicate (the newly added file), NOT the parent folder.
     assertEquals("dup-1", model.getId());
     assertFalse(FOLDER_ID.equals(model.getId()));
+  }
+
+  @Test
+  public void duplicateDocumentResolvesByNameIgnoringConcurrentDifferentFile() throws Exception {
+    // Concurrency: while the "Copy of report.pdf" duplicate is created in the
+    // parent folder, another differently-named file ("other.pdf") appears there.
+    // The name-aware resolver must return the duplicate, not the concurrent file
+    // (which reduce((a,b)->b) would wrongly return as the last added id).
+    FileNode source = fileNode(DOCUMENT_ID, "application/pdf");
+    source.setParentFolderId(FOLDER_ID);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(source);
+    when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.duplicateDocument(OWNER_ID, DOCUMENT_ID, "Copy of", USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of(source))
+        .thenReturn(List.of(source,
+                            fileNodeNamed("dup-1", "Copy of report.pdf"),
+                            fileNodeNamed("concurrent-1", "other.pdf")));
+
+    DocumentModel model = documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of");
+
+    assertNotNull(model);
+    assertEquals("dup-1", model.getId());
   }
 
   @Test
