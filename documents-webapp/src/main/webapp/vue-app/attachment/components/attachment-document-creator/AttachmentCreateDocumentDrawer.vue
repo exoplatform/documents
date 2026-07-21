@@ -29,7 +29,11 @@
     class="createDocumentDrawer"
     right>
     <template slot="title">
-      <div class="d-flex align-center">
+      <!-- Default title bar: back arrow + title, with a filter icon on the right
+           (shown once there are enough templates to filter). -->
+      <div
+        v-if="!templateSearchMode"
+        class="d-flex align-center full-width">
         <v-btn
           icon
           small
@@ -40,6 +44,40 @@
           <v-icon size="20">fa-arrow-left</v-icon>
         </v-btn>
         <span class="text-truncate">{{ $t('attachments.drawer.addDocument') }}</span>
+        <v-spacer />
+        <v-btn
+          v-if="showTemplateFilters"
+          icon
+          small
+          class="flex-shrink-0"
+          :aria-label="$t('attachments.drawer.templates.search')"
+          :title="$t('attachments.drawer.templates.search')"
+          @click="openTemplateSearch()">
+          <v-icon size="18">fa-search</v-icon>
+        </v-btn>
+      </div>
+      <!-- Search mode: back arrow closes search; the field spans the full width. -->
+      <div
+        v-else
+        class="d-flex align-center full-width">
+        <v-btn
+          icon
+          small
+          class="ms-n2 me-1 flex-shrink-0"
+          :aria-label="$t('attachments.drawer.back')"
+          :title="$t('attachments.drawer.back')"
+          @click="closeTemplateSearch()">
+          <v-icon size="20">fa-arrow-left</v-icon>
+        </v-btn>
+        <v-text-field
+          ref="templateSearchField"
+          v-model="templateSearch"
+          :placeholder="$t('attachments.drawer.templates.search')"
+          class="attachmentsTemplateSearch flex-grow-1 pt-0 mt-0"
+          hide-details
+          dense
+          autofocus
+          clearable />
       </div>
     </template>
     <template slot="content">
@@ -97,49 +135,70 @@
         </div>
         <div
           v-else-if="templates.length"
-          class="attachmentsTemplatesGrid d-flex flex-column">
+          class="attachmentsTemplatesSection">
+          <!-- Category chip bar (self-hiding when templates aren't categorized).
+               Free-text search lives in the drawer title bar (filter icon). -->
+          <div
+            v-if="showTemplateFilters"
+            class="attachmentsTemplatesFilters mb-3">
+            <categories-filter
+              v-model="selectedTemplateCategoryId"
+              :space-id="templatesOwnerId"
+              object-type="document"
+              hide-on-empty
+              class="attachmentsTemplateCategories" />
+          </div>
           <!-- Full-width reused Documents-app cards, stacked. click.capture keeps
                the card's hover info icon opening the info drawer, while a plain
                click SELECTS the template and reveals an editable name field right
                under that card (option B: name-first, pre-filled with the
                template's name). The footer "Create" then creates it with that
                name. -->
-          <div
-            v-for="template in templates"
-            :key="template.id"
-            class="attachmentsTemplateItem mb-3">
+          <div class="attachmentsTemplatesGrid d-flex flex-column">
             <div
-              class="attachmentsTemplateCard clickable"
-              :class="{ 'attachmentsTemplateCard--selected': selectedTemplate && selectedTemplate.id === template.id }"
-              role="button"
-              tabindex="0"
-              :aria-pressed="selectedTemplate && selectedTemplate.id === template.id ? 'true' : 'false'"
-              :aria-label="template.name"
-              @click.capture="onTemplateCardClick($event, template)"
-              @keydown.enter.prevent="selectTemplate(template)"
-              @keydown.space.prevent="selectTemplate(template)">
-              <documents-item-card
-                :file="template"
-                :files="templates"
-                :selected-documents="[]"
-                :show-details="false"
-                width="100%"
-                height="150px"
-                max-height="150px" />
+              v-for="template in filteredTemplates"
+              :key="template.id"
+              class="attachmentsTemplateItem mb-3">
+              <div
+                class="attachmentsTemplateCard clickable"
+                :class="{ 'attachmentsTemplateCard--selected': selectedTemplate && selectedTemplate.id === template.id }"
+                role="button"
+                tabindex="0"
+                :aria-pressed="selectedTemplate && selectedTemplate.id === template.id ? 'true' : 'false'"
+                :aria-label="template.name"
+                @click.capture="onTemplateCardClick($event, template)"
+                @keydown.enter.prevent="selectTemplate(template)"
+                @keydown.space.prevent="selectTemplate(template)">
+                <documents-item-card
+                  :file="template"
+                  :files="filteredTemplates"
+                  :selected-documents="[]"
+                  :show-details="false"
+                  width="100%"
+                  height="150px"
+                  max-height="150px" />
+              </div>
+              <v-text-field
+                v-if="selectedTemplate && selectedTemplate.id === template.id"
+                ref="templateNameInput"
+                v-model="newDocTitleInput"
+                :rules="documentTitleRules"
+                :placeholder="$t('attachment.untitledDocument')"
+                class="attachmentsCreateDocumentInput mt-2"
+                outlined
+                dense
+                autofocus
+                @keyup.enter="submitCreate()">
+                <span slot="append" class="text-color mt-1">{{ activeExtension }}</span>
+              </v-text-field>
             </div>
-            <v-text-field
-              v-if="selectedTemplate && selectedTemplate.id === template.id"
-              ref="templateNameInput"
-              v-model="newDocTitleInput"
-              :rules="documentTitleRules"
-              :placeholder="$t('attachment.untitledDocument')"
-              class="attachmentsCreateDocumentInput mt-2"
-              outlined
-              dense
-              autofocus
-              @keyup.enter="submitCreate()">
-              <span slot="append" class="text-color mt-1">{{ activeExtension }}</span>
-            </v-text-field>
+          </div>
+          <!-- The active category/search filter matched no template. -->
+          <div
+            v-if="!filteredTemplates.length"
+            class="attachmentsTemplatesEmpty d-flex flex-column align-center justify-center text-center py-6">
+            <v-icon size="36" color="grey">far fa-clone</v-icon>
+            <span class="text-sub-title mt-3">{{ $t('attachments.drawer.templates.noMatch') }}</span>
           </div>
         </div>
         <div
@@ -224,6 +283,12 @@ export default {
       templates: [],
       templatesLoading: false,
       templateCreating: false,
+      // Filter row: selected category chip (id) + free-text search over the loaded
+      // templates (both applied client-side). templateSearchMode toggles the title
+      // bar between the title and the full-width search field.
+      selectedTemplateCategoryId: null,
+      templateSearch: '',
+      templateSearchMode: false,
       // Bootstrap state: whether the drive's "Templates" folder exists, its parent
       // (drive root) id, and whether the current user may create a folder here.
       templatesFolderExists: false,
@@ -306,6 +371,27 @@ export default {
       return this.isSpaceContext
         ? this.$t('attachments.drawer.templates.empty.space')
         : this.$t('attachments.drawer.templates.empty.personal');
+    },
+    // Templates after the active category + free-text filters (both client-side).
+    // Category ids are compared as strings — the chip component may emit the id as
+    // a string while the item's categoryIds are numbers (or vice-versa).
+    filteredTemplates() {
+      let list = this.templates;
+      if (this.selectedTemplateCategoryId !== null && this.selectedTemplateCategoryId !== '') {
+        const selected = String(this.selectedTemplateCategoryId);
+        list = list.filter(template => (template.categoryIds || []).some(id => String(id) === selected));
+      }
+      const query = (this.templateSearch || '').trim().toLowerCase();
+      if (query) {
+        list = list.filter(template => (template.name || '').toLowerCase().includes(query));
+      }
+      return list;
+    },
+    // Only surface the filter row once there are enough templates to warrant it —
+    // small sets are fully visible, and the category chip bar self-hides anyway
+    // when the templates aren't categorized.
+    showTemplateFilters() {
+      return this.templates.length > 3;
     },
     // Drive-root-relative path of the current target folder (blank-create target).
     // '' targets the drive root. Defensive against a path passed as an object.
@@ -425,6 +511,21 @@ export default {
         this.createNewDoc();
       }
     },
+    // Title-bar filter icon → full-width search field (standard drawer pattern).
+    openTemplateSearch() {
+      this.templateSearchMode = true;
+      this.$nextTick(() => {
+        const field = this.$refs.templateSearchField;
+        if (field && field.focus) {
+          field.focus();
+        }
+      });
+    },
+    // Back arrow in search mode: restore the title and clear the query.
+    closeTemplateSearch() {
+      this.templateSearchMode = false;
+      this.templateSearch = '';
+    },
     resetNewDocInput() {
       this.NewDocInputHidden = true;
       this.newDocTitleInput = '';
@@ -469,6 +570,9 @@ export default {
       this.templatesFolderExists = false;
       this.rootFolderId = null;
       this.canCreateTemplatesFolder = false;
+      this.selectedTemplateCategoryId = null;
+      this.templateSearch = '';
+      this.templateSearchMode = false;
       const ownerId = this.templatesOwnerId;
       if (!ownerId) {
         return;
