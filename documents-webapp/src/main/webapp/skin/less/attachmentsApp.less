@@ -280,7 +280,9 @@
       width: 100%;
       max-width: 100%;
       outline: none;
-      border-radius: 8px;
+      /* Match the reused card's own 4px radius so the selected ring hugs its
+         corners instead of bowing out. */
+      border-radius: 4px;
       transition: box-shadow .2s ease;
 
       /* Selected template = a clear primary ring around the card. */
@@ -310,6 +312,13 @@
    avatar keeps its own white background — it is a .v-avatar, not a .v-card). */
 .attachmentsTemplateCard .mask-color .v-card {
   background-color: transparent !important;
+}
+
+/* Expanded (full-screen) drawer: centre the content with side margins — like the
+   notification / favorite drawers — instead of spanning edge to edge. */
+.createDocumentDrawerContent--expanded {
+  max-width: 1200px;
+  margin-inline: auto;
 }
 
 .driveExplorerDrawer {

@@ -31,7 +31,8 @@
     allow-expand
     :use-filter="showTemplateFilters"
     :filter-placeholder="$t('attachments.drawer.templates.search')"
-    @filter-updated="onTemplateFilter">
+    @filter-updated="onTemplateFilter"
+    @expand-updated="drawerExpanded = $event">
     <template slot="title">
       <!-- Back arrow + title. The filter icon (→ inline header search) and the
            expand/full-screen icon are provided by exo-drawer itself (use-filter +
@@ -51,7 +52,9 @@
       </div>
     </template>
     <template slot="content">
-      <div class="createDocumentDrawerContent pt-4 pa-4">
+      <div
+        class="createDocumentDrawerContent pt-4 pa-4"
+        :class="{ 'createDocumentDrawerContent--expanded': drawerExpanded }">
         <!-- Section 1: create a blank document. Doc types are selectable cards
              (hover + selected state, keyboard-focusable). Picking one reveals
              the inline title input; the primary "Create" action lives in the
@@ -106,10 +109,11 @@
         <div
           v-else-if="templates.length"
           class="attachmentsTemplatesSection">
-          <!-- Category chip bar (self-hiding when templates aren't categorized).
+          <!-- Category chip bar — only in the expanded (full-screen) view, where
+               there's room for it (self-hiding when templates aren't categorized).
                Free-text search lives in the drawer title bar (filter icon). -->
           <div
-            v-if="showTemplateFilters"
+            v-if="drawerExpanded"
             class="attachmentsTemplatesFilters mb-3">
             <categories-filter
               v-model="selectedTemplateCategoryId"
@@ -258,6 +262,10 @@ export default {
       // header filter (use-filter → @filter-updated).
       selectedTemplateCategoryId: null,
       templateSearch: '',
+      // True when the drawer is in its expanded (full-screen) state — drives the
+      // centered side margins and shows the category chip bar. Fed by exo-drawer's
+      // own @expand-updated event (same pattern as App Center's launcher drawer).
+      drawerExpanded: false,
       // Bootstrap state: whether the drive's "Templates" folder exists, its parent
       // (drive root) id, and whether the current user may create a folder here.
       templatesFolderExists: false,
@@ -390,6 +398,7 @@ export default {
       this.$refs.createDocumentDrawer.open();
     },
     close() {
+      this.drawerExpanded = false;
       this.$refs.createDocumentDrawer.close();
     },
     refreshNewDocumentsActions() {
