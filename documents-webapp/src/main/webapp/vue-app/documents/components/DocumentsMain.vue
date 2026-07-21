@@ -91,6 +91,12 @@
         <documents-advanced-filter-drawer />
         <documents-download-drawer />
         <document-import-from-zip-drawer />
+        <attachment-create-document-drawer
+          ref="createDocumentDrawer"
+          mode="drive"
+          :current-drive="createDocDrive"
+          :path-destination-folder="createDocFolderPath"
+          @document-created="onDocumentCreated" />
         <documents-offline-changes-reminder />
         <open-in-desktop-credentials-dialog
           ref="dialog" />
@@ -196,6 +202,8 @@ export default {
     drivesOffset: 0,
     viewType: 'listView',
     drives: [],
+    createDocDrive: null,
+    createDocFolderPath: '',
   }),
   computed: {
     displayCategoriesFilter() {
@@ -295,6 +303,7 @@ export default {
     this.$root.$on('confirm-document-deletion', this.deleteDocument);
     this.$root.$on('undo-delete-document', this.undoDeleteDocument);
     this.$root.$on('documents-open-drawer', this.openDrawer);
+    this.$root.$on('documents-open-create-document-drawer', this.openCreateDocumentDrawer);
     this.$root.$on('set-current-folder', this.setCurrentFolder);
     this.$root.$on('cancel-add-folder', this.cancelAddFolder);
     this.$root.$on('document-search', this.search);
@@ -1567,6 +1576,53 @@ export default {
     setCurrentFolder(folder) {
       this.currentFolder = folder;
       this.canAdd = this.spaceCanAdd || folder?.accessList?.canEdit;
+    },
+    // Opens the shared "Add a document" drawer standalone in the Drive, resolving
+    // the current drive + folder path the same way openDrawer() resolves the
+    // attachments-app destination, so the created document lands in the folder
+    // currently being viewed.
+    openCreateDocumentDrawer() {
+      if (!eXo.env.portal.spaceName && this.$root.ownerId !== eXo.env.portal.userIdentityId) {
+        const drive = this.drives.find(drive => drive.identityId === this.$root.ownerId);
+        if (drive) {
+          const createDocDrive = {
+            isSelected: true,
+            name: `.spaces.${drive.groupId}`,
+            title: drive.name,
+          };
+          if (this.parentFolderId) {
+            this.$attachmentService.getDocumentDetails(this.parentFolderId, '')
+              .then(folder => {
+                const folderPath = folder?.path.substring(folder.path.indexOf('Documents') + '/Documents'.length);
+                this.showCreateDocumentDrawer(createDocDrive, folderPath);
+              });
+          } else {
+            this.showCreateDocumentDrawer(createDocDrive, '');
+          }
+        }
+      } else {
+        const folderPath = this.$root.selectedPath && this.$root.selectedDrive?.path && this.$root.selectedPath.indexOf(this.$root.selectedDrive.path) !== -1
+          ? this.splitAtFirstOccurrence(this.$root.selectedPath, this.$root.selectedDrive.path)[1]
+          : this.$root.selectedPath;
+        this.showCreateDocumentDrawer(this.$root.selectedDrive, folderPath);
+      }
+    },
+    showCreateDocumentDrawer(drive, folderPath) {
+      // Fall back to the current context's default drive when no folder/drive is
+      // selected yet (e.g. the recent/timeline view), mirroring the attachment
+      // app's default-drive resolution.
+      this.createDocDrive = drive || {
+        isSelected: true,
+        name: eXo.env.portal.spaceGroup ? `.spaces.${eXo.env.portal.spaceGroup}` : 'Personal Documents',
+        title: eXo.env.portal.spaceDisplayName || 'Personal Documents',
+      };
+      // The backend rejects an empty path; '/' targets the drive root (used
+      // when no sub-folder is opened, e.g. the drive/recent root).
+      this.createDocFolderPath = folderPath || '/';
+      this.$nextTick().then(() => this.$refs.createDocumentDrawer.open());
+    },
+    onDocumentCreated() {
+      this.refreshFiles();
     },
     getDocumentDataFromUrl(path) {
       const currentUrlSearchParams = window.location.search;
