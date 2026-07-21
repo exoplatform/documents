@@ -124,11 +124,11 @@
                under that card (option B: name-first, pre-filled with the
                template's name). The footer "Create" then creates it with that
                name. -->
-          <div class="attachmentsTemplatesGrid d-flex flex-column">
+          <div class="attachmentsTemplatesGrid">
             <div
               v-for="template in filteredTemplates"
               :key="template.id"
-              class="attachmentsTemplateItem mb-3">
+              class="attachmentsTemplateItem">
               <div
                 class="attachmentsTemplateCard clickable"
                 :class="{ 'attachmentsTemplateCard--selected': selectedTemplate && selectedTemplate.id === template.id }"
