@@ -592,15 +592,22 @@ export default {
           if (!dest || !dest.id) {
             throw new Error('Could not resolve the destination folder');
           }
-          // Primary path: copy the template into the target folder. The copy
-          // endpoint returns the destination folder (not the new file), so we
-          // re-list that folder to find the freshly-created copy and get its real,
-          // openable id. If the copy fails because a same-named file already exists
-          // there (JCR "same name sibling" 500), fall back to an in-place duplicate,
-          // which is dedupe-safe and returns the new node directly (it lands in the
-          // Templates folder rather than 500-ing).
+          // Snapshot the destination's current file ids so we can identify the copy
+          // by id-diff afterwards. The copy endpoint returns the destination folder
+          // (not the new file), and matching by name is unreliable — the backend
+          // de-duplicates a clashing name to "name (1)", which would make a name
+          // match pick the WRONG node (e.g. the source template itself). The one
+          // new id in the folder is unambiguously the copy.
+          return this.listFolderFileIds(ownerId, dest.id).then(beforeIds => ({ dest, beforeIds }));
+        })
+        .then(({ dest, beforeIds }) => {
+          // Primary path: copy the template into the target folder, then find the
+          // node whose id is new. If the copy fails because a same-named file
+          // already exists there (JCR "same name sibling" 500), fall back to an
+          // in-place duplicate, which is dedupe-safe and returns the new node
+          // directly (it lands in the Templates folder rather than 500-ing).
           return this.$documentFileService.duplicateDocument(copySourceId, dest.id, ownerId)
-            .then(() => this.findCreatedCopy(ownerId, dest.id, template))
+            .then(() => this.findNewCopy(ownerId, dest.id, beforeIds))
             .catch(() => this.$documentFileService.duplicateDocument(copySourceId, null, ownerId));
         })
         .then(newDoc => {
@@ -645,17 +652,22 @@ export default {
           return last ? { id: last.id, path: last.path } : null;
         });
     },
-    // Locates the copy just created by the backend copy in the destination folder.
-    // We know its folder (destinationFolderId) and its name (the template's), so
-    // prefer the newest file whose name matches the template, falling back to the
-    // newest file overall. Returns the node with its real, openable id.
-    findCreatedCopy(ownerId, destinationFolderId, template) {
+    // Set of the current (non-folder) file ids in a folder, used to snapshot state
+    // before a copy so the new node can be identified by id-diff afterwards.
+    listFolderFileIds(ownerId, folderId) {
+      return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: folderId }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
+        .then(items => new Set((items || []).filter(item => !item.folder).map(item => item.id)))
+        .catch(() => new Set());
+    },
+    // Locates the copy just created by the backend copy: the one file in the
+    // destination folder whose id was not present before the copy. Matching by id
+    // (not name) is robust against the backend de-duplicating a clashing name.
+    findNewCopy(ownerId, destinationFolderId, beforeIds) {
       return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: destinationFolderId }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
         .then(items => {
-          const files = (items || []).filter(item => !item.folder);
+          const created = (items || []).filter(item => !item.folder && !beforeIds.has(item.id));
           const byNewest = (a, b) => Number(b.modifiedDate || b.created || b.createdDate || 0) - Number(a.modifiedDate || a.created || a.createdDate || 0);
-          const sameName = files.filter(file => file.name === template.name).sort(byNewest);
-          return sameName[0] || files.slice().sort(byNewest)[0] || null;
+          return created.sort(byNewest)[0] || null;
         });
     }
   }
