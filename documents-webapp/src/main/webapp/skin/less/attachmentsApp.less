@@ -262,11 +262,18 @@
     }
   }
 
-  /* Full-width, stacked template cards (each nearly the whole drawer width).
-     The editable name field appears right under the selected card. */
+  /* Responsive template grid: one full-width card per row in the normal (narrow)
+     drawer, flowing to several columns when the drawer is expanded — driven purely
+     by the container width via CSS grid auto-fill (no expand-state needed). The
+     editable name field appears right under the selected card. */
   .attachmentsTemplatesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    align-items: start;
+
     .attachmentsTemplateItem {
-      width: 100%;
+      min-width: 0;
     }
 
     .attachmentsTemplateCard {
