@@ -314,6 +314,20 @@
   background-color: transparent !important;
 }
 
+/* Templates show the reused card's title band permanently (show-details) with the
+   file icon + name; also keep the info button visible without hovering (the card
+   otherwise only reveals it on hover). */
+.attachmentsTemplateCard #attachment-info {
+  display: inline-flex !important;
+}
+
+/* ...but suppress the docs card-view selection checkbox and 3-dots actions menu —
+   neither makes sense when picking a template. */
+.attachmentsTemplateCard .v-simple-checkbox,
+.attachmentsTemplateCard .v-btn:has(.mdi-dots-vertical) {
+  display: none !important;
+}
+
 /* Expanded (full-screen) drawer: centre the content with side margins — like the
    notification / favorite drawers — instead of spanning edge to edge. */
 .createDocumentDrawerContent--expanded {

@@ -147,7 +147,7 @@
                   :file="template"
                   :files="filteredTemplates"
                   :selected-documents="[]"
-                  :show-details="false"
+                  :show-details="true"
                   width="100%"
                   height="150px"
                   max-height="150px" />
@@ -354,7 +354,9 @@ export default {
     // a string while the item's categoryIds are numbers (or vice-versa).
     filteredTemplates() {
       let list = this.templates;
-      if (this.selectedTemplateCategoryId !== null && this.selectedTemplateCategoryId !== '') {
+      // `!= null` catches both null and undefined — the category bar emits
+      // `undefined` when you navigate back to root, which must mean "no filter".
+      if (this.selectedTemplateCategoryId != null && this.selectedTemplateCategoryId !== '') {
         const selected = String(this.selectedTemplateCategoryId);
         list = list.filter(template => (template.categoryIds || []).some(id => String(id) === selected));
       }
