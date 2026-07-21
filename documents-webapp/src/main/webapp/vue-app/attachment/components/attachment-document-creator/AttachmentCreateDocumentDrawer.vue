@@ -27,13 +27,17 @@
   <exo-drawer
     ref="createDocumentDrawer"
     class="createDocumentDrawer"
-    right>
+    right
+    allow-expand
+    :use-filter="showTemplateFilters"
+    :filter-placeholder="$t('attachments.drawer.templates.search')"
+    @filter-updated="onTemplateFilter">
     <template slot="title">
-      <!-- Default title bar: back arrow + title, with a filter icon on the right
-           (shown once there are enough templates to filter). -->
-      <div
-        v-if="!templateSearchMode"
-        class="d-flex align-center full-width">
+      <!-- Back arrow + title. The filter icon (→ inline header search) and the
+           expand/full-screen icon are provided by exo-drawer itself (use-filter +
+           allow-expand), so they sit at the platform-standard location next to the
+           close button. -->
+      <div class="d-flex align-center">
         <v-btn
           icon
           small
@@ -44,40 +48,6 @@
           <v-icon size="20">fa-arrow-left</v-icon>
         </v-btn>
         <span class="text-truncate">{{ $t('attachments.drawer.addDocument') }}</span>
-        <v-spacer />
-        <v-btn
-          v-if="showTemplateFilters"
-          icon
-          small
-          class="flex-shrink-0"
-          :aria-label="$t('attachments.drawer.templates.search')"
-          :title="$t('attachments.drawer.templates.search')"
-          @click="openTemplateSearch()">
-          <v-icon size="18">fa-search</v-icon>
-        </v-btn>
-      </div>
-      <!-- Search mode: back arrow closes search; the field spans the full width. -->
-      <div
-        v-else
-        class="d-flex align-center full-width">
-        <v-btn
-          icon
-          small
-          class="ms-n2 me-1 flex-shrink-0"
-          :aria-label="$t('attachments.drawer.back')"
-          :title="$t('attachments.drawer.back')"
-          @click="closeTemplateSearch()">
-          <v-icon size="20">fa-arrow-left</v-icon>
-        </v-btn>
-        <v-text-field
-          ref="templateSearchField"
-          v-model="templateSearch"
-          :placeholder="$t('attachments.drawer.templates.search')"
-          class="attachmentsTemplateSearch flex-grow-1 pt-0 mt-0"
-          hide-details
-          dense
-          autofocus
-          clearable />
       </div>
     </template>
     <template slot="content">
@@ -283,12 +253,11 @@ export default {
       templates: [],
       templatesLoading: false,
       templateCreating: false,
-      // Filter row: selected category chip (id) + free-text search over the loaded
-      // templates (both applied client-side). templateSearchMode toggles the title
-      // bar between the title and the full-width search field.
+      // Filters over the loaded templates (both applied client-side): the selected
+      // category chip (id) + the free-text query fed by exo-drawer's built-in
+      // header filter (use-filter → @filter-updated).
       selectedTemplateCategoryId: null,
       templateSearch: '',
-      templateSearchMode: false,
       // Bootstrap state: whether the drive's "Templates" folder exists, its parent
       // (drive root) id, and whether the current user may create a folder here.
       templatesFolderExists: false,
@@ -511,20 +480,10 @@ export default {
         this.createNewDoc();
       }
     },
-    // Title-bar filter icon → full-width search field (standard drawer pattern).
-    openTemplateSearch() {
-      this.templateSearchMode = true;
-      this.$nextTick(() => {
-        const field = this.$refs.templateSearchField;
-        if (field && field.focus) {
-          field.focus();
-        }
-      });
-    },
-    // Back arrow in search mode: restore the title and clear the query.
-    closeTemplateSearch() {
-      this.templateSearchMode = false;
-      this.templateSearch = '';
+    // exo-drawer built-in header filter (use-filter) → the typed query, applied
+    // client-side over the loaded templates.
+    onTemplateFilter(text) {
+      this.templateSearch = text || '';
     },
     resetNewDocInput() {
       this.NewDocInputHidden = true;
@@ -572,7 +531,6 @@ export default {
       this.canCreateTemplatesFolder = false;
       this.selectedTemplateCategoryId = null;
       this.templateSearch = '';
-      this.templateSearchMode = false;
       const ownerId = this.templatesOwnerId;
       if (!ownerId) {
         return;
