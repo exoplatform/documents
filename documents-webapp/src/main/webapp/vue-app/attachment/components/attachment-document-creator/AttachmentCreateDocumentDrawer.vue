@@ -20,8 +20,10 @@
   <!-- Level-2 "Add a document" drawer rendered as a sibling of the level-1
        attachments drawer. Back arrow returns to level-1. Two sections:
        (1) New document = the pre-refactor doc-type picker + inline title input;
-       (2) Templates = a placeholder empty-state, scaffolded for a future
-       templates backend (none exists yet). -->
+       (2) Templates = the documents found in the current drive's "Templates"
+       folder (convention-based), rendered with the reused Documents-app grid
+       card. Clicking a card copies that template into the current target folder
+       and opens it, exactly like blank-create. -->
   <exo-drawer
     ref="createDocumentDrawer"
     class="createDocumentDrawer"
@@ -77,15 +79,53 @@
           <span slot="append" class="text-color mt-1">{{ selectedDocType.extension }}</span>
         </v-text-field>
         <!-- Section 2: Templates. Elegant labelled separator introduces the
-             (currently empty) templates area — scaffolded for a future backend. -->
+             templates area. Always shown: the documents of the current drive's
+             "Templates" folder as reused Documents-app cards, or a neutral
+             placeholder when that folder is absent/empty. -->
         <div class="templatesIntro d-flex align-center my-6">
           <v-divider />
           <span class="mx-4 text-sub-title text-no-wrap">{{ $t('attachments.drawer.templates.intro') }}</span>
           <v-divider />
         </div>
-        <div class="attachmentsTemplatesEmpty d-flex flex-column align-center justify-center text-center py-6">
+        <div
+          v-if="templatesLoading"
+          class="attachmentsTemplatesLoading d-flex justify-center py-6">
+          <v-progress-circular
+            indeterminate
+            color="primary"
+            size="28" />
+        </div>
+        <div
+          v-else-if="templates.length"
+          class="attachmentsTemplatesGrid d-flex flex-wrap justify-center">
+          <!-- Reused Documents-app card at the same size as the activity-stream
+               attachment preview, so it reveals the file name + info icon on
+               hover exactly like there. click.capture intercepts the card's own
+               preview/open behavior so a plain click creates a document from that
+               template, while the card's hover info icon still opens the info
+               drawer. -->
+          <div
+            v-for="template in templates"
+            :key="template.id"
+            class="attachmentsTemplateCard ma-2 clickable"
+            role="button"
+            :aria-label="template.name"
+            @click.capture="onTemplateCardClick($event, template)">
+            <documents-item-card
+              :file="template"
+              :files="templates"
+              :selected-documents="[]"
+              :show-details="false"
+              width="252px"
+              height="210px"
+              max-height="210px" />
+          </div>
+        </div>
+        <div
+          v-else
+          class="attachmentsTemplatesEmpty d-flex flex-column align-center justify-center text-center py-6">
           <v-icon size="36" color="grey">far fa-clone</v-icon>
-          <span class="text-sub-title mt-3">{{ $t('attachments.drawer.templates.empty') }}</span>
+          <span class="text-sub-title mt-3">{{ templatesEmptyLabel }}</span>
         </div>
       </div>
     </template>
@@ -145,6 +185,12 @@ export default {
       extensionApp: 'attachment',
       newDocumentActionExtension: 'new-document-action',
       newDocumentActions: {},
+      // Templates section: documents of the current drive's "Templates" folder.
+      templates: [],
+      templatesLoading: false,
+      templateCreating: false,
+      TEMPLATES_FOLDER_NAME: 'Templates',
+      TEMPLATES_LIST_LIMIT: 100,
       MAX_DOCUMENT_TITLE_LENGTH: 510,
       titleRegex: /[<\\>:"/|?*]/,
       documentTitleRules: [title => !title || title && title.trim().length <= this.MAX_DOCUMENT_TITLE_LENGTH - this.selectedDocType.extension.length || this.newDocTitleMaxLengthLabel,
@@ -180,6 +226,40 @@ export default {
     newDocTitleExistLabel() {
       return this.$t('attachment.document.title.exist');
     },
+    // Identity id of the current drive owner (space or user). Kept in sync by the
+    // host root ($root.ownerId) in both the attachment composer and the Drive app.
+    templatesOwnerId() {
+      return this.currentDrive && this.currentDrive.ownerId || this.$root.ownerId;
+    },
+    // Space vs personal context, for the placeholder word-swap. Prefer the drive
+    // signal (drive name / spaceId), fall back to the portal space context.
+    isSpaceContext() {
+      const driveName = this.currentDrive && this.currentDrive.name || '';
+      if (driveName) {
+        return driveName.startsWith('.spaces.') || !!(this.currentDrive && this.currentDrive.spaceId);
+      }
+      return !!eXo.env.portal.spaceId;
+    },
+    templatesEmptyLabel() {
+      return this.isSpaceContext
+        ? this.$t('attachments.drawer.templates.empty.space')
+        : this.$t('attachments.drawer.templates.empty.personal');
+    },
+    // Drive-root-relative path of the current target folder (blank-create target).
+    // '' targets the drive root. Defensive against a path passed as an object.
+    destinationRelativePath() {
+      let path = this.pathDestinationFolder;
+      if (path && typeof path === 'object') {
+        path = path.path || '';
+      }
+      if (!path || path === '/') {
+        return '';
+      }
+      if (path.startsWith('/')) {
+        path = path.substring(1);
+      }
+      return path;
+    },
   },
   created() {
     this.$root.$on(`${this.extensionApp}-${this.newDocumentActionExtension}-updated`, this.refreshNewDocumentsActions);
@@ -189,6 +269,7 @@ export default {
   methods: {
     open() {
       this.resetNewDocInput();
+      this.loadTemplates();
       this.$refs.createDocumentDrawer.open();
     },
     close() {
@@ -245,7 +326,10 @@ export default {
       // Clear the picked type too, so no card keeps its selected ring on reopen.
       this.selectedDocType = {};
     },
-    manageNewCreatedDocument(doc) {
+    // openInEditor: blank-create always yields an editable office document, so it
+    // defaults to true. Template create passes false for non-editable source
+    // types (PDF, image, ...) which the OnlyOffice editor cannot open.
+    manageNewCreatedDocument(doc, openInEditor = true) {
       if (doc && doc.id) {
         doc.drive = this.currentDrive.title;
         doc.date = doc.created;
@@ -259,11 +343,127 @@ export default {
         }
         this.$root.$emit('alert-message', this.$t('attachments.upload.success'), 'success');
         this.resetNewDocInput();
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${doc.id}&backTo=${window.location.pathname}`, '_blank');
+        if (openInEditor) {
+          window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${doc.id}&backTo=${window.location.pathname}`, '_blank');
+        }
         // Return to the level-1 attachments drawer (attachment host) or simply
         // close the standalone drawer (drive host).
         this.close();
       }
+    },
+    // Loads the documents of the current drive's "Templates" folder (convention).
+    // Lists the drive root (ownerId only), finds the child folder named
+    // "Templates", then lists its files. Enriches each file with the thumbnail /
+    // download / icon fields the reused Documents-app card expects.
+    loadTemplates() {
+      this.templates = [];
+      const ownerId = this.templatesOwnerId;
+      if (!ownerId) {
+        return;
+      }
+      this.templatesLoading = true;
+      this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER' }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
+        .then(rootItems => {
+          const templatesFolder = (rootItems || []).find(item => item.folder && item.name === this.TEMPLATES_FOLDER_NAME);
+          if (!templatesFolder) {
+            return [];
+          }
+          return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: templatesFolder.id }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator');
+        })
+        .then(files => {
+          this.templates = (files || []).filter(file => !file.folder).map(file => this.enrichTemplate(file));
+        })
+        .catch(() => {
+          this.templates = [];
+        })
+        .finally(() => {
+          this.templatesLoading = false;
+        });
+    },
+    // True only for the office document types that the blank-create flow itself
+    // produces (Word / Spreadsheet / Presentation, incl. legacy and ODF). Those
+    // open in the OnlyOffice editor exactly like a blank create. Any other type
+    // (PDF, image, ...) is still copied and added/refreshed but NOT opened in the
+    // editor, which would otherwise error.
+    isTemplateEditable(template) {
+      const mimeType = template && (template.mimeType || template.mimetype) || '';
+      return /(officedocument|opendocument|msword|ms-word|ms-excel|ms-powerpoint)/i.test(mimeType);
+    },
+    // Mirrors DocumentsCardsView's file enrichment so the reused card resolves
+    // its thumbnail / download URL / file icon from the $root shim.
+    enrichTemplate(file) {
+      file.image = this.$root.getImageUrl(file);
+      file.downloadUrl = this.$root.getDownloadUrl(file);
+      file.icon = this.$root.getFileIcon(file);
+      return file;
+    },
+    // click.capture handler on the template card wrapper. Lets the card's own
+    // info icon open the shared document-info-drawer; any other click on the
+    // card creates a document from that template.
+    onTemplateCardClick(event, template) {
+      if (event.target.closest('#attachment-info')) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.createFromTemplate(template);
+    },
+    // Copies the template node into the current target folder (JCR duplicate),
+    // then reuses the exact blank-create post-processing (attachment list add /
+    // Drive refresh + OnlyOffice open).
+    createFromTemplate(template) {
+      if (this.templateCreating) {
+        return;
+      }
+      // Same max-files guard as the blank-create path (attachment host only).
+      if (this.mode !== 'drive' && this.attachments.length >= this.maxFilesCount) {
+        document.dispatchEvent(new CustomEvent('alert-message', { detail: {
+          useHtml: true,
+          alertType: 'error',
+          alertMessage: this.maxFileCountErrorLabel,
+        } }));
+        return;
+      }
+      const ownerId = this.templatesOwnerId;
+      this.templateCreating = true;
+      this.$root.$emit('start-loading-attachment-drawer');
+      this.resolveDestinationFolderId(ownerId)
+        .then(destinationFolderId => {
+          if (!destinationFolderId) {
+            throw new Error('Could not resolve the destination folder');
+          }
+          return this.$documentFileService.duplicateDocument(template.id, destinationFolderId, ownerId);
+        })
+        .then(newDoc => {
+          if (newDoc && newDoc.id) {
+            // AbstractNodeEntity carries name/createdDate; the downstream handlers
+            // expect title/created.
+            newDoc.title = newDoc.title || newDoc.name;
+            newDoc.created = newDoc.created || newDoc.createdDate;
+            // Only open OnlyOffice for editable office types; PDFs/images copied
+            // from a template are not editable and would error in the editor.
+            this.manageNewCreatedDocument(newDoc, this.isTemplateEditable(template));
+          } else {
+            throw new Error('Error creating document from template');
+          }
+        })
+        .catch(() => {
+          this.$root.$emit('alert-message', this.newDocCreationFailedLabel, 'error');
+          this.$root.$emit('end-loading-attachment-drawer');
+        })
+        .finally(() => {
+          this.templateCreating = false;
+        });
+    },
+    // Resolves the JCR node id of the current target folder (required by the
+    // duplicate endpoint's destinationId) from the drive-root-relative path via
+    // the breadcrumb endpoint. The last crumb is the target folder; at the drive
+    // root (empty path) it is the drive root node.
+    resolveDestinationFolderId(ownerId) {
+      return this.$documentFileService.getBreadCrumbs(null, ownerId, this.destinationRelativePath)
+        .then(crumbs => {
+          return crumbs && crumbs.length ? crumbs[crumbs.length - 1].id : null;
+        });
     }
   }
 };
