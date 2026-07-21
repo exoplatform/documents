@@ -1,35 +1,41 @@
 <template>
-  <div class="attachmentsUploadBlock">
-    <div class="d-flex align-center">
-      <v-subheader class="text-sub-title pl-0 d-flex">
-        {{ $t('attachments.upload') }}
-      </v-subheader>
-      <v-divider />
+  <div class="attachmentsUploadBlock" :class="hasAttachments ? 'compact' : 'hero'">
+    <!-- EMPTY state: dominant hero drop-zone, the whole card is clickable and
+         keyboard-focusable (role=button / tabindex / Enter-Space open the picker). -->
+    <div
+      v-if="!hasAttachments"
+      ref="uploadHero"
+      class="attachmentsUploadHero d-flex flex-column align-center justify-center text-center"
+      role="button"
+      tabindex="0"
+      :aria-label="$t('attachments.drawer.hero.title')"
+      @click="uploadFile"
+      @keydown.enter.prevent="uploadFile"
+      @keydown.space.prevent="uploadFile">
+      <v-icon size="48" color="primary">fa-cloud-upload-alt</v-icon>
+      <span class="attachmentsUploadHeroTitle font-weight-bold mt-4">{{ $t('attachments.drawer.hero.title') }}</span>
+      <span class="text-sub-title mt-1">{{ $t('attachments.drawer.hero.paste') }}</span>
+      <span class="text-sub-title">({{ $t('attachments.drawer.maxFileSize').replace('{0}', maxFileSize) }})</span>
     </div>
-    <div class="multiUploadFilesSelector d-flex flex-column">
-      <div
-        id="DropFileBox"
-        ref="dropFileBox"
-        class="dropFileBox py-10 ml-5 d-flex flex-column align-center theme--light"
-        aria-controls
-        @click="uploadFile">
-        <i class="uiIconEcmsUploadVersion uiIcon32x32"></i>
-        <v-subheader
-          class="upload-drag-drop-label text-sub-title mt-3 d-flex flex-column">
-          <span>{{ $t('attachments.drawer.uploadOrDrop') }}</span>
-          <span>({{ $t('attachments.drawer.maxFileSize').replace('{0}', maxFileSize) }})</span>
-        </v-subheader>
-      </div>
-      <div class="fileHidden d-none">
-        <input
-          ref="uploadInput"
-          class="file"
-          name="file"
-          type="file"
-          multiple="multiple"
-          style="display:none"
-          @change="handleFileUpload($refs.uploadInput.files)">
-      </div>
+    <!-- POPULATED state: compact "add" button that keeps the list room. -->
+    <v-btn
+      v-else
+      outlined
+      class="attachmentsAddBarBtn"
+      :aria-label="$t('attachments.upload')"
+      @click="uploadFile">
+      <v-icon size="18" class="me-1">fa-cloud-upload-alt</v-icon>
+      <span>{{ $t('attachments.upload') }}</span>
+    </v-btn>
+    <div class="fileHidden d-none">
+      <input
+        ref="uploadInput"
+        class="file"
+        name="file"
+        type="file"
+        multiple="multiple"
+        style="display:none"
+        @change="handleFileUpload($refs.uploadInput.files)">
     </div>
   </div>
 </template>
@@ -41,6 +47,10 @@ export default {
     attachments: {
       type: Array,
       default: () => []
+    },
+    hasAttachments: {
+      type: Boolean,
+      default: false
     },
     maxFilesCount: {
       type: Number,
@@ -96,12 +106,15 @@ export default {
     }
   },
   created() {
-    this.initDragAndDropEvents();
+    // Drag & drop is now handled by the parent drawer (scoped to the drawer
+    // element and cleaned up on destroy), which forwards dropped files here via
+    // the existing 'handle-provided-files' event.
     this.$root.$on('handle-pasted-files-from-clipboard', this.handleFileUpload);
     this.$root.$on('reset-attachments-upload-input', () => this.resetUploadInput());
     this.$root.$on('abort-attachments-new-upload', () => this.abortUploadingNewAttachments());
     this.$root.$on('abort-uploading-new-file', this.abortUploadingNewFile);
     this.$root.$on('handle-provided-files', files => this.handleFileUpload(files));
+    this.$root.$on('retry-upload-file', this.retryUpload);
     this.$root.$on('attachment-continue-upload', (file) => {
       this.sendFileToServer(file, true);
     });
@@ -112,48 +125,9 @@ export default {
     this.$root.$off('abort-attachments-new-upload', this.abortUploadingNewAttachments);
     this.$root.$off('abort-uploading-new-file', this.abortUploadingNewFile);
     this.$root.$off('handle-provided-files', this.handleFileUpload);
+    this.$root.$off('retry-upload-file', this.retryUpload);
   },
   methods: {
-    initDragAndDropEvents() {
-      this.$nextTick(() => {
-        if (!this.dragAndDropEventListenerInitialized) {
-          ['drag', 'dragstart', 'dragend', 'dragover', 'dragenter', 'dragleave', 'drop'].forEach(function (evt) {
-
-            /*
-              For each event add an event listener that prevents the default action
-              (opening the file in the browser) and stop the propagation of the event (so
-              no other elements open the file in the browser)
-            */
-            document.addEventListener(evt, function (e) {
-              e.preventDefault();
-              e.stopPropagation();
-            }.bind(this), false);
-          }.bind(this));
-
-          document.addEventListener('dragover', function () {
-            this.$refs.dropFileBox?.classList.add('dragStart');
-          }.bind(this));
-
-          /*
-            Capture the files from the drop event and add them to our local files
-            array.
-          */
-          this.$refs.dropFileBox.addEventListener('drop', function (e) {
-            this.$refs.dropFileBox.classList.remove('dragStart');
-            this.handleFileUpload(e.dataTransfer.files);
-          }.bind(this));
-
-          document.addEventListener('dragleave', function () {
-            this.$refs.dropFileBox?.classList.remove('dragStart');
-          }.bind(this));
-
-          document.addEventListener('drop', function () {
-            this.$refs.dropFileBox?.classList.remove('dragStart');
-          }.bind(this));
-          this.dragAndDropEventListenerInitialized = true;
-        }
-      });
-    },
     uploadFile: function () {
       this.$refs.uploadInput.click();
     },
@@ -183,6 +157,8 @@ export default {
             destinationFolder: file.destinationFolder? `${this.pathDestinationFolder}/${file.destinationFolder}` :this.pathDestinationFolder,
             pathDestinationFolderForFile: '',
             isPublic: true,
+            source: 'device',
+            uploadFailed: false,
             signal: signal
           });
         });
@@ -265,7 +241,7 @@ export default {
           .then(() => delete file.originalFileObject)
           .catch(() => {
             this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
-            this.removeAttachedFile(file);
+            this.markUploadFailed(file);
           });
         this.controlUpload(file, continueAction);
       } else {
@@ -310,7 +286,7 @@ export default {
                   file.countFirstProgressError++;
                   this.controlUpload(file, continueAction);
                 } else {
-                  this.removeAttachedFile(file);
+                  this.markUploadFailed(file);
                   this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
                 }
               });
@@ -329,6 +305,40 @@ export default {
     },
     removeAttachedFile(file) {
       this.$root.$emit('remove-attachment-item', file);
+    },
+    markUploadFailed(file) {
+      // Keep the failed item in the list (with an inline error + Retry) instead
+      // of silently removing it.
+      this.$set(file, 'uploadFailed', true);
+      this.$set(file, 'uploadProgress', 0);
+      if (this.uploadingCount > 0) {
+        this.uploadingCount--;
+      }
+      const queueIndex = this.uploadingFilesQueue.findIndex(f => f.uploadId === file.uploadId);
+      if (queueIndex !== -1) {
+        this.uploadingFilesQueue.splice(queueIndex, 1);
+      }
+      this.processNextQueuedUpload();
+    },
+    retryUpload(file) {
+      if (!file || !file.uploadFailed) {
+        return;
+      }
+      this.$set(file, 'uploadFailed', false);
+      this.$set(file, 'uploadProgress', 0);
+      file.aborted = false;
+      delete file.inProcess;
+      delete file.countFirstProgressError;
+      const controller = new AbortController();
+      file.signal = controller.signal;
+      if (this.newUploadedFiles.findIndex(f => f.uploadId === file.uploadId) === -1) {
+        this.newUploadedFiles.push(file);
+      }
+      if (this.uploadingCount < this.maxUploadInProgressCount) {
+        this.sendFileToServer(file);
+      } else {
+        this.uploadingFilesQueue.push(file);
+      }
     },
     resetUploadInput() {
       this.newUploadedFiles = [];
