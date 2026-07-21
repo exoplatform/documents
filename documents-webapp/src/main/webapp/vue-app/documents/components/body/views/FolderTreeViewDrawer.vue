@@ -45,6 +45,7 @@
     <template slot="content">
       <document-tree-view
         :items="items"
+        :search="treeSearch"
         :folder-path="folderPath" />
     </template>
   </exo-drawer>
@@ -64,6 +65,7 @@ export default {
     pageSize: 20,
     drivesLimit: 20,
     drivesOffset: 0,
+    treeSearch: '',
   }),
   created(){
     this.$root.$on('openTreeFolderDrawer', this.open);
@@ -91,10 +93,10 @@ export default {
     close() {
       this.$refs.treeViewDrawer?.close();
     },
-    // exo-drawer's built-in header filter → the tree's existing drive search
-    // (searches the user's spaces server-side; an empty query resets to all).
+    // exo-drawer's built-in header filter → v-treeview's built-in search, which
+    // filters the loaded tree (drives + expanded folders) by name client-side.
     onFilterDrives(query) {
-      this.$root.$emit('search-drives', query || '');
+      this.treeSearch = query || '';
     },
     async retrieveDocumentTree() {
       this.items = [];
