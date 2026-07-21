@@ -67,13 +67,24 @@
         </v-list-item>
         <v-list-item
           class="text-body menu-text-color"
-          @click="openDrawer()">
+          @click="openCreateDocumentDrawer()">
           <v-list-item-icon class="me-1">
             <v-icon size="16" class="pe-1">fa-file-alt</v-icon>
           </v-list-item-icon>
           <v-list-item-title
             class="text-body menu-text-color">
             <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.addNewFile') }}</span>
+          </v-list-item-title>
+        </v-list-item>
+        <v-list-item
+          class="text-body menu-text-color"
+          @click="uploadFromDevice()">
+          <v-list-item-icon class="me-1">
+            <v-icon size="16" class="pe-1">fas fa-upload</v-icon>
+          </v-list-item-icon>
+          <v-list-item-title
+            class="text-body menu-text-color">
+            <span v-if="!isMobile" class="ps-1">{{ $t('documents.button.upload') }}</span>
           </v-list-item-title>
         </v-list-item>
         <v-list-item
@@ -91,6 +102,12 @@
         </v-list-item>
       </v-list>
     </v-menu>
+    <input
+      ref="deviceUploadInput"
+      type="file"
+      multiple
+      class="d-none"
+      @change="onDeviceFilesSelected">
   </div>
 </template>
 <script>
@@ -175,8 +192,21 @@ export default {
         this.addMenu = !this.addMenu;
       }
     },
-    openDrawer() {
-      this.$root.$emit('documents-open-drawer');
+    openCreateDocumentDrawer() {
+      this.$root.$emit('documents-open-create-document-drawer');
+      this.hideAddMenuMobile();
+    },
+    uploadFromDevice() {
+      // Open the OS file picker; the chosen files are uploaded into the current
+      // folder through the Drive's existing upload path (openDrawer(files)).
+      this.$refs.deviceUploadInput.value = '';
+      this.$refs.deviceUploadInput.click();
+    },
+    onDeviceFilesSelected(event) {
+      const files = event?.target?.files;
+      if (files && files.length) {
+        this.$root.$emit('documents-open-drawer', Array.from(files));
+      }
       this.hideAddMenuMobile();
     },
     openImportDrawer() {

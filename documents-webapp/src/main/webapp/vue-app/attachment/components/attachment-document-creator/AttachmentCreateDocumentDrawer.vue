@@ -127,6 +127,15 @@ export default {
       type: Number,
       default: parseInt(`${eXo.env.portal.maxToUpload}`)
     },
+    // Host context. 'attachment' (default) keeps the original attachment-composer
+    // behavior (add to the level-1 attachments list). 'drive' is used when the
+    // drawer is opened standalone by the Documents/Drive app: the created
+    // document lands in the current folder and the host refreshes its file list
+    // (via the emitted 'document-created' event).
+    mode: {
+      type: String,
+      default: 'attachment'
+    },
   },
   data() {
     return {
@@ -240,12 +249,19 @@ export default {
       if (doc && doc.id) {
         doc.drive = this.currentDrive.title;
         doc.date = doc.created;
-        this.$root.$emit('add-new-created-document', doc);
+        if (this.mode === 'drive') {
+          // Drive host: let it drop the new document into the current folder
+          // and refresh its own file list.
+          this.$emit('document-created', doc);
+        } else {
+          // Attachment composer host: add it to the level-1 attachments list.
+          this.$root.$emit('add-new-created-document', doc);
+        }
         this.$root.$emit('alert-message', this.$t('attachments.upload.success'), 'success');
         this.resetNewDocInput();
         window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${doc.id}&backTo=${window.location.pathname}`, '_blank');
-        // Return to the level-1 attachments drawer so the freshly created
-        // document is visible in the populated attachments list.
+        // Return to the level-1 attachments drawer (attachment host) or simply
+        // close the standalone drawer (drive host).
         this.close();
       }
     }
