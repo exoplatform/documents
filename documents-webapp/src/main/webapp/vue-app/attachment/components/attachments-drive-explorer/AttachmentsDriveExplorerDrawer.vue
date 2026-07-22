@@ -1,97 +1,70 @@
+<!--
+ This file is part of the Meeds project (https://meeds.io/).
+
+ Copyright (C) 2020 - 2025 Meeds Association contact@meeds.io
+
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 3 of the License, or (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Lesser General Public License for more details.
+
+ You should have received a copy of the GNU Lesser General Public License
+ along with this program; if not, see <http://www.gnu.org/licenses/>.
+-->
 <template>
   <exo-drawer
     ref="driveExplorerDrawer"
     class="driveExplorerDrawer"
-    right>
+    go-back-button
+    right
+    :use-filter="!!currentDrive"
+    :filter-placeholder="$t('attachments.drawer.search')"
+    @go-back="closeAttachmentsDriveExplorerDrawer()"
+    @filter-updated="onHeaderSearch">
+    <!-- Standard exo-drawer header: default title + close button. Search reuses
+         exo-drawer's built-in use-filter, which turns the header title itself
+         into an inline text field (the platform-wide drawer search pattern) and
+         drives the same server-side `query` param. -->
     <template slot="title">
-      <div class="drawerHeader">
-        <v-btn icon>
-          <v-icon @click="closeAttachmentsDriveExplorerDrawer()">
-            mdi-keyboard-backspace
-          </v-icon>
-        </v-btn>
-        <span>{{ driveExplorerDrawerTitle }}</span>
-      </div>
+      <span class="text-truncate">{{ driveExplorerDrawerTitle }}</span>
     </template>
     <template slot="content">
       <div class="serverFiles pt-0 pa-3" @click="closeFolderActionsMenu">
-        <div v-show="connectedMessage" class="alert alert-info attachmentsAlert">
-          <b>{{ $t('attachments.alert.connected') }} {{ connectedMessage }}!</b>{{ $t('attachments.alert.pleaseNote') }}
-        </div>
         <div class="contentHeader border-bottom-color d-flex align-center pb-2 ma-3">
-          <div v-if="!showSearchInput" class="currentDirectory d-flex align-center mr-2">
-            <div class="documents clickable d-flex align-center" @click="fetchUserDrives()">
-              <i class="uiIconFolder mr-1"></i>
-              <span
-                class="documents"
-                data-toggle="tooltip"
-                rel="tooltip"
-                data-placement="bottom"
-                data-original-title="Documents">
-                {{ $t('attachments.drawer.drives') }}
-              </span>
+          <div class="currentDirectory d-flex align-center mr-2">
+            <!-- Nav-toggle: opens the reused FolderTreeViewDrawer. Rendered
+                 identically to the breadcrumb back button (fa-angle-left): same
+                 v-btn/v-icon markup + classes, and the same wrapper padding
+                 (documents-breadcrumb-mobile uses pa-1 mb-1 ps-0) so both icons
+                 sit on the same line, same size/padding/baseline. -->
+            <div class="d-flex align-center pa-1 mb-1 ps-0">
+              <v-btn
+                icon
+                small
+                class="ms-n1 me-1 flex-shrink-0"
+                :title="$t('attachments.drawer.drives')"
+                @click="openNavigationTree()">
+                <v-icon size="18">fas fa-columns</v-icon>
+              </v-btn>
             </div>
-            <div
+            <!-- Reused Documents breadcrumb, forced to its mobile branch
+                 (fa-angle-left to the parent + current folder / drive name). Its
+                 own tree toggle is hidden (show-icon=false); the panel icon above
+                 opens the nav tree. -->
+            <documents-breadcrumb
               v-if="currentDrive"
-              class="currentDrive d-flex clickable align-center"
-              @click="openDrive(currentDrive)">
-              <span class="uiIconArrowRight"></span>
-              <a
-                :title="currentDrive.title"
-                :class="currentDrive.isSelected? 'active font-weight-bold' : ''"
-                class="currentDriveTitle text-truncate"
-                data-toggle="tooltip"
-                rel="tooltip"
-                data-placement="bottom">
-                {{ currentDrive.title }}
-              </a>
-            </div>
-            <div v-if="foldersHistory.length > 2" class="longFolderHistory d-flex align-center">
-              <span class="uiIconArrowRight"></span>
-              <div class="btn-group">
-                <button class="dropdown-toggle px-2 py-1" data-toggle="dropdown">
-                  ...
-                </button>
-                <ul class="dropdown-menu folders-menu">
-                  <li v-for="folderHist in foldersHistory.slice(0,foldersHistory.length-2)" :key="folderHist">
-                    <a
-                      @click="openFolder(folderHist)">{{ folderHist.title }}</a>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div class="foldersHistory  d-flex">
-              <div
-                v-for="folderHis in foldersHistory.slice(foldersHistory.length-2,foldersHistory.length)"
-                :key="folderHis"
-                class="folderHistory d-flex align-center text-truncate">
-                <span class="uiIconArrowRight"></span>
-                <a
-                  :title="folderHis.title"
-                  :class="folderHis.isSelected? 'active font-weight-bold' : ''"
-                  class="currentSpaceDirectory text-truncate clickable"
-                  data-toggle="tooltip"
-                  rel="tooltip"
-                  data-placement="bottom"
-                  @click="openFolder(folderHis)">
-                  {{ folderHis.title }}
-                </a>
-              </div>
-            </div>
+              :show-icon="false"
+              :is-mobile="true"
+              class="attachments-drive-breadcrumb" />
           </div>
-          <div :class="showSearchInput? 'visible' : ''" class="selectorActions d-flex align-center">
-            <input
-              id="searchServerAttachments"
-              ref="searchServerAttachments"
-              v-model="searchFilesFolders"
-              type="text"
-              class="searchInput ma-0">
+          <div class="selectorActions d-flex align-center">
             <a
-              :class="showSearchInput ? 'uiIconCloseServerAttachments' : 'uiIconFilter'"
-              class="uiIconLightGray mr-1"
-              @click="showSearchDocumentInput()"></a>
-            <a
-              v-if="(modeFolderSelectionForFile || modeFolderSelection) && currentDrive"
+              v-if="modeFolderSelection && currentDrive"
               :title="$t('attachments.filesFoldersSelector.button.addNewFOlder.tooltip')"
               rel="tooltip"
               data-placement="bottom"
@@ -125,9 +98,11 @@
             <i class="uiIconError"></i>{{ errorMessage }}
           </div>
         </transition>
+
         <div class="contentBody">
+          <!-- Drive browsing (a drive is opened) -->
           <div v-if="currentDrive" class="selectionBox">
-            <div v-if="loadingFolders || driveExplorerInitializing" class="loader flex-column d-flex align-center">
+            <div v-if="loading && !browseItems.length" class="loader flex-column d-flex align-center">
               <v-progress-circular
                 :size="30"
                 :width="3"
@@ -135,62 +110,75 @@
                 class="loadingRing"
                 color="#476A9C" />
             </div>
-            <div v-else class="content-explorer px-5 d-flex flex-wrap">
+            <div
+              v-else
+              class="content-explorer px-3">
+              <!-- Inline folder create / rename (destination mode) - kept as
+                   lightweight inputs above the list to preserve folder CRUD. -->
+              <div v-if="creatingNewFolder" class="newFolderRow d-flex align-center px-3 pb-2">
+                <i class="uiIcon24x24nt_folder uiIcon24x24FolderDefault uiIconEcmsLightGray me-2"></i>
+                <input
+                  ref="newFolder"
+                  v-model="newFolderName"
+                  type="text"
+                  class="newFolderInput ignore-vuetify-classes"
+                  @click.stop
+                  @blur="createNewFolder()"
+                  @keyup.enter="$event.target.blur()"
+                  @keyup.esc="cancelCreatingNewFolder($event)">
+              </div>
+              <div v-else-if="renameFolderAction" class="renameFolderRow d-flex align-center px-3 pb-2">
+                <i class="uiIcon24x24nt_folder uiIcon24x24FolderDefault uiIconEcmsLightGray me-2"></i>
+                <input
+                  ref="rename"
+                  v-model="newName"
+                  type="text"
+                  class="newFolderInput ignore-vuetify-classes"
+                  @click.stop
+                  @blur="saveNewNameFolder()"
+                  @keyup.enter="$event.target.blur()"
+                  @keyup.esc="cancelRenameNewFolder($event)">
+              </div>
               <div v-if="emptyFolder" class="emptyFolder my-10 mx-auto flex-column d-flex align-center">
                 <i class="uiIconEmptyFolder"></i>
                 <p>{{ $t('attachments.drawer.destination.folder.empty') }}</p>
               </div>
-              <div
-                v-for="folder in filteredFolders"
-                :id="folder.id"
-                :key="folder.id"
-                :title="folder.name"
-                :class="folder.type === 'new_folder' ? 'boxOfFolder d-flex flex-column' : ''"
-                class="folderSelection ma-2"
-                @click="openFolder(folder)"
-                @contextmenu="openFolderActionsMenu(folder, $event)">
-                <a
-                  v-if="folder.type === 'new_folder'"
-                  href="javascript:void(0);"
-                  class="closeIcon pt-1 pr-1 align-self-end"
-                  @mousedown="cancelCreatingNewFolder($event)">
-                  <span>x</span>
-                </a>
-                <div :class="folder.type === 'new_folder' ? 'boxOfTitle px-1' :''">
-                  <a
-                    :title="folder.title"
-                    href="javascript:void(0);"
-                    rel="tooltip"
-                    class="folderTitle d-flex flex-column v-messages"
-                    data-placement="bottom">
-                    <i
-                      :class="folder.folderTypeCSSClass"
-                      class="uiIcon24x24FolderDefault uiIconEcmsLightGray selectionIcon center"></i>
-                    <i
-                      v-show="folder.isCloudDrive"
-                      :class="getFolderIcon(folder)"
-                      class="uiIcon-clouddrive"></i>
-                    <input
-                      v-if="folder.type === 'new_folder'"
-                      :ref="folder.ref"
-                      v-model="newFolderName"
-                      type="text"
-                      class="newFolderInput  ignore-vuetify-classes"
-                      @blur="createNewFolder($event)"
-                      @keyup.enter="$event.target.blur()"
-                      @keyup.esc="cancelCreatingNewFolder($event)">
-                    <input
-                      v-else-if="renameFolderAction && folder.id === selectedFolder.id"
-                      :id="folder.id"
-                      ref="rename"
-                      v-model="newName"
-                      type="text"
-                      class="newFolderInput  ignore-vuetify-classes"
-                      @blur="saveNewNameFolder()"
-                      @keyup.enter="$event.target.blur()"
-                      @keyup.esc="cancelRenameNewFolder($event)">
-                    <div v-else class="selectionLabel text-truncate text-color center">{{ folder.title }}</div>
-                  </a>
+              <!-- Very simple rows: [checkbox (files only)] [icon] [name], all
+                   left-aligned and vertically centered; no date, no dividers, no
+                   badge / 3-dots. Folders drill on click; files toggle selection
+                   feeding the preserved attachments-changed-from-drives contract. -->
+              <div v-else class="drive-explorer-list">
+                <div
+                  v-for="item in listItems"
+                  :key="item.id"
+                  :class="{ 'selected-row': isRowSelected(item) }"
+                  class="drive-explorer-row d-flex align-center"
+                  @click="onRowClick(item)"
+                  @contextmenu="onRowContextMenu(item, $event)">
+                  <v-simple-checkbox
+                    v-if="!modeFolderSelection && !item.folder"
+                    :value="isRowSelected(item)"
+                    color="primary"
+                    class="drive-explorer-row-check flex-shrink-0 my-0 me-1"
+                    @input="toggleFileSelection(item)"
+                    @click.stop />
+                  <v-icon
+                    :color="rowIconColor(item)"
+                    size="20"
+                    class="drive-explorer-row-icon flex-shrink-0 me-2">
+                    {{ rowIconClass(item) }}
+                  </v-icon>
+                  <span class="drive-explorer-row-name text-truncate">{{ item.name }}</span>
+                </div>
+                <div v-if="hasMore" class="d-flex justify-center py-2">
+                  <v-btn
+                    text
+                    small
+                    :loading="loading"
+                    class="primary--text"
+                    @click="loadMore()">
+                    {{ $t('attachments.drawer.loadMore') }}
+                  </v-btn>
                 </div>
               </div>
               <attachments-folder-actions-menu
@@ -201,93 +189,15 @@
                 @renameFolder="renameFolder()"
                 @deleteFolder="deleteFolder"
                 @closeMenu="closeFolderActionsMenu" />
-              <div v-if="emptyFolderForSelectDestination && modeFolderSelection && !emptyFolder" class="emptyFolder d-flex flex-column align-center mx-auto mt-10">
-                <i class="uiIconEmptyFolder"></i>
-                <p>{{ $t('attachments.drawer.destination.subfolder.empty') }}</p>
-              </div>
-              <div
-                v-for="file in filteredFiles"
-                v-show="!modeFolderSelection"
-                :id="file.idAttribute"
-                :key="file.id"
-                :title="file.idAttribute"
-                :class="file.isSelected? 'selected' : ''"
-                class="fileSelection"
-                @click="selectFile(file)">
-                <attachments-drive-explorer-file-item :file="file" />
-              </div>
             </div>
           </div>
-          <div v-else class="categorizedDrives">
-            <v-list
-              dense
-              flat
-              class="drivesList">
-              <v-list-group
-                value="true"
-                class="categories"
-                eager>
-                <v-list-group
-                  v-for="(group, name) in filteredDrivers"
-                  :key="name"
-                  :ripple="false"
-                  sub-group
-                  no-action
-                  value="true"
-                  class="category"
-                  active-class="categoryActive">
-                  <template #activator>
-                    <v-list-item-content class="categoryContent">
-                      {{ name }}
-                    </v-list-item-content>
-                  </template>
-                  <!-- Drives block -->
-                  <div class="selectionBox px-5 d-flex flex-wrap">
-                    <div
-                      v-for="driver in group.drives"
-                      :key="driver.name"
-                      :title="driver.title"
-                      class="folderSelection ma-2 d-flex flex-column"
-                      @click="openDrive(driver, name)">
-                      <a
-                        :data-original-title="driver.title"
-                        rel="tooltip"
-                        class="driveTitle d-flex flex-column v-messages"
-                        data-placement="bottom">
-                        <i
-                          v-show="!drivesInProgress[driver.title]"
-                          :class="driver.isCloudDrive ? driver.driveTypeCSSClass : `uiIconEcms24x24DriveGroup ${driver.driveTypeCSSClass}`"
-                          class="uiIconEcmsLightGray drive-icon selectionIcon center"></i>
-                        <div class="text-center connectingDrive">
-                          <!-- show circular progress if cloud drive is connecting -->
-                          <v-progress-circular
-                            v-show="drivesInProgress[driver.title] >= 0 || drivesInProgress[driver.title] <= 100"
-                            :indeterminate="false"
-                            :rotate="0"
-                            :size="40"
-                            :value="drivesInProgress[driver.title]"
-                            :width="4"
-                            color="var(--allPagesPrimaryColor, #476A9C)"
-                            class="connectingDriveProgress">{{ drivesInProgress[driver.title] }}<span class="connectingDriveProgressPercent">%</span>
-                          </v-progress-circular>
-                          <!-- end of progress block -->
-                        </div>
-                        <div
-                          :class="{ 'connectingDriveTitle': drivesInProgress[driver.title] >= 0 || drivesInProgress[driver.title] <= 100}"
-                          class="selectionLabel text-truncate text-color center">{{ driver.mainTitle }}
-                        </div>
-                      </a>
-                    </div>
-                  </div>
-                  <!-- end of drives -->
-                </v-list-group>
-              </v-list-group>
-            </v-list>
+          <!-- No drive selected yet: prompt to pick one via the nav tree. -->
+          <div v-else class="emptyFolder my-10 mx-auto flex-column d-flex align-center">
+            <i class="uiIconEmptyFolder"></i>
+            <p>{{ $t('attachments.drawer.destination.folder.empty') }}</p>
           </div>
         </div>
       </div>
-      <!-- The following bloc is needed in order to display the confirmation popup -->
-      <!--begin -->
       <exo-confirm-dialog
         ref="confirmDialog"
         :title="titleLabel"
@@ -295,16 +205,13 @@
         :ok-label="okLabel"
         :cancel-label="cancelLabel"
         @ok="okConfirmDialog" />
-      <!--end -->
+      <!-- Reused Documents navigation drawer (drives / spaces / folder tree).
+           Opened by the panel icon; selecting a folder closes it and loads the
+           selected location via the 'open-folder' event handled below. -->
+      <folder-treeview-drawer :folder-path="folderPath" />
     </template>
     <template slot="footer">
       <div class="d-flex">
-        <span
-          v-if="!modeFolderSelection"
-          :class="filesCountClass"
-          class="countLimit">
-          {{ $t('attachments.drawer.maxFileCountLeft').replace('{0}', filesCountLeft) }}
-        </span>
         <v-spacer />
         <v-btn
           class="btn mr-3"
@@ -339,14 +246,6 @@ export default {
       type: Array,
       default: () => []
     },
-    connectedDrive: { // cloud drive that is in connecting progress recieved from parent
-      type: Object,
-      default: () => ({})
-    },
-    cloudDrivesInProgress: { // all cloud drives that is in progress with their progress values recieved from parent
-      type: Object,
-      default: () => ({})
-    },
     entityId: {
       type: String,
       default: ''
@@ -370,132 +269,91 @@ export default {
   },
   data() {
     return {
-      workspace: 'collaboration',
-      driveRootPath: '',
-      drivers: [],
-      folders: [],
-      files: [],
-      space: {},
-      currentDrive: {},
+      // Drives model (two sources: My Documents + My Spaces)
+      drives: [],
+      loadingDrives: false,
+      loadingMoreSpaces: false,
+      spacesOffset: 0,
+      spacesLimit: 20,
+      spacesHasMore: false,
+      // Current drive + folder browsing state
+      currentDrive: null,
+      breadcrumb: [], // result of /v1/documents/breadcrumb (index 0 = drive root)
+      parentFolderId: null,
+      folderPath: '',
+      browseItems: [], // documents (folders + files) of the current folder
+      // Pagination
+      pageSize: 20,
+      offset: 0,
+      limit: 20,
+      hasMore: false,
+      loading: false,
+      // Sort (server-side; fixed name-ascending for the picker)
+      sortField: 'name',
+      ascending: true,
+      // Search (driven by the exo-drawer header filter field)
+      query: '',
+      searchDebounce: null,
+      // Selection (existing files -> attachments)
       selectedFiles: [],
       removedFiles: [],
       maxFilesCount: 20,
-      foldersHistory: [],
-      showSearchInput: false,
-      searchFilesFolders: '',
-      loadingFolders: true,
       filesCountClass: '',
-      selectedFolderPath: '',
-      schemaFolder: '',
-      folderDestinationForFile: '',
-      attachmentsComposerActions: [], // extensions from extensionRegistry
+      // Modes
+      modeFolderSelection: true, // destination folder picker
+      modeFolderSelectionForFile: false, // destination for a single moved file
+      movedFile: {},
+      // Folder CRUD
       creatingNewFolder: false,
       newFolderName: '',
-      currentAbsolutePath: '',
-      popupBodyMessage: '',
-      folderActionsMenuTop: '0px',
-      folderActionsMenuLeft: '0px',
-      selectedFolder: {},
-      windowPositionLimit: 25,
-      MESSAGE_TIMEOUT: 5000,
-      showErrorMessage: false,
-      errorMessage: '',
       renameFolderAction: false,
       newName: '',
-      MESSAGES_DISPLAY_TIME: 5000,
-      privateDestinationForFile: false,
-      fromSpace: {},
+      selectedFolder: {},
+      folderActionsMenuTop: 0,
+      folderActionsMenuLeft: 0,
+      // Confirm dialog
+      titleLabel: '',
       okLabel: '',
       cancelLabel: '',
-      titleLabel: '',
+      popupBodyMessage: '',
       okAction: false,
-      modeFolderSelection: true,
-      modeFolderSelectionForFile: false,
-      movedFile: {},
-      driveExplorerInitializing: false,
-      currentFolder: {},
-      folderPath: '',
-      destinationFolder: ''
+      // Errors
+      showErrorMessage: false,
+      errorMessage: '',
+      MESSAGE_TIMEOUT: 5000,
+      // Extensions
+      attachmentsComposerActions: [],
+      // Infinite scroll
+      scrollObserver: null,
+      // Default destination model (upload bootstrap)
+      defaultDriveModel: null,
     };
   },
   computed: {
-    filteredFolders() {
-      let folders = this.folders.slice();
-      if (this.searchFilesFolders && this.searchFilesFolders.trim().length) {
-        const searchTerm = this.searchFilesFolders.trim().toLowerCase();
-        folders = this.folders.filter(folder => folder.name.toLowerCase().indexOf(searchTerm) >= 0);
-      }
-      const txt = document.createElement('textarea');
-      folders.forEach((folder) => {
-        txt.innerHTML = folder.title;
-        folder.title = txt.value;
-      });
-      return folders;
+    // All items reported by the server that are folders (or drives).
+    folderItems() {
+      return this.browseItems.filter(item => item.folder || item.drive);
     },
-    filteredFiles() {
-      let files = this.files.slice();
-      if (this.searchFilesFolders && this.searchFilesFolders.trim().length) {
-        const searchTerm = this.searchFilesFolders.trim().toLowerCase();
-        files = this.files.filter(file => file.name.toLowerCase().indexOf(searchTerm) >= 0);
-      }
-      files.forEach(file => {
-        file.isSelected = this.attachedFiles.some(f => f.id === file.id);
-        try {
-          file.name = decodeURI(file.name);
-        }
-        catch (error) {
-          // Nothing to do, name contains % character , but it represents not an encoded character
-          // No need to decode the file name
-        }
-      });
-      return files;
+    // All items reported by the server that are plain files.
+    fileItems() {
+      return this.browseItems.filter(item => !item.folder && !item.drive);
     },
-    filteredDrivers() {
-      let drivers = this.drivers.slice();
-      if (this.searchFilesFolders && this.searchFilesFolders.trim().length) {
-        const searchTerm = this.searchFilesFolders.trim().toLowerCase();
-        drivers = this.drivers.filter(driver => driver.title.toLowerCase().indexOf(searchTerm) >= 0);
+    // Rows rendered: folders (for navigation) plus, in "select existing files"
+    // mode, the files. These are the raw browse items (already name-decoded).
+    listItems() {
+      if (this.modeFolderSelection) {
+        return this.folderItems;
       }
-      const drivesByTypes = {
-        'My Drives': {drives: []},
-        'My Spaces': {drives: []},
-        'Others': {drives: []}
-      };
-      // map through founded drives and fill in drivesByTypes
-      drivers.map(drive => {
-        if (drive.driverType === 'Personal Drives') {
-          drivesByTypes['My Drives'].drives.push(drive);
-        } else if (drive.path.includes('spaces')) {
-          drivesByTypes['My Spaces'].drives.push(drive);
-        } else if (!drive.path.includes('Trash')) {
-          drivesByTypes['Others'].drives.push(drive);
-        }
-        return drive;
-      });
-      return drivesByTypes;
+      return this.folderItems.concat(this.fileItems);
     },
     selectedFilesCount() {
-      return (this.attachedFiles.length + this.selectedFiles.length) - this.removedFiles.length ;
+      return (this.attachedFiles.length + this.selectedFiles.length) - this.removedFiles.length;
     },
     filesCountLeft() {
       return this.maxFilesCount - this.selectedFilesCount;
     },
     emptyFolder() {
-      return this.files.length === 0 && this.folders.length === 0 && this.drivers.length === 0 && !this.loadingFolders;
-    },
-    emptyFolderForSelectDestination() {
-      return this.folders.length === 0 && this.drivers.length === 0 && !this.loadingFolders;
-    },
-    connectedMessage() { // returns name of the drive which finished connecting
-      let connectedDrive;
-      for (const key in this.drivesInProgress) {
-        const fullProgress = 100;
-        connectedDrive = this.drivesInProgress[key] >= fullProgress ? key : '';
-      }
-      return connectedDrive;
-    },
-    drivesInProgress() { // returns the copy of cloudDrivesInProgress.drives
-      return {...this.cloudDrivesInProgress.drives};
+      return !this.loading && this.listItems.length === 0;
     },
     driveExplorerDrawerTitle() {
       return this.modeFolderSelection ? this.$t('attachments.drawer.destination.folder') : this.$t('attachments.drawer.existingUploads');
@@ -507,21 +365,16 @@ export default {
       return this.removedFiles && !!this.removedFiles.length;
     },
     selectFromDrivesEnabled() {
-      return this.isSelectedFromDrivesFiles || this.isRemovedFromDrivesFiles || this.modeFolderSelectionForFile || this.modeFolderSelection;
+      return this.isSelectedFromDrivesFiles || this.isRemovedFromDrivesFiles || this.modeFolderSelection;
     }
   },
   watch: {
     filesCountLeft() {
       this.filesCountClass = this.filesCountLeft === 0 ? 'noFilesLeft' : '';
     },
-    showErrorMessage: function (newVal) {
+    showErrorMessage(newVal) {
       if (newVal) {
         setTimeout(() => this.showErrorMessage = false, this.MESSAGE_TIMEOUT);
-      }
-    },
-    connectedDrive: function (drive) {
-      if (!this.drivers.some(({title}) => title === drive.title)) {
-        this.drivers.push(drive); // display connecting drive in 'My Drives' section
       }
     },
     entityId() {
@@ -538,600 +391,714 @@ export default {
     this.initDestinationFolderPath();
     document.addEventListener('extension-AttachmentsComposer-attachments-composer-action-updated', () => this.attachmentsComposerActions = getAttachmentsComposerExtensions());
     this.attachmentsComposerActions = getAttachmentsComposerExtensions();
-    this.$root.$on('open-drive-explorer-drawer', (currentDrive) => {
-      this.currentDrive = currentDrive;
-      this.initHistoryTree();
+    this.$root.$on('open-drive-explorer-drawer', () => {
+      this.modeFolderSelection = true;
+      this.modeFolderSelectionForFile = false;
       this.openAttachmentsDriveExplorerDrawer();
     });
     this.$root.$on('open-select-from-drives-drawer', () => this.openSelectFromDrivesDrawer());
     this.$root.$on('change-attachment-destination-path', (file) => {
-      this.currentDrive = file.fileDrive;
-      if (file.pathDestinationFolderForFile !== '') {
-        this.defaultFolder = file.pathDestinationFolderForFile;
-      }
-      this.initHistoryTree();
-      this.openSelectDestinationFolderForFile(file);
-    });
-  },
-  methods: {
-    initHistoryTree(){
-      this.foldersHistory = [];
-      this.resetExplorer();
-      if (this.defaultFolder !== '/'){
-        this.folderPath = '';
-        this.currentAbsolutePath = this.defaultFolder;
-        this.selectedFolderPath = this.defaultFolder;
-        this.schemaFolder = this.currentDrive.title.concat('/', this.defaultFolder);        
-        const folderNames = this.defaultFolder.split('/');
-        folderNames.forEach(folderName => {
-          this.folderPath = `${this.folderPath}/${folderName}`;
-          const folder = {
-            name: folderName,
-            title: folderName,
-            path: this.folderPath,
-          };
-          this.generateHistoryTree(folder);
-        });
-      }
-      this.fetchChildrenContents(this.defaultFolder); 
-    },
-    openAttachmentsDriveExplorerDrawer() {
       this.modeFolderSelection = true;
-      this.$refs.driveExplorerDrawer.open();
-    },
-    openSelectDestinationFolderForFile(file) {
       this.modeFolderSelectionForFile = true;
       this.movedFile = file;
       this.openAttachmentsDriveExplorerDrawer();
+    });
+    // The reused breadcrumb brokers navigation: nav-tree selection ('open-folder')
+    // and breadcrumb crumb / angle-left clicks are re-emitted as
+    // 'document-open-folder' (a folder / drive node) or 'document-open-home' (the
+    // personal root) -> load that location in the list.
+    this.$root.$on('document-open-folder', this.handleDocumentOpenFolder);
+    this.$root.$on('document-open-home', this.handleDocumentOpenHome);
+  },
+  beforeDestroy() {
+    this.$root.$off('document-open-folder', this.handleDocumentOpenFolder);
+    this.$root.$off('document-open-home', this.handleDocumentOpenHome);
+  },
+  methods: {
+    // ---------------------------------------------------------------------
+    // Drawer lifecycle
+    // ---------------------------------------------------------------------
+    // Opens the level-2 drawer and shows the initial view (a drive or the drive list).
+    openAttachmentsDriveExplorerDrawer() {
+      this.resetSearch();
+      this.resetSelection();
+      if (this.spaceId) {
+        // A space context is known -> auto-open that space's drive
+        this.openSpaceDrive(this.spaceId);
+      } else if (this.defaultDrive && this.defaultDriveModel && this.defaultDriveModel.ownerId) {
+        // A default drive was provided by the caller -> open it
+        this.openDrive(this.defaultDriveModel);
+      } else {
+        // Generic case -> open My Documents; the panel icon switches drives.
+        this.openMyDocuments();
+      }
+      this.$refs.driveExplorerDrawer.open();
     },
+    // Resolves and opens a space's drive from its space id (via the drive list).
+    openSpaceDrive(spaceId) {
+      this.loadDrives().then(() => {
+        const spaceDrive = this.drives.find(drive => drive.spaceId === spaceId);
+        if (spaceDrive) {
+          this.openDrive(spaceDrive);
+        } else if (this.defaultDriveModel && this.defaultDriveModel.ownerId) {
+          this.openDrive(this.defaultDriveModel);
+        }
+      });
+    },
+    // Opens the drawer in "select existing files" mode (multi-select of files).
+    openSelectFromDrivesDrawer() {
+      this.modeFolderSelection = false;
+      this.modeFolderSelectionForFile = false;
+      this.openAttachmentsDriveExplorerDrawer();
+    },
+    // Closes the drawer and clears the transient selection state.
     closeAttachmentsDriveExplorerDrawer() {
-      this.resetDriveExplorer();
+      this.resetSelection();
+      this.disconnectScrollObserver();
       this.$refs.driveExplorerDrawer.close();
     },
-    initDestinationFolderPath: function () {
-      this.driveRootPath = '';
-      this.drivers = [];
-      this.folders = [];
-      this.files = [];
-      this.space = {};
-      this.folderDestinationForFile = '';
-      this.selectedFolder = {};
-      this.currentFolder = {};
-      this.folderPath = '';
-      this.destinationFolder = '';
-      //if default drive exist
-      if (this.defaultDrive && this.defaultDrive.name) {
-        const self = this;
-        this.driveExplorerInitializing = true;
-        //open it to generate the path
-        let parentFolder = this.defaultFolder.substr(0, this.defaultFolder.lastIndexOf('/') + 1);
-        if (!parentFolder) {
-          parentFolder = '/';
-        }
-        if (!parentFolder.startsWith('/')) {
-          parentFolder = '/'.concat(parentFolder) ;
-        }
-        this.openDrive(this.defaultDrive, null, parentFolder).then(() => {
-          const defaultFolder = self.folders.find(folder => folder.name === self.defaultFolder.split('/').pop());
-          if (self.entityType && self.createEntityTypeFolder) {
-            this.createEntityTypeAndIdFolders(defaultFolder);
-          }
-          //if both default drive and default folder exist
-          if (defaultFolder) {
-            this.openFolder(defaultFolder)
-              .then(() => {
-                this.$root.$emit('attachments-default-folder-path-initialized', this.getRelativePath(self.selectedFolderPath), this.schemaFolder);
-              }).finally(() => this.driveExplorerInitializing = false);
-            // create a default folder for activity attachments if it doesn't exist
-          } else if (!defaultFolder && self.defaultFolder === 'Activity Stream Documents') {
-            this.$attachmentService.createFolder(self.currentDrive.name, self.workspace, this.currentAbsolutePath, self.defaultFolder, 'nt:folder', true).then(() => {
-              this.initDestinationFolderPath();
-            });
-            //else if no default folder create file in root folder
-          } else if (self.defaultFolder.includes('/')){
-            const pathParts= self.defaultFolder.split('/');
-            const folderName = pathParts.pop();
-            let parentPath = pathParts.join('/');
-            if (!parentPath) {
-              parentPath = '/';
-            }
-            this.fetchChildrenContents(parentPath).then(() => {
-              const defaultFolder = self.folders.find(folder => folder.title === folderName);
-              if (defaultFolder){
-                this.openFolder(defaultFolder).then(() => {
-                  this.$root.$emit('attachments-default-folder-path-initialized', this.getRelativePath(self.selectedFolderPath), this.schemaFolder);
-                  this.driveExplorerInitializing = false;
-                });
-              }
-              
-            });
-            
+    // True when the drawer is currently closed (used by the parent).
+    isClosed() {
+      return this.$refs.driveExplorerDrawer.$el.classList.contains('v-navigation-drawer--close');
+    },
+    // ---------------------------------------------------------------------
+    // Drive navigation (reused Documents nav tree)
+    // ---------------------------------------------------------------------
+    // Opens the reused navigation drawer at the current location. The current
+    // breadcrumb (enriched with the owner identity so the tree can locate the
+    // space-drive node) is passed THROUGH the open event, so the tree re-emits it
+    // after its lazily-created content + root data are ready (fixes the lost-event
+    // timing) and expands the drive + ancestors down to the current folder.
+    openNavigationTree() {
+      const ownerId = this.currentDrive && this.currentDrive.ownerId;
+      const enriched = (this.breadcrumb || []).map(crumb => Object.assign({}, crumb, {identityId: crumb.identityId || ownerId}));
+      this.$root.$emit('openTreeFolderDrawer', false, enriched);
+    },
+    // Opens the personal "My Documents" drive at its root.
+    openMyDocuments() {
+      this.openDrive({
+        name: 'Personal Documents',
+        title: this.$t('attachments.drawer.myDocuments'),
+        ownerId: eXo.env.portal.userIdentityId,
+        spaceId: null,
+        avatarUrl: null,
+      });
+    },
+    // Breadcrumb re-emits 'document-open-home' for the personal root (Private).
+    handleDocumentOpenHome() {
+      this.openMyDocuments();
+    },
+    // ".spaces.<group>" ECMS drive name from a space groupId (else Personal).
+    driveNameFromGroupId(groupId) {
+      if (!groupId) {
+        return 'Personal Documents';
+      }
+      const group = groupId.includes('/spaces/') ? groupId.split('/spaces/')[1] : groupId.replace(/^\//, '');
+      return `.spaces.${group}`;
+    },
+    // Builds "My Documents" and fetches the first page of "My Spaces".
+    loadDrives() {
+      this.loadingDrives = true;
+      this.drives = [{
+        driverType: 'My Documents',
+        name: 'Personal Documents',
+        title: this.$t('attachments.drawer.myDocuments'),
+        ownerId: eXo.env.portal.userIdentityId,
+        avatarUrl: null,
+        drive: true,
+      }];
+      this.spacesOffset = 0;
+      return this.fetchSpaces(false).finally(() => this.loadingDrives = false);
+    },
+    // Fetches a page of member spaces and maps each to a drive descriptor.
+    fetchSpaces(append) {
+      return this.$spaceService.getSpaces(this.query || null, this.spacesOffset, this.spacesLimit, 'member', 'identity')
+        .then(data => {
+          const spaces = (data && data.spaces) || [];
+          const spaceDrives = spaces.filter(space => space && space.identity && space.identity.id).map(space => ({
+            driverType: 'My Spaces',
+            name: this.spaceDriveName(space),
+            title: space.displayName,
+            ownerId: space.identity.id,
+            spaceId: space.id,
+            avatarUrl: space.avatarUrl,
+            drive: true,
+          }));
+          if (append) {
+            this.drives = this.drives.concat(spaceDrives);
           } else {
-            this.$root.$emit('attachments-default-folder-path-initialized', '/', this.currentDrive.title);
-            this.driveExplorerInitializing = false;
+            this.drives = this.drives.filter(drive => drive.driverType !== 'My Spaces').concat(spaceDrives);
           }
+          const size = (data && data.size) || 0;
+          this.spacesHasMore = (this.spacesOffset + this.spacesLimit) < size;
+        }).catch(() => {
+          this.errorMessage = this.$t('attachments.getDrivers.error');
+          this.showErrorMessage = true;
         });
-      } else {
-        this.currentDrive = null;
-        this.fetchUserDrives();
-      }
     },
-    openFolder: function (folder) {
-      if (this.selectedFolder.id && this.selectedFolder.canRemove) {
-        this.$refs.rename[0].focus();
-      } else if (folder.type && folder.type === 'new_folder') {
-        this.$refs.newFolder[0].focus();
-      } else {
-        this.currentAbsolutePath = folder.path;
-        this.generateHistoryTree(folder);
-        this.resetExplorer();
-        folder.isSelected = true;
-        this.selectedFolderPath = this.driveRootPath.concat(folder.path);
-        this.schemaFolder = this.currentDrive.title.concat('/', folder.path);
-        this.folderDestinationForFile = folder.name;
-        return this.fetchChildrenContents(folder.path);
-      }
-      this.schemaFolder = this.currentDrive.title.concat('/', folder.path);
-      this.folderDestinationForFile = folder.title;
-      this.privateDestinationForFile = folder.isPublic;
+    // Computes the legacy ECMS drive name (".spaces.<group>") for a space.
+    spaceDriveName(space) {
+      const groupId = space.groupId || '';
+      const group = groupId.includes('/spaces/') ? groupId.split('/spaces/')[1] : groupId.replace(/^\//, '');
+      return `.spaces.${group}`;
     },
-
-    openDrive(drive, group, parentPath) {
-      this.currentAbsolutePath = '';
-      this.selectedFolderPath = '';
-      this.folderDestinationForFile = '';
-      this.foldersHistory = [];
-      this.resetExplorer();
-      this.fromSpace = group === 'My Spaces' ? {title: drive.title, name: drive.name} : {};
+    // ---------------------------------------------------------------------
+    // Folder browsing (breadcrumb drill-down)
+    // ---------------------------------------------------------------------
+    // Opens a drive at its root folder.
+    openDrive(drive) {
+      if (!drive) {
+        return this.openMyDocuments();
+      }
       this.currentDrive = {
         name: drive.name,
         title: drive.title,
-        mainTitle: drive.mainTitle,
-        isSelected: true
+        ownerId: drive.ownerId,
+        spaceId: drive.spaceId,
+        avatarUrl: drive.avatarUrl,
       };
-      return this.fetchChildrenContents(parentPath);
+      this.parentFolderId = null;
+      this.folderPath = '';
+      this.resetSearch();
+      return this.navigate();
     },
-    fetchChildrenContents: function (parentPath) {
-      this.loadingFolders = true;
-      const self = this;
-      return this.$attachmentService.fetchFoldersAndFiles(this.currentDrive.name, this.workspace, parentPath).then(xml => {
-        const rootFolder = xml.childNodes[0];
-        if (rootFolder.getAttribute('path') === '/') {
-          self.driveRootPath = `${rootFolder.getAttribute('path')}`;
-        } else if (parentPath === '') {
-          self.driveRootPath = `${rootFolder.getAttribute('path')}/`;
-        }
-        self.setFoldersAndFiles(rootFolder);
-        self.loadingFolders = false;
-      }).catch(error => {
-        this.loadingFolders = false;
-        this.errorMessage = `${this.$t('attachments.fetchFoldersAndFiles.error')}. ${error.message ? error.message : ''}`;
-        this.showErrorMessage = true;
-      });
-    },
-    fetchUserDrives() {
-      this.resetExplorer();
-      this.loadingFolders = true;
-      this.currentDrive = null;
-      this.foldersHistory = [];
-      const self = this;
-      this.$attachmentService.getDrivers().then(xml => {
-        const drivers = xml.childNodes[0].childNodes;
-        self.setDrivers(drivers);
-        this.loadingFolders = false;
-      }).catch(() => {
-        this.loadingFolders = false;
-        this.errorMessage = `${this.$t('attachments.getDrivers.error')}`;
-        this.showErrorMessage = true;
-      });
-    },
-    resetExplorer() {
-      this.drivers = [];
-      this.folders = [];
-      this.files = [];
-    },
-    getRelativePath: function (absolutePath) {
-      if (absolutePath && absolutePath.startsWith(this.driveRootPath)) {
-        return absolutePath.substr(this.driveRootPath.length);
+    // Handles a folder open from: a folder row click (mapped browse item), the
+    // breadcrumb (crumb / angle-left click), or the nav tree (brokered by the
+    // breadcrumb as 'document-open-folder'). A drive/space tree node (folder.drive)
+    // opens that drive; otherwise we drill into the folder, syncing the drive
+    // owner the tree may have changed (cross-drive jump).
+    handleDocumentOpenFolder(folder) {
+      if (!folder || this.creatingNewFolder || this.renameFolderAction) {
+        return;
       }
-    },
-    getURLQueryParam(paramName) {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has(paramName)) {
-        return urlParams.get(paramName);
-      }
-    },
-    selectFile(file) {
-      if (file.isSelected) {
-        file.isSelected = false;
-        file.isSelectedFromDrives = false;
-        const existingFileIndex = this.attachedFiles.findIndex(f => f.id === file.id);
-        const newlyAddedIndex = this.selectedFiles.findIndex(f => f.id === file.id);
-        if (existingFileIndex !== -1) {
-          this.removedFiles.push(file);
-        } else if (newlyAddedIndex !== -1) {
-          this.selectedFiles.splice(newlyAddedIndex, 1);
-        }
-      } else if (this.filesCountLeft > 0) {
-        file.isSelected = true;
-        file.isSelectedFromDrives = true;
-        const alreadyAttachedFile = this.attachedFiles.find(f => f.id === file.id);
-        if (!alreadyAttachedFile) {
-          this.selectedFiles.push({...file, space: this.fromSpace , eXoDrive: true});
-        }
-        const alreadyRemovedFileIndex = this.removedFiles.findIndex(f => f.id === file.id);
-        if (alreadyRemovedFileIndex !== -1) {
-          this.removedFiles.splice(alreadyRemovedFileIndex, 1);
-        }
-      }
-    },
-    generateHistoryTree(folder) {
-      if (!this.foldersHistory.find(f => f.name === folder.name) && folder) {
-        this.foldersHistory.push({
-          name: folder.name,
-          title: folder.title,
-          path: folder.driverType ? '' : folder.path,
-          driverType: folder.driverType ? folder.driverType : ''
+      if (folder.drive) {
+        return this.openDrive({
+          name: this.driveNameFromGroupId(folder.groupId),
+          title: folder.title || folder.name,
+          ownerId: folder.identityId || folder.ownerId,
+          spaceId: folder.spaceId,
+          avatarUrl: folder.avatarUrl,
         });
       }
-      if (!folder.driverType && folder.path) {
-        this.foldersHistory = this.foldersHistory.filter(ele =>
-          folder.path.split('/').find(f => f === ele.name)
-        );
+      // If the nav tree switched the owner to another drive, rebuild the drive
+      // context from the folder path (destination is recomputed from breadcrumb).
+      const treeOwner = this.$root.ownerId;
+      if (treeOwner && treeOwner !== '0' && this.currentDrive && treeOwner !== this.currentDrive.ownerId && folder.path) {
+        const isSpace = folder.path.startsWith('/Groups/spaces');
+        this.currentDrive = {
+          name: isSpace ? `.spaces.${folder.path.split('/').filter(segment => segment && segment.length)[2]}` : 'Personal Documents',
+          title: isSpace ? folder.name : this.$t('attachments.drawer.myDocuments'),
+          ownerId: treeOwner,
+          spaceId: this.$root.spaceId,
+          avatarUrl: null,
+        };
       }
-      this.currentDrive.isSelected = false;
-      this.foldersHistory.forEach(f => f.isSelected = false);
-      this.foldersHistory.find(f => f.name === folder.name).isSelected = true;
+      const isDriveRoot = this.breadcrumb && this.breadcrumb.length && folder.id === this.breadcrumb[0].id;
+      this.parentFolderId = isDriveRoot ? null : folder.id;
+      this.folderPath = '';
+      this.resetSearch();
+      return this.navigate();
     },
+    // Reloads the current folder contents (page 0) and the breadcrumb, and feeds
+    // the reused breadcrumb the current folder so it renders/updates.
+    navigate() {
+      this.offset = 0;
+      this.limit = this.pageSize;
+      this.browseItems = [];
+      this.$root.ownerId = this.currentDrive.ownerId;
+      this.loadBreadcrumb().then(() => this.syncVisualBreadcrumb());
+      return this.fetchDocuments(false);
+    },
+    // Feeds the reused documents-breadcrumb the current folder (it fetches its own
+    // crumb chain from the last folder's id).
+    syncVisualBreadcrumb() {
+      const last = this.breadcrumb && this.breadcrumb.length ? this.breadcrumb[this.breadcrumb.length - 1] : null;
+      if (last) {
+        this.$root.$emit('set-breadcrumb', last);
+      }
+    },
+    // Fetches the breadcrumb chain for the current folder.
+    loadBreadcrumb() {
+      return this.$documentFileService.getBreadCrumbs(this.parentFolderId, this.currentDrive.ownerId, this.folderPath)
+        .then(breadcrumb => {
+          this.breadcrumb = breadcrumb || [];
+        }).catch(() => {
+          this.breadcrumb = [];
+        });
+    },
+    // Fetches (a page of) the current folder's documents via /v1/documents.
+    // Sort mirrors the Documents app; the header search icon drives `query`.
+    fetchDocuments(append) {
+      const filter = {
+        ownerId: this.currentDrive.ownerId,
+        listingType: 'FOLDER',
+        sortField: this.sortField || 'name',
+        ascending: this.ascending,
+        favorites: false,
+      };
+      if (this.parentFolderId) {
+        filter.parentFolderId = this.parentFolderId;
+      }
+      if (this.folderPath) {
+        filter.folderPath = this.folderPath;
+      }
+      if (this.query && this.query.trim().length) {
+        filter.query = this.query.trim();
+      }
+      this.offset = append ? this.offset + this.pageSize : 0;
+      this.limit = append ? this.limit + this.pageSize : this.pageSize;
+      this.loading = true;
+      // request one extra item to detect whether more pages exist
+      return this.$documentFileService.getDocumentItems(filter, null, null, this.offset, this.limit + 1, 'owner')
+        .then(items => {
+          const documents = (items || []).map(item => this.mapDocument(item));
+          this.hasMore = documents.length > this.limit;
+          const pageItems = this.hasMore ? documents.slice(0, this.limit) : documents;
+          this.browseItems = append ? this.dedupe(this.browseItems.concat(pageItems)) : pageItems;
+        }).catch(error => {
+          this.errorMessage = `${this.$t('attachments.fetchFoldersAndFiles.error')}. ${error && error.message ? error.message : ''}`;
+          this.showErrorMessage = true;
+        }).finally(() => this.loading = false);
+    },
+    // Loads the next page of the current folder (infinite scroll).
+    loadMore() {
+      if (this.loading || !this.hasMore) {
+        return;
+      }
+      this.fetchDocuments(true);
+    },
+    // Maps a /v1/documents item to the shape used by this drawer.
+    mapDocument(item) {
+      let name = item.name;
+      try {
+        name = decodeURIComponent(item.name);
+      } catch (e) {
+        // keep the raw name when it is not a valid encoded string
+      }
+      return {
+        id: item.id,
+        name: name,
+        folder: !!item.folder,
+        drive: !!item.drive,
+        mimetype: item.mimeType,
+        sourceID: item.sourceID,
+        modifiedDate: item.modifiedDate,
+        lastModified: item.modifiedDate,
+        size: item.size,
+        path: item.path,
+        downloadUrl: item.downloadUrl,
+        acl: item.acl,
+        canRemove: !!(item.acl && item.acl.canDelete) || !!(item.acl && item.acl.canEdit),
+        isCloudFile: false,
+        isSelected: this.attachedFiles.some(f => f.id === item.id) || this.selectedFiles.some(f => f.id === item.id),
+      };
+    },
+    dedupe(items) {
+      return [...new Map(items.map(item => [item.id, item])).values()];
+    },
+    // Human-readable label for a breadcrumb crumb.
+    crumbLabel(crumb) {
+      if (crumb.name === 'Private') {
+        return this.$t('attachments.drawer.myDocuments');
+      }
+      if (crumb.name === 'Documents') {
+        return this.currentDrive.title;
+      }
+      return crumb.name;
+    },
+    // ---------------------------------------------------------------------
+    // Search
+    // ---------------------------------------------------------------------
+    // Header search: exo-drawer's built-in filter field emits 'filter-updated'
+    // on each keystroke -> debounced server-side search of the current folder.
+    onHeaderSearch(text) {
+      this.query = text || '';
+      if (this.searchDebounce) {
+        clearTimeout(this.searchDebounce);
+      }
+      this.searchDebounce = setTimeout(() => this.triggerSearch(), 400);
+    },
+    triggerSearch() {
+      if (this.currentDrive) {
+        this.offset = 0;
+        this.limit = this.pageSize;
+        this.browseItems = [];
+        this.fetchDocuments(false);
+      } else {
+        this.spacesOffset = 0;
+        this.fetchSpaces(false);
+      }
+    },
+    resetSearch() {
+      this.query = '';
+    },
+    // ---------------------------------------------------------------------
+    // File selection (-> attachments-changed-from-drives)
+    // ---------------------------------------------------------------------
+    // Adds a file to the picked set feeding the (unchanged)
+    // attachments-changed-from-drives emit contract (called via the list-view
+    // selection cell's 'update-selection-documents-list' event).
+    onFileSelected(cardFile) {
+      const original = this.fileItems.find(f => f.id === cardFile.id);
+      if (!original) {
+        return;
+      }
+      const alreadyAttached = this.attachedFiles.some(f => f.id === cardFile.id);
+      if (!alreadyAttached && !this.selectedFiles.some(f => f.id === cardFile.id)) {
+        this.selectedFiles.push(this.buildSelectedFile(original));
+      }
+      const removedIndex = this.removedFiles.findIndex(f => f.id === cardFile.id);
+      if (removedIndex !== -1) {
+        this.removedFiles.splice(removedIndex, 1);
+      }
+    },
+    // Removes a file from the picked set (deselection counterpart).
+    onFileUnselected(cardFile) {
+      const attachedIndex = this.attachedFiles.findIndex(f => f.id === cardFile.id);
+      const newlyAddedIndex = this.selectedFiles.findIndex(f => f.id === cardFile.id);
+      if (attachedIndex !== -1) {
+        if (!this.removedFiles.some(f => f.id === cardFile.id)) {
+          this.removedFiles.push(this.attachedFiles[attachedIndex]);
+        }
+      } else if (newlyAddedIndex !== -1) {
+        this.selectedFiles.splice(newlyAddedIndex, 1);
+      }
+    },
+    // ---------------------------------------------------------------------
+    // Custom row rendering + interactions
+    // ---------------------------------------------------------------------
+    // True when the file is already attached or currently picked.
+    isRowSelected(item) {
+      return this.attachedFiles.some(f => f.id === item.id) || this.selectedFiles.some(f => f.id === item.id);
+    },
+    // Row click: folders drill down, files (select mode) toggle selection.
+    onRowClick(item) {
+      if (item.folder || item.drive) {
+        this.handleDocumentOpenFolder(item);
+      } else if (!this.modeFolderSelection) {
+        this.toggleFileSelection(item);
+      }
+    },
+    // Toggles a file's selection, feeding the preserved emit contract.
+    toggleFileSelection(item) {
+      if (this.isRowSelected(item)) {
+        this.onFileUnselected(item);
+      } else {
+        this.onFileSelected(item);
+      }
+    },
+    // Right-click a folder row -> folder actions menu (destination mode only).
+    onRowContextMenu(item, event) {
+      if (!this.modeFolderSelection || !item || !item.folder) {
+        return;
+      }
+      this.openFolderActionsMenu(item, event);
+    },
+    // Icon class/color from the shared documents icons extension.
+    rowIconClass(item) {
+      if (item.folder || item.drive) {
+        return 'fas fa-folder';
+      }
+      const icon = this.$documentsIconsExtension && this.$documentsIconsExtension[0] && this.$documentsIconsExtension[0].get(item.mimetype);
+      return icon && icon.class || 'fas fa-file';
+    },
+    rowIconColor(item) {
+      if (item.folder || item.drive) {
+        return 'primary';
+      }
+      const icon = this.$documentsIconsExtension && this.$documentsIconsExtension[0] && this.$documentsIconsExtension[0].get(item.mimetype);
+      return icon && icon.color || 'grey';
+    },
+    // Builds the file payload consumed by the level-1 drawer / attachments list.
+    buildSelectedFile(file) {
+      const dest = this.computeLegacyDestination();
+      const fromSpace = this.currentDrive.spaceId ? {title: this.currentDrive.title, name: dest.driveName} : {};
+      return {
+        id: file.id,
+        name: file.name,
+        title: file.name,
+        size: file.size,
+        mimetype: file.mimetype,
+        path: dest.relativePath ? `${dest.relativePath}/${file.name}` : file.name,
+        downloadUrl: file.downloadUrl,
+        acl: file.acl,
+        isSelected: true,
+        isSelectedFromDrives: true,
+        fileDrive: {name: dest.driveName, title: this.currentDrive.title},
+        space: fromSpace,
+        eXoDrive: true,
+      };
+    },
+    // Emits the picked files to the level-1 drawer.
     addSelectedFiles() {
       this.$root.$emit('attachments-changed-from-drives', this.selectedFiles, this.removedFiles);
-      this.resetDriveExplorer();
+      this.resetSelection();
     },
-    showSearchDocumentInput() {
-      this.showSearchInput = !this.showSearchInput;
-      document.getElementById('searchServerAttachments').style.display = this.showSearchInput ? 'block' : 'none';
-      this.$refs.searchServerAttachments.focus();
-      this.searchFilesFolders = '';
+    resetSelection() {
+      this.selectedFiles = [];
+      this.removedFiles = [];
     },
-    setFoldersAndFiles(rootFolder) {
-      const fetchedDocuments = rootFolder.childNodes;
-      for (let i = 0; i < fetchedDocuments.length; i++) {
-        if (fetchedDocuments[i].tagName === 'Folders') {
-          const fetchedFolders = fetchedDocuments[i].childNodes;
-          for (let j = 0; j < fetchedFolders.length; j++) {
-            const folderType = fetchedFolders[j].getAttribute('nodeType');
-            const folderTypeCSSClass = `uiIcon24x24${folderType.replace(':', '_')}`;
-            const id = fetchedFolders[j].getAttribute('path').split('/').pop();
-            this.folders.push({
-              id: id,
-              name: fetchedFolders[j].getAttribute('name'),
-              title: fetchedFolders[j].getAttribute('title'),
-              path: fetchedFolders[j].getAttribute('currentFolder'),
-              folderTypeCSSClass: folderTypeCSSClass,
-              isSelected: false,
-              canRemove: fetchedFolders[j].getAttribute('canRemove') === 'true',
-              isCloudDrive: fetchedFolders[j].getAttribute('isCloudDrive') === 'true' ? true : false,
-              isPublic: fetchedFolders[j].getAttribute('isPublic') === 'true' ? true : false,
-              cloudProvider: fetchedFolders[j].getAttribute('cloudProvider')
-            });
-          }
-        } else if (fetchedDocuments[i].tagName === 'Files') {
-          const fetchedFiles = fetchedDocuments[i].childNodes;
-          for (let j = 0; j < fetchedFiles.length; j++) {
-            const idAttribute = fetchedFiles[j].getAttribute('path').split('/').pop();
-            const id = fetchedFiles[j].getAttribute('id');
-            const isSelected = this.attachedFiles.some(f => f.id === id);
-            this.files.push({
-              id: id,
-              name: fetchedFiles[j].getAttribute('name'),
-              title: fetchedFiles[j].getAttribute('title'),
-              path: this.getRelativePath(fetchedFiles[j].getAttribute('path')),
-              size: fetchedFiles[j].getAttribute('size'),
-              idAttribute: idAttribute,
-              isSelected: isSelected,
-              mimetype: fetchedFiles[j].getAttribute('nodeType'),
-              isCloudFile: fetchedFiles[j].getAttribute('isCloudFile') === 'true' ? true : false,
-              isPublic: fetchedFiles[j].getAttribute('isPublic') === 'true' ? true : false,
-              fileDrive: this.currentDrive
-            });
-          }
-        }
-      }
-    },
-    setDrivers(drivers) {
-      for (let i = 0; i < drivers.length; i++) {
-        if (drivers[i].tagName === 'Folders') {
-          const fetchedDrivers = drivers[i].childNodes;
-          let driverTypeClass;
-          const driverType = drivers[i].getAttribute('name');
-          if (driverType === 'Personal Drives') {
-            driverTypeClass = 'uiIconEcms24x24DrivePrivate';
-          } else {
-            driverTypeClass = `uiIconEcms24x24Drive${driverType.split(' ')[0]}`;
-          }
-          for (let j = 0; j < fetchedDrivers.length; j++) {
-            const name = fetchedDrivers[j].getAttribute('name');
-            const isCloudDrive = fetchedDrivers[j].getAttribute('isCloudDrive') === 'true' ? true : false;
-            const driveTypeCSSClass = isCloudDrive
-              ? `uiIconEcmsDrive-${fetchedDrivers[j].getAttribute('cloudProvider')}`
-              : `${name.replace(/\s/g, '')} ${driverTypeClass}`;
-            const driveLabel = fetchedDrivers[j].getAttribute('label')
-              .replace('.', '').replace(' ', '');
-            const labelKey = `Drives.label.${driveLabel}`;
-            const DriveTitle = labelKey === this.$t(labelKey) && driveLabel || this.$t(labelKey);
-            const driver = {
-              name: name,
-              title: DriveTitle,
-              mainTitle: DriveTitle,
-              path: fetchedDrivers[j].getAttribute('path'),
-              css: fetchedDrivers[j].getAttribute('nodeTypeCssClass'),
-              type: 'drive',
-              driveTypeCSSClass: driveTypeCSSClass,
-              driverType: driverType,
-              isCloudDrive: isCloudDrive
-            };
-            if (isCloudDrive) {
-              const index = name.indexOf('-');
-              driver.mainTitle = name.substr(0,index);
-              driver.title = name;
-            }
-            this.drivers.push(driver);
-          }
-        }
-      }
-    },
+    // ---------------------------------------------------------------------
+    // Destination selection (-> select-destination-path-for-all / add-destination-path-for-file)
+    // ---------------------------------------------------------------------
+    // Confirms the current selection: destination folder or picked files.
     selectActionDriveExplorerDrawer() {
       if (this.modeFolderSelection) {
-        if (!this.selectedFolderPath) {
-          this.selectedFolderPath = this.driveRootPath;
-          this.schemaFolder = this.currentDrive.title;
-          this.folderDestinationForFile = this.currentDrive.title;
-        }
+        const dest = this.computeLegacyDestination();
+        const drive = {
+          name: dest.driveName,
+          title: this.currentDrive.title,
+          mainTitle: this.currentDrive.title,
+          isSelected: true,
+        };
         if (this.modeFolderSelectionForFile) {
-          this.$root.$emit('add-destination-path-for-file', this.movedFile, this.getRelativePath(this.selectedFolderPath), this.folderDestinationForFile, this.currentDrive);
+          this.$root.$emit('add-destination-path-for-file', this.movedFile, dest.relativePath, dest.folderName, drive);
           this.modeFolderSelectionForFile = false;
         } else {
-          this.$root.$emit('select-destination-path-for-all', this.selectedFolderPath, this.getRelativePath(this.selectedFolderPath), this.schemaFolder, this.currentDrive);
+          this.$root.$emit('select-destination-path-for-all', dest.relativePath, dest.relativePath, dest.schemaFolder, drive);
         }
       } else {
         this.addSelectedFiles();
       }
-
       this.closeAttachmentsDriveExplorerDrawer();
     },
-    executeAction(action) { // will execute code inside 'onExecute' extension method
-      executeExtensionAction(action, this.extensionRefs[action.key][0]);
+    // Derives the legacy ECMS drive name + drive-root-relative path from the current breadcrumb, so the (unchanged) level-1 upload/move flow keeps working. Mirrors the mapping used by the documents app breadcrumb.
+    computeLegacyDestination() {
+      const fallbackDriveName = this.currentDrive && this.currentDrive.name || 'Personal Documents';
+      const fallbackTitle = this.currentDrive && this.currentDrive.title || '';
+      if (!this.breadcrumb || !this.breadcrumb.length) {
+        return {driveName: fallbackDriveName, relativePath: '', folderName: fallbackTitle, schemaFolder: fallbackTitle};
+      }
+      const root = this.breadcrumb[0];
+      const last = this.breadcrumb[this.breadcrumb.length - 1];
+      let driveName;
+      if (root.path && root.path.startsWith('/Groups/spaces')) {
+        driveName = `.spaces.${root.path.split('/').filter(segment => segment && segment.length)[2]}`;
+      } else {
+        driveName = 'Personal Documents';
+      }
+      let relativePath = (last.path && root.path && last.path !== root.path)
+        ? last.path.replace(`${root.path}/`, '')
+        : '';
+      if (relativePath.indexOf('Public') !== -1) {
+        relativePath = `Public/${relativePath.split('Public')[1]}`.replace('//', '/') || 'Public';
+      }
+      const folderName = this.breadcrumb.length > 1 ? this.crumbLabel(last) : fallbackTitle;
+      const schemaFolder = relativePath ? `${fallbackTitle}/${relativePath}` : fallbackTitle;
+      return {driveName, relativePath, folderName, schemaFolder};
     },
+    // ---------------------------------------------------------------------
+    // Folder CRUD (destination mode only) via DocumentFileService
+    // ---------------------------------------------------------------------
+    // Shows the inline "new folder" input above the list.
     addNewFolder() {
-      if (!this.creatingNewFolder) {
-        this.creatingNewFolder = true;
-        this.newFolderName = this.$t('documents.label.newfolder');
-        this.folders.unshift({
-          id: 'new_folder',
-          type: 'new_folder',
-          ref: 'newFolder',
-          folderTypeCSSClass: 'uiIcon24x24nt_folder',
-          isSelected: false
-        });
-      }
-      this.$nextTick(() => this.$refs.newFolder[0].focus());
-    },
-    createNewFolder(isSystem) {
       if (this.creatingNewFolder) {
-        if (this.newFolderName) {
-          const folderNameExists = this.folders.some(folder => folder.title === this.newFolderName);
-          if (folderNameExists) {
-            this.$refs.confirmDialog.open();
-            this.titleLabel = this.$t('attachments.filesFoldersSelector.popup.title');
-            this.okLabel = this.$t('attachments.ok');
-            this.popupBodyMessage = `${this.$t('attachments.filesFoldersSelector.popup.folderNameExists')}`;
-          } else {
-            const self = this;
-            return this.$attachmentService.createFolder(this.currentDrive.name, this.workspace, this.currentAbsolutePath, this.newFolderName, 'nt:folder',isSystem).then(xml => {
-              const createdNewFolder = xml.childNodes[0];
-              if (createdNewFolder) {
-                const folderType = createdNewFolder.getAttribute('nodeType');
-                const folderTypeCSSClass = `uiIcon24x24${folderType.replace(':', '_')}`;
-                const id = createdNewFolder.getAttribute('path').split('/').pop();
-                const newFolder = {
-                  id: id,
-                  name: createdNewFolder.getAttribute('name'),
-                  title: createdNewFolder.getAttribute('title'),
-                  path: createdNewFolder.getAttribute('currentFolder'),
-                  folderTypeCSSClass: folderTypeCSSClass,
-                  isSelected: false,
-                  canRemove: true
-                };
-                self.folders.shift();
-                self.folders.unshift(newFolder);
-                self.creatingNewFolder = false;
-                self.newFolderName = '';
-                return newFolder;
-              } else {
-                self.creatingNewFolder = false;
-                self.newFolderName = '';
-              }
-            }).catch(() => {
-              this.errorMessage = `${this.$t('attachments.createFolder.error')}`;
-              this.showErrorMessage = true;
-            });
-          }
-        } else {
-          this.$refs.confirmDialog.open();
-          this.titleLabel = this.$t('attachments.filesFoldersSelector.popup.title');
-          this.okLabel = this.$t('attachments.ok');
-          this.popupBodyMessage = `${this.$t('attachments.filesFoldersSelector.popup.emptyFolderName')}`;
-        }
+        return;
       }
+      this.renameFolderAction = false;
+      this.creatingNewFolder = true;
+      this.newFolderName = this.$t('attachments.drawer.newFolder');
+      this.$nextTick(() => this.$refs.newFolder && this.$refs.newFolder.focus && this.$refs.newFolder.focus());
+    },
+    // Creates the folder via DocumentFileService.createFolder.
+    createNewFolder() {
+      if (!this.creatingNewFolder) {
+        return;
+      }
+      const name = this.newFolderName && this.newFolderName.trim();
+      if (!name) {
+        this.creatingNewFolder = false;
+        return;
+      }
+      const nameExists = this.browseItems.some(item => item.folder && item.name === name);
+      if (nameExists) {
+        this.openWarningDialog(this.$t('attachments.filesFoldersSelector.popup.folderNameExists'));
+        return;
+      }
+      const dest = this.computeLegacyDestination();
+      this.creatingNewFolder = false;
+      return this.$documentFileService.createFolder(this.currentDrive.ownerId, this.parentFolderId, dest.relativePath, name)
+        .then(() => {
+          this.newFolderName = '';
+          this.navigate();
+        }).catch(() => {
+          this.errorMessage = this.$t('attachments.createFolder.error');
+          this.showErrorMessage = true;
+        });
     },
     cancelCreatingNewFolder() {
-      this.folders.shift();
       this.creatingNewFolder = false;
       this.newFolderName = '';
     },
+    // Starts inline renaming of the selected folder.
+    renameFolder() {
+      if (!this.selectedFolder.canRemove) {
+        return;
+      }
+      this.newName = this.selectedFolder.name;
+      this.creatingNewFolder = false;
+      this.renameFolderAction = true;
+      this.closeFolderActionsMenu();
+      this.$nextTick(() => this.$refs.rename && this.$refs.rename.focus && this.$refs.rename.focus());
+    },
+    // Persists the folder rename via DocumentFileService.renameDocument.
+    saveNewNameFolder() {
+      const name = this.newName && this.newName.trim();
+      if (!name || name === this.selectedFolder.name) {
+        this.renameFolderAction = false;
+        this.selectedFolder = {};
+        return;
+      }
+      const nameExists = this.browseItems.some(item => item.folder && item.name === name);
+      if (nameExists) {
+        this.openWarningDialog(this.$t('attachments.renameFolder.error'));
+        this.cancelRenameNewFolder();
+        return;
+      }
+      return this.$documentFileService.renameDocument(this.currentDrive.ownerId, this.selectedFolder.id, name)
+        .then(() => {
+          this.renameFolderAction = false;
+          this.selectedFolder = {};
+          this.navigate();
+        }).catch(() => {
+          this.errorMessage = this.$t('attachments.renameFolder.error');
+          this.showErrorMessage = true;
+        });
+    },
     cancelRenameNewFolder() {
       this.renameFolderAction = false;
-      this.newName = this.selectedFolder.title;
+      this.newName = this.selectedFolder.name;
     },
+    // Opens the delete-confirmation dialog for the selected folder.
+    deleteFolder() {
+      if (!this.selectedFolder.canRemove) {
+        return;
+      }
+      this.closeFolderActionsMenu();
+      this.okAction = true;
+      this.titleLabel = this.$t('attachments.filesFoldersSelector.action.delete.popup.title');
+      this.okLabel = this.$t('attachments.filesFoldersSelector.action.delete.popup.button.ok');
+      this.cancelLabel = this.$t('attachments.cancel');
+      this.popupBodyMessage = this.$t('attachments.filesFoldersSelector.action.delete.popup.bodyMessage');
+      this.$refs.confirmDialog.open();
+    },
+    // Confirm-dialog OK handler (folder deletion).
+    okConfirmDialog() {
+      if (!this.okAction) {
+        return;
+      }
+      this.okAction = false;
+      this.$documentFileService.deleteDocument(this.selectedFolder.path, this.selectedFolder.id, false, 0)
+        .then(() => this.navigate())
+        .catch(() => {
+          this.errorMessage = this.$t('attachments.deleteFolderOrFile.error');
+          this.showErrorMessage = true;
+        });
+    },
+    openWarningDialog(message) {
+      this.okAction = false;
+      this.titleLabel = this.$t('attachments.filesFoldersSelector.popup.title');
+      this.okLabel = this.$t('attachments.ok');
+      this.cancelLabel = this.$t('attachments.cancel');
+      this.popupBodyMessage = message;
+      this.$refs.confirmDialog.open();
+    },
+    // ---------------------------------------------------------------------
+    // Folder context menu
+    // ---------------------------------------------------------------------
     openFolderActionsMenu(folder, event) {
       event.preventDefault();
+      if (!this.modeFolderSelection || !folder || !folder.folder) {
+        return;
+      }
       this.selectedFolder = folder;
       this.folderActionsMenuTop = event.clientY;
       this.folderActionsMenuLeft = event.clientX;
-      this.$nextTick(() => {
-        this.$refs.folderActionsMenu.openMenu();
-      });
+      this.$nextTick(() => this.$refs.folderActionsMenu.openMenu());
     },
-    closeFolderActionsMenu: function () {
+    closeFolderActionsMenu() {
       this.$refs.folderActionsMenu?.closeMenu();
     },
-    deleteFolder() {
-      if (this.selectedFolder.canRemove) {
-        this.closeFolderActionsMenu();
-        this.$refs.confirmDialog.open();
-        this.titleLabel = this.$t('attachments.filesFoldersSelector.action.delete.popup.title');
-        this.okLabel = this.$t('attachments.filesFoldersSelector.action.delete.popup.button.ok');
-        this.cancelLabel = this.$t('attachments.cancel');
-        this.okAction = true;
-        this.popupBodyMessage = `${this.$t('attachments.filesFoldersSelector.action.delete.popup.bodyMessage')}`;
-      }
-    },
-    okConfirmDialog() {
-      if (this.okAction) {
-        this.$attachmentService.deleteFolderOrFile(this.currentDrive.name, this.workspace, this.selectedFolder.path).then(() => {
-          this.reloadCurrentPath();
-        }).catch(() => {
-          this.errorMessage = `${this.$t('attachments.deleteFolderOrFile.error')}`;
-          this.showErrorMessage = true;
-        });
-      } else {
+    // ---------------------------------------------------------------------
+    // Infinite scroll
+    // ---------------------------------------------------------------------
+    // (Re)connects an IntersectionObserver on the load-more sentinel.
+    observeScrollSentinel() {
+      this.disconnectScrollObserver();
+      const sentinel = this.$refs.loadMoreSentinel;
+      if (!sentinel || !window.IntersectionObserver) {
         return;
       }
-    },
-    reloadCurrentPath() {
-      this.resetExplorer();
-      if (this.currentAbsolutePath) {
-        this.fetchChildrenContents(this.currentAbsolutePath);
-      } else {
-        this.fetchChildrenContents('');
-      }
-    },
-    renameFolder() {
-      if (this.selectedFolder.canRemove) {
-        if (this.selectedFolder.title) {
-          this.newName = this.selectedFolder.title;
-          this.renameFolderAction = true;
-          this.$refs.folderActionsMenu?.closeMenu();
-          this.$nextTick(() => {
-            this.$refs.rename[0].focus();
-          });
+      this.scrollObserver = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          this.loadMore();
         }
+      });
+      this.scrollObserver.observe(sentinel);
+    },
+    disconnectScrollObserver() {
+      if (this.scrollObserver) {
+        this.scrollObserver.disconnect();
+        this.scrollObserver = null;
       }
     },
-    saveNewNameFolder() {
-      if (this.newName !== this.selectedFolder.title && this.newName !== '') {
-        const folderNameExists = this.folders.some(folder => folder.title === this.newName);
-        if (folderNameExists) {
-          this.$refs.confirmDialog.open();
-          this.titleLabel = this.$t('attachments.filesFoldersSelector.popup.title');
-          this.okLabel = this.$t('attachments.ok');
-          this.popupBodyMessage = `${this.$t('attachments.renameFolder.error')}`;
-          this.cancelRenameNewFolder();
-        } else {
-          this.selectedFolderPath = this.driveRootPath.concat(this.selectedFolder.path);
-          const path = encodeURIComponent(this.workspace.concat(':', this.selectedFolderPath));
-          this.$attachmentService.renameFolder(path, this.newName).then(response => {
-            if (response) {
-              this.renameFolderAction = false;
-              this.folders.find(folder => {
-                if (folder.id === this.selectedFolder.id) {
-                  folder.title = this.newName;
-                  folder.name = this.newName;
-                  folder.id = this.newName;
-                  const oldFolder = folder.path.split('/');
-                  let newPath = oldFolder[0];
-                  for (let i = 0; i < oldFolder.length - 1; i++) {
-                    newPath.concat('/', newPath[i]);
-                  }
-                  if (oldFolder.length === 1) {
-                    newPath = this.newName;
-                  } else {
-                    newPath.concat('/', this.newName);
-                  }
-                  folder.path = newPath;
-                }
-              });
-              this.selectedFolder = {};
-            }
-          });
-        }
+    // ---------------------------------------------------------------------
+    // Extensions
+    // ---------------------------------------------------------------------
+    executeAction(action) {
+      executeExtensionAction(action, this.extensionRefs[action.key][0]);
+    },
+    // ---------------------------------------------------------------------
+    // Default destination bootstrap (feeds the unchanged upload flow)
+    // ---------------------------------------------------------------------
+    // Computes the default upload destination folder (per-entity folders) and emits it so the level-1 drawer keeps uploading into the expected location. This only prepares the destination path; the upload itself is unchanged.
+    initDestinationFolderPath() {
+      const ownerId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
+      const driveName = eXo.env.portal.spaceGroup ? `.spaces.${eXo.env.portal.spaceGroup}` : 'Personal Documents';
+      const driveTitle = (this.defaultDrive && this.defaultDrive.title)
+        || eXo.env.portal.spaceDisplayName
+        || this.$t('attachments.drawer.myDocuments');
+      this.defaultDriveModel = {name: driveName, title: driveTitle, ownerId};
+      if (!ownerId) {
+        return;
+      }
+      if (this.entityType && this.createEntityTypeFolder) {
+        this.ensureEntityFolders(ownerId)
+          .then(relativePath => this.emitDefaultFolder(relativePath, driveTitle))
+          .catch(() => this.emitDefaultFolder('/', driveTitle));
       } else {
-        this.selectedFolder = {};
+        this.emitDefaultFolder(this.defaultFolder && this.defaultFolder !== '/' ? this.defaultFolder : '/', driveTitle);
       }
-      this.selectedFolderPath = '';
     },
-    getFolderIcon(folder) {
-      return `uiIcon-${folder.cloudProvider}`;
+    emitDefaultFolder(relativePath, driveTitle) {
+      const schema = relativePath && relativePath !== '/' ? `${driveTitle}/${relativePath}` : driveTitle;
+      this.$root.$emit('attachments-default-folder-path-initialized', relativePath, schema);
     },
-    createEntityTypeAndIdFolders() {
-      let entityForlder = this.entityType;
-      if (this.entityType === 'activity'){
-        entityForlder = 'Activity Stream Documents';
+    // Find-or-create the per-entity folders (entityType[/entityId]) at the drive root.
+    ensureEntityFolders(ownerId) {
+      const entityFolderName = this.entityType === 'activity' ? 'Activity Stream Documents' : this.entityType;
+      return this.ensureFolder(ownerId, null, '', entityFolderName).then(entityFolder => {
+        if (!this.entityId || !entityFolder || !entityFolder.id) {
+          return entityFolderName;
+        }
+        return this.ensureFolder(ownerId, entityFolder.id, entityFolderName, String(this.entityId))
+          .then(() => `${entityFolderName}/${this.entityId}`);
+      });
+    },
+    // Returns an existing child folder by name, creating it when missing.
+    ensureFolder(ownerId, parentFolderId, folderPath, name) {
+      const filter = {ownerId, listingType: 'FOLDER', sortField: 'name', ascending: true, favorites: false};
+      if (parentFolderId) {
+        filter.parentFolderId = parentFolderId;
       }
-      let defaultFolder = this.folders.find(folder => folder.title === entityForlder);
-      //if entityType (tasks, event, ..) folder not found
-      if (!defaultFolder) {
-        this.newFolderName = entityForlder;
-        this.creatingNewFolder = true;
-        this.createNewFolder(true).then((newFolder) => {
-          this.openFolder(newFolder).then(() => {
-            this.newFolderName = this.entityId;
-            this.creatingNewFolder = true;
-            this.createNewFolder().then((newFolder) => {
-              this.openFolder(newFolder).then(() => {
-                this.$root.$emit('attachments-default-folder-path-initialized', this.getRelativePath(this.selectedFolderPath), this.schemaFolder);
-              }).finally(() => {
-                this.driveExplorerInitializing = false;
-              });
-            });
-          });
-        });
-      } else if (this.entityId){ //if entityType (tasks, event, ..) folder exist, we create directly entityId folder
-        this.openFolder(defaultFolder).then(() => {
-          defaultFolder = this.folders.find(folder => parseInt(folder.title) === parseInt(this.entityId));
-          if (!defaultFolder) {
-            this.newFolderName = this.entityId;
-            this.creatingNewFolder = true;
-            this.createNewFolder().then((newFolder) => {
-              this.openFolder(newFolder).then(() => {
-                this.$root.$emit('attachments-default-folder-path-initialized', this.getRelativePath(this.selectedFolderPath), this.schemaFolder);
-              }).finally(() => {
-                this.driveExplorerInitializing = false;
-              });
-            });
-          } else {
-            this.openFolder(defaultFolder).then(() => {
-              this.$root.$emit('attachments-default-folder-path-initialized', this.getRelativePath(this.selectedFolderPath), this.schemaFolder);
-            }).finally(() => {
-              this.driveExplorerInitializing = false;
-            });
+      return this.$documentFileService.getDocumentItems(filter, null, null, 0, 200, 'owner')
+        .then(items => {
+          const found = (items || []).find(item => item.folder && item.name === name);
+          if (found) {
+            return found;
           }
+          return this.$documentFileService.createFolder(ownerId, parentFolderId, folderPath, name);
         });
-      }
-    },
-    openSelectFromDrivesDrawer() {
-      this.modeFolderSelection = false;
-      if (this.currentDrive) {
-        this.reloadCurrentPath();
-      }
-      this.$refs.driveExplorerDrawer.open();
-    },
-    resetDriveExplorer() {
-      this.selectedFiles = [];
-      this.removedFiles = [];
-    },
-    isClosed() {
-      return this.$refs.driveExplorerDrawer.$el.classList.contains('v-navigation-drawer--close');
     },
   }
 };
