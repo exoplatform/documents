@@ -254,6 +254,48 @@
   .attachmentsTemplatesEmpty {
     color: @greyColorLighten1Default;
   }
+
+  /* Full-width, stacked template cards (each nearly the whole drawer width).
+     The editable name field appears right under the selected card. */
+  .attachmentsTemplatesGrid {
+    .attachmentsTemplateItem {
+      width: 100%;
+    }
+
+    .attachmentsTemplateCard {
+      width: 100%;
+      max-width: 100%;
+      outline: none;
+      border-radius: 8px;
+      transition: box-shadow .2s ease;
+
+      /* Selected template = a clear primary ring around the card. */
+      &--selected {
+        box-shadow: 0 0 0 2px @primaryColor;
+      }
+    }
+  }
+}
+
+/* The reused Documents card's hover title band uses .mask-color, whose grey
+   comes from the theme var --allPagesMaskColor; in this drawer context that
+   resolves to white, hiding the white filename text (the "white band"). Force
+   the activity-stream grey (#707070BF) directly on the band. Targeted on the
+   template-card class only (NOT under .createDocumentDrawer) so it survives the
+   exo-drawer content teleport. The `.v-card.mask-color` selector (0,3,0) beats
+   both the platform-ui `.mask-color` !important rule and Vuetify's `.v-card`
+   white background on equal-specificity ties. */
+.attachmentsTemplateCard .v-card.mask-color,
+.attachmentsTemplateCard .mask-color {
+  background-color: #707070BF !important;
+}
+
+/* Inside that grey band the file name sits in a nested Vuetify v-card whose
+   default theme background is white, hiding the white file-name text. Make that
+   inner card transparent so the name reads on the grey band (the file-type
+   avatar keeps its own white background — it is a .v-avatar, not a .v-card). */
+.attachmentsTemplateCard .mask-color .v-card {
+  background-color: transparent !important;
 }
 
 .driveExplorerDrawer {
