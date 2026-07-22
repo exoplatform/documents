@@ -20,18 +20,28 @@
   <exo-drawer
     ref="driveExplorerDrawer"
     class="driveExplorerDrawer"
-    go-back-button
     right
     :use-filter="!!currentDrive"
     :filter-placeholder="$t('attachments.drawer.search')"
-    @go-back="closeAttachmentsDriveExplorerDrawer()"
     @filter-updated="onHeaderSearch">
-    <!-- Standard exo-drawer header: default title + close button. Search reuses
-         exo-drawer's built-in use-filter, which turns the header title itself
-         into an inline text field (the platform-wide drawer search pattern) and
-         drives the same server-side `query` param. -->
+    <!-- Standard exo-drawer header: an explicit back arrow (returns to the
+         level-1 attachments drawer underneath) + title + close button. Search
+         reuses exo-drawer's built-in use-filter, which turns the header title
+         itself into an inline text field (the platform-wide drawer search
+         pattern) and drives the same server-side `query` param. -->
     <template slot="title">
-      <span class="text-truncate">{{ driveExplorerDrawerTitle }}</span>
+      <div class="d-flex align-center">
+        <v-btn
+          icon
+          small
+          class="ms-n2 me-1 flex-shrink-0"
+          :aria-label="$t('attachments.drawer.back')"
+          :title="$t('attachments.drawer.back')"
+          @click="closeAttachmentsDriveExplorerDrawer()">
+          <v-icon size="20">fa-arrow-left</v-icon>
+        </v-btn>
+        <span class="text-truncate">{{ driveExplorerDrawerTitle }}</span>
+      </div>
     </template>
     <template slot="content">
       <div class="serverFiles pt-0 pa-3" @click="closeFolderActionsMenu">

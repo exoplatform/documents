@@ -1,17 +1,21 @@
 <template>
-  <div class="uploadedFiles">
+  <div v-if="renderedFiles.length" class="uploadedFiles">
     <div class="attachments-list d-flex align-center">
       <v-subheader class="text-sub-title pl-0 d-flex">
-        {{ $t('attachments.drawer.title') }} ({{ attachments.length }}/{{ maxFilesCount }})
+        {{ $t('attachments.drawer.title') }} ({{ renderedFiles.length }}/{{ maxFilesCount }})
       </v-subheader>
-      <v-divider />
-    </div>
-    <div v-if="attachments.length === 0" class="no-files-attached d-flex flex-column align-center text-sub-title">
-      <div class="d-flex pl-6 not-files-icon">
-        <i class="uiIconAttach uiIcon64x64"></i>
-        <i class="uiIconCloseCircled uiIcon32x32"></i>
-      </div>
-      <span>{{ $t('no.attachments') }}</span>
+      <v-divider class="mx-2" />
+      <v-btn
+        v-if="renderedFiles.length"
+        text
+        x-small
+        color="error"
+        class="removeAllAttachments flex-shrink-0"
+        :aria-label="$t('attachments.drawer.removeAll')"
+        @click="confirmRemoveAll">
+        <v-icon size="14" class="me-1">fa-trash-can</v-icon>
+        {{ $t('attachments.drawer.removeAll') }}
+      </v-btn>
     </div>
     <!-- we hide the possibility to select a folder for all files
     There a lot of problem with this feature and need a rework to make it work.
@@ -95,18 +99,16 @@
           data-placement="top"></i>
       </button>
     </div>
-    <div v-if="attachments.length" class="uploadedFilesItems ml-5">
+    <div v-if="renderedFiles.length" class="uploadedFilesItems ml-5">
       <transition-group
         name="list-complete"
         tag="div"
         class="d-flex flex-column">
         <span
-          v-for="attachment in newUploadedFiles"
-          :key="attachment.title"
+          v-for="attachment in renderedFiles"
+          :key="attachment.id || attachment.uploadId"
           class="list-complete-item">
           <attachment-item
-            @keepBoth="$emit('keep-both', attachment)"
-            @createVersion="$emit('create-version', attachment)"
             :attachment="attachment"
             :can-edit="attachment.acl && attachment.acl.canEdit"
             :allow-to-preview="false"
@@ -115,10 +117,19 @@
             :default-folder="defaultFolder"
             :entity-id="entityId"
             :allow-to-detach="allowToDetach"
-            allow-to-edit />
+            allow-to-edit
+            @keepBoth="$emit('keep-both', attachment)"
+            @createVersion="$emit('create-version', attachment)" />
         </span>
       </transition-group>
     </div>
+    <exo-confirm-dialog
+      ref="removeAllConfirmDialog"
+      :title="$t('attachments.drawer.removeAll.confirm.title')"
+      :message="$t('attachments.drawer.removeAll.confirm.message')"
+      :ok-label="$t('attachments.drawer.removeAll')"
+      :cancel-label="$t('attachments.cancel')"
+      @ok="removeAll" />
   </div>
 </template>
 
@@ -176,6 +187,23 @@ export default {
     });
   },
   computed: {
+    // Single source of truth for the rendered list AND the header count: the
+    // list de-dupes newUploadedFiles by (id || uploadId) so the count and the
+    // rows can no longer diverge, and rows get a stable key on id||uploadId.
+    renderedFiles() {
+      const seen = new Set();
+      const files = [];
+      (this.newUploadedFiles || []).forEach(file => {
+        const key = file && (file.id || file.uploadId);
+        if (key == null) {
+          files.push(file);
+        } else if (!seen.has(key)) {
+          seen.add(key);
+          files.push(file);
+        }
+      });
+      return files;
+    },
     displayMessageDestinationFolder() {
       return !this.attachments.length || this.attachments.some(val => val.uploadId != null && val.uploadId !== '');
     },
@@ -199,6 +227,14 @@ export default {
     }
   },
   methods: {
+    confirmRemoveAll() {
+      this.$refs.removeAllConfirmDialog.open();
+    },
+    removeAll() {
+      // Reuse the existing per-item removal contract (remove-attachment-item) so
+      // every consumer (entity link removal / local splice) behaves as usual.
+      this.renderedFiles.slice().forEach(file => this.$root.$emit('remove-attachment-item', file));
+    },
     openSelectDestinationFolderDrawer() {
       this.$root.$emit('open-drive-explorer-drawer', this.currentDrive);
     },
