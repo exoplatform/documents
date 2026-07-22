@@ -9,6 +9,7 @@
         :entity-has-attachments="entityHasAttachments"
         :entity-id="entityId"
         :entity-type="entityType"
+        :space-id="spaceId"
         :default-drive="defaultDrive"
         :default-folder="defaultFolder"
         :current-space="currentSpace"

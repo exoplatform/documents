@@ -58,6 +58,7 @@
           :default-drive="defaultDrive"
           :extension-refs="$refs"
           :default-folder="defaultFolder"
+          :space-id="spaceId"
           :create-entity-type-folder="createEntityTypeFolder"
           :attached-files="attachments" />
         <div
@@ -81,6 +82,10 @@ import {getAttachmentsComposerExtensions} from '../../../js/extension';
 
 export default {
   props: {
+    spaceId: {
+      type: String,
+      default: ''
+    },
     maxFilesCount: {
       type: Number,
       required: false,

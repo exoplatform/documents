@@ -50,15 +50,26 @@ export default {
   }),
   created(){
     this.$root.$on('openTreeFolderDrawer', this.open);
+    // Selecting a drive/space/folder in the tree emits 'open-folder' -> close
+    // this navigation drawer so the list shows the newly selected location.
+    this.$root.$on('open-folder', this.close);
   },
   beforeDestroy() {
     this.$root.$off('openTreeFolderDrawer', this.open);
+    this.$root.$off('open-folder', this.close);
   },
   methods: {
-    open(showHidden) {
+    async open(showHidden, breadcrumb) {
       this.showHidden = showHidden;
-      this.retrieveDocumentTree();
       this.$refs.treeViewDrawer?.open();
+      // The tree content is created lazily when the drawer opens, so the
+      // 'documentsBreadcrumb' event emitted before opening is lost. (Re)emit it
+      // AFTER the root data is loaded and the tree exists, so the tree expands
+      // the drive node + ancestors down to - and highlights - the current folder.
+      await this.retrieveDocumentTree();
+      if (breadcrumb && breadcrumb.length) {
+        this.$nextTick(() => this.$root.$emit('documentsBreadcrumb', breadcrumb));
+      }
     },
     close() {
       this.$refs.treeViewDrawer?.close();
@@ -67,9 +78,16 @@ export default {
       this.items = [];
       this.loading = true;
       try {
+        // The home root is FIXED to the page identity (the space on a space page,
+        // else the current user's home). It must NOT follow the mutable
+        // $root.ownerId - otherwise, after navigating into a space, re-opening the
+        // tree would rebuild the first root from the space owner and overwrite
+        // "Personal Documents" with the space's "Documents" folder. Navigation
+        // only drives expansion/active state, never the root nodes' identities.
+        const homeIdentityId = eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId;
         const promises = [
           this.$documentFileService.getFullTreeData(
-            this.$root.ownerId && this.$root.ownerId !== '0' ? this.$root.ownerId : eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId,
+            homeIdentityId,
             null,
             this.folderPath,
             this.showHidden
@@ -90,13 +108,21 @@ export default {
         if (userSpacesTree && userSpacesTree.children?.length > 0) {
           this.items.push(userSpacesTree);
         }
-        this.items = this.items.map(obj => ({
-          ...JSON.parse(JSON.stringify(obj, (key, value) =>
+        // The backend marks leaf folders (no subfolders) with children === null.
+        // Vuetify's v-treeview requires children to be an ARRAY or absent - a
+        // literal null makes buildTree crash (null.map). The JSON clone below
+        // strips every nested null (null -> undefined -> key omitted); we must NOT
+        // re-inject the RAW obj.children afterwards (that would bring the nested
+        // nulls back). We only coerce the CLONED top-level children to an array so
+        // the fixed roots stay expandable.
+        this.items = this.items.map(obj => {
+          const cloned = JSON.parse(JSON.stringify(obj, (key, value) =>
             // eslint-disable-next-line no-undefined
             (value === null ? undefined : value)
-          )),
-          children: obj.children || []
-        }));
+          ));
+          cloned.children = cloned.children || [];
+          return cloned;
+        });
 
       } catch (error) {
         console.error('Error retrieving document tree:', error);
