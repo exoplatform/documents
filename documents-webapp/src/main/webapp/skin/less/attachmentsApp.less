@@ -255,18 +255,34 @@
     color: @greyColorLighten1Default;
   }
 
-  /* Full-width, stacked template cards (each nearly the whole drawer width).
-     The editable name field appears right under the selected card. */
+  /* Category chip row (search lives in the title bar, standard drawer pattern). */
+  .attachmentsTemplatesFilters {
+    .attachmentsTemplateCategories {
+      min-width: 0;
+    }
+  }
+
+  /* Responsive template grid: one full-width card per row in the normal (narrow)
+     drawer, flowing to several columns when the drawer is expanded — driven purely
+     by the container width via CSS grid auto-fill (no expand-state needed). The
+     editable name field appears right under the selected card. */
   .attachmentsTemplatesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    align-items: start;
+
     .attachmentsTemplateItem {
-      width: 100%;
+      min-width: 0;
     }
 
     .attachmentsTemplateCard {
       width: 100%;
       max-width: 100%;
       outline: none;
-      border-radius: 8px;
+      /* Match the reused card's own 4px radius so the selected ring hugs its
+         corners instead of bowing out. */
+      border-radius: 4px;
       transition: box-shadow .2s ease;
 
       /* Selected template = a clear primary ring around the card. */
@@ -296,6 +312,27 @@
    avatar keeps its own white background — it is a .v-avatar, not a .v-card). */
 .attachmentsTemplateCard .mask-color .v-card {
   background-color: transparent !important;
+}
+
+/* Templates show the reused card's title band permanently (show-details) with the
+   file icon + name; also keep the info button visible without hovering (the card
+   otherwise only reveals it on hover). */
+.attachmentsTemplateCard #attachment-info {
+  display: inline-flex !important;
+}
+
+/* ...but suppress the docs card-view selection checkbox and 3-dots actions menu —
+   neither makes sense when picking a template. */
+.attachmentsTemplateCard .v-simple-checkbox,
+.attachmentsTemplateCard .v-btn:has(.mdi-dots-vertical) {
+  display: none !important;
+}
+
+/* Expanded (full-screen) drawer: centre the content with side margins — like the
+   notification / favorite drawers — instead of spanning edge to edge. */
+.createDocumentDrawerContent--expanded {
+  max-width: 1200px;
+  margin-inline: auto;
 }
 
 .driveExplorerDrawer {
