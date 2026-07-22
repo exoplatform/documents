@@ -94,6 +94,22 @@
           </div>
         </template>
       </div>
+      <!-- Mobile / responsive: a back (fa-angle-left) button to the parent
+           folder + the current folder name (or the drive name at a drive root,
+           where the back button is hidden). -->
+      <div
+        v-else
+        class="documents-breadcrumb-mobile d-flex align-center width-full pa-1 mb-1 ps-0">
+        <v-btn
+          v-if="documentsBreadcrumb && documentsBreadcrumb.length > 1"
+          icon
+          small
+          class="ms-n1 me-1 flex-shrink-0"
+          @click.stop.prevent="openParentFolder()">
+          <v-icon size="18">fas fa-angle-left</v-icon>
+        </v-btn>
+        <span class="text-truncate text-header breadcrumb-current-name">{{ mobileCurrentName }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -152,6 +168,17 @@ export default {
         });
         return documentsBreadcrumbToDisplay;
       }
+    },
+    // Mobile branch label: at a drive root show the drive/home name (via getName);
+    // below the root show the current folder's own name (a real subfolder may be
+    // literally named "Documents"/"Private", which getName would remap).
+    mobileCurrentName() {
+      const breadcrumb = this.documentsBreadcrumb;
+      if (!breadcrumb || !breadcrumb.length) {
+        return '';
+      }
+      const last = breadcrumb[breadcrumb.length - 1];
+      return breadcrumb.length === 1 ? this.getName(last.name) : (last.name || this.getName(last.name));
     },
   },
   watch: {
@@ -277,6 +304,15 @@ export default {
       }
       this.$root.$emit('breadcrumb-updated');
     },
+    // Mobile back button: navigate to the parent folder (one level up). At a
+    // drive root there is no parent (the button is hidden).
+    openParentFolder() {
+      const breadcrumb = this.documentsBreadcrumb;
+      if (!breadcrumb || breadcrumb.length <= 1) {
+        return;
+      }
+      this.openFolder(breadcrumb[breadcrumb.length - 2]);
+    },
     getName(name){
       if (name==='Private'){
         return this.$t('documents.label.userHomeDocuments');
@@ -358,8 +394,10 @@ export default {
     },
     openTreeView() {
       if (this.isMobile) {
-        this.$root.$emit('documentsBreadcrumb',this.documentsBreadcrumb);
-        this.$root.$emit('openTreeFolderDrawer',this.showHidden);
+        // Pass the current breadcrumb THROUGH the open event; the tree re-emits
+        // it once its lazily-created content + root data are ready, so it expands
+        // to the current folder (emitting before opening loses the event).
+        this.$root.$emit('openTreeFolderDrawer', this.showHidden, this.documentsBreadcrumb);
       } else {
         this.$root.$emit('tree-view-expend', true);
       }
