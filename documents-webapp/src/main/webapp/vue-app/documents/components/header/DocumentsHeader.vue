@@ -7,7 +7,6 @@
           minCharacters: 3,
           placeholder: $root.driveView ? $t('documents.label.filterDrives') : $t('documents.label.searchDocuments'),
           ariaLabel: $root.driveView ? $t('documents.label.filterDrives') : $t('documents.label.filterDocuments'),
-          tooltip: $root.driveView ? $t('documents.label.filterDrives') : $t('documents.label.filterDocuments')
         }"
         :right-filter-button="{
           text: $t('documents.label.filter'),
