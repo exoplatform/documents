@@ -99,8 +99,13 @@ import CopyMenuAction from './components/body/actions/CopyMenuAction.vue';
 import PastMenuAction from './components/body/actions/PastMenuAction.vue';
 import PostMenuAction from './components/body/actions/PostMenuAction.vue';
 import DocumentActionItem from './components/body/actions/DocumentActionItem.vue';
+// Shared "Add a document" drawer, owned by the attachment app. Imported here so
+// the SAME component (single source of truth) is registered in the Documents
+// bundle too, and the Drive can open it directly from its "+ New" menu.
+import AttachmentCreateDocumentDrawer from '../attachment/components/attachment-document-creator/AttachmentCreateDocumentDrawer.vue';
 
 const components = {
+  'attachment-create-document-drawer': AttachmentCreateDocumentDrawer,
   'documents-main': DocumentsMain,
   'documents-header': DocumentsHeader,
   'documents-header-left': DocumentsHeaderLeft,
@@ -189,4 +194,14 @@ const components = {
 
 for (const key in components) {
   Vue.component(key, components[key]);
+}
+
+// Exposed so the shared "Add a document" drawer (createNewDoc) works in the
+// Documents Vue context without relying on the attachment bundle being loaded.
+import * as attachmentService from '../../js/attachmentService.js';
+
+if (!Vue.prototype.$attachmentService) {
+  window.Object.defineProperty(Vue.prototype, '$attachmentService', {
+    value: attachmentService,
+  });
 }
