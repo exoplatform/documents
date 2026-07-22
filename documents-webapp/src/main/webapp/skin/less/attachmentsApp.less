@@ -31,6 +31,27 @@
   }
 }
 
+/* Attachments LIST drawer — align its rows with the picker's revamped list.
+   The EXO-88732 revamp styled only .attachmentsAppDrawer (the picker), so
+   .attachmentsListDrawer fell back to raw Vuetify: no right gutter (the info /
+   detach icons hug the panel edge & scrollbar) and align-items:normal (those
+   icons are not vertically centered against the row). Scope the fix to the list
+   drawer so the picker and other consumers are untouched. */
+.attachmentsListDrawer {
+  .uploadedFilesItems {
+    margin-right: 20px;
+  }
+
+  .attachment.d-flex {
+    align-items: center;
+  }
+
+  .attachment .v-list-item__action {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+
 .attachmentsAppDrawer {
   .drawerContent {
     .uploadedFiles {
