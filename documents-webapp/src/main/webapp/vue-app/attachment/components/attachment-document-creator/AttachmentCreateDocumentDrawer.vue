@@ -27,8 +27,17 @@
   <exo-drawer
     ref="createDocumentDrawer"
     class="createDocumentDrawer"
-    right>
+    right
+    allow-expand
+    :use-filter="showTemplateFilters"
+    :filter-placeholder="$t('attachments.drawer.templates.search')"
+    @filter-updated="onTemplateFilter"
+    @expand-updated="drawerExpanded = $event">
     <template slot="title">
+      <!-- Back arrow + title. The filter icon (→ inline header search) and the
+           expand/full-screen icon are provided by exo-drawer itself (use-filter +
+           allow-expand), so they sit at the platform-standard location next to the
+           close button. -->
       <div class="d-flex align-center">
         <v-btn
           icon
@@ -43,7 +52,9 @@
       </div>
     </template>
     <template slot="content">
-      <div class="createDocumentDrawerContent pt-4 pa-4">
+      <div
+        class="createDocumentDrawerContent pt-4 pa-4"
+        :class="{ 'createDocumentDrawerContent--expanded': drawerExpanded }">
         <!-- Section 1: create a blank document. Doc types are selectable cards
              (hover + selected state, keyboard-focusable). Picking one reveals
              the inline title input; the primary "Create" action lives in the
@@ -97,49 +108,71 @@
         </div>
         <div
           v-else-if="templates.length"
-          class="attachmentsTemplatesGrid d-flex flex-column">
+          class="attachmentsTemplatesSection">
+          <!-- Category chip bar — only in the expanded (full-screen) view, where
+               there's room for it (self-hiding when templates aren't categorized).
+               Free-text search lives in the drawer title bar (filter icon). -->
+          <div
+            v-if="drawerExpanded"
+            class="attachmentsTemplatesFilters mb-3">
+            <categories-filter
+              v-model="selectedTemplateCategoryId"
+              :space-id="templatesOwnerId"
+              object-type="document"
+              hide-on-empty
+              class="attachmentsTemplateCategories" />
+          </div>
           <!-- Full-width reused Documents-app cards, stacked. click.capture keeps
                the card's hover info icon opening the info drawer, while a plain
                click SELECTS the template and reveals an editable name field right
                under that card (option B: name-first, pre-filled with the
                template's name). The footer "Create" then creates it with that
                name. -->
-          <div
-            v-for="template in templates"
-            :key="template.id"
-            class="attachmentsTemplateItem mb-3">
+          <div class="attachmentsTemplatesGrid">
             <div
-              class="attachmentsTemplateCard clickable"
-              :class="{ 'attachmentsTemplateCard--selected': selectedTemplate && selectedTemplate.id === template.id }"
-              role="button"
-              tabindex="0"
-              :aria-pressed="selectedTemplate && selectedTemplate.id === template.id ? 'true' : 'false'"
-              :aria-label="template.name"
-              @click.capture="onTemplateCardClick($event, template)"
-              @keydown.enter.prevent="selectTemplate(template)"
-              @keydown.space.prevent="selectTemplate(template)">
-              <documents-item-card
-                :file="template"
-                :files="templates"
-                :selected-documents="[]"
-                :show-details="false"
-                width="100%"
-                height="150px"
-                max-height="150px" />
+              v-for="template in filteredTemplates"
+              :key="template.id"
+              class="attachmentsTemplateItem">
+              <div
+                class="attachmentsTemplateCard clickable"
+                :class="{ 'attachmentsTemplateCard--selected': selectedTemplate && selectedTemplate.id === template.id }"
+                role="button"
+                tabindex="0"
+                :aria-pressed="selectedTemplate && selectedTemplate.id === template.id ? 'true' : 'false'"
+                :aria-label="template.name"
+                @click.capture="onTemplateCardClick($event, template)"
+                @keydown.enter.prevent="selectTemplate(template)"
+                @keydown.space.prevent="selectTemplate(template)">
+                <documents-item-card
+                  :file="template"
+                  :files="filteredTemplates"
+                  :selected-documents="[]"
+                  :show-details="true"
+                  width="100%"
+                  height="150px"
+                  max-height="150px" />
+              </div>
+              <v-text-field
+                v-if="selectedTemplate && selectedTemplate.id === template.id"
+                ref="templateNameInput"
+                v-model="newDocTitleInput"
+                :rules="documentTitleRules"
+                :placeholder="$t('attachment.untitledDocument')"
+                class="attachmentsCreateDocumentInput mt-2"
+                outlined
+                dense
+                autofocus
+                @keyup.enter="submitCreate()">
+                <span slot="append" class="text-color mt-1">{{ activeExtension }}</span>
+              </v-text-field>
             </div>
-            <v-text-field
-              v-if="selectedTemplate && selectedTemplate.id === template.id"
-              ref="templateNameInput"
-              v-model="newDocTitleInput"
-              :rules="documentTitleRules"
-              :placeholder="$t('attachment.untitledDocument')"
-              class="attachmentsCreateDocumentInput mt-2"
-              outlined
-              dense
-              autofocus
-              @keyup.enter="submitCreate()">
-              <span slot="append" class="text-color mt-1">{{ activeExtension }}</span>
-            </v-text-field>
+          </div>
+          <!-- The active category/search filter matched no template. -->
+          <div
+            v-if="!filteredTemplates.length"
+            class="attachmentsTemplatesEmpty d-flex flex-column align-center justify-center text-center py-6">
+            <v-icon size="36" color="grey">far fa-clone</v-icon>
+            <span class="text-sub-title mt-3">{{ $t('attachments.drawer.templates.noMatch') }}</span>
           </div>
         </div>
         <div
@@ -224,6 +257,15 @@ export default {
       templates: [],
       templatesLoading: false,
       templateCreating: false,
+      // Filters over the loaded templates (both applied client-side): the selected
+      // category chip (id) + the free-text query fed by exo-drawer's built-in
+      // header filter (use-filter → @filter-updated).
+      selectedTemplateCategoryId: null,
+      templateSearch: '',
+      // True when the drawer is in its expanded (full-screen) state — drives the
+      // centered side margins and shows the category chip bar. Fed by exo-drawer's
+      // own @expand-updated event (same pattern as App Center's launcher drawer).
+      drawerExpanded: false,
       // Bootstrap state: whether the drive's "Templates" folder exists, its parent
       // (drive root) id, and whether the current user may create a folder here.
       templatesFolderExists: false,
@@ -307,6 +349,29 @@ export default {
         ? this.$t('attachments.drawer.templates.empty.space')
         : this.$t('attachments.drawer.templates.empty.personal');
     },
+    // Templates after the active category + free-text filters (both client-side).
+    // Category ids are compared as strings — the chip component may emit the id as
+    // a string while the item's categoryIds are numbers (or vice-versa).
+    filteredTemplates() {
+      let list = this.templates;
+      // `!= null` catches both null and undefined — the category bar emits
+      // `undefined` when you navigate back to root, which must mean "no filter".
+      if (this.selectedTemplateCategoryId != null && this.selectedTemplateCategoryId !== '') {
+        const selected = String(this.selectedTemplateCategoryId);
+        list = list.filter(template => (template.categoryIds || []).some(id => String(id) === selected));
+      }
+      const query = (this.templateSearch || '').trim().toLowerCase();
+      if (query) {
+        list = list.filter(template => (template.name || '').toLowerCase().includes(query));
+      }
+      return list;
+    },
+    // Only surface the filter row once there are enough templates to warrant it —
+    // small sets are fully visible, and the category chip bar self-hides anyway
+    // when the templates aren't categorized.
+    showTemplateFilters() {
+      return this.templates.length > 3;
+    },
     // Drive-root-relative path of the current target folder (blank-create target).
     // '' targets the drive root. Defensive against a path passed as an object.
     destinationRelativePath() {
@@ -335,6 +400,7 @@ export default {
       this.$refs.createDocumentDrawer.open();
     },
     close() {
+      this.drawerExpanded = false;
       this.$refs.createDocumentDrawer.close();
     },
     refreshNewDocumentsActions() {
@@ -425,6 +491,11 @@ export default {
         this.createNewDoc();
       }
     },
+    // exo-drawer built-in header filter (use-filter) → the typed query, applied
+    // client-side over the loaded templates.
+    onTemplateFilter(text) {
+      this.templateSearch = text || '';
+    },
     resetNewDocInput() {
       this.NewDocInputHidden = true;
       this.newDocTitleInput = '';
@@ -469,6 +540,8 @@ export default {
       this.templatesFolderExists = false;
       this.rootFolderId = null;
       this.canCreateTemplatesFolder = false;
+      this.selectedTemplateCategoryId = null;
+      this.templateSearch = '';
       const ownerId = this.templatesOwnerId;
       if (!ownerId) {
         return;

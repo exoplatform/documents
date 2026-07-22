@@ -22,6 +22,7 @@
     :open.sync="openNodes"
     :active.sync="activeNodes"
     :items="items"
+    :search="search"
     :load-children="fetchChildren"
     class="treeView-item my-2"
     item-key="id"
@@ -92,6 +93,12 @@ export default {
     showHidden: {
       type: Boolean,
       default: false
+    },
+    // Free-text filter fed to v-treeview's built-in search (matches node names of
+    // the loaded tree — drives and any expanded folders).
+    search: {
+      type: String,
+      default: ''
     }
   },
 

@@ -17,17 +17,35 @@
  *
 -->
 <template>
-  <exo-drawer 
+  <exo-drawer
     ref="treeViewDrawer"
     class="treeViewDrawer"
+    :use-filter="true"
+    :filter-placeholder="$t('documents.drawer.tree.searchDrives')"
+    @filter-updated="onFilterDrives"
     @closed="close"
     right>
     <template slot="title">
-      {{ $t('documents.drawer.tree') }}
+      <!-- Back arrow (returns to the underlying list/explorer) + title. The filter
+           icon is provided by exo-drawer's built-in use-filter, wired to the tree's
+           existing drive search. -->
+      <div class="d-flex align-center">
+        <v-btn
+          icon
+          small
+          class="ms-n2 me-1 flex-shrink-0"
+          :aria-label="$t('documents.label.button.back')"
+          :title="$t('documents.label.button.back')"
+          @click="close()">
+          <v-icon size="20">fa-arrow-left</v-icon>
+        </v-btn>
+        <span class="text-truncate">{{ $t('documents.drawer.tree') }}</span>
+      </div>
     </template>
     <template slot="content">
       <document-tree-view
         :items="items"
+        :search="treeSearch"
         :folder-path="folderPath" />
     </template>
   </exo-drawer>
@@ -47,6 +65,7 @@ export default {
     pageSize: 20,
     drivesLimit: 20,
     drivesOffset: 0,
+    treeSearch: '',
   }),
   created(){
     this.$root.$on('openTreeFolderDrawer', this.open);
@@ -73,6 +92,11 @@ export default {
     },
     close() {
       this.$refs.treeViewDrawer?.close();
+    },
+    // exo-drawer's built-in header filter → v-treeview's built-in search, which
+    // filters the loaded tree (drives + expanded folders) by name client-side.
+    onFilterDrives(query) {
+      this.treeSearch = query || '';
     },
     async retrieveDocumentTree() {
       this.items = [];
