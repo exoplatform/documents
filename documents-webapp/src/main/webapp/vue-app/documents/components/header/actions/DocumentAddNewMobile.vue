@@ -42,7 +42,7 @@
             size="19"
             :class="importBtnColorClass"
             class="clickable pr-2">
-            fas fa-upload
+            far fa-file-archive
           </v-icon>
           <span 
             :class="importBtnColorClass" 
