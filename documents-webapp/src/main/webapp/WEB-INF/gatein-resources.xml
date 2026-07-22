@@ -333,6 +333,9 @@
       <depends>
         <module>documentsPreviewExtension</module>
       </depends>
+      <depends>
+        <module>categoryVueComponents</module>
+      </depends>
     </module>
   </portlet>
 
