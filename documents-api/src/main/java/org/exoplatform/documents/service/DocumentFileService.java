@@ -316,6 +316,20 @@ public interface DocumentFileService {
 
   AbstractNode createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
+  /**
+   * Creates a new empty office document (Word/Excel/PowerPoint/ODF) from the
+   * platform's blank template, delegating to the ecms {@code DocumentService}.
+   *
+   * @param ownerId owner identity id (used when folderId is blank)
+   * @param folderId identifier of the parent folder node
+   * @param folderPath optional relative path under the parent folder
+   * @param title document title (should already include the file extension)
+   * @param documentType office document extension (docx, xlsx, pptx, odt, ods, odp)
+   * @param authenticatedUserId identity id of the user creating the document
+   * @return the created {@link AbstractNode}
+   */
+  AbstractNode createDocumentFromTemplate(long ownerId, String folderId, String folderPath, String title, String documentType, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException;
+
   String getNewName(long ownerId, String folderId, String folderPath, String name) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
   void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
