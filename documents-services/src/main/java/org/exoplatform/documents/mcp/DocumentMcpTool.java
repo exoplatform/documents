@@ -591,10 +591,10 @@ public class DocumentMcpTool implements McpToolPlugin {
         UploadToolUtils.FetchedContent fetched = UploadToolUtils.resolveImage(socialAttachmentService,
                                                                             fileService,
                                                                             getCurrentUserAclIdentity(),
-                                                                            null,
-                                                                            null,
-                                                                            attachmentObjectType,
-                                                                            attachmentObjectId,
+                                                                            new UploadToolUtils.ImageSource(null,
+                                                                                                            null,
+                                                                                                            attachmentObjectType,
+                                                                                                            attachmentObjectId),
                                                                             UploadToolUtils.DEFAULT_MAX_BYTES);
         bytes = fetched.bytes();
         if (StringUtils.isBlank(fileName)) {
@@ -1110,10 +1110,10 @@ public class DocumentMcpTool implements McpToolPlugin {
         return UploadToolUtils.resolveImage(socialAttachmentService,
                                             fileService,
                                             getCurrentUserAclIdentity(),
-                                            null,
-                                            null,
-                                            attachmentObjectType,
-                                            attachmentObjectId,
+                                            new UploadToolUtils.ImageSource(null,
+                                                                            null,
+                                                                            attachmentObjectType,
+                                                                            attachmentObjectId),
                                             UploadToolUtils.DEFAULT_MAX_BYTES)
                               .bytes();
       } else {
