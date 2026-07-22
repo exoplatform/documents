@@ -1,0 +1,970 @@
+{
+  "tools": [
+    {
+      "name": "get_root_folder_by_space",
+      "title": "Get DMS root folder of a given space",
+      "description": "Retrieves the root folder associated with a specific space.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "space_id": {
+            "type": "integer",
+            "description": "space id for which the root folder is requested."
+          }
+        },
+        "required": [
+          "space_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_documents_by_folder_id",
+      "title": "Get DMS files and/or folders under a given folder",
+      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string"
+          },
+          "files_only": {
+            "type": "boolean"
+          },
+          "folders_only": {
+            "type": "boolean"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Pagination offset for result listing."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return."
+          }
+        },
+        "required": [
+          "folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_root_folder_for_user",
+      "title": "Get DMS root personal folder",
+      "description": "Retrieves the root folder belonging to the currently authenticated user.",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_document_by_id",
+      "title": "Get DMS folder or file by its id",
+      "description": "Fetches the metadata of a document given its unique identifier.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the document."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_document_content_by_id",
+      "title": "Get DMS file content",
+      "description": "Retrieves the textual or Markdown content of a document by its unique identifier.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the document."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "attach_document_to_content",
+      "title": "Link DMS file to a content",
+      "description": "Attach a file to a given content identified by its type (note, new, activity...) and its id",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "content_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "document_id",
+          "content_type",
+          "content_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "update_document_description",
+      "title": "Update DMS file summary",
+      "description": "Updates the file summary. This will not change the content of the file.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "html_description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "html_description"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "get_document_transcription_by_id",
+      "title": "Transcript an Audio DMS file",
+      "description": "Get the file transcription when it's an audio/video media content",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_documents",
+      "title": "Search for files",
+      "description": "Searches for documents matching the specified query and optional filters.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Full-text search query string."
+          },
+          "space_id": {
+            "type": "integer",
+            "description": "Optional space identifier to restrict search scope."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "description": "Optional parent folder ID to filter results."
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Pagination offset for result listing."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return."
+          },
+          "is_favorites": {
+            "type": "boolean",
+            "description": "If true, restricts results to favorite documents."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_folder_children",
+      "title": "List DMS folder children",
+      "description": "Lists the direct child files and folders of a folder. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder to list."
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Pagination offset for result listing."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return."
+          }
+        },
+        "required": [
+          "folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_folder_breadcrumb",
+      "title": "Get DMS folder breadcrumb",
+      "description": "Returns the ancestor path (breadcrumb, from the drive root down to the folder) of a folder. Call get_documents_by_folder_id first to get a folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder."
+          }
+        },
+        "required": [
+          "folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_folder_tree",
+      "title": "Get DMS folder tree",
+      "description": "Returns the nested folder tree rooted at a folder. Call get_root_folder_for_user or get_documents_by_folder_id first to get a folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the root folder of the tree."
+          },
+          "with_children": {
+            "type": "boolean",
+            "description": "If true (default), include the child folders recursively."
+          }
+        },
+        "required": [
+          "folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_document_versions",
+      "title": "List DMS file versions",
+      "description": "Lists the versions of a versioned file, newest first. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_documents_size",
+      "title": "Get DMS drive size",
+      "description": "Returns the total storage size (in bytes) of a user or space drive. When owner_id is omitted, returns the size of the current user's personal drive.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner_id": {
+            "type": "integer",
+            "description": "Identity id of the user or space whose drive size is requested. Optional; defaults to the current user."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "create_folder",
+      "title": "Create a DMS folder",
+      "description": "Creates a new folder under a parent folder. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the parent folder."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the folder to create."
+          }
+        },
+        "required": [
+          "parent_folder_id",
+          "name"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "create_document",
+      "title": "Create a text document in the DMS",
+      "description": "Creates a TEXT-based document (plain text, markdown, HTML, CSV, JSON, XML) by writing the provided content string as-is into the file body. Use this to turn chat-generated text into a real file in the Documents app. The name must be a filename WITH an extension (e.g. 'notes.md', 'report.txt', 'page.html') — the extension sets the file's content type. It writes text as the file body, so use a text extension (.txt, .md, .html). It CANNOT produce binary formats: office documents (.docx, .xlsx, .pptx, .odt, etc.) and PDF are structured packages, not text, so they cannot be created here. To create a NEW EMPTY office document (Word/Excel/PowerPoint/ODF) use create_document_from_template; to store real file bytes use upload_document (base64, url or a chat attachment). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The stored content type is derived from the file extension by the platform: use a registered text extension (.txt, .html, .csv, etc.) so the file has the correct type and is readable via get_document_content_by_id; an unregistered extension like .md is stored as application/octet-stream and its text won't be extractable.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder where the document is created."
+          },
+          "name": {
+            "type": "string",
+            "description": "The document file name, including its extension (e.g. 'notes.md', 'report.txt', 'page.html'). The extension determines the file's content type; the name is used as-is."
+          },
+          "content": {
+            "type": "string",
+            "description": "The text, markdown or HTML body of the document."
+          }
+        },
+        "required": [
+          "parent_folder_id",
+          "name",
+          "content"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "create_document_from_template",
+      "title": "Create an empty office document from a template",
+      "description": "Creates a NEW EMPTY office document (Word, Excel, or PowerPoint) from the platform's blank template, ready to edit in the online editor. Use this when the user wants a blank Word/Excel/PowerPoint document to fill in — create_document CANNOT produce office files (they are structured packages, not text) and upload_document needs the real file bytes. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The file extension is added automatically from document_type, so pass 'name' without an extension. Availability of a given type depends on the installed document editor add-on (onlyoffice).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder where the document is created."
+          },
+          "name": {
+            "type": "string",
+            "description": "The document name, without extension (e.g. 'Q3 report'); the extension is appended automatically from document_type."
+          },
+          "document_type": {
+            "type": "string",
+            "description": "The office document type to create. The matching file extension is added automatically.",
+            "enum": [
+              "docx",
+              "xlsx",
+              "pptx"
+            ]
+          }
+        },
+        "required": [
+          "parent_folder_id",
+          "name",
+          "document_type"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "upload_document",
+      "title": "Upload a file to the DMS",
+      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder. Use this when the user attaches a file or image in the conversation and asks to save it to the Documents app (the attachment is resolved automatically server-side), or from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the destination folder."
+          },
+          "name": {
+            "type": "string",
+            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with url or a chat attachment (the name is then derived from the source file)."
+          },
+          "base64": {
+            "type": "string",
+            "description": "The file bytes encoded in base64. Provide exactly one source: the chat attachment, base64 or url."
+          },
+          "url": {
+            "type": "string",
+            "description": "An http(s) URL to download the file from. Provide exactly one source: the chat attachment, base64 or url."
+          },
+          "attachment_object_type": {
+            "type": "string",
+            "description": "Internal: object type of an existing platform attachment to upload (set automatically by the client from the file/image the user attached in the conversation — do not fill this yourself). Read as the current user, so its ACL is enforced."
+          },
+          "attachment_object_id": {
+            "type": "string",
+            "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, base64 or url."
+          }
+        },
+        "required": [
+          "parent_folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "require_approval": true
+    },
+    {
+      "name": "rename_document",
+      "title": "Rename a DMS file or folder",
+      "description": "Renames a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to rename."
+          },
+          "new_name": {
+            "type": "string",
+            "description": "The new name."
+          }
+        },
+        "required": [
+          "document_id",
+          "new_name"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "move_document",
+      "title": "Move a DMS file or folder",
+      "description": "Moves a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to move."
+          },
+          "destination_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the destination folder."
+          },
+          "conflict_action": {
+            "type": "string",
+            "enum": ["keepBoth", "createNewVersion"],
+            "description": "Behaviour when a document with the same name exists in the destination: 'keepBoth' moves it as a renamed copy, 'createNewVersion' replaces the existing file's content (keeping its version history). Defaults to 'keepBoth'."
+          }
+        },
+        "required": [
+          "document_id",
+          "destination_folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "copy_document",
+      "title": "Copy a DMS file or folder",
+      "description": "Copies a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to copy."
+          },
+          "destination_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the destination folder."
+          }
+        },
+        "required": [
+          "document_id",
+          "destination_folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "duplicate_document",
+      "title": "Duplicate a DMS file or folder",
+      "description": "Creates a copy of a file or folder in the same parent folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to duplicate."
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Optional prefix added to the duplicated name (e.g. 'Copy of')."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "delete_document",
+      "title": "Delete a DMS file or folder",
+      "description": "Moves a file or folder to the trash. It can be restored with undo_delete_document. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to delete."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "undo_delete_document",
+      "title": "Restore a deleted DMS document",
+      "description": "Cancels a previous delete_document and restores the document from the trash.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the previously deleted document."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "restore_document_version",
+      "title": "Restore a DMS file version",
+      "description": "Restores a previous version of a file as the current one. Call list_document_versions first to get a version_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "description": "The unique identifier of the version to restore."
+          }
+        },
+        "required": [
+          "version_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "update_version_summary",
+      "title": "Update a DMS file version summary",
+      "description": "Updates the summary (change note) of a specific file version. Call list_document_versions first to get the version_id; the document_id is the file the version belongs to.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file the version belongs to."
+          },
+          "version_id": {
+            "type": "string",
+            "description": "The unique identifier of the version to update."
+          },
+          "summary": {
+            "type": "string",
+            "description": "The new summary text."
+          }
+        },
+        "required": [
+          "document_id",
+          "version_id",
+          "summary"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "set_document_visibility",
+      "title": "Set DMS document visibility",
+      "description": "Hides or shows a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "true to hide the document, false to make it visible."
+          }
+        },
+        "required": [
+          "document_id",
+          "hidden"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "add_document_version",
+      "title": "Add a new version to a DMS file",
+      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source: a text 'content' string (for text files), a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the existing file to add a version to."
+          },
+          "content": {
+            "type": "string",
+            "description": "Plain text / markdown / HTML body to write as the new version. Use for text files. Provide exactly one source: content, base64, url or the chat attachment."
+          },
+          "base64": {
+            "type": "string",
+            "description": "The new file bytes encoded in base64. Provide exactly one source: content, base64, url or the chat attachment."
+          },
+          "url": {
+            "type": "string",
+            "description": "An http(s) URL to download the new content from (fetched server-side behind an SSRF guard). Provide exactly one source: content, base64, url or the chat attachment."
+          },
+          "attachment_object_type": {
+            "type": "string",
+            "description": "Internal: object type of an existing platform attachment to use as the new version (set automatically by the client from the file the user attached in the conversation - do not fill this yourself). Read as the current user, so its ACL is enforced."
+          },
+          "attachment_object_id": {
+            "type": "string",
+            "description": "Internal: object id of an existing platform attachment to use as the new version (set automatically by the client - do not fill this yourself). Provide exactly one source: content, base64, url or attachment_object_id."
+          },
+          "version_summary": {
+            "type": "string",
+            "description": "Optional change note stored on the new version."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "create_public_link",
+      "title": "Create a public download link for a DMS file",
+      "description": "Creates (or refreshes) an anonymous public share link for a document so it can be downloaded without signing in, optionally protected by a password and/or an expiration date. Requires edit permission on the document. Call get_document_by_id or get_documents_by_folder_id first to get the document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file to share publicly."
+          },
+          "password": {
+            "type": "string",
+            "description": "Optional password required to open the link."
+          },
+          "expiration_date": {
+            "type": "integer",
+            "description": "Optional expiration date as epoch milliseconds; after it the link stops working. Leave blank for a link that never expires."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "require_approval": true
+    },
+    {
+      "name": "create_document_shortcut",
+      "title": "Create a shortcut to a DMS file or folder",
+      "description": "Creates a shortcut (symlink) to a document inside another folder, so the same file appears in a second location without being copied. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file or folder to create a shortcut to."
+          },
+          "destination_folder_id": {
+            "type": "string",
+            "description": "The unique identifier of the folder where the shortcut is placed."
+          },
+          "conflict_action": {
+            "type": "string",
+            "enum": ["keepBoth"],
+            "description": "Behaviour when a node with the same name already exists in the destination: only 'keepBoth' is supported (creates the shortcut under a renamed entry). Defaults to 'keepBoth'."
+          }
+        },
+        "required": [
+          "document_id",
+          "destination_folder_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "share_document",
+      "title": "Share a DMS file with a user or space",
+      "description": "Shares a document with another user or with a space: the recipient is granted read access and gets the file in their 'Shared' folder. Provide exactly one recipient: either username or space_id. Requires edit permission on the document. Call get_document_by_id first to get the document_id, search_users for a username, or get_my_spaces for a space_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file to share."
+          },
+          "username": {
+            "type": "string",
+            "description": "The username to share the document with (mutually exclusive with space_id)."
+          },
+          "space_id": {
+            "type": "integer",
+            "description": "The id of the space to share the document with (mutually exclusive with username)."
+          },
+          "notify": {
+            "type": "boolean",
+            "description": "Whether to notify the recipient. Defaults to true."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "favorite_document",
+      "title": "Add a DMS file to favorites",
+      "description": "Adds a file to the current user's favorites. Only files can be favorited; folders have no favorites view. Call get_document_by_id or get_documents_by_folder_id first to get the document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file to mark as favorite."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "unfavorite_document",
+      "title": "Remove a DMS file from favorites",
+      "description": "Removes a file from the current user's favorites. Only files can be favorited; folders have no favorites view. Call get_document_by_id or get_documents_by_folder_id first to get the document_id.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the file to remove from favorites."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    }
+  ]
+}

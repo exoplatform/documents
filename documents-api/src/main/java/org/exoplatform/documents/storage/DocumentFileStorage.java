@@ -240,6 +240,30 @@ public interface DocumentFileStorage {
   AbstractNode createFolder(long ownerId, String folderId, String folderPath, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
                                                                                ObjectNotFoundException;
 
+  /**
+   * Creates a new empty office document (Word/Excel/PowerPoint/ODF) from the
+   * platform's blank template, by delegating to the ecms {@code DocumentService}.
+   *
+   * @param ownerId owner identity id (used when folderId is blank to resolve the
+   *          identity root folder)
+   * @param folderId identifier of the parent folder node
+   * @param folderPath optional relative path under the parent folder
+   * @param title document title (should already include the file extension)
+   * @param documentType office document extension (e.g. docx, xlsx, pptx, odt,
+   *          ods, odp) matched against the installed template providers
+   * @param aclIdentity ACL identity of the user creating the document
+   * @return the created {@link AbstractNode}
+   * @throws IllegalAccessException when the user isn't allowed to edit the parent
+   *           folder
+   * @throws ObjectNotFoundException when the parent folder or a matching template
+   *           doesn't exist
+   * @throws ObjectAlreadyExistsException when a document with the same name
+   *           already exists in the target folder
+   */
+  AbstractNode createDocumentFromTemplate(long ownerId, String folderId, String folderPath, String title, String documentType, Identity aclIdentity) throws IllegalAccessException,
+                                                                               ObjectNotFoundException,
+                                                                               ObjectAlreadyExistsException;
+
   String getNewName(long ownerId,
                     String folderId,
                     String folderPath,

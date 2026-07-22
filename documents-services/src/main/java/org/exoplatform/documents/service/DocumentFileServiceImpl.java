@@ -370,6 +370,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public AbstractNode createDocumentFromTemplate(long ownerId, String folderId, String folderPath, String title, String documentType, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException {
+    return documentFileStorage.createDocumentFromTemplate(ownerId, folderId, folderPath, title, documentType, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
   public String getNewName(long ownerId, String folderId, String folderPath, String name) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
     return documentFileStorage.getNewName(ownerId, folderId, folderPath, name);
   }

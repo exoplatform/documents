@@ -29,6 +29,8 @@
   <properties>
     <!-- 3rd party libraries versions -->
     <addon.exo.jcr.version>7.3.x-SNAPSHOT</addon.exo.jcr.version>
+    <!-- ecms provides AttachmentService used by the document MCP tools; not managed by the platform depchain -->
+    <addon.exo.ecms.version>7.3.x-SNAPSHOT</addon.exo.ecms.version>
     <net.lingala.zip4j.version>2.11.5</net.lingala.zip4j.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
