@@ -402,6 +402,13 @@
           border: 1px solid #b3b3b3;
           display: none;
         }
+
+        .uiIconAddFolder {
+          border: 1px solid #b3b3b3;
+          padding: 10px;
+          border-radius: 15%;
+          color: @headingColor;
+        }
       }
 
       .actionBox {
@@ -965,24 +972,6 @@
   /* Header breadcrumb (reused documents-breadcrumb, mobile branch). */
   .attachments-drive-breadcrumb {
     min-width: 0;
-  }
-
-  /* Inline folder create / rename field: same compact sizing as the Documents
-     app inline name edit (documentEditName), so the appended validate / cancel
-     icons stay vertically centered in a 35px dense outlined field. */
-  .newFolderRow,
-  .renameFolderRow {
-    .newFolderInput {
-      .v-input__slot {
-        padding-right: 4px;
-        height: 35px;
-        min-height: auto !important;
-
-        .v-input__append-inner {
-          margin-top: 5px;
-        }
-      }
-    }
   }
 
   /* Equalize the header action icons: the use-filter funnel reads heavier than

@@ -72,20 +72,6 @@
               :is-mobile="true"
               class="attachments-drive-breadcrumb" />
           </div>
-          <!-- Create-folder: same v-btn/v-icon markup as the nav-toggle button
-               above, so it aligns on the breadcrumb row and matches the drawer's
-               other header icons (no legacy bordered <a> box). -->
-          <div class="selectorActions d-flex align-center flex-shrink-0">
-            <v-btn
-              v-if="modeFolderSelection && currentDrive"
-              icon
-              small
-              :title="$t('attachments.filesFoldersSelector.button.addNewFOlder.tooltip')"
-              :aria-label="$t('attachments.filesFoldersSelector.button.addNewFOlder.tooltip')"
-              @click="addNewFolder()">
-              <v-icon size="18">fas fa-folder-plus</v-icon>
-            </v-btn>
-          </div>
           <!-- Action buttons for extensionRegistry extensions -->
           <div
             v-for="action in attachmentsComposerActions"
@@ -128,97 +114,18 @@
             <div
               v-else
               class="content-explorer px-3">
-              <!-- Inline folder create / rename (destination mode). Same pattern
-                   as the Documents app inline name edit (DocumentsFileEditNameCell):
-                   a dense outlined field with inline validate (check) and cancel
-                   (times) icons in the append slot. mousedown.prevent on the icons
-                   keeps the input focused so the blur handler does not race the
-                   click; Enter still validates and Esc still cancels. -->
-              <div v-if="creatingNewFolder" class="newFolderRow d-flex align-center px-3 pb-2">
-                <v-icon
-                  color="primary"
-                  size="20"
-                  class="flex-shrink-0 me-2">
-                  fas fa-folder
-                </v-icon>
-                <v-text-field
-                  ref="newFolder"
-                  v-model="newFolderName"
-                  type="text"
-                  class="newFolderInput pt-0 mt-0"
-                  autofocus
-                  outlined
-                  dense
-                  hide-details
-                  @click.stop
-                  @blur="createNewFolder()"
-                  @keyup.enter="$event.target.blur()"
-                  @keyup.esc="cancelCreatingNewFolder($event)">
-                  <div slot="append" class="d-flex align-center">
-                    <v-divider vertical />
-                    <v-icon
-                      class="primary--text ma-1 px-1"
-                      :title="$t('attachments.drawer.apply')"
-                      small
-                      @mousedown.prevent
-                      @click="createNewFolder()">
-                      fa-check
-                    </v-icon>
-                    <v-divider vertical />
-                    <v-icon
-                      class="clickable ma-1 px-1"
-                      :title="$t('attachments.cancel')"
-                      color="red"
-                      small
-                      @mousedown.prevent
-                      @click="cancelCreatingNewFolder($event)">
-                      fa-times
-                    </v-icon>
-                  </div>
-                </v-text-field>
-              </div>
-              <div v-else-if="renameFolderAction" class="renameFolderRow d-flex align-center px-3 pb-2">
-                <v-icon
-                  color="primary"
-                  size="20"
-                  class="flex-shrink-0 me-2">
-                  fas fa-folder
-                </v-icon>
-                <v-text-field
+              <!-- Inline folder rename (destination mode). -->
+              <div v-if="renameFolderAction" class="renameFolderRow d-flex align-center px-3 pb-2">
+                <i class="uiIcon24x24nt_folder uiIcon24x24FolderDefault uiIconEcmsLightGray me-2"></i>
+                <input
                   ref="rename"
                   v-model="newName"
                   type="text"
-                  class="newFolderInput pt-0 mt-0"
-                  autofocus
-                  outlined
-                  dense
-                  hide-details
+                  class="newFolderInput ignore-vuetify-classes"
                   @click.stop
                   @blur="saveNewNameFolder()"
                   @keyup.enter="$event.target.blur()"
                   @keyup.esc="cancelRenameNewFolder($event)">
-                  <div slot="append" class="d-flex align-center">
-                    <v-divider vertical />
-                    <v-icon
-                      class="primary--text ma-1 px-1"
-                      :title="$t('attachments.drawer.apply')"
-                      small
-                      @mousedown.prevent
-                      @click="saveNewNameFolder()">
-                      fa-check
-                    </v-icon>
-                    <v-divider vertical />
-                    <v-icon
-                      class="clickable ma-1 px-1"
-                      :title="$t('attachments.cancel')"
-                      color="red"
-                      small
-                      @mousedown.prevent
-                      @click="cancelRenameNewFolder($event)">
-                      fa-times
-                    </v-icon>
-                  </div>
-                </v-text-field>
               </div>
               <div v-if="emptyFolder" class="emptyFolder my-10 mx-auto flex-column d-flex align-center">
                 <i class="uiIconEmptyFolder"></i>
@@ -385,8 +292,6 @@ export default {
       modeFolderSelectionForFile: false, // destination for a single moved file
       movedFile: {},
       // Folder CRUD
-      creatingNewFolder: false,
-      newFolderName: '',
       renameFolderAction: false,
       newName: '',
       selectedFolder: {},
@@ -649,7 +554,7 @@ export default {
     // opens that drive; otherwise we drill into the folder, syncing the drive
     // owner the tree may have changed (cross-drive jump).
     handleDocumentOpenFolder(folder) {
-      if (!folder || this.creatingNewFolder || this.renameFolderAction) {
+      if (!folder || this.renameFolderAction) {
         return;
       }
       if (folder.drive) {
@@ -971,53 +876,12 @@ export default {
     // ---------------------------------------------------------------------
     // Folder CRUD (destination mode only) via DocumentFileService
     // ---------------------------------------------------------------------
-    // Shows the inline "new folder" input above the list.
-    addNewFolder() {
-      if (this.creatingNewFolder) {
-        return;
-      }
-      this.renameFolderAction = false;
-      this.creatingNewFolder = true;
-      this.newFolderName = this.$t('attachments.drawer.newFolder');
-      this.$nextTick(() => this.$refs.newFolder && this.$refs.newFolder.focus && this.$refs.newFolder.focus());
-    },
-    // Creates the folder via DocumentFileService.createFolder.
-    createNewFolder() {
-      if (!this.creatingNewFolder) {
-        return;
-      }
-      const name = this.newFolderName && this.newFolderName.trim();
-      if (!name) {
-        this.creatingNewFolder = false;
-        return;
-      }
-      const nameExists = this.browseItems.some(item => item.folder && item.name === name);
-      if (nameExists) {
-        this.openWarningDialog(this.$t('attachments.filesFoldersSelector.popup.folderNameExists'));
-        return;
-      }
-      const dest = this.computeLegacyDestination();
-      this.creatingNewFolder = false;
-      return this.$documentFileService.createFolder(this.currentDrive.ownerId, this.parentFolderId, dest.relativePath, name)
-        .then(() => {
-          this.newFolderName = '';
-          this.navigate();
-        }).catch(() => {
-          this.errorMessage = this.$t('attachments.createFolder.error');
-          this.showErrorMessage = true;
-        });
-    },
-    cancelCreatingNewFolder() {
-      this.creatingNewFolder = false;
-      this.newFolderName = '';
-    },
     // Starts inline renaming of the selected folder.
     renameFolder() {
       if (!this.selectedFolder.canRemove) {
         return;
       }
       this.newName = this.selectedFolder.name;
-      this.creatingNewFolder = false;
       this.renameFolderAction = true;
       this.closeFolderActionsMenu();
       this.$nextTick(() => this.$refs.rename && this.$refs.rename.focus && this.$refs.rename.focus());
