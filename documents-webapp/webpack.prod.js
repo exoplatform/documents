@@ -45,6 +45,8 @@ module.exports = {
     documentsPreviewExtension: './src/main/webapp/vue-app/preview-extension/main.js',
     attachmentApp: './src/main/webapp/vue-app/attachment/main.js',
     attachmentIntegration: './src/main/webapp/vue-app/attachment-integration/main.js',
+    documentsFolderPicker: './src/main/webapp/vue-app/documents-folder-picker/main.js',
+    documentsFolderPickerApp: './src/main/webapp/vue-app/documents-folder-picker-app/main.js',
     documentsInfoDrawer: './src/main/webapp/vue-app/document-info-drawer/main.js',
     documentsOffline: './src/main/webapp/vue-app/documents-offline/main.js',
     documentsOfflineSettings: './src/main/webapp/vue-app/documents-offline-settings/main.js',
