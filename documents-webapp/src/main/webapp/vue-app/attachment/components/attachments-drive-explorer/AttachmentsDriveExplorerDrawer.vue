@@ -639,6 +639,13 @@ export default {
         .then(items => {
           const documents = (items || []).map(item => this.mapDocument(item));
           this.hasMore = documents.length > this.limit;
+          // In destination-picker mode only folders are listed, and the server returns
+          // folders before files, so once the fetched page includes a file every folder
+          // is already loaded. Without this, a folder holding more than a page of files
+          // keeps offering a "Load more" that reveals no new folder.
+          if (this.modeFolderSelection && this.hasMore && documents.some(item => !item.folder)) {
+            this.hasMore = false;
+          }
           const pageItems = this.hasMore ? documents.slice(0, this.limit) : documents;
           this.browseItems = append ? this.dedupe(this.browseItems.concat(pageItems)) : pageItems;
         }).catch(error => {
