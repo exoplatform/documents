@@ -72,15 +72,6 @@
               :is-mobile="true"
               class="attachments-drive-breadcrumb" />
           </div>
-          <div class="selectorActions d-flex align-center">
-            <a
-              v-if="modeFolderSelection && currentDrive"
-              :title="$t('attachments.filesFoldersSelector.button.addNewFOlder.tooltip')"
-              rel="tooltip"
-              data-placement="bottom"
-              class="uiIconLightGray uiIconAddFolder"
-              @click="addNewFolder()"></a>
-          </div>
           <!-- Action buttons for extensionRegistry extensions -->
           <div
             v-for="action in attachmentsComposerActions"
@@ -123,21 +114,8 @@
             <div
               v-else
               class="content-explorer px-3">
-              <!-- Inline folder create / rename (destination mode) - kept as
-                   lightweight inputs above the list to preserve folder CRUD. -->
-              <div v-if="creatingNewFolder" class="newFolderRow d-flex align-center px-3 pb-2">
-                <i class="uiIcon24x24nt_folder uiIcon24x24FolderDefault uiIconEcmsLightGray me-2"></i>
-                <input
-                  ref="newFolder"
-                  v-model="newFolderName"
-                  type="text"
-                  class="newFolderInput ignore-vuetify-classes"
-                  @click.stop
-                  @blur="createNewFolder()"
-                  @keyup.enter="$event.target.blur()"
-                  @keyup.esc="cancelCreatingNewFolder($event)">
-              </div>
-              <div v-else-if="renameFolderAction" class="renameFolderRow d-flex align-center px-3 pb-2">
+              <!-- Inline folder rename (destination mode). -->
+              <div v-if="renameFolderAction" class="renameFolderRow d-flex align-center px-3 pb-2">
                 <i class="uiIcon24x24nt_folder uiIcon24x24FolderDefault uiIconEcmsLightGray me-2"></i>
                 <input
                   ref="rename"
@@ -314,8 +292,6 @@ export default {
       modeFolderSelectionForFile: false, // destination for a single moved file
       movedFile: {},
       // Folder CRUD
-      creatingNewFolder: false,
-      newFolderName: '',
       renameFolderAction: false,
       newName: '',
       selectedFolder: {},
@@ -578,7 +554,7 @@ export default {
     // opens that drive; otherwise we drill into the folder, syncing the drive
     // owner the tree may have changed (cross-drive jump).
     handleDocumentOpenFolder(folder) {
-      if (!folder || this.creatingNewFolder || this.renameFolderAction) {
+      if (!folder || this.renameFolderAction) {
         return;
       }
       if (folder.drive) {
@@ -663,6 +639,13 @@ export default {
         .then(items => {
           const documents = (items || []).map(item => this.mapDocument(item));
           this.hasMore = documents.length > this.limit;
+          // In destination-picker mode only folders are listed, and the server returns
+          // folders before files, so once the fetched page includes a file every folder
+          // is already loaded. Without this, a folder holding more than a page of files
+          // keeps offering a "Load more" that reveals no new folder.
+          if (this.modeFolderSelection && this.hasMore && documents.some(item => !item.folder)) {
+            this.hasMore = false;
+          }
           const pageItems = this.hasMore ? documents.slice(0, this.limit) : documents;
           this.browseItems = append ? this.dedupe(this.browseItems.concat(pageItems)) : pageItems;
         }).catch(error => {
@@ -900,53 +883,12 @@ export default {
     // ---------------------------------------------------------------------
     // Folder CRUD (destination mode only) via DocumentFileService
     // ---------------------------------------------------------------------
-    // Shows the inline "new folder" input above the list.
-    addNewFolder() {
-      if (this.creatingNewFolder) {
-        return;
-      }
-      this.renameFolderAction = false;
-      this.creatingNewFolder = true;
-      this.newFolderName = this.$t('attachments.drawer.newFolder');
-      this.$nextTick(() => this.$refs.newFolder && this.$refs.newFolder.focus && this.$refs.newFolder.focus());
-    },
-    // Creates the folder via DocumentFileService.createFolder.
-    createNewFolder() {
-      if (!this.creatingNewFolder) {
-        return;
-      }
-      const name = this.newFolderName && this.newFolderName.trim();
-      if (!name) {
-        this.creatingNewFolder = false;
-        return;
-      }
-      const nameExists = this.browseItems.some(item => item.folder && item.name === name);
-      if (nameExists) {
-        this.openWarningDialog(this.$t('attachments.filesFoldersSelector.popup.folderNameExists'));
-        return;
-      }
-      const dest = this.computeLegacyDestination();
-      this.creatingNewFolder = false;
-      return this.$documentFileService.createFolder(this.currentDrive.ownerId, this.parentFolderId, dest.relativePath, name)
-        .then(() => {
-          this.newFolderName = '';
-          this.navigate();
-        }).catch(() => {
-          this.errorMessage = this.$t('attachments.createFolder.error');
-          this.showErrorMessage = true;
-        });
-    },
-    cancelCreatingNewFolder() {
-      this.creatingNewFolder = false;
-      this.newFolderName = '';
-    },
     // Starts inline renaming of the selected folder.
     renameFolder() {
       if (!this.selectedFolder.canRemove) {
         return;
       }
       this.newName = this.selectedFolder.name;
-      this.creatingNewFolder = false;
       this.renameFolderAction = true;
       this.closeFolderActionsMenu();
       this.$nextTick(() => this.$refs.rename && this.$refs.rename.focus && this.$refs.rename.focus());
