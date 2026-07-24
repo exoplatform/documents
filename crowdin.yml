@@ -124,4 +124,34 @@ files: [
     "escape_special_characters": 0,
     "escape_quotes" : 0,
   },
+  {
+    "source" : "/documents-webapp/src/main/resources/locale/portlet/TrashManagement_en.properties",
+
+    "translation" : "%original_path%/%file_name%!_%locale_with_underscore%.%file_extension%",
+    "translation_replace" : {YML_CROWDIN_LANGUAGES_ARG},
+    "dest" : "add__ons/documents/TrashManagement.properties",
+    "update_option" : "update_as_unapproved",
+    "escape_special_characters": 0,
+    "escape_quotes" : 0,
+  },
+  {
+    "source" : "/documents-webapp/src/main/resources/locale/portlet/attachments_en.properties",
+
+    "translation" : "%original_path%/%file_name%!_%locale_with_underscore%.%file_extension%",
+    "translation_replace" : {YML_CROWDIN_LANGUAGES_ARG},
+    "dest" : "add__ons/documents/attachments.properties",
+    "update_option" : "update_as_unapproved",
+    "escape_special_characters": 0,
+    "escape_quotes" : 0,
+  },
+  {
+    "source" : "/documents-webapp/src/main/resources/locale/portlet/ckeditor_en.properties",
+
+    "translation" : "%original_path%/%file_name%!_%locale_with_underscore%.%file_extension%",
+    "translation_replace" : {YML_CROWDIN_LANGUAGES_ARG},
+    "dest" : "add__ons/documents/ckeditor.properties",
+    "update_option" : "update_as_unapproved",
+    "escape_special_characters": 0,
+    "escape_quotes" : 0,
+  },
 ]
