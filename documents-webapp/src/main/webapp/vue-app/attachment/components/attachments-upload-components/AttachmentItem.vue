@@ -1,6 +1,6 @@
 <template>
   <v-main>
-    <div :class="[allowToPreview && 'clickable', attachment.uploadFailed && 'attachment--failed']" class="attachment d-flex">
+    <div :class="[allowToPreview && 'clickable', attachment.uploadFailed && 'attachment--failed']" class="attachment d-flex align-center">
       <v-list-item-avatar
         :class="smallAttachmentIcon ? 'me-0' :'me-3'"
         class="border-radius"
