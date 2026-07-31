@@ -10,11 +10,11 @@
       @closed="closeAttachmentsAppDrawer">
       <template slot="title">
         <div class="attachmentsDrawerHeader">
-          <span>{{ $t('attachments.upload.document') }}</span>
+          <span>{{ $t('attachments.drawer.header') }}</span>
         </div>
       </template>
       <template slot="content">
-        <div class="attachmentsContent pt-0 pa-5">
+        <div ref="drawerBody" class="attachmentsContent pt-5 pa-5">
           <div v-show="showSelectedAttachmentsFromOtherDriveInfo" class="alert alert-info attachmentsAlert">
             {{ $t('attachments.alert.sharing.attachedFrom') }}
             {{ selectedFromOtherDriveLabel }}
@@ -23,23 +23,23 @@
             </b>
             {{ $t('attachments.alert.sharing.availableFor') }} <b>{{ currentSpaceDisplayName }}</b> {{ $t('attachments.alert.sharing.members') }}
           </div>
-          <attachment-create-document-input
-            v-if="(!entityType && !entityId) || !attachToEntity && displayCreateDocumentInput"
-            :attachments="attachments"
-            :max-files-count="maxFilesCount"
-            :max-files-size="maxFileSize"
-            :current-drive="currentDrive"
-            :path-destination-folder="pathDestinationFolder" />
-          <attachments-upload-input
-            :attachments="attachments"
-            :max-files-count="maxFilesCount"
-            :max-files-size="maxFileSize"
-            :current-drive="currentDrive"
-            :path-destination-folder="pathDestinationFolder" />
-          <attachments-select-from-drive v-if="(entityId && entityType) || !attachToEntity" />
+          <!-- EMPTY: hero drop-zone + two secondary tiles. POPULATED: compact add bar. -->
+          <div :class="hasUploadedFiles ? 'attachmentsAddBar' : 'attachmentsAddZone'">
+            <attachments-upload-input
+              :attachments="attachments"
+              :has-attachments="hasUploadedFiles"
+              :max-files-count="maxFilesCount"
+              :max-files-size="maxFileSize"
+              :current-drive="currentDrive"
+              :path-destination-folder="pathDestinationFolder" />
+            <attachments-select-from-drive
+              v-if="(entityId && entityType) || !attachToEntity"
+              :has-attachments="hasUploadedFiles" />
+            <attachment-create-document-input
+              v-if="(!entityType && !entityId) || !attachToEntity && displayCreateDocumentInput"
+              :has-attachments="hasUploadedFiles" />
+          </div>
           <attachments-uploaded-files
-            @keep-both="uploadManually($event, 'keep')"
-            @create-version="uploadManually($event, 'createVersion')"
             :attachments="attachments"
             :new-uploaded-files="newUploadedFiles"
             :schema-folder="schemaFolder"
@@ -49,7 +49,16 @@
             :default-folder="defaultFolder"
             :display-uploaded-files="displayUploadedFiles"
             :entity-id="entityId"
-            :entity-type="entityType" />
+            :entity-type="entityType"
+            @keep-both="uploadManually($event, 'keep')"
+            @create-version="uploadManually($event, 'createVersion')" />
+          <!-- Self-contained level-1 full-drawer drag-over overlay. -->
+          <div
+            v-if="dragging"
+            class="attachmentsDropOverlay d-flex flex-column align-center justify-center text-center">
+            <v-icon size="60" color="primary">fa-file-upload</v-icon>
+            <span class="mt-3 font-weight-bold">{{ $t('attachments.drawer.dropOverlay') }}</span>
+          </div>
         </div>
         <attachments-drive-explorer-drawer
           ref="attachmentsDriveExplorerDrawer"
@@ -58,8 +67,15 @@
           :default-drive="defaultDrive"
           :extension-refs="$refs"
           :default-folder="defaultFolder"
+          :space-id="spaceId"
           :create-entity-type-folder="createEntityTypeFolder"
           :attached-files="attachments" />
+        <attachment-create-document-drawer
+          ref="attachmentCreateDocumentDrawer"
+          :attachments="attachments"
+          :current-drive="currentDrive"
+          :path-destination-folder="pathDestinationFolder"
+          :max-files-count="maxFilesCount" />
         <div
           v-for="action in attachmentsComposerActions"
           :key="action.key"
@@ -72,6 +88,21 @@
             v-bind="action.component.props ? action.component.props : {}" />
         </div>
       </template>
+      <template slot="footer">
+        <div class="d-flex">
+          <v-spacer />
+          <v-btn
+            class="btn me-3"
+            @click="closeDrawer">
+            {{ $t('attachments.drawer.cancel') }}
+          </v-btn>
+          <v-btn
+            class="btn btn-primary"
+            @click="closeDrawer">
+            {{ $t('attachments.drawer.done') }}
+          </v-btn>
+        </div>
+      </template>
     </exo-drawer>
   </div>
 </template>
@@ -81,6 +112,10 @@ import {getAttachmentsComposerExtensions} from '../../../js/extension';
 
 export default {
   props: {
+    spaceId: {
+      type: String,
+      default: ''
+    },
     maxFilesCount: {
       type: Number,
       required: false,
@@ -175,10 +210,32 @@ export default {
       newUploadedFiles: [],
       creationType: '',
       saveMode: 'keep',
-      drawer: false
+      drawer: false,
+      dragging: false,
+      dragLeaveTimer: null,
+      dragEl: null
     };
   },
   computed: {
+    renderedAttachments() {
+      // De-dupe by (id || uploadId) so the drawer's notion of "populated"
+      // matches exactly the list rendered by attachments-uploaded-files.
+      const seen = new Set();
+      const files = [];
+      (this.newUploadedFiles || []).forEach(file => {
+        const key = file && (file.id || file.uploadId);
+        if (key == null) {
+          files.push(file);
+        } else if (!seen.has(key)) {
+          seen.add(key);
+          files.push(file);
+        }
+      });
+      return files;
+    },
+    hasUploadedFiles() {
+      return this.renderedAttachments.length > 0;
+    },
     uploadFinished() {
       return this.attachments.length > 0 && (this.attachments.every(file => !file.uploadId) || this.attachments.every(file => file.waitAction));
     },
@@ -265,6 +322,7 @@ export default {
     this.$root.$on('add-destination-path-for-file', (movedFile, pathDestinationFolder, folder, currentDrive) => {
       this.moveFileToNewDestinationFile(movedFile, pathDestinationFolder, folder, currentDrive);
     });
+    this.$root.$on('open-create-document-drawer', () => this.$refs.attachmentCreateDocumentDrawer.open());
     this.$root.$on('abort-uploading-new-file', this.abortUploadingNewFile);
     this.$root.$on('remove-attached-file', this.removeAttachedFile);
     this.$root.$on('start-loading-attachment-drawer', () => this.$refs.attachmentsAppDrawer.startLoading());
@@ -284,7 +342,81 @@ export default {
     document.addEventListener('end-loading-attachment-drawer', this.endLoading);
     document.addEventListener('start-loading-attachment-drawer', this.startLoading);
   },
+  beforeDestroy() {
+    this.detachDragListeners();
+    window.clearTimeout(this.dragLeaveTimer);
+  },
   methods: {
+    attachDragListeners() {
+      // Drag & drop is scoped to the drawer *body* (the actual dropped-files
+      // target), NOT this component's $el: exo-drawer renders its panel in a
+      // teleported DOM subtree that is not a descendant of `.attachments-drawer`,
+      // so listeners on $el never fire when a file is dragged over the visible
+      // drawer. We (re)bind on open, once the body is in the DOM, and unbind on
+      // close/destroy. We drive the overlay off `dragover` + a short self-clearing
+      // timer rather than a dragenter/dragleave counter: the counter approach
+      // desyncs (dragenter bubbles from every child while the matching leave/drop
+      // can land on a child or outside), leaving the overlay stuck on. `dragover`
+      // fires continuously while a file is over the drawer, so re-arming a 150ms
+      // timer on each tick hides the overlay ~150ms after the pointer leaves /
+      // drops / the drag ends, and it can never get stuck when nothing is dragged.
+      const el = this.$refs.drawerBody;
+      if (!el || el === this.dragEl) {
+        return;
+      }
+      this.detachDragListeners();
+      el.addEventListener('dragenter', this.onDragEnter);
+      el.addEventListener('dragover', this.onDragOver);
+      el.addEventListener('drop', this.onDrop);
+      el.addEventListener('dragend', this.stopDragging);
+      this.dragEl = el;
+    },
+    detachDragListeners() {
+      const el = this.dragEl;
+      if (el) {
+        el.removeEventListener('dragenter', this.onDragEnter);
+        el.removeEventListener('dragover', this.onDragOver);
+        el.removeEventListener('drop', this.onDrop);
+        el.removeEventListener('dragend', this.stopDragging);
+        this.dragEl = null;
+      }
+    },
+    hasDraggedFiles(event) {
+      return event && event.dataTransfer && Array.from(event.dataTransfer.types || []).includes('Files');
+    },
+    onDragEnter(event) {
+      // preventDefault here (and on dragover) is what makes the drawer a valid
+      // drop target; the actual show/hide is handled by onDragOver.
+      if (this.hasDraggedFiles(event)) {
+        event.preventDefault();
+      }
+    },
+    onDragOver(event) {
+      if (!this.hasDraggedFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      this.dragging = true;
+      window.clearTimeout(this.dragLeaveTimer);
+      this.dragLeaveTimer = window.setTimeout(this.stopDragging, 150);
+    },
+    onDrop(event) {
+      event.preventDefault();
+      this.stopDragging();
+      const files = event.dataTransfer && event.dataTransfer.files;
+      if (files && files.length) {
+        this.$root.$emit('handle-provided-files', files);
+      }
+    },
+    stopDragging() {
+      window.clearTimeout(this.dragLeaveTimer);
+      this.dragLeaveTimer = null;
+      this.dragging = false;
+    },
+    closeDrawer() {
+      this.$refs.attachmentsAppDrawer.close();
+    },
     startLoading() {
       this.$refs.attachmentsAppDrawer.startLoading();
     },
@@ -299,6 +431,9 @@ export default {
       }
     },
     openAttachmentsAppDrawer() {
+      // Always start with the drag overlay hidden, so no stale state from a
+      // previous session can leave it showing on open.
+      this.stopDragging();
       document.addEventListener('paste', this.onPaste, false);
       this.$root.$on('open-select-from-drives', () => {
         this.creationType = this.$t('attachments.uploaded.from.cloud');
@@ -306,9 +441,14 @@ export default {
       });
       this.$refs.attachmentsAppDrawer.open();
       this.$root.$emit('attachments-app-drawer-opened');
+      // Bind drag & drop once the drawer body is rendered in the DOM.
+      this.$nextTick(() => this.attachDragListeners());
+      window.setTimeout(() => this.attachDragListeners(), 400);
       window.setTimeout(() => this.handleProvidedFiles(), 400);
     },
     closeAttachmentsAppDrawer() {
+      this.stopDragging();
+      this.detachDragListeners();
       this.resetAttachmentsDrawer();
       this.$root.$emit('reset-attachments-upload-input');
       document.removeEventListener('paste', this.onPaste, false);
@@ -590,6 +730,7 @@ export default {
     manageFilesFromDrives(selectedFromDrives, removedFilesFromDrive) {
       if (selectedFromDrives && selectedFromDrives.length || removedFilesFromDrive && removedFilesFromDrive.length) {
         this.attachmentsChanged = true;
+        (selectedFromDrives || []).forEach(file => file.source = 'documents');
         this.newUploadedFiles.push(...selectedFromDrives);
         selectedFromDrives.forEach(file => document.dispatchEvent(new CustomEvent('attachment-added', {detail: {
           attachment: file,
@@ -613,6 +754,7 @@ export default {
     },
     addNewCreatedDocument(file) {
       if (file && file.id) {
+        file.source = 'created';
         document.dispatchEvent(new CustomEvent('attachment-added', {detail: {
           attachment: file,
           entityType: this.entityType,

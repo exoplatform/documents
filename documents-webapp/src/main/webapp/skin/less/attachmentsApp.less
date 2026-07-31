@@ -7,12 +7,12 @@
   }
 
   .attachment-location {
-    background-color: @primaryColorLighterDefault !important;
-    border: 1px solid @primaryDarkerColorGradientEnd !important;
-    color: @primaryDarkerColorGradientEnd !important;
+    background-color: transparent !important;
+    border: 1px solid rgba(0, 0, 0, 0.18) !important;
+    color: @greyColorLighten1Default !important;
 
     .mdi-close-circle {
-      color: @primaryDarkerColorGradientEnd !important;
+      color: @greyColorLighten1Default !important;
     }
   }
 
@@ -28,6 +28,27 @@
 
   .attachmentDestinationPath {
     border-bottom: 1px solid @primaryColor;
+  }
+}
+
+/* Attachments LIST drawer — align its rows with the picker's revamped list.
+   The EXO-88732 revamp styled only .attachmentsAppDrawer (the picker), so
+   .attachmentsListDrawer fell back to raw Vuetify: no right gutter (the info /
+   detach icons hug the panel edge & scrollbar) and align-items:normal (those
+   icons are not vertically centered against the row). Scope the fix to the list
+   drawer so the picker and other consumers are untouched. */
+.attachmentsListDrawer {
+  .uploadedFilesItems {
+    margin-right: 20px;
+  }
+
+  .attachment.d-flex {
+    align-items: center;
+  }
+
+  .attachment .v-list-item__action {
+    margin-top: 0;
+    margin-bottom: 0;
   }
 }
 
@@ -80,6 +101,182 @@
   }
 }
 
+/* ===== Attachments drawer UX revamp (EXO-88732) — level 1 ===== */
+.attachmentsAppDrawer {
+  .attachmentsContent {
+    position: relative;
+    min-height: 100%;
+  }
+
+  /* EMPTY state: hero on its own row, two secondary tiles side by side below. */
+  .attachmentsAddZone {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    > .attachmentsUploadBlock {
+      flex: 1 1 100%;
+    }
+
+    > .attachmentsSelectFromDrive,
+    > .attachmentsCreateDocument {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 45%;
+      min-width: 150px;
+    }
+
+    .attachmentsSelectFromDrive .attachmentsSecondaryTile,
+    .attachmentsCreateDocument .attachmentsSecondaryTile {
+      width: 100%;
+    }
+  }
+
+  /* POPULATED state: compact add bar so the list has room. */
+  .attachmentsAddBar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+
+    > .attachmentsCreateDocument {
+      display: flex;
+      flex-wrap: wrap;
+    }
+  }
+
+  .attachmentsUploadHero {
+    width: 100%;
+    padding: 32px 16px;
+    border: 2px dashed @greyColorLighten1Default;
+    border-radius: 8px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: rgba(0, 0, 0, 0.26);
+      background-color: rgba(0, 0, 0, 0.04);
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .attachmentsUploadHeroTitle {
+      font-size: 16px;
+      color: @textColor;
+    }
+  }
+
+  .attachmentsSecondaryTile {
+    min-height: 92px;
+    padding: 16px 12px;
+    border: 1px solid @greyColorLighten1Default;
+    border-radius: 8px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: rgba(0, 0, 0, 0.26);
+      background-color: rgba(0, 0, 0, 0.04);
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+    }
+  }
+
+  .attachmentsCreateDocumentInput {
+    width: 100%;
+  }
+
+  .attachmentsAddBarBtn {
+    text-transform: none;
+  }
+
+  /* Full-drawer drag-over overlay (self-contained level-1 version). */
+  .attachmentsDropOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border: 2px dashed @primaryColor;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.92);
+    color: @primaryColor;
+    pointer-events: none;
+  }
+
+  /* Richer attachment rows. */
+  .uploadedFileMeta {
+    color: @greyColorLighten1Default;
+
+    .attachmentSourceBadge {
+      background-color: transparent !important;
+      border-color: rgba(0, 0, 0, 0.18) !important;
+      color: @greyColorLighten1Default !important;
+      height: 18px;
+    }
+  }
+
+  .attachmentThumbnail {
+    object-fit: cover;
+  }
+
+  .attachmentProgressLinear {
+    max-width: 220px;
+  }
+
+  .attachmentConflictActions .v-btn {
+    text-transform: none;
+  }
+
+  .removeAllAttachments {
+    text-transform: none;
+  }
+}
+
+/* Level-2 "Add a document" drawer. */
+.createDocumentDrawer {
+  .createDocumentTypes {
+    gap: 12px;
+
+    .createDocumentTypeCard {
+      flex: 1 1 0;
+      min-width: 96px;
+      max-width: 150px;
+      min-height: 100px;
+      padding: 16px 12px;
+      border: 1px solid @greyColorLighten1Default;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+
+      &:hover,
+      &:focus-visible {
+        border-color: rgba(0, 0, 0, 0.26);
+        background-color: rgba(0, 0, 0, 0.04);
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+      }
+
+      /* Selected = a clear primary ring (no filled tint), keeps its look on hover. */
+      &--selected,
+      &--selected:hover,
+      &--selected:focus-visible {
+        border-color: @primaryColor;
+        background-color: transparent;
+        box-shadow: inset 0 0 0 1px @primaryColor;
+      }
+    }
+  }
+
+  .templatesIntro .text-sub-title {
+    color: @greyColorLighten1Default;
+  }
+
+  .attachmentsTemplatesEmpty {
+    color: @greyColorLighten1Default;
+  }
+}
+
 .driveExplorerDrawer {
   .serverFiles {
     .contentHeader {
@@ -101,11 +298,6 @@
           margin: 0 2px;
         }
 
-        .foldersHistory {
-          flex: 1 1 42%;
-          min-width: 0;
-        }
-
         .folders-menu {
           width: fit-content;
         }
@@ -124,22 +316,6 @@
               box-shadow: none;
             }
           }
-
-          .uiIconCloseServerAttachments {
-            font-size: 14px;
-            padding: 10px 15px 13px 15px;
-            border: 1px solid #b3b3b3;
-            border-left: 0;
-            border-radius: 0 5px 5px 0;
-            cursor: pointer;
-
-            &::before {
-              color: #476A9C;
-              content: "\f12a";
-              font-family: 'IONIC-FONT';
-              font-size: 12px;
-            }
-          }
         }
 
         .searchInput {
@@ -148,7 +324,7 @@
           display: none;
         }
 
-        .uiIconFilter, .uiIconAddFolder {
+        .uiIconAddFolder {
           border: 1px solid #b3b3b3;
           padding: 10px;
           border-radius: 15%;
@@ -206,18 +382,8 @@
           }
         }
 
-        .boxOfFolder {
-          background-color: @greyColorDefault;
-          border-radius: 5px;
-        }
-
         .folderSelection {
           width: 20%;
-
-          .boxNewFolder {
-            border-radius: 5px;
-            background-color: @greyColorDefault;
-          }
 
             i {
               font-size: 41px;
@@ -278,48 +444,6 @@
           }
         }
 
-        .fileSelection {
-          width: 20%;
-          margin: 7px;
-          cursor: pointer;
-          height: fit-content;
-
-          .attachment {
-            flex-direction: column;
-            align-items: center;
-
-            .v-avatar {
-              margin-right: 0;
-            }
-
-            .serverFileContent {
-              width: 100%;
-              align-items: center;
-            }
-
-            .serverFileTitle {
-              font-size: 12px;
-            }
-
-            .fileDetails {
-              margin: 0;
-
-              .fileSize {
-                display: none;
-              }
-
-              .fileNameLabel {
-                font-size: 12px;
-                text-align: center;
-              }
-            }
-          }
-
-          &.selected {
-            border-radius: 5px;
-            background-color: #E1E8EE;
-          }
-        }
       }
 
       .categorizedDrives {
@@ -733,4 +857,48 @@
 .make-icons-size();
 .noteAttachmentsIcon {
   color: @greyColorLighten1Default !important;
+}
+
+/* Simple, container-relative rows for the drive explorer: icon far-left and
+   vertically centered, name on top, date on a muted secondary line left-aligned
+   with the name. No vw units (fits the ~380px drawer at any window width), no
+   visibility badge / 3-dots. */
+.driveExplorerDrawer {
+  /* Very simple rows: [checkbox (files)] [icon] [name] on one line, left-aligned
+     and vertically centered. No dividers, no date. */
+  .drive-explorer-list {
+    .drive-explorer-row {
+      padding: 6px 4px;
+      cursor: pointer;
+      justify-content: flex-start;
+      text-align: left;
+
+      &:hover {
+        background-color: #f7f7f7;
+      }
+
+      &.selected-row {
+        background-color: #E1E8EE;
+      }
+
+      /* Match the Documents list row name size (the drawer's inherited default
+         renders smaller than the Documents app list name). */
+      .drive-explorer-row-name {
+        color: @textColor;
+        font-size: 16px;
+      }
+    }
+  }
+
+  /* Header breadcrumb (reused documents-breadcrumb, mobile branch). */
+  .attachments-drive-breadcrumb {
+    min-width: 0;
+  }
+
+  /* Equalize the header action icons: the use-filter funnel reads heavier than
+     the close (x) at the same size, so shrink the funnel (first icon; the close
+     is the last-child) to match its visual weight. */
+  .drawerIcons .v-btn:not(:last-child) .v-icon {
+    font-size: 18px !important;
+  }
 }

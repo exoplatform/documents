@@ -19,6 +19,16 @@
   </portal-skin>
 
   <!-- AttachmentsPortlet skins -->
+  <!-- Reuse the Documents app skin so the reused documents-list-view / cells
+       render exactly like the Documents app (declared before attachmentsApp.css
+       so drawer-specific overrides in attachmentsApp.css win style ties). -->
+  <portlet-skin>
+    <application-name>documents</application-name>
+    <portlet-name>AttachmentApp</portlet-name>
+    <skin-name>Enterprise</skin-name>
+    <css-path>/skin/css/documents.css</css-path>
+    <overwrite>false</overwrite>
+  </portlet-skin>
   <portlet-skin>
     <application-name>documents</application-name>
     <portlet-name>AttachmentApp</portlet-name>
@@ -26,6 +36,49 @@
     <css-path>/skin/css/attachmentsApp.css</css-path>
     <overwrite>true</overwrite>
   </portlet-skin>
+
+  <!-- Reusable Documents folder picker (EXO-88830).
+       Two-part design: a TINY site-wide bootstrap + a lazily-required app module.
+       The bootstrap is loaded on every page through the quick-actions discovery
+       (the top bar's includeExtensions('QuickActionExtension') requires every
+       module whose name contains that suffix), so its single always-on
+       'open-documents-folder-picker' listener is present everywhere. On first use
+       it window.require()s SHARED/DocumentsFolderPickerApp below. -->
+  <module>
+    <name>DocumentsFolderPickerQuickActionExtension</name>
+    <load-group>QuickActionsGrp</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsFolderPicker.bundle.js</path>
+    </script>
+  </module>
+
+  <!-- The picker app itself: mounts the ONE existing folders-only drive explorer
+       (attachments-drive-explorer-drawer) on its own small root. A plain named
+       module (no load-group) so it is dynamically requireable from any page, like
+       the unified-search connector modules. -->
+  <module>
+    <name>DocumentsFolderPickerApp</name>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsFolderPickerApp.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+  </module>
 
   <module>
     <name>DocumentsLeftHeaderExtension</name>
