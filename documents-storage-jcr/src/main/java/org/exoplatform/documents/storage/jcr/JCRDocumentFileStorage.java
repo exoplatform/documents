@@ -54,6 +54,9 @@ import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnect
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
+import org.exoplatform.services.cms.documents.DocumentService;
+import org.exoplatform.services.cms.documents.NewDocumentTemplate;
+import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -145,6 +148,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final BulkStorageActionService            bulkStorageActionService;
 
+  private final DocumentService                     documentService;
+
   private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
 
   private final String                              DEST_PATH                   = "destPath";
@@ -195,7 +200,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 UploadService uploadService,
                                 IdentityRegistry identityRegistry,
                                 ActivityManager activityManager,
-                                BulkStorageActionService bulkStorageActionService) {
+                                BulkStorageActionService bulkStorageActionService,
+                                DocumentService documentService) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.repositoryService = repositoryService;
@@ -206,6 +212,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     this.identityRegistry = identityRegistry;
     this.activityManager = activityManager;
     this.bulkStorageActionService = bulkStorageActionService;
+    this.documentService = documentService;
   }
 
   @Override
@@ -1038,6 +1045,97 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new ObjectAlreadyExistsException(e);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public AbstractNode createDocumentFromTemplate(long ownerId,
+                                                 String folderId,
+                                                 String folderPath,
+                                                 String title,
+                                                 String documentType,
+                                                 Identity aclIdentity) throws IllegalAccessException,
+                                                                       ObjectNotFoundException,
+                                                                       ObjectAlreadyExistsException {
+    if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
+      throw new IllegalArgumentException("document title is not valid");
+    }
+    String extension = StringUtils.isBlank(documentType) ? "" : documentType.trim();
+    if (extension.startsWith(".")) {
+      extension = extension.substring(1);
+    }
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      Node node = null;
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      if (StringUtils.isBlank(folderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        folderId = ((NodeImpl) node).getIdentifier();
+      } else {
+        node = getNodeByIdentifier(session, folderId);
+      }
+      if (StringUtils.isNotBlank(folderPath)) {
+        try {
+          node = node.getNode(java.net.URLDecoder.decode(folderPath, StandardCharsets.UTF_8).replace("%", "%25"));
+        } catch (RepositoryException repositoryException) {
+          throw new ObjectNotFoundException("Folder with path : " + folderPath + " isn't found");
+        }
+      }
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(node, aclIdentity);
+      String canEdit = "canEdit";
+      if (nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue()) {
+        throw new IllegalAccessException("Permission to add document is missing");
+      }
+      // no need to this object later make it eligible to the garbage collactor
+      nodeAccessList = null;
+      // Resolve the template from the installed document editor add-on providers
+      NewDocumentTemplate template = null;
+      List<String> availableExtensions = new ArrayList<>();
+      for (NewDocumentTemplateProvider provider : documentService.getNewDocumentTemplateProviders()) {
+        if (provider == null || provider.getTemplates() == null) {
+          continue;
+        }
+        for (NewDocumentTemplate candidate : provider.getTemplates()) {
+          if (candidate == null || candidate.getExtension() == null) {
+            continue;
+          }
+          availableExtensions.add(candidate.getExtension());
+          // onlyoffice stores extensions with a leading dot (".docx"); the
+          // caller-provided extension is already dot-stripped above, so strip
+          // the candidate's dot too before comparing.
+          if (StringUtils.removeStart(candidate.getExtension(), ".").equalsIgnoreCase(extension)) {
+            template = candidate;
+            break;
+          }
+        }
+        if (template != null) {
+          break;
+        }
+      }
+      if (template == null) {
+        throw new ObjectNotFoundException("No document template found for extension '" + extension
+            + "'. Available template extensions: " + availableExtensions);
+      }
+      Node createdNode = documentService.createDocumentFromTemplate(node, title, template);
+      // defensive save (ecms saves internally, but the parent may still hold pending state)
+      node.save();
+      return toFileNode(identityManager, aclIdentity, createdNode, "", spaceService);
+    } catch (IllegalAccessException exception) {
+      throw new IllegalAccessException(exception.getMessage());
+    } catch (ObjectNotFoundException e) {
+      throw new ObjectNotFoundException(e.getMessage());
+    } catch (javax.jcr.ItemExistsException e) {
+      throw new ObjectAlreadyExistsException("A document named '" + title + "' already exists in the target folder");
+    } catch (Exception e) {
+      throw new IllegalStateException("Error creating document from template in folder '" + folderId + "'", e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
@@ -2643,18 +2741,30 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(nodeId);
-      if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && node.getNode(NodeTypeConstants.JCR_CONTENT) != null) {
-        Node contentNode = node.getNode(NodeTypeConstants.JCR_CONTENT);
-        if (contentNode.hasProperty(NodeTypeConstants.JCR_DATA)) {
-          contentNode.setProperty(NodeTypeConstants.JCR_DATA, newContent);
-          contentNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, Calendar.getInstance());
+      if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+        // Make the file versionable if it isn't yet: otherwise the whole write was
+        // silently skipped and no version was ever created (mirror
+        // ActionThread.createFile which adds mix:versionable on file creation).
+        if (!node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && node.canAddMixin(NodeTypeConstants.MIX_VERSIONABLE)) {
+          node.addMixin(NodeTypeConstants.MIX_VERSIONABLE);
+          node.save();
         }
-        if (node.isNodeType(NodeTypeConstants.EXO_MODIFY)) {
-          node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
-          node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
+        if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+          if (!node.isCheckedOut()) {
+            node.checkout();
+          }
+          Node contentNode = node.getNode(NodeTypeConstants.JCR_CONTENT);
+          if (contentNode.hasProperty(NodeTypeConstants.JCR_DATA)) {
+            contentNode.setProperty(NodeTypeConstants.JCR_DATA, newContent);
+            contentNode.setProperty(NodeTypeConstants.JCR_LAST_MODIFIED, Calendar.getInstance());
+          }
+          if (node.isNodeType(NodeTypeConstants.EXO_MODIFY)) {
+            node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
+            node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
+          }
+          node.save();
+          VersionHistoryUtils.createVersion(node);
         }
-        node.save();
-        VersionHistoryUtils.createVersion(node);
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error while creating new version", e);
