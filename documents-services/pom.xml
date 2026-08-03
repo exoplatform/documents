@@ -45,14 +45,12 @@
     <dependency>
       <groupId>io.meeds.mcp-server</groupId>
       <artifactId>mcp-server-tools</artifactId>
-      <version>7.3.x-SNAPSHOT</version>
       <scope>provided</scope>
     </dependency>
     <!-- AttachmentService, used by attach_document_to_content -->
     <dependency>
       <groupId>org.exoplatform.ecms</groupId>
       <artifactId>ecms-core-services</artifactId>
-      <version>${addon.exo.ecms.version}</version>
       <scope>provided</scope>
     </dependency>
     <!-- NoteService, used by attach_document_to_content (note content type resolution) -->

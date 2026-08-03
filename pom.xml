@@ -29,7 +29,8 @@
   <properties>
     <!-- 3rd party libraries versions -->
     <addon.exo.jcr.version>7.3.x-SNAPSHOT</addon.exo.jcr.version>
-    <!-- ecms provides AttachmentService used by the document MCP tools; not managed by the platform depchain -->
+    <addon.meeds.mcp-server.version>7.3.x-SNAPSHOT</addon.meeds.mcp-server.version>
+    <!-- ecms provides AttachmentService/DocumentService used by the document MCP tools -->
     <addon.exo.ecms.version>7.3.x-SNAPSHOT</addon.exo.ecms.version>
     <net.lingala.zip4j.version>2.11.5</net.lingala.zip4j.version>
     <!-- Sonar properties -->
@@ -46,11 +47,26 @@
         <scope>import</scope>
       </dependency>
 
+      <!-- MCP Server API, used by the document MCP tools exposed to the AI agent. -->
+      <dependency>
+        <groupId>io.meeds.mcp-server</groupId>
+        <artifactId>mcp-server</artifactId>
+        <version>${addon.meeds.mcp-server.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
       <!-- 3rd party libraries artifacts -->
       <dependency>
         <groupId>net.lingala.zip4j</groupId>
         <artifactId>zip4j</artifactId>
         <version>${net.lingala.zip4j.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.exoplatform.ecms</groupId>
+        <artifactId>ecms-core-services</artifactId>
+        <version>${addon.exo.ecms.version}</version>
       </dependency>
 
       <!-- Current project artifacts -->
