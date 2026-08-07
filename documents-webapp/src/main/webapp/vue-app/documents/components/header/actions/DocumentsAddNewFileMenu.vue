@@ -93,7 +93,7 @@
           class="text-body menu-text-color"
           @click="openImportDrawer()">
           <v-list-item-icon class="me-1">
-            <v-icon size="16" class="pe-1">fas fa-upload</v-icon>
+            <v-icon size="16" class="pe-1">far fa-file-archive</v-icon>
           </v-list-item-icon>
           <v-list-item-title
             class="text-body menu-text-color">

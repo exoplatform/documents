@@ -31,6 +31,11 @@ import ActivityAttachmentIcon from './components/activity/ActivityAttachmentIcon
 import FolderTreeViewDrawer from '../documents/components/body/views/FolderTreeViewDrawer.vue';
 import TreeView from '../documents/components/body/views/TreeView.vue';
 import DocumentsBreadcrumb from '../documents/components/body/views/DocumentsBreadcrumb.vue';
+// Reused Documents-app grid card (thumbnail preview + info icon) used to render
+// the "Add a document" drawer Templates section. DocumentsFileEditNameCell is a
+// leaf dependency of the card template (inline rename, never triggered here).
+import DocumentItemCard from '../documents/components/body/views/DocumentItemCard.vue';
+import DocumentsFileEditNameCell from '../documents/components/body/table/cells/DocumentsFileEditNameCell.vue';
 
 const components = {
   'attachments-drawer': AttachmentsDrawer,
@@ -63,6 +68,9 @@ const components = {
   'folder-treeview-drawer': FolderTreeViewDrawer,
   'document-tree-view': TreeView,
   'documents-breadcrumb': DocumentsBreadcrumb,
+  // Reused Documents-app grid card for the create-document drawer Templates section.
+  'documents-item-card': DocumentItemCard,
+  'documents-file-edit-name-cell': DocumentsFileEditNameCell,
 };
 
 for (const key in components) {

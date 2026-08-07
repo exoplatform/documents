@@ -20,8 +20,10 @@
   <!-- Level-2 "Add a document" drawer rendered as a sibling of the level-1
        attachments drawer. Back arrow returns to level-1. Two sections:
        (1) New document = the pre-refactor doc-type picker + inline title input;
-       (2) Templates = a placeholder empty-state, scaffolded for a future
-       templates backend (none exists yet). -->
+       (2) Templates = the documents found in the current drive's "Templates"
+       folder (convention-based), rendered with the reused Documents-app grid
+       card. Clicking a card copies that template into the current target folder
+       and opens it, exactly like blank-create. -->
   <exo-drawer
     ref="createDocumentDrawer"
     class="createDocumentDrawer"
@@ -77,15 +79,84 @@
           <span slot="append" class="text-color mt-1">{{ selectedDocType.extension }}</span>
         </v-text-field>
         <!-- Section 2: Templates. Elegant labelled separator introduces the
-             (currently empty) templates area — scaffolded for a future backend. -->
+             templates area. Always shown: the documents of the current drive's
+             "Templates" folder as reused Documents-app cards, or a neutral
+             placeholder when that folder is absent/empty. -->
         <div class="templatesIntro d-flex align-center my-6">
           <v-divider />
           <span class="mx-4 text-sub-title text-no-wrap">{{ $t('attachments.drawer.templates.intro') }}</span>
           <v-divider />
         </div>
-        <div class="attachmentsTemplatesEmpty d-flex flex-column align-center justify-center text-center py-6">
+        <div
+          v-if="templatesLoading"
+          class="attachmentsTemplatesLoading d-flex justify-center py-6">
+          <v-progress-circular
+            indeterminate
+            color="primary"
+            size="28" />
+        </div>
+        <div
+          v-else-if="templates.length"
+          class="attachmentsTemplatesGrid d-flex flex-column">
+          <!-- Full-width reused Documents-app cards, stacked. click.capture keeps
+               the card's hover info icon opening the info drawer, while a plain
+               click SELECTS the template and reveals an editable name field right
+               under that card (option B: name-first, pre-filled with the
+               template's name). The footer "Create" then creates it with that
+               name. -->
+          <div
+            v-for="template in templates"
+            :key="template.id"
+            class="attachmentsTemplateItem mb-3">
+            <div
+              class="attachmentsTemplateCard clickable"
+              :class="{ 'attachmentsTemplateCard--selected': selectedTemplate && selectedTemplate.id === template.id }"
+              role="button"
+              tabindex="0"
+              :aria-pressed="selectedTemplate && selectedTemplate.id === template.id ? 'true' : 'false'"
+              :aria-label="template.name"
+              @click.capture="onTemplateCardClick($event, template)"
+              @keydown.enter.prevent="selectTemplate(template)"
+              @keydown.space.prevent="selectTemplate(template)">
+              <documents-item-card
+                :file="template"
+                :files="templates"
+                :selected-documents="[]"
+                :show-details="false"
+                width="100%"
+                height="150px"
+                max-height="150px" />
+            </div>
+            <v-text-field
+              v-if="selectedTemplate && selectedTemplate.id === template.id"
+              ref="templateNameInput"
+              v-model="newDocTitleInput"
+              :rules="documentTitleRules"
+              :placeholder="$t('attachment.untitledDocument')"
+              class="attachmentsCreateDocumentInput mt-2"
+              outlined
+              dense
+              autofocus
+              @keyup.enter="submitCreate()">
+              <span slot="append" class="text-color mt-1">{{ activeExtension }}</span>
+            </v-text-field>
+          </div>
+        </div>
+        <div
+          v-else
+          class="attachmentsTemplatesEmpty d-flex flex-column align-center justify-center text-center py-6">
           <v-icon size="36" color="grey">far fa-clone</v-icon>
-          <span class="text-sub-title mt-3">{{ $t('attachments.drawer.templates.empty') }}</span>
+          <span class="text-sub-title mt-3">{{ templatesEmptyLabel }}</span>
+          <!-- Bootstrap: when the Templates folder is missing and the user may
+               create folders in this drive, offer a one-click creation. -->
+          <v-btn
+            v-if="!templatesFolderExists && canCreateTemplatesFolder"
+            class="btn btn-primary mt-4"
+            :loading="creatingTemplatesFolder"
+            @click="createTemplatesFolder()">
+            <v-icon size="16" class="me-2">fas fa-folder-plus</v-icon>
+            {{ $t('attachments.drawer.templates.createFolder') }}
+          </v-btn>
         </div>
       </div>
     </template>
@@ -100,7 +171,7 @@
         <v-btn
           class="btn btn-primary"
           :disabled="createDisabled"
-          @click="createNewDoc()">
+          @click="submitCreate()">
           {{ $t('attachments.drawer.create') }}
         </v-btn>
       </div>
@@ -141,13 +212,29 @@ export default {
     return {
       newDocTitleInput: '',
       selectedDocType: {},
+      // Name-first template create (option B): the currently picked template whose
+      // editable title field is shown right under its card. Mutually exclusive with
+      // a picked blank doc-type.
+      selectedTemplate: null,
       NewDocInputHidden: true,
       extensionApp: 'attachment',
       newDocumentActionExtension: 'new-document-action',
       newDocumentActions: {},
+      // Templates section: documents of the current drive's "Templates" folder.
+      templates: [],
+      templatesLoading: false,
+      templateCreating: false,
+      // Bootstrap state: whether the drive's "Templates" folder exists, its parent
+      // (drive root) id, and whether the current user may create a folder here.
+      templatesFolderExists: false,
+      rootFolderId: null,
+      canCreateTemplatesFolder: false,
+      creatingTemplatesFolder: false,
+      TEMPLATES_FOLDER_NAME: 'Templates',
+      TEMPLATES_LIST_LIMIT: 100,
       MAX_DOCUMENT_TITLE_LENGTH: 510,
       titleRegex: /[<\\>:"/|?*]/,
-      documentTitleRules: [title => !title || title && title.trim().length <= this.MAX_DOCUMENT_TITLE_LENGTH - this.selectedDocType.extension.length || this.newDocTitleMaxLengthLabel,
+      documentTitleRules: [title => !title || title && title.trim().length <= this.MAX_DOCUMENT_TITLE_LENGTH - this.activeExtension.length || this.newDocTitleMaxLengthLabel,
         title => !this.titleRegex.test(title)],
     };
   },
@@ -155,18 +242,30 @@ export default {
     cleanedNewDocumentTitle() {
       return this.newDocTitleInput && this.newDocTitleInput.trim();
     },
+    // Extension of the current create target: the picked template's own extension
+    // in name-first template mode, else the picked blank doc-type's extension.
+    templateExtension() {
+      const name = this.selectedTemplate && this.selectedTemplate.name || '';
+      const dot = name.lastIndexOf('.');
+      return dot > -1 ? name.substring(dot) : '';
+    },
+    activeExtension() {
+      return (this.selectedTemplate ? this.templateExtension : this.selectedDocType.extension) || '';
+    },
     newDocumentTitle() {
-      return this.cleanedNewDocumentTitle && `${this.cleanedNewDocumentTitle}${this.selectedDocType.extension}` || this.untitledNewDoc;
+      return this.cleanedNewDocumentTitle && `${this.cleanedNewDocumentTitle}${this.activeExtension}` || this.untitledNewDoc;
     },
     documentTitleMaxLengthReached() {
       return this.newDocumentTitle && this.newDocumentTitle.length > this.MAX_DOCUMENT_TITLE_LENGTH;
     },
     createDisabled() {
-      // Enabled only once a doc type is picked and the (optional) title is valid.
-      return this.NewDocInputHidden || this.documentTitleMaxLengthReached || this.titleRegex.test(this.newDocumentTitle);
+      // Enabled once either a blank doc type OR a template is picked and the
+      // (optional) title is valid.
+      const nothingPicked = this.NewDocInputHidden && !this.selectedTemplate;
+      return nothingPicked || this.documentTitleMaxLengthReached || this.titleRegex.test(this.newDocumentTitle);
     },
     untitledNewDoc() {
-      return `${this.$t('attachment.untitledDocument')}${this.selectedDocType.extension}`;
+      return `${this.$t('attachment.untitledDocument')}${this.activeExtension}`;
     },
     maxFileCountErrorLabel() {
       return this.$t('attachments.drawer.maxFileCount.error').replace('{0}', `<b> ${this.maxFilesCount} </b>`);
@@ -180,6 +279,49 @@ export default {
     newDocTitleExistLabel() {
       return this.$t('attachment.document.title.exist');
     },
+    // Identity id of the current drive owner (space or user). Kept in sync by the
+    // host root ($root.ownerId) in both the attachment composer and the Drive app.
+    templatesOwnerId() {
+      return this.currentDrive && this.currentDrive.ownerId || this.$root.ownerId;
+    },
+    // Space vs personal context, for the placeholder word-swap. Prefer the drive
+    // signal (drive name / spaceId), fall back to the portal space context.
+    isSpaceContext() {
+      const driveName = this.currentDrive && this.currentDrive.name || '';
+      if (driveName) {
+        return driveName.startsWith('.spaces.') || !!(this.currentDrive && this.currentDrive.spaceId);
+      }
+      return !!eXo.env.portal.spaceId;
+    },
+    templatesEmptyLabel() {
+      // Folder exists but has no (readable) files yet.
+      if (this.templatesFolderExists) {
+        return this.$t('attachments.drawer.templates.empty.folderEmpty');
+      }
+      // Folder missing but the user can bootstrap it (a create button is shown).
+      if (this.canCreateTemplatesFolder) {
+        return this.$t('attachments.drawer.templates.empty.canCreate');
+      }
+      // Folder missing and the user cannot create it: neutral, context-aware text.
+      return this.isSpaceContext
+        ? this.$t('attachments.drawer.templates.empty.space')
+        : this.$t('attachments.drawer.templates.empty.personal');
+    },
+    // Drive-root-relative path of the current target folder (blank-create target).
+    // '' targets the drive root. Defensive against a path passed as an object.
+    destinationRelativePath() {
+      let path = this.pathDestinationFolder;
+      if (path && typeof path === 'object') {
+        path = path.path || '';
+      }
+      if (!path || path === '/') {
+        return '';
+      }
+      if (path.startsWith('/')) {
+        path = path.substring(1);
+      }
+      return path;
+    },
   },
   created() {
     this.$root.$on(`${this.extensionApp}-${this.newDocumentActionExtension}-updated`, this.refreshNewDocumentsActions);
@@ -189,6 +331,7 @@ export default {
   methods: {
     open() {
       this.resetNewDocInput();
+      this.loadTemplates();
       this.$refs.createDocumentDrawer.open();
     },
     close() {
@@ -236,16 +379,63 @@ export default {
         return;
       }
       this.$refs.newDocInput.focus();
+      // A blank doc-type and a template are mutually exclusive selections.
+      this.selectedTemplate = null;
       this.NewDocInputHidden = false;
       this.selectedDocType = doc;
+      this.newDocTitleInput = '';
+    },
+    // Name-first template create (option B): picking a template card selects it and
+    // reveals an editable title field right under that card, pre-filled with the
+    // template's base name. The footer "Create" then creates it with that name.
+    selectTemplate(template) {
+      // Same max-files guard as the blank-create path (attachment host only).
+      if (this.mode !== 'drive' && this.attachments.length >= this.maxFilesCount) {
+        document.dispatchEvent(new CustomEvent('alert-message', { detail: {
+          useHtml: true,
+          alertType: 'error',
+          alertMessage: this.maxFileCountErrorLabel,
+        } }));
+        return;
+      }
+      // A template and a blank doc-type are mutually exclusive selections.
+      this.selectedDocType = {};
+      this.NewDocInputHidden = true;
+      this.selectedTemplate = template;
+      this.newDocTitleInput = this.templateBaseName(template);
+      this.$nextTick(() => {
+        const input = this.$refs.templateNameInput;
+        const field = Array.isArray(input) ? input[0] : input;
+        if (field && field.focus) {
+          field.focus();
+        }
+      });
+    },
+    // Base name (without extension) of a template, used to pre-fill the name field.
+    templateBaseName(template) {
+      const name = template && template.name || '';
+      const dot = name.lastIndexOf('.');
+      return dot > -1 ? name.substring(0, dot) : name;
+    },
+    // Footer "Create": create from the picked template (name-first) or a blank doc.
+    submitCreate() {
+      if (this.selectedTemplate) {
+        this.createFromTemplate(this.selectedTemplate);
+      } else {
+        this.createNewDoc();
+      }
     },
     resetNewDocInput() {
       this.NewDocInputHidden = true;
       this.newDocTitleInput = '';
-      // Clear the picked type too, so no card keeps its selected ring on reopen.
+      // Clear the picked type/template too, so nothing keeps its selected ring on reopen.
       this.selectedDocType = {};
+      this.selectedTemplate = null;
     },
-    manageNewCreatedDocument(doc) {
+    // openInEditor: blank-create always yields an editable office document, so it
+    // defaults to true. Template create passes false for non-editable source
+    // types (PDF, image, ...) which the OnlyOffice editor cannot open.
+    manageNewCreatedDocument(doc, openInEditor = true) {
       if (doc && doc.id) {
         doc.drive = this.currentDrive.title;
         doc.date = doc.created;
@@ -259,11 +449,232 @@ export default {
         }
         this.$root.$emit('alert-message', this.$t('attachments.upload.success'), 'success');
         this.resetNewDocInput();
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${doc.id}&backTo=${window.location.pathname}`, '_blank');
+        if (openInEditor) {
+          window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${doc.id}&backTo=${window.location.pathname}`, '_blank');
+        }
         // Return to the level-1 attachments drawer (attachment host) or simply
         // close the standalone drawer (drive host).
         this.close();
       }
+    },
+    // Loads the documents of the current drive's "Templates" folder (convention).
+    // Resolves the drive root (its id + the current user's edit permission, to gate
+    // the bootstrap button), finds the child folder named "Templates", then lists
+    // its files. Symlink templates (references to global/other-space template files)
+    // are kept only when their target resolved for the current user; unreadable
+    // ones are filtered out. Each file is enriched with the thumbnail / download /
+    // icon fields the reused Documents-app card expects.
+    loadTemplates() {
+      this.templates = [];
+      this.templatesFolderExists = false;
+      this.rootFolderId = null;
+      this.canCreateTemplatesFolder = false;
+      const ownerId = this.templatesOwnerId;
+      if (!ownerId) {
+        return;
+      }
+      this.templatesLoading = true;
+      const rootCrumbPromise = this.$documentFileService.getBreadCrumbs(null, ownerId, '')
+        .then(crumbs => (crumbs && crumbs.length ? crumbs[crumbs.length - 1] : null))
+        .catch(() => null);
+      Promise.all([
+        rootCrumbPromise,
+        this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER' }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
+      ])
+        .then(([rootCrumb, rootItems]) => {
+          this.rootFolderId = rootCrumb && rootCrumb.id || null;
+          this.canCreateTemplatesFolder = !!(rootCrumb && rootCrumb.accessList && rootCrumb.accessList.canEdit);
+          const templatesFolder = (rootItems || []).find(item => item.folder && item.name === this.TEMPLATES_FOLDER_NAME);
+          this.templatesFolderExists = !!templatesFolder;
+          if (!templatesFolder) {
+            return [];
+          }
+          return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: templatesFolder.id }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator');
+        })
+        .then(files => {
+          this.templates = (files || []).filter(file => !file.folder && this.isReadableTemplate(file)).map(file => this.enrichTemplate(file));
+        })
+        .catch(() => {
+          this.templates = [];
+        })
+        .finally(() => {
+          this.templatesLoading = false;
+        });
+    },
+    // Creates the drive's "Templates" folder (bootstrap). Only reachable when the
+    // user has edit permission on the drive root. Reloads the list afterwards so
+    // the empty-folder state (with an upload hint) is shown.
+    createTemplatesFolder() {
+      const ownerId = this.templatesOwnerId;
+      if (!ownerId || !this.rootFolderId || this.creatingTemplatesFolder) {
+        return;
+      }
+      this.creatingTemplatesFolder = true;
+      this.$documentFileService.createFolder(ownerId, this.rootFolderId, '', this.TEMPLATES_FOLDER_NAME)
+        .then(() => {
+          this.$root.$emit('alert-message', this.$t('attachments.drawer.templates.createFolder.success'), 'success');
+          this.loadTemplates();
+        })
+        .catch(() => {
+          this.$root.$emit('alert-message', this.$t('attachments.drawer.templates.createFolder.error'), 'error');
+        })
+        .finally(() => {
+          this.creatingTemplatesFolder = false;
+        });
+    },
+    // A template is a symlink when it carries a sourceID (the referenced file's id).
+    // Symlinks to global/other-space template files are supported, but only when
+    // the target actually resolved for the current user — an unreadable target
+    // comes back without file characteristics (no mime type), so we drop it.
+    isReadableTemplate(file) {
+      if (!file.id) {
+        return false;
+      }
+      if (!file.sourceID) {
+        return true;
+      }
+      return !!(file.mimeType || file.mimetype);
+    },
+    // Delegates to the same centralized editability check DocumentsCardsView /
+    // DocumentsFolderCardsView use ($root.isFileEditable, backed by the
+    // 'supported-document-types' extension point) instead of a local regex —
+    // it already covers every MS Office and LibreOffice/ODF type the deployed
+    // OnlyOffice editor actually supports. Any other type (PDF, image, ...) is
+    // still copied and added/refreshed but NOT opened in the editor, which
+    // would otherwise error.
+    isTemplateEditable(template) {
+      return this.$root.isFileEditable(template);
+    },
+    // Mirrors DocumentsCardsView's file enrichment so the reused card resolves
+    // its thumbnail / download URL / file icon from the $root shim.
+    enrichTemplate(file) {
+      file.image = this.$root.getImageUrl(file);
+      file.downloadUrl = this.$root.getDownloadUrl(file);
+      file.icon = this.$root.getFileIcon(file);
+      return file;
+    },
+    // click.capture handler on the template card wrapper. Lets the card's own
+    // info icon open the shared document-info-drawer; any other click on the
+    // card selects that template and reveals its name field (option B).
+    onTemplateCardClick(event, template) {
+      if (event.target.closest('#attachment-info')) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.selectTemplate(template);
+    },
+    // Copies the template node into the current target folder (JCR duplicate),
+    // then reuses the exact blank-create post-processing (attachment list add /
+    // Drive refresh + OnlyOffice open).
+    createFromTemplate(template) {
+      if (this.templateCreating) {
+        return;
+      }
+      // Same max-files guard as the blank-create path (attachment host only).
+      if (this.mode !== 'drive' && this.attachments.length >= this.maxFilesCount) {
+        document.dispatchEvent(new CustomEvent('alert-message', { detail: {
+          useHtml: true,
+          alertType: 'error',
+          alertMessage: this.maxFileCountErrorLabel,
+        } }));
+        return;
+      }
+      const ownerId = this.templatesOwnerId;
+      // The user-provided name (option B), captured before the async chain.
+      const targetName = this.newDocumentTitle;
+      // When the template is a symlink to a global/other-space file, copy its
+      // target (sourceID) so the new document holds the real content, not a link.
+      const copySourceId = template.sourceID || template.id;
+      this.templateCreating = true;
+      this.$root.$emit('start-loading-attachment-drawer');
+      this.resolveDestinationFolder(ownerId)
+        .then(dest => {
+          if (!dest || !dest.id) {
+            throw new Error('Could not resolve the destination folder');
+          }
+          // Snapshot the destination's current file ids so we can identify the copy
+          // by id-diff afterwards. The copy endpoint returns the destination folder
+          // (not the new file), and matching by name is unreliable — the backend
+          // de-duplicates a clashing name to "name (1)", which would make a name
+          // match pick the WRONG node (e.g. the source template itself). The one
+          // new id in the folder is unambiguously the copy.
+          return this.listFolderFileIds(ownerId, dest.id).then(beforeIds => ({ dest, beforeIds }));
+        })
+        .then(({ dest, beforeIds }) => {
+          // Primary path: copy the template into the target folder, then find the
+          // node whose id is new. If the copy fails because a same-named file
+          // already exists there (JCR "same name sibling" 500), duplicate in
+          // place in the Templates folder instead (dedupe-safe there), then move
+          // that copy into the actual destination with conflictAction 'keepBoth' —
+          // the same JCR-side auto-dedupe ("(n)" appended to both name and title)
+          // used by drag-and-drop moves elsewhere in the app — so a clash there is
+          // deduped rather than leaving the file stranded in Templates.
+          return this.$documentFileService.duplicateDocument(copySourceId, dest.id, ownerId)
+            .then(() => this.findNewCopy(ownerId, dest.id, beforeIds))
+            .catch(() => this.$documentFileService.duplicateDocument(copySourceId, null, ownerId)
+              .then(newDoc => this.$documentFileService.moveDocument(ownerId, newDoc.id, dest.path, 'keepBoth')
+                .then(() => newDoc)));
+        })
+        .then(newDoc => {
+          if (!newDoc || !newDoc.id) {
+            throw new Error('Error creating document from template');
+          }
+          // Apply the user-provided name (option B). Keep the copy as-is if the
+          // rename clashes with an existing file (the user can rename in the editor).
+          if (targetName && newDoc.name !== targetName) {
+            return this.$documentFileService.renameDocument(ownerId, newDoc.id, targetName)
+              .then(() => {
+                newDoc.name = targetName;
+                return newDoc;
+              })
+              .catch(() => newDoc);
+          }
+          return newDoc;
+        })
+        .then(newDoc => {
+          newDoc.title = newDoc.name || targetName;
+          newDoc.created = newDoc.created || newDoc.createdDate;
+          // Only open OnlyOffice for editable office types; PDFs/images copied
+          // from a template are not editable and would error in the editor.
+          this.manageNewCreatedDocument(newDoc, this.isTemplateEditable(template));
+        })
+        .catch(() => {
+          this.$root.$emit('alert-message', this.newDocCreationFailedLabel, 'error');
+          this.$root.$emit('end-loading-attachment-drawer');
+        })
+        .finally(() => {
+          this.templateCreating = false;
+        });
+    },
+    // Resolves the current target folder (its JCR node id and absolute path) from
+    // the drive-root-relative path via the breadcrumb endpoint. The last crumb is
+    // the target folder; at the drive root (empty path) it is the drive root node.
+    // The absolute path is used as the move destination.
+    resolveDestinationFolder(ownerId) {
+      return this.$documentFileService.getBreadCrumbs(null, ownerId, this.destinationRelativePath)
+        .then(crumbs => {
+          const last = crumbs && crumbs.length ? crumbs[crumbs.length - 1] : null;
+          return last ? { id: last.id, path: last.path } : null;
+        });
+    },
+    // Set of the current (non-folder) file ids in a folder, used to snapshot state
+    // before a copy so the new node can be identified by id-diff afterwards.
+    listFolderFileIds(ownerId, folderId) {
+      return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: folderId }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
+        .then(items => new Set((items || []).filter(item => !item.folder).map(item => item.id)))
+        .catch(() => new Set());
+    },
+    // Locates the copy just created by the backend copy: the one file in the
+    // destination folder whose id was not present before the copy. Matching by id
+    // (not name) is robust against the backend de-duplicating a clashing name.
+    findNewCopy(ownerId, destinationFolderId, beforeIds) {
+      return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: destinationFolderId }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
+        .then(items => {
+          const created = (items || []).filter(item => !item.folder && !beforeIds.has(item.id));
+          const byNewest = (a, b) => Number(b.modifiedDate || b.created || b.createdDate || 0) - Number(a.modifiedDate || a.created || a.createdDate || 0);
+          return created.sort(byNewest)[0] || null;
+        });
     }
   }
 };
