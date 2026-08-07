@@ -535,14 +535,15 @@ export default {
       }
       return !!(file.mimeType || file.mimetype);
     },
-    // True only for the office document types that the blank-create flow itself
-    // produces (Word / Spreadsheet / Presentation, incl. legacy and ODF). Those
-    // open in the OnlyOffice editor exactly like a blank create. Any other type
-    // (PDF, image, ...) is still copied and added/refreshed but NOT opened in the
-    // editor, which would otherwise error.
+    // Delegates to the same centralized editability check DocumentsCardsView /
+    // DocumentsFolderCardsView use ($root.isFileEditable, backed by the
+    // 'supported-document-types' extension point) instead of a local regex —
+    // it already covers every MS Office and LibreOffice/ODF type the deployed
+    // OnlyOffice editor actually supports. Any other type (PDF, image, ...) is
+    // still copied and added/refreshed but NOT opened in the editor, which
+    // would otherwise error.
     isTemplateEditable(template) {
-      const mimeType = template && (template.mimeType || template.mimetype) || '';
-      return /(officedocument|opendocument|msword|ms-word|ms-excel|ms-powerpoint)/i.test(mimeType);
+      return this.$root.isFileEditable(template);
     },
     // Mirrors DocumentsCardsView's file enrichment so the reused card resolves
     // its thumbnail / download URL / file icon from the $root shim.
@@ -603,12 +604,17 @@ export default {
         .then(({ dest, beforeIds }) => {
           // Primary path: copy the template into the target folder, then find the
           // node whose id is new. If the copy fails because a same-named file
-          // already exists there (JCR "same name sibling" 500), fall back to an
-          // in-place duplicate, which is dedupe-safe and returns the new node
-          // directly (it lands in the Templates folder rather than 500-ing).
+          // already exists there (JCR "same name sibling" 500), duplicate in
+          // place in the Templates folder instead (dedupe-safe there), then move
+          // that copy into the actual destination with conflictAction 'keepBoth' —
+          // the same JCR-side auto-dedupe ("(n)" appended to both name and title)
+          // used by drag-and-drop moves elsewhere in the app — so a clash there is
+          // deduped rather than leaving the file stranded in Templates.
           return this.$documentFileService.duplicateDocument(copySourceId, dest.id, ownerId)
             .then(() => this.findNewCopy(ownerId, dest.id, beforeIds))
-            .catch(() => this.$documentFileService.duplicateDocument(copySourceId, null, ownerId));
+            .catch(() => this.$documentFileService.duplicateDocument(copySourceId, null, ownerId)
+              .then(newDoc => this.$documentFileService.moveDocument(ownerId, newDoc.id, dest.path, 'keepBoth')
+                .then(() => newDoc)));
         })
         .then(newDoc => {
           if (!newDoc || !newDoc.id) {
