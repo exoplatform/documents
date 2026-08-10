@@ -34,7 +34,7 @@
               {{ $t('documents.label.upload.zip.choice') }}
             </v-subheader>
           </div>
-          <div class="caption font-weight-light grey--text px-4 mt-n5">
+          <div class="caption font-weight-light text-light-color px-4 mt-n5">
             {{ $t('documents.label.zip.attachments.upload.description') }}
           </div>
           <documents-zip-upload-input
@@ -50,7 +50,7 @@
               {{ $t('documents.label.upload.zip.rules') }}
             </v-subheader>
           </div>
-          <div class="caption font-weight-light grey--text px-4 mt-n5">
+          <div class="caption font-weight-light text-light-color px-4 mt-n5">
             {{ $t('documents.label.upload.zip.rules.description') }}
           </div>
           <div class="radio-group-container ps-3">
