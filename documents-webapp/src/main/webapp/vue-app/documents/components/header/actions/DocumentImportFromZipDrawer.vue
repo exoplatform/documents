@@ -30,7 +30,7 @@
       <div v-if="!importing">
         <template>
           <div class="d-flex align-center px-4 py-2">
-            <v-subheader class="text-header-title pl-0 d-flex">
+            <v-subheader class="text-title pl-0 d-flex">
               {{ $t('documents.label.upload.zip.choice') }}
             </v-subheader>
           </div>
@@ -46,7 +46,7 @@
             :attachments="value" />
  
           <div class="d-flex align-center px-4 py-2">
-            <v-subheader class="text-header-title pl-0 d-flex">
+            <v-subheader class="text-title pl-0 d-flex">
               {{ $t('documents.label.upload.zip.rules') }}
             </v-subheader>
           </div>
