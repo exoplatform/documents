@@ -46,6 +46,7 @@
               </span>*
             </v-label>
             <v-text-field
+              id="documentPassword"
               v-model="password"
               :title="$t('documents.public.link.new.password.message')"
               :placeholder="$t('documents.public.access.password.placeholder')"
@@ -74,6 +75,7 @@
               </span>*
             </v-label>
             <v-text-field
+              id="confirmDocumentPassword"
               v-model="confirmPassword"
               :title="$t('documents.public.link.confirm.password.message')"
               :placeholder="$t('documents.public.link.confirm.password.placeholder')"
@@ -93,6 +95,7 @@
         <div class="d-flex flex-column ms-n11">
           <v-switch
             v-model="hasPassword"
+            :aria-label="$t('documents.public.access.options.password.label')"
             class="mt-0 me-1 mt-n1" />
         </div>
       </div>
@@ -102,6 +105,7 @@
         <div class="d-flex flex-column full-width">
           <input
             :type="currentPasswordType"
+            :aria-label="$t('documents.public.access.options.password.label')"
             disabled
             readonly
             class="ps-0 mt-auto mb-auto elevation-0"
@@ -189,6 +193,7 @@
                     v-model="dateFormatted"
                     v-bind="attrs"
                     v-on="on"
+                    :aria-label="$t('documents.public.access.options.expirationDate.label')"
                     :placeholder="$t('documents.public.access.choose.date.placeholder')"
                     class="pt-0 ps-8 pe-10 border-box-sizing"
                     append-icon="mdi-calendar"
@@ -220,6 +225,7 @@
                 <div class="d-flex flex-column">
                   <v-text-field
                     v-model="delayTypeTimes"
+                    :aria-label="$t('documents.public.access.delay.date.label')"
                     class="pt-0 me-5 ms-8 border-box-sizing"
                     outlined
                     dense
@@ -230,6 +236,7 @@
                   <v-select
                     v-model="delayType"
                     ref="delayType"
+                    :aria-label="$t('documents.public.access.delay.date.label')"
                     :items="delayTypeItems"
                     class="pt-0 me-10 border-box-sizing"
                     item-text="label"
@@ -245,12 +252,13 @@
         <div class="d-flex flex-column ms-n11">
           <v-switch
             v-model="showExpirationDateInput"
+            :aria-label="$t('documents.public.access.options.expirationDate.label')"
             class="mt-0 me-1 mt-n1" />
         </div>
       </div>
       <div class="d-flex flex-row mt-3">
         <div class="d-flex flex-column full-width pb-4">
-          <v-label for="publicAccess">
+          <v-label>
             <span class="text-body mr-6">
               {{ $t('document.visibility.publicAccess.message') }}
             </span>
