@@ -53,10 +53,11 @@
               link-style />
           </div>
           <div class="mt-4">
-            <v-label for="visibility">
+            <v-label for="documentVisibilityChoice">
               <span class="text-body font-weight-bold">{{ $t('documents.label.who.can.view') }}</span>
             </v-label>
             <v-select
+              id="documentVisibilityChoice"
               v-model="visibilityChoice"
               :items="visibilityLabel"
               item-text="text"
@@ -69,15 +70,14 @@
             </p>
           </div>
           <div v-if="showEditSwitch" class="mt-4">
-            <v-label for="edit">
-              <span class="text-body font-weight-bold">{{ $t('documents.label.who.can.edit') }}</span>
-            </v-label>
+            <span class="v-label text-body font-weight-bold">{{ $t('documents.label.who.can.edit') }}</span>
             <div class="d-flex flex-row align-center mt-2">
-              <v-label>
+              <v-label for="documentAllMembersCanEdit">
                 <span class="text-body mr-6">{{ $t('documents.label.visibility.allowEveryone') }}</span>
               </v-label>
               <v-spacer />
               <v-switch
+                id="documentAllMembersCanEdit"
                 v-model="allMembersCanEdit"
                 class="mt-0 me-1" />
             </div>
@@ -123,11 +123,12 @@
         <v-divider dark class="mx-4" />
         <div class="pa-4">
           <div class="d-flex">
-            <p class="text-body font-weight-bold">
-              {{ $t('documents.label.public.link.header') }}
-            </p>
+            <v-label for="documentPublicLinkEnabled">
+              <span class="text-body font-weight-bold">{{ $t('documents.label.public.link.header') }}</span>
+            </v-label>
             <v-spacer />
             <v-switch
+              id="documentPublicLinkEnabled"
               v-model="publicLinkEnabled"
               class="mt-0 me-1" />
           </div>
