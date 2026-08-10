@@ -30,10 +30,11 @@
         icon
         v-bind="attrs"
         v-on="on"
+        :title="$t('documents.tooltip.close.tree')"
+        :aria-label="$t('documents.tooltip.close.tree')"
         @click.stop.prevent="$root.$emit('tree-view-expend', false)">
         <img
           alt=""
-          :title="$t('documents.tooltip.close.tree')"
           src="/social/images/sidebar.svg"
           class="icon-default-color mb-1"
           height="20px"
