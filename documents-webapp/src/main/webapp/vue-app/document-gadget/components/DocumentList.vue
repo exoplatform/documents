@@ -22,8 +22,8 @@
         extra-class="application-body">
         <template #title>
           <span
-            class="widget-text-header text-truncate">
-            {{ headerTitle }}
+            class="text-header">
+            <span class="text-truncate">{{ headerTitle }}</span>
           </span>
         </template>
         <template #action>
