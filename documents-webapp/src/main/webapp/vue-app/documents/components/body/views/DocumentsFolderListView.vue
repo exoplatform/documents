@@ -420,20 +420,13 @@ export default {
         return items;
       }
       let sorted = items;
-      const accentedExp = /[À-ÖØ-öø-ÿ]/;
       if (sortBy[1] === 'name') {
         const folders = items.filter((item) => item.folder);
         const files = items.filter((item) => !item.folder);
-        const nonAccentedFolders = folders.filter((item) => !accentedExp.test(item.name[0]));
-        const accentedFolders = folders.filter((item) => accentedExp.test(item.name[0]));
-        const nonAccentedFiles = files.filter((item) => !accentedExp.test(item.name[0]));
-        const accentedFiles = files.filter((item) => accentedExp.test(item.name[0]));
         const collator = new Intl.Collator(eXo.env.portal.language, {numeric: true, sensitivity: 'base'});
-        nonAccentedFolders.sort((a, b) =>collator.compare(a.name, b.name));
-        accentedFolders.sort((a, b) =>collator.compare(a.name, b.name));
-        nonAccentedFiles.sort((a, b) =>collator.compare(a.name, b.name));
-        accentedFiles.sort((a, b) =>collator.compare(a.name, b.name));
-        sorted =  [...nonAccentedFolders,...accentedFolders, ...nonAccentedFiles, ...accentedFiles];
+        folders.sort((a, b) => collator.compare(a.name, b.name));
+        files.sort((a, b) => collator.compare(a.name, b.name));
+        sorted = [...folders, ...files];
         if (isDesc[1]) {
           return sorted.reverse();
         }
