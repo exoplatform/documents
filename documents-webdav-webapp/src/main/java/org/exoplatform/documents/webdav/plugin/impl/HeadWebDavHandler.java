@@ -28,9 +28,11 @@ import javax.xml.namespace.QName;
 
 import org.apache.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.util.MimeTypeUtils;
 
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
+import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -61,10 +63,22 @@ public class HeadWebDavHandler extends WebDavHttpMethodPlugin {
                                                     0,
                                                     getBaseUrl(httpRequest),
                                                     httpRequest.getRemoteUser());
-    httpResponse.setHeader(HttpHeaders.LAST_MODIFIED, resource.getProperty(GETLASTMODIFIED).getValue());
-    httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, resource.getProperty(GETCONTENTTYPE).getValue());
-    httpResponse.setHeader(HttpHeaders.CONTENT_LENGTH, resource.getProperty(GETCONTENTLENGTH).getValue());
-    httpResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
+    setHeaderIfPresent(httpResponse, HttpHeaders.LAST_MODIFIED, resource.getProperty(GETLASTMODIFIED));
+    if (resource.isFile()) {
+      // A file has an actual content: mirror the type/length GET would return for it
+      setHeaderIfPresent(httpResponse, HttpHeaders.CONTENT_TYPE, resource.getProperty(GETCONTENTTYPE));
+      setHeaderIfPresent(httpResponse, HttpHeaders.CONTENT_LENGTH, resource.getProperty(GETCONTENTLENGTH));
+    } else {
+      // A folder has no content-type/content-length of its own: GET renders it as an HTML listing
+      httpResponse.setHeader(HttpHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_HTML_VALUE);
+    }
+    httpResponse.setStatus(HttpServletResponse.SC_OK);
+  }
+
+  private void setHeaderIfPresent(HttpServletResponse httpResponse, String header, WebDavItemProperty property) {
+    if (property != null) {
+      httpResponse.setHeader(header, property.getValue());
+    }
   }
 
 }
