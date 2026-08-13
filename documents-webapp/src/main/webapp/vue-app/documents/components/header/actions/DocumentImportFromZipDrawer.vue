@@ -103,104 +103,152 @@
               <v-list-item-content>
                 <v-list-item-title>
                   <div class="d-flex flex-nowrap pa-1">
-                    <v-icon
-                      v-if="showCreatedFiles"
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-up pa-1 chevron-icon" 
-                      @click="showCreatedFiles=!showCreatedFiles" />
-                    <v-icon
-                      v-else
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-down pa-1 chevron-icon"
-                      @click="showCreatedFiles=!showCreatedFiles" />
+                    <v-btn
+                      icon
+                      x-small
+                      :aria-expanded="showCreatedFiles ? 'true' : 'false'"
+                      :aria-label="getToggleSectionLabel(showCreatedFiles, $t('documents.label.upload.zip.more.created'))"
+                      :title="getToggleSectionLabel(showCreatedFiles, $t('documents.label.upload.zip.more.created'))"
+                      @click="showCreatedFiles=!showCreatedFiles">
+                      <v-icon
+                        v-if="showCreatedFiles"
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-up chevron-icon" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-down chevron-icon" />
+                    </v-btn>
                     <span class="px-2 my-auto">{{ importData.createdFiles.length }} {{ $t('documents.label.upload.zip.more.created') }}</span>
                     <v-divider class="my-auto" />
                   </div>
                 </v-list-item-title>
                 <v-list-item-subtitle
                   v-if="showCreatedFiles"
-                  v-sanitized-html="importData.createdFiles.join('<br>')"
-                  class="ps-6" />
+                  tag="ul"
+                  class="ps-6 mb-0">
+                  <li
+                    v-for="(file, index) in importData.createdFiles"
+                    :key="index">
+                    {{ file }}
+                  </li>
+                </v-list-item-subtitle>
               </v-list-item-content>
-            </v-list-item> 
+            </v-list-item>
             <v-list-item>
               <v-list-item-content>
                 <v-list-item-title>
                   <div class="d-flex flex-nowrap pa-1">
-                    <v-icon
-                      v-if="showIgnoredFiles"
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-up pa-1 chevron-icon" 
-                      @click="showIgnoredFiles=!showIgnoredFiles" />
-                    <v-icon
-                      v-else
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-down pa-1 chevron-icon"
-                      @click="showIgnoredFiles=!showIgnoredFiles" />
+                    <v-btn
+                      icon
+                      x-small
+                      :aria-expanded="showIgnoredFiles ? 'true' : 'false'"
+                      :aria-label="getToggleSectionLabel(showIgnoredFiles, $t('documents.label.upload.zip.more.ignored'))"
+                      :title="getToggleSectionLabel(showIgnoredFiles, $t('documents.label.upload.zip.more.ignored'))"
+                      @click="showIgnoredFiles=!showIgnoredFiles">
+                      <v-icon
+                        v-if="showIgnoredFiles"
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-up chevron-icon" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-down chevron-icon" />
+                    </v-btn>
                     <span class="px-2 my-auto">{{ importData.ignoredFiles.length }} {{ $t('documents.label.upload.zip.more.ignored') }}</span>
                     <v-divider class="my-auto" />
                   </div>
                 </v-list-item-title>
                 <v-list-item-subtitle
                   v-if="showIgnoredFiles"
-                  v-sanitized-html="importData.ignoredFiles.join('<br>')"
-                  class="ps-6" />
+                  tag="ul"
+                  class="ps-6 mb-0">
+                  <li
+                    v-for="(file, index) in importData.ignoredFiles"
+                    :key="index">
+                    {{ file }}
+                  </li>
+                </v-list-item-subtitle>
               </v-list-item-content>
-            </v-list-item>  
+            </v-list-item>
             <v-list-item>
               <v-list-item-content>
                 <v-list-item-title>
                   <div class="d-flex flex-nowrap pa-1">
-                    <v-icon
-                      v-if="showDuplicatedFiles"
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-up pa-1 chevron-icon" 
-                      @click="showDuplicatedFiles=!showDuplicatedFiles" />
-                    <v-icon
-                      v-else
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-down pa-1 chevron-icon"
-                      @click="showDuplicatedFiles=!showDuplicatedFiles" />
+                    <v-btn
+                      icon
+                      x-small
+                      :aria-expanded="showDuplicatedFiles ? 'true' : 'false'"
+                      :aria-label="getToggleSectionLabel(showDuplicatedFiles, $t('documents.label.upload.zip.more.duplicated'))"
+                      :title="getToggleSectionLabel(showDuplicatedFiles, $t('documents.label.upload.zip.more.duplicated'))"
+                      @click="showDuplicatedFiles=!showDuplicatedFiles">
+                      <v-icon
+                        v-if="showDuplicatedFiles"
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-up chevron-icon" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-down chevron-icon" />
+                    </v-btn>
                     <span class="px-2 my-auto">{{ importData.duplicatedFiles.length }} {{ $t('documents.label.upload.zip.more.duplicated') }}</span>
                     <v-divider class="my-auto" />
                   </div>
                 </v-list-item-title>
                 <v-list-item-subtitle
                   v-if="showDuplicatedFiles"
-                  v-sanitized-html="importData.duplicatedFiles.join('<br>')"
-                  class="ps-6" />
+                  tag="ul"
+                  class="ps-6 mb-0">
+                  <li
+                    v-for="(file, index) in importData.duplicatedFiles"
+                    :key="index">
+                    {{ file }}
+                  </li>
+                </v-list-item-subtitle>
               </v-list-item-content>
-            </v-list-item> 
+            </v-list-item>
             <v-list-item>
               <v-list-item-content>
                 <v-list-item-title>
                   <div class="d-flex flex-nowrap pa-1">
-                    <v-icon
-                      v-if="showFailedFiles"
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-up pa-1 chevron-icon" 
-                      @click="showFailedFiles=!showFailedFiles" />
-                    <v-icon
-                      v-else
-                      color="grey"
-                      size="16"
-                      class="fas fa-chevron-down pa-1 chevron-icon"
-                      @click="showFailedFiles=!showFailedFiles" />
+                    <v-btn
+                      icon
+                      x-small
+                      :aria-expanded="showFailedFiles ? 'true' : 'false'"
+                      :aria-label="getToggleSectionLabel(showFailedFiles, $t('documents.label.upload.zip.more.failed'))"
+                      :title="getToggleSectionLabel(showFailedFiles, $t('documents.label.upload.zip.more.failed'))"
+                      @click="showFailedFiles=!showFailedFiles">
+                      <v-icon
+                        v-if="showFailedFiles"
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-up chevron-icon" />
+                      <v-icon
+                        v-else
+                        color="grey"
+                        size="16"
+                        class="fas fa-chevron-down chevron-icon" />
+                    </v-btn>
                     <span class="px-2 my-auto">{{ importData.failedFiles.length }} {{ $t('documents.label.upload.zip.more.failed') }}</span>
                     <v-divider class="my-auto" />
                   </div>
                 </v-list-item-title>
                 <v-list-item-subtitle
                   v-if="showFailedFiles"
-                  v-sanitized-html="importData.failedFiles.join('<br>')"
-                  class="ps-6" />
+                  tag="ul"
+                  class="ps-6 mb-0">
+                  <li
+                    v-for="(file, index) in importData.failedFiles"
+                    :key="index">
+                    {{ file }}
+                  </li>
+                </v-list-item-subtitle>
               </v-list-item-content>
             </v-list-item>
           </v-col>
@@ -289,6 +337,9 @@ export default {
     });
   },
   methods: {
+    getToggleSectionLabel(expanded, sectionName) {
+      return this.$t(expanded ? 'documents.label.upload.zip.section.fold' : 'documents.label.upload.zip.section.unfold', {0: sectionName});
+    },
     open() {
       this.getDocumentDataFromUrl();
       this.$refs.documentsUploadZipDrawer.open();
