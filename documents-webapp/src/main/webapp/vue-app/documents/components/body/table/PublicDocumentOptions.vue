@@ -189,19 +189,21 @@
                 offset-y
                 min-width="auto">
                 <template #activator="{ on, attrs }">
-                  <v-text-field
-                    v-model="dateFormatted"
+                  <div
                     v-bind="attrs"
-                    v-on="on"
-                    :aria-label="$t('documents.public.access.options.expirationDate.label')"
-                    :placeholder="$t('documents.public.access.choose.date.placeholder')"
-                    class="pt-0 ps-8 pe-10 border-box-sizing"
-                    append-icon="mdi-calendar"
-                    :rules="[v => !!v || $t('documents.public.access.expiration.undefined')]"
-                    required
-                    readonly
-                    outlined
-                    dense />
+                    v-on="on">
+                    <v-text-field
+                      v-model="dateFormatted"
+                      :aria-label="$t('documents.public.access.options.expirationDate.label')"
+                      :placeholder="$t('documents.public.access.choose.date.placeholder')"
+                      class="pt-0 ps-8 pe-10 border-box-sizing"
+                      append-icon="mdi-calendar"
+                      :rules="[v => !!v || $t('documents.public.access.expiration.undefined')]"
+                      required
+                      readonly
+                      outlined
+                      dense />
+                  </div>
                 </template>
                 <v-date-picker
                   v-model="expirationDate"
