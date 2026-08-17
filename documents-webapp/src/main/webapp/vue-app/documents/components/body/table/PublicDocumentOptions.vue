@@ -273,6 +273,7 @@
               <v-btn
                 v-bind="attrs"
                 v-on="on"
+                :aria-label="$t('document.visibility.publicAccess.copyLink.message')"
                 class="ms-n9 mt-n1"
                 color="primary"
                 icon
