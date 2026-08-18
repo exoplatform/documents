@@ -1,0 +1,30 @@
+<nodeTypes xmlns:exo="http://www.exoplatform.com/jcr/exo/1.0">
+  <nodeType
+    name="exo:cleanupExemption"
+    isMixin="true"
+    hasOrderableChildNodes="false"
+    primaryItemName="">
+    <propertyDefinitions>
+      <propertyDefinition
+        name="exo:cleanupExemptedDate"
+        requiredType="Date"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:cleanupExemptedBy"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+    </propertyDefinitions>
+  </nodeType>
+</nodeTypes>

@@ -99,6 +99,27 @@
   </portlet>
 
   <portlet>
+    <portlet-name>DocumentCleanupAdmin</portlet-name>
+    <display-name>Document Cleanup Campaigns Administration</display-name>
+    <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
+    <init-param>
+      <name>portlet-view-dispatched-file-path</name>
+      <value>/html/documentCleanupAdmin.html</value>
+    </init-param>
+    <expiration-cache>-1</expiration-cache>
+    <cache-scope>PUBLIC</cache-scope>
+    <supports>
+      <mime-type>text/html</mime-type>
+    </supports>
+    <supported-locale>en</supported-locale>
+    <resource-bundle>locale.portlet.DocumentCleanupAdmin</resource-bundle>
+    <portlet-info>
+      <title>Document Cleanup Campaigns Administration</title>
+      <keywords>Document Cleanup Campaigns Administration</keywords>
+    </portlet-info>
+  </portlet>
+
+  <portlet>
     <portlet-name>DocumentsUserSettings</portlet-name>
     <display-name>Documents User Settings</display-name>
     <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>

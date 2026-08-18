@@ -1,0 +1,86 @@
+/*
+ * Copyright (C) 2026 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <gnu.org/licenses>.
+ */
+package org.exoplatform.document.cleanup.entity;
+
+import java.io.Serializable;
+import java.util.Date;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import lombok.Data;
+
+@Entity(name = "CleanupCampaignItem")
+@Table(name = "DOCUMENTS_CLEANUP_CAMPAIGN_ITEM")
+@Data
+public class CleanupCampaignItemEntity implements Serializable {
+
+  private static final long serialVersionUID = 87351249172354529L;
+
+  @Id
+  @SequenceGenerator(name = "SEQ_DOCUMENTS_CLEANUP_CAMPAIGN_ITEM_ID", sequenceName = "SEQ_DOCUMENTS_CLEANUP_CAMPAIGN_ITEM_ID", allocationSize = 1)
+  @GeneratedValue(strategy = GenerationType.AUTO, generator = "SEQ_DOCUMENTS_CLEANUP_CAMPAIGN_ITEM_ID")
+  @Column(name = "ID", nullable = false)
+  private Long              id;
+
+  @Column(name = "CAMPAIGN_ID", nullable = false)
+  private long              campaignId;
+
+  @Column(name = "NODE_UUID", nullable = false)
+  private String            nodeUuid;
+
+  @Column(name = "PATH")
+  private String            path;
+
+  @Column(name = "OWNER_IDENTITY_ID")
+  private long              ownerIdentityId;
+
+  @Column(name = "FILE_SIZE")
+  private long              fileSize;
+
+  @Column(name = "VERSIONS_SIZE")
+  private long              versionsSize;
+
+  @Column(name = "ACTION", nullable = false)
+  private String            action;
+
+  @Column(name = "STATE", nullable = false)
+  private String            state;
+
+  @Column(name = "COMPUTED_AT")
+  private Date              computedAt;
+
+  @Column(name = "DECIDED_BY")
+  private String            decidedBy;
+
+  @Column(name = "DECIDED_AT")
+  private Date              decidedAt;
+
+  @Column(name = "PURGED_AT")
+  private Date              purgedAt;
+
+  @Column(name = "RECLAIMED_BYTES")
+  private long              reclaimedBytes;
+
+  @Column(name = "FAILURE_REASON")
+  private String            failureReason;
+
+}
