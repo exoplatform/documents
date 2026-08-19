@@ -58,16 +58,16 @@ public class CleanupSettingService {
   @Autowired
   private SettingService       settingService;
 
-  @Value("${cleanup.period.months:6}")
+  @Value("${cleanup.period.months:24}")
   private int                  defaultPeriodMonths;
 
-  @Value("${cleanup.minFileSize.bytes:1048576}")
+  @Value("${cleanup.minFileSize.bytes:5242880}")
   private long                 defaultMinFileSizeBytes;
 
-  @Value("${cleanup.grace.days:7}")
+  @Value("${cleanup.grace.days:14}")
   private int                  defaultGraceDays;
 
-  @Value("${cleanup.maxVersionsPerFile:5}")
+  @Value("${cleanup.maxVersionsPerFile:25}")
   private int                  defaultMaxVersionsPerFile;
 
   @Value("${cleanup.excludedPaths:}")

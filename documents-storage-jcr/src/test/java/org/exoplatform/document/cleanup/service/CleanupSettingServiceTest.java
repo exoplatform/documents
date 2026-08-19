@@ -70,10 +70,10 @@ class CleanupSettingServiceTest {
   @BeforeEach
   void setUp() throws ReflectiveOperationException {
     // Property values normally injected by Spring through @Value fallbacks
-    setField("defaultPeriodMonths", 6);
-    setField("defaultMinFileSizeBytes", 1048576L);
-    setField("defaultGraceDays", 7);
-    setField("defaultMaxVersionsPerFile", 5);
+    setField("defaultPeriodMonths", 24);
+    setField("defaultMinFileSizeBytes", 5242880L);
+    setField("defaultGraceDays", 14);
+    setField("defaultMaxVersionsPerFile", 25);
     setField("defaultExcludedPaths", "");
     setField("batchSize", 200);
     setField("reportRetentionCampaigns", 3);
@@ -83,10 +83,10 @@ class CleanupSettingServiceTest {
   void getDefaultParamsFallsBackToPropertiesWithoutPersistedOverrides() {
     CleanupParams defaults = cleanupSettingService.getDefaultParams();
 
-    assertEquals(6, defaults.getPeriodMonths());
-    assertEquals(1048576L, defaults.getMinFileSizeBytes());
-    assertEquals(7, defaults.getGraceDays());
-    assertEquals(5, defaults.getMaxVersionsPerFile());
+    assertEquals(24, defaults.getPeriodMonths());
+    assertEquals(5242880L, defaults.getMinFileSizeBytes());
+    assertEquals(14, defaults.getGraceDays());
+    assertEquals(25, defaults.getMaxVersionsPerFile());
     assertTrue(defaults.getExcludedPaths().isEmpty(), "A blank excluded-paths property must yield an empty list");
     assertEquals(200, defaults.getBatchSize());
   }
@@ -114,8 +114,8 @@ class CleanupSettingServiceTest {
     assertEquals(12, defaults.getPeriodMonths());
     assertEquals(2048L, defaults.getMinFileSizeBytes());
     assertEquals(List.of("/Trash"), defaults.getExcludedPaths());
-    assertEquals(7, defaults.getGraceDays(), "Keys without a persisted override keep the property fallback");
-    assertEquals(5, defaults.getMaxVersionsPerFile());
+    assertEquals(14, defaults.getGraceDays(), "Keys without a persisted override keep the property fallback");
+    assertEquals(25, defaults.getMaxVersionsPerFile());
   }
 
   @Test
@@ -132,8 +132,8 @@ class CleanupSettingServiceTest {
     CleanupParams effective = cleanupSettingService.getEffectiveParams(overrides);
 
     assertEquals(12, effective.getPeriodMonths());
-    assertEquals(1048576L, effective.getMinFileSizeBytes(), "Null override fields must fall back to the default");
-    assertEquals(7, effective.getGraceDays());
+    assertEquals(5242880L, effective.getMinFileSizeBytes(), "Null override fields must fall back to the default");
+    assertEquals(14, effective.getGraceDays());
     assertEquals(2, effective.getMaxVersionsPerFile());
     assertEquals(List.of("/Trash"), effective.getExcludedPaths());
     assertEquals(200, effective.getBatchSize(), "The effective snapshot must always carry a batch size");
