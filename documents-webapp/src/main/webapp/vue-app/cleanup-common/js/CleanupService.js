@@ -127,6 +127,24 @@ export function keepItems(itemIds) {
   }).then(handleVoidResponse);
 }
 
+export function unkeepItem(itemId) {
+  return fetch(`${BASE_URL}/items/${itemId}/unkeep`, {
+    method: 'POST',
+    credentials: 'include',
+  }).then(handleVoidResponse);
+}
+
+export function unkeepItems(itemIds) {
+  return fetch(`${BASE_URL}/items/unkeep`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({itemIds}),
+  }).then(handleVoidResponse);
+}
+
 function handleJsonResponse(resp) {
   if (!resp || !resp.ok) {
     return resp.text().then(text => {

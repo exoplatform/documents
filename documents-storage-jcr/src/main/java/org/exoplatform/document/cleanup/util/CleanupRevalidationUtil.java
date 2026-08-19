@@ -34,6 +34,10 @@ public class CleanupRevalidationUtil {
   /**
    * Applies a revalidation outcome to a campaign item:
    * <ul>
+   * <li>outcome unknown (transient JCR read failure): the item is left
+   * UNTOUCHED — never spared, never gone, never deleted on doubt; callers
+   * needing a distinct handling (e.g. the execution skipping the item) check
+   * {@link CleanupRevalidation#isUnknown()} first</li>
    * <li>node gone: {@link CleanupItemState#GONE}</li>
    * <li>node exempted: {@link CleanupItemState#EXEMPTED}</li>
    * <li>node no longer a candidate:
@@ -46,10 +50,13 @@ public class CleanupRevalidationUtil {
    * @param item campaign item to update
    * @param revalidation revalidation outcome
    * @return true when the node is still a candidate (the item's action was
-   *         refreshed), false when the item left the candidate state
+   *         refreshed), false when the item left the candidate state or the
+   *         outcome is unknown
    */
   public static boolean applyRevalidation(CleanupCampaignItem item, CleanupRevalidation revalidation) {
-    if (!revalidation.isExists()) {
+    if (revalidation.isUnknown()) {
+      return false;
+    } else if (!revalidation.isExists()) {
       item.setState(CleanupItemState.GONE);
       return false;
     } else if (revalidation.isExempted()) {

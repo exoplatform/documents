@@ -39,59 +39,54 @@ class CleanupCriterionEvaluatorTest {
   @Test
   void shouldReturnDeleteWhenBothDatesOlderThanPeriodAndSizeAboveFloor() {
     assertEquals(CleanupAction.DELETE,
-                 evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE, 0, 0, PATH, false));
+                 evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE, 0, 0, PATH));
   }
 
   @Test
   void shouldNotReturnDeleteWhenCreatedRecent() {
-    assertNull(evaluate(monthsAgo(2), monthsAgo(2), MIN_FILE_SIZE, 0, 0, PATH, false));
+    assertNull(evaluate(monthsAgo(2), monthsAgo(2), MIN_FILE_SIZE, 0, 0, PATH));
   }
 
   @Test
   void shouldNotReturnDeleteWhenLastModifiedRecent() {
-    assertNull(evaluate(monthsAgo(12), monthsAgo(1), MIN_FILE_SIZE, 0, 0, PATH, false));
+    assertNull(evaluate(monthsAgo(12), monthsAgo(1), MIN_FILE_SIZE, 0, 0, PATH));
   }
 
   @Test
   void shouldNotReturnDeleteWhenCreatedUnknown() {
-    assertNull(evaluate(0, monthsAgo(12), MIN_FILE_SIZE, 0, 0, PATH, false));
+    assertNull(evaluate(0, monthsAgo(12), MIN_FILE_SIZE, 0, 0, PATH));
   }
 
   @Test
   void shouldFallBackToCreatedDateWhenLastModifiedUnknown() {
-    assertEquals(CleanupAction.DELETE, evaluate(monthsAgo(12), 0, MIN_FILE_SIZE, 0, 0, PATH, false));
+    assertEquals(CleanupAction.DELETE, evaluate(monthsAgo(12), 0, MIN_FILE_SIZE, 0, 0, PATH));
   }
 
   @Test
   void shouldNotReturnDeleteWhenSizeUnderFloor() {
-    assertNull(evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE - 1, 0, 0, PATH, false));
+    assertNull(evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE - 1, 0, 0, PATH));
   }
 
   @Test
   void shouldReturnPurgeVersionsWhenVersionCountAboveMaxEvenOnRecentFile() {
     assertEquals(CleanupAction.PURGE_VERSIONS,
-                 evaluate(monthsAgo(1), monthsAgo(1), MIN_FILE_SIZE, MIN_FILE_SIZE, 6, PATH, false));
+                 evaluate(monthsAgo(1), monthsAgo(1), MIN_FILE_SIZE, MIN_FILE_SIZE, 6, PATH));
   }
 
   @Test
   void shouldNotReturnPurgeVersionsWhenVersionsSizeUnderFloor() {
-    assertNull(evaluate(monthsAgo(1), monthsAgo(1), MIN_FILE_SIZE, MIN_FILE_SIZE - 1, 6, PATH, false));
+    assertNull(evaluate(monthsAgo(1), monthsAgo(1), MIN_FILE_SIZE, MIN_FILE_SIZE - 1, 6, PATH));
   }
 
   @Test
   void shouldNotReturnPurgeVersionsWhenVersionCountAtMax() {
-    assertNull(evaluate(monthsAgo(1), monthsAgo(1), MIN_FILE_SIZE, MIN_FILE_SIZE, 5, PATH, false));
+    assertNull(evaluate(monthsAgo(1), monthsAgo(1), MIN_FILE_SIZE, MIN_FILE_SIZE, 5, PATH));
   }
 
   @Test
   void shouldPreferDeleteOverPurgeVersionsWhenBothQualify() {
     assertEquals(CleanupAction.DELETE,
-                 evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE, MIN_FILE_SIZE, 6, PATH, false));
-  }
-
-  @Test
-  void shouldNeverReturnCandidateWhenExempted() {
-    assertNull(evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE, MIN_FILE_SIZE, 6, PATH, true));
+                 evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE, MIN_FILE_SIZE, 6, PATH));
   }
 
   @Test
@@ -103,7 +98,6 @@ class CleanupCriterionEvaluatorTest {
                                                   0,
                                                   0,
                                                   PATH,
-                                                  false,
                                                   params,
                                                   NOW));
   }
@@ -118,7 +112,6 @@ class CleanupCriterionEvaluatorTest {
                                                     0,
                                                     0,
                                                     PATH,
-                                                    false,
                                                     params,
                                                     NOW));
   }
@@ -132,7 +125,6 @@ class CleanupCriterionEvaluatorTest {
                                                   0,
                                                   0,
                                                   PATH,
-                                                  false,
                                                   params,
                                                   NOW));
   }
@@ -142,15 +134,13 @@ class CleanupCriterionEvaluatorTest {
                                  long fileSize,
                                  long versionsSize,
                                  int versionCount,
-                                 String path,
-                                 boolean exempted) {
+                                 String path) {
     return CleanupCriterionEvaluator.evaluate(createdTime,
                                               lastModifiedTime,
                                               fileSize,
                                               versionsSize,
                                               versionCount,
                                               path,
-                                              exempted,
                                               params(List.of()),
                                               NOW);
   }

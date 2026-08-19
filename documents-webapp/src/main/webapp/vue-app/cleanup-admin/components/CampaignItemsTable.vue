@@ -17,6 +17,7 @@
 -->
 <template>
   <div>
+    <!-- cleanupFiltersRow is a selector for the click-outside handler below, not a style hook -->
     <div class="d-flex align-center flex-wrap border-box-sizing mt-8 cleanupFiltersRow">
       <h6 class="my-0 me-4 text-color">{{ $t('cleanup.admin.items.title') }}</h6>
       <v-select
@@ -25,6 +26,7 @@
         :items="stateFilterItems"
         :label="$t('cleanup.admin.items.filter.state')"
         class="pa-0"
+        style="max-width: 220px"
         dense
         outlined
         hide-details
@@ -35,6 +37,7 @@
         :items="actionFilterItems"
         :label="$t('cleanup.admin.items.filter.action')"
         class="ms-2 pa-0"
+        style="max-width: 220px"
         dense
         outlined
         hide-details
@@ -45,6 +48,7 @@
         type="number"
         min="0"
         class="ms-2 pa-0"
+        style="max-width: 220px"
         dense
         outlined
         hide-details
@@ -62,7 +66,12 @@
       must-sort
       @update:options="loadItems">
       <template slot="item.path" slot-scope="{item}">
-        <div :title="item.path" class="cleanupPathCell">{{ item.path }}</div>
+        <div
+          :title="item.path"
+          class="text-truncate"
+          style="max-width: 320px">
+          {{ item.path }}
+        </div>
       </template>
       <template slot="item.ownerFullName" slot-scope="{item}">
         {{ item.ownerFullName }}

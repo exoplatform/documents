@@ -40,6 +40,7 @@ import org.exoplatform.document.cleanup.dao.CleanupCampaignItemDAO;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignEntity;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
+import org.exoplatform.document.cleanup.model.CleanupCampaignAggregates;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupParams;
@@ -181,8 +182,31 @@ public class CleanupCampaignStorage {
     return itemDAO.findByCampaignId(campaignId, pageable).map(this::toModel);
   }
 
-  public List<CleanupCampaignItem> getItemsByPathPrefixOf(long campaignId, String prefixPath) {
-    return itemDAO.findByCampaignIdAndPathStartingWith(campaignId, prefixPath).stream().map(this::toModel).toList();
+  /**
+   * Item aggregates of a whole campaigns list, computed by ONE grouped query
+   * (see the DAO) instead of per-campaign aggregate queries: a campaign absent
+   * from the returned map simply has no item rows anymore.
+   *
+   * @param campaignIds campaign identifiers
+   * @return map of campaign id to its item aggregates
+   */
+  public Map<Long, CleanupCampaignAggregates> getItemAggregates(List<Long> campaignIds) {
+    Map<Long, CleanupCampaignAggregates> aggregatesByCampaignId = new HashMap<>();
+    if (campaignIds == null || campaignIds.isEmpty()) {
+      return aggregatesByCampaignId;
+    }
+    for (Object[] row : itemDAO.findAggregatesByCampaignIds(campaignIds)) {
+      long campaignId = ((Number) row[0]).longValue();
+      CleanupCampaignAggregates aggregates = aggregatesByCampaignId.computeIfAbsent(campaignId,
+                                                                                    id -> new CleanupCampaignAggregates());
+      aggregates.setItemsRetained(true);
+      if (CleanupItemState.CANDIDATE.name().equals(row[1])) {
+        aggregates.setCandidateCount(((Number) row[2]).longValue());
+        aggregates.setReclaimableBytes(((Number) row[3]).longValue());
+      }
+      aggregates.setReclaimedBytes(aggregates.getReclaimedBytes() + ((Number) row[4]).longValue());
+    }
+    return aggregatesByCampaignId;
   }
 
   public long countItemsByState(long campaignId, CleanupItemState state) {
@@ -277,7 +301,15 @@ public class CleanupCampaignStorage {
     entity.setFileSize(candidate.getFileSize());
     entity.setVersionsSize(candidate.getVersionsSize());
     entity.setAction(candidate.getAction().name());
-    entity.setState(CleanupItemState.CANDIDATE.name());
+    if (candidate.isExempted()) {
+      // A previously-exempted file stays visible as 'Kept' in every campaign,
+      // carrying the mixin's decision metadata when readable
+      entity.setState(CleanupItemState.EXEMPTED.name());
+      entity.setDecidedBy(candidate.getExemptedBy());
+      entity.setDecidedAt(toDate(candidate.getExemptedDate()));
+    } else {
+      entity.setState(CleanupItemState.CANDIDATE.name());
+    }
     entity.setComputedAt(new Date());
     return entity;
   }

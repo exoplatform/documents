@@ -21,8 +21,10 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.function.BiConsumer;
 
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.ReferentialIntegrityException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -51,6 +53,7 @@ import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.observation.ExtendedEvent;
 import org.exoplatform.services.log.ExoLogger;
@@ -58,8 +61,6 @@ import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
-
-import lombok.Synchronized;
 
 /**
  * JCR implementation of {@link CleanupJcrStorage} against the collaboration
@@ -218,16 +219,21 @@ public class CleanupJcrStorage {
 
   /**
    * Re-evaluates a node against the campaign criteria, at execution or refresh
-   * time.
+   * time. A transient JCR read failure yields a distinct UNKNOWN outcome —
+   * never 'spared' nor 'gone' — so a flaky repository can neither permanently
+   * spare an item nor let it be deleted on doubt: the node lookup is made
+   * directly against the session (not through the null-swallowing helper) to
+   * tell 'the node no longer exists' apart from 'the repository failed'.
    *
    * @param nodeUuid JCR node identifier
    * @param params campaign parameters snapshot
-   * @return revalidation outcome (gone, exempted, spared or still candidate)
+   * @return revalidation outcome (gone, exempted, spared, still candidate, or
+   *         unknown on a JCR read failure)
    */
   public CleanupRevalidation revalidate(String nodeUuid, CleanupParams params) {
     try {
       Session session = getSystemSession();
-      Node node = JCRDocumentsUtil.getNodeByIdentifier(session, nodeUuid);
+      Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupRevalidation.gone();
       } else if (node.isNodeType(EXO_CLEANUP_EXEMPTION)) {
@@ -237,7 +243,21 @@ public class CleanupJcrStorage {
       }
     } catch (RepositoryException e) {
       LOG.warn("Error revalidating cleanup candidate node {}", nodeUuid, e);
-      return CleanupRevalidation.of(null);
+      return CleanupRevalidation.unknown();
+    }
+  }
+
+  /**
+   * Node lookup distinguishing a MISSING node (null) from a repository failure
+   * (propagated {@link RepositoryException}), unlike
+   * {@link JCRDocumentsUtil#getNodeByIdentifier(Session, String)} which
+   * swallows both into null.
+   */
+  private Node getNodeByIdentifierOrNull(Session session, String nodeUuid) throws RepositoryException {
+    try {
+      return ((ExtendedSession) session).getNodeByIdentifier(nodeUuid);
+    } catch (PathNotFoundException | ItemNotFoundException e) {
+      return null;
     }
   }
 
@@ -276,6 +296,45 @@ public class CleanupJcrStorage {
     } catch (RepositoryException e) {
       refresh(session);
       LOG.warn("Error adding cleanup exemption mixin on node {}", nodeUuid, e);
+      return CleanupExemptionResult.FAILED;
+    }
+  }
+
+  /**
+   * Removes the exo:cleanupExemption mixin from the node (un-keep), mirroring
+   * {@link #addExemptionMixin(String, String)}: a checked-in versionable node
+   * is checked out first, and real modification dates stay untouched.
+   *
+   * @param nodeUuid JCR node identifier
+   * @return {@link CleanupExemptionResult#ADDED} when the node no longer
+   *         carries the mixin (applied, idempotent),
+   *         {@link CleanupExemptionResult#NOT_FOUND} when it doesn't exist
+   *         anymore, {@link CleanupExemptionResult#FAILED} on a (possibly
+   *         transient) JCR write failure
+   */
+  public CleanupExemptionResult removeExemptionMixin(String nodeUuid) {
+    Session session = null;
+    try {
+      session = getSystemSession();
+      Node node = JCRDocumentsUtil.getNodeByIdentifier(session, nodeUuid);
+      if (node == null) {
+        return CleanupExemptionResult.NOT_FOUND;
+      }
+      if (node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !node.isCheckedOut()) {
+        // A checked-in versionable node rejects property writes: check it out
+        // first. Deliberately NO checkin afterward — leaving the node
+        // checked-out is acceptable and avoids creating a spurious version.
+        node.checkout();
+      }
+      if (node.isNodeType(EXO_CLEANUP_EXEMPTION)) {
+        // Removing the mixin also drops its exo:cleanupExempted* properties
+        node.removeMixin(EXO_CLEANUP_EXEMPTION);
+        session.save();
+      }
+      return CleanupExemptionResult.ADDED;
+    } catch (RepositoryException e) {
+      refresh(session);
+      LOG.warn("Error removing cleanup exemption mixin from node {}", nodeUuid, e);
       return CleanupExemptionResult.FAILED;
     }
   }
@@ -372,8 +431,7 @@ public class CleanupJcrStorage {
    * @return true when the listener is registered (or already was), false when
    *         the registration failed (e.g. JCR not ready yet) and may be retried
    */
-  @Synchronized
-  public boolean registerObservationListener(BiConsumer<String, String> pathAndEventTypeCallback) {
+  public synchronized boolean registerObservationListener(BiConsumer<String, String> pathAndEventTypeCallback) {
     if (observationListener != null) {
       return true;
     }
@@ -423,16 +481,16 @@ public class CleanupJcrStorage {
     long fileSize = getContentSize(node);
     long versionsSize = JCRDocumentsUtil.computeVersionsSize(node);
     int versionCount = node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) ? countVersions(node.getVersionHistory()) : 0;
-    boolean hasExemptionMixin = node.isNodeType(EXO_CLEANUP_EXEMPTION);
     // Candidacy policy defined in the api module, applied here at scan time to
-    // avoid shipping every node upward
+    // avoid shipping every node upward. The exemption mixin doesn't disqualify
+    // a node anymore: a still-qualifying exempted file is emitted flagged
+    // exempted, so it stays visible as 'Kept' in every campaign
     var action = CleanupCriterionEvaluator.evaluate(createdTime,
                                                     lastModifiedTime,
                                                     fileSize,
                                                     versionsSize,
                                                     versionCount,
                                                     path,
-                                                    hasExemptionMixin,
                                                     params,
                                                     System.currentTimeMillis());
     if (action == null) {
@@ -440,14 +498,42 @@ public class CleanupJcrStorage {
     }
     Identity ownerIdentity = JCRDocumentsUtil.getOwnerIdentityFromNodePath(path, identityManager, spaceService);
     long ownerIdentityId = ownerIdentity == null ? 0 : Long.parseLong(ownerIdentity.getId());
-    return new CleanupCandidate(((ExtendedNode) node).getIdentifier(),
-                                path,
-                                ownerIdentityId,
-                                fileSize,
-                                versionsSize,
-                                action,
-                                createdTime,
-                                lastModifiedTime);
+    CleanupCandidate candidate = new CleanupCandidate(((ExtendedNode) node).getIdentifier(),
+                                                      path,
+                                                      ownerIdentityId,
+                                                      fileSize,
+                                                      versionsSize,
+                                                      action,
+                                                      createdTime,
+                                                      lastModifiedTime);
+    if (node.isNodeType(EXO_CLEANUP_EXEMPTION)) {
+      candidate.setExempted(true);
+      candidate.setExemptedBy(getStringProperty(node, EXO_CLEANUP_EXEMPTED_BY));
+      candidate.setExemptedDate(getDateProperty(node, EXO_CLEANUP_EXEMPTED_DATE));
+    }
+    return candidate;
+  }
+
+  private String getStringProperty(Node node, String propertyName) {
+    try {
+      if (node.hasProperty(propertyName)) {
+        return node.getProperty(propertyName).getString();
+      }
+    } catch (RepositoryException e) {
+      LOG.debug("Error reading string property {} of node", propertyName, e);
+    }
+    return null;
+  }
+
+  private long getDateProperty(Node node, String propertyName) {
+    try {
+      if (node.hasProperty(propertyName)) {
+        return node.getProperty(propertyName).getDate().getTimeInMillis();
+      }
+    } catch (RepositoryException e) {
+      LOG.debug("Error reading date property {} of node", propertyName, e);
+    }
+    return 0;
   }
 
   /**

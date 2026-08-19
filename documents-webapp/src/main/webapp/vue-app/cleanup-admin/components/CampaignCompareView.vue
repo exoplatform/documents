@@ -16,6 +16,7 @@
  *
 -->
 <template>
+  <!-- cleanupFiltersCompareRow is a selector for the click-outside handler below, not a style hook -->
   <div v-if="comparableCampaigns.length" class="cleanupFiltersCompareRow">
     <div class="d-flex align-center">
       <h6 class="my-0 me-4 text-color">{{ $t('cleanup.admin.compare.title') }}</h6>
@@ -27,6 +28,7 @@
         item-text="name"
         item-value="id"
         class="pa-0"
+        style="max-width: 220px"
         dense
         outlined
         hide-details

@@ -114,22 +114,64 @@ class CleanupItemRestTest {
   }
 
   @Test
-  void keepItemsMapsExceptionContract() throws Exception {
+  void keepItemsMapsIllegalArgumentTo400() {
+    // The bulk keep continues past individual failures (like the bulk
+    // un-keep): only the empty-ids validation surfaces as a 400
     KeepItemsRestEntity body = new KeepItemsRestEntity();
-    body.setItemIds(List.of(ITEM_ID));
+    body.setItemIds(List.of());
 
-    doThrow(new ObjectNotFoundException("cleanup.itemNotFound")).when(campaignService).keepItems(anyList(), eq(USER));
-    assertEquals(HttpStatus.NOT_FOUND,
-                 assertThrows(ResponseStatusException.class, () -> itemRest.keepItems(request, body)).getStatusCode());
+    doThrow(new IllegalArgumentException("cleanup.itemIdsMandatory")).when(campaignService).keepItems(anyList(), eq(USER));
 
-    doThrow(new IllegalAccessException("cleanup.notOwner")).when(campaignService).keepItems(anyList(), eq(USER));
-    assertEquals(HttpStatus.FORBIDDEN,
-                 assertThrows(ResponseStatusException.class, () -> itemRest.keepItems(request, body)).getStatusCode());
-
-    doThrow(new IllegalArgumentException("cleanup.invalidState")).when(campaignService).keepItems(anyList(), eq(USER));
     ResponseStatusException badRequest = assertThrows(ResponseStatusException.class, () -> itemRest.keepItems(request, body));
     assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
-    assertEquals("cleanup.invalidState", badRequest.getReason());
+    assertEquals("cleanup.itemIdsMandatory", badRequest.getReason());
+  }
+
+  @Test
+  void unkeepItemDelegatesWithAuthenticatedUser() throws Exception {
+    itemRest.unkeepItem(request, ITEM_ID);
+
+    verify(campaignService).unkeepItem(ITEM_ID, USER);
+  }
+
+  @Test
+  void unkeepItemMapsExceptionContract() throws Exception {
+    doThrow(new ObjectNotFoundException("cleanup.itemNotFound")).when(campaignService).unkeepItem(ITEM_ID, USER);
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class, () -> itemRest.unkeepItem(request, ITEM_ID)).getStatusCode());
+
+    doThrow(new IllegalAccessException("cleanup.notOwner")).when(campaignService).unkeepItem(ITEM_ID, USER);
+    assertEquals(HttpStatus.FORBIDDEN,
+                 assertThrows(ResponseStatusException.class, () -> itemRest.unkeepItem(request, ITEM_ID)).getStatusCode());
+
+    doThrow(new IllegalArgumentException("cleanup.reviewClosed")).when(campaignService).unkeepItem(ITEM_ID, USER);
+    ResponseStatusException badRequest = assertThrows(ResponseStatusException.class,
+                                                      () -> itemRest.unkeepItem(request, ITEM_ID));
+    assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
+    assertEquals("cleanup.reviewClosed", badRequest.getReason());
+  }
+
+  @Test
+  void unkeepItemsDelegatesWithAuthenticatedUser() {
+    KeepItemsRestEntity body = new KeepItemsRestEntity();
+    body.setItemIds(List.of(1L, 2L, 3L));
+
+    itemRest.unkeepItems(request, body);
+
+    verify(campaignService).unkeepItems(List.of(1L, 2L, 3L), USER);
+  }
+
+  @Test
+  void unkeepItemsMapsIllegalArgumentTo400() {
+    KeepItemsRestEntity body = new KeepItemsRestEntity();
+    body.setItemIds(List.of());
+
+    doThrow(new IllegalArgumentException("cleanup.itemIdsMandatory")).when(campaignService).unkeepItems(anyList(), eq(USER));
+
+    ResponseStatusException badRequest = assertThrows(ResponseStatusException.class,
+                                                      () -> itemRest.unkeepItems(request, body));
+    assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
+    assertEquals("cleanup.itemIdsMandatory", badRequest.getReason());
   }
 
 }

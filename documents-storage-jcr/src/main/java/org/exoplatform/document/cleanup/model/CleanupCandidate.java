@@ -18,17 +18,18 @@ package org.exoplatform.document.cleanup.model;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
  * A file (JCR nt:file node) qualifying for a cleanup action, as computed by a
- * dry-run scan or a revalidation.
+ * dry-run scan or a revalidation. A previously-exempted file (carrying the
+ * exo:cleanupExemption mixin) still qualifying by the criteria is emitted
+ * flagged {@code exempted}, with the mixin's decision metadata when readable,
+ * so it stays visible as 'Kept' in every campaign instead of being skipped.
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class CleanupCandidate {
 
   private String        nodeUuid;
@@ -46,5 +47,32 @@ public class CleanupCandidate {
   private long          createdTime;
 
   private long          lastModifiedTime;
+
+  /** Whether the node carries the exo:cleanupExemption mixin. */
+  private boolean       exempted;
+
+  /** exo:cleanupExemptedBy mixin property, null when unreadable. */
+  private String        exemptedBy;
+
+  /** exo:cleanupExemptedDate mixin property (epoch millis), 0 when unreadable. */
+  private long          exemptedDate;
+
+  public CleanupCandidate(String nodeUuid, // NOSONAR
+                          String path,
+                          long ownerIdentityId,
+                          long fileSize,
+                          long versionsSize,
+                          CleanupAction action,
+                          long createdTime,
+                          long lastModifiedTime) {
+    this.nodeUuid = nodeUuid;
+    this.path = path;
+    this.ownerIdentityId = ownerIdentityId;
+    this.fileSize = fileSize;
+    this.versionsSize = versionsSize;
+    this.action = action;
+    this.createdTime = createdTime;
+    this.lastModifiedTime = lastModifiedTime;
+  }
 
 }

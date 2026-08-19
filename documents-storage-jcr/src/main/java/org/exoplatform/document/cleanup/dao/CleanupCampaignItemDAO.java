@@ -94,7 +94,18 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
                                                                    @Param("escapedEventPath")
                                                                    String escapedEventPath);
 
-  List<CleanupCampaignItemEntity> findByCampaignIdAndPathStartingWith(long campaignId, String pathPrefix);
+  /**
+   * Per-campaign, per-state item aggregates of a whole campaigns list in ONE
+   * grouped query (rows: campaignId, state, item count, reclaimable bytes sum,
+   * reclaimed bytes sum), folded by the Storage layer into one aggregate per
+   * campaign — replaces up to 4 aggregate queries PER campaign on the list
+   * endpoint.
+   */
+  @Query("SELECT i.campaignId, i.state, COUNT(i), COALESCE(SUM(" + RECLAIMABLE_BYTES + "), 0),"
+      + " COALESCE(SUM(i.reclaimedBytes), 0)"
+      + " FROM CleanupCampaignItem i WHERE i.campaignId IN :campaignIds GROUP BY i.campaignId, i.state")
+  List<Object[]> findAggregatesByCampaignIds(@Param("campaignIds")
+  List<Long> campaignIds);
 
   @Query("SELECT i.nodeUuid, " + RECLAIMABLE_BYTES + " FROM CleanupCampaignItem i WHERE i.campaignId = :campaignId")
   Page<Object[]> findNodeUuidAndReclaimableBytes(@Param("campaignId")

@@ -196,6 +196,44 @@ class CleanupCampaignStorageTest {
   }
 
   @Test
+  void saveCandidatesPersistsExemptedCandidatesAsExemptedWithMixinDecision() {
+    when(itemDAO.findByCampaignIdAndNodeUuidIn(eq(CAMPAIGN_ID), anyCollection())).thenReturn(List.of());
+    CleanupCandidate exemptedCandidate = candidate("uuid-kept", "/Users/j___/john/Private/kept.pdf");
+    exemptedCandidate.setExempted(true);
+    exemptedCandidate.setExemptedBy("mary");
+    exemptedCandidate.setExemptedDate(123456789L);
+
+    storage.saveCandidates(CAMPAIGN_ID, List.of(exemptedCandidate));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CleanupCampaignItemEntity>> savedCaptor = ArgumentCaptor.forClass(List.class);
+    verify(itemDAO).saveAll(savedCaptor.capture());
+    CleanupCampaignItemEntity savedEntity = savedCaptor.getValue().get(0);
+    assertEquals(CleanupItemState.EXEMPTED.name(), savedEntity.getState(),
+                 "A mixin-carrying file must be persisted as EXEMPTED, visible as 'Kept'");
+    assertEquals("mary", savedEntity.getDecidedBy());
+    assertEquals(new Date(123456789L), savedEntity.getDecidedAt());
+    assertEquals(CleanupAction.DELETE.name(), savedEntity.getAction(), "The action stays computed as usual");
+  }
+
+  @Test
+  void saveCandidatesLeavesDecisionEmptyWhenMixinMetadataUnreadable() {
+    when(itemDAO.findByCampaignIdAndNodeUuidIn(eq(CAMPAIGN_ID), anyCollection())).thenReturn(List.of());
+    CleanupCandidate exemptedCandidate = candidate("uuid-kept", "/Users/j___/john/Private/kept.pdf");
+    exemptedCandidate.setExempted(true);
+
+    storage.saveCandidates(CAMPAIGN_ID, List.of(exemptedCandidate));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CleanupCampaignItemEntity>> savedCaptor = ArgumentCaptor.forClass(List.class);
+    verify(itemDAO).saveAll(savedCaptor.capture());
+    CleanupCampaignItemEntity savedEntity = savedCaptor.getValue().get(0);
+    assertEquals(CleanupItemState.EXEMPTED.name(), savedEntity.getState());
+    assertNull(savedEntity.getDecidedBy());
+    assertNull(savedEntity.getDecidedAt());
+  }
+
+  @Test
   void saveCandidatesSavesNothingWhenAllReplayed() {
     CleanupCampaignItemEntity existing = new CleanupCampaignItemEntity();
     existing.setNodeUuid("uuid-existing");
@@ -263,6 +301,55 @@ class CleanupCampaignStorageTest {
                          eventPath),
                  ancestorsCaptor.getValue());
     assertEquals("/Groups/spaces/marketing/Documents/reports|_2026/q1.pdf", escapedCaptor.getValue());
+  }
+
+  @Test
+  void ancestorChainOfPropertyEventPathContainsTheFileItemPath() {
+    // A PROPERTY_CHANGED event path is the PROPERTY's path, a DESCENDANT of
+    // the file node: the ancestor chain must contain the file item's path so
+    // the exact-match branch of the touched-by query refreshes the file item
+    List<String> chain = CleanupCampaignStorage.ancestorChain("/Users/j___/john/Private/file.pdf/jcr:content/jcr:data");
+    assertTrue(chain.contains("/Users/j___/john/Private/file.pdf"),
+               "The file path above the changed property must be in the ancestor chain");
+  }
+
+  @Test
+  void getItemAggregatesFoldsGroupedRowsPerCampaign() {
+    when(itemDAO.findAggregatesByCampaignIds(List.of(1L, 2L, 3L)))
+                                                                  .thenReturn(List.of(new Object[] { 1L, "CANDIDATE", 4L, 2048L,
+                                                                                                     0L },
+                                                                                      new Object[] { 1L, "PURGED", 2L, 512L,
+                                                                                                     999L },
+                                                                                      new Object[] { 2L, "EXEMPTED", 1L, 128L,
+                                                                                                     0L }));
+
+    Map<Long, org.exoplatform.document.cleanup.model.CleanupCampaignAggregates> aggregates =
+                                                                                            storage.getItemAggregates(List.of(1L,
+                                                                                                                              2L,
+                                                                                                                              3L));
+
+    // Campaign 1: candidate count/bytes from the CANDIDATE row only, reclaimed
+    // bytes summed across every state
+    assertTrue(aggregates.get(1L).isItemsRetained());
+    assertEquals(4L, aggregates.get(1L).getCandidateCount());
+    assertEquals(2048L, aggregates.get(1L).getReclaimableBytes());
+    assertEquals(999L, aggregates.get(1L).getReclaimedBytes());
+    // Campaign 2: rows exist but none CANDIDATE
+    assertTrue(aggregates.get(2L).isItemsRetained());
+    assertEquals(0L, aggregates.get(2L).getCandidateCount());
+    // Campaign 3: no item rows anymore, absent from the map
+    assertNull(aggregates.get(3L));
+    // A single grouped query serves the whole list
+    verify(itemDAO, org.mockito.Mockito.times(1)).findAggregatesByCampaignIds(anyList());
+    verify(itemDAO, never()).countByCampaignIdAndState(anyLong(), any());
+    verify(itemDAO, never()).existsByCampaignId(anyLong());
+  }
+
+  @Test
+  void getItemAggregatesOfEmptyListNeverQueries() {
+    assertTrue(storage.getItemAggregates(List.of()).isEmpty());
+    assertTrue(storage.getItemAggregates(null).isEmpty());
+    verifyNoInteractions(itemDAO);
   }
 
   @Test

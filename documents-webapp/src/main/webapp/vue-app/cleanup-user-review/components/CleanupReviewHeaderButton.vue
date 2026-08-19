@@ -39,12 +39,15 @@
       ref="drawer"
       expanded
       right
-      @closed="loadSummary">
+      @opened="drawerOpened = true"
+      @closed="drawerClosed">
       <template slot="title">
         {{ $t('cleanup.review.title') }}
       </template>
       <template slot="content">
-        <document-cleanup-user-review />
+        <!-- Mounted only while the drawer is open: the summary and the items
+             list reload on EVERY (re)open instead of once at page load -->
+        <document-cleanup-user-review v-if="drawerOpened" />
       </template>
     </exo-drawer>
   </div>
@@ -54,6 +57,7 @@ export default {
   data() {
     return {
       summary: null,
+      drawerOpened: false,
     };
   },
   computed: {
@@ -83,6 +87,11 @@ export default {
     },
     openDrawer() {
       this.$refs.drawer.open();
+    },
+    drawerClosed() {
+      this.drawerOpened = false;
+      // Refresh the header button visibility with the decisions just made
+      return this.loadSummary();
     },
   },
 };

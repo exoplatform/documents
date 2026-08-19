@@ -57,6 +57,24 @@ export function formatDateTime(timeInMillis) {
   });
 }
 
+export function formatRemaining(deadlineMillis, nowMillis) {
+  const remainingMillis = (deadlineMillis || 0) - (nowMillis || Date.now());
+  if (remainingMillis <= 0) {
+    return '';
+  }
+  const totalMinutes = Math.ceil(remainingMillis / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days) {
+    return hours ? `${days}d ${hours}h` : `${days}d`;
+  } else if (hours) {
+    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+  } else {
+    return `${minutes}m`;
+  }
+}
+
 export function formatEta(etaSeconds) {
   if (etaSeconds == null || etaSeconds < 0) {
     return '';

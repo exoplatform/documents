@@ -58,7 +58,7 @@
           id="cleanupGraceDays"
           v-model.number="graceDays"
           type="number"
-          min="1"
+          min="0"
           class="pt-2 pb-4"
           outlined
           dense />
@@ -139,12 +139,13 @@ export default {
         .split('\n')
         .map(path => path.trim())
         .filter(path => !!path);
+      const minFileSizeMb = this.numberOrNull(this.minFileSizeMb);
       this.$cleanupService.createCampaign({
         name: this.name,
-        periodMonths: this.periodMonths,
-        minFileSizeBytes: this.minFileSizeMb != null ? Math.round(this.minFileSizeMb * MEGA_BYTE) : null,
-        graceDays: this.graceDays,
-        maxVersionsPerFile: this.maxVersionsPerFile,
+        periodMonths: this.numberOrNull(this.periodMonths),
+        minFileSizeBytes: minFileSizeMb === null ? null : Math.round(minFileSizeMb * MEGA_BYTE),
+        graceDays: this.numberOrNull(this.graceDays),
+        maxVersionsPerFile: this.numberOrNull(this.maxVersionsPerFile),
         excludedPaths,
       }).then(campaign => {
         this.displayAlert(this.$t('cleanup.admin.createDrawer.success'));
@@ -153,6 +154,12 @@ export default {
       }).catch(() => {
         this.displayAlert(this.$t('cleanup.admin.createDrawer.error'), 'error');
       }).finally(() => this.loading = false);
+    },
+    numberOrNull(value) {
+      // A cleared numeric input yields '' (and '' * N === 0): treat '' / null
+      // / undefined as 'no override' so the platform default applies instead
+      // of a spurious 0
+      return value === '' || value == null || isNaN(value) ? null : Number(value);
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {

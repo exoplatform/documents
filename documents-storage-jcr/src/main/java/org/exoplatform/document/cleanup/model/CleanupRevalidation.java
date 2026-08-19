@@ -23,12 +23,17 @@ import lombok.NoArgsConstructor;
 /**
  * Result of re-evaluating a former candidate against the campaign criteria,
  * distinguishing a node that disappeared, one that got exempted, one that no
- * longer qualifies, and one still qualifying (candidate != null).
+ * longer qualifies, one still qualifying (candidate != null), and an outcome
+ * that could NOT be computed (transient JCR read failure): an unknown outcome
+ * must never be mistaken for a spared/gone node — the execution skips the item
+ * (never deletes on doubt) and the freshness refresh leaves it untouched.
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CleanupRevalidation {
+
+  private boolean          unknown;
 
   private boolean          exists;
 
@@ -37,15 +42,19 @@ public class CleanupRevalidation {
   private CleanupCandidate candidate;
 
   public static CleanupRevalidation gone() {
-    return new CleanupRevalidation(false, false, null);
+    return new CleanupRevalidation(false, false, false, null);
   }
 
   public static CleanupRevalidation exempted() {
-    return new CleanupRevalidation(true, true, null);
+    return new CleanupRevalidation(false, true, true, null);
   }
 
   public static CleanupRevalidation of(CleanupCandidate candidate) {
-    return new CleanupRevalidation(true, false, candidate);
+    return new CleanupRevalidation(false, true, false, candidate);
+  }
+
+  public static CleanupRevalidation unknown() {
+    return new CleanupRevalidation(true, false, false, null);
   }
 
 }

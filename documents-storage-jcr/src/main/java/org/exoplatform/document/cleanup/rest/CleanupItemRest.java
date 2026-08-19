@@ -73,12 +73,10 @@ public class CleanupItemRest {
   @Secured("users")
   @PostMapping(path = "keep", consumes = MediaType.APPLICATION_JSON_VALUE)
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  @Operation(method = "POST", summary = "Keep several cleanup candidate files", description = "Exempt several of the user's candidate files from the published campaign (ownership checked in the Service layer)")
+  @Operation(method = "POST", summary = "Keep several cleanup candidate files", description = "Exempt several of the user's candidate files from the published campaign (ownership checked in the Service layer), continuing past individual failures")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "204", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
-    @ApiResponse(responseCode = "403", description = "Forbidden"),
-    @ApiResponse(responseCode = "404", description = "Not found"),
   })
   public void keepItems(HttpServletRequest request,
                         @io.swagger.v3.oas.annotations.parameters.RequestBody
@@ -86,10 +84,50 @@ public class CleanupItemRest {
                         KeepItemsRestEntity keepItemsEntity) {
     try {
       campaignService.keepItems(keepItemsEntity.getItemIds(), request.getRemoteUser());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+  }
+
+  @Secured("users")
+  @PostMapping("{id}/unkeep")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(method = "POST", summary = "Un-keep a previously kept cleanup candidate file", description = "Undo the exemption of one of the user's kept files while the campaign is published (ownership checked in the Service layer)")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+    @ApiResponse(responseCode = "403", description = "Forbidden"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public void unkeepItem(HttpServletRequest request,
+                         @Parameter(description = "Campaign item identifier", required = true)
+                         @PathVariable("id")
+                         long id) {
+    try {
+      campaignService.unkeepItem(id, request.getRemoteUser());
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalAccessException e) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+  }
+
+  @Secured("users")
+  @PostMapping(path = "unkeep", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(method = "POST", summary = "Un-keep several previously kept cleanup candidate files", description = "Undo the exemption of several of the user's kept files while the campaign is published (ownership checked in the Service layer), continuing past individual failures")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+  })
+  public void unkeepItems(HttpServletRequest request,
+                          @io.swagger.v3.oas.annotations.parameters.RequestBody
+                          @RequestBody
+                          KeepItemsRestEntity keepItemsEntity) {
+    try {
+      campaignService.unkeepItems(keepItemsEntity.getItemIds(), request.getRemoteUser());
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }

@@ -31,6 +31,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -98,6 +99,9 @@ class CleanupExecutionServiceTest {
   @InjectMocks
   private CleanupExecutionService  executionService;
 
+  @Mock
+  private ExecutorService          workerExecutor;
+
   @BeforeEach
   void injectLifecycle() throws ReflectiveOperationException {
     // Mockito doesn't inject a @Spy @InjectMocks field into another
@@ -105,6 +109,13 @@ class CleanupExecutionServiceTest {
     Field lifecycleField = CleanupExecutionService.class.getDeclaredField("campaignLifecycle");
     lifecycleField.setAccessible(true); // NOSONAR test wiring
     lifecycleField.set(executionService, campaignLifecycle); // NOSONAR
+    // Replace the service's REAL single-thread executor with a mock: a live
+    // background worker would race the test with unstubbed collaborators
+    // (e.g. getBatchSize() = 0 -> PageRequest.of(0, 0) errors in every CI
+    // run); worker-body tests invoke executeCampaign() directly instead
+    Field executorField = CleanupExecutionService.class.getDeclaredField("executorService");
+    executorField.setAccessible(true); // NOSONAR test wiring
+    executorField.set(executionService, workerExecutor); // NOSONAR
   }
 
   @Test
@@ -118,6 +129,16 @@ class CleanupExecutionServiceTest {
     assertEquals(CleanupCampaignState.EXECUTING, executing.getState());
     assertEquals(5L, executing.getTotalCount());
     assertEquals(0L, executing.getProcessedCount());
+    // The purge worker is scheduled (and only scheduled: no live thread leaks
+    // out of the test)
+    verify(workerExecutor).execute(any());
+  }
+
+  @Test
+  void shouldScheduleTheWorkerOnResumeExecution() {
+    executionService.resumeExecution(CAMPAIGN_ID);
+
+    verify(workerExecutor).execute(any());
   }
 
   @Test
@@ -214,6 +235,30 @@ class CleanupExecutionServiceTest {
     assertTrue(campaignCaptor.getValue().getCompletedDate() > 0);
     assertNotNull(campaignCaptor.getValue().getSummaryJson());
     assertTrue(campaignCaptor.getValue().getSummaryJson().contains("reclaimedBytes"));
+  }
+
+  @Test
+  void shouldSkipItemWhenRevalidationOutcomeIsUnknown() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    CleanupCampaignItem unknownItem = item(17L, "uuid-unknown", CleanupAction.DELETE);
+    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
+                                                                                                 .thenReturn(new PageImpl<>(List.of(unknownItem)))
+                                                                                                 .thenReturn(new PageImpl<>(List.of()));
+    when(cleanupJcrStorage.revalidate(eq("uuid-unknown"), any())).thenReturn(CleanupRevalidation.unknown());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // A transient JCR read failure at revalidation time must NEVER let the
+    // item be deleted, nor mark it permanently spared: SKIPPED with a
+    // distinct reason
+    assertEquals(CleanupItemState.SKIPPED, unknownItem.getState());
+    assertEquals("cleanup.revalidationFailed", unknownItem.getFailureReason());
+    verify(cleanupJcrStorage, org.mockito.Mockito.never()).deleteNode(any());
+    verify(cleanupJcrStorage, org.mockito.Mockito.never()).purgeVersions(any(), org.mockito.ArgumentMatchers.anyInt());
   }
 
   @Test

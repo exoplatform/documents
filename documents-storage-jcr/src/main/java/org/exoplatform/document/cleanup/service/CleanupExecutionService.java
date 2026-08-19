@@ -179,12 +179,17 @@ public class CleanupExecutionService {
 
   /**
    * Per-item revalidation at delete time — THE correctness guarantee — then
-   * purge. Any error skips the item and continues.
+   * purge. Any error skips the item and continues; an UNKNOWN revalidation
+   * (transient JCR read failure) skips the item too — never spared, never
+   * deleted on doubt — with a distinct failure reason.
    */
   private void processItem(CleanupCampaignItem item, CleanupParams params) {
     try {
       CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(item.getNodeUuid(), params);
-      if (CleanupRevalidationUtil.applyRevalidation(item, revalidation)) {
+      if (revalidation.isUnknown()) {
+        item.setState(CleanupItemState.SKIPPED);
+        item.setFailureReason("cleanup.revalidationFailed");
+      } else if (CleanupRevalidationUtil.applyRevalidation(item, revalidation)) {
         CleanupAction action = item.getAction();
         CleanupPurgeResult result = action == CleanupAction.DELETE ?
                                                                    cleanupJcrStorage.deleteNode(item.getNodeUuid()) :

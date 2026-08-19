@@ -27,13 +27,16 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
 /**
  * Pure, JCR-free evaluation of the cleanup candidate criterion:
  * <ul>
- * <li>an exempted node (exo:cleanupExemption mixin) is never a candidate</li>
  * <li>a node under an excluded path prefix is never a candidate</li>
  * <li>DELETE: created AND last modified older than the campaign period, and
  * content size above the floor</li>
  * <li>PURGE_VERSIONS: version count above the campaign maximum (independent of
  * content dates), and versions size above the floor</li>
  * </ul>
+ * An exemption (exo:cleanupExemption mixin) is deliberately NOT evaluated
+ * here: an exempted node still qualifying by these criteria is emitted as an
+ * exempted-flagged {@link org.exoplatform.document.cleanup.model.CleanupCandidate},
+ * so it stays visible as 'Kept' in every campaign.
  */
 public class CleanupCriterionEvaluator {
 
@@ -49,7 +52,6 @@ public class CleanupCriterionEvaluator {
    * @param versionsSize cumulated versions size in bytes
    * @param versionCount number of versions (excluding the root version)
    * @param path node path
-   * @param hasExemptionMixin whether the node carries exo:cleanupExemption
    * @param params campaign parameters snapshot
    * @param nowMillis evaluation time (epoch millis)
    * @return the qualifying {@link CleanupAction}, or null when the node is not
@@ -61,10 +63,9 @@ public class CleanupCriterionEvaluator {
                                        long versionsSize,
                                        int versionCount,
                                        String path,
-                                       boolean hasExemptionMixin,
                                        CleanupParams params,
                                        long nowMillis) {
-    if (hasExemptionMixin || isExcluded(path, params.getExcludedPaths())) {
+    if (isExcluded(path, params.getExcludedPaths())) {
       return null;
     }
     long cutoffTime = computeCutoffTime(nowMillis, params.getPeriodMonths());

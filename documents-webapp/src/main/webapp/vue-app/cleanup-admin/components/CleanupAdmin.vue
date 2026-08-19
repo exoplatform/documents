@@ -16,7 +16,7 @@
  *
 -->
 <template>
-  <v-app class="cleanupAdminApp">
+  <v-app>
     <v-card class="application-body border-box-sizing pa-5" flat>
       <div class="d-flex align-center mb-4">
         <v-btn

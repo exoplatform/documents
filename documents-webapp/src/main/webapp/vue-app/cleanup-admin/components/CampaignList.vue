@@ -35,10 +35,11 @@
       {{ $cleanupUtils.formatDateTime(item.startedDate) }}
     </template>
     <template slot="item.progress" slot-scope="{item}">
-      <div class="d-flex align-center cleanupCampaignProgress">
+      <div class="d-flex align-center" style="min-width: 120px">
         <v-progress-linear
           :value="progressOf(item)"
           height="6"
+          style="min-width: 60px"
           rounded />
         <span class="ms-2 text-no-wrap caption">{{ progressOf(item) }}%</span>
       </div>

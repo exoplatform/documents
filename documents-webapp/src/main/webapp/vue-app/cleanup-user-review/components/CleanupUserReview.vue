@@ -18,7 +18,7 @@
 <template>
   <!-- Hosted in the Documents header review drawer (whose title slot carries
        the app title), no more a standalone portlet: plain div, no v-app -->
-  <div class="cleanupUserReviewApp">
+  <div class="full-width">
     <v-card class="pa-5" flat>
       <div v-if="loading" class="d-flex justify-center py-10">
         <v-progress-circular indeterminate />

@@ -33,13 +33,23 @@
         @click="publish">
         {{ $t('cleanup.admin.campaign.publish') }}
       </v-btn>
-      <v-btn
-        v-if="campaign.state === 'LOCKED'"
-        :loading="actionInProgress"
-        class="btn btn-primary me-2"
-        @click="execute">
-        {{ $t('cleanup.admin.campaign.execute') }}
-      </v-btn>
+      <v-tooltip
+        v-if="executable"
+        :disabled="executeEnabled"
+        bottom>
+        <template #activator="{ on, attrs }">
+          <div v-bind="attrs" v-on="on">
+            <v-btn
+              :disabled="!executeEnabled"
+              :loading="actionInProgress"
+              class="btn btn-primary me-2"
+              @click="execute">
+              {{ $t('cleanup.admin.campaign.execute') }}
+            </v-btn>
+          </div>
+        </template>
+        <span>{{ $t('cleanup.admin.execute.remaining', {0: remainingTime}) }}</span>
+      </v-tooltip>
       <v-btn
         v-if="cancelable"
         :loading="actionInProgress"
@@ -87,11 +97,25 @@ export default {
     return {
       campaign: null,
       actionInProgress: false,
+      now: Date.now(),
     };
   },
   computed: {
     cancelable() {
       return this.campaign && !['COMPLETED', 'CANCELLED'].includes(this.campaign.state);
+    },
+    executable() {
+      return ['PUBLISHED', 'LOCKED'].includes(this.campaign?.state);
+    },
+    graceDeadline() {
+      return this.campaign?.lockDate
+        || (this.campaign?.publishedDate && (this.campaign.publishedDate + (this.campaign.graceDays || 0) * 86400000)) || 0;
+    },
+    executeEnabled() {
+      return this.campaign?.state === 'LOCKED' || (!!this.graceDeadline && this.graceDeadline <= this.now);
+    },
+    remainingTime() {
+      return this.$cleanupUtils.formatRemaining(this.graceDeadline, this.now);
     },
     paramsSummary() {
       return this.$t('cleanup.admin.campaign.paramsSummary', {
@@ -124,6 +148,7 @@ export default {
   },
   methods: {
     loadCampaign() {
+      this.now = Date.now();
       return this.$cleanupService.getCampaign(this.campaignId)
         .then(campaign => this.campaign = campaign)
         .catch(() => this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error'));

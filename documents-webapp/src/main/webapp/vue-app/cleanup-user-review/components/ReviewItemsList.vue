@@ -42,7 +42,12 @@
       show-select
       @update:options="loadItems">
       <template slot="item.path" slot-scope="{item}">
-        <div :title="item.path" class="cleanupPathCell">{{ item.path }}</div>
+        <div
+          :title="item.path"
+          class="text-truncate"
+          style="max-width: 220px">
+          {{ item.path }}
+        </div>
       </template>
       <template slot="item.action" slot-scope="{item}">
         {{ $t(`cleanup.item.action.${item.action}`) }}
@@ -65,11 +70,20 @@
             @click="keepOne(item)">
             {{ $t('cleanup.review.items.keep') }}
           </v-btn>
+          <v-btn
+            v-else-if="item.state === 'EXEMPTED'"
+            :loading="item.loading"
+            class="btn"
+            small
+            @click="unkeepOne(item)">
+            {{ $t('cleanup.review.unkeep') }}
+          </v-btn>
           <v-tooltip
             :open-delay="500"
             bottom>
             <template #activator="{ on, attrs }">
               <v-btn
+                :aria-label="$t('cleanup.review.showDetails')"
                 icon
                 small
                 v-bind="attrs"
@@ -153,6 +167,17 @@ export default {
         .then(() => this.keptDone(itemIds.length))
         .catch(() => this.displayAlert(this.$t('cleanup.review.items.keepError'), 'error'))
         .finally(() => this.selectedItems.forEach(item => item.loading = false));
+    },
+    unkeepOne(item) {
+      item.loading = true;
+      return this.$cleanupService.unkeepItem(item.id)
+        .then(() => {
+          this.displayAlert(this.$t('cleanup.review.items.unkeepSuccess'));
+          this.$emit('kept');
+          return this.loadItems();
+        })
+        .catch(() => this.displayAlert(this.$t('cleanup.review.items.unkeepError'), 'error'))
+        .finally(() => item.loading = false);
     },
     keptDone(count) {
       this.displayAlert(this.$t('cleanup.review.items.keepSuccess', {0: count}));
