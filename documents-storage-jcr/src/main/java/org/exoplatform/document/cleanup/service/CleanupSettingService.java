@@ -58,25 +58,25 @@ public class CleanupSettingService {
   @Autowired
   private SettingService       settingService;
 
-  @Value("${cleanup.period.months:24}")
+  @Value("${documents.cleanup.period.months:24}")
   private int                  defaultPeriodMonths;
 
-  @Value("${cleanup.minFileSize.bytes:5242880}")
+  @Value("${documents.cleanup.minFileSize.bytes:5242880}")
   private long                 defaultMinFileSizeBytes;
 
-  @Value("${cleanup.grace.days:14}")
+  @Value("${documents.cleanup.grace.days:14}")
   private int                  defaultGraceDays;
 
-  @Value("${cleanup.maxVersionsPerFile:25}")
+  @Value("${documents.cleanup.maxVersionsPerFile:25}")
   private int                  defaultMaxVersionsPerFile;
 
-  @Value("${cleanup.excludedPaths:}")
+  @Value("${documents.cleanup.excludedPaths:}")
   private String               defaultExcludedPaths;
 
-  @Value("${cleanup.batch.size:200}")
+  @Value("${documents.cleanup.batch.size:200}")
   private int                  batchSize;
 
-  @Value("${cleanup.report.retention.campaigns:3}")
+  @Value("${documents.cleanup.report.retention.campaigns:3}")
   private int                  reportRetentionCampaigns;
 
   /**

@@ -21,14 +21,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -42,6 +48,8 @@ import javax.jcr.Property;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.Workspace;
+import javax.jcr.observation.EventListener;
+import javax.jcr.observation.ObservationManager;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
@@ -69,8 +77,6 @@ import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
-import org.exoplatform.services.jcr.ext.app.SessionProviderService;
-import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -82,6 +88,12 @@ import org.exoplatform.social.core.space.spi.SpaceService;
  * exists (strictly-greater comparison), batches carry the last scanned path as
  * the next checkpoint, and a JCR failure propagates so the scan stays
  * resumable.
+ * <p>
+ * Also pins the system-session discipline: sessions are opened on the
+ * COLLABORATION workspace with the configured timeout, every per-item primitive
+ * releases its own session, the streamed walk releases ONE session at the end,
+ * and the observation-listener session survives the registration to be released
+ * only by the unregistration.
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupJcrStorageTest {
@@ -100,25 +112,28 @@ class CleanupJcrStorageTest {
 
   private static final String    NODE_UUID_VERSIONED = "uuid-versioned";
 
+  private static final String    NODE_UUID_FLAKY     = "uuid-flaky";
+
   private static final String    JCR_ROOT_VERSION    = "jcr:rootVersion";
 
-  private static final String    USERS_PATH          = "/Users";                        // NOSONAR
+  private static final String    USERS_PATH          = "/Users";                              // NOSONAR
 
-  private static final String    PATH_A              = "/Users/j___/john/Private/a.pdf";// NOSONAR
+  private static final String    PATH_A              = "/Users/j___/john/Private/a.pdf";      // NOSONAR
 
-  private static final String    PATH_B              = "/Users/j___/john/Private/b.pdf";// NOSONAR
+  private static final String    PATH_B              = "/Users/j___/john/Private/b.pdf";      // NOSONAR
 
-  private static final String    PATH_C              = "/Users/j___/john/Private/c.pdf";// NOSONAR
+  private static final String    PATH_C              = "/Users/j___/john/Private/c.pdf";      // NOSONAR
 
-  private static final String    PATH_D              = "/Users/j___/john/Private/d.pdf";// NOSONAR
+  private static final String    PATH_D              = "/Users/j___/john/Private/d.pdf";      // NOSONAR
 
-  private static final String    PATH_E              = "/Users/j___/john/Private/e.pdf";// NOSONAR
+  private static final String    PATH_E              = "/Users/j___/john/Private/e.pdf";      // NOSONAR
+
+  private static final String    PATH_F              = "/Users/j___/john/Private/docs/a.pdf"; // NOSONAR
+
+  private static final long      SESSION_TIMEOUT     = 3600000L;
 
   @Mock
   private RepositoryService      repositoryService;
-
-  @Mock
-  private SessionProviderService sessionProviderService;
 
   @Mock
   private TrashStorage           trashStorage;
@@ -131,9 +146,6 @@ class CleanupJcrStorageTest {
 
   @Mock
   private ManageableRepository   repository;
-
-  @Mock
-  private SessionProvider        sessionProvider;
 
   @Mock
   private ExtendedSession        session;
@@ -166,11 +178,14 @@ class CleanupJcrStorageTest {
   private CleanupParams          params;
 
   @BeforeEach
-  void setUp() throws RepositoryException {
+  void setUp() throws Exception {
     params = new CleanupParams(6, 1024L, 7, 5, List.of(), 100);
-    when(repositoryService.getCurrentRepository()).thenReturn(repository);
-    when(sessionProviderService.getSystemSessionProvider(null)).thenReturn(sessionProvider);
-    when(sessionProvider.getSession(CleanupJcrStorage.COLLABORATION, repository)).thenReturn(session);
+    // Property value normally injected by Spring through the @Value fallback
+    setField("jcrSessionTimeout", SESSION_TIMEOUT);
+    when(repositoryService.getDefaultRepository()).thenReturn(repository);
+    // The cleanup roots live in the collaboration workspace: the session is
+    // asked for it by name, never for the deployment's default workspace
+    when(repository.getSystemSession(CleanupJcrStorage.COLLABORATION)).thenReturn(session);
     // Lenient: the exemption-mixin tests never query the workspace
     org.mockito.Mockito.lenient().when(session.getWorkspace()).thenReturn(workspace);
     org.mockito.Mockito.lenient().when(workspace.getQueryManager()).thenReturn(queryManager);
@@ -243,6 +258,10 @@ class CleanupJcrStorageTest {
     assertEquals(List.of(PATH_B, PATH_D, PATH_E), batchCheckpoints);
     assertEquals(List.of(2, 2, 1), batchScannedCounts);
     verify(nodeA, atLeastOnce()).isNodeType(anyString());
+    // The lazy NodeIterator needs the session for the WHOLE walk: exactly ONE
+    // session, opened once and logged out after the last batch, never per batch
+    verify(repository).getSystemSession(CleanupJcrStorage.COLLABORATION);
+    verify(session).logout();
   }
 
   @Test
@@ -365,7 +384,7 @@ class CleanupJcrStorageTest {
   void deleteNodeRemovesPointingSymlinksFirstAndReportsContentSizeAsReclaimedBytes() throws RepositoryException {
     Node node = mock(Node.class);
     when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
-    when(node.getPath()).thenReturn("/Users/j___/john/Private/docs/a.pdf");
+    when(node.getPath()).thenReturn(PATH_F);
     Node content = mock(Node.class);
     Property dataProperty = mock(Property.class);
     when(dataProperty.getLength()).thenReturn(2048L);
@@ -401,7 +420,7 @@ class CleanupJcrStorageTest {
     Node node = mock(Node.class);
     when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
     // Drive root = the user's Private folder, at depth 4 here
-    when(node.getPath()).thenReturn("/Users/j___/john/Private/docs/a.pdf");
+    when(node.getPath()).thenReturn(PATH_F);
     Node docsFolder = mock(Node.class);
     Node privateFolder = mock(Node.class);
     when(node.getParent()).thenReturn(docsFolder);
@@ -574,9 +593,9 @@ class CleanupJcrStorageTest {
 
   @Test
   void revalidateReturnsUnknownOnJcrReadFailure() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+    when(session.getNodeByIdentifier(NODE_UUID_FLAKY)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
-    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate("uuid-flaky", params);
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_FLAKY, params);
 
     // A transient read failure is a distinct UNKNOWN outcome: never 'gone',
     // never 'no longer a candidate' (which would permanently spare the item)
@@ -598,9 +617,9 @@ class CleanupJcrStorageTest {
 
   @Test
   void deleteNodeReportsFailedReadAsSkippedNeverAsGone() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+    when(session.getNodeByIdentifier(NODE_UUID_FLAKY)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
-    CleanupPurgeResult result = cleanupJcrStorage.deleteNode("uuid-flaky");
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_FLAKY);
 
     // A transient repository failure must NEVER be reported as 'the file
     // disappeared': GONE is a definitive outcome recorded on the item
@@ -611,9 +630,9 @@ class CleanupJcrStorageTest {
 
   @Test
   void purgeVersionsReportsFailedReadAsSkippedNeverAsGone() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+    when(session.getNodeByIdentifier(NODE_UUID_FLAKY)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions("uuid-flaky", 2);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_FLAKY, 2);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
@@ -628,19 +647,19 @@ class CleanupJcrStorageTest {
 
   @Test
   void addExemptionMixinReportsFailedReadAsFailedNeverAsNotFound() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+    when(session.getNodeByIdentifier(NODE_UUID_FLAKY)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
     // NOT_FOUND would make the Service mark the item GONE and durably discard
     // the user's keep decision; FAILED keeps it retryable
-    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.addExemptionMixin("uuid-flaky", "john"));
+    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.addExemptionMixin(NODE_UUID_FLAKY, "john"));
     verify(session, never()).save();
   }
 
   @Test
   void removeExemptionMixinReportsFailedReadAsFailedNeverAsNotFound() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+    when(session.getNodeByIdentifier(NODE_UUID_FLAKY)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
-    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.removeExemptionMixin("uuid-flaky"));
+    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_FLAKY));
     verify(session, never()).save();
   }
 
@@ -648,7 +667,7 @@ class CleanupJcrStorageTest {
   void deleteNodeReclaimedBytesSumContentSizeAndVersionsSizeOfAVersionableNode() throws RepositoryException {
     Node node = mock(Node.class);
     when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
-    when(node.getPath()).thenReturn("/Users/j___/john/Private/docs/a.pdf");
+    when(node.getPath()).thenReturn(PATH_F);
     Node content = mock(Node.class);
     Property dataProperty = mock(Property.class);
     when(dataProperty.getLength()).thenReturn(2048L);
@@ -675,6 +694,85 @@ class CleanupJcrStorageTest {
     assertEquals(2348L,
                  result.getReclaimedBytes(),
                  "Reclaimed bytes must sum the content size AND the versions size of a versionable node");
+  }
+
+  @Test
+  void perItemPrimitiveOpensACollaborationSessionWithTheConfiguredTimeoutAndReleasesIt() throws RepositoryException {
+    when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
+
+    cleanupJcrStorage.revalidate(NODE_UUID_GONE, params);
+
+    // The scan roots (/Users, /Groups/spaces) live in the collaboration
+    // workspace: it is named explicitly, never taken from the repository
+    // configuration whose default workspace is deployment-dependent
+    verify(repository).getSystemSession(CleanupJcrStorage.COLLABORATION);
+    verify(repository, never()).getConfiguration();
+    verify(session).setTimeout(SESSION_TIMEOUT);
+    // getSystemSession opens a BRAND-NEW session per call and the per-item
+    // primitives run once per campaign item: not releasing it would leak tens
+    // of thousands of sessions on a large campaign
+    verify(session).logout();
+  }
+
+  @Test
+  void observationSessionSurvivesRegistrationAndIsReleasedOnlyByUnregistration() throws RepositoryException {
+    ObservationManager observationManager = mock(ObservationManager.class);
+    when(workspace.getObservationManager()).thenReturn(observationManager);
+
+    assertTrue(cleanupJcrStorage.registerObservationListener((path, eventType) -> {
+      /* no-op callback */
+    }));
+
+    verify(observationManager).addEventListener(any(EventListener.class),
+                                                anyInt(),
+                                                eq("/"),
+                                                eq(true),
+                                                isNull(),
+                                                isNull(),
+                                                eq(false));
+    // A JCR listener is bound to the session that registered it: logging that
+    // session out here would silently kill the listener
+    verify(session, never()).logout();
+
+    cleanupJcrStorage.unregisterObservationListener();
+
+    // ONE dedicated long-lived session for the whole listener lifetime, logged
+    // out only AFTER the listener has been removed
+    verify(repository).getSystemSession(CleanupJcrStorage.COLLABORATION);
+    org.mockito.InOrder inOrder = inOrder(observationManager, session);
+    inOrder.verify(observationManager).removeEventListener(any(EventListener.class));
+    inOrder.verify(session).logout();
+  }
+
+  @Test
+  void failedObservationRegistrationReleasesTheSessionItOpened() throws RepositoryException {
+    ObservationManager observationManager = mock(ObservationManager.class);
+    when(workspace.getObservationManager()).thenReturn(observationManager);
+    doThrow(new RepositoryException(JCR_DOWN_ERROR_MSG)).when(observationManager)
+                                                        .addEventListener(any(EventListener.class),
+                                                                          anyInt(),
+                                                                          anyString(),
+                                                                          eq(true),
+                                                                          isNull(),
+                                                                          isNull(),
+                                                                          eq(false));
+
+    assertFalse(cleanupJcrStorage.registerObservationListener((path, eventType) -> {
+      /* no-op callback */
+    }));
+
+    // A failed registration owns no listener: its session must not be leaked
+    // until a later retry succeeds
+    verify(session).logout();
+    // ... and the listener field is cleared, so unregister is a no-op
+    cleanupJcrStorage.unregisterObservationListener();
+    verify(observationManager, never()).removeEventListener(any(EventListener.class));
+  }
+
+  private void setField(String name, Object value) throws ReflectiveOperationException {
+    Field field = CleanupJcrStorage.class.getDeclaredField(name);
+    field.setAccessible(true); // NOSONAR
+    field.set(cleanupJcrStorage, value);
   }
 
   /**

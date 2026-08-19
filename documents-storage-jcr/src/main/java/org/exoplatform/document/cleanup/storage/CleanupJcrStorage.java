@@ -38,6 +38,7 @@ import javax.jcr.version.VersionIterator;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.document.cleanup.constant.CleanupExemptionResult;
@@ -52,9 +53,10 @@ import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.config.RepositoryConfigurationException;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
-import org.exoplatform.services.jcr.ext.app.SessionProviderService;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.observation.ExtendedEvent;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -66,6 +68,23 @@ import org.exoplatform.social.core.space.spi.SpaceService;
  * JCR implementation of {@link CleanupJcrStorage} against the collaboration
  * workspace, always through a system session (async cleanup workers carry no
  * user conversation state).
+ * <p>
+ * SESSION LIFECYCLE — {@link #getSystemSession()} opens a BRAND-NEW system
+ * session on every call, so every method obtaining one MUST release it in a
+ * {@code finally} block through {@link #logout(Session)}. The per-item
+ * primitives (revalidate / addExemptionMixin / removeExemptionMixin /
+ * deleteNode / purgeVersions) are invoked once per campaign item: leaking one
+ * session per call would leave tens of thousands of live sessions behind on a
+ * large campaign. {@link #scanRoot} holds its session for the WHOLE streamed
+ * walk (the {@link NodeIterator} is lazy) and logs out only once the iteration
+ * is over, never inside the batch loop.
+ * <p>
+ * THE ONE EXCEPTION is the observation listener: a JCR listener is bound to the
+ * session that registered it, so logging that session out would silently kill
+ * the listener. {@link #registerObservationListener(BiConsumer)} therefore
+ * keeps ONE dedicated long-lived session in {@link #observationSession}, logged
+ * out only by {@link #unregisterObservationListener()} (or by a failed
+ * registration).
  */
 @Component
 public class CleanupJcrStorage {
@@ -86,9 +105,6 @@ public class CleanupJcrStorage {
   private RepositoryService             repositoryService;
 
   @Autowired
-  private SessionProviderService        sessionProviderService;
-
-  @Autowired
   private TrashStorage                  trashStorage;
 
   @Autowired
@@ -97,21 +113,33 @@ public class CleanupJcrStorage {
   @Autowired
   private SpaceService                  spaceService;
 
+  @Value("${documents.cleanup.jcr.session.timeout:3600000}")
+  private long                          jcrSessionTimeout;
+
   private CleanupJcrObservationListener observationListener;
+
+  /**
+   * Dedicated long-lived session owning the observation listener registration:
+   * never logged out per call, see the class comment
+   */
+  private Session                       observationSession;
 
   /**
    * @param rootPath scanned tree root path (e.g. /Users or /Groups/spaces)
    * @return total number of nt:file nodes under the given root
    */
   public long countFiles(String rootPath) {
+    Session session = null;
     try {
-      Session session = getSystemSession();
+      session = getSystemSession();
       QueryManager queryManager = session.getWorkspace().getQueryManager();
       Query query = queryManager.createQuery(buildScanQuery(rootPath), Query.SQL);
       return query.execute().getNodes().getSize();
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       LOG.warn("Error counting nt:file nodes under {}", rootPath, e);
       return 0;
+    } finally {
+      logout(session);
     }
   }
 
@@ -141,8 +169,12 @@ public class CleanupJcrStorage {
                        int batchSize,
                        CleanupParams params,
                        ScanBatchConsumer batchConsumer) { // NOSONAR
+    // ONE session for the whole streamed walk: the NodeIterator below is lazy,
+    // so the session must stay open until the iteration is over — logged out
+    // in the finally wrapping it, never inside the batch loop
+    Session session = null;
     try {
-      Session session = getSystemSession();
+      session = getSystemSession();
       QueryManager queryManager = session.getWorkspace().getQueryManager();
       Query query = queryManager.createQuery(buildScanQuery(rootPath), Query.SQL);
       // Single ordered query per root per scan run; on resume, fast-forward
@@ -190,11 +222,13 @@ public class CleanupJcrStorage {
       if (scannedInBatch > 0) {
         batchConsumer.onBatch(candidates, lastScannedPath, scannedInBatch);
       }
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       // Propagate so the scan worker leaves the campaign resumable from its
       // last persisted checkpoint instead of moving on to the next root
       throw new IllegalStateException("Error scanning nt:file nodes under " + rootPath +
           (StringUtils.isBlank(resumeAfterPath) ? "" : " (resuming after " + resumeAfterPath + ")"), e);
+    } finally {
+      logout(session);
     }
   }
 
@@ -231,8 +265,9 @@ public class CleanupJcrStorage {
    *         unknown on a JCR read failure)
    */
   public CleanupRevalidation revalidate(String nodeUuid, CleanupParams params) {
+    Session session = null;
     try {
-      Session session = getSystemSession();
+      session = getSystemSession();
       Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupRevalidation.gone();
@@ -241,20 +276,22 @@ public class CleanupJcrStorage {
       } else {
         return CleanupRevalidation.of(toCandidate(node, params));
       }
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       LOG.warn("Error revalidating cleanup candidate node {}", nodeUuid, e);
       return CleanupRevalidation.unknown();
+    } finally {
+      logout(session);
     }
   }
 
   /**
    * Node lookup distinguishing a MISSING node (null) from a repository failure
    * (propagated {@link RepositoryException}), unlike
-   * {@link JCRDocumentsUtil#getNodeByIdentifier(Session, String)} which swallows
-   * both into null. EVERY cleanup primitive goes through this lookup: reporting
-   * an item NOT_FOUND / GONE on a transient repository failure would durably
-   * discard the user's keep decision, or record a file as vanished while it is
-   * still there.
+   * {@link JCRDocumentsUtil#getNodeByIdentifier(Session, String)} which
+   * swallows both into null. EVERY cleanup primitive goes through this lookup:
+   * reporting an item NOT_FOUND / GONE on a transient repository failure would
+   * durably discard the user's keep decision, or record a file as vanished
+   * while it is still there.
    */
   private Node getNodeByIdentifierOrNull(Session session, String nodeUuid) throws RepositoryException {
     try {
@@ -297,10 +334,12 @@ public class CleanupJcrStorage {
       node.setProperty(EXO_CLEANUP_EXEMPTED_BY, username);
       session.save();
       return CleanupExemptionResult.ADDED;
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       refresh(session);
       LOG.warn("Error adding cleanup exemption mixin on node {}", nodeUuid, e);
       return CleanupExemptionResult.FAILED;
+    } finally {
+      logout(session);
     }
   }
 
@@ -337,10 +376,12 @@ public class CleanupJcrStorage {
         session.save();
       }
       return CleanupExemptionResult.ADDED;
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       refresh(session);
       LOG.warn("Error removing cleanup exemption mixin from node {}", nodeUuid, e);
       return CleanupExemptionResult.FAILED;
+    } finally {
+      logout(session);
     }
   }
 
@@ -350,8 +391,8 @@ public class CleanupJcrStorage {
    *
    * @param nodeUuid JCR node identifier
    * @return purge outcome with reclaimed bytes, GONE only when the node really
-   *         disappeared, or SKIPPED with a reason (a JCR read failure is SKIPPED,
-   *         never GONE)
+   *         disappeared, or SKIPPED with a reason (a JCR read failure is
+   *         SKIPPED, never GONE)
    */
   public CleanupPurgeResult deleteNode(String nodeUuid) {
     Session session = null;
@@ -378,10 +419,12 @@ public class CleanupJcrStorage {
     } catch (ReferentialIntegrityException e) {
       refresh(session);
       return CleanupPurgeResult.skipped("cleanup.referentialIntegrity: " + e.getMessage());
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       refresh(session);
       LOG.warn("Error hard-deleting node {}", nodeUuid, e);
       return CleanupPurgeResult.skipped("cleanup.deleteError: " + e.getMessage());
+    } finally {
+      logout(session);
     }
   }
 
@@ -392,12 +435,13 @@ public class CleanupJcrStorage {
    * @param nodeUuid JCR node identifier
    * @param maxVersionsPerFile number of versions to keep
    * @return purge outcome with reclaimed bytes, GONE only when the node really
-   *         disappeared, or SKIPPED with a reason (a JCR read failure is SKIPPED,
-   *         never GONE)
+   *         disappeared, or SKIPPED with a reason (a JCR read failure is
+   *         SKIPPED, never GONE)
    */
   public CleanupPurgeResult purgeVersions(String nodeUuid, int maxVersionsPerFile) {
+    Session session = null;
     try {
-      Session session = getSystemSession();
+      session = getSystemSession();
       Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupPurgeResult.gone();
@@ -425,15 +469,20 @@ public class CleanupJcrStorage {
         }
       }
       return CleanupPurgeResult.purged(reclaimedBytes);
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
       LOG.warn("Error purging versions of node {}", nodeUuid, e);
       return CleanupPurgeResult.skipped("cleanup.purgeVersionsError: " + e.getMessage());
+    } finally {
+      logout(session);
     }
   }
 
   /**
    * Registers a JCR observation listener forwarding (nodePath, eventType) pairs
-   * for changes under the scanned roots. Idempotent.
+   * for changes under the scanned roots. Idempotent. Unlike every other method
+   * here, the session obtained is NOT logged out: the listener is bound to it
+   * for its whole lifetime, so it is kept in {@link #observationSession} and
+   * released only by {@link #unregisterObservationListener()}.
    *
    * @param pathAndEventTypeCallback callback receiving the event node path and
    *          the event type name
@@ -445,7 +494,8 @@ public class CleanupJcrStorage {
       return true;
     }
     try {
-      ObservationManager observationManager = getSystemSession().getWorkspace().getObservationManager();
+      observationSession = getSystemSession();
+      ObservationManager observationManager = observationSession.getWorkspace().getObservationManager();
       observationListener = new CleanupJcrObservationListener(pathAndEventTypeCallback);
       observationManager.addEventListener(observationListener,
                                           Event.PROPERTY_CHANGED | Event.NODE_REMOVED | ExtendedEvent.NODE_MOVED,
@@ -455,8 +505,12 @@ public class CleanupJcrStorage {
                                           null,
                                           false);
       return true;
-    } catch (RepositoryException e) {
+    } catch (Exception e) {
+      // A failed registration owns no listener: release the session it opened
+      // instead of leaking it until the next retry succeeds
       observationListener = null;
+      logout(observationSession);
+      observationSession = null;
       // Callers decide the log level: startup retries in a backoff loop and
       // warns only after the final failure
       LOG.debug("Error registering cleanup JCR observation listener", e);
@@ -465,17 +519,24 @@ public class CleanupJcrStorage {
   }
 
   /**
-   * Unregisters the JCR observation listener, if registered. Idempotent.
+   * Unregisters the JCR observation listener, if registered, and logs out the
+   * session that owned it. Idempotent.
    */
   public synchronized void unregisterObservationListener() {
     if (observationListener == null) {
       return;
     }
     try {
-      getSystemSession().getWorkspace().getObservationManager().removeEventListener(observationListener);
-    } catch (RepositoryException e) {
+      if (observationSession != null) {
+        observationSession.getWorkspace().getObservationManager().removeEventListener(observationListener);
+      }
+    } catch (Exception e) {
       LOG.warn("Error unregistering cleanup JCR observation listener", e);
     } finally {
+      // Logout only AFTER removeEventListener: the listener lives on this
+      // session
+      logout(observationSession);
+      observationSession = null;
       observationListener = null;
     }
   }
@@ -607,9 +668,18 @@ public class CleanupJcrStorage {
     return "SELECT * FROM " + NodeTypeConstants.NT_FILE + " WHERE jcr:path LIKE '" + rootPath + "/%' ORDER BY jcr:path";
   }
 
-  private Session getSystemSession() throws RepositoryException {
-    return sessionProviderService.getSystemSessionProvider(null)
-                                 .getSession(COLLABORATION, repositoryService.getCurrentRepository());
+  /**
+   * Opens a BRAND-NEW system session on the collaboration workspace: the
+   * cleanup roots (/Users and /Groups/spaces) live there, so the workspace is
+   * named explicitly rather than taken from the repository default workspace,
+   * which a deployment is free to configure as something else. Every caller
+   * MUST release the returned session (see the class comment).
+   */
+  private Session getSystemSession() throws RepositoryException, RepositoryConfigurationException {
+    ManageableRepository repository = repositoryService.getDefaultRepository();
+    ExtendedSession dynamicSession = (ExtendedSession) repository.getSystemSession(COLLABORATION);
+    dynamicSession.setTimeout(jcrSessionTimeout);
+    return dynamicSession;
   }
 
   private void refresh(Session session) {
@@ -619,6 +689,21 @@ public class CleanupJcrStorage {
       }
     } catch (RepositoryException e) {
       LOG.debug("Error refreshing JCR session after a failed cleanup operation", e);
+    }
+  }
+
+  /**
+   * Releases a system session obtained from {@link #getSystemSession()}. A
+   * logout failure is only logged at debug level: it must never mask the
+   * outcome — nor the exception — of the cleanup operation that just ran.
+   */
+  private void logout(Session session) {
+    try {
+      if (session != null) {
+        session.logout();
+      }
+    } catch (Exception e) { // NOSONAR
+      LOG.debug("Error logging out the cleanup JCR system session", e);
     }
   }
 
