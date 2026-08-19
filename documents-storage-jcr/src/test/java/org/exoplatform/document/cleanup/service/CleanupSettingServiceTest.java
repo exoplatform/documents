@@ -23,7 +23,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -50,6 +49,8 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupSettingServiceTest {
+
+  private static final String   TRASH_PATH         = "/Trash";                    // NOSONAR
 
   private static final String   PERIOD_MONTHS_KEY  = "cleanup.period.months";
 
@@ -100,20 +101,21 @@ class CleanupSettingServiceTest {
                  "The CSV property must be trimmed and blank entries dropped");
   }
 
+  @SuppressWarnings({ "rawtypes", "unchecked" })
   @Test
   void persistedOverridesWinOverProperties() {
     lenient().when(settingService.get(any(Context.class), any(Scope.class), eq(PERIOD_MONTHS_KEY)))
-             .thenReturn((SettingValue) SettingValue.create("12"));
+             .thenReturn((SettingValue) SettingValue.create("12")); // NOSONAR
     lenient().when(settingService.get(any(Context.class), any(Scope.class), eq(MIN_FILE_SIZE_KEY)))
-             .thenReturn((SettingValue) SettingValue.create("2048"));
+             .thenReturn((SettingValue) SettingValue.create("2048")); // NOSONAR
     lenient().when(settingService.get(any(Context.class), any(Scope.class), eq(EXCLUDED_PATHS_KEY)))
-             .thenReturn((SettingValue) SettingValue.create("[\"/Trash\"]"));
+             .thenReturn((SettingValue) SettingValue.create("[\"/Trash\"]")); // NOSONAR
 
     CleanupParams defaults = cleanupSettingService.getDefaultParams();
 
     assertEquals(12, defaults.getPeriodMonths());
     assertEquals(2048L, defaults.getMinFileSizeBytes());
-    assertEquals(List.of("/Trash"), defaults.getExcludedPaths());
+    assertEquals(List.of(TRASH_PATH), defaults.getExcludedPaths());
     assertEquals(14, defaults.getGraceDays(), "Keys without a persisted override keep the property fallback");
     assertEquals(25, defaults.getMaxVersionsPerFile());
   }
@@ -127,7 +129,7 @@ class CleanupSettingServiceTest {
 
   @Test
   void getEffectiveParamsMergesPartialOverridesOverDefaults() {
-    CleanupParams overrides = new CleanupParams(12, null, null, 2, List.of("/Trash"), null);
+    CleanupParams overrides = new CleanupParams(12, null, null, 2, List.of(TRASH_PATH), null);
 
     CleanupParams effective = cleanupSettingService.getEffectiveParams(overrides);
 
@@ -135,13 +137,13 @@ class CleanupSettingServiceTest {
     assertEquals(5242880L, effective.getMinFileSizeBytes(), "Null override fields must fall back to the default");
     assertEquals(14, effective.getGraceDays());
     assertEquals(2, effective.getMaxVersionsPerFile());
-    assertEquals(List.of("/Trash"), effective.getExcludedPaths());
+    assertEquals(List.of(TRASH_PATH), effective.getExcludedPaths());
     assertEquals(200, effective.getBatchSize(), "The effective snapshot must always carry a batch size");
   }
 
   @Test
   void updateDefaultParamsPersistsOnlyProvidedFields() {
-    cleanupSettingService.updateDefaultParams(new CleanupParams(12, null, 10, null, List.of("/Trash"), null));
+    cleanupSettingService.updateDefaultParams(new CleanupParams(12, null, 10, null, List.of(TRASH_PATH), null));
 
     ArgumentCaptor<SettingValue<?>> valueCaptor = ArgumentCaptor.forClass(SettingValue.class);
     verify(settingService).set(any(Context.class), any(Scope.class), eq(PERIOD_MONTHS_KEY), valueCaptor.capture());
@@ -154,6 +156,7 @@ class CleanupSettingServiceTest {
     verify(settingService, never()).set(any(Context.class), any(Scope.class), eq(MAX_VERSIONS_KEY), any());
   }
 
+  @SuppressWarnings({ "unchecked", "rawtypes" })
   @Test
   void updatedDefaultsFeedBackIntoEffectiveParams() {
     lenient().when(settingService.get(any(Context.class), any(Scope.class), eq(GRACE_DAYS_KEY)))

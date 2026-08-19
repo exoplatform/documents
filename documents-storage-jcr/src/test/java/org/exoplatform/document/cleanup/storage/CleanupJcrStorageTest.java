@@ -86,15 +86,33 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 @ExtendWith(MockitoExtension.class)
 class CleanupJcrStorageTest {
 
-  private static final String    PATH_A = "/Users/j___/john/Private/a.pdf";
+  private static final String    JCR_DOWN_ERROR_MSG  = "JCR down";
 
-  private static final String    PATH_B = "/Users/j___/john/Private/b.pdf";
+  private static final String    NODE_UUID_A         = "uuid-a";
 
-  private static final String    PATH_C = "/Users/j___/john/Private/c.pdf";
+  private static final String    NODE_UUID_PLAIN     = "uuid-plain";
 
-  private static final String    PATH_D = "/Users/j___/john/Private/d.pdf";
+  private static final String    NODE_UUID_DOOMED    = "uuid-doomed";
 
-  private static final String    PATH_E = "/Users/j___/john/Private/e.pdf";
+  private static final String    NODE_UUID_GONE      = "uuid-gone";
+
+  private static final String    NODE_UUID_KEPT      = "uuid-kept";
+
+  private static final String    NODE_UUID_VERSIONED = "uuid-versioned";
+
+  private static final String    JCR_ROOT_VERSION    = "jcr:rootVersion";
+
+  private static final String    USERS_PATH          = "/Users";                        // NOSONAR
+
+  private static final String    PATH_A              = "/Users/j___/john/Private/a.pdf";// NOSONAR
+
+  private static final String    PATH_B              = "/Users/j___/john/Private/b.pdf";// NOSONAR
+
+  private static final String    PATH_C              = "/Users/j___/john/Private/c.pdf";// NOSONAR
+
+  private static final String    PATH_D              = "/Users/j___/john/Private/d.pdf";// NOSONAR
+
+  private static final String    PATH_E              = "/Users/j___/john/Private/e.pdf";// NOSONAR
 
   @Mock
   private RepositoryService      repositoryService;
@@ -173,7 +191,7 @@ class CleanupJcrStorageTest {
     List<String> batchCheckpoints = new ArrayList<>();
     List<Integer> batchScannedCounts = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot("/Users", PATH_B, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, PATH_B, 2, params, (candidates, lastScannedPath, scannedCount) -> {
       batchCheckpoints.add(lastScannedPath);
       batchScannedCounts.add(scannedCount);
       return true;
@@ -199,7 +217,7 @@ class CleanupJcrStorageTest {
     when(queryResult.getNodes()).thenReturn(nodes);
     List<String> batchCheckpoints = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot("/Users", PATH_B, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, PATH_B, 2, params, (candidates, lastScannedPath, scannedCount) -> {
       batchCheckpoints.add(lastScannedPath);
       return true;
     });
@@ -216,7 +234,7 @@ class CleanupJcrStorageTest {
     List<String> batchCheckpoints = new ArrayList<>();
     List<Integer> batchScannedCounts = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot("/Users", null, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 2, params, (candidates, lastScannedPath, scannedCount) -> {
       batchCheckpoints.add(lastScannedPath);
       batchScannedCounts.add(scannedCount);
       return true;
@@ -233,7 +251,7 @@ class CleanupJcrStorageTest {
     when(queryResult.getNodes()).thenReturn(nodes);
     List<String> batchCheckpoints = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot("/Users", null, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 2, params, (candidates, lastScannedPath, scannedCount) -> {
       batchCheckpoints.add(lastScannedPath);
       return false;
     });
@@ -244,29 +262,34 @@ class CleanupJcrStorageTest {
 
   @Test
   void scanRootPropagatesJcrFailureToStayResumable() throws RepositoryException {
-    when(query.execute()).thenThrow(new RepositoryException("JCR down"));
+    when(query.execute()).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
     assertThrows(IllegalStateException.class,
-                 () -> cleanupJcrStorage.scanRoot("/Users", PATH_B, 2, params, (candidates, lastScannedPath,
-                                                                                scannedCount) -> true));
+                 () -> cleanupJcrStorage.scanRoot(USERS_PATH,
+                                                  PATH_B,
+                                                  2,
+                                                  params,
+                                                  (candidates,
+                                                   lastScannedPath,
+                                                   scannedCount) -> true));
   }
 
   @Test
   void scanRootEmitsQualifyingExemptedFileFlaggedWithMixinDecision() throws RepositoryException {
     Calendar exemptedDate = Calendar.getInstance();
-    Node exemptedNode = qualifyingNode(PATH_A, "uuid-a", true, "mary", exemptedDate);
+    Node exemptedNode = qualifyingNode(PATH_A, NODE_UUID_A, true, "mary", exemptedDate);
     NodeIterator nodes = nodeIterator(exemptedNode);
     when(queryResult.getNodes()).thenReturn(nodes);
     List<CleanupCandidate> emitted = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot("/Users", null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
       emitted.addAll(candidates);
       return true;
     });
 
     assertEquals(1, emitted.size(), "A qualifying exempted file must be emitted, no more skipped");
     CleanupCandidate candidate = emitted.get(0);
-    assertEquals("uuid-a", candidate.getNodeUuid());
+    assertEquals(NODE_UUID_A, candidate.getNodeUuid());
     assertEquals(CleanupAction.DELETE, candidate.getAction());
     assertEquals(2048L, candidate.getFileSize());
     assertTrue(candidate.isExempted());
@@ -276,12 +299,12 @@ class CleanupJcrStorageTest {
 
   @Test
   void scanRootEmitsQualifyingNonExemptedFileUnflagged() throws RepositoryException {
-    Node plainNode = qualifyingNode(PATH_A, "uuid-a", false, null, null);
+    Node plainNode = qualifyingNode(PATH_A, NODE_UUID_A, false, null, null);
     NodeIterator nodes = nodeIterator(plainNode);
     when(queryResult.getNodes()).thenReturn(nodes);
     List<CleanupCandidate> emitted = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot("/Users", null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
       emitted.addAll(candidates);
       return true;
     });
@@ -293,20 +316,20 @@ class CleanupJcrStorageTest {
 
   @Test
   void removeExemptionMixinReturnsNotFoundWhenNodeIsGone() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-gone")).thenThrow(new PathNotFoundException("gone"));
+    when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
 
-    assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.removeExemptionMixin("uuid-gone"));
+    assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_GONE));
   }
 
   @Test
   void removeExemptionMixinChecksOutCheckedInVersionableNodeThenRemovesAndSaves() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-kept")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
     when(node.isCheckedOut()).thenReturn(false);
     when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(true);
 
-    assertEquals(CleanupExemptionResult.ADDED, cleanupJcrStorage.removeExemptionMixin("uuid-kept"));
+    assertEquals(CleanupExemptionResult.ADDED, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_KEPT));
 
     verify(node).checkout();
     verify(node).removeMixin(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION);
@@ -316,9 +339,9 @@ class CleanupJcrStorageTest {
   @Test
   void removeExemptionMixinIsIdempotentWhenMixinAbsent() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-plain")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_PLAIN)).thenReturn(node);
 
-    assertEquals(CleanupExemptionResult.ADDED, cleanupJcrStorage.removeExemptionMixin("uuid-plain"));
+    assertEquals(CleanupExemptionResult.ADDED, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_PLAIN));
 
     verify(node, never()).removeMixin(anyString());
     verify(session, never()).save();
@@ -327,12 +350,12 @@ class CleanupJcrStorageTest {
   @Test
   void removeExemptionMixinReturnsFailedAndRefreshesSessionOnJcrWriteFailure() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-kept")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
     when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(true);
-    doThrow(new RepositoryException("JCR down")).when(node).removeMixin(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION);
+    doThrow(new RepositoryException(JCR_DOWN_ERROR_MSG)).when(node).removeMixin(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION);
 
-    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.removeExemptionMixin("uuid-kept"));
+    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_KEPT));
 
     verify(session, never()).save();
     verify(session).refresh(false);
@@ -341,7 +364,7 @@ class CleanupJcrStorageTest {
   @Test
   void deleteNodeRemovesPointingSymlinksFirstAndReportsContentSizeAsReclaimedBytes() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-doomed")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
     when(node.getPath()).thenReturn("/Users/j___/john/Private/docs/a.pdf");
     Node content = mock(Node.class);
     Property dataProperty = mock(Property.class);
@@ -360,7 +383,7 @@ class CleanupJcrStorageTest {
     when(parentFolder.getDepth()).thenReturn(5);
     when(parentFolder.hasNodes()).thenReturn(true);
 
-    CleanupPurgeResult result = cleanupJcrStorage.deleteNode("uuid-doomed");
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
 
     assertEquals(CleanupItemState.PURGED, result.getState());
     assertEquals(2048L, result.getReclaimedBytes(), "Reclaimed bytes must report the content size");
@@ -376,7 +399,7 @@ class CleanupJcrStorageTest {
   @Test
   void deleteNodeSweepsEmptyAncestorsStoppingAtTheDriveRoot() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-doomed")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
     // Drive root = the user's Private folder, at depth 4 here
     when(node.getPath()).thenReturn("/Users/j___/john/Private/docs/a.pdf");
     Node docsFolder = mock(Node.class);
@@ -388,7 +411,7 @@ class CleanupJcrStorageTest {
     when(docsFolder.getParent()).thenReturn(privateFolder);
     when(privateFolder.getDepth()).thenReturn(4);
 
-    CleanupPurgeResult result = cleanupJcrStorage.deleteNode("uuid-doomed");
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
 
     assertEquals(CleanupItemState.PURGED, result.getState());
     // The now-empty docs folder is swept, the drive root itself never is
@@ -417,9 +440,9 @@ class CleanupJcrStorageTest {
 
   @Test
   void deleteNodeReturnsGoneWhenNodeMissing() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-gone")).thenThrow(new PathNotFoundException("gone"));
+    when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
 
-    CleanupPurgeResult result = cleanupJcrStorage.deleteNode("uuid-gone");
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_GONE);
 
     assertEquals(CleanupItemState.GONE, result.getState());
     verify(session, never()).save();
@@ -428,14 +451,14 @@ class CleanupJcrStorageTest {
   @Test
   void purgeVersionsRemovesOldestFirstDownToMaxSkippingRootAndBaseVersions() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-versioned")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_VERSIONED)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
     VersionHistory versionHistory = mock(VersionHistory.class);
     when(node.getVersionHistory()).thenReturn(versionHistory);
     Version baseVersion = mock(Version.class);
     when(baseVersion.getName()).thenReturn("4");
     when(node.getBaseVersion()).thenReturn(baseVersion);
-    Version rootVersion = version("jcr:rootVersion", 0L);
+    Version rootVersion = version(JCR_ROOT_VERSION, 0L);
     Version firstVersion = version("1", 100L);
     Version secondVersion = version("2", 200L);
     Version thirdVersion = version("3", 300L);
@@ -446,7 +469,7 @@ class CleanupJcrStorageTest {
     VersionIterator walkIterator = versionIterator(rootVersion, firstVersion, secondVersion, thirdVersion, fourthVersion);
     when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions("uuid-versioned", 2);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 2);
 
     assertEquals(CleanupItemState.PURGED, result.getState());
     assertEquals(300L, result.getReclaimedBytes(), "Reclaimed bytes must sum the removed version sizes");
@@ -454,7 +477,7 @@ class CleanupJcrStorageTest {
     // (skipped by name) nor the base (current) version
     verify(versionHistory).removeVersion("1");
     verify(versionHistory).removeVersion("2");
-    verify(versionHistory, never()).removeVersion("jcr:rootVersion");
+    verify(versionHistory, never()).removeVersion(JCR_ROOT_VERSION);
     verify(versionHistory, never()).removeVersion("3");
     verify(versionHistory, never()).removeVersion("4");
   }
@@ -462,7 +485,7 @@ class CleanupJcrStorageTest {
   @Test
   void purgeVersionsSkipsWhenAVersionRemovalFails() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-versioned")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_VERSIONED)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
     VersionHistory versionHistory = mock(VersionHistory.class);
     when(node.getVersionHistory()).thenReturn(versionHistory);
@@ -471,14 +494,14 @@ class CleanupJcrStorageTest {
     when(node.getBaseVersion()).thenReturn(baseVersion);
     VersionIterator countIterator = mock(VersionIterator.class);
     when(countIterator.getSize()).thenReturn(4L); // root + 3 versions
-    VersionIterator walkIterator = versionIterator(version("jcr:rootVersion", 0L),
+    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L),
                                                    version("1", 100L),
                                                    version("2", 200L),
                                                    version("3", 300L));
     when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
     doThrow(new RepositoryException("version in use")).when(versionHistory).removeVersion("1");
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions("uuid-versioned", 1);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 1);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
@@ -487,10 +510,10 @@ class CleanupJcrStorageTest {
   @Test
   void purgeVersionsSkipsNonVersionableNode() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-plain")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_PLAIN)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions("uuid-plain", 2);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_PLAIN, 2);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertEquals("cleanup.notVersionable", result.getFailureReason());
@@ -499,12 +522,12 @@ class CleanupJcrStorageTest {
   @Test
   void addExemptionMixinChecksOutCheckedInVersionableNodeBeforeWriting() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-kept")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
     when(node.isCheckedOut()).thenReturn(false);
     when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(false);
 
-    assertEquals(CleanupExemptionResult.ADDED, cleanupJcrStorage.addExemptionMixin("uuid-kept", "john"));
+    assertEquals(CleanupExemptionResult.ADDED, cleanupJcrStorage.addExemptionMixin(NODE_UUID_KEPT, "john"));
 
     // A checked-in versionable node rejects property writes: checkout FIRST
     org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(node, session);
@@ -518,22 +541,22 @@ class CleanupJcrStorageTest {
 
   @Test
   void addExemptionMixinReturnsNotFoundWhenNodeIsGone() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-gone")).thenThrow(new PathNotFoundException("gone"));
+    when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
 
-    assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.addExemptionMixin("uuid-gone", "john"));
+    assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.addExemptionMixin(NODE_UUID_GONE, "john"));
   }
 
   @Test
   void addExemptionMixinReturnsFailedAndRefreshesSessionOnJcrWriteFailure() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-kept")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
     when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(false);
     when(node.setProperty(org.mockito.ArgumentMatchers.eq(CleanupJcrStorage.EXO_CLEANUP_EXEMPTED_DATE),
                           org.mockito.ArgumentMatchers.any(Calendar.class)))
-                                                                            .thenThrow(new RepositoryException("JCR down"));
+                                                                            .thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
-    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.addExemptionMixin("uuid-kept", "john"));
+    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.addExemptionMixin(NODE_UUID_KEPT, "john"));
 
     verify(session, never()).save();
     verify(session).refresh(false);
@@ -541,9 +564,9 @@ class CleanupJcrStorageTest {
 
   @Test
   void revalidateReturnsGoneWhenNodeMissing() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-gone")).thenThrow(new PathNotFoundException("gone"));
+    when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
 
-    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate("uuid-gone", params);
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_GONE, params);
 
     assertFalse(revalidation.isUnknown());
     assertFalse(revalidation.isExists());
@@ -551,7 +574,7 @@ class CleanupJcrStorageTest {
 
   @Test
   void revalidateReturnsUnknownOnJcrReadFailure() throws RepositoryException {
-    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException("JCR down"));
+    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
     CleanupRevalidation revalidation = cleanupJcrStorage.revalidate("uuid-flaky", params);
 
@@ -564,13 +587,94 @@ class CleanupJcrStorageTest {
   @Test
   void revalidateReturnsExemptedWhenMixinPresent() throws RepositoryException {
     Node node = mock(Node.class);
-    when(session.getNodeByIdentifier("uuid-kept")).thenReturn(node);
+    when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
     when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(true);
 
-    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate("uuid-kept", params);
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_KEPT, params);
 
     assertFalse(revalidation.isUnknown());
     assertTrue(revalidation.isExempted());
+  }
+
+  @Test
+  void deleteNodeReportsFailedReadAsSkippedNeverAsGone() throws RepositoryException {
+    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode("uuid-flaky");
+
+    // A transient repository failure must NEVER be reported as 'the file
+    // disappeared': GONE is a definitive outcome recorded on the item
+    assertEquals(CleanupItemState.SKIPPED, result.getState());
+    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    verify(session, never()).save();
+  }
+
+  @Test
+  void purgeVersionsReportsFailedReadAsSkippedNeverAsGone() throws RepositoryException {
+    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions("uuid-flaky", 2);
+
+    assertEquals(CleanupItemState.SKIPPED, result.getState());
+    assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
+  }
+
+  @Test
+  void purgeVersionsReturnsGoneOnlyWhenNodeReallyMissing() throws RepositoryException {
+    when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
+
+    assertEquals(CleanupItemState.GONE, cleanupJcrStorage.purgeVersions(NODE_UUID_GONE, 2).getState());
+  }
+
+  @Test
+  void addExemptionMixinReportsFailedReadAsFailedNeverAsNotFound() throws RepositoryException {
+    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    // NOT_FOUND would make the Service mark the item GONE and durably discard
+    // the user's keep decision; FAILED keeps it retryable
+    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.addExemptionMixin("uuid-flaky", "john"));
+    verify(session, never()).save();
+  }
+
+  @Test
+  void removeExemptionMixinReportsFailedReadAsFailedNeverAsNotFound() throws RepositoryException {
+    when(session.getNodeByIdentifier("uuid-flaky")).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.removeExemptionMixin("uuid-flaky"));
+    verify(session, never()).save();
+  }
+
+  @Test
+  void deleteNodeReclaimedBytesSumContentSizeAndVersionsSizeOfAVersionableNode() throws RepositoryException {
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
+    when(node.getPath()).thenReturn("/Users/j___/john/Private/docs/a.pdf");
+    Node content = mock(Node.class);
+    Property dataProperty = mock(Property.class);
+    when(dataProperty.getLength()).thenReturn(2048L);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(content);
+    when(content.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    when(content.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
+    // Versionable: the version history bytes are freed by the delete too and
+    // must be counted in the reclaimed total
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    // Built before the stubbing: the iterator helper stubs its own mock
+    VersionIterator versions = versionIterator(version(JCR_ROOT_VERSION, 0L), version("1", 100L), version("2", 200L));
+    when(versionHistory.getAllVersions()).thenReturn(versions);
+    Node parentFolder = mock(Node.class);
+    when(node.getParent()).thenReturn(parentFolder);
+    when(parentFolder.getDepth()).thenReturn(5);
+    when(parentFolder.hasNodes()).thenReturn(true);
+
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
+
+    assertEquals(CleanupItemState.PURGED, result.getState());
+    assertEquals(2348L,
+                 result.getReclaimedBytes(),
+                 "Reclaimed bytes must sum the content size AND the versions size of a versionable node");
   }
 
   /**
@@ -631,12 +735,15 @@ class CleanupJcrStorageTest {
     ownerIdentity.setId("7");
     when(identityManager.getOrCreateUserIdentity("john")).thenReturn(ownerIdentity);
     if (exempted) {
-      // Lenient: toCandidate also asks isNodeType("mix:versionable"), and a strict
+      // Lenient: toCandidate also asks isNodeType("mix:versionable"), and a
+      // strict
       // stub here would turn that call into an argument mismatch
       org.mockito.Mockito.lenient().when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(true);
-      // Lenient: while these mixin-property stubbings are still unsatisfied, the
+      // Lenient: while these mixin-property stubbings are still unsatisfied,
+      // the
       // date reads of JCRDocumentsUtil.getLastModifiedDate (hasProperty on
-      // jcr:content/jcr:lastModified & co) would be rejected as argument mismatches
+      // jcr:content/jcr:lastModified & co) would be rejected as argument
+      // mismatches
       Property exemptedByProperty = mock(Property.class);
       org.mockito.Mockito.lenient().when(exemptedByProperty.getString()).thenReturn(exemptedBy);
       org.mockito.Mockito.lenient().when(node.hasProperty(CleanupJcrStorage.EXO_CLEANUP_EXEMPTED_BY)).thenReturn(true);

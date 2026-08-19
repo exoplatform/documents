@@ -33,6 +33,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
@@ -55,10 +56,14 @@ import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupExemptionResult;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
+import org.exoplatform.document.cleanup.model.CleanupBulkFailure;
+import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignAggregates;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
+import org.exoplatform.document.cleanup.model.CleanupComparison;
+import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
@@ -72,6 +77,10 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 
 @ExtendWith(MockitoExtension.class)
 class CleanupCampaignServiceTest {
+
+  private static final String      PATH                        = "/Users/john/Private/docs"; // NOSONAR
+
+  private static final String      PROPERTY_CHANGED_EVENT      = "PROPERTY_CHANGED";
 
   private static final String      CLEANUP_INVALID_STATE_ERROR = "cleanup.invalidState";
 
@@ -241,7 +250,8 @@ class CleanupCampaignServiceTest {
     CleanupCampaign published = campaignService.publishCampaign(CAMPAIGN_ID);
 
     assertEquals(CleanupCampaignState.PUBLISHED, published.getState());
-    assertEquals(published.getPublishedDate(), published.getLockDate(),
+    assertEquals(published.getPublishedDate(),
+                 published.getLockDate(),
                  "A zero grace period must make the deadline elapse at publication");
 
     // The next scheduler tick locks the campaign right away
@@ -312,7 +322,8 @@ class CleanupCampaignServiceTest {
 
   @Test
   void shouldRejectKeepOfForeignItem() {
-    mockPublishedCampaignWithItem(CleanupItemState.CANDIDATE);
+    // No campaign stub: the ownership check runs BEFORE the campaign is loaded
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item(CleanupItemState.CANDIDATE));
     when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", "mary"));
 
     assertThrows(IllegalAccessException.class, () -> campaignService.keepItem(ITEM_ID, USERNAME));
@@ -338,7 +349,7 @@ class CleanupCampaignServiceTest {
 
   @Test
   void shouldRejectKeepOfSpaceItemWhenUserIsNotManager() {
-    mockPublishedCampaignWithItem(CleanupItemState.CANDIDATE);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item(CleanupItemState.CANDIDATE));
     when(identityManager.getIdentity(5l)).thenReturn(spaceIdentity("5", SPACE_NAME));
     Space space = new Space();
     when(spaceService.getSpaceByPrettyName(SPACE_NAME)).thenReturn(space);
@@ -351,12 +362,104 @@ class CleanupCampaignServiceTest {
   void shouldRejectKeepWhenCampaignNotPublished() {
     CleanupCampaignItem item = item(CleanupItemState.CANDIDATE);
     when(campaignStorage.getItem(ITEM_ID)).thenReturn(item);
+    when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", USERNAME));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.LOCKED));
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                                                       () -> campaignService.keepItem(ITEM_ID, USERNAME));
 
     assertEquals("cleanup.campaignNotPublished", exception.getMessage());
+  }
+
+  @Test
+  void shouldRejectKeepOfForeignItemBeforeRevealingTheCampaignState() {
+    // Ownership is checked FIRST: probing item ids must never let a non-owner
+    // learn that the item exists nor which state its campaign is in
+    CleanupCampaignItem item = item(CleanupItemState.PURGED);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item);
+    when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", "mary"));
+
+    assertThrows(IllegalAccessException.class, () -> campaignService.keepItem(ITEM_ID, USERNAME));
+
+    // The campaign was never even loaded, so no state could leak through the
+    // 400 message codes
+    verify(campaignStorage, never()).getCampaign(anyLong());
+    verify(cleanupJcrStorage, never()).addExemptionMixin(any(), any());
+  }
+
+  @Test
+  void shouldRejectUnkeepOfForeignItemBeforeRevealingTheCampaignState() {
+    CleanupCampaignItem item = item(CleanupItemState.CANDIDATE);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item);
+    when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", "mary"));
+
+    assertThrows(IllegalAccessException.class, () -> campaignService.unkeepItem(ITEM_ID, USERNAME));
+
+    verify(campaignStorage, never()).getCampaign(anyLong());
+    verify(cleanupJcrStorage, never()).removeExemptionMixin(any());
+  }
+
+  @Test
+  void shouldFailClosedOnKeepAndUnkeepWhenOwnerIdentityUnresolvable() {
+    CleanupCampaignItem item = item(CleanupItemState.CANDIDATE);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item);
+    when(identityManager.getIdentity(5l)).thenReturn(null);
+
+    // An unresolvable owner identity denies access, it never falls through to
+    // the decision
+    assertThrows(IllegalAccessException.class, () -> campaignService.keepItem(ITEM_ID, USERNAME));
+    assertThrows(IllegalAccessException.class, () -> campaignService.unkeepItem(ITEM_ID, USERNAME));
+    verify(cleanupJcrStorage, never()).addExemptionMixin(any(), any());
+    verify(cleanupJcrStorage, never()).removeExemptionMixin(any());
+  }
+
+  @Test
+  void shouldFailClosedOnKeepAndUnkeepWhenOwningSpaceUnresolvable() {
+    CleanupCampaignItem item = item(CleanupItemState.EXEMPTED);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item);
+    when(identityManager.getIdentity(5l)).thenReturn(spaceIdentity("5", SPACE_NAME));
+    when(spaceService.getSpaceByPrettyName(SPACE_NAME)).thenReturn(null);
+
+    // A space that can't be resolved anymore denies access too (fail closed),
+    // never grants it
+    assertThrows(IllegalAccessException.class, () -> campaignService.keepItem(ITEM_ID, USERNAME));
+    assertThrows(IllegalAccessException.class, () -> campaignService.unkeepItem(ITEM_ID, USERNAME));
+    verify(cleanupJcrStorage, never()).addExemptionMixin(any(), any());
+    verify(cleanupJcrStorage, never()).removeExemptionMixin(any());
+  }
+
+  @Test
+  void shouldRejectUnkeepOfSpaceItemWhenUserIsNotManager() {
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item(CleanupItemState.EXEMPTED));
+    when(identityManager.getIdentity(5l)).thenReturn(spaceIdentity("5", SPACE_NAME));
+    Space space = new Space();
+    when(spaceService.getSpaceByPrettyName(SPACE_NAME)).thenReturn(space);
+    when(spaceService.isManager(space, USERNAME)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> campaignService.unkeepItem(ITEM_ID, USERNAME));
+    verify(cleanupJcrStorage, never()).removeExemptionMixin(any());
+  }
+
+  @Test
+  void shouldRejectKeepAndUnkeepOnceGraceDeadlineElapsedEvenWhileStillPublished() {
+    // The locking cron runs every 10 minutes, so a campaign stays PUBLISHED for
+    // a while past its deadline (always so with a zero grace period): the review
+    // window freezes on the DEADLINE, not on the LOCKED transition
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    campaign.setLockDate(System.currentTimeMillis() - 1000);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item(CleanupItemState.CANDIDATE))
+                                          .thenReturn(item(CleanupItemState.EXEMPTED));
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", USERNAME));
+
+    assertEquals("cleanup.reviewClosed",
+                 assertThrows(IllegalArgumentException.class, () -> campaignService.keepItem(ITEM_ID, USERNAME)).getMessage());
+    assertEquals("cleanup.reviewClosed",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> campaignService.unkeepItem(ITEM_ID, USERNAME)).getMessage());
+    verify(cleanupJcrStorage, never()).addExemptionMixin(any(), any());
+    verify(cleanupJcrStorage, never()).removeExemptionMixin(any());
+    verify(campaignStorage, never()).saveItem(any());
   }
 
   @Test
@@ -425,7 +528,7 @@ class CleanupCampaignServiceTest {
 
   @Test
   void shouldRejectUnkeepOfForeignItem() {
-    mockPublishedCampaignWithItem(CleanupItemState.EXEMPTED);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(item(CleanupItemState.EXEMPTED));
     when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", "mary"));
 
     assertThrows(IllegalAccessException.class, () -> campaignService.unkeepItem(ITEM_ID, USERNAME));
@@ -454,6 +557,7 @@ class CleanupCampaignServiceTest {
   void shouldRejectUnkeepWhenCampaignNotPublished() {
     CleanupCampaignItem item = item(CleanupItemState.EXEMPTED);
     when(campaignStorage.getItem(ITEM_ID)).thenReturn(item);
+    when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", USERNAME));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.LOCKED));
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
@@ -522,12 +626,15 @@ class CleanupCampaignServiceTest {
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID), any())).thenReturn(CleanupRevalidation.of(null));
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    campaignService.unkeepItems(List.of(ITEM_ID, 11L), USERNAME);
+    CleanupBulkResult result = campaignService.unkeepItems(List.of(ITEM_ID, 11L), USERNAME);
 
     ArgumentCaptor<CleanupCampaignItem> captor = ArgumentCaptor.forClass(CleanupCampaignItem.class);
     verify(campaignStorage).saveItem(captor.capture());
     assertEquals(11L, captor.getValue().getId(), "The failing item must not prevent the remaining un-keeps");
     assertEquals(CleanupItemState.SPARED_BY_MODIFICATION, captor.getValue().getState());
+    assertEquals(1, result.getSucceeded());
+    assertEquals(1, result.getFailures().size());
+    assertEquals(ITEM_ID, result.getFailures().get(0).getItemId());
   }
 
   @Test
@@ -543,9 +650,9 @@ class CleanupCampaignServiceTest {
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED))).thenReturn(List.of(campaign));
     CleanupCampaignItem keptItem = item(CleanupItemState.EXEMPTED);
-    when(campaignStorage.getItemsTouchedByPath(CAMPAIGN_ID, "/Users/john/Private/docs")).thenReturn(List.of(keptItem));
+    when(campaignStorage.getItemsTouchedByPath(CAMPAIGN_ID, PATH)).thenReturn(List.of(keptItem));
 
-    campaignService.refreshCandidate("/Users/john/Private/docs", "PROPERTY_CHANGED");
+    campaignService.refreshCandidate(PATH, PROPERTY_CHANGED_EVENT);
 
     // A modification never un-keeps: the freshness refresh skips decided items
     assertEquals(CleanupItemState.EXEMPTED, keptItem.getState());
@@ -598,11 +705,11 @@ class CleanupCampaignServiceTest {
     refreshedItem.setNodeUuid(NODE_UUID_REFRESHED);
     CleanupCampaignItem decidedItem = item(CleanupItemState.EXEMPTED);
     decidedItem.setId(15L);
-    when(campaignStorage.getItemsTouchedByPath(CAMPAIGN_ID, "/Users/john/Private/docs")).thenReturn(List.of(goneItem,
-                                                                                                             exemptedItem,
-                                                                                                             sparedItem,
-                                                                                                             refreshedItem,
-                                                                                                             decidedItem));
+    when(campaignStorage.getItemsTouchedByPath(CAMPAIGN_ID, PATH)).thenReturn(List.of(goneItem,
+                                                                                      exemptedItem,
+                                                                                      sparedItem,
+                                                                                      refreshedItem,
+                                                                                      decidedItem));
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_GONE), any())).thenReturn(CleanupRevalidation.gone());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_EXEMPTED), any())).thenReturn(CleanupRevalidation.exempted());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_SPARED), any())).thenReturn(CleanupRevalidation.of(null));
@@ -617,7 +724,7 @@ class CleanupCampaignServiceTest {
                                                                                                                               0L)));
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    campaignService.refreshCandidate("/Users/john/Private/docs", "NODE_REMOVED");
+    campaignService.refreshCandidate(PATH, "NODE_REMOVED");
 
     assertEquals(CleanupItemState.GONE, goneItem.getState());
     assertEquals(CleanupItemState.EXEMPTED, exemptedItem.getState());
@@ -825,7 +932,8 @@ class CleanupCampaignServiceTest {
   void shouldServeTerminalAggregatesFromSummaryOnceItemsPurged() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
     campaign.setSummaryJson("""
-        {"candidateCount":3,"reclaimableBytes":1024,"reclaimedBytes":123456,"purgedCount":42}""");
+                {"candidateCount":3,"reclaimableBytes":1024,"reclaimedBytes":123456,"purgedCount":42}
+        """);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(false);
 
@@ -842,7 +950,8 @@ class CleanupCampaignServiceTest {
   void shouldServeLiveAggregatesWhileItemsRetained() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
     campaign.setSummaryJson("""
-        {"reclaimedBytes":123456}""");
+                {"reclaimedBytes":123456}
+        """);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(true);
     when(campaignStorage.sumReclaimedBytes(CAMPAIGN_ID)).thenReturn(99L);
@@ -905,12 +1014,56 @@ class CleanupCampaignServiceTest {
     when(cleanupJcrStorage.addExemptionMixin(NODE_UUID, USERNAME)).thenReturn(CleanupExemptionResult.ADDED);
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    campaignService.keepItems(List.of(ITEM_ID, 11L), USERNAME);
+    CleanupBulkResult result = campaignService.keepItems(List.of(ITEM_ID, 11L), USERNAME);
 
     ArgumentCaptor<CleanupCampaignItem> captor = ArgumentCaptor.forClass(CleanupCampaignItem.class);
     verify(campaignStorage).saveItem(captor.capture());
     assertEquals(11L, captor.getValue().getId(), "The failing item must not prevent the remaining keeps");
     assertEquals(CleanupItemState.EXEMPTED, captor.getValue().getState());
+    // The partial failure is REPORTED, never swallowed into a blanket success
+    assertEquals(1, result.getSucceeded());
+    assertEquals(1, result.getFailures().size());
+    assertEquals(ITEM_ID, result.getFailures().get(0).getItemId());
+    assertEquals("cleanup.itemNotFound", result.getFailures().get(0).getReason());
+  }
+
+  @Test
+  void shouldReportEveryFailureWhenNoBulkKeepSucceeds() {
+    // Nothing was kept: the UI must be able to warn instead of telling the user
+    // their files are safe
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(null);
+    when(campaignStorage.getItem(11L)).thenReturn(null);
+
+    CleanupBulkResult result = campaignService.keepItems(List.of(ITEM_ID, 11L), USERNAME);
+
+    assertEquals(0, result.getSucceeded());
+    assertEquals(2, result.getFailures().size());
+    assertEquals(List.of(ITEM_ID, 11L), result.getFailures().stream().map(CleanupBulkFailure::getItemId).toList());
+    verify(campaignStorage, never()).saveItem(any());
+  }
+
+  @Test
+  void shouldReportTheAclFailureReasonOfARefusedBulkKeep() {
+    CleanupCampaignItem foreignItem = item(CleanupItemState.CANDIDATE);
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(foreignItem);
+    when(identityManager.getIdentity(5l)).thenReturn(userIdentity("5", "mary"));
+
+    CleanupBulkResult result = campaignService.keepItems(List.of(ITEM_ID), USERNAME);
+
+    assertEquals(0, result.getSucceeded());
+    assertEquals(1, result.getFailures().size());
+    assertNotNull(result.getFailures().get(0).getReason(), "A refused keep must carry a reason");
+  }
+
+  @Test
+  void shouldReportEveryFailureWhenNoBulkUnkeepSucceeds() {
+    when(campaignStorage.getItem(ITEM_ID)).thenReturn(null);
+
+    CleanupBulkResult result = campaignService.unkeepItems(List.of(ITEM_ID), USERNAME);
+
+    assertEquals(0, result.getSucceeded());
+    assertEquals(1, result.getFailures().size());
+    assertEquals("cleanup.itemNotFound", result.getFailures().get(0).getReason());
   }
 
   @Test
@@ -920,14 +1073,14 @@ class CleanupCampaignServiceTest {
     // raw event path so the ancestor-chain match finds the file item above it
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED))).thenReturn(List.of(campaign));
-    String propertyPath = "/Users/j___/john/Private/file.pdf/jcr:content/jcr:data";
+    String propertyPath = "/Users/j___/john/Private/file.pdf/jcr:content/jcr:data"; // NOSONAR
     CleanupCampaignItem fileItem = item(CleanupItemState.CANDIDATE);
     fileItem.setPath("/Users/j___/john/Private/file.pdf");
     when(campaignStorage.getItemsTouchedByPath(CAMPAIGN_ID, propertyPath)).thenReturn(List.of(fileItem));
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID), any())).thenReturn(CleanupRevalidation.of(null));
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    campaignService.refreshCandidate(propertyPath, "PROPERTY_CHANGED");
+    campaignService.refreshCandidate(propertyPath, PROPERTY_CHANGED_EVENT);
 
     assertEquals(CleanupItemState.SPARED_BY_MODIFICATION, fileItem.getState());
     verify(campaignStorage).getItemsTouchedByPath(CAMPAIGN_ID, propertyPath);
@@ -940,7 +1093,7 @@ class CleanupCampaignServiceTest {
     // the touched-by query returns the candidate items BELOW the event path
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED))).thenReturn(List.of(campaign));
-    String folderPath = "/Users/j___/john/Private/docs";
+    String folderPath = "/Users/j___/john/Private/docs"; // NOSONAR
     CleanupCampaignItem firstItem = item(CleanupItemState.CANDIDATE);
     firstItem.setId(21L);
     firstItem.setNodeUuid("uuid-below-1");
@@ -964,11 +1117,11 @@ class CleanupCampaignServiceTest {
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED))).thenReturn(List.of(campaign));
     CleanupCampaignItem candidateItem = item(CleanupItemState.CANDIDATE);
-    when(campaignStorage.getItemsTouchedByPath(CAMPAIGN_ID, "/Users/john/Private/docs"))
-                                                                                        .thenReturn(List.of(candidateItem));
+    when(campaignStorage.getItemsTouchedByPath(CAMPAIGN_ID, PATH))
+                                                                  .thenReturn(List.of(candidateItem));
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID), any())).thenReturn(CleanupRevalidation.unknown());
 
-    campaignService.refreshCandidate("/Users/john/Private/docs", "PROPERTY_CHANGED");
+    campaignService.refreshCandidate(PATH, PROPERTY_CHANGED_EVENT);
 
     // A transient JCR read failure never spares the item: left untouched
     assertEquals(CleanupItemState.CANDIDATE, candidateItem.getState());
@@ -1021,7 +1174,8 @@ class CleanupCampaignServiceTest {
     CleanupCampaign purgedCampaign = campaign(CleanupCampaignState.COMPLETED);
     purgedCampaign.setId(2L);
     purgedCampaign.setSummaryJson("""
-        {"candidateCount":3,"reclaimableBytes":1024,"reclaimedBytes":123456}""");
+                {"candidateCount":3,"reclaimableBytes":1024,"reclaimedBytes":123456}
+        """);
     when(campaignStorage.getCampaigns(any())).thenReturn(List.of(liveCampaign, purgedCampaign));
     CleanupCampaignAggregates liveAggregates = new CleanupCampaignAggregates();
     liveAggregates.setItemsRetained(true);
@@ -1048,6 +1202,203 @@ class CleanupCampaignServiceTest {
     verify(campaignStorage, never()).countItemsByState(anyLong(), any());
     verify(campaignStorage, never()).sumReclaimableBytesByState(anyLong(), any());
     verify(campaignStorage, never()).sumReclaimedBytes(anyLong());
+  }
+
+  @Test
+  void shouldAssembleComparisonFromTheThreeSetBasedBuckets() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+    CleanupCampaign otherCampaign = campaign(CleanupCampaignState.COMPLETED);
+    otherCampaign.setId(2L);
+    when(campaignStorage.getCampaign(2L)).thenReturn(otherCampaign);
+    // Deliberately distinct values per bucket: a bucket wired to the wrong DTO
+    // field must fail this test
+    when(campaignStorage.getPersistingItems(CAMPAIGN_ID, 2L)).thenReturn(new CleanupComparisonBucket(3L, 300L));
+    when(campaignStorage.getNewItems(CAMPAIGN_ID, 2L)).thenReturn(new CleanupComparisonBucket(1L, 100L));
+    when(campaignStorage.getGoneItems(CAMPAIGN_ID, 2L)).thenReturn(new CleanupComparisonBucket(2L, 200L));
+
+    CleanupComparison comparison = campaignService.compareCampaigns(CAMPAIGN_ID, 2L);
+
+    assertEquals(CAMPAIGN_ID, comparison.getBaseCampaignId());
+    assertEquals(2L, comparison.getOtherCampaignId());
+    assertEquals(3L, comparison.getPersistingCount());
+    assertEquals(300L, comparison.getPersistingBytes());
+    assertEquals(1L, comparison.getNewCount());
+    assertEquals(100L, comparison.getNewBytes());
+    assertEquals(2L, comparison.getGoneCount());
+    assertEquals(200L, comparison.getGoneBytes());
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenComparingWithAnUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+    when(campaignStorage.getCampaign(404L)).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> campaignService.compareCampaigns(CAMPAIGN_ID, 404L));
+    // The existence of both campaigns is settled BEFORE any aggregate query
+    verify(campaignStorage, never()).getPersistingItems(anyLong(), anyLong());
+    verify(campaignStorage, never()).getNewItems(anyLong(), anyLong());
+    verify(campaignStorage, never()).getGoneItems(anyLong(), anyLong());
+  }
+
+  @Test
+  void shouldArchiveOnlyTheCampaignsBeyondRetentionOrderedByCompletionDate() throws Exception {
+    when(settingService.getReportRetentionCampaigns()).thenReturn(2);
+    // Fed in a scrambled order on purpose: a wrong sort would archive (and purge
+    // the item rows of) the WRONG campaigns' reports
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                      .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                           1000L),
+                                                                                                                                          terminalCampaign(104L,
+                                                                                                                                                           4000L),
+                                                                                                                                          terminalCampaign(102L,
+                                                                                                                                                           2000L),
+                                                                                                                                          terminalCampaign(103L,
+                                                                                                                                                           3000L)));
+    when(campaignStorage.hasItems(anyLong())).thenReturn(true);
+    when(campaignStorage.getItemsPage(anyLong(), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+    when(fileService.writeFile(any())).thenAnswer(invocation -> archiveFileItem());
+
+    campaignService.applyRetention();
+
+    // The 2 most recently completed keep their item detail; the 2 oldest are
+    // archived then purged
+    ArgumentCaptor<CleanupCampaign> captor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage, org.mockito.Mockito.times(2)).saveCampaign(captor.capture());
+    assertEquals(List.of(102L, 101L), captor.getAllValues().stream().map(CleanupCampaign::getId).toList());
+    verify(campaignStorage).deleteItems(102L);
+    verify(campaignStorage).deleteItems(101L);
+    verify(campaignStorage, never()).deleteItems(103L);
+    verify(campaignStorage, never()).deleteItems(104L);
+  }
+
+  @Test
+  void shouldArchiveThenReferenceThenPurgeItemRowsInThatOrder() throws Exception {
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    CleanupCampaign campaign = terminalCampaign(101L, 1000L);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                      .thenReturn(List.of(campaign));
+    when(campaignStorage.hasItems(101L)).thenReturn(true);
+    when(campaignStorage.getItemsPage(eq(101L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+    when(fileService.writeFile(any())).thenReturn(archiveFileItem());
+
+    campaignService.applyRetention();
+
+    // The item rows are only dropped AFTER the archive is written and its id
+    // referenced by the campaign: no window where the report is unreachable
+    InOrder inOrder = inOrder(fileService, campaignStorage);
+    inOrder.verify(fileService).writeFile(any());
+    inOrder.verify(campaignStorage).saveCampaign(campaign);
+    inOrder.verify(campaignStorage).deleteItems(101L);
+    assertEquals(77L, campaign.getArchiveFileId());
+  }
+
+  @Test
+  void shouldKeepItemRowsWhenTheArchiveWriteFails() throws Exception {
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                      .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                           1000L)));
+    when(campaignStorage.hasItems(101L)).thenReturn(true);
+    when(campaignStorage.getItemsPage(eq(101L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+    when(fileService.writeFile(any())).thenThrow(new IllegalStateException("Binary storage down"));
+
+    campaignService.applyRetention();
+
+    // NO DATA LOSS: a failed archive write never purges the item detail it was
+    // supposed to preserve
+    verify(campaignStorage, never()).deleteItems(anyLong());
+    verify(campaignStorage, never()).saveCampaign(any());
+  }
+
+  @Test
+  void shouldStreamTheLiveCsvReportOfARetainedCampaign() throws Exception {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(true);
+    CleanupCampaignItem item = item(CleanupItemState.PURGED);
+    item.setPath("/Users/j___/john/Private/report,final.pdf");
+    item.setReclaimedBytes(4096L);
+    when(campaignStorage.getItemsPage(eq(CAMPAIGN_ID), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+
+    campaignService.checkArchiveAvailable(CAMPAIGN_ID);
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
+
+    String csv = outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
+    assertTrue(csv.startsWith("nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason\n"),
+               "The streamed report must open with the CSV header");
+    assertTrue(csv.contains("\"/Users/j___/john/Private/report,final.pdf\""),
+               "A comma-carrying path must stay quoted in the streamed rows");
+    assertTrue(csv.contains(",4096,"));
+    // Nothing is read from the FileService while the item rows are retained
+    verify(fileService, never()).getFileInfo(anyLong());
+  }
+
+  @Test
+  void shouldStreamTheStoredArchiveOnceItemRowsArePurged() throws Exception {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    campaign.setArchiveFileId(77L);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(false);
+    when(fileService.getFileInfo(77L)).thenReturn(archiveFileItem().getFileInfo());
+    when(fileService.getFile(77L)).thenReturn(new org.exoplatform.commons.file.model.FileItem(77L,
+                                                                                             "archive.csv",
+                                                                                             "text/csv",
+                                                                                             "documentsCleanup",
+                                                                                             8,
+                                                                                             new java.util.Date(),
+                                                                                             "system",
+                                                                                             false,
+                                                                                             new java.io.ByteArrayInputStream("archived".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+
+    campaignService.checkArchiveAvailable(CAMPAIGN_ID);
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
+
+    assertEquals("archived", outputStream.toString(java.nio.charset.StandardCharsets.UTF_8));
+    verify(campaignStorage, never()).getItemsPage(anyLong(), any());
+  }
+
+  @Test
+  void shouldRejectTheArchiveDownloadBeforeStreamingWhenNoReportLeft() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(false);
+
+    // Settled BEFORE a single byte is written, so the 404 can still be sent
+    assertEquals("cleanup.archiveNotFound",
+                 assertThrows(ObjectNotFoundException.class,
+                              () -> campaignService.checkArchiveAvailable(CAMPAIGN_ID)).getMessage());
+  }
+
+  @Test
+  void shouldRejectTheArchiveDownloadWhenTheStoredFileIsGone() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    campaign.setArchiveFileId(77L);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(false);
+    when(fileService.getFileInfo(77L)).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> campaignService.checkArchiveAvailable(CAMPAIGN_ID));
+  }
+
+  private CleanupCampaign terminalCampaign(long id, long completedDate) {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    campaign.setId(id);
+    campaign.setCompletedDate(completedDate);
+    return campaign;
+  }
+
+  private org.exoplatform.commons.file.model.FileItem archiveFileItem() throws Exception {
+    return new org.exoplatform.commons.file.model.FileItem(77L,
+                                                           "cleanup-campaign.csv",
+                                                           "text/csv",
+                                                           "documentsCleanup",
+                                                           0,
+                                                           new java.util.Date(),
+                                                           "system",
+                                                           false,
+                                                           null);
   }
 
   private void assertCreateRejected(CleanupParams effectiveParams, String expectedMessage) {

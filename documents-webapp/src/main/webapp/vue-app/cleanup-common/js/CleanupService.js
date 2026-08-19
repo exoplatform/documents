@@ -116,6 +116,9 @@ export function keepItem(itemId) {
   }).then(handleVoidResponse);
 }
 
+// Answers 200 with {succeeded, failures: [{itemId, reason}]}: a bulk keep
+// continues past individual failures, so the caller must inspect the outcomes
+// instead of assuming everything was kept.
 export function keepItems(itemIds) {
   return fetch(`${BASE_URL}/items/keep`, {
     method: 'POST',
@@ -124,7 +127,7 @@ export function keepItems(itemIds) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({itemIds}),
-  }).then(handleVoidResponse);
+  }).then(handleJsonResponse);
 }
 
 export function unkeepItem(itemId) {
@@ -134,6 +137,7 @@ export function unkeepItem(itemId) {
   }).then(handleVoidResponse);
 }
 
+// Same outcome contract as keepItems.
 export function unkeepItems(itemIds) {
   return fetch(`${BASE_URL}/items/unkeep`, {
     method: 'POST',
@@ -142,7 +146,7 @@ export function unkeepItems(itemIds) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({itemIds}),
-  }).then(handleVoidResponse);
+  }).then(handleJsonResponse);
 }
 
 function handleJsonResponse(resp) {

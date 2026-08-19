@@ -39,21 +39,22 @@ import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
+import io.meeds.common.ContainerTransactional;
+
 import jakarta.annotation.PreDestroy;
 
 /**
  * Asynchronous dry-run scan of the collaboration workspace: counts the
  * denominator first, then walks path-ordered nt:file batches, persisting
- * candidates, a path-based resume checkpoint (root in progress + last
- * processed path) and a rolling-throughput ETA per batch. Nothing is ever
- * deleted here.
+ * candidates, a path-based resume checkpoint (root in progress + last processed
+ * path) and a rolling-throughput ETA per batch. Nothing is ever deleted here.
  */
 @Service
 public class CleanupScanService {
 
-  private static final List<String> SCAN_ROOTS      = CleanupConstants.SCAN_ROOTS;
+  private static final List<String> SCAN_ROOTS       = CleanupConstants.SCAN_ROOTS;
 
-  private static final Log          LOG             = ExoLogger.getLogger(CleanupScanService.class);
+  private static final Log          LOG              = ExoLogger.getLogger(CleanupScanService.class);
 
   @Autowired
   private CleanupCampaignStorage    campaignStorage;
@@ -101,6 +102,11 @@ public class CleanupScanService {
     executorService.execute(() -> scan(campaignId));
   }
 
+  @ContainerTransactional
+  public void scanTransactional(long campaignId) {
+    scan(campaignId);
+  }
+
   /**
    * Scan worker, running as system (no conversation state needed).
    */
@@ -133,7 +139,7 @@ public class CleanupScanService {
       int resumeRootIndex = 0;
       String resumeAfterPath = null;
       if (StringUtils.isNotBlank(checkpointPath)) {
-        for (int i = 0; i < SCAN_ROOTS.size(); i++) {
+        for (int i = 0; i < SCAN_ROOTS.size(); i++) { // NOSONAR
           if (StringUtils.equals(checkpointPath, SCAN_ROOTS.get(i))) {
             resumeRootIndex = i;
             break;

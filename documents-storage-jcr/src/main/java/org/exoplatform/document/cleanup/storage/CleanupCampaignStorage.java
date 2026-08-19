@@ -27,9 +27,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -43,6 +41,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignAggregates;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
+import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 
@@ -55,8 +54,6 @@ import io.meeds.social.util.JsonUtils;
  */
 @Component
 public class CleanupCampaignStorage {
-
-  private static final int       COMPARE_PAGE_SIZE = 1000;
 
   @Autowired
   private CleanupCampaignDAO     campaignDAO;
@@ -234,21 +231,53 @@ public class CleanupCampaignStorage {
   }
 
   /**
-   * @return map of node uuid to reclaimable bytes for a campaign, retrieved
-   *         page by page (never a whole-table fetch in one query)
+   * Items of the base campaign whose node uuid is ALSO a candidate of the other
+   * campaign ('persisting' bucket of a comparison).
+   *
+   * @param baseCampaignId base campaign identifier
+   * @param otherCampaignId compared campaign identifier
+   * @return count and reclaimable bytes of the bucket
    */
-  public Map<String, Long> getNodeUuidToReclaimableBytes(long campaignId) {
-    Map<String, Long> result = new HashMap<>();
-    int pageIndex = 0;
-    Page<Object[]> page;
-    do {
-      page = itemDAO.findNodeUuidAndReclaimableBytes(campaignId,
-                                                     PageRequest.of(pageIndex++,
-                                                                    COMPARE_PAGE_SIZE,
-                                                                    Sort.by("id")));
-      page.forEach(row -> result.put((String) row[0], ((Number) row[1]).longValue()));
-    } while (page.hasNext());
-    return result;
+  public CleanupComparisonBucket getPersistingItems(long baseCampaignId, long otherCampaignId) {
+    return toBucket(itemDAO.aggregateItemsSharedWithCampaign(baseCampaignId, otherCampaignId));
+  }
+
+  /**
+   * Items of the base campaign absent from the other one ('new' bucket of a
+   * comparison).
+   *
+   * @param baseCampaignId base campaign identifier
+   * @param otherCampaignId compared campaign identifier
+   * @return count and reclaimable bytes of the bucket
+   */
+  public CleanupComparisonBucket getNewItems(long baseCampaignId, long otherCampaignId) {
+    return toBucket(itemDAO.aggregateItemsAbsentFromCampaign(baseCampaignId, otherCampaignId));
+  }
+
+  /**
+   * Items of the other campaign absent from the base one ('gone' bucket of a
+   * comparison): the very same query as {@link #getNewItems(long, long)} with
+   * the campaigns swapped, so the bytes are read from the other campaign's rows.
+   *
+   * @param baseCampaignId base campaign identifier
+   * @param otherCampaignId compared campaign identifier
+   * @return count and reclaimable bytes of the bucket
+   */
+  public CleanupComparisonBucket getGoneItems(long baseCampaignId, long otherCampaignId) {
+    return toBucket(itemDAO.aggregateItemsAbsentFromCampaign(otherCampaignId, baseCampaignId));
+  }
+
+  /**
+   * Folds the single aggregate row of a comparison bucket query: an empty result
+   * (no item row at all) is an empty bucket, never an error.
+   */
+  private CleanupComparisonBucket toBucket(List<Object[]> rows) {
+    if (rows == null || rows.isEmpty() || rows.get(0) == null) {
+      return new CleanupComparisonBucket();
+    }
+    Object[] row = rows.get(0);
+    return new CleanupComparisonBucket(row[0] == null ? 0 : ((Number) row[0]).longValue(),
+                                       row[1] == null ? 0 : ((Number) row[1]).longValue());
   }
 
   public boolean hasItems(long campaignId) {

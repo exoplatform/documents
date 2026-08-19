@@ -101,15 +101,45 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
    * campaign — replaces up to 4 aggregate queries PER campaign on the list
    * endpoint.
    */
-  @Query("SELECT i.campaignId, i.state, COUNT(i), COALESCE(SUM(" + RECLAIMABLE_BYTES + "), 0),"
-      + " COALESCE(SUM(i.reclaimedBytes), 0)"
-      + " FROM CleanupCampaignItem i WHERE i.campaignId IN :campaignIds GROUP BY i.campaignId, i.state")
+  @Query("SELECT i.campaignId, i.state, COUNT(i), COALESCE(SUM(" + RECLAIMABLE_BYTES + "), 0)," +
+      " COALESCE(SUM(i.reclaimedBytes), 0)" +
+      " FROM CleanupCampaignItem i WHERE i.campaignId IN :campaignIds GROUP BY i.campaignId, i.state")
   List<Object[]> findAggregatesByCampaignIds(@Param("campaignIds")
   List<Long> campaignIds);
 
-  @Query("SELECT i.nodeUuid, " + RECLAIMABLE_BYTES + " FROM CleanupCampaignItem i WHERE i.campaignId = :campaignId")
-  Page<Object[]> findNodeUuidAndReclaimableBytes(@Param("campaignId")
-  long campaignId, Pageable pageable);
+  /**
+   * Count and reclaimable-bytes sum of the items of {@code campaignId} whose
+   * node uuid ALSO belongs to {@code otherCampaignId} — the 'persisting' bucket
+   * of a campaign comparison, computed set-based by the database (never by
+   * loading both candidate sets in memory). The correlated sub-query hits the
+   * (CAMPAIGN_ID, NODE_UUID) unique index.
+   *
+   * @return a single row: item count, reclaimable bytes sum
+   */
+  @Query("SELECT COUNT(i), COALESCE(SUM(" + RECLAIMABLE_BYTES + "), 0) FROM CleanupCampaignItem i" +
+      " WHERE i.campaignId = :campaignId" +
+      " AND EXISTS (SELECT o.id FROM CleanupCampaignItem o" +
+      " WHERE o.campaignId = :otherCampaignId AND o.nodeUuid = i.nodeUuid)")
+  List<Object[]> aggregateItemsSharedWithCampaign(@Param("campaignId")
+  long campaignId, @Param("otherCampaignId")
+  long otherCampaignId);
+
+  /**
+   * Count and reclaimable-bytes sum of the items of {@code campaignId} whose
+   * node uuid is ABSENT from {@code otherCampaignId}. Serves BOTH asymmetric
+   * buckets of a campaign comparison by swapping the two arguments: 'new' is
+   * (base, other), 'gone' is (other, base) — the bytes are always those of the
+   * campaign passed first, exactly as the previous in-memory diff computed them.
+   *
+   * @return a single row: item count, reclaimable bytes sum
+   */
+  @Query("SELECT COUNT(i), COALESCE(SUM(" + RECLAIMABLE_BYTES + "), 0) FROM CleanupCampaignItem i" +
+      " WHERE i.campaignId = :campaignId" +
+      " AND NOT EXISTS (SELECT o.id FROM CleanupCampaignItem o" +
+      " WHERE o.campaignId = :otherCampaignId AND o.nodeUuid = i.nodeUuid)")
+  List<Object[]> aggregateItemsAbsentFromCampaign(@Param("campaignId")
+  long campaignId, @Param("otherCampaignId")
+  long otherCampaignId);
 
   long countByCampaignIdAndState(long campaignId, String state);
 

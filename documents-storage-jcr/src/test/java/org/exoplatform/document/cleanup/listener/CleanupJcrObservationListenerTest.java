@@ -57,7 +57,8 @@ class CleanupJcrObservationListenerTest {
     String userFilePath = "/Users/j___/john/Private/file.pdf";
     String spaceFilePath = "/Groups/spaces/marketing/Documents/report.pdf";
     listener.onEvent(events(event(userFilePath, Event.PROPERTY_CHANGED),
-                            // Same node fires many events on one save: deduplicated
+                            // Same node fires many events on one save:
+                            // deduplicated
                             event(userFilePath, Event.NODE_REMOVED),
                             event(spaceFilePath, ExtendedEvent.NODE_MOVED),
                             // Outside every scan root: filtered out
@@ -81,7 +82,10 @@ class CleanupJcrObservationListenerTest {
     });
 
     listener.onEvent(events(event("/exo:applications/a", Event.NODE_REMOVED),
-                            event("/Trash", Event.PROPERTY_CHANGED), // the root itself, not below it
+                            event("/Trash", Event.PROPERTY_CHANGED), // the root
+                                                                     // itself,
+                                                                     // not
+                                                                     // below it
                             event(null, Event.NODE_REMOVED)));
     // A later watched bundle proves the earlier one forwarded nothing
     listener.onEvent(events(event("/Trash/deleted.pdf", 9999)));

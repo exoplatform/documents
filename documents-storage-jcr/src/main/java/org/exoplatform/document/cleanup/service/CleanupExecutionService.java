@@ -58,7 +58,7 @@ import jakarta.annotation.PreDestroy;
 @Service
 public class CleanupExecutionService {
 
-  private static final Log         LOG             = ExoLogger.getLogger(CleanupExecutionService.class);
+  private static final Log         LOG              = ExoLogger.getLogger(CleanupExecutionService.class);
 
   @Autowired
   private CleanupCampaignStorage   campaignStorage;
@@ -225,8 +225,8 @@ public class CleanupExecutionService {
 
   /**
    * Snapshots the campaign aggregates at completion, so they can still be
-   * served once the retention job purges the item rows. Writer and reader
-   * share {@link CleanupCampaignSummary}, keeping the JSON keys aligned.
+   * served once the retention job purges the item rows. Writer and reader share
+   * {@link CleanupCampaignSummary}, keeping the JSON keys aligned.
    */
   private String buildSummaryJson(long campaignId) {
     CleanupCampaignSummary summary = new CleanupCampaignSummary();

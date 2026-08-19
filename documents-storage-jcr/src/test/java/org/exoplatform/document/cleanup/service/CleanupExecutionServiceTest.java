@@ -23,6 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -298,6 +301,88 @@ class CleanupExecutionServiceTest {
     // The running id was removed in the finally block even on fatal error —
     // the property the watchdog resume depends on to relaunch the worker
     assertTrue(runningCampaigns().isEmpty(), "The running-campaign id must be removed even on fatal error");
+  }
+
+  @Test
+  void shouldAbortBetweenBatchesWhenCampaignLeavesExecutingMidRun() {
+    CleanupCampaign executingCampaign = campaign(CleanupCampaignState.EXECUTING);
+    // Worker entry and the check before batch 1 see EXECUTING; the check BETWEEN
+    // batch 1 and batch 2 sees the cancellation
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(executingCampaign,
+                                                              executingCampaign,
+                                                              campaign(CleanupCampaignState.CANCELLED));
+    when(settingService.getBatchSize()).thenReturn(1);
+    CleanupCampaignItem firstItem = item(11L, NODE_UUID_DELETED, CleanupAction.DELETE);
+    CleanupCampaignItem secondItem = item(12L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
+    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
+                                                                                                 .thenReturn(new PageImpl<>(List.of(firstItem)))
+                                                                                                 .thenReturn(new PageImpl<>(List.of(secondItem)));
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
+                                                                    .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_DELETED,
+                                                                                                                 CleanupAction.DELETE)));
+    when(cleanupJcrStorage.deleteNode(NODE_UUID_DELETED)).thenReturn(CleanupPurgeResult.purged(100L));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // Batch 1 is fully processed and its progress persisted...
+    assertEquals(CleanupItemState.PURGED, firstItem.getState());
+    verify(campaignStorage, org.mockito.Mockito.times(1)).saveItem(any());
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), anyLong(), eq(1L), anyLong(), isNull(), eq(0L));
+    // ...batch 2 is abandoned: a cancelled campaign never keeps deleting files
+    assertEquals(CleanupItemState.CANDIDATE, secondItem.getState());
+    verify(cleanupJcrStorage, org.mockito.Mockito.never()).deleteNode(NODE_UUID_SKIPPED);
+    // And no terminal transition is forced on the campaign
+    verify(campaignStorage, org.mockito.Mockito.never()).saveCampaign(any());
+  }
+
+  @Test
+  void shouldProcessEveryBatchOfAMultiPageRunPersistingProgressPerBatch() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    campaign.setTotalCount(4);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(2);
+    CleanupCampaignItem firstItem = purgeableItem(11L, "uuid-1");
+    CleanupCampaignItem secondItem = purgeableItem(12L, "uuid-2");
+    CleanupCampaignItem thirdItem = purgeableItem(13L, "uuid-3");
+    CleanupCampaignItem fourthItem = purgeableItem(14L, "uuid-4");
+    // Two full pages of candidates, then the empty page ending the run
+    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
+                                                                                                 .thenReturn(new PageImpl<>(List.of(firstItem,
+                                                                                                                                    secondItem)))
+                                                                                                 .thenReturn(new PageImpl<>(List.of(thirdItem,
+                                                                                                                                    fourthItem)))
+                                                                                                 .thenReturn(new PageImpl<>(List.of()));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // EVERY item of EVERY page is processed (not only the first page)
+    verify(campaignStorage, org.mockito.Mockito.times(4)).saveItem(any());
+    assertEquals(CleanupItemState.PURGED, firstItem.getState());
+    assertEquals(CleanupItemState.PURGED, secondItem.getState());
+    assertEquals(CleanupItemState.PURGED, thirdItem.getState());
+    assertEquals(CleanupItemState.PURGED, fourthItem.getState());
+    // Progress is persisted AFTER EACH BATCH, cumulatively: a crash mid-run
+    // resumes from the last persisted count, never from zero
+    InOrder inOrder = inOrder(campaignStorage);
+    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(4L), eq(2L), anyLong(), isNull(), eq(0L));
+    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(4L), eq(4L), anyLong(), isNull(), eq(0L));
+    // One progress push per batch on the CometD channel
+    verify(webSocketService, org.mockito.Mockito.atLeast(2)).sendToAdministrators(any());
+    ArgumentCaptor<CleanupCampaign> captor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage).saveCampaign(captor.capture());
+    assertEquals(CleanupCampaignState.COMPLETED, captor.getValue().getState());
+    assertEquals(4L, captor.getValue().getProcessedCount());
+  }
+
+  private CleanupCampaignItem purgeableItem(long id, String nodeUuid) {
+    CleanupCampaignItem item = item(id, nodeUuid, CleanupAction.DELETE);
+    when(cleanupJcrStorage.revalidate(eq(nodeUuid), any())).thenReturn(CleanupRevalidation.of(candidate(nodeUuid,
+                                                                                                       CleanupAction.DELETE)));
+    when(cleanupJcrStorage.deleteNode(nodeUuid)).thenReturn(CleanupPurgeResult.purged(10L));
+    return item;
   }
 
   @SuppressWarnings("unchecked")

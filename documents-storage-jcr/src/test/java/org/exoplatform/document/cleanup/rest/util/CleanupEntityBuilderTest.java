@@ -35,6 +35,7 @@ import org.springframework.data.domain.PageRequest;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
+import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
@@ -42,6 +43,7 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
+import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -49,9 +51,9 @@ import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 /**
- * Model to REST DTO mapping tests: field mapping, zero-date to null
- * conversion, archive availability, owner resolution through
- * {@link IdentityManager} and partial-override extraction.
+ * Model to REST DTO mapping tests: field mapping, zero-date to null conversion,
+ * archive availability, owner resolution through {@link IdentityManager} and
+ * partial-override extraction.
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupEntityBuilderTest {
@@ -115,7 +117,8 @@ class CleanupEntityBuilderTest {
 
     campaign.setArchiveFileId(null);
     campaign.setItemsRetained(true);
-    assertTrue(CleanupEntityBuilder.build(campaign).isArchiveAvailable(), "Live report must be downloadable while items are retained");
+    assertTrue(CleanupEntityBuilder.build(campaign).isArchiveAvailable(),
+               "Live report must be downloadable while items are retained");
 
     campaign.setArchiveFileId(null);
     campaign.setItemsRetained(false);
@@ -296,6 +299,35 @@ class CleanupEntityBuilderTest {
     campaign.setReclaimableBytes(2048);
     campaign.setReclaimedBytes(512);
     return campaign;
+  }
+
+  @Test
+  void buildsBulkKeepOutcomesWithEveryFailure() {
+    CleanupBulkResult result = new CleanupBulkResult();
+    result.setSucceeded(2);
+    result.addFailure(7L, "cleanup.itemNotFound");
+    result.addFailure(8L, "cleanup.reviewClosed");
+
+    KeepItemsResultRestEntity entity = CleanupEntityBuilder.build(result);
+
+    assertEquals(2, entity.getSucceeded());
+    assertEquals(2, entity.getFailures().size());
+    assertEquals(7L, entity.getFailures().get(0).getItemId());
+    assertEquals("cleanup.itemNotFound", entity.getFailures().get(0).getReason());
+    assertEquals(8L, entity.getFailures().get(1).getItemId());
+    assertEquals("cleanup.reviewClosed", entity.getFailures().get(1).getReason());
+  }
+
+  @Test
+  void buildsBulkKeepOutcomesWithAnEmptyFailureListWhenEverythingSucceeded() {
+    CleanupBulkResult result = new CleanupBulkResult();
+    result.setSucceeded(3);
+
+    KeepItemsResultRestEntity entity = CleanupEntityBuilder.build(result);
+
+    assertEquals(3, entity.getSucceeded());
+    assertNotNull(entity.getFailures(), "The failures list must never be null in the response body");
+    assertTrue(entity.getFailures().isEmpty());
   }
 
   private CleanupCampaignItem item() {

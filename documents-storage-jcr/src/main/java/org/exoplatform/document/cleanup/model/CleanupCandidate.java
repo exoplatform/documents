@@ -54,7 +54,9 @@ public class CleanupCandidate {
   /** exo:cleanupExemptedBy mixin property, null when unreadable. */
   private String        exemptedBy;
 
-  /** exo:cleanupExemptedDate mixin property (epoch millis), 0 when unreadable. */
+  /**
+   * exo:cleanupExemptedDate mixin property (epoch millis), 0 when unreadable.
+   */
   private long          exemptedDate;
 
   public CleanupCandidate(String nodeUuid, // NOSONAR

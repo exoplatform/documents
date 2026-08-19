@@ -136,7 +136,7 @@ public class CleanupJcrStorage {
    * @throws IllegalStateException on a JCR failure, so the caller can leave the
    *           scan resumable from its last persisted checkpoint
    */
-  public void scanRoot(String rootPath,
+  public void scanRoot(String rootPath, // NOSONAR
                        String resumeAfterPath,
                        int batchSize,
                        CleanupParams params,
@@ -152,7 +152,7 @@ public class CleanupJcrStorage {
       List<CleanupCandidate> candidates = new ArrayList<>();
       int scannedInBatch = 0;
       String lastScannedPath = null;
-      while (nodes.hasNext()) {
+      while (nodes.hasNext()) { // NOSONAR
         Node node = nodes.nextNode();
         String path;
         try { // NOSONAR
@@ -193,8 +193,8 @@ public class CleanupJcrStorage {
     } catch (RepositoryException e) {
       // Propagate so the scan worker leaves the campaign resumable from its
       // last persisted checkpoint instead of moving on to the next root
-      throw new IllegalStateException("Error scanning nt:file nodes under " + rootPath
-          + (StringUtils.isBlank(resumeAfterPath) ? "" : " (resuming after " + resumeAfterPath + ")"), e);
+      throw new IllegalStateException("Error scanning nt:file nodes under " + rootPath +
+          (StringUtils.isBlank(resumeAfterPath) ? "" : " (resuming after " + resumeAfterPath + ")"), e);
     }
   }
 
@@ -250,8 +250,11 @@ public class CleanupJcrStorage {
   /**
    * Node lookup distinguishing a MISSING node (null) from a repository failure
    * (propagated {@link RepositoryException}), unlike
-   * {@link JCRDocumentsUtil#getNodeByIdentifier(Session, String)} which
-   * swallows both into null.
+   * {@link JCRDocumentsUtil#getNodeByIdentifier(Session, String)} which swallows
+   * both into null. EVERY cleanup primitive goes through this lookup: reporting
+   * an item NOT_FOUND / GONE on a transient repository failure would durably
+   * discard the user's keep decision, or record a file as vanished while it is
+   * still there.
    */
   private Node getNodeByIdentifierOrNull(Session session, String nodeUuid) throws RepositoryException {
     try {
@@ -270,13 +273,14 @@ public class CleanupJcrStorage {
    * @return {@link CleanupExemptionResult#ADDED} when the node is now exempted,
    *         {@link CleanupExemptionResult#NOT_FOUND} when it doesn't exist
    *         anymore, {@link CleanupExemptionResult#FAILED} on a (possibly
-   *         transient) JCR write failure
+   *         transient) JCR read or write failure — never NOT_FOUND on doubt, so
+   *         the user's keep decision is never discarded
    */
   public CleanupExemptionResult addExemptionMixin(String nodeUuid, String username) {
     Session session = null;
     try {
       session = getSystemSession();
-      Node node = JCRDocumentsUtil.getNodeByIdentifier(session, nodeUuid);
+      Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupExemptionResult.NOT_FOUND;
       }
@@ -310,13 +314,14 @@ public class CleanupJcrStorage {
    *         carries the mixin (applied, idempotent),
    *         {@link CleanupExemptionResult#NOT_FOUND} when it doesn't exist
    *         anymore, {@link CleanupExemptionResult#FAILED} on a (possibly
-   *         transient) JCR write failure
+   *         transient) JCR read or write failure — never NOT_FOUND on doubt, so
+   *         a flaky repository never marks a still-existing file GONE
    */
   public CleanupExemptionResult removeExemptionMixin(String nodeUuid) {
     Session session = null;
     try {
       session = getSystemSession();
-      Node node = JCRDocumentsUtil.getNodeByIdentifier(session, nodeUuid);
+      Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupExemptionResult.NOT_FOUND;
       }
@@ -344,13 +349,15 @@ public class CleanupJcrStorage {
    * the node, then now-empty ancestor folders up to (excluding) the drive root.
    *
    * @param nodeUuid JCR node identifier
-   * @return purge outcome with reclaimed bytes, or SKIPPED with a reason
+   * @return purge outcome with reclaimed bytes, GONE only when the node really
+   *         disappeared, or SKIPPED with a reason (a JCR read failure is SKIPPED,
+   *         never GONE)
    */
   public CleanupPurgeResult deleteNode(String nodeUuid) {
     Session session = null;
     try {
       session = getSystemSession();
-      Node node = JCRDocumentsUtil.getNodeByIdentifier(session, nodeUuid);
+      Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupPurgeResult.gone();
       }
@@ -384,12 +391,14 @@ public class CleanupJcrStorage {
    *
    * @param nodeUuid JCR node identifier
    * @param maxVersionsPerFile number of versions to keep
-   * @return purge outcome with reclaimed bytes, or SKIPPED with a reason
+   * @return purge outcome with reclaimed bytes, GONE only when the node really
+   *         disappeared, or SKIPPED with a reason (a JCR read failure is SKIPPED,
+   *         never GONE)
    */
   public CleanupPurgeResult purgeVersions(String nodeUuid, int maxVersionsPerFile) {
     try {
       Session session = getSystemSession();
-      Node node = JCRDocumentsUtil.getNodeByIdentifier(session, nodeUuid);
+      Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupPurgeResult.gone();
       } else if (!node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {

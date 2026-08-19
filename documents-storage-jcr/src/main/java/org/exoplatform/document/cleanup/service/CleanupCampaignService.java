@@ -16,7 +16,15 @@
  */
 package org.exoplatform.document.cleanup.service;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
@@ -40,11 +48,13 @@ import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupExemptionResult;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
+import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignAggregates;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
+import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
@@ -71,26 +81,29 @@ import jakarta.annotation.PostConstruct;
 @Service
 public class CleanupCampaignService {
 
-  public static final String                      FILE_NAMESPACE     = "documentsCleanup";
+  public static final String                      FILE_NAMESPACE              = "documentsCleanup";
 
-  private static final Log                        LOG                = ExoLogger.getLogger(CleanupCampaignService.class);
+  private static final Log                        LOG                         = ExoLogger.getLogger(CleanupCampaignService.class);
 
-  private static final List<CleanupCampaignState> ACTIVE_STATES      = List.of(CleanupCampaignState.PUBLISHED,
-                                                                               CleanupCampaignState.LOCKED,
-                                                                               CleanupCampaignState.EXECUTING);
+  private static final List<CleanupCampaignState> ACTIVE_STATES               = List.of(CleanupCampaignState.PUBLISHED,
+                                                                                        CleanupCampaignState.LOCKED,
+                                                                                        CleanupCampaignState.EXECUTING);
 
-  private static final List<CleanupCampaignState> TERMINAL_STATES    = List.of(CleanupCampaignState.COMPLETED,
-                                                                               CleanupCampaignState.CANCELLED);
+  private static final List<CleanupCampaignState> TERMINAL_STATES             = List.of(CleanupCampaignState.COMPLETED,
+                                                                                        CleanupCampaignState.CANCELLED);
 
-  private static final int                        MAX_CAMPAIGNS      = 200;
+  private static final int                        MAX_CAMPAIGNS               = 200;
 
-  private static final int                        MAX_MANAGED_SPACES = 100;
+  private static final int                        MAX_MANAGED_SPACES          = 100;
 
-  private static final int                        CSV_PAGE_SIZE      = 1000;
+  private static final int                        CSV_PAGE_SIZE               = 1000;
 
-  private static final int                        LISTENER_RETRY_MAX_ATTEMPTS  = 10;
+  private static final String                     CSV_HEADER                  =
+                                                              "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason\n";
 
-  private static final long                       LISTENER_RETRY_DELAY_MILLIS  = TimeUnit.SECONDS.toMillis(30);
+  private static final int                        LISTENER_RETRY_MAX_ATTEMPTS = 10;
+
+  private static final long                       LISTENER_RETRY_DELAY_MILLIS = TimeUnit.SECONDS.toMillis(30);
 
   /**
    * Guards the check-then-transition of {@link #publishCampaign(long)}: the
@@ -98,7 +111,7 @@ public class CleanupCampaignService {
    * two concurrent publish requests. In-JVM lock only: cluster-wide exclusion
    * is out of scope by spec assumption (single-node deployment).
    */
-  private final Object                            publishLock        = new Object();
+  private final Object                            publishLock                 = new Object();
 
   @Autowired
   private CleanupCampaignStorage                  campaignStorage;
@@ -136,8 +149,8 @@ public class CleanupCampaignService {
   /**
    * Restart recovery: re-registers the freshness observation listener while a
    * campaign is PUBLISHED (bounded backoff: JCR may not be ready yet), then
-   * resumes the interrupted workers through
-   * {@link #resumeStalledWorkers()}. Package visible for tests.
+   * resumes the interrupted workers through {@link #resumeStalledWorkers()}.
+   * Package visible for tests.
    */
   void recoverAfterRestart() {
     try {
@@ -152,13 +165,13 @@ public class CleanupCampaignService {
 
   /**
    * Resumes the workers of the campaigns left DRY_RUN_RUNNING or EXECUTING
-   * without a live worker — the dry-run scan resumes from its persisted
-   * path checkpoint, the purge is naturally resumable (it iterates the
-   * remaining CANDIDATE items). Called at startup recovery AND on every
-   * watchdog tick, so a worker thread that died mid-run is re-launched without
-   * a JVM restart. Safe to call unconditionally: the workers' running-campaign
-   * guard (the id is removed in a finally block even on fatal error) makes
-   * this a no-op while a campaign's worker is alive.
+   * without a live worker — the dry-run scan resumes from its persisted path
+   * checkpoint, the purge is naturally resumable (it iterates the remaining
+   * CANDIDATE items). Called at startup recovery AND on every watchdog tick, so
+   * a worker thread that died mid-run is re-launched without a JVM restart.
+   * Safe to call unconditionally: the workers' running-campaign guard (the id
+   * is removed in a finally block even on fatal error) makes this a no-op while
+   * a campaign's worker is alive.
    */
   public void resumeStalledWorkers() {
     for (CleanupCampaign campaign : campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.DRY_RUN_RUNNING))) {
@@ -279,12 +292,11 @@ public class CleanupCampaignService {
   }
 
   /**
-   * Triggers the batched purge of a LOCKED campaign. A PUBLISHED campaign
-   * whose grace deadline elapsed is first locked through the regular lifecycle
-   * transition (the same code path as
-   * {@link #lockExpiredPublishedCampaign()}, including the observation
-   * listener unregistration), then executed; before the deadline the
-   * execution is rejected.
+   * Triggers the batched purge of a LOCKED campaign. A PUBLISHED campaign whose
+   * grace deadline elapsed is first locked through the regular lifecycle
+   * transition (the same code path as {@link #lockExpiredPublishedCampaign()},
+   * including the observation listener unregistration), then executed; before
+   * the deadline the execution is rejected.
    *
    * @param campaignId campaign identifier
    * @return the campaign, now EXECUTING
@@ -333,11 +345,19 @@ public class CleanupCampaignService {
    * User decision to keep a candidate file: checks ownership (own file, or
    * manager of the owning space), adds the exemption mixin and marks the item
    * EXEMPTED.
+   * <p>
+   * The ownership check runs FIRST, before any campaign-state or item-state
+   * check: probing item ids must never tell a non-owner whether an item exists
+   * nor which state its campaign is in.
    *
    * @param itemId campaign item identifier
    * @param username user requesting to keep the file
    * @throws ObjectNotFoundException when the item or its node doesn't exist
    * @throws IllegalAccessException when the user doesn't own the file
+   * @throws IllegalArgumentException "cleanup.campaignNotPublished" when the
+   *           campaign isn't PUBLISHED, "cleanup.reviewClosed" once the grace
+   *           deadline elapsed, "cleanup.itemNotCandidate" when the item isn't
+   *           decidable
    * @throws IllegalStateException on a (possibly transient) JCR write failure,
    *           the item state left untouched so the keep can be retried
    */
@@ -346,11 +366,12 @@ public class CleanupCampaignService {
     if (item == null) {
       throw new ObjectNotFoundException("cleanup.itemNotFound");
     }
+    checkOwnership(item.getOwnerIdentityId(), username);
     CleanupCampaign campaign = campaignStorage.getCampaign(item.getCampaignId());
     if (campaign == null || campaign.getState() != CleanupCampaignState.PUBLISHED) {
       throw new IllegalArgumentException("cleanup.campaignNotPublished");
     }
-    checkOwnership(item.getOwnerIdentityId(), username);
+    checkReviewWindowOpen(campaign);
     if (item.getState() != CleanupItemState.CANDIDATE && item.getState() != CleanupItemState.EXEMPTED) {
       throw new IllegalArgumentException("cleanup.itemNotCandidate");
     }
@@ -371,40 +392,39 @@ public class CleanupCampaignService {
   }
 
   /**
-   * Bulk variant of {@link #keepItem(long, String)}, continuing past
-   * individual failures.
+   * Bulk variant of {@link #keepItem(long, String)}, continuing past individual
+   * failures and REPORTING them: a caller that answered a blanket success would
+   * tell the user their files are kept while none of them is.
    *
    * @param itemIds campaign item identifiers
    * @param username user requesting to keep the files
+   * @return per-item outcomes: how many succeeded, and which ones failed with
+   *         which reason
    */
-  public void keepItems(List<Long> itemIds, String username) {
-    if (itemIds == null || itemIds.isEmpty()) {
-      throw new IllegalArgumentException("cleanup.itemIdsMandatory");
-    }
-    for (Long itemId : itemIds) {
-      try {
-        keepItem(itemId, username);
-      } catch (Exception e) {
-        LOG.warn("Error keeping cleanup campaign item {}, continuing with the remaining items", itemId, e);
-      }
-    }
+  public CleanupBulkResult keepItems(List<Long> itemIds, String username) {
+    return applyToItems(itemIds, itemId -> keepItem(itemId, username));
   }
 
   /**
    * User decision to un-keep a previously kept file (undo of
-   * {@link #keepItem(long, String)}): checks ownership (own file, or manager
-   * of the owning space), removes the exemption mixin, then revalidates the
-   * node through the shared revalidation mapping — still qualifying goes back
-   * to CANDIDATE, modified meanwhile to SPARED_BY_MODIFICATION, disappeared to
-   * GONE. Only allowed while the campaign is PUBLISHED (review window open).
+   * {@link #keepItem(long, String)}): checks ownership (own file, or manager of
+   * the owning space), removes the exemption mixin, then revalidates the node
+   * through the shared revalidation mapping — still qualifying goes back to
+   * CANDIDATE, modified meanwhile to SPARED_BY_MODIFICATION, disappeared to
+   * GONE. Only allowed while the review window is open (campaign PUBLISHED and
+   * grace deadline not elapsed yet).
+   * <p>
+   * The ownership check runs FIRST, before any campaign-state or item-state
+   * check: probing item ids must never tell a non-owner whether an item exists
+   * nor which state its campaign is in.
    *
    * @param itemId campaign item identifier
    * @param username user requesting to un-keep the file
    * @throws ObjectNotFoundException when the item or its node doesn't exist
    * @throws IllegalAccessException when the user doesn't own the file
    * @throws IllegalArgumentException "cleanup.reviewClosed" when the campaign
-   *           isn't PUBLISHED, "cleanup.itemNotKept" when the item isn't
-   *           EXEMPTED
+   *           isn't PUBLISHED anymore or its grace deadline elapsed,
+   *           "cleanup.itemNotKept" when the item isn't EXEMPTED
    * @throws IllegalStateException on a (possibly transient) JCR write failure,
    *           the item state left untouched so the un-keep can be retried
    */
@@ -413,11 +433,12 @@ public class CleanupCampaignService {
     if (item == null) {
       throw new ObjectNotFoundException("cleanup.itemNotFound");
     }
+    checkOwnership(item.getOwnerIdentityId(), username);
     CleanupCampaign campaign = campaignStorage.getCampaign(item.getCampaignId());
     if (campaign == null || campaign.getState() != CleanupCampaignState.PUBLISHED) {
       throw new IllegalArgumentException("cleanup.reviewClosed");
     }
-    checkOwnership(item.getOwnerIdentityId(), username);
+    checkReviewWindowOpen(campaign);
     if (item.getState() != CleanupItemState.EXEMPTED) {
       throw new IllegalArgumentException("cleanup.itemNotKept");
     }
@@ -445,22 +466,47 @@ public class CleanupCampaignService {
 
   /**
    * Bulk variant of {@link #unkeepItem(long, String)}, continuing past
-   * individual failures.
+   * individual failures and REPORTING them (see
+   * {@link #keepItems(List, String)}).
    *
    * @param itemIds campaign item identifiers
    * @param username user requesting to un-keep the files
+   * @return per-item outcomes: how many succeeded, and which ones failed with
+   *         which reason
    */
-  public void unkeepItems(List<Long> itemIds, String username) {
+  public CleanupBulkResult unkeepItems(List<Long> itemIds, String username) {
+    return applyToItems(itemIds, itemId -> unkeepItem(itemId, username));
+  }
+
+  /**
+   * Shared bulk loop of {@link #keepItems(List, String)} and
+   * {@link #unkeepItems(List, String)}: never aborts on one item, collects each
+   * failure's message code. The per-item failures are expected flow (not found,
+   * not owned, review closed), so they are logged at DEBUG only — the caller
+   * gets them in the returned result.
+   */
+  private CleanupBulkResult applyToItems(List<Long> itemIds, CleanupItemDecision decision) {
     if (itemIds == null || itemIds.isEmpty()) {
       throw new IllegalArgumentException("cleanup.itemIdsMandatory");
     }
+    CleanupBulkResult result = new CleanupBulkResult();
     for (Long itemId : itemIds) {
       try {
-        unkeepItem(itemId, username);
+        decision.apply(itemId);
+        result.setSucceeded(result.getSucceeded() + 1);
       } catch (Exception e) {
-        LOG.warn("Error un-keeping cleanup campaign item {}, continuing with the remaining items", itemId, e);
+        LOG.debug("Error deciding cleanup campaign item {}, continuing with the remaining items", itemId, e);
+        result.addFailure(itemId, StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName()));
       }
     }
+    return result;
+  }
+
+  @FunctionalInterface
+  private interface CleanupItemDecision {
+
+    void apply(long itemId) throws ObjectNotFoundException, IllegalAccessException;
+
   }
 
   /**
@@ -525,7 +571,11 @@ public class CleanupCampaignService {
   }
 
   /**
-   * Delta between two campaigns' candidate sets, matched by node uuid.
+   * Delta between two campaigns' candidate sets, matched by node uuid. The three
+   * buckets are computed set-based by the database (three aggregate queries
+   * hitting the (CAMPAIGN_ID, NODE_UUID) unique index): neither campaign's
+   * candidate set is ever loaded in memory, so the endpoint stays bounded
+   * whatever the campaign size.
    *
    * @param baseCampaignId base campaign identifier
    * @param otherCampaignId compared campaign identifier
@@ -535,26 +585,18 @@ public class CleanupCampaignService {
   public CleanupComparison compareCampaigns(long baseCampaignId, long otherCampaignId) throws ObjectNotFoundException {
     getCampaign(baseCampaignId);
     getCampaign(otherCampaignId);
-    Map<String, Long> baseItems = campaignStorage.getNodeUuidToReclaimableBytes(baseCampaignId);
-    Map<String, Long> otherItems = campaignStorage.getNodeUuidToReclaimableBytes(otherCampaignId);
+    CleanupComparisonBucket persisting = campaignStorage.getPersistingItems(baseCampaignId, otherCampaignId);
+    CleanupComparisonBucket newItems = campaignStorage.getNewItems(baseCampaignId, otherCampaignId);
+    CleanupComparisonBucket goneItems = campaignStorage.getGoneItems(baseCampaignId, otherCampaignId);
     CleanupComparison comparison = new CleanupComparison();
     comparison.setBaseCampaignId(baseCampaignId);
     comparison.setOtherCampaignId(otherCampaignId);
-    baseItems.forEach((nodeUuid, bytes) -> {
-      if (otherItems.containsKey(nodeUuid)) {
-        comparison.setPersistingCount(comparison.getPersistingCount() + 1);
-        comparison.setPersistingBytes(comparison.getPersistingBytes() + bytes);
-      } else {
-        comparison.setNewCount(comparison.getNewCount() + 1);
-        comparison.setNewBytes(comparison.getNewBytes() + bytes);
-      }
-    });
-    otherItems.forEach((nodeUuid, bytes) -> {
-      if (!baseItems.containsKey(nodeUuid)) {
-        comparison.setGoneCount(comparison.getGoneCount() + 1);
-        comparison.setGoneBytes(comparison.getGoneBytes() + bytes);
-      }
-    });
+    comparison.setPersistingCount(persisting.getCount());
+    comparison.setPersistingBytes(persisting.getReclaimableBytes());
+    comparison.setNewCount(newItems.getCount());
+    comparison.setNewBytes(newItems.getReclaimableBytes());
+    comparison.setGoneCount(goneItems.getCount());
+    comparison.setGoneBytes(goneItems.getReclaimableBytes());
     return comparison;
   }
 
@@ -614,29 +656,50 @@ public class CleanupCampaignService {
   }
 
   /**
-   * CSV report of a campaign: generated live while item detail is retained,
-   * served from the {@link FileService} archive afterwards.
+   * Availability check of a campaign's CSV report, to run BEFORE a single byte
+   * is streamed: once the response body started flowing the HTTP status is
+   * already committed, so the not-found outcome has to be settled here. Only
+   * metadata is read (never the archive content).
    *
    * @param campaignId campaign identifier
-   * @return CSV content
    * @throws ObjectNotFoundException when the campaign or its report doesn't
    *           exist anymore
    */
-  public byte[] getArchiveCsv(long campaignId) throws ObjectNotFoundException {
+  public void checkArchiveAvailable(long campaignId) throws ObjectNotFoundException {
     CleanupCampaign campaign = getCampaign(campaignId);
     if (campaignStorage.hasItems(campaignId)) {
-      return buildCsv(campaignId);
-    } else if (campaign.getArchiveFileId() != null) {
-      try {
-        FileItem fileItem = fileService.getFile(campaign.getArchiveFileId());
-        if (fileItem != null) {
-          return fileItem.getAsByte();
-        }
-      } catch (Exception e) {
-        LOG.warn("Error reading cleanup campaign {} archive file {}", campaignId, campaign.getArchiveFileId(), e);
-      }
+      // Item detail retained: the CSV is generated live
+      return;
     }
-    throw new ObjectNotFoundException("cleanup.archiveNotFound");
+    Long archiveFileId = campaign.getArchiveFileId();
+    if (archiveFileId == null || fileService.getFileInfo(archiveFileId) == null) {
+      throw new ObjectNotFoundException("cleanup.archiveNotFound");
+    }
+  }
+
+  /**
+   * Streams the CSV report of a campaign: generated page by page while item
+   * detail is retained (each page is flushed, so the first rows reach the client
+   * immediately and the whole report is never materialized in memory), copied
+   * from the {@link FileService} archive afterwards. Availability must have been
+   * settled by {@link #checkArchiveAvailable(long)} first.
+   *
+   * @param campaignId campaign identifier
+   * @param outputStream stream to write the CSV to, left open for the container
+   *          to close
+   * @throws IOException when writing to the client stream fails
+   */
+  public void writeArchiveCsv(long campaignId, OutputStream outputStream) throws IOException {
+    CleanupCampaign campaign = campaignStorage.getCampaign(campaignId);
+    if (campaign == null) {
+      // Deleted between the availability check and the streaming
+      return;
+    }
+    if (campaignStorage.hasItems(campaignId)) {
+      writeCsv(campaignId, outputStream);
+    } else if (campaign.getArchiveFileId() != null) {
+      writeArchiveFile(campaign, outputStream);
+    }
   }
 
   /**
@@ -679,35 +742,85 @@ public class CleanupCampaignService {
     }
   }
 
-  private byte[] buildCsv(long campaignId) {
-    StringBuilder csv =
-                      new StringBuilder("nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason\n");
+  /**
+   * Writes the live CSV report page by page, flushing after each page: the
+   * archive download starts streaming immediately instead of waiting for the
+   * whole report to be built in memory.
+   */
+  private void writeCsv(long campaignId, OutputStream outputStream) throws IOException {
+    Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
+    writer.write(CSV_HEADER);
     int pageIndex = 0;
     Page<CleanupCampaignItem> page;
     do {
       page = campaignStorage.getItemsPage(campaignId, PageRequest.of(pageIndex++, CSV_PAGE_SIZE, Sort.by("id")));
       for (CleanupCampaignItem item : page.getContent()) {
-        csv.append(escapeCsv(item.getNodeUuid()))
-           .append(',')
-           .append(escapeCsv(item.getPath()))
-           .append(',')
-           .append(item.getOwnerIdentityId())
-           .append(',')
-           .append(item.getAction().name())
-           .append(',')
-           .append(item.getState().name())
-           .append(',')
-           .append(item.getFileSize())
-           .append(',')
-           .append(item.getVersionsSize())
-           .append(',')
-           .append(item.getReclaimedBytes())
-           .append(',')
-           .append(escapeCsv(item.getFailureReason()))
-           .append('\n');
+        writer.write(toCsvRow(item));
       }
+      // Never left buffered: the client gets each page as it is read
+      writer.flush();
     } while (page.hasNext());
-    return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Streams the stored archive of a campaign whose item rows were purged by the
+   * retention job. A read failure is logged (the availability check already
+   * passed, so the status is committed) rather than propagated as an error page
+   * inside the CSV body.
+   */
+  private void writeArchiveFile(CleanupCampaign campaign, OutputStream outputStream) throws IOException {
+    FileItem fileItem;
+    try {
+      fileItem = fileService.getFile(campaign.getArchiveFileId());
+    } catch (Exception e) {
+      LOG.warn("Error reading cleanup campaign {} archive file {}", campaign.getId(), campaign.getArchiveFileId(), e);
+      return;
+    }
+    InputStream archiveStream = fileItem == null ? null : fileItem.getAsStream();
+    if (archiveStream == null) {
+      LOG.warn("Cleanup campaign {} archive file {} has no content anymore",
+               campaign.getId(),
+               campaign.getArchiveFileId());
+      return;
+    }
+    try (InputStream inputStream = archiveStream) {
+      inputStream.transferTo(outputStream);
+      outputStream.flush();
+    }
+  }
+
+  private String toCsvRow(CleanupCampaignItem item) {
+    StringBuilder row = new StringBuilder();
+    row.append(escapeCsv(item.getNodeUuid()))
+       .append(',')
+       .append(escapeCsv(item.getPath()))
+       .append(',')
+       .append(item.getOwnerIdentityId())
+       .append(',')
+       .append(item.getAction().name())
+       .append(',')
+       .append(item.getState().name())
+       .append(',')
+       .append(item.getFileSize())
+       .append(',')
+       .append(item.getVersionsSize())
+       .append(',')
+       .append(item.getReclaimedBytes())
+       .append(',')
+       .append(escapeCsv(item.getFailureReason()))
+       .append('\n');
+    return row.toString();
+  }
+
+  /**
+   * Materializes the CSV report for the retention archiving path only: the
+   * {@link FileService} needs the content length up front. The download path
+   * never goes through here — see {@link #writeCsv(long, OutputStream)}.
+   */
+  private byte[] buildCsv(long campaignId) throws IOException {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    writeCsv(campaignId, outputStream);
+    return outputStream.toByteArray();
   }
 
   private String escapeCsv(String value) {
@@ -750,6 +863,22 @@ public class CleanupCampaignService {
    */
   private boolean isGraceDeadlineElapsed(CleanupCampaign campaign, long now) {
     return campaign.getLockDate() > 0 && campaign.getLockDate() <= now;
+  }
+
+  /**
+   * The review window freezes at the GRACE DEADLINE, not at the LOCKED
+   * transition: the locking cron runs every 10 minutes, so a campaign can stay
+   * PUBLISHED for up to that long after its deadline elapsed (systematically so
+   * with a zero grace period). Accepting a keep in that window would let a user
+   * believe a file is spared while the purge is about to start.
+   *
+   * @throws IllegalArgumentException "cleanup.reviewClosed" once the grace
+   *           deadline elapsed
+   */
+  private void checkReviewWindowOpen(CleanupCampaign campaign) {
+    if (isGraceDeadlineElapsed(campaign, System.currentTimeMillis())) {
+      throw new IllegalArgumentException("cleanup.reviewClosed");
+    }
   }
 
   /**
@@ -842,12 +971,12 @@ public class CleanupCampaignService {
 
   private boolean servesAggregatesFromSummary(CleanupCampaign campaign) {
     return !campaign.isItemsRetained() && TERMINAL_STATES.contains(campaign.getState())
-        && StringUtils.isNotBlank(campaign.getSummaryJson());
+           && StringUtils.isNotBlank(campaign.getSummaryJson());
   }
 
   /**
-   * The retention job purged the item rows: the live aggregates would all be
-   * 0, serve the summary snapshotted at campaign completion instead.
+   * The retention job purged the item rows: the live aggregates would all be 0,
+   * serve the summary snapshotted at campaign completion instead.
    */
   private void applySummaryAggregates(CleanupCampaign campaign) {
     CleanupCampaignSummary summary = JsonUtils.fromJsonString(campaign.getSummaryJson(), CleanupCampaignSummary.class);

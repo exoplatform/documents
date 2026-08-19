@@ -30,6 +30,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.document.cleanup.rest.model.KeepItemsRestEntity;
+import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
+import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,20 +72,24 @@ public class CleanupItemRest {
     }
   }
 
+  /**
+   * Answers 200 with the per-item outcomes, NEVER a blanket 204: a bulk keep
+   * continues past individual failures, so the UI has to be able to warn instead
+   * of reporting a success when nothing was actually kept.
+   */
   @Secured("users")
-  @PostMapping(path = "keep", consumes = MediaType.APPLICATION_JSON_VALUE)
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  @Operation(method = "POST", summary = "Keep several cleanup candidate files", description = "Exempt several of the user's candidate files from the published campaign (ownership checked in the Service layer), continuing past individual failures")
+  @PostMapping(path = "keep", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "POST", summary = "Keep several cleanup candidate files", description = "Exempt several of the user's candidate files from the published campaign (ownership checked in the Service layer), continuing past individual failures and reporting them")
   @ApiResponses(value = {
-    @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "200", description = "Request fulfilled, with the per-item outcomes"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
   })
-  public void keepItems(HttpServletRequest request,
-                        @io.swagger.v3.oas.annotations.parameters.RequestBody
-                        @RequestBody
-                        KeepItemsRestEntity keepItemsEntity) {
+  public KeepItemsResultRestEntity keepItems(HttpServletRequest request,
+                                            @io.swagger.v3.oas.annotations.parameters.RequestBody
+                                            @RequestBody
+                                            KeepItemsRestEntity keepItemsEntity) {
     try {
-      campaignService.keepItems(keepItemsEntity.getItemIds(), request.getRemoteUser());
+      return CleanupEntityBuilder.build(campaignService.keepItems(keepItemsEntity.getItemIds(), request.getRemoteUser()));
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }
@@ -114,20 +120,23 @@ public class CleanupItemRest {
     }
   }
 
+  /**
+   * Answers 200 with the per-item outcomes, mirroring
+   * {@link #keepItems(HttpServletRequest, KeepItemsRestEntity)}.
+   */
   @Secured("users")
-  @PostMapping(path = "unkeep", consumes = MediaType.APPLICATION_JSON_VALUE)
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  @Operation(method = "POST", summary = "Un-keep several previously kept cleanup candidate files", description = "Undo the exemption of several of the user's kept files while the campaign is published (ownership checked in the Service layer), continuing past individual failures")
+  @PostMapping(path = "unkeep", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "POST", summary = "Un-keep several previously kept cleanup candidate files", description = "Undo the exemption of several of the user's kept files while the campaign is published (ownership checked in the Service layer), continuing past individual failures and reporting them")
   @ApiResponses(value = {
-    @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "200", description = "Request fulfilled, with the per-item outcomes"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
   })
-  public void unkeepItems(HttpServletRequest request,
-                          @io.swagger.v3.oas.annotations.parameters.RequestBody
-                          @RequestBody
-                          KeepItemsRestEntity keepItemsEntity) {
+  public KeepItemsResultRestEntity unkeepItems(HttpServletRequest request,
+                                              @io.swagger.v3.oas.annotations.parameters.RequestBody
+                                              @RequestBody
+                                              KeepItemsRestEntity keepItemsEntity) {
     try {
-      campaignService.unkeepItems(keepItemsEntity.getItemIds(), request.getRemoteUser());
+      return CleanupEntityBuilder.build(campaignService.unkeepItems(keepItemsEntity.getItemIds(), request.getRemoteUser()));
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }

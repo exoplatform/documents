@@ -42,7 +42,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -54,6 +53,7 @@ import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
+import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 
 /**
@@ -64,7 +64,19 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
 @ExtendWith(MockitoExtension.class)
 class CleanupCampaignStorageTest {
 
-  private static final long      CAMPAIGN_ID = 3L;
+  private static final String    NODE_UUID_EXISTING = "uuid-existing";
+
+  private static final String    EXEMPTED_STATE     = "EXEMPTED";
+
+  private static final String    PURGED_STATE       = "PURGED";
+
+  private static final String    CANDIDATE_STATE    = "CANDIDATE";
+
+  private static final String    USERS_ROOT_PATH    = "/Users/root";  // NOSONAR
+
+  private static final long      CAMPAIGN_ID        = 3L;
+
+  private static final long      OTHER_CAMPAIGN_ID  = 4L;
 
   @Mock
   private CleanupCampaignDAO     campaignDAO;
@@ -172,11 +184,11 @@ class CleanupCampaignStorageTest {
   @Test
   void saveCandidatesSkipsAlreadyRecordedNodes() {
     CleanupCampaignItemEntity existing = new CleanupCampaignItemEntity();
-    existing.setNodeUuid("uuid-existing");
+    existing.setNodeUuid(NODE_UUID_EXISTING);
     when(itemDAO.findByCampaignIdAndNodeUuidIn(eq(CAMPAIGN_ID), anyCollection())).thenReturn(List.of(existing));
 
     storage.saveCandidates(CAMPAIGN_ID,
-                           List.of(candidate("uuid-existing", "/Users/j___/john/Private/old.pdf"),
+                           List.of(candidate(NODE_UUID_EXISTING, "/Users/j___/john/Private/old.pdf"),
                                    candidate("uuid-new", "/Users/j___/john/Private/new.pdf")));
 
     @SuppressWarnings("unchecked")
@@ -209,7 +221,8 @@ class CleanupCampaignStorageTest {
     ArgumentCaptor<List<CleanupCampaignItemEntity>> savedCaptor = ArgumentCaptor.forClass(List.class);
     verify(itemDAO).saveAll(savedCaptor.capture());
     CleanupCampaignItemEntity savedEntity = savedCaptor.getValue().get(0);
-    assertEquals(CleanupItemState.EXEMPTED.name(), savedEntity.getState(),
+    assertEquals(CleanupItemState.EXEMPTED.name(),
+                 savedEntity.getState(),
                  "A mixin-carrying file must be persisted as EXEMPTED, visible as 'Kept'");
     assertEquals("mary", savedEntity.getDecidedBy());
     assertEquals(new Date(123456789L), savedEntity.getDecidedAt());
@@ -236,10 +249,10 @@ class CleanupCampaignStorageTest {
   @Test
   void saveCandidatesSavesNothingWhenAllReplayed() {
     CleanupCampaignItemEntity existing = new CleanupCampaignItemEntity();
-    existing.setNodeUuid("uuid-existing");
+    existing.setNodeUuid(NODE_UUID_EXISTING);
     when(itemDAO.findByCampaignIdAndNodeUuidIn(eq(CAMPAIGN_ID), anyCollection())).thenReturn(List.of(existing));
 
-    storage.saveCandidates(CAMPAIGN_ID, List.of(candidate("uuid-existing", "/Users/j___/john/Private/old.pdf")));
+    storage.saveCandidates(CAMPAIGN_ID, List.of(candidate(NODE_UUID_EXISTING, "/Users/j___/john/Private/old.pdf")));
 
     verify(itemDAO, never()).saveAll(anyList());
   }
@@ -286,7 +299,7 @@ class CleanupCampaignStorageTest {
 
   @Test
   void getItemsTouchedByPathMatchesAncestorsExactlyAndDescendantsEscaped() {
-    String eventPath = "/Groups/spaces/marketing/Documents/reports_2026/q1.pdf";
+    String eventPath = "/Groups/spaces/marketing/Documents/reports_2026/q1.pdf"; // NOSONAR
     when(itemDAO.findByCampaignIdAndPathTouchedBy(eq(CAMPAIGN_ID), anyList(), any())).thenReturn(List.of());
 
     storage.getItemsTouchedByPath(CAMPAIGN_ID, eventPath);
@@ -316,17 +329,18 @@ class CleanupCampaignStorageTest {
   @Test
   void getItemAggregatesFoldsGroupedRowsPerCampaign() {
     when(itemDAO.findAggregatesByCampaignIds(List.of(1L, 2L, 3L)))
-                                                                  .thenReturn(List.of(new Object[] { 1L, "CANDIDATE", 4L, 2048L,
-                                                                                                     0L },
-                                                                                      new Object[] { 1L, "PURGED", 2L, 512L,
-                                                                                                     999L },
-                                                                                      new Object[] { 2L, "EXEMPTED", 1L, 128L,
-                                                                                                     0L }));
+                                                                  .thenReturn(List.of(new Object[] { 1L, CANDIDATE_STATE, 4L,
+                                                                    2048L,
+                                                                    0L },
+                                                                                      new Object[] { 1L, PURGED_STATE, 2L, 512L,
+                                                                                        999L },
+                                                                                      new Object[] { 2L, EXEMPTED_STATE, 1L, 128L,
+                                                                                        0L }));
 
     Map<Long, org.exoplatform.document.cleanup.model.CleanupCampaignAggregates> aggregates =
-                                                                                            storage.getItemAggregates(List.of(1L,
-                                                                                                                              2L,
-                                                                                                                              3L));
+                                                                                           storage.getItemAggregates(List.of(1L,
+                                                                                                                             2L,
+                                                                                                                             3L));
 
     // Campaign 1: candidate count/bytes from the CANDIDATE row only, reclaimed
     // bytes summed across every state
@@ -374,11 +388,11 @@ class CleanupCampaignStorageTest {
 
   @Test
   void getItemsMapsNullableFiltersToDao() {
-    when(itemDAO.findByFilters(eq(CAMPAIGN_ID), eq(7L), eq("CANDIDATE"), eq("DELETE"), eq(1024L), any()))
-                                                                                                         .thenReturn(new PageImpl<>(List.of()));
+    when(itemDAO.findByFilters(eq(CAMPAIGN_ID), eq(7L), eq(CANDIDATE_STATE), eq("DELETE"), eq(1024L), any()))
+                                                                                                             .thenReturn(new PageImpl<>(List.of()));
 
     storage.getItems(CAMPAIGN_ID, 7L, CleanupItemState.CANDIDATE, CleanupAction.DELETE, 1024L, PageRequest.of(0, 10));
-    verify(itemDAO).findByFilters(eq(CAMPAIGN_ID), eq(7L), eq("CANDIDATE"), eq("DELETE"), eq(1024L), any());
+    verify(itemDAO).findByFilters(eq(CAMPAIGN_ID), eq(7L), eq(CANDIDATE_STATE), eq("DELETE"), eq(1024L), any());
 
     when(itemDAO.findByFilters(eq(CAMPAIGN_ID), eq((Long) null), eq((String) null), eq((String) null), eq((Long) null), any()))
                                                                                                                                .thenReturn(new PageImpl<>(List.of()));
@@ -387,35 +401,46 @@ class CleanupCampaignStorageTest {
   }
 
   @Test
-  void getNodeUuidToReclaimableBytesDrainsEveryPage() {
-    Pageable firstPage = PageRequest.of(0, 1000, org.springframework.data.domain.Sort.by("id"));
-    when(itemDAO.findNodeUuidAndReclaimableBytes(eq(CAMPAIGN_ID), any(Pageable.class)))
-                                                                                       .thenReturn(new PageImpl<>(List.of(new Object[][] {
-                                                                                                                           { "uuid-1",
-                                                                                                                             100L } }),
-                                                                                                                  firstPage,
-                                                                                                                  1001),
-                                                                                                   new PageImpl<>(List.of(new Object[][] {
-                                                                                                                           { "uuid-2",
-                                                                                                                             200L } }),
-                                                                                                                  firstPage.next(),
-                                                                                                                  1001));
+  void comparisonBucketsFoldTheAggregateRowsWithoutLoadingAnyCandidateSet() {
+    // The three buckets are computed by the database: NO node-uuid map is ever
+    // built in memory (that was the unbounded-memory risk of the old diff)
+    when(itemDAO.aggregateItemsSharedWithCampaign(CAMPAIGN_ID, OTHER_CAMPAIGN_ID))
+                                                                                  .thenReturn(List.<Object[]> of(new Object[] { 3L,
+                                                                                    300L }));
+    when(itemDAO.aggregateItemsAbsentFromCampaign(CAMPAIGN_ID, OTHER_CAMPAIGN_ID))
+                                                                                  .thenReturn(List.<Object[]> of(new Object[] { 1L,
+                                                                                    100L }));
+    when(itemDAO.aggregateItemsAbsentFromCampaign(OTHER_CAMPAIGN_ID, CAMPAIGN_ID))
+                                                                                  .thenReturn(List.<Object[]> of(new Object[] { 2L,
+                                                                                    200L }));
 
-    Map<String, Long> result = storage.getNodeUuidToReclaimableBytes(CAMPAIGN_ID);
+    assertEquals(new CleanupComparisonBucket(3L, 300L), storage.getPersistingItems(CAMPAIGN_ID, OTHER_CAMPAIGN_ID));
+    assertEquals(new CleanupComparisonBucket(1L, 100L), storage.getNewItems(CAMPAIGN_ID, OTHER_CAMPAIGN_ID));
+    // 'gone' reuses the same absence query with the campaigns SWAPPED, so its
+    // bytes come from the other campaign's rows
+    assertEquals(new CleanupComparisonBucket(2L, 200L), storage.getGoneItems(CAMPAIGN_ID, OTHER_CAMPAIGN_ID));
+  }
 
-    assertEquals(Map.of("uuid-1", 100L, "uuid-2", 200L), result);
-    verify(itemDAO, org.mockito.Mockito.times(2)).findNodeUuidAndReclaimableBytes(eq(CAMPAIGN_ID), any(Pageable.class));
+  @Test
+  void comparisonBucketsFoldEmptyAndNullAggregatesAsZero() {
+    when(itemDAO.aggregateItemsSharedWithCampaign(CAMPAIGN_ID, OTHER_CAMPAIGN_ID)).thenReturn(List.of());
+    when(itemDAO.aggregateItemsAbsentFromCampaign(CAMPAIGN_ID, OTHER_CAMPAIGN_ID))
+                                                                                  .thenReturn(java.util.Collections.singletonList(new Object[] {
+                                                                                    null, null }));
+
+    assertEquals(new CleanupComparisonBucket(0L, 0L), storage.getPersistingItems(CAMPAIGN_ID, OTHER_CAMPAIGN_ID));
+    assertEquals(new CleanupComparisonBucket(0L, 0L), storage.getNewItems(CAMPAIGN_ID, OTHER_CAMPAIGN_ID));
   }
 
   @Test
   void countsAndSumsDelegateWithStateNames() {
-    when(itemDAO.countByCampaignIdAndState(CAMPAIGN_ID, "CANDIDATE")).thenReturn(4L);
+    when(itemDAO.countByCampaignIdAndState(CAMPAIGN_ID, CANDIDATE_STATE)).thenReturn(4L);
     assertEquals(4L, storage.countItemsByState(CAMPAIGN_ID, CleanupItemState.CANDIDATE));
 
-    when(itemDAO.sumReclaimableBytesByState(CAMPAIGN_ID, "EXEMPTED")).thenReturn(2048L);
+    when(itemDAO.sumReclaimableBytesByState(CAMPAIGN_ID, EXEMPTED_STATE)).thenReturn(2048L);
     assertEquals(2048L, storage.sumReclaimableBytesByState(CAMPAIGN_ID, CleanupItemState.EXEMPTED));
 
-    when(itemDAO.countByCampaignIdAndOwnerIdentityIdInAndState(CAMPAIGN_ID, List.of(7L), "PURGED")).thenReturn(2L);
+    when(itemDAO.countByCampaignIdAndOwnerIdentityIdInAndState(CAMPAIGN_ID, List.of(7L), PURGED_STATE)).thenReturn(2L);
     assertEquals(2L, storage.countItemsByOwnersAndState(CAMPAIGN_ID, List.of(7L), CleanupItemState.PURGED));
 
     when(itemDAO.existsByCampaignId(CAMPAIGN_ID)).thenReturn(true);
@@ -429,10 +454,10 @@ class CleanupCampaignStorageTest {
   void excludedPathsRoundTripAsJson() {
     when(campaignDAO.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     CleanupCampaign campaign = campaign();
-    campaign.getParams().setExcludedPaths(List.of("/Users/root", "/Groups/spaces/admin"));
+    campaign.getParams().setExcludedPaths(List.of(USERS_ROOT_PATH, "/Groups/spaces/admin"));
 
     CleanupCampaign saved = storage.saveCampaign(campaign);
-    assertEquals(List.of("/Users/root", "/Groups/spaces/admin"), saved.getParams().getExcludedPaths());
+    assertEquals(List.of(USERS_ROOT_PATH, "/Groups/spaces/admin"), saved.getParams().getExcludedPaths());
 
     campaign.getParams().setExcludedPaths(null);
     saved = storage.saveCampaign(campaign);
@@ -444,7 +469,7 @@ class CleanupCampaignStorageTest {
     campaign.setId(CAMPAIGN_ID);
     campaign.setName("Spring cleanup");
     campaign.setState(CleanupCampaignState.SIMULATED);
-    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of("/Users/root"), null));
+    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(USERS_ROOT_PATH), null));
     campaign.setStartedDate(1000L);
     campaign.setPublishedDate(0);
     campaign.setTotalCount(100);

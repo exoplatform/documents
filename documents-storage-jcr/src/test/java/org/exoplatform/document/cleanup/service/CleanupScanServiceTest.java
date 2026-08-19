@@ -65,8 +65,8 @@ import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
  * candidate persistence + path checkpoint/ETA updates + progress push, the
  * path-based resume from a persisted checkpoint (never a positional offset),
  * the abort check between batches, the checkpoint-resumable error handling and
- * the running-campaign guard the watchdog depends on. The JCR walking itself
- * is mocked through {@link CleanupJcrStorage}'s streaming callback.
+ * the running-campaign guard the watchdog depends on. The JCR walking itself is
+ * mocked through {@link CleanupJcrStorage}'s streaming callback.
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupScanServiceTest {
@@ -150,16 +150,26 @@ class CleanupScanServiceTest {
     // A fresh scan never carries a resume path
     verify(cleanupJcrStorage).scanRoot(eq("/Users"), isNull(), eq(BATCH_SIZE), any(), any());
     // Streamed candidates are persisted per batch
-    verify(campaignStorage).saveCandidates(eq(CAMPAIGN_ID), argThat(candidates -> candidates.size() == 1
-                                                                                  && "uuid-0".equals(candidates.get(0)
-                                                                                                               .getNodeUuid())));
-    verify(campaignStorage).saveCandidates(eq(CAMPAIGN_ID), argThat(candidates -> "uuid-2".equals(candidates.get(0)
-                                                                                                            .getNodeUuid())));
+    verify(campaignStorage).saveCandidates(eq(CAMPAIGN_ID),
+                                           argThat(candidates -> candidates.size() == 1
+                                                                 && "uuid-0".equals(candidates.get(0)
+                                                                                              .getNodeUuid())));
+    verify(campaignStorage).saveCandidates(eq(CAMPAIGN_ID),
+                                           argThat(candidates -> "uuid-2".equals(candidates.get(0)
+                                                                                           .getNodeUuid())));
     // Progress after each batch carries the last processed PATH as checkpoint
     // (the numeric scanned count is for progress display only)
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(3L), eq(2L), anyLong(), eq("/Users/j___/john/Private/b.pdf"),
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
+                                           eq(3L),
+                                           eq(2L),
+                                           anyLong(),
+                                           eq("/Users/j___/john/Private/b.pdf"),
                                            eq(2L));
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(3L), eq(3L), anyLong(), eq("/Users/j___/john/Private/c.pdf"),
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
+                                           eq(3L),
+                                           eq(3L),
+                                           anyLong(),
+                                           eq("/Users/j___/john/Private/c.pdf"),
                                            eq(3L));
     // Once a root completes, the checkpoint advances to the NEXT root so a
     // crash between roots never re-iterates the completed one
@@ -215,8 +225,12 @@ class CleanupScanServiceTest {
     verify(cleanupJcrStorage).scanRoot(eq("/Trash"), isNull(), eq(BATCH_SIZE), any(), any());
     // Progress counts include the skipped roots and the pre-resume scanned
     // count in the numerator; the checkpoint carries the new last path
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(10L), eq(9L), anyLong(),
-                                           eq("/Groups/spaces/marketing/Documents/d.pdf"), eq(4L));
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
+                                           eq(10L),
+                                           eq(9L),
+                                           anyLong(),
+                                           eq("/Groups/spaces/marketing/Documents/d.pdf"),
+                                           eq(4L));
     verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(10L), eq(9L), anyLong(), eq("/Trash"), eq(0L));
     verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(10L), eq(10L), anyLong(), eq("/Trash/x.pdf"), eq(1L));
   }
@@ -244,8 +258,12 @@ class CleanupScanServiceTest {
     // No resume path, and the stale legacy offset is NEVER used to position:
     // the scanned-in-root count restarts from zero
     verify(cleanupJcrStorage).scanRoot(eq("/Groups/spaces"), isNull(), eq(BATCH_SIZE), any(), any());
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(9L), eq(7L), anyLong(),
-                                           eq("/Groups/spaces/marketing/Documents/b.pdf"), eq(2L));
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
+                                           eq(9L),
+                                           eq(7L),
+                                           anyLong(),
+                                           eq("/Groups/spaces/marketing/Documents/b.pdf"),
+                                           eq(2L));
   }
 
   @Test

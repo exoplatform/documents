@@ -14,25 +14,23 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.document.cleanup.constant;
+package org.exoplatform.document.cleanup.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
- * Outcome of an exemption mixin change (add or remove) on a JCR node, letting
- * the Service layer distinguish a node that no longer exists (item GONE) from a
- * transient write failure (item state untouched, retryable).
+ * One bucket of a campaign comparison (persisting / new / gone): the item count
+ * and reclaimable-bytes sum computed by a single set-based aggregate query.
  */
-public enum CleanupExemptionResult {
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class CleanupComparisonBucket {
 
-  /**
-   * The node exists and the exemption change was applied: the mixin is now
-   * present (keep) or absent (un-keep).
-   */
-  ADDED,
+  private long count;
 
-  /** The node doesn't exist anymore. */
-  NOT_FOUND,
-
-  /** The node exists but the exemption change could not be persisted. */
-  FAILED;
+  private long reclaimableBytes;
 
 }

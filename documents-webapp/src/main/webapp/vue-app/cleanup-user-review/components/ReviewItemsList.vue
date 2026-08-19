@@ -17,7 +17,7 @@
 -->
 <template>
   <div>
-    <div v-if="selectedItems.length" class="d-flex align-center mb-2">
+    <div v-if="selectedItems.length && !reviewClosed" class="d-flex align-center mb-2">
       <span class="text-color">
         {{ $t('cleanup.review.items.selected', {0: selectedItems.length}) }}
       </span>
@@ -38,8 +38,8 @@
       :server-items-length="totalItems"
       :footer-props="{ itemsPerPageOptions }"
       :no-data-text="$t('cleanup.review.items.empty')"
+      :show-select="!reviewClosed"
       item-key="id"
-      show-select
       @update:options="loadItems">
       <template slot="item.path" slot-scope="{item}">
         <div
@@ -62,8 +62,10 @@
       </template>
       <template slot="item.keep" slot-scope="{item}">
         <div class="d-flex align-center justify-center">
+          <!-- Once the grace deadline elapsed the review is frozen server-side
+               (cleanup.reviewClosed), so the actions must not be offered anymore -->
           <v-btn
-            v-if="item.state === 'CANDIDATE'"
+            v-if="!reviewClosed && item.state === 'CANDIDATE'"
             :loading="item.loading"
             class="btn"
             small
@@ -71,7 +73,7 @@
             {{ $t('cleanup.review.items.keep') }}
           </v-btn>
           <v-btn
-            v-else-if="item.state === 'EXEMPTED'"
+            v-else-if="!reviewClosed && item.state === 'EXEMPTED'"
             :loading="item.loading"
             class="btn"
             small
@@ -101,6 +103,12 @@
 </template>
 <script>
 export default {
+  props: {
+    reviewClosed: {
+      type: Boolean,
+      default: false,
+    },
+  },
   data() {
     return {
       items: [],
@@ -124,6 +132,13 @@ export default {
         {text: this.$t('cleanup.review.items.state'), value: 'state', align: 'center', sortable: false},
         {text: this.$t('cleanup.review.items.actions'), value: 'keep', align: 'center', sortable: false},
       ];
+    },
+  },
+  watch: {
+    reviewClosed(closed) {
+      if (closed) {
+        this.selectedItems = [];
+      }
     },
   },
   created() {
@@ -164,7 +179,7 @@ export default {
       }
       this.selectedItems.forEach(item => item.loading = true);
       return this.$cleanupService.keepItems(itemIds)
-        .then(() => this.keptDone(itemIds.length))
+        .then(result => this.bulkDone(result, 'keep'))
         .catch(() => this.displayAlert(this.$t('cleanup.review.items.keepError'), 'error'))
         .finally(() => this.selectedItems.forEach(item => item.loading = false));
     },
@@ -181,6 +196,19 @@ export default {
     },
     keptDone(count) {
       this.displayAlert(this.$t('cleanup.review.items.keepSuccess', {0: count}));
+      this.$emit('kept');
+      return this.loadItems();
+    },
+    // A bulk keep/un-keep continues past individual failures: warn naming the
+    // failed count instead of reporting a success when nothing was decided,
+    // and refresh the list either way
+    bulkDone(result, action) {
+      const failures = result?.failures?.length || 0;
+      if (failures) {
+        this.displayAlert(this.$t(`cleanup.review.items.${action}Failures`, {0: failures}), 'warning');
+      } else {
+        this.displayAlert(this.$t(`cleanup.review.items.${action}Success`, {0: result?.succeeded || 0}));
+      }
       this.$emit('kept');
       return this.loadItems();
     },

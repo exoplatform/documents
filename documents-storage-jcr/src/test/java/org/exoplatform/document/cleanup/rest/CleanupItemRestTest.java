@@ -17,7 +17,9 @@
 package org.exoplatform.document.cleanup.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -33,10 +35,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.rest.model.KeepItemsRestEntity;
+import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -66,7 +71,8 @@ class CleanupItemRestTest {
 
   @BeforeEach
   void setUp() {
-    when(request.getRemoteUser()).thenReturn(USER);
+    // Lenient: the annotation-contract test never goes through the request
+    org.mockito.Mockito.lenient().when(request.getRemoteUser()).thenReturn(USER);
   }
 
   @Test
@@ -104,13 +110,32 @@ class CleanupItemRestTest {
   }
 
   @Test
-  void keepItemsDelegatesWithAuthenticatedUser() throws Exception {
+  void keepItemsDelegatesWithAuthenticatedUserAndReturnsTheOutcomes() throws Exception {
     KeepItemsRestEntity body = new KeepItemsRestEntity();
     body.setItemIds(List.of(1L, 2L, 3L));
+    CleanupBulkResult result = new CleanupBulkResult();
+    result.setSucceeded(2);
+    result.addFailure(3L, "cleanup.itemNotFound");
+    when(campaignService.keepItems(List.of(1L, 2L, 3L), USER)).thenReturn(result);
 
-    itemRest.keepItems(request, body);
+    KeepItemsResultRestEntity response = itemRest.keepItems(request, body);
 
     verify(campaignService).keepItems(List.of(1L, 2L, 3L), USER);
+    // 200 with the per-item outcomes, never a blanket 204: the UI must be able
+    // to warn when part of the bulk keep failed
+    assertEquals(2, response.getSucceeded());
+    assertEquals(1, response.getFailures().size());
+    assertEquals(3L, response.getFailures().get(0).getItemId());
+    assertEquals("cleanup.itemNotFound", response.getFailures().get(0).getReason());
+  }
+
+  @Test
+  void bulkEndpointsNeverAnswerNoContent() throws NoSuchMethodException {
+    // A 204 would make a fully-failed bulk keep indistinguishable from a success
+    assertNull(CleanupItemRest.class.getMethod("keepItems", HttpServletRequest.class, KeepItemsRestEntity.class)
+                                   .getAnnotation(ResponseStatus.class));
+    assertNull(CleanupItemRest.class.getMethod("unkeepItems", HttpServletRequest.class, KeepItemsRestEntity.class)
+                                   .getAnnotation(ResponseStatus.class));
   }
 
   @Test
@@ -152,13 +177,18 @@ class CleanupItemRestTest {
   }
 
   @Test
-  void unkeepItemsDelegatesWithAuthenticatedUser() {
+  void unkeepItemsDelegatesWithAuthenticatedUserAndReturnsTheOutcomes() {
     KeepItemsRestEntity body = new KeepItemsRestEntity();
     body.setItemIds(List.of(1L, 2L, 3L));
+    CleanupBulkResult result = new CleanupBulkResult();
+    result.setSucceeded(3);
+    when(campaignService.unkeepItems(List.of(1L, 2L, 3L), USER)).thenReturn(result);
 
-    itemRest.unkeepItems(request, body);
+    KeepItemsResultRestEntity response = itemRest.unkeepItems(request, body);
 
     verify(campaignService).unkeepItems(List.of(1L, 2L, 3L), USER);
+    assertEquals(3, response.getSucceeded());
+    assertTrue(response.getFailures().isEmpty());
   }
 
   @Test

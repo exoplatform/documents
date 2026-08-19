@@ -82,6 +82,11 @@
   </div>
 </template>
 <script>
+// Slow safety net around the CometD follow-up, which stays the primary refresh
+// path: it also re-evaluates 'now' so the Execute gate and the remaining-time
+// tooltip keep ticking instead of freezing on the value captured at load.
+const REFRESH_PERIOD_MS = 30000;
+
 export default {
   props: {
     campaignId: {
@@ -98,6 +103,7 @@ export default {
       campaign: null,
       actionInProgress: false,
       now: Date.now(),
+      refreshTimerId: null,
     };
   },
   computed: {
@@ -106,6 +112,16 @@ export default {
     },
     executable() {
       return ['PUBLISHED', 'LOCKED'].includes(this.campaign?.state);
+    },
+    running() {
+      return ['DRY_RUN_RUNNING', 'EXECUTING'].includes(this.campaign?.state);
+    },
+    gracePending() {
+      return !!this.graceDeadline && this.graceDeadline > this.now;
+    },
+    // Ticking is only needed while progress can move or a deadline can elapse
+    refreshNeeded() {
+      return this.running || this.gracePending;
     },
     graceDeadline() {
       return this.campaign?.lockDate
@@ -136,22 +152,51 @@ export default {
     campaignId() {
       this.loadCampaign();
     },
+    refreshNeeded() {
+      this.refreshTimer();
+    },
   },
   created() {
     this.loadCampaign();
     document.addEventListener('campaign.progress', this.applyProgressEvent);
     document.addEventListener('campaign.stateChanged', this.applyStateChangedEvent);
+    document.addEventListener('visibilitychange', this.refreshTimer);
   },
   beforeDestroy() {
+    this.stopTimer();
     document.removeEventListener('campaign.progress', this.applyProgressEvent);
     document.removeEventListener('campaign.stateChanged', this.applyStateChangedEvent);
+    document.removeEventListener('visibilitychange', this.refreshTimer);
   },
   methods: {
     loadCampaign() {
       this.now = Date.now();
       return this.$cleanupService.getCampaign(this.campaignId)
         .then(campaign => this.campaign = campaign)
-        .catch(() => this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error'));
+        .catch(() => this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error'))
+        .finally(() => this.refreshTimer());
+    },
+    // Started only while it can change something, and never while the tab is
+    // hidden: no polling behind the user's back
+    refreshTimer() {
+      this.stopTimer();
+      if (this.refreshNeeded && !document.hidden) {
+        this.refreshTimerId = window.setInterval(this.tick, REFRESH_PERIOD_MS);
+      }
+    },
+    stopTimer() {
+      if (this.refreshTimerId) {
+        window.clearInterval(this.refreshTimerId);
+        this.refreshTimerId = null;
+      }
+    },
+    tick() {
+      this.now = Date.now();
+      if (this.running) {
+        // CometD remains the primary refresh path: this poll only prevents a
+        // permanently stale progress bar if the socket never connected or dropped
+        this.loadCampaign();
+      }
     },
     applyProgressEvent(event) {
       const message = event?.detail;

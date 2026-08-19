@@ -44,19 +44,19 @@ import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.ws.frameworks.cometd.ContinuationService;
 
 /**
- * WebSocket push tests pinning the channel bootstrap, the
- * administrators-only fan-out, the path/owner-free payload and the
- * never-fail contract (a WebSocket error must never break a cleanup
- * operation, e.g. during the Seti warm-up window).
+ * WebSocket push tests pinning the channel bootstrap, the administrators-only
+ * fan-out, the path/owner-free payload and the never-fail contract (a WebSocket
+ * error must never break a cleanup operation, e.g. during the Seti warm-up
+ * window).
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupWebSocketServiceTest {
 
-  private static final String     ADMIN_USER    = "admin";
+  private static final String     ADMIN_USER   = "admin";
 
-  private static final String     REGULAR_USER  = "bob";
+  private static final String     REGULAR_USER = "bob";
 
-  private static final String     UNKNOWN_USER  = "ghost";
+  private static final String     UNKNOWN_USER = "ghost";
 
   @Mock
   private ContinuationService     continuationService;

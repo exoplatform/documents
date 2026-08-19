@@ -19,6 +19,7 @@ package org.exoplatform.document.cleanup.rest.util;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 
+import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
@@ -27,6 +28,7 @@ import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
+import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -110,6 +112,19 @@ public class CleanupEntityBuilder {
     entity.setNewBytes(comparison.getNewBytes());
     entity.setGoneBytes(comparison.getGoneBytes());
     entity.setPersistingBytes(comparison.getPersistingBytes());
+    return entity;
+  }
+
+  public static KeepItemsResultRestEntity build(CleanupBulkResult result) {
+    KeepItemsResultRestEntity entity = new KeepItemsResultRestEntity();
+    entity.setSucceeded(result.getSucceeded());
+    entity.setFailures(result.getFailures().stream().map(failure -> {
+      KeepItemsResultRestEntity.KeepItemFailureRestEntity failureEntity =
+                                                                       new KeepItemsResultRestEntity.KeepItemFailureRestEntity();
+      failureEntity.setItemId(failure.getItemId());
+      failureEntity.setReason(failure.getReason());
+      return failureEntity;
+    }).toList());
     return entity;
   }
 

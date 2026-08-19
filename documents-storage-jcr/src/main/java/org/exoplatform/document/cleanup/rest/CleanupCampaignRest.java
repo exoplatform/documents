@@ -39,6 +39,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -98,11 +99,19 @@ public class CleanupCampaignRest {
     return campaignService.getDefaultParams();
   }
 
+  /**
+   * ASYNCHRONOUS: the campaign row is created synchronously, its dry-run scan is
+   * handed off to a worker thread — hence the 202. The returned campaign carries
+   * no scan result yet; the scan progress and the SIMULATED completion are
+   * pushed on the {@code /eXo/Application/CleanupCampaign} CometD channel
+   * ({@code campaign.progress} / {@code campaign.stateChanged} events).
+   */
   @Secured("administrators")
   @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "POST", summary = "Create a cleanup campaign and launch its dry-run", description = "Create a cleanup campaign, snapshotting parameters, then launch its dry-run scan")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  @Operation(method = "POST", summary = "Create a cleanup campaign and launch its dry-run", description = "Create a cleanup campaign, snapshotting parameters, then launch its dry-run scan asynchronously. Returns 202: the scan progress is followed on the CometD channel /eXo/Application/CleanupCampaign")
   @ApiResponses(value = {
-    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "202", description = "Dry-run scan accepted, progress followed on the CometD channel"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
   })
   public CampaignRestEntity createCampaign(
@@ -178,11 +187,19 @@ public class CleanupCampaignRest {
     }
   }
 
+  /**
+   * ASYNCHRONOUS: the campaign is switched to EXECUTING synchronously, the
+   * batched purge itself is handed off to a worker thread — hence the 202. The
+   * purge progress and the COMPLETED transition are pushed on the
+   * {@code /eXo/Application/CleanupCampaign} CometD channel
+   * ({@code campaign.progress} / {@code campaign.stateChanged} events).
+   */
   @Secured("administrators")
   @PostMapping(path = "{id}/execute", produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "POST", summary = "Execute a locked cleanup campaign", description = "Trigger the batched purge of a LOCKED campaign")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  @Operation(method = "POST", summary = "Execute a locked cleanup campaign", description = "Trigger the batched purge of a LOCKED campaign asynchronously. Returns 202: the purge progress is followed on the CometD channel /eXo/Application/CleanupCampaign")
   @ApiResponses(value = {
-    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "202", description = "Purge accepted, progress followed on the CometD channel"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
     @ApiResponse(responseCode = "404", description = "Not found"),
   })
@@ -269,27 +286,33 @@ public class CleanupCampaignRest {
     }
   }
 
+  /**
+   * STREAMED: the report is written page by page to the response body, so the
+   * download starts immediately and a large campaign never materializes its CSV
+   * in memory. The availability check runs BEFORE the streaming starts, since the
+   * HTTP status is committed as soon as the first byte flows.
+   */
   @Secured("administrators")
   @GetMapping(path = "{id}/archive")
-  @Operation(method = "GET", summary = "Download the CSV report of a cleanup campaign", description = "Download the CSV report of a campaign: generated live while item detail is retained, from the archive afterwards")
+  @Operation(method = "GET", summary = "Download the CSV report of a cleanup campaign", description = "Download the CSV report of a campaign, streamed page by page: generated live while item detail is retained, from the archive afterwards")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
     @ApiResponse(responseCode = "404", description = "Not found"),
   })
-  public ResponseEntity<byte[]> getCampaignArchive(
-                                                   @Parameter(description = "Campaign identifier", required = true)
-                                                   @PathVariable("id")
-                                                   long id) {
+  public ResponseEntity<StreamingResponseBody> getCampaignArchive(
+                                                                  @Parameter(description = "Campaign identifier", required = true)
+                                                                  @PathVariable("id")
+                                                                  long id) {
     try {
-      byte[] csv = campaignService.getArchiveCsv(id);
-      return ResponseEntity.ok()
-                           .header(HttpHeaders.CONTENT_DISPOSITION,
-                                   "attachment; filename=\"cleanup-campaign-" + id + ".csv\"")
-                           .contentType(MediaType.parseMediaType("text/csv"))
-                           .body(csv);
+      campaignService.checkArchiveAvailable(id);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     }
+    StreamingResponseBody body = outputStream -> campaignService.writeArchiveCsv(id, outputStream);
+    return ResponseEntity.ok()
+                         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"cleanup-campaign-" + id + ".csv\"")
+                         .contentType(MediaType.parseMediaType("text/csv"))
+                         .body(body);
   }
 
   @Secured("users")

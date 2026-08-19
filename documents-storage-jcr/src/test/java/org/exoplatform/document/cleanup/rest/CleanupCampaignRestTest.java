@@ -25,9 +25,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -43,7 +45,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -263,15 +267,15 @@ class CleanupCampaignRestTest {
   @Test
   void getCampaignItemsRejectsUnknownSortField() {
     ResponseStatusException exception =
-                                       assertThrows(ResponseStatusException.class,
-                                                    () -> campaignRest.getCampaignItems(CAMPAIGN_ID,
-                                                                                        null,
-                                                                                        null,
-                                                                                        null,
-                                                                                        null,
-                                                                                        0,
-                                                                                        20,
-                                                                                        "name'); DROP TABLE items;--,asc"));
+                                      assertThrows(ResponseStatusException.class,
+                                                   () -> campaignRest.getCampaignItems(CAMPAIGN_ID,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       0,
+                                                                                       20,
+                                                                                       "name'); DROP TABLE items;--,asc"));
     assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
     assertEquals("cleanup.invalidSortField", exception.getReason());
   }
@@ -331,27 +335,52 @@ class CleanupCampaignRestTest {
   }
 
   @Test
-  void getCampaignArchiveDownloadsCsvAttachment() throws ObjectNotFoundException {
-    byte[] csv = "path,size".getBytes();
-    when(campaignService.getArchiveCsv(CAMPAIGN_ID)).thenReturn(csv);
-
-    ResponseEntity<byte[]> response = campaignRest.getCampaignArchive(CAMPAIGN_ID);
+  void getCampaignArchiveStreamsCsvAttachment() throws Exception {
+    ResponseEntity<StreamingResponseBody> response = campaignRest.getCampaignArchive(CAMPAIGN_ID);
 
     assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals(csv, response.getBody());
     String contentDisposition = response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION);
     assertNotNull(contentDisposition);
     assertTrue(contentDisposition.contains("cleanup-campaign-" + CAMPAIGN_ID + ".csv"));
     assertNotNull(response.getHeaders().getContentType());
     assertEquals("text/csv", response.getHeaders().getContentType().toString());
+
+    // Availability is settled BEFORE the body is written: nothing was streamed
+    // yet at this point
+    verify(campaignService).checkArchiveAvailable(CAMPAIGN_ID);
+    verify(campaignService, never()).writeArchiveCsv(anyLong(), any());
+
+    // The body only writes to the response stream when the container drains it
+    assertNotNull(response.getBody());
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    response.getBody().writeTo(outputStream);
+    verify(campaignService).writeArchiveCsv(CAMPAIGN_ID, outputStream);
   }
 
   @Test
-  void getCampaignArchiveMapsNotFoundTo404() throws ObjectNotFoundException {
-    when(campaignService.getArchiveCsv(CAMPAIGN_ID)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+  void getCampaignArchiveMapsNotFoundTo404BeforeStreaming() throws Exception {
+    org.mockito.Mockito.doThrow(new ObjectNotFoundException(NOT_FOUND_CODE))
+                       .when(campaignService)
+                       .checkArchiveAvailable(CAMPAIGN_ID);
 
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> campaignRest.getCampaignArchive(CAMPAIGN_ID)).getStatusCode());
+    verify(campaignService, never()).writeArchiveCsv(anyLong(), any());
+  }
+
+  @Test
+  void launchEndpointsAnswerAcceptedBecauseTheyHandOffToAWorker() throws NoSuchMethodException {
+    // Both launch endpoints do no long work on the request thread: the dry-run
+    // scan and the purge run in a worker and are followed on the CometD channel,
+    // so the HTTP contract has to be 202, not 200
+    assertEquals(HttpStatus.ACCEPTED,
+                 CleanupCampaignRest.class.getMethod("createCampaign", CampaignRestEntity.class)
+                                          .getAnnotation(ResponseStatus.class)
+                                          .value());
+    assertEquals(HttpStatus.ACCEPTED,
+                 CleanupCampaignRest.class.getMethod("executeCampaign", long.class)
+                                          .getAnnotation(ResponseStatus.class)
+                                          .value());
   }
 
   @Test

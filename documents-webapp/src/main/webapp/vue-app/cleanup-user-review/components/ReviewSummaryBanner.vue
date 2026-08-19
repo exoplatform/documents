@@ -18,8 +18,8 @@
 <template>
   <v-alert
     :icon="false"
+    :type="reviewClosed && 'warning' || 'info'"
     border="left"
-    type="info"
     colored-border
     class="ma-0">
     <div class="text-color">
@@ -28,7 +28,12 @@
     <div v-if="summary.keptCount" class="text-color">
       {{ $t('cleanup.review.banner.kept', {0: summary.keptCount, 1: $cleanupUtils.formatBytes(summary.keptBytes)}) }}
     </div>
-    <div class="text-light-color caption mt-1">
+    <!-- Past the grace deadline the review is already frozen server-side, even
+         while the campaign is still PUBLISHED (the locking cron runs later) -->
+    <div v-if="reviewClosed" class="text-light-color caption mt-1">
+      {{ $t('cleanup.review.banner.closed') }}
+    </div>
+    <div v-else class="text-light-color caption mt-1">
       {{ $t('cleanup.review.banner.deadline', {0: $cleanupUtils.formatDateTime(summary.deadline)}) }}
     </div>
   </v-alert>
@@ -39,6 +44,10 @@ export default {
     summary: {
       type: Object,
       default: null,
+    },
+    reviewClosed: {
+      type: Boolean,
+      default: false,
     },
   },
 };

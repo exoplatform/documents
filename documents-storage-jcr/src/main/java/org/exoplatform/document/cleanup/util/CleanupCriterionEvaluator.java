@@ -33,10 +33,11 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
  * <li>PURGE_VERSIONS: version count above the campaign maximum (independent of
  * content dates), and versions size above the floor</li>
  * </ul>
- * An exemption (exo:cleanupExemption mixin) is deliberately NOT evaluated
- * here: an exempted node still qualifying by these criteria is emitted as an
- * exempted-flagged {@link org.exoplatform.document.cleanup.model.CleanupCandidate},
- * so it stays visible as 'Kept' in every campaign.
+ * An exemption (exo:cleanupExemption mixin) is deliberately NOT evaluated here:
+ * an exempted node still qualifying by these criteria is emitted as an
+ * exempted-flagged
+ * {@link org.exoplatform.document.cleanup.model.CleanupCandidate}, so it stays
+ * visible as 'Kept' in every campaign.
  */
 public class CleanupCriterionEvaluator {
 

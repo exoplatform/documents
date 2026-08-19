@@ -24,8 +24,11 @@
         <v-progress-circular indeterminate />
       </div>
       <template v-else-if="summary && summary.state === 'PUBLISHED'">
-        <document-cleanup-review-summary-banner :summary="summary" />
+        <document-cleanup-review-summary-banner
+          :summary="summary"
+          :review-closed="reviewClosed" />
         <document-cleanup-review-items-list
+          :review-closed="reviewClosed"
           class="mt-4"
           @kept="loadSummary" />
       </template>
@@ -48,27 +51,66 @@
   </div>
 </template>
 <script>
+// The displayed deadline has to keep ticking: the locking cron runs every 10
+// minutes, so a campaign stays PUBLISHED for a short while after its grace
+// deadline elapsed (systematically so with a zero grace period). The review is
+// already frozen server-side in that window, so the UI must follow the DEADLINE,
+// not only the state.
+const DEADLINE_REFRESH_PERIOD_MS = 30000;
+
 export default {
   data() {
     return {
       summary: null,
       loading: true,
+      now: Date.now(),
+      deadlineTimerId: null,
     };
   },
   computed: {
     cleanupInProgress() {
       return ['LOCKED', 'EXECUTING'].includes(this.summary?.state);
     },
+    reviewClosed() {
+      return !!this.summary?.deadline && this.summary.deadline <= this.now;
+    },
+    deadlinePending() {
+      return this.summary?.state === 'PUBLISHED' && !!this.summary?.deadline && !this.reviewClosed;
+    },
+  },
+  watch: {
+    deadlinePending() {
+      this.refreshDeadlineTimer();
+    },
   },
   created() {
     this.loadSummary();
   },
+  beforeDestroy() {
+    this.stopDeadlineTimer();
+  },
   methods: {
     loadSummary() {
+      this.now = Date.now();
       return this.$cleanupService.getMySummary()
         .then(summary => this.summary = summary)
         .catch(() => this.summary = null)
-        .finally(() => this.loading = false);
+        .finally(() => {
+          this.loading = false;
+          this.refreshDeadlineTimer();
+        });
+    },
+    refreshDeadlineTimer() {
+      this.stopDeadlineTimer();
+      if (this.deadlinePending) {
+        this.deadlineTimerId = window.setInterval(() => this.now = Date.now(), DEADLINE_REFRESH_PERIOD_MS);
+      }
+    },
+    stopDeadlineTimer() {
+      if (this.deadlineTimerId) {
+        window.clearInterval(this.deadlineTimerId);
+        this.deadlineTimerId = null;
+      }
     },
   }
 };
