@@ -74,8 +74,8 @@ public class CleanupItemRest {
 
   /**
    * Answers 200 with the per-item outcomes, NEVER a blanket 204: a bulk keep
-   * continues past individual failures, so the UI has to be able to warn instead
-   * of reporting a success when nothing was actually kept.
+   * continues past individual failures, so the UI has to be able to warn
+   * instead of reporting a success when nothing was actually kept.
    */
   @Secured("users")
   @PostMapping(path = "keep", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -85,9 +85,9 @@ public class CleanupItemRest {
     @ApiResponse(responseCode = "400", description = "Bad Request"),
   })
   public KeepItemsResultRestEntity keepItems(HttpServletRequest request,
-                                            @io.swagger.v3.oas.annotations.parameters.RequestBody
-                                            @RequestBody
-                                            KeepItemsRestEntity keepItemsEntity) {
+                                             @io.swagger.v3.oas.annotations.parameters.RequestBody
+                                             @RequestBody
+                                             KeepItemsRestEntity keepItemsEntity) {
     try {
       return CleanupEntityBuilder.build(campaignService.keepItems(keepItemsEntity.getItemIds(), request.getRemoteUser()));
     } catch (IllegalArgumentException e) {
@@ -132,9 +132,9 @@ public class CleanupItemRest {
     @ApiResponse(responseCode = "400", description = "Bad Request"),
   })
   public KeepItemsResultRestEntity unkeepItems(HttpServletRequest request,
-                                              @io.swagger.v3.oas.annotations.parameters.RequestBody
-                                              @RequestBody
-                                              KeepItemsRestEntity keepItemsEntity) {
+                                               @io.swagger.v3.oas.annotations.parameters.RequestBody
+                                               @RequestBody
+                                               KeepItemsRestEntity keepItemsEntity) {
     try {
       return CleanupEntityBuilder.build(campaignService.unkeepItems(keepItemsEntity.getItemIds(), request.getRemoteUser()));
     } catch (IllegalArgumentException e) {

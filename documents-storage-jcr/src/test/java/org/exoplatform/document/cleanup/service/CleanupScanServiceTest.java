@@ -75,6 +75,13 @@ class CleanupScanServiceTest {
 
   private static final int         BATCH_SIZE  = 2;
 
+  /**
+   * The worker runs in a container transaction, so the first scan of the JVM
+   * pays the persistence-stack initialisation (several seconds); the wait must
+   * exceed it, otherwise whichever scan test runs first flakes.
+   */
+  private static final int         WORKER_WAIT = 20000;
+
   @Mock
   private CleanupCampaignStorage   campaignStorage;
 
@@ -140,7 +147,7 @@ class CleanupScanServiceTest {
 
     scanService.startScan(CAMPAIGN_ID);
 
-    verify(campaignLifecycle, timeout(5000)).transition(campaign, CleanupCampaignState.SIMULATED);
+    verify(campaignLifecycle, timeout(WORKER_WAIT)).transition(campaign, CleanupCampaignState.SIMULATED);
     // DRAFT campaigns first transition into DRY_RUN_RUNNING
     verify(campaignLifecycle).transition(campaign, CleanupCampaignState.DRY_RUN_RUNNING);
     // The denominator is counted once per root, before any batch
@@ -209,7 +216,7 @@ class CleanupScanServiceTest {
 
     scanService.startScan(CAMPAIGN_ID);
 
-    verify(campaignLifecycle, timeout(5000)).transition(campaign, CleanupCampaignState.SIMULATED);
+    verify(campaignLifecycle, timeout(WORKER_WAIT)).transition(campaign, CleanupCampaignState.SIMULATED);
     // A campaign already DRY_RUN_RUNNING is resumed, not re-transitioned
     verify(campaignLifecycle, never()).transition(campaign, CleanupCampaignState.DRY_RUN_RUNNING);
     // The checkpoint path identifies the in-progress root: completed roots are
@@ -253,7 +260,7 @@ class CleanupScanServiceTest {
 
     scanService.startScan(CAMPAIGN_ID);
 
-    verify(campaignLifecycle, timeout(5000)).transition(campaign, CleanupCampaignState.SIMULATED);
+    verify(campaignLifecycle, timeout(WORKER_WAIT)).transition(campaign, CleanupCampaignState.SIMULATED);
     verify(cleanupJcrStorage, never()).scanRoot(eq("/Users"), any(), anyInt(), any(), any());
     // No resume path, and the stale legacy offset is NEVER used to position:
     // the scanned-in-root count restarts from zero
@@ -288,7 +295,7 @@ class CleanupScanServiceTest {
 
     scanService.startScan(CAMPAIGN_ID);
 
-    verify(cleanupJcrStorage, timeout(5000)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
+    verify(cleanupJcrStorage, timeout(WORKER_WAIT)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
     // The aborted batch is neither persisted nor checkpointed, and the
     // remaining roots are never scanned
     verify(campaignStorage, after(200).never()).saveCandidates(anyLong(), anyList());
@@ -310,7 +317,7 @@ class CleanupScanServiceTest {
 
     scanService.startScan(CAMPAIGN_ID);
 
-    verify(cleanupJcrStorage, timeout(5000)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
+    verify(cleanupJcrStorage, timeout(WORKER_WAIT)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
     // The worker swallows the failure: no terminal transition, state untouched
     verify(campaignLifecycle, after(200).never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
     assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
@@ -320,7 +327,7 @@ class CleanupScanServiceTest {
     // error — the property the watchdog resume depends on: a new startScan
     // relaunches the worker instead of no-oping
     scanService.startScan(CAMPAIGN_ID);
-    verify(cleanupJcrStorage, timeout(5000).times(2)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
+    verify(cleanupJcrStorage, timeout(WORKER_WAIT).times(2)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
   }
 
   @Test

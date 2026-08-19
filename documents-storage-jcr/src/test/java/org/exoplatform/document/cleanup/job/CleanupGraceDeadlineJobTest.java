@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package org.exoplatform.document.cleanup.listener;
+package org.exoplatform.document.cleanup.job;
 
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -33,13 +33,13 @@ import org.exoplatform.document.cleanup.service.CleanupCampaignService;
  * with no business logic of its own.
  */
 @ExtendWith(MockitoExtension.class)
-class CleanupGraceDeadlineTaskTest {
+class CleanupGraceDeadlineJobTest {
 
   @Mock
-  private CleanupCampaignService   campaignService;
+  private CleanupCampaignService  campaignService;
 
   @InjectMocks
-  private CleanupGraceDeadlineTask task;
+  private CleanupGraceDeadlineJob task;
 
   @Test
   void runDelegatesOnlyToTheService() {

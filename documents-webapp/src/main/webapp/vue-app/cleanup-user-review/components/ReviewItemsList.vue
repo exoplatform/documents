@@ -23,6 +23,16 @@
       </span>
       <v-spacer />
       <v-btn
+        v-if="selectedKeptIds.length"
+        :disabled="bulkInProgress"
+        :loading="unkeepInProgress"
+        class="btn me-2"
+        @click="unkeepSelected">
+        {{ $t('cleanup.review.items.unkeepSelected') }}
+      </v-btn>
+      <v-btn
+        v-if="selectedCandidateIds.length"
+        :disabled="bulkInProgress"
         :loading="keepInProgress"
         class="btn btn-primary"
         @click="keepSelected">
@@ -115,6 +125,8 @@ export default {
       totalItems: 0,
       selectedItems: [],
       loading: false,
+      keepInProgress: false,
+      unkeepInProgress: false,
       options: {
         page: 1,
         itemsPerPage: 20,
@@ -123,6 +135,18 @@ export default {
     };
   },
   computed: {
+    bulkInProgress() {
+      return this.keepInProgress || this.unkeepInProgress;
+    },
+    // Each bulk action submits ONLY the selection it can actually decide: the
+    // server refuses a keep on an already-kept item (and an un-keep on a
+    // candidate), which would be reported as a failure the user never caused
+    selectedCandidateIds() {
+      return this.selectedItems.filter(item => item.state === 'CANDIDATE').map(item => item.id);
+    },
+    selectedKeptIds() {
+      return this.selectedItems.filter(item => item.state === 'EXEMPTED').map(item => item.id);
+    },
     headers() {
       return [
         {text: this.$t('cleanup.review.items.name'), value: 'name', align: 'left', sortable: false},
@@ -171,23 +195,34 @@ export default {
         .finally(() => item.loading = false);
     },
     keepSelected() {
-      const itemIds = this.selectedItems
-        .filter(item => item.state === 'CANDIDATE')
-        .map(item => item.id);
-      if (!itemIds.length) {
+      return this.bulkDecide(this.selectedCandidateIds, ids => this.$cleanupService.keepItems(ids), 'keep');
+    },
+    unkeepSelected() {
+      return this.bulkDecide(this.selectedKeptIds, ids => this.$cleanupService.unkeepItems(ids), 'unkeep');
+    },
+    // The spinning rows are captured BEFORE the request: bulkDone reloads the
+    // list, which clears selectedItems, so resetting their loading flag through
+    // that (now empty) array in the finally would leave the rows spinning
+    bulkDecide(itemIds, submit, action) {
+      if (!itemIds.length || this.bulkInProgress) {
         return;
       }
-      this.selectedItems.forEach(item => item.loading = true);
-      return this.$cleanupService.keepItems(itemIds)
-        .then(result => this.bulkDone(result, 'keep'))
-        .catch(() => this.displayAlert(this.$t('cleanup.review.items.keepError'), 'error'))
-        .finally(() => this.selectedItems.forEach(item => item.loading = false));
+      const decidedItems = this.selectedItems.slice();
+      decidedItems.forEach(item => item.loading = true);
+      this[`${action}InProgress`] = true;
+      return submit(itemIds)
+        .then(result => this.bulkDone(result, action))
+        .catch(() => this.displayAlert(this.$t(`cleanup.review.items.${action}Error`), 'error'))
+        .finally(() => {
+          decidedItems.forEach(item => item.loading = false);
+          this[`${action}InProgress`] = false;
+        });
     },
     unkeepOne(item) {
       item.loading = true;
       return this.$cleanupService.unkeepItem(item.id)
         .then(() => {
-          this.displayAlert(this.$t('cleanup.review.items.unkeepSuccess'));
+          this.displayAlert(this.$t('cleanup.review.items.unkeepSuccess', {0: 1}));
           this.$emit('kept');
           return this.loadItems();
         })
@@ -199,15 +234,19 @@ export default {
       this.$emit('kept');
       return this.loadItems();
     },
-    // A bulk keep/un-keep continues past individual failures: warn naming the
-    // failed count instead of reporting a success when nothing was decided,
-    // and refresh the list either way
+    // A bulk keep/un-keep continues past individual failures. The three outcomes
+    // are told apart: total failure (nothing decided), PARTIAL success (naming
+    // both counts — '2 could not be kept' alone reads the same whether 8 or 0
+    // succeeded), and full success. The list is refreshed either way.
     bulkDone(result, action) {
+      const succeeded = result?.succeeded || 0;
       const failures = result?.failures?.length || 0;
-      if (failures) {
+      if (failures && succeeded) {
+        this.displayAlert(this.$t(`cleanup.review.items.${action}Partial`, {0: succeeded, 1: failures}), 'warning');
+      } else if (failures) {
         this.displayAlert(this.$t(`cleanup.review.items.${action}Failures`, {0: failures}), 'warning');
       } else {
-        this.displayAlert(this.$t(`cleanup.review.items.${action}Success`, {0: result?.succeeded || 0}));
+        this.displayAlert(this.$t(`cleanup.review.items.${action}Success`, {0: succeeded}));
       }
       this.$emit('kept');
       return this.loadItems();

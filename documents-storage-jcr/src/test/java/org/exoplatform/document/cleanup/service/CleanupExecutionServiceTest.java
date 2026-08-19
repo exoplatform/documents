@@ -306,7 +306,8 @@ class CleanupExecutionServiceTest {
   @Test
   void shouldAbortBetweenBatchesWhenCampaignLeavesExecutingMidRun() {
     CleanupCampaign executingCampaign = campaign(CleanupCampaignState.EXECUTING);
-    // Worker entry and the check before batch 1 see EXECUTING; the check BETWEEN
+    // Worker entry and the check before batch 1 see EXECUTING; the check
+    // BETWEEN
     // batch 1 and batch 2 sees the cancellation
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(executingCampaign,
                                                               executingCampaign,
@@ -380,7 +381,7 @@ class CleanupExecutionServiceTest {
   private CleanupCampaignItem purgeableItem(long id, String nodeUuid) {
     CleanupCampaignItem item = item(id, nodeUuid, CleanupAction.DELETE);
     when(cleanupJcrStorage.revalidate(eq(nodeUuid), any())).thenReturn(CleanupRevalidation.of(candidate(nodeUuid,
-                                                                                                       CleanupAction.DELETE)));
+                                                                                                        CleanupAction.DELETE)));
     when(cleanupJcrStorage.deleteNode(nodeUuid)).thenReturn(CleanupPurgeResult.purged(10L));
     return item;
   }

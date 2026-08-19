@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -40,7 +41,10 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.PathNotFoundException;
@@ -60,6 +64,9 @@ import javax.jcr.version.VersionIterator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -71,7 +78,6 @@ import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupPurgeResult;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
-import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ExtendedNode;
@@ -98,84 +104,81 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 @ExtendWith(MockitoExtension.class)
 class CleanupJcrStorageTest {
 
-  private static final String    JCR_DOWN_ERROR_MSG  = "JCR down";
+  private static final String  JCR_DOWN_ERROR_MSG  = "JCR down";
 
-  private static final String    NODE_UUID_A         = "uuid-a";
+  private static final String  NODE_UUID_A         = "uuid-a";
 
-  private static final String    NODE_UUID_PLAIN     = "uuid-plain";
+  private static final String  NODE_UUID_PLAIN     = "uuid-plain";
 
-  private static final String    NODE_UUID_DOOMED    = "uuid-doomed";
+  private static final String  NODE_UUID_DOOMED    = "uuid-doomed";
 
-  private static final String    NODE_UUID_GONE      = "uuid-gone";
+  private static final String  NODE_UUID_GONE      = "uuid-gone";
 
-  private static final String    NODE_UUID_KEPT      = "uuid-kept";
+  private static final String  NODE_UUID_KEPT      = "uuid-kept";
 
-  private static final String    NODE_UUID_VERSIONED = "uuid-versioned";
+  private static final String  NODE_UUID_VERSIONED = "uuid-versioned";
 
-  private static final String    NODE_UUID_FLAKY     = "uuid-flaky";
+  private static final String  NODE_UUID_FLAKY     = "uuid-flaky";
 
-  private static final String    JCR_ROOT_VERSION    = "jcr:rootVersion";
+  private static final String  JCR_ROOT_VERSION    = "jcr:rootVersion";
 
-  private static final String    USERS_PATH          = "/Users";                              // NOSONAR
+  private static final String  USERS_PATH          = "/Users";                              // NOSONAR
 
-  private static final String    PATH_A              = "/Users/j___/john/Private/a.pdf";      // NOSONAR
+  private static final String  PATH_A              = "/Users/j___/john/Private/a.pdf";      // NOSONAR
 
-  private static final String    PATH_B              = "/Users/j___/john/Private/b.pdf";      // NOSONAR
+  private static final String  PATH_B              = "/Users/j___/john/Private/b.pdf";      // NOSONAR
 
-  private static final String    PATH_C              = "/Users/j___/john/Private/c.pdf";      // NOSONAR
+  private static final String  PATH_C              = "/Users/j___/john/Private/c.pdf";      // NOSONAR
 
-  private static final String    PATH_D              = "/Users/j___/john/Private/d.pdf";      // NOSONAR
+  private static final String  PATH_D              = "/Users/j___/john/Private/d.pdf";      // NOSONAR
 
-  private static final String    PATH_E              = "/Users/j___/john/Private/e.pdf";      // NOSONAR
+  private static final String  PATH_E              = "/Users/j___/john/Private/e.pdf";      // NOSONAR
 
-  private static final String    PATH_F              = "/Users/j___/john/Private/docs/a.pdf"; // NOSONAR
+  private static final String  PATH_F              = "/Users/j___/john/Private/docs/a.pdf"; // NOSONAR
 
-  private static final long      SESSION_TIMEOUT     = 3600000L;
-
-  @Mock
-  private RepositoryService      repositoryService;
+  private static final long    SESSION_TIMEOUT     = 3600000L;
 
   @Mock
-  private TrashStorage           trashStorage;
+  private RepositoryService    repositoryService;
 
   @Mock
-  private IdentityManager        identityManager;
+  private IdentityManager      identityManager;
 
   @Mock
-  private SpaceService           spaceService;
+  private SpaceService         spaceService;
 
   @Mock
-  private ManageableRepository   repository;
+  private ManageableRepository repository;
 
   @Mock
-  private ExtendedSession        session;
+  private ExtendedSession      session;
 
   @Mock
-  private Workspace              workspace;
+  private Workspace            workspace;
 
   @Mock
-  private QueryManager           queryManager;
+  private QueryManager         queryManager;
 
   @Mock
-  private Query                  query;
+  private Query                query;
 
   @Mock
-  private QueryResult            queryResult;
+  private QueryResult          queryResult;
 
   @InjectMocks
-  private CleanupJcrStorage      cleanupJcrStorage;
+  private CleanupJcrStorage    cleanupJcrStorage;
 
-  private Node                   nodeA;
+  private Node                 nodeA;
 
-  private Node                   nodeB;
+  private Node                 nodeB;
 
-  private Node                   nodeC;
+  private Node                 nodeC;
 
-  private Node                   nodeD;
+  private Node                 nodeD;
 
-  private Node                   nodeE;
+  private Node                 nodeE;
 
-  private CleanupParams          params;
+  private CleanupParams        params;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -192,6 +195,13 @@ class CleanupJcrStorageTest {
     org.mockito.Mockito.lenient().when(queryManager.createQuery(anyString(), anyString())).thenReturn(query);
     // Lenient: the JCR-failure test overrides it with a throwing stub
     org.mockito.Mockito.lenient().when(query.execute()).thenReturn(queryResult);
+    // The symlink lookup of deleteNode names the workspace of the session it
+    // holds; lenient because the other primitives never query it
+    org.mockito.Mockito.lenient().when(workspace.getName()).thenReturn(CleanupJcrStorage.COLLABORATION);
+    // Default: no result row. A fresh NodeIterator mock answers hasNext() false,
+    // which is exactly 'no symlink points at the node' — the scan tests override
+    // this stub with their own ordered iterator
+    org.mockito.Mockito.lenient().when(queryResult.getNodes()).thenReturn(mock(NodeIterator.class));
     nodeA = node(PATH_A);
     nodeB = node(PATH_B);
     nodeC = node(PATH_C);
@@ -367,7 +377,7 @@ class CleanupJcrStorageTest {
   }
 
   @Test
-  void removeExemptionMixinReturnsFailedAndRefreshesSessionOnJcrWriteFailure() throws RepositoryException {
+  void removeExemptionMixinReturnsFailedOnJcrWriteFailure() throws RepositoryException {
     Node node = mock(Node.class);
     when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
@@ -377,7 +387,10 @@ class CleanupJcrStorageTest {
     assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_KEPT));
 
     verify(session, never()).save();
-    verify(session).refresh(false);
+    // No refresh: the session is logged out right away, which discards the
+    // pending changes anyway — a refresh here would be dead code
+    verify(session, never()).refresh(anyBoolean());
+    verify(session).logout();
   }
 
   @Test
@@ -393,9 +406,9 @@ class CleanupJcrStorageTest {
     when(content.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
     when(content.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
     Node symlink = mock(Node.class);
-    Session symlinkSession = mock(Session.class);
-    when(symlink.getSession()).thenReturn(symlinkSession);
-    when(trashStorage.getAllLinks(node, NodeTypeConstants.EXO_SYMLINK)).thenReturn(List.of(symlink));
+    // Built BEFORE the stubbing: the iterator helper stubs its own mock
+    NodeIterator symlinkNodes = nodeIterator(symlink);
+    when(queryResult.getNodes()).thenReturn(symlinkNodes);
     Node parentFolder = mock(Node.class);
     when(node.getParent()).thenReturn(parentFolder);
     // Non-empty parent: the empty-ancestors sweep removes nothing
@@ -407,12 +420,87 @@ class CleanupJcrStorageTest {
     assertEquals(CleanupItemState.PURGED, result.getState());
     assertEquals(2048L, result.getReclaimedBytes(), "Reclaimed bytes must report the content size");
     // The pointing symlinks are removed BEFORE the node itself
-    org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(symlink, node);
+    org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(symlink, node, session);
     inOrder.verify(symlink).remove();
     inOrder.verify(node).remove();
-    verify(symlinkSession).save();
-    verify(session).save();
+    // ONE save covering both removals, on the session this method holds and
+    // releases: a symlink removal committed through a session nothing logs out
+    // used to leak one session per purged file
+    inOrder.verify(session).save();
+    verify(symlink, never()).getSession();
     verify(parentFolder, never()).remove();
+    verify(session).logout();
+  }
+
+  @Test
+  void deleteNodeFindsThePointingSymlinksThroughTheHeldSystemSession() throws RepositoryException {
+    // REGRESSION: the symlink lookup used to go through
+    // TrashStorage.getAllLinks(node, type), whose 2-arg overload resolves its
+    // session from SessionProviderService.getSessionProvider(null) — a
+    // per-REQUEST ThreadLocal, always null on the purge worker thread. It
+    // therefore returned an EMPTY list on every purge and left dangling
+    // shortcuts pointing at hard-deleted files. The query must run on the system
+    // session this method already holds.
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
+    when(node.getPath()).thenReturn(PATH_F);
+    Node symlink = mock(Node.class);
+    // Built BEFORE the stubbing: the iterator helper stubs its own mock
+    NodeIterator symlinkNodes = nodeIterator(symlink);
+    when(queryResult.getNodes()).thenReturn(symlinkNodes);
+    Node parentFolder = mock(Node.class);
+    when(node.getParent()).thenReturn(parentFolder);
+    when(parentFolder.getDepth()).thenReturn(5);
+    when(parentFolder.hasNodes()).thenReturn(true);
+
+    assertEquals(CleanupItemState.PURGED, cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED).getState());
+
+    // The query is built on the HELD session's workspace, targeting the exact
+    // node identifier — no user session provider involved anywhere
+    org.mockito.ArgumentCaptor<String> statementCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(queryManager).createQuery(statementCaptor.capture(), eq(Query.SQL));
+    String statement = statementCaptor.getValue();
+    assertTrue(statement.contains(NodeTypeConstants.EXO_SYMLINK), "The lookup must query the symlink node type");
+    assertTrue(statement.contains(NodeTypeConstants.EXO_SYMLINK_UUID + "='" + NODE_UUID_DOOMED + "'"),
+               "The lookup must target the purged node identifier");
+    assertTrue(statement.contains(NodeTypeConstants.EXO_WORKSPACE + "='" + CleanupJcrStorage.COLLABORATION + "'"),
+               "The lookup must be scoped to the workspace of the held system session");
+    verify(symlink).remove();
+  }
+
+  @Test
+  void deleteNodeSkipsWhenThePointingSymlinkLookupFailsInsteadOfLeavingDanglingShortcuts() throws RepositoryException {
+    // A swallowed lookup failure would announce a purge while every shortcut
+    // pointing at the deleted file silently stayed in place
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
+    when(node.getPath()).thenReturn(PATH_F);
+    when(query.execute()).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
+
+    assertEquals(CleanupItemState.SKIPPED, result.getState());
+    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    verify(node, never()).remove();
+    verify(session, never()).save();
+    verify(session).logout();
+  }
+
+  @Test
+  void deleteNodeSkipsTheSymlinkLookupWhenTheDeletedNodeIsItselfASymlink() throws RepositoryException {
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
+    when(node.getPath()).thenReturn(PATH_F);
+    when(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Node parentFolder = mock(Node.class);
+    when(node.getParent()).thenReturn(parentFolder);
+    when(parentFolder.getDepth()).thenReturn(5);
+    when(parentFolder.hasNodes()).thenReturn(true);
+
+    assertEquals(CleanupItemState.PURGED, cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED).getState());
+
+    verify(queryManager, never()).createQuery(anyString(), anyString());
+    verify(node).remove();
   }
 
   @Test
@@ -440,7 +528,7 @@ class CleanupJcrStorageTest {
   }
 
   @Test
-  void deleteNodeSkipsAndRefreshesSessionOnReferentialIntegrityFailure() throws RepositoryException {
+  void deleteNodeSkipsOnReferentialIntegrityFailure() throws RepositoryException {
     Node node = mock(Node.class);
     when(session.getNodeByIdentifier("uuid-referenced")).thenReturn(node);
     when(node.getPath()).thenReturn(PATH_A);
@@ -453,7 +541,10 @@ class CleanupJcrStorageTest {
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertTrue(result.getFailureReason().startsWith("cleanup.referentialIntegrity"),
                "A referenced node must be SKIPPED with the referential-integrity reason");
-    verify(session).refresh(false);
+    // No refresh: the session is logged out right away, which discards the
+    // pending changes anyway — a refresh here would be dead code
+    verify(session, never()).refresh(anyBoolean());
+    verify(session).logout();
     verify(parentFolder, never()).remove();
   }
 
@@ -566,7 +657,7 @@ class CleanupJcrStorageTest {
   }
 
   @Test
-  void addExemptionMixinReturnsFailedAndRefreshesSessionOnJcrWriteFailure() throws RepositoryException {
+  void addExemptionMixinReturnsFailedOnJcrWriteFailure() throws RepositoryException {
     Node node = mock(Node.class);
     when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
@@ -578,7 +669,10 @@ class CleanupJcrStorageTest {
     assertEquals(CleanupExemptionResult.FAILED, cleanupJcrStorage.addExemptionMixin(NODE_UUID_KEPT, "john"));
 
     verify(session, never()).save();
-    verify(session).refresh(false);
+    // No refresh: the session is logged out right away, which discards the
+    // pending changes anyway — a refresh here would be dead code
+    verify(session, never()).refresh(anyBoolean());
+    verify(session).logout();
   }
 
   @Test
@@ -712,6 +806,79 @@ class CleanupJcrStorageTest {
     // primitives run once per campaign item: not releasing it would leak tens
     // of thousands of sessions on a large campaign
     verify(session).logout();
+  }
+
+  /**
+   * The four per-item write primitives, each named and invoked on a
+   * {@link CleanupJcrStorage}. Feeds the session-release invariant below: this is
+   * THE invariant of the session-lifecycle change, and without an assertion per
+   * primitive, deleting any of their {@code finally} blocks would keep the suite
+   * green while leaking one session per campaign item.
+   */
+  static Stream<Arguments> perItemWritePrimitives() {
+    return Stream.of(Arguments.of("addExemptionMixin",
+                                  (Consumer<CleanupJcrStorage>) storage -> storage.addExemptionMixin(NODE_UUID_DOOMED, "john")),
+                     Arguments.of("removeExemptionMixin",
+                                  (Consumer<CleanupJcrStorage>) storage -> storage.removeExemptionMixin(NODE_UUID_DOOMED)),
+                     Arguments.of("deleteNode", (Consumer<CleanupJcrStorage>) storage -> storage.deleteNode(NODE_UUID_DOOMED)),
+                     Arguments.of("purgeVersions",
+                                  (Consumer<CleanupJcrStorage>) storage -> storage.purgeVersions(NODE_UUID_DOOMED, 2)));
+  }
+
+  @ParameterizedTest(name = "{0} releases its system session on the happy path")
+  @MethodSource("perItemWritePrimitives")
+  void perItemWritePrimitiveReleasesItsSessionOnTheHappyPath(String name,
+                                                             Consumer<CleanupJcrStorage> primitive) throws RepositoryException {
+    Node node = mock(Node.class);
+    org.mockito.Mockito.lenient().when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
+    org.mockito.Mockito.lenient().when(node.getPath()).thenReturn(PATH_F);
+    Node parentFolder = mock(Node.class);
+    org.mockito.Mockito.lenient().when(node.getParent()).thenReturn(parentFolder);
+    org.mockito.Mockito.lenient().when(parentFolder.getDepth()).thenReturn(5);
+    org.mockito.Mockito.lenient().when(parentFolder.hasNodes()).thenReturn(true);
+
+    primitive.accept(cleanupJcrStorage);
+
+    // getSystemSession opens a BRAND-NEW session per call and these primitives
+    // run once per campaign item: dropping the finally would leak tens of
+    // thousands of live sessions on a large campaign
+    verify(repository).getSystemSession(CleanupJcrStorage.COLLABORATION);
+    verify(session).logout();
+  }
+
+  @ParameterizedTest(name = "{0} releases its system session when the JCR read throws")
+  @MethodSource("perItemWritePrimitives")
+  void perItemWritePrimitiveReleasesItsSessionOnAThrowingPath(String name,
+                                                              Consumer<CleanupJcrStorage> primitive) throws RepositoryException {
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    primitive.accept(cleanupJcrStorage);
+
+    // The failure path must release the session just as the happy path does:
+    // a repository going flaky is exactly when sessions would pile up
+    verify(session).logout();
+  }
+
+  static Stream<RepositoryException> jcrLookupNotFoundExceptions() {
+    // Both types mean 'no such node': eXo's ExtendedSession.getNodeByIdentifier
+    // actually raises ItemNotFoundException, so covering only
+    // PathNotFoundException would leave the real production shape untested
+    return Stream.of(new PathNotFoundException("gone"), new ItemNotFoundException("gone"));
+  }
+
+  @ParameterizedTest(name = "a {0} lookup means 'missing node' for every primitive")
+  @MethodSource("jcrLookupNotFoundExceptions")
+  void everyPrimitiveReportsAMissingNodeForBothJcrLookupNotFoundTypes(RepositoryException notFound) throws RepositoryException {
+    when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(notFound);
+
+    assertFalse(cleanupJcrStorage.revalidate(NODE_UUID_GONE, params).isExists());
+    assertFalse(cleanupJcrStorage.revalidate(NODE_UUID_GONE, params).isUnknown(),
+                "A missing node is a definitive outcome, never UNKNOWN");
+    assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.addExemptionMixin(NODE_UUID_GONE, "john"));
+    assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_GONE));
+    assertEquals(CleanupItemState.GONE, cleanupJcrStorage.deleteNode(NODE_UUID_GONE).getState());
+    assertEquals(CleanupItemState.GONE, cleanupJcrStorage.purgeVersions(NODE_UUID_GONE, 2).getState());
+    verify(session, never()).save();
   }
 
   @Test

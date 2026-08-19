@@ -17,6 +17,7 @@
 package org.exoplatform.document.cleanup.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,10 +31,13 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Value;
 
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
@@ -171,6 +175,30 @@ class CleanupSettingServiceTest {
   void staticSettingsComeFromProperties() {
     assertEquals(200, cleanupSettingService.getBatchSize());
     assertEquals(3, cleanupSettingService.getReportRetentionCampaigns());
+  }
+
+  @ParameterizedTest(name = "the shipped @Value default of {0} is {1}")
+  @CsvSource({ "defaultPeriodMonths, ${documents.cleanup.period.months:24}",
+               "defaultMinFileSizeBytes, ${documents.cleanup.minFileSize.bytes:5242880}",
+               "defaultGraceDays, ${documents.cleanup.grace.days:14}",
+               "defaultMaxVersionsPerFile, ${documents.cleanup.maxVersionsPerFile:25}",
+               "defaultExcludedPaths, ${documents.cleanup.excludedPaths:}",
+               "batchSize, ${documents.cleanup.batch.size:200}",
+               "reportRetentionCampaigns, ${documents.cleanup.report.retention.campaigns:3}" })
+  void shippedDefaultsArePinnedOnTheValueAnnotationsThemselves(String fieldName,
+                                                               String expectedExpression) throws NoSuchFieldException {
+    // The PO-decided defaults (24 months / 5 MB / 14 days / 25 versions / no
+    // excluded path / batch 200 / 3 retained reports) are asserted on the @Value
+    // ANNOTATION, not on a value the test itself wrote by reflection: the other
+    // tests seed those fields, so reverting a fallback in the source would leave
+    // every one of them green. Same spirit as the annotation-based assertion on
+    // the launch endpoints' @ResponseStatus.
+    Value value = CleanupSettingService.class.getDeclaredField(fieldName).getAnnotation(Value.class);
+
+    assertNotNull(value, "Every platform default must be injectable through a property");
+    assertEquals(expectedExpression,
+                 value.value(),
+                 "The shipped default of " + fieldName + " changed: the PO decision must be re-validated");
   }
 
   private void setField(String name, Object value) throws ReflectiveOperationException {

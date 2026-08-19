@@ -22,19 +22,24 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,9 +54,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
+import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupExemptionResult;
@@ -66,6 +73,7 @@ import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
+import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
@@ -443,7 +451,8 @@ class CleanupCampaignServiceTest {
   @Test
   void shouldRejectKeepAndUnkeepOnceGraceDeadlineElapsedEvenWhileStillPublished() {
     // The locking cron runs every 10 minutes, so a campaign stays PUBLISHED for
-    // a while past its deadline (always so with a zero grace period): the review
+    // a while past its deadline (always so with a zero grace period): the
+    // review
     // window freezes on the DEADLINE, not on the LOCKED transition
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     campaign.setLockDate(System.currentTimeMillis() - 1000);
@@ -1052,7 +1061,13 @@ class CleanupCampaignServiceTest {
 
     assertEquals(0, result.getSucceeded());
     assertEquals(1, result.getFailures().size());
-    assertNotNull(result.getFailures().get(0).getReason(), "A refused keep must carry a reason");
+    String reason = result.getFailures().get(0).getReason();
+    assertNotNull(reason, "A refused keep must carry a reason");
+    // A LOCALIZABLE message code, not the IllegalAccessException message: that
+    // one is a raw English sentence naming the user and the owning space —
+    // internal detail the client must never receive, and the UI can't translate
+    assertEquals(CleanupCampaignService.NOT_OWNER_FAILURE_CODE, reason);
+    assertFalse(reason.contains(USERNAME), "No internal sentence naming the user may reach the client");
   }
 
   @Test
@@ -1243,17 +1258,18 @@ class CleanupCampaignServiceTest {
   @Test
   void shouldArchiveOnlyTheCampaignsBeyondRetentionOrderedByCompletionDate() throws Exception {
     when(settingService.getReportRetentionCampaigns()).thenReturn(2);
-    // Fed in a scrambled order on purpose: a wrong sort would archive (and purge
+    // Fed in a scrambled order on purpose: a wrong sort would archive (and
+    // purge
     // the item rows of) the WRONG campaigns' reports
     when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
-                                                                                                                      .thenReturn(List.of(terminalCampaign(101L,
-                                                                                                                                                           1000L),
-                                                                                                                                          terminalCampaign(104L,
-                                                                                                                                                           4000L),
-                                                                                                                                          terminalCampaign(102L,
-                                                                                                                                                           2000L),
-                                                                                                                                          terminalCampaign(103L,
-                                                                                                                                                           3000L)));
+                                                                                                                       .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                            1000L),
+                                                                                                                                           terminalCampaign(104L,
+                                                                                                                                                            4000L),
+                                                                                                                                           terminalCampaign(102L,
+                                                                                                                                                            2000L),
+                                                                                                                                           terminalCampaign(103L,
+                                                                                                                                                            3000L)));
     when(campaignStorage.hasItems(anyLong())).thenReturn(true);
     when(campaignStorage.getItemsPage(anyLong(), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
     when(fileService.writeFile(any())).thenAnswer(invocation -> archiveFileItem());
@@ -1276,7 +1292,7 @@ class CleanupCampaignServiceTest {
     when(settingService.getReportRetentionCampaigns()).thenReturn(0);
     CleanupCampaign campaign = terminalCampaign(101L, 1000L);
     when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
-                                                                                                                      .thenReturn(List.of(campaign));
+                                                                                                                       .thenReturn(List.of(campaign));
     when(campaignStorage.hasItems(101L)).thenReturn(true);
     when(campaignStorage.getItemsPage(eq(101L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
     when(fileService.writeFile(any())).thenReturn(archiveFileItem());
@@ -1296,8 +1312,8 @@ class CleanupCampaignServiceTest {
   void shouldKeepItemRowsWhenTheArchiveWriteFails() throws Exception {
     when(settingService.getReportRetentionCampaigns()).thenReturn(0);
     when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
-                                                                                                                      .thenReturn(List.of(terminalCampaign(101L,
-                                                                                                                                                           1000L)));
+                                                                                                                       .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                            1000L)));
     when(campaignStorage.hasItems(101L)).thenReturn(true);
     when(campaignStorage.getItemsPage(eq(101L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
     when(fileService.writeFile(any())).thenThrow(new IllegalStateException("Binary storage down"));
@@ -1318,7 +1334,8 @@ class CleanupCampaignServiceTest {
     CleanupCampaignItem item = item(CleanupItemState.PURGED);
     item.setPath("/Users/j___/john/Private/report,final.pdf");
     item.setReclaimedBytes(4096L);
-    when(campaignStorage.getItemsPage(eq(CAMPAIGN_ID), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+    when(campaignStorage.getItemsPage(eq(CAMPAIGN_ID),
+                                      any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
 
     campaignService.checkArchiveAvailable(CAMPAIGN_ID);
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -1342,14 +1359,14 @@ class CleanupCampaignServiceTest {
     when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(false);
     when(fileService.getFileInfo(77L)).thenReturn(archiveFileItem().getFileInfo());
     when(fileService.getFile(77L)).thenReturn(new org.exoplatform.commons.file.model.FileItem(77L,
-                                                                                             "archive.csv",
-                                                                                             "text/csv",
-                                                                                             "documentsCleanup",
-                                                                                             8,
-                                                                                             new java.util.Date(),
-                                                                                             "system",
-                                                                                             false,
-                                                                                             new java.io.ByteArrayInputStream("archived".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+                                                                                              "archive.csv",
+                                                                                              "text/csv",
+                                                                                              "documentsCleanup",
+                                                                                              8,
+                                                                                              new java.util.Date(),
+                                                                                              "system",
+                                                                                              false,
+                                                                                              new java.io.ByteArrayInputStream("archived".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
 
     campaignService.checkArchiveAvailable(CAMPAIGN_ID);
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -1380,6 +1397,181 @@ class CleanupCampaignServiceTest {
     when(fileService.getFileInfo(77L)).thenReturn(null);
 
     assertThrows(ObjectNotFoundException.class, () -> campaignService.checkArchiveAvailable(CAMPAIGN_ID));
+  }
+
+  @Test
+  void shouldResolveEveryManagedSpaceAcrossPagesForMyItems() throws Exception {
+    // REGRESSION: the managed spaces used to be read with a single bounded
+    // load(0, 100), so a user managing more spaces never saw the candidates of
+    // the spaces past the cap — silently, with no error anywhere
+    mockPublishedCampaignForUserReview();
+    ListAccess<Space> managerSpaces = mockManagedSpaces(250);
+    when(campaignStorage.getItemsByOwners(eq(CAMPAIGN_ID), anyList(), any()))
+                                                                            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item(CleanupItemState.CANDIDATE))));
+
+    Page<CleanupCampaignItem> page = campaignService.getMyItems(USERNAME, 0, 20);
+
+    assertEquals(1, page.getContent().size());
+    // 250 spaces, 100 per page: three loads, the last one asking for the
+    // remainder only, never past the reported total
+    InOrder loadOrder = inOrder(managerSpaces);
+    loadOrder.verify(managerSpaces).load(0, 100);
+    loadOrder.verify(managerSpaces).load(100, 100);
+    loadOrder.verify(managerSpaces).load(200, 50);
+    verify(managerSpaces, never()).load(eq(250), anyInt());
+    List<Long> ownerIdentityIds = captureMyItemsOwnerIds();
+    assertEquals(251,
+                 ownerIdentityIds.size(),
+                 "The user's own identity plus EVERY managed space identity, none truncated at the page size");
+    assertTrue(ownerIdentityIds.contains(5L), "The user's own identity must be resolved");
+    assertTrue(ownerIdentityIds.contains(1249L), "A space beyond the first page must be resolved too");
+  }
+
+  @Test
+  void shouldScopeMyItemsSummaryToTheResolvedOwnerIdentityIds() throws Exception {
+    mockPublishedCampaignForUserReview();
+    mockManagedSpaces(150);
+    when(campaignStorage.countItemsByOwnersAndState(eq(CAMPAIGN_ID), anyList(), eq(CleanupItemState.CANDIDATE))).thenReturn(4L);
+    when(campaignStorage.countItemsByOwnersAndState(eq(CAMPAIGN_ID), anyList(), eq(CleanupItemState.EXEMPTED))).thenReturn(1L);
+    when(campaignStorage.sumReclaimableBytesByOwnersAndState(eq(CAMPAIGN_ID),
+                                                             anyList(),
+                                                             eq(CleanupItemState.CANDIDATE))).thenReturn(8192L);
+
+    CleanupUserSummary summary = campaignService.getMyItemsSummary(USERNAME);
+
+    assertEquals(CAMPAIGN_ID, summary.getCampaignId());
+    assertEquals(4, summary.getCandidateCount());
+    assertEquals(1, summary.getKeptCount());
+    assertEquals(8192L, summary.getCandidateBytes());
+    // Every counter is scoped to the SAME resolved owner ids: a summary computed
+    // on a truncated list would contradict the list the user is shown
+    ArgumentCaptor<List<Long>> ownersCaptor = ArgumentCaptor.forClass(List.class);
+    verify(campaignStorage, atLeastOnce()).countItemsByOwnersAndState(eq(CAMPAIGN_ID), ownersCaptor.capture(), any());
+    assertEquals(151, ownersCaptor.getValue().size());
+    assertTrue(ownersCaptor.getValue().contains(1149L), "A space beyond the first page must be counted too");
+  }
+
+  @Test
+  void shouldStreamTheLiveCsvReportPageByPageUntilTheLastPage() throws Exception {
+    // The streaming loop is a do/while over getItemsPage: with a single-page
+    // stub it iterates exactly once and the paging is never actually exercised
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(true);
+    CleanupCampaignItem firstPageItem = item(CleanupItemState.PURGED);
+    firstPageItem.setNodeUuid("uuid-page-1");
+    CleanupCampaignItem secondPageItem = item(CleanupItemState.PURGED);
+    secondPageItem.setNodeUuid("uuid-page-2");
+    when(campaignStorage.getItemsPage(eq(CAMPAIGN_ID), any())).thenAnswer(invocation -> {
+      org.springframework.data.domain.Pageable pageable = invocation.getArgument(1);
+      // 1500 rows over pages of 1000: page 0 hasNext, page 1 is the last
+      return new org.springframework.data.domain.PageImpl<>(List.of(pageable.getPageNumber() == 0 ? firstPageItem :
+                                                                                                 secondPageItem),
+                                                            pageable,
+                                                            1500L);
+    });
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
+
+    String csv = outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
+    assertTrue(csv.contains("uuid-page-1"), "The first page rows must be streamed");
+    assertTrue(csv.contains("uuid-page-2"), "The loop must keep reading while the page has a next one");
+    verify(campaignStorage, times(2)).getItemsPage(eq(CAMPAIGN_ID), any());
+  }
+
+  @Test
+  void shouldQuoteAndDoubleTheQuotesOfCsvValues() throws Exception {
+    // Paths are USER-CONTROLLED: an unescaped quote or newline would break the
+    // row structure of the whole report
+    CleanupCampaignItem item = item(CleanupItemState.SKIPPED);
+    item.setPath("/Users/j___/john/Private/say \"hi\".pdf");
+    item.setFailureReason("cleanup.deleteError: it went \"wrong\"");
+
+    String csv = streamCsvOf(item);
+
+    assertTrue(csv.contains("\"/Users/j___/john/Private/say \"\"hi\"\".pdf\""),
+               "A quote-carrying value must be quoted with its quotes DOUBLED");
+    assertTrue(csv.contains("\"cleanup.deleteError: it went \"\"wrong\"\"\""),
+               "The failure reason goes through the same escaping");
+  }
+
+  @Test
+  void shouldQuoteCsvValuesCarryingANewline() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.PURGED);
+    item.setPath("/Users/j___/john/Private/line1\nline2.pdf");
+
+    String csv = streamCsvOf(item);
+
+    assertTrue(csv.contains("\"/Users/j___/john/Private/line1\nline2.pdf\""),
+               "A newline-carrying value must be quoted, so the embedded newline can't be read as a row separator");
+  }
+
+  @Test
+  void shouldLeaveCsvValuesWithoutSpecialCharactersUnquoted() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.PURGED);
+    item.setPath("/Users/j___/john/Private/plain.pdf");
+
+    String csv = streamCsvOf(item);
+
+    assertTrue(csv.contains(",/Users/j___/john/Private/plain.pdf,"), "A plain value must be written as-is");
+  }
+
+  private String streamCsvOf(CleanupCampaignItem item) throws Exception {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(true);
+    when(campaignStorage.getItemsPage(eq(CAMPAIGN_ID),
+                                      any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
+    return outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
+  }
+
+  private void mockPublishedCampaignForUserReview() {
+    when(campaignStorage.getCampaignsByStates(anyList())).thenReturn(List.of(campaign(CleanupCampaignState.PUBLISHED)));
+    when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(userIdentity("5", USERNAME));
+  }
+
+  /**
+   * A {@link ListAccess} of the given total, answering each {@code load(offset,
+   * limit)} with exactly that window of distinct spaces. Each space resolves to
+   * its own identity, numbered 1000, 1001... in resolution order, so an id past
+   * the first page (e.g. 1249 of 250 spaces) proves the pagination really walked
+   * that far.
+   */
+  @SuppressWarnings("unchecked")
+  private ListAccess<Space> mockManagedSpaces(int total) throws Exception {
+    ListAccess<Space> managerSpaces = org.mockito.Mockito.mock(ListAccess.class);
+    when(spaceService.getManagerSpaces(USERNAME)).thenReturn(managerSpaces);
+    when(managerSpaces.getSize()).thenReturn(total);
+    when(managerSpaces.load(anyInt(), anyInt())).thenAnswer(invocation -> {
+      int offset = invocation.getArgument(0);
+      int limit = invocation.getArgument(1);
+      Space[] spaces = new Space[limit];
+      for (int i = 0; i < limit; i++) {
+        Space space = new Space();
+        // Space.setPrettyName runs the name through Utils.cleanString: no
+        // separator to parse back, the identity ids are numbered on resolution
+        space.setPrettyName("managed" + (offset + i));
+        spaces[i] = space;
+      }
+      return spaces;
+    });
+    Map<String, Long> resolvedSpaceIdentityIds = new HashMap<>();
+    when(identityManager.getOrCreateSpaceIdentity(anyString())).thenAnswer(invocation -> {
+      String prettyName = invocation.getArgument(0);
+      long identityId = resolvedSpaceIdentityIds.computeIfAbsent(prettyName,
+                                                                 name -> 1000L + resolvedSpaceIdentityIds.size());
+      return spaceIdentity(String.valueOf(identityId), prettyName);
+    });
+    return managerSpaces;
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<Long> captureMyItemsOwnerIds() {
+    ArgumentCaptor<List<Long>> ownersCaptor = ArgumentCaptor.forClass(List.class);
+    verify(campaignStorage).getItemsByOwners(eq(CAMPAIGN_ID), ownersCaptor.capture(), any());
+    return ownersCaptor.getValue();
   }
 
   private CleanupCampaign terminalCampaign(long id, long completedDate) {

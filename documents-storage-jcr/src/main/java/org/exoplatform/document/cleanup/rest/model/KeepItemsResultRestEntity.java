@@ -29,7 +29,7 @@ import lombok.Data;
 @Data
 public class KeepItemsResultRestEntity {
 
-  private int                           succeeded;
+  private int                             succeeded;
 
   private List<KeepItemFailureRestEntity> failures = new ArrayList<>();
 

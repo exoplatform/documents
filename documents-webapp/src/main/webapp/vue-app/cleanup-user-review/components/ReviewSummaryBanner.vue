@@ -18,7 +18,7 @@
 <template>
   <v-alert
     :icon="false"
-    :type="reviewClosed && 'warning' || 'info'"
+    :type="reviewClosed ? 'warning' : 'info'"
     border="left"
     colored-border
     class="ma-0">

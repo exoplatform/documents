@@ -100,10 +100,10 @@ public class CleanupCampaignRest {
   }
 
   /**
-   * ASYNCHRONOUS: the campaign row is created synchronously, its dry-run scan is
-   * handed off to a worker thread — hence the 202. The returned campaign carries
-   * no scan result yet; the scan progress and the SIMULATED completion are
-   * pushed on the {@code /eXo/Application/CleanupCampaign} CometD channel
+   * ASYNCHRONOUS: the campaign row is created synchronously, its dry-run scan
+   * is handed off to a worker thread — hence the 202. The returned campaign
+   * carries no scan result yet; the scan progress and the SIMULATED completion
+   * are pushed on the {@code /eXo/Application/CleanupCampaign} CometD channel
    * ({@code campaign.progress} / {@code campaign.stateChanged} events).
    */
   @Secured("administrators")
@@ -289,8 +289,8 @@ public class CleanupCampaignRest {
   /**
    * STREAMED: the report is written page by page to the response body, so the
    * download starts immediately and a large campaign never materializes its CSV
-   * in memory. The availability check runs BEFORE the streaming starts, since the
-   * HTTP status is committed as soon as the first byte flows.
+   * in memory. The availability check runs BEFORE the streaming starts, since
+   * the HTTP status is committed as soon as the first byte flows.
    */
   @Secured("administrators")
   @GetMapping(path = "{id}/archive")

@@ -131,11 +131,12 @@ class CleanupItemRestTest {
 
   @Test
   void bulkEndpointsNeverAnswerNoContent() throws NoSuchMethodException {
-    // A 204 would make a fully-failed bulk keep indistinguishable from a success
+    // A 204 would make a fully-failed bulk keep indistinguishable from a
+    // success
     assertNull(CleanupItemRest.class.getMethod("keepItems", HttpServletRequest.class, KeepItemsRestEntity.class)
-                                   .getAnnotation(ResponseStatus.class));
+                                    .getAnnotation(ResponseStatus.class));
     assertNull(CleanupItemRest.class.getMethod("unkeepItems", HttpServletRequest.class, KeepItemsRestEntity.class)
-                                   .getAnnotation(ResponseStatus.class));
+                                    .getAnnotation(ResponseStatus.class));
   }
 
   @Test

@@ -44,6 +44,7 @@ import org.springframework.stereotype.Service;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.file.services.FileService;
+import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupExemptionResult;
@@ -83,6 +84,12 @@ public class CleanupCampaignService {
 
   public static final String                      FILE_NAMESPACE              = "documentsCleanup";
 
+  /**
+   * Localizable message code reported for an ACL refusal in a bulk outcome, in
+   * place of the {@link IllegalAccessException} raw English message.
+   */
+  public static final String                      NOT_OWNER_FAILURE_CODE      = "cleanup.notOwner";
+
   private static final Log                        LOG                         = ExoLogger.getLogger(CleanupCampaignService.class);
 
   private static final List<CleanupCampaignState> ACTIVE_STATES               = List.of(CleanupCampaignState.PUBLISHED,
@@ -94,7 +101,7 @@ public class CleanupCampaignService {
 
   private static final int                        MAX_CAMPAIGNS               = 200;
 
-  private static final int                        MAX_MANAGED_SPACES          = 100;
+  private static final int                        MANAGED_SPACES_PAGE_SIZE    = 100;
 
   private static final int                        CSV_PAGE_SIZE               = 1000;
 
@@ -484,6 +491,12 @@ public class CleanupCampaignService {
    * failure's message code. The per-item failures are expected flow (not found,
    * not owned, review closed), so they are logged at DEBUG only — the caller
    * gets them in the returned result.
+   * <p>
+   * Every reported reason is a MESSAGE CODE the UI can localize: an ACL refusal
+   * is mapped to {@link #NOT_OWNER_FAILURE_CODE} rather than forwarded as the
+   * {@link IllegalAccessException} message, which is a raw English sentence
+   * naming the user and the owning space — internal detail that must not reach
+   * the client.
    */
   private CleanupBulkResult applyToItems(List<Long> itemIds, CleanupItemDecision decision) {
     if (itemIds == null || itemIds.isEmpty()) {
@@ -494,6 +507,9 @@ public class CleanupCampaignService {
       try {
         decision.apply(itemId);
         result.setSucceeded(result.getSucceeded() + 1);
+      } catch (IllegalAccessException e) {
+        LOG.debug("User isn't allowed to decide cleanup campaign item {}, continuing with the remaining items", itemId, e);
+        result.addFailure(itemId, NOT_OWNER_FAILURE_CODE);
       } catch (Exception e) {
         LOG.debug("Error deciding cleanup campaign item {}, continuing with the remaining items", itemId, e);
         result.addFailure(itemId, StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName()));
@@ -917,6 +933,14 @@ public class CleanupCampaignService {
                           .orElseThrow(() -> new ObjectNotFoundException("cleanup.noRelevantCampaign"));
   }
 
+  /**
+   * Owner identity ids the user may review: their own identity, plus the
+   * identity of EVERY space they manage. The managed spaces are read PAGE BY
+   * PAGE up to the reported total: a single bounded {@code load(0, N)} used to
+   * silently truncate the list, so a user managing more than N spaces never saw
+   * the candidates of the spaces past the cap — neither in their review list nor
+   * in their summary counters.
+   */
   private List<Long> getUserOwnedIdentityIds(String username) {
     List<Long> ownerIdentityIds = new ArrayList<>();
     Identity userIdentity = identityManager.getOrCreateUserIdentity(username);
@@ -924,11 +948,15 @@ public class CleanupCampaignService {
       ownerIdentityIds.add(Long.parseLong(userIdentity.getId()));
     }
     try {
-      Space[] managedSpaces = spaceService.getManagerSpaces(username).load(0, MAX_MANAGED_SPACES);
-      for (Space space : managedSpaces) {
-        Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
-        if (spaceIdentity != null) {
-          ownerIdentityIds.add(Long.parseLong(spaceIdentity.getId()));
+      ListAccess<Space> managerSpaces = spaceService.getManagerSpaces(username);
+      int total = managerSpaces.getSize();
+      for (int offset = 0; offset < total; offset += MANAGED_SPACES_PAGE_SIZE) {
+        Space[] managedSpaces = managerSpaces.load(offset, Math.min(MANAGED_SPACES_PAGE_SIZE, total - offset));
+        for (Space space : managedSpaces) {
+          Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+          if (spaceIdentity != null) {
+            ownerIdentityIds.add(Long.parseLong(spaceIdentity.getId()));
+          }
         }
       }
     } catch (Exception e) {

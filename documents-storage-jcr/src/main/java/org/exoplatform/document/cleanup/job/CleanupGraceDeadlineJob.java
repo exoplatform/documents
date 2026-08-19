@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <gnu.org/licenses>.
  */
-package org.exoplatform.document.cleanup.listener;
+package org.exoplatform.document.cleanup.job;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -33,7 +33,7 @@ import lombok.Synchronized;
  */
 @Configuration
 @EnableScheduling
-public class CleanupGraceDeadlineTask {
+public class CleanupGraceDeadlineJob {
 
   @Autowired
   private CleanupCampaignService campaignService;

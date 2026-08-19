@@ -49,7 +49,6 @@ import org.exoplatform.document.cleanup.model.CleanupPurgeResult;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 import org.exoplatform.document.cleanup.util.CleanupCriterionEvaluator;
-import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -103,9 +102,6 @@ public class CleanupJcrStorage {
 
   @Autowired
   private RepositoryService             repositoryService;
-
-  @Autowired
-  private TrashStorage                  trashStorage;
 
   @Autowired
   private IdentityManager               identityManager;
@@ -335,7 +331,8 @@ public class CleanupJcrStorage {
       session.save();
       return CleanupExemptionResult.ADDED;
     } catch (Exception e) {
-      refresh(session);
+      // No session.refresh here: the session is logged out in the finally right
+      // below, which discards the pending changes anyway
       LOG.warn("Error adding cleanup exemption mixin on node {}", nodeUuid, e);
       return CleanupExemptionResult.FAILED;
     } finally {
@@ -377,7 +374,8 @@ public class CleanupJcrStorage {
       }
       return CleanupExemptionResult.ADDED;
     } catch (Exception e) {
-      refresh(session);
+      // No session.refresh here: the session is logged out in the finally right
+      // below, which discards the pending changes anyway
       LOG.warn("Error removing cleanup exemption mixin from node {}", nodeUuid, e);
       return CleanupExemptionResult.FAILED;
     } finally {
@@ -404,11 +402,13 @@ public class CleanupJcrStorage {
       }
       long reclaimedBytes = getContentSize(node) + JCRDocumentsUtil.computeVersionsSize(node);
       String nodePath = node.getPath();
-      // Remove pointing symlinks first
+      // Remove the pointing symlinks first, then the node, in ONE save: a
+      // failure of the node removal (e.g. referential integrity) rolls the
+      // symlink removals back with it instead of leaving shortcuts deleted
+      // while their target survives
       if (!node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-        for (Node symlink : trashStorage.getAllLinks(node, NodeTypeConstants.EXO_SYMLINK)) {
+        for (Node symlink : getPointingSymlinks(session, nodeUuid)) {
           symlink.remove();
-          symlink.getSession().save();
         }
       }
       Node parentNode = node.getParent();
@@ -417,15 +417,50 @@ public class CleanupJcrStorage {
       removeEmptyAncestors(session, parentNode, nodePath);
       return CleanupPurgeResult.purged(reclaimedBytes);
     } catch (ReferentialIntegrityException e) {
-      refresh(session);
       return CleanupPurgeResult.skipped("cleanup.referentialIntegrity: " + e.getMessage());
     } catch (Exception e) {
-      refresh(session);
       LOG.warn("Error hard-deleting node {}", nodeUuid, e);
       return CleanupPurgeResult.skipped("cleanup.deleteError: " + e.getMessage());
     } finally {
       logout(session);
     }
+  }
+
+  /**
+   * Symlinks pointing at the given node, queried through the SYSTEM session
+   * {@link #deleteNode(String)} already holds.
+   * <p>
+   * Deliberately NOT through {@link org.exoplatform.documents.storage.TrashStorage}:
+   * its {@code getAllLinks(Node, String)} overload resolves its session through
+   * {@code SessionProviderService.getSessionProvider(null)}, a bare ThreadLocal
+   * populated per REQUEST. The purge runs on a worker thread, where it is always
+   * null, so that overload systematically returned an EMPTY list and every purge
+   * left dangling shortcuts behind pointing at hard-deleted files. Its 3-arg
+   * variant taking a SessionProvider isn't on the TrashStorage interface, and
+   * the system SessionProvider is a thread-local singleton nothing releases on a
+   * worker thread — whereas the session held here is released by the caller's
+   * finally, and the returned symlink nodes are attached to it, so the caller's
+   * own {@code session.save()} commits their removal.
+   * <p>
+   * A repository failure PROPAGATES (unlike the TrashStorage overload, which
+   * swallows it into an empty list): the caller then reports SKIPPED instead of
+   * announcing a purge that silently left the shortcuts in place.
+   *
+   * @param session held system session, also the session the caller saves
+   * @param nodeUuid identifier of the targeted node — the same value the node
+   *          was looked up with, so no cast to {@link ExtendedNode} is needed
+   */
+  private List<Node> getPointingSymlinks(Session session, String nodeUuid) throws RepositoryException {
+    String workspaceName = session.getWorkspace().getName();
+    String queryString = "SELECT * FROM " + NodeTypeConstants.EXO_SYMLINK + " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID
+        + "='" + nodeUuid + "' AND " + NodeTypeConstants.EXO_WORKSPACE + "='" + workspaceName + "'";
+    QueryManager queryManager = session.getWorkspace().getQueryManager();
+    NodeIterator symlinkNodes = queryManager.createQuery(queryString, Query.SQL).execute().getNodes();
+    List<Node> symlinks = new ArrayList<>();
+    while (symlinkNodes.hasNext()) {
+      symlinks.add(symlinkNodes.nextNode());
+    }
+    return symlinks;
   }
 
   /**
@@ -625,8 +660,9 @@ public class CleanupJcrStorage {
         current = ancestor;
       }
     } catch (RepositoryException e) {
+      // No session.refresh here: deleteNode logs this session out as soon as it
+      // returns, which discards the pending changes anyway
       LOG.debug("Error removing empty ancestors of {}", deletedNodePath, e);
-      refresh(session);
     }
   }
 
@@ -680,16 +716,6 @@ public class CleanupJcrStorage {
     ExtendedSession dynamicSession = (ExtendedSession) repository.getSystemSession(COLLABORATION);
     dynamicSession.setTimeout(jcrSessionTimeout);
     return dynamicSession;
-  }
-
-  private void refresh(Session session) {
-    try {
-      if (session != null) {
-        session.refresh(false);
-      }
-    } catch (RepositoryException e) {
-      LOG.debug("Error refreshing JCR session after a failed cleanup operation", e);
-    }
   }
 
   /**

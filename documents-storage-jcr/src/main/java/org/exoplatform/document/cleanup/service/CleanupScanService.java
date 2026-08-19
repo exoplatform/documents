@@ -99,7 +99,7 @@ public class CleanupScanService {
       // Guarded by the lifecycle: only DRAFT may enter DRY_RUN_RUNNING
       campaignLifecycle.transition(campaign, CleanupCampaignState.DRY_RUN_RUNNING);
     }
-    executorService.execute(() -> scan(campaignId));
+    executorService.execute(() -> scanTransactional(campaignId));
   }
 
   @ContainerTransactional

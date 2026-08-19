@@ -405,13 +405,16 @@ class CleanupCampaignStorageTest {
     // The three buckets are computed by the database: NO node-uuid map is ever
     // built in memory (that was the unbounded-memory risk of the old diff)
     when(itemDAO.aggregateItemsSharedWithCampaign(CAMPAIGN_ID, OTHER_CAMPAIGN_ID))
-                                                                                  .thenReturn(List.<Object[]> of(new Object[] { 3L,
+                                                                                  .thenReturn(List.<Object[]> of(new Object[] {
+                                                                                    3L,
                                                                                     300L }));
     when(itemDAO.aggregateItemsAbsentFromCampaign(CAMPAIGN_ID, OTHER_CAMPAIGN_ID))
-                                                                                  .thenReturn(List.<Object[]> of(new Object[] { 1L,
+                                                                                  .thenReturn(List.<Object[]> of(new Object[] {
+                                                                                    1L,
                                                                                     100L }));
     when(itemDAO.aggregateItemsAbsentFromCampaign(OTHER_CAMPAIGN_ID, CAMPAIGN_ID))
-                                                                                  .thenReturn(List.<Object[]> of(new Object[] { 2L,
+                                                                                  .thenReturn(List.<Object[]> of(new Object[] {
+                                                                                    2L,
                                                                                     200L }));
 
     assertEquals(new CleanupComparisonBucket(3L, 300L), storage.getPersistingItems(CAMPAIGN_ID, OTHER_CAMPAIGN_ID));

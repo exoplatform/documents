@@ -85,11 +85,22 @@ export default {
   },
   created() {
     this.loadSummary();
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   },
   beforeDestroy() {
     this.stopDeadlineTimer();
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
   methods: {
+    // Coming back to the tab must re-evaluate the deadline IMMEDIATELY, not only
+    // re-arm the timer: nothing ticked while the tab was hidden, so the review
+    // could stay displayed as open for a whole period after it actually closed
+    onVisibilityChange() {
+      if (!document.hidden) {
+        this.now = Date.now();
+      }
+      this.refreshDeadlineTimer();
+    },
     loadSummary() {
       this.now = Date.now();
       return this.$cleanupService.getMySummary()

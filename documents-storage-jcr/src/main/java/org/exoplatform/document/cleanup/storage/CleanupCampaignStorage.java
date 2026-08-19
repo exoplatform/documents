@@ -257,7 +257,8 @@ public class CleanupCampaignStorage {
   /**
    * Items of the other campaign absent from the base one ('gone' bucket of a
    * comparison): the very same query as {@link #getNewItems(long, long)} with
-   * the campaigns swapped, so the bytes are read from the other campaign's rows.
+   * the campaigns swapped, so the bytes are read from the other campaign's
+   * rows.
    *
    * @param baseCampaignId base campaign identifier
    * @param otherCampaignId compared campaign identifier
@@ -268,8 +269,8 @@ public class CleanupCampaignStorage {
   }
 
   /**
-   * Folds the single aggregate row of a comparison bucket query: an empty result
-   * (no item row at all) is an empty bucket, never an error.
+   * Folds the single aggregate row of a comparison bucket query: an empty
+   * result (no item row at all) is an empty bucket, never an error.
    */
   private CleanupComparisonBucket toBucket(List<Object[]> rows) {
     if (rows == null || rows.isEmpty() || rows.get(0) == null) {

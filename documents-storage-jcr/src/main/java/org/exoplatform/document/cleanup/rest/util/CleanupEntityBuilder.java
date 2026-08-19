@@ -120,7 +120,7 @@ public class CleanupEntityBuilder {
     entity.setSucceeded(result.getSucceeded());
     entity.setFailures(result.getFailures().stream().map(failure -> {
       KeepItemsResultRestEntity.KeepItemFailureRestEntity failureEntity =
-                                                                       new KeepItemsResultRestEntity.KeepItemFailureRestEntity();
+                                                                        new KeepItemsResultRestEntity.KeepItemFailureRestEntity();
       failureEntity.setItemId(failure.getItemId());
       failureEntity.setReason(failure.getReason());
       return failureEntity;

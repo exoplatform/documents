@@ -129,7 +129,8 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
    * node uuid is ABSENT from {@code otherCampaignId}. Serves BOTH asymmetric
    * buckets of a campaign comparison by swapping the two arguments: 'new' is
    * (base, other), 'gone' is (other, base) — the bytes are always those of the
-   * campaign passed first, exactly as the previous in-memory diff computed them.
+   * campaign passed first, exactly as the previous in-memory diff computed
+   * them.
    *
    * @return a single row: item count, reclaimable bytes sum
    */

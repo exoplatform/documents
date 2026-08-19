@@ -371,7 +371,8 @@ class CleanupCampaignRestTest {
   @Test
   void launchEndpointsAnswerAcceptedBecauseTheyHandOffToAWorker() throws NoSuchMethodException {
     // Both launch endpoints do no long work on the request thread: the dry-run
-    // scan and the purge run in a worker and are followed on the CometD channel,
+    // scan and the purge run in a worker and are followed on the CometD
+    // channel,
     // so the HTTP contract has to be 202, not 200
     assertEquals(HttpStatus.ACCEPTED,
                  CleanupCampaignRest.class.getMethod("createCampaign", CampaignRestEntity.class)

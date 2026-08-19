@@ -116,8 +116,12 @@ export default {
     running() {
       return ['DRY_RUN_RUNNING', 'EXECUTING'].includes(this.campaign?.state);
     },
+    // A campaign cancelled mid-grace keeps its future lockDate: without the
+    // terminal-state guard the grace would stay 'pending' and the fallback timer
+    // would keep ticking for weeks on a campaign nothing can happen to anymore
     gracePending() {
-      return !!this.graceDeadline && this.graceDeadline > this.now;
+      return !['COMPLETED', 'CANCELLED'].includes(this.campaign?.state)
+        && !!this.graceDeadline && this.graceDeadline > this.now;
     },
     // Ticking is only needed while progress can move or a deadline can elapse
     refreshNeeded() {
@@ -160,13 +164,13 @@ export default {
     this.loadCampaign();
     document.addEventListener('campaign.progress', this.applyProgressEvent);
     document.addEventListener('campaign.stateChanged', this.applyStateChangedEvent);
-    document.addEventListener('visibilitychange', this.refreshTimer);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   },
   beforeDestroy() {
     this.stopTimer();
     document.removeEventListener('campaign.progress', this.applyProgressEvent);
     document.removeEventListener('campaign.stateChanged', this.applyStateChangedEvent);
-    document.removeEventListener('visibilitychange', this.refreshTimer);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
   methods: {
     loadCampaign() {
@@ -175,6 +179,15 @@ export default {
         .then(campaign => this.campaign = campaign)
         .catch(() => this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error'))
         .finally(() => this.refreshTimer());
+    },
+    // Coming back to the tab must tick IMMEDIATELY, not only re-arm the timer:
+    // no refresh happened while the tab was hidden, so the countdown — and the
+    // Execute gate it drives — would stay stale for a whole period otherwise
+    onVisibilityChange() {
+      if (!document.hidden) {
+        this.tick();
+      }
+      this.refreshTimer();
     },
     // Started only while it can change something, and never while the tab is
     // hidden: no polling behind the user's back
