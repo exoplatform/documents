@@ -19,9 +19,7 @@ package org.exoplatform.document.cleanup.storage;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -36,6 +34,7 @@ import javax.jcr.version.Version;
 import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -119,44 +118,58 @@ public class CleanupJcrStorage {
    * Scans the path-ordered nt:file nodes under the given root with a SINGLE
    * query, streaming the qualifying cleanup candidates to the consumer in
    * batches of {@code batchSize} scanned nodes (the last batch may cover
-   * fewer). When resuming, the already-processed prefix of the result is
-   * skipped through {@code startOffset} without re-executing the query per
-   * batch.
+   * fewer). When resuming, the result is fast-forwarded BY PATH: nodes whose
+   * path is not strictly greater than {@code resumeAfterPath} are skipped
+   * without processing. Unlike a numeric offset, this stays correct when the
+   * tree changed during the interruption (no file shifted before the cursor is
+   * silently missed), including when the checkpointed node itself no longer
+   * exists.
    *
    * @param rootPath scanned tree root path
-   * @param startOffset number of nodes of the path-ordered result to skip
-   *          (resume checkpoint), 0 for a fresh scan
+   * @param resumeAfterPath path of the last node processed before the
+   *          interruption (resume checkpoint), null or blank for a fresh scan
    * @param batchSize number of scanned nodes per consumer invocation
    * @param params campaign parameters snapshot
-   * @param batchConsumer receives the qualifying candidates of each scanned
-   *          batch; returns false to abort the scan of this root
+   * @param batchConsumer receives each scanned batch; returns false to abort
+   *          the scan of this root
    * @throws IllegalStateException on a JCR failure, so the caller can leave the
    *           scan resumable from its last persisted checkpoint
    */
   public void scanRoot(String rootPath,
-                       long startOffset,
+                       String resumeAfterPath,
                        int batchSize,
                        CleanupParams params,
-                       Function<List<CleanupCandidate>, Boolean> batchConsumer) { // NOSONAR
+                       ScanBatchConsumer batchConsumer) { // NOSONAR
     try {
       Session session = getSystemSession();
       QueryManager queryManager = session.getWorkspace().getQueryManager();
       Query query = queryManager.createQuery(buildScanQuery(rootPath), Query.SQL);
-      // Single ordered query per root per scan run; on resume, skip the
-      // already-processed prefix instead of re-executing with a growing offset
+      // Single ordered query per root per scan run; on resume, fast-forward
+      // past the checkpoint path instead of trusting a positional offset
       NodeIterator nodes = query.execute().getNodes();
-      if (startOffset > 0) {
-        try { // NOSONAR
-          nodes.skip(startOffset);
-        } catch (NoSuchElementException e) {
-          // The tree shrank below the checkpoint since the interrupted run
-          return;
-        }
-      }
+      boolean fastForwarding = StringUtils.isNotBlank(resumeAfterPath);
       List<CleanupCandidate> candidates = new ArrayList<>();
       int scannedInBatch = 0;
+      String lastScannedPath = null;
       while (nodes.hasNext()) {
         Node node = nodes.nextNode();
+        String path;
+        try { // NOSONAR
+          path = node.getPath();
+        } catch (RepositoryException e) {
+          LOG.warn("Error reading scanned node path, skipping it", e);
+          continue;
+        }
+        if (fastForwarding) {
+          if (path.compareTo(resumeAfterPath) <= 0) {
+            // Skipped without processing: already covered before the
+            // interruption (strictly-greater comparison, so a checkpointed
+            // node that no longer exists still positions correctly)
+            continue;
+          }
+          fastForwarding = false;
+        }
+        lastScannedPath = path;
         try { // NOSONAR
           CleanupCandidate candidate = toCandidate(node, params);
           if (candidate != null) {
@@ -166,7 +179,7 @@ public class CleanupJcrStorage {
           LOG.warn("Error evaluating cleanup candidate node, skipping it", e);
         }
         if (++scannedInBatch == batchSize) {
-          if (!Boolean.TRUE.equals(batchConsumer.apply(candidates))) {
+          if (!batchConsumer.onBatch(candidates, lastScannedPath, scannedInBatch)) {
             return;
           }
           candidates = new ArrayList<>();
@@ -174,14 +187,33 @@ public class CleanupJcrStorage {
         }
       }
       if (scannedInBatch > 0) {
-        batchConsumer.apply(candidates);
+        batchConsumer.onBatch(candidates, lastScannedPath, scannedInBatch);
       }
     } catch (RepositoryException e) {
       // Propagate so the scan worker leaves the campaign resumable from its
       // last persisted checkpoint instead of moving on to the next root
-      throw new IllegalStateException("Error scanning nt:file nodes under " + rootPath + " (startOffset = " + startOffset + ")",
-                                      e);
+      throw new IllegalStateException("Error scanning nt:file nodes under " + rootPath
+          + (StringUtils.isBlank(resumeAfterPath) ? "" : " (resuming after " + resumeAfterPath + ")"), e);
     }
+  }
+
+  /**
+   * Receives the scanned batches streamed by
+   * {@link CleanupJcrStorage#scanRoot(String, String, int, CleanupParams, ScanBatchConsumer)}.
+   */
+  @FunctionalInterface
+  public interface ScanBatchConsumer {
+
+    /**
+     * @param candidates qualifying candidates of the batch, possibly empty
+     * @param lastScannedPath path of the last node scanned by the batch (the
+     *          resume checkpoint), never null since a batch scans at least one
+     *          node
+     * @param scannedCount number of nodes scanned by the batch
+     * @return true to continue the scan, false to abort the scan of this root
+     */
+    boolean onBatch(List<CleanupCandidate> candidates, String lastScannedPath, int scannedCount);
+
   }
 
   /**

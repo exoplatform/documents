@@ -135,33 +135,44 @@ public class CleanupCampaignService {
   /**
    * Restart recovery: re-registers the freshness observation listener while a
    * campaign is PUBLISHED (bounded backoff: JCR may not be ready yet), then
-   * resumes the interrupted workers — the dry-run scan of a DRY_RUN_RUNNING
-   * campaign (from its persisted checkpoint) and the purge of an EXECUTING one
-   * (naturally resumable: it iterates the remaining CANDIDATE items). Both
-   * workers no-op when that campaign's worker is already running. Package
-   * visible for tests.
+   * resumes the interrupted workers through
+   * {@link #resumeStalledWorkers()}. Package visible for tests.
    */
   void recoverAfterRestart() {
     try {
       if (!campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED)).isEmpty()) {
         registerObservationListenerWithRetry();
       }
-      for (CleanupCampaign campaign : campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.DRY_RUN_RUNNING))) {
-        try {
-          scanService.startScan(campaign.getId());
-        } catch (Exception e) {
-          LOG.warn("Error resuming the interrupted dry-run scan of cleanup campaign {}", campaign.getId(), e);
-        }
-      }
-      for (CleanupCampaign campaign : campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.EXECUTING))) {
-        try {
-          executionService.resumeExecution(campaign.getId());
-        } catch (Exception e) {
-          LOG.warn("Error resuming the interrupted execution of cleanup campaign {}", campaign.getId(), e);
-        }
-      }
+      resumeStalledWorkers();
     } catch (Exception e) {
       LOG.warn("Error recovering cleanup campaigns after restart", e);
+    }
+  }
+
+  /**
+   * Resumes the workers of the campaigns left DRY_RUN_RUNNING or EXECUTING
+   * without a live worker — the dry-run scan resumes from its persisted
+   * path checkpoint, the purge is naturally resumable (it iterates the
+   * remaining CANDIDATE items). Called at startup recovery AND on every
+   * watchdog tick, so a worker thread that died mid-run is re-launched without
+   * a JVM restart. Safe to call unconditionally: the workers' running-campaign
+   * guard (the id is removed in a finally block even on fatal error) makes
+   * this a no-op while a campaign's worker is alive.
+   */
+  public void resumeStalledWorkers() {
+    for (CleanupCampaign campaign : campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.DRY_RUN_RUNNING))) {
+      try {
+        scanService.startScan(campaign.getId());
+      } catch (Exception e) {
+        LOG.warn("Error resuming the interrupted dry-run scan of cleanup campaign {}", campaign.getId(), e);
+      }
+    }
+    for (CleanupCampaign campaign : campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.EXECUTING))) {
+      try {
+        executionService.resumeExecution(campaign.getId());
+      } catch (Exception e) {
+        LOG.warn("Error resuming the interrupted execution of cleanup campaign {}", campaign.getId(), e);
+      }
     }
   }
 

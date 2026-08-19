@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -517,6 +518,45 @@ class CleanupCampaignServiceTest {
     verify(scanService).startScan(CAMPAIGN_ID);
     verify(executionService).resumeExecution(2L);
     verify(cleanupJcrStorage, never()).registerObservationListener(any());
+  }
+
+  @Test
+  void shouldResumeStalledWorkersOnWatchdogTick() throws ObjectNotFoundException {
+    CleanupCampaign scanningCampaign = campaign(CleanupCampaignState.DRY_RUN_RUNNING);
+    CleanupCampaign executingCampaign = campaign(CleanupCampaignState.EXECUTING);
+    executingCampaign.setId(2L);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.DRY_RUN_RUNNING)))
+                                                                                             .thenReturn(List.of(scanningCampaign));
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.EXECUTING)))
+                                                                                       .thenReturn(List.of(executingCampaign));
+
+    campaignService.resumeStalledWorkers();
+
+    // The watchdog re-invokes the exact resume path used at startup recovery:
+    // the workers' running-set guard makes it a no-op when the worker is alive
+    verify(scanService).startScan(CAMPAIGN_ID);
+    verify(executionService).resumeExecution(2L);
+  }
+
+  @Test
+  void shouldKeepResumingRemainingWorkersWhenOneResumeFails() throws ObjectNotFoundException {
+    CleanupCampaign scanningCampaign = campaign(CleanupCampaignState.DRY_RUN_RUNNING);
+    CleanupCampaign otherScanningCampaign = campaign(CleanupCampaignState.DRY_RUN_RUNNING);
+    otherScanningCampaign.setId(2L);
+    CleanupCampaign executingCampaign = campaign(CleanupCampaignState.EXECUTING);
+    executingCampaign.setId(3L);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.DRY_RUN_RUNNING)))
+                                                                                             .thenReturn(List.of(scanningCampaign,
+                                                                                                                 otherScanningCampaign));
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.EXECUTING)))
+                                                                                       .thenReturn(List.of(executingCampaign));
+    doThrow(new IllegalStateException("Resume failed")).when(scanService).startScan(CAMPAIGN_ID);
+
+    campaignService.resumeStalledWorkers();
+
+    // A failing resume never prevents the remaining stalled workers' resume
+    verify(scanService).startScan(2L);
+    verify(executionService).resumeExecution(3L);
   }
 
   @Test

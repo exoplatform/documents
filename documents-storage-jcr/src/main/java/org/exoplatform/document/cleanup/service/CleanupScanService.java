@@ -17,12 +17,13 @@
 package org.exoplatform.document.cleanup.service;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -43,8 +44,9 @@ import jakarta.annotation.PreDestroy;
 /**
  * Asynchronous dry-run scan of the collaboration workspace: counts the
  * denominator first, then walks path-ordered nt:file batches, persisting
- * candidates, a resume checkpoint and a rolling-throughput ETA per batch.
- * Nothing is ever deleted here.
+ * candidates, a path-based resume checkpoint (root in progress + last
+ * processed path) and a rolling-throughput ETA per batch. Nothing is ever
+ * deleted here.
  */
 @Service
 public class CleanupScanService {
@@ -100,8 +102,7 @@ public class CleanupScanService {
   }
 
   /**
-   * Scan worker, running as system (no conversation state needed). Package
-   * visible for tests.
+   * Scan worker, running as system (no conversation state needed).
    */
   private void scan(long campaignId) { // NOSONAR
     if (!runningCampaigns.add(campaignId)) {
@@ -117,44 +118,86 @@ public class CleanupScanService {
       int batchSize = settingService.getBatchSize();
 
       long[] rootTotals = new long[SCAN_ROOTS.size()];
-      long total = 0;
+      long countedTotal = 0;
       for (int i = 0; i < SCAN_ROOTS.size(); i++) {
         rootTotals[i] = cleanupJcrStorage.countFiles(SCAN_ROOTS.get(i));
-        total += rootTotals[i];
+        countedTotal += rootTotals[i];
       }
+      long total = countedTotal;
 
-      String checkpointPath = Objects.requireNonNullElse(campaign.getCheckpointPath(), "");
-      int resumeRootIndex = Math.max(0, SCAN_ROOTS.indexOf(checkpointPath));
-      long resumeOffset = SCAN_ROOTS.contains(checkpointPath) ? campaign.getCheckpointOffset() : 0;
+      // The persisted checkpoint path identifies WHICH root is in progress
+      // (completed roots are never re-walked) and WHERE to resume in it: a
+      // node path resumes its root strictly after that path, a bare root path
+      // marks a root not started yet (also the legacy checkpoint shape)
+      String checkpointPath = campaign.getCheckpointPath();
+      int resumeRootIndex = 0;
+      String resumeAfterPath = null;
+      if (StringUtils.isNotBlank(checkpointPath)) {
+        for (int i = 0; i < SCAN_ROOTS.size(); i++) {
+          if (StringUtils.equals(checkpointPath, SCAN_ROOTS.get(i))) {
+            resumeRootIndex = i;
+            break;
+          } else if (checkpointPath.startsWith(SCAN_ROOTS.get(i) + "/")) {
+            resumeRootIndex = i;
+            resumeAfterPath = checkpointPath;
+            break;
+          }
+        }
+      }
       long processedBase = 0;
       for (int i = 0; i < resumeRootIndex; i++) {
         processedBase += rootTotals[i];
       }
+      // Scanned-in-root count: progress/ETA display only, NEVER positioning
+      long resumeScannedInRoot = resumeAfterPath == null ? 0 : campaign.getCheckpointOffset();
       long startTime = System.currentTimeMillis();
-      long processedAtStart = processedBase + resumeOffset;
+      long processedAtStart = processedBase + resumeScannedInRoot;
 
       for (int rootIndex = resumeRootIndex; rootIndex < SCAN_ROOTS.size(); rootIndex++) {
         String root = SCAN_ROOTS.get(rootIndex);
         long rootTotal = rootTotals[rootIndex];
-        for (long offset = rootIndex == resumeRootIndex ? resumeOffset : 0; offset < rootTotal; offset += batchSize) {
-          if (isAborted(campaignId)) {
-            return;
-          }
-          cleanupJcrStorage.scanRoot(root, offset, batchSize, params, candidates -> {
-            campaignStorage.saveCandidates(campaignId, candidates);
-            return true;
-          });
-          long processed = processedBase + Math.min(offset + batchSize, rootTotal);
-          long etaSeconds = computeEtaSeconds(startTime, processedAtStart, processed, total);
-          campaignStorage.updateProgress(campaignId, total, processed, etaSeconds, root, offset + batchSize);
-          webSocketService.sendToAdministrators(new CleanupWsMessage(CleanupWsMessage.PROGRESS_EVENT,
-                                                                     campaignId,
-                                                                     CleanupCampaignState.DRY_RUN_RUNNING.name(),
-                                                                     processed,
-                                                                     total,
-                                                                     etaSeconds));
+        long rootProcessedBase = processedBase;
+        AtomicLong scannedInRoot = new AtomicLong(rootIndex == resumeRootIndex ? resumeScannedInRoot : 0);
+        cleanupJcrStorage.scanRoot(root,
+                                   rootIndex == resumeRootIndex ? resumeAfterPath : null,
+                                   batchSize,
+                                   params,
+                                   (candidates, lastScannedPath, scannedCount) -> {
+                                     if (isAborted(campaignId)) {
+                                       return false;
+                                     }
+                                     campaignStorage.saveCandidates(campaignId, candidates);
+                                     long scanned = scannedInRoot.addAndGet(scannedCount);
+                                     long processed = rootProcessedBase + Math.min(scanned, rootTotal);
+                                     long etaSeconds = computeEtaSeconds(startTime, processedAtStart, processed, total);
+                                     campaignStorage.updateProgress(campaignId,
+                                                                    total,
+                                                                    processed,
+                                                                    etaSeconds,
+                                                                    lastScannedPath,
+                                                                    scanned);
+                                     webSocketService.sendToAdministrators(new CleanupWsMessage(CleanupWsMessage.PROGRESS_EVENT,
+                                                                                                campaignId,
+                                                                                                CleanupCampaignState.DRY_RUN_RUNNING.name(),
+                                                                                                processed,
+                                                                                                total,
+                                                                                                etaSeconds));
+                                     return true;
+                                   });
+        if (isAborted(campaignId)) {
+          return;
         }
         processedBase += rootTotal;
+        if (rootIndex < SCAN_ROOTS.size() - 1) {
+          // Advance the checkpoint to the next root, so a crash right here
+          // never re-iterates the root just completed on resume
+          campaignStorage.updateProgress(campaignId,
+                                         total,
+                                         processedBase,
+                                         computeEtaSeconds(startTime, processedAtStart, processedBase, total),
+                                         SCAN_ROOTS.get(rootIndex + 1),
+                                         0);
+        }
       }
 
       campaign = campaignStorage.getCampaign(campaignId);

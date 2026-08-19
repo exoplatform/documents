@@ -86,6 +86,13 @@ public class CleanupCampaignStorage {
     return campaignDAO.findByStateIn(stateNames).stream().map(this::toModel).toList();
   }
 
+  /**
+   * Persists the scan/execution progress counters and the scan resume
+   * checkpoint: {@code checkpointPath} is the last processed node path (or a
+   * bare scan-root path marking a root not started yet), the ONLY positioning
+   * information; {@code checkpointOffset} is the scanned-in-root count, kept
+   * for progress/ETA display only.
+   */
   public void updateProgress(long campaignId,
                              long totalCount,
                              long processedCount,

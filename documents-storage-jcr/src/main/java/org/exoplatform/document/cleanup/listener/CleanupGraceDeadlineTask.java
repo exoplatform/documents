@@ -27,7 +27,9 @@ import lombok.Synchronized;
 
 /**
  * Scheduled glue, no business logic: flips the PUBLISHED campaign to LOCKED
- * once its grace deadline elapsed, and enforces report retention.
+ * once its grace deadline elapsed, enforces report retention, and watchdogs
+ * the scan/purge workers (a campaign whose worker thread died mid-run is
+ * resumed on the next tick, without a JVM restart).
  */
 @Configuration
 @EnableScheduling
@@ -41,6 +43,7 @@ public class CleanupGraceDeadlineTask {
   public void run() {
     campaignService.lockExpiredPublishedCampaign();
     campaignService.applyRetention();
+    campaignService.resumeStalledWorkers();
   }
 
 }

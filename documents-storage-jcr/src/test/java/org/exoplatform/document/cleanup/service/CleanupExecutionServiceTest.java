@@ -30,6 +30,7 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -222,6 +223,43 @@ class CleanupExecutionServiceTest {
     executionService.executeCampaign(CAMPAIGN_ID);
 
     verify(campaignStorage, org.mockito.Mockito.never()).saveItem(any());
+  }
+
+  @Test
+  void shouldNoOpWhileTheWorkerIsAlive() throws ReflectiveOperationException {
+    runningCampaigns().add(CAMPAIGN_ID);
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // Double-start guard: a watchdog- or recovery-triggered worker is a no-op
+    // while the campaign id is in the running set
+    verify(campaignStorage, org.mockito.Mockito.never()).getCampaign(CAMPAIGN_ID);
+    verify(campaignStorage, org.mockito.Mockito.never()).saveItem(any());
+  }
+
+  @Test
+  void shouldRemoveRunningIdAndStayResumableOnFatalError() throws ReflectiveOperationException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
+                                                                                                 .thenThrow(new IllegalStateException("Database gone"));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // No terminal transition: the campaign stays EXECUTING, resumable
+    assertEquals(CleanupCampaignState.EXECUTING, campaign.getState());
+    verify(campaignStorage, org.mockito.Mockito.never()).saveCampaign(any());
+    // The running id was removed in the finally block even on fatal error —
+    // the property the watchdog resume depends on to relaunch the worker
+    assertTrue(runningCampaigns().isEmpty(), "The running-campaign id must be removed even on fatal error");
+  }
+
+  @SuppressWarnings("unchecked")
+  private Set<Long> runningCampaigns() throws ReflectiveOperationException {
+    Field runningCampaignsField = CleanupExecutionService.class.getDeclaredField("runningCampaigns");
+    runningCampaignsField.setAccessible(true); // NOSONAR test wiring
+    return (Set<Long>) runningCampaignsField.get(executionService);
   }
 
   private CleanupCampaign campaign(CleanupCampaignState state) {
