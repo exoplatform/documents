@@ -158,20 +158,49 @@ function toQueryParams(filters) {
   return new URLSearchParams(formData).toString();
 }
 
+// The module defines NO @ControllerAdvice, so a
+// ResponseStatusException(BAD_REQUEST, 'cleanup.graceNotElapsed') reaches the
+// browser wrapped in Spring's default error envelope
+// ({"timestamp":...,"status":400,"message":"cleanup.graceNotElapsed",...}), not
+// as a bare code. Every consumer of these errors (CampaignDetail.errorLabel,
+// ReviewItemsList.decisionError) localizes error.message as a BARE message code
+// and falls back to a generic 'unexpected error' when it isn't one — so the code
+// is unwrapped HERE, once, instead of in each caller. A non-JSON body is already
+// the message; a body with no message falls back to the status.
+function errorMessage(text, status) {
+  if (text) {
+    try {
+      const body = JSON.parse(text);
+      if (body?.message) {
+        return body.message;
+      }
+    } catch (e) {
+      // Not a JSON envelope: the raw body IS the message code
+      return text;
+    }
+  }
+  return text || `${status}`;
+}
+
+function rejectResponse(resp) {
+  if (!resp) {
+    return Promise.reject(new Error(''));
+  }
+  return resp.text().then(text => {
+    throw new Error(errorMessage(text, resp.status));
+  });
+}
+
 function handleJsonResponse(resp) {
   if (!resp || !resp.ok) {
-    return resp.text().then(text => {
-      throw new Error(text || resp.status);
-    });
+    return rejectResponse(resp);
   }
   return resp.json();
 }
 
 function handleVoidResponse(resp) {
   if (!resp || !resp.ok) {
-    return resp.text().then(text => {
-      throw new Error(text || resp.status);
-    });
+    return rejectResponse(resp);
   }
   return resp;
 }

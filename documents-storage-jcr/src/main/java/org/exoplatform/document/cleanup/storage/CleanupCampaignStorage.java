@@ -219,9 +219,9 @@ public class CleanupCampaignStorage {
    * filled entirely from one chunk), so deep paging costs more rows per chunk —
    * bounded, since the review UI pages at 20/50/100. The requested ordering must
    * be TOTAL for the slice to be stable; the REST layer guarantees that by
-   * appending {@code path ASC} (unique per campaign) to every ordering. The
-   * total element count is the exact sum of the chunks' counts, the owner sets
-   * being disjoint by construction.
+   * appending {@code id ASC} (the primary key) to every ordering. The total
+   * element count is the exact sum of the chunks' counts, the owner sets being
+   * disjoint by construction.
    *
    * @param campaignId campaign identifier
    * @param ownerIdentityIds owner identities (the user and the spaces they
@@ -455,7 +455,14 @@ public class CleanupCampaignStorage {
    * applied inside each chunk. Any key the DAO can be asked to sort on (the REST
    * layer validates them against its allowlist) has its counterpart here;
    * anything else is ignored, and an ordering left with no usable key falls back
-   * to the path — the one column that is unique per campaign.
+   * to the id — the primary key, hence the only column whose uniqueness the
+   * schema really enforces (the path is nullable and only unique in practice).
+   * <p>
+   * Every key of the requested ordering is CHAINED, tiebreaker included: honouring
+   * only the first one would leave a block of ties ordered by whatever order the
+   * chunks happened to be read in, and the page sliced out of the merge would
+   * repeat a row while skipping another — the very row-skipping the total ordering
+   * exists to prevent.
    */
   private static Comparator<CleanupCampaignItemEntity> mergeComparator(Sort sort) {
     Comparator<CleanupCampaignItemEntity> comparator = null;
@@ -469,7 +476,7 @@ public class CleanupCampaignStorage {
       }
       comparator = comparator == null ? keyComparator : comparator.thenComparing(keyComparator);
     }
-    return comparator == null ? sortKeyComparator("path") : comparator;
+    return comparator == null ? sortKeyComparator("id") : comparator;
   }
 
   private static Comparator<CleanupCampaignItemEntity> sortKeyComparator(String property) {

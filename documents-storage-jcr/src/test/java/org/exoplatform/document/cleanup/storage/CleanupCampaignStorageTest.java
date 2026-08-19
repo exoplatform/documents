@@ -529,6 +529,97 @@ class CleanupCampaignStorageTest {
     assertEquals(1, page.getNumber());
   }
 
+  @Test
+  void getItemsByOwnersMergeChainsEverySortKeyIncludingTheTiebreaker() {
+    // Every row carries the SAME fileSize, and the two chunks INTERLEAVE on the
+    // tiebreaker: a merge honouring only the FIRST sort key leaves the ties in
+    // whatever order the chunks were read in (10, 40, 20, 30 here), and the page
+    // sliced out of it repeats a row while skipping another — exactly the
+    // row-skipping a total ordering exists to prevent. This is the one place the
+    // requested ordering is re-implemented in Java.
+    List<Long> ownerIdentityIds = ownerIds(950);
+    List<Long> firstChunk = ownerIdentityIds.subList(0, CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE);
+    List<Long> secondChunk = ownerIdentityIds.subList(CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE, ownerIdentityIds.size());
+    Pageable pageable = PageRequest.of(0, 4, Sort.by(Sort.Direction.DESC, "fileSize").and(Sort.by(Sort.Direction.ASC, "id")));
+    Pageable chunkPageable = PageRequest.of(0, 4, pageable.getSort());
+    when(itemDAO.findByOwnersAndSearch(CAMPAIGN_ID, firstChunk, null, chunkPageable))
+                                                                                    .thenReturn(new PageImpl<>(List.of(itemEntity("/a.pdf",
+                                                                                                                                 500,
+                                                                                                                                 10L),
+                                                                                                                      itemEntity("/d.pdf",
+                                                                                                                                 500,
+                                                                                                                                 40L)),
+                                                                                                               chunkPageable,
+                                                                                                               2L));
+    when(itemDAO.findByOwnersAndSearch(CAMPAIGN_ID, secondChunk, null, chunkPageable))
+                                                                                     .thenReturn(new PageImpl<>(List.of(itemEntity("/b.pdf",
+                                                                                                                                   500,
+                                                                                                                                   20L),
+                                                                                                                        itemEntity("/c.pdf",
+                                                                                                                                   500,
+                                                                                                                                   30L)),
+                                                                                                                chunkPageable,
+                                                                                                                2L));
+
+    Page<CleanupCampaignItem> page = storage.getItemsByOwners(CAMPAIGN_ID, ownerIdentityIds, null, pageable);
+
+    assertEquals(List.of(10L, 20L, 30L, 40L),
+                 page.getContent().stream().map(CleanupCampaignItem::getId).toList(),
+                 "Tied primary keys must be ordered by the requested tiebreaker, across chunks");
+  }
+
+  @Test
+  void getItemsByOwnersMergeFallsBackToTheIdWhenNoRequestedKeyIsUsable() {
+    // The REST allowlist makes this unreachable today, but an ordering left with
+    // no usable key must still be TOTAL: the fallback is the primary key, the
+    // only column whose uniqueness the schema enforces. The two rows are ordered
+    // the OTHER way round by their paths, so a fallback on the (nullable, only
+    // in-practice-unique) path cannot produce the expected order
+    List<Long> ownerIdentityIds = ownerIds(950);
+    List<Long> firstChunk = ownerIdentityIds.subList(0, CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE);
+    List<Long> secondChunk = ownerIdentityIds.subList(CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE, ownerIdentityIds.size());
+    Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.ASC, "ownerFullName"));
+    Pageable chunkPageable = PageRequest.of(0, 2, pageable.getSort());
+    when(itemDAO.findByOwnersAndSearch(CAMPAIGN_ID, firstChunk, null, chunkPageable))
+                                                                                    .thenReturn(new PageImpl<>(List.of(itemEntity("/a.pdf",
+                                                                                                                                 500,
+                                                                                                                                 9L)),
+                                                                                                               chunkPageable,
+                                                                                                               1L));
+    when(itemDAO.findByOwnersAndSearch(CAMPAIGN_ID, secondChunk, null, chunkPageable))
+                                                                                     .thenReturn(new PageImpl<>(List.of(itemEntity("/z.pdf",
+                                                                                                                                   900,
+                                                                                                                                   4L)),
+                                                                                                                chunkPageable,
+                                                                                                                1L));
+
+    Page<CleanupCampaignItem> page = storage.getItemsByOwners(CAMPAIGN_ID, ownerIdentityIds, null, pageable);
+
+    assertEquals(List.of(4L, 9L),
+                 page.getContent().stream().map(CleanupCampaignItem::getId).toList(),
+                 "With no usable requested key, the merge orders on the id");
+  }
+
+  @Test
+  void getItemsByOwnersAppliesTheSearchToEveryChunkNotOnlyTheSingleChunkFastPath() {
+    // The escaped pattern must reach EVERY chunk: dropping it on the multi-chunk
+    // branch would silently stop filtering for exactly the users chunking was
+    // written for (those managing hundreds of spaces)
+    List<Long> ownerIdentityIds = ownerIds(950);
+    Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "fileSize").and(Sort.by(Sort.Direction.ASC, "id")));
+    Pageable chunkPageable = PageRequest.of(0, 2, pageable.getSort());
+    // Answered for ANY pattern (leniently), so a chunk queried WITHOUT the term
+    // still gets a page back and the verify below is what reports the drift
+    org.mockito.Mockito.lenient()
+                       .when(itemDAO.findByOwnersAndSearch(eq(CAMPAIGN_ID), anyList(), any(), eq(chunkPageable)))
+                       .thenReturn(new PageImpl<>(List.of(), chunkPageable, 0L));
+
+    storage.getItemsByOwners(CAMPAIGN_ID, ownerIdentityIds, " Q1 ", pageable);
+
+    verify(itemDAO, times(2)).findByOwnersAndSearch(eq(CAMPAIGN_ID), anyList(), eq("%q1%"), eq(chunkPageable));
+    verify(itemDAO, never()).findByOwnersAndSearch(eq(CAMPAIGN_ID), anyList(), eq((String) null), any());
+  }
+
   /**
    * Two chunk pages whose rows INTERLEAVE once merged by fileSize descending
    * (500 and 100 in the first chunk, 300 and 200 in the second): a merge that
@@ -560,8 +651,12 @@ class CleanupCampaignStorageTest {
   }
 
   private CleanupCampaignItemEntity itemEntity(String path, long fileSize) {
+    return itemEntity(path, fileSize, fileSize);
+  }
+
+  private CleanupCampaignItemEntity itemEntity(String path, long fileSize, long id) {
     CleanupCampaignItemEntity entity = new CleanupCampaignItemEntity();
-    entity.setId(fileSize);
+    entity.setId(id);
     entity.setCampaignId(CAMPAIGN_ID);
     entity.setNodeUuid("uuid" + path);
     entity.setPath(path);

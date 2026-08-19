@@ -34,6 +34,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -427,8 +428,11 @@ class CleanupJcrStorageTest {
     inOrder.verify(node).remove();
     // ONE save covering both removals, on the session this method holds and
     // releases: a symlink removal committed through a session nothing logs out
-    // used to leak one session per purged file
+    // used to leak one session per purged file. Counted EXACTLY — an extra save
+    // inside the symlink loop would commit the shortcut removals on their own,
+    // leaving them deleted while their target survives a failing node removal
     inOrder.verify(session).save();
+    verify(session, times(1)).save();
     verify(symlink, never()).getSession();
     verify(parentFolder, never()).remove();
     verify(session).logout();
@@ -468,6 +472,9 @@ class CleanupJcrStorageTest {
     assertTrue(statement.contains(NodeTypeConstants.EXO_WORKSPACE + "='" + CleanupJcrStorage.COLLABORATION + "'"),
                "The lookup must be scoped to the workspace of the held system session");
     verify(symlink).remove();
+    // Still ONE save for the symlink removals AND the node removal: they must
+    // commit atomically, so the loop above never saves on its own
+    verify(session, times(1)).save();
   }
 
   @Test
@@ -617,6 +624,48 @@ class CleanupJcrStorageTest {
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
+    assertEquals(0L, result.getReclaimedBytes(), "The very first removal failed: nothing was reclaimed");
+  }
+
+  @Test
+  void purgeVersionsCarriesTheBytesAlreadyReclaimedWhenALaterRemovalFails() throws RepositoryException {
+    // PARTIAL purge: removeVersion is immediate, so the two first removals really
+    // freed their bytes. The item stays SKIPPED with its reason (an administrator
+    // must still see the file needs attention), but discarding the reclaimed bytes
+    // would make the campaign's reclaimed total under-report the real work
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_VERSIONED)).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    Version baseVersion = mock(Version.class);
+    when(baseVersion.getName()).thenReturn("5");
+    when(node.getBaseVersion()).thenReturn(baseVersion);
+    VersionIterator countIterator = mock(VersionIterator.class);
+    when(countIterator.getSize()).thenReturn(6L); // root + 5 versions
+    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L),
+                                                   version("1", 100L),
+                                                   version("2", 200L),
+                                                   version("3", 300L),
+                                                   version("4", 400L),
+                                                   version("5", 500L));
+    when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
+    // The removals BEFORE the failing one must really succeed: without this
+    // catch-all the strict-stubs runner would raise a PotentialStubbingProblem on
+    // removeVersion("1"), i.e. the very first removal, and the test would no
+    // longer exercise a PARTIAL purge at all
+    org.mockito.Mockito.lenient().doNothing().when(versionHistory).removeVersion(anyString());
+    doThrow(new RepositoryException("version in use")).when(versionHistory).removeVersion("3");
+
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 2);
+
+    assertEquals(CleanupItemState.SKIPPED, result.getState());
+    assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
+    assertEquals(300L,
+                 result.getReclaimedBytes(),
+                 "The bytes of the two versions really removed before the failure must be carried");
+    verify(versionHistory).removeVersion("1");
+    verify(versionHistory).removeVersion("2");
   }
 
   @Test

@@ -127,6 +127,11 @@ export default {
       syncedAt: Date.now(),
       now: Date.now(),
       refreshTimerId: null,
+      // Monotonic token of the last campaign load STARTED: the fallback tick, the
+      // CometD state-change handler, the campaignId watcher and every action
+      // refresh all load, so several can be in flight at once and a slow one must
+      // not overwrite a newer campaign (see loadCampaign)
+      loadToken: 0,
     };
   },
   computed: {
@@ -197,10 +202,24 @@ export default {
   },
   methods: {
     loadCampaign() {
+      this.loadToken = this.loadToken + 1;
+      const token = this.loadToken;
       return this.$cleanupService.getCampaign(this.campaignId)
-        .then(campaign => this.applyCampaign(campaign))
-        .catch(() => this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error'))
-        .finally(() => this.refreshTimer());
+        .then(campaign => {
+          if (token === this.loadToken) {
+            this.applyCampaign(campaign);
+          }
+        })
+        .catch(() => {
+          if (token === this.loadToken) {
+            this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error');
+          }
+        })
+        .finally(() => {
+          if (token === this.loadToken) {
+            this.refreshTimer();
+          }
+        });
     },
     // Re-syncs the countdown on EVERY load, so the local drift accumulated since
     // the previous one is discarded instead of compounding

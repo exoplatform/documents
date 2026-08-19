@@ -153,11 +153,14 @@ export default {
       unkeepInProgress: false,
       search: null,
       searchDebounce: null,
+      // Monotonic token of the last load STARTED: a response carrying an older
+      // token is dropped instead of overwriting the table (see loadItems)
+      loadToken: 0,
       options: {
         page: 1,
         itemsPerPage: 20,
         // Biggest reclaimable files first: what a reviewer wants to decide on
-        // first. The server appends the stable 'path' tiebreaker.
+        // first. The server appends the stable 'id' tiebreaker.
         sortBy: [DEFAULT_SORT_FIELD],
         sortDesc: [true],
       },
@@ -221,9 +224,16 @@ export default {
         this.loadItems();
       }, SEARCH_DEBOUNCE_MS);
     },
+    // SUPERSESSION: loads overlap (the debounce narrows the typing window but
+    // never closes it, and @update:options plus the post-decision refreshes can
+    // fire concurrently), and the path search is documented unindexable — so a
+    // slow response can land after a newer one. Only the response of the LAST
+    // load started is applied; older ones are dropped, table and spinner alike.
     loadItems() {
       this.loading = true;
       this.selectedItems = [];
+      this.loadToken = this.loadToken + 1;
+      const token = this.loadToken;
       const {page, itemsPerPage, sortBy, sortDesc} = this.options;
       const sortField = SORT_FIELDS[sortBy[0]] || sortBy[0] || DEFAULT_SORT_FIELD;
       return this.$cleanupService.getMyItems({
@@ -233,14 +243,25 @@ export default {
         sort: `${sortField},${sortDesc[0] === false ? 'asc' : 'desc'}`,
       })
         .then(data => {
+          if (token !== this.loadToken) {
+            return;
+          }
           this.items = data?.items?.map(i => ({
             ...i,
             loading: false,
           })) || [];
           this.totalItems = data?.totalItems || 0;
         })
-        .catch(() => this.displayAlert(this.$t('cleanup.review.items.loadError'), 'error'))
-        .finally(() => this.loading = false);
+        .catch(() => {
+          if (token === this.loadToken) {
+            this.displayAlert(this.$t('cleanup.review.items.loadError'), 'error');
+          }
+        })
+        .finally(() => {
+          if (token === this.loadToken) {
+            this.loading = false;
+          }
+        });
     },
     showDetails(item) {
       document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: item.nodeUuid}));

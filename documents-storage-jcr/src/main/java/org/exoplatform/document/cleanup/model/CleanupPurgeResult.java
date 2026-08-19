@@ -44,8 +44,28 @@ public class CleanupPurgeResult {
     return new CleanupPurgeResult(CleanupItemState.GONE, 0, null);
   }
 
+  /**
+   * A skip that reclaimed nothing at all.
+   *
+   * @param failureReason message code of the failure
+   * @return a SKIPPED result with zero reclaimed bytes
+   */
   public static CleanupPurgeResult skipped(String failureReason) {
-    return new CleanupPurgeResult(CleanupItemState.SKIPPED, 0, failureReason);
+    return skipped(failureReason, 0);
+  }
+
+  /**
+   * A PARTIAL purge: the item stays SKIPPED and keeps its failure reason (an
+   * administrator must still see that the file needs attention), but the bytes
+   * really reclaimed before the failure are CARRIED, so the campaign's reclaimed
+   * total reports the work actually done instead of silently under-reporting it.
+   *
+   * @param failureReason message code of the failure that interrupted the purge
+   * @param reclaimedBytes bytes effectively reclaimed before that failure
+   * @return a SKIPPED result carrying the bytes already reclaimed
+   */
+  public static CleanupPurgeResult skipped(String failureReason, long reclaimedBytes) {
+    return new CleanupPurgeResult(CleanupItemState.SKIPPED, reclaimedBytes, failureReason);
   }
 
 }

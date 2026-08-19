@@ -74,6 +74,10 @@ export default {
       syncedAt: Date.now(),
       now: Date.now(),
       deadlineTimerId: null,
+      // Monotonic token of the last summary load STARTED: the items list emits
+      // 'kept' after every decision, so several loads can be in flight at once
+      // and a slow one must not overwrite a newer summary (see loadSummary)
+      loadToken: 0,
     };
   },
   computed: {
@@ -114,12 +118,24 @@ export default {
       this.refreshDeadlineTimer();
     },
     loadSummary() {
+      this.loadToken = this.loadToken + 1;
+      const token = this.loadToken;
       return this.$cleanupService.getMySummary()
-        .then(summary => this.applySummary(summary))
-        .catch(() => this.applySummary(null))
+        .then(summary => {
+          if (token === this.loadToken) {
+            this.applySummary(summary);
+          }
+        })
+        .catch(() => {
+          if (token === this.loadToken) {
+            this.applySummary(null);
+          }
+        })
         .finally(() => {
-          this.loading = false;
-          this.refreshDeadlineTimer();
+          if (token === this.loadToken) {
+            this.loading = false;
+            this.refreshDeadlineTimer();
+          }
         });
     },
     // Re-syncs the countdown on EVERY refresh: the value received is the server's

@@ -388,6 +388,25 @@ class CleanupScanServiceTest {
   }
 
   @Test
+  void startScanSchedulesTheTransactionalWorkerEntryPoint() throws ObjectNotFoundException {
+    // Verifying execute(any()) alone never RUNS the scheduled Runnable, so
+    // scheduling scan() instead of scanTransactional() — dropping the whole scan
+    // out of its container transaction — would go unnoticed. Pinned by running
+    // the captured Runnable against a spy whose entry point is stubbed out, so
+    // the woven aspect never boots a container
+    CleanupScanService spiedService = org.mockito.Mockito.spy(scanService);
+    org.mockito.Mockito.doNothing().when(spiedService).scanTransactional(anyLong());
+    campaign.setState(CleanupCampaignState.DRY_RUN_RUNNING);
+
+    spiedService.startScan(CAMPAIGN_ID);
+
+    ArgumentCaptor<Runnable> workerCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(workerExecutor).execute(workerCaptor.capture());
+    workerCaptor.getValue().run();
+    verify(spiedService).scanTransactional(CAMPAIGN_ID);
+  }
+
+  @Test
   void theScheduledScanEntryPointRunsInAContainerTransaction() throws NoSuchMethodException {
     // The tests drive scan() directly, so nothing else would notice the
     // annotation disappearing from the method the executor actually schedules —

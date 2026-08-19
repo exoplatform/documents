@@ -74,12 +74,18 @@ public class CleanupCampaignRest {
                                                                  "reclaimedBytes");
 
   /**
-   * Sortable fields that are already unique per campaign, hence already yield a
+   * Sortable fields that are already unique per item row, hence already yield a
    * TOTAL order and need no tiebreaker appended.
+   * <p>
+   * Only the primary key qualifies. {@code path} does NOT: the sole uniqueness
+   * the item table enforces is {@code UK_DOC_CLEANUP_ITEM_NODE (CAMPAIGN_ID,
+   * NODE_UUID)}, and PATH is a nullable column — a file deleted and recreated at
+   * the same path across a resumed scan yields two rows sharing a path, at which
+   * point an ordering ending on the path stops being total.
    */
-  private static final Set<String> UNIQUE_ITEM_FIELDS   = Set.of("id", "path");
+  private static final Set<String> UNIQUE_ITEM_FIELDS   = Set.of("id");
 
-  private static final String      TIEBREAKER_FIELD     = "path";
+  private static final String      TIEBREAKER_FIELD     = "id";
 
   private static final String      DEFAULT_SORT_FIELD   = "fileSize";
 
@@ -397,19 +403,20 @@ public class CleanupCampaignRest {
   }
 
   /**
-   * Appends {@code path ASC} as the LAST key of every ordering, default or
+   * Appends {@code id ASC} as the LAST key of every ordering, default or
    * client-requested.
    * <p>
-   * {@code fileSize} — like {@code state}, {@code action} and
+   * {@code fileSize} — like {@code state}, {@code action}, {@code path} and
    * {@code ownerIdentityId} — is NOT unique, so an offset-paged query over a
    * block of ties has no total order: the database is free to return the same
    * row on two pages and to never return another one. On a review table that
    * means a user could page through their whole list and never see a file that
-   * is about to be deleted. {@code path} is unique per campaign, so appending it
-   * makes ANY ordering total.
+   * is about to be deleted. {@code id} is the primary key, so appending it makes
+   * ANY ordering total — and, unlike the path, it depends on no invariant the
+   * schema does not enforce (see {@link #UNIQUE_ITEM_FIELDS}).
    * <p>
-   * Skipped when the requested field is already unique ({@code path} itself, or
-   * {@code id}): a second key would be dead weight in the ORDER BY.
+   * Skipped when the requested field already IS {@code id}: a second key would
+   * be dead weight in the ORDER BY.
    */
   private Sort withTiebreaker(Sort sort) {
     boolean alreadyTotal = sort.stream().map(Sort.Order::getProperty).anyMatch(UNIQUE_ITEM_FIELDS::contains);

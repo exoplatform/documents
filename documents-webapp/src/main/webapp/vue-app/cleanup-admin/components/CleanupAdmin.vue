@@ -60,6 +60,10 @@ export default {
       campaigns: [],
       loading: false,
       selectedCampaignId: null,
+      // Monotonic token of the last load STARTED: every CometD state change plus
+      // the detail's refresh event reload the list, so a slow response must not
+      // overwrite a newer one (see loadCampaigns)
+      loadToken: 0,
     };
   },
   created() {
@@ -75,10 +79,24 @@ export default {
   methods: {
     loadCampaigns() {
       this.loading = true;
+      this.loadToken = this.loadToken + 1;
+      const token = this.loadToken;
       return this.$cleanupService.getCampaigns()
-        .then(campaigns => this.campaigns = campaigns || [])
-        .catch(() => this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error'))
-        .finally(() => this.loading = false);
+        .then(campaigns => {
+          if (token === this.loadToken) {
+            this.campaigns = campaigns || [];
+          }
+        })
+        .catch(() => {
+          if (token === this.loadToken) {
+            this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error');
+          }
+        })
+        .finally(() => {
+          if (token === this.loadToken) {
+            this.loading = false;
+          }
+        });
     },
     applyProgressEvent(event) {
       const message = event?.detail;

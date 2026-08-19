@@ -137,6 +137,9 @@ export default {
       minSizeMb: null,
       search: null,
       searchDebounce: null,
+      // Monotonic token of the last load STARTED: a response carrying an older
+      // token is dropped instead of overwriting the table (see loadItems)
+      loadToken: 0,
       options: {
         page: 1,
         itemsPerPage: 20,
@@ -205,8 +208,16 @@ export default {
       }
       this.searchDebounce = window.setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
     },
+    // SUPERSESSION: loads overlap (the search debounce narrows the typing window
+    // but never closes it, and the filter changes, @update:options and the
+    // campaignId watcher can fire concurrently), and the path search is
+    // documented unindexable — so a slow response can land after a newer one.
+    // Only the response of the LAST load started is applied; older ones are
+    // dropped, table and spinner alike.
     loadItems() {
       this.loading = true;
+      this.loadToken = this.loadToken + 1;
+      const token = this.loadToken;
       const {page, itemsPerPage, sortBy, sortDesc} = this.options;
       const sortField = SORT_FIELDS[sortBy[0]] || sortBy[0] || DEFAULT_SORT_FIELD;
       return this.$cleanupService.getCampaignItems(this.campaignId, {
@@ -218,14 +229,24 @@ export default {
         size: itemsPerPage,
         sort: `${sortField},${sortDesc[0] === false ? 'asc' : 'desc'}`,
       }).then(data => {
+        if (token !== this.loadToken) {
+          return;
+        }
         this.items = data?.items || [];
         this.totalItems = data?.totalItems || 0;
       }).catch(() => {
+        if (token !== this.loadToken) {
+          return;
+        }
         document.dispatchEvent(new CustomEvent('notification-alert', {detail: {
           message: this.$t('cleanup.admin.items.loadError'),
           type: 'error',
         }}));
-      }).finally(() => this.loading = false);
+      }).finally(() => {
+        if (token === this.loadToken) {
+          this.loading = false;
+        }
+      });
     },
     closeMenus(event) {
       if (this?.$refs?.menu1

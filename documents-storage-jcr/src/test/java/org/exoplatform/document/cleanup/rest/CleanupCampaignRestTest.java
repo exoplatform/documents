@@ -84,10 +84,10 @@ class CleanupCampaignRestTest {
 
   /**
    * The ordering BOTH item tables must end up with by default: the size-first
-   * business ordering, made total by the unique 'path' tiebreaker.
+   * business ordering, made total by the primary-key 'id' tiebreaker.
    */
-  private static final Sort      FILE_SIZE_DESC_THEN_PATH = Sort.by(Sort.Direction.DESC, "fileSize")
-                                                                .and(Sort.by(Sort.Direction.ASC, "path"));
+  private static final Sort      FILE_SIZE_DESC_THEN_ID = Sort.by(Sort.Direction.DESC, "fileSize")
+                                                              .and(Sort.by(Sort.Direction.ASC, "id"));
 
   @Mock
   private CleanupCampaignService campaignService;
@@ -254,12 +254,14 @@ class CleanupCampaignRestTest {
                                              eq("report"),
                                              pageableCaptor.capture());
     Pageable pageable = pageableCaptor.getValue();
-    // 'path' is already unique per campaign: no tiebreaker is piled on top of it
-    assertEquals(PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "path")), pageable);
+    // 'path' is NOT unique (the only uniqueness on the table is on the node
+    // uuid, and PATH is nullable), so it gets the id tiebreaker like any other
+    // non-unique key
+    assertEquals(PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "path").and(Sort.by(Sort.Direction.ASC, "id"))), pageable);
   }
 
   @Test
-  void getCampaignItemsDefaultsToFileSizeDescendingSortWithPathTiebreaker() throws ObjectNotFoundException {
+  void getCampaignItemsDefaultsToFileSizeDescendingSortWithIdTiebreaker() throws ObjectNotFoundException {
     when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
     campaignRest.getCampaignItems(CAMPAIGN_ID, null, null, null, null, null, 0, 20, null);
@@ -272,19 +274,19 @@ class CleanupCampaignRestTest {
                                              eq((Long) null),
                                              eq((String) null),
                                              pageableCaptor.capture());
-    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_PATH), pageableCaptor.getValue());
+    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_ID), pageableCaptor.getValue());
   }
 
   @Test
-  void getCampaignItemsAppendsThePathTiebreakerToANonUniqueRequestedSort() throws ObjectNotFoundException {
+  void getCampaignItemsAppendsTheIdTiebreakerToANonUniqueRequestedSort() throws ObjectNotFoundException {
     when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
     campaignRest.getCampaignItems(CAMPAIGN_ID, null, null, null, null, null, 0, 20, "fileSize,desc");
 
-    // fileSize is NOT unique: without the appended 'path ASC' an offset-paged
+    // fileSize is NOT unique: without the appended 'id ASC' an offset-paged
     // query over a block of equal sizes could repeat a row on one page and skip
     // another one entirely
-    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_PATH), captureItemsPageable());
+    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_ID), captureItemsPageable());
   }
 
   @Test
@@ -421,18 +423,18 @@ class CleanupCampaignRestTest {
     assertEquals(5, result.getItems().get(0).getId());
     // The USER endpoint builds the Pageable exactly like the admin one, stable
     // tiebreaker included — the service must not order on its own anymore
-    assertEquals(PageRequest.of(1, 10, FILE_SIZE_DESC_THEN_PATH), captureMyItemsPageable());
+    assertEquals(PageRequest.of(1, 10, FILE_SIZE_DESC_THEN_ID), captureMyItemsPageable());
   }
 
   @Test
-  void getMyItemsDefaultsToFileSizeDescendingSortWithPathTiebreaker() throws ObjectNotFoundException {
+  void getMyItemsDefaultsToFileSizeDescendingSortWithIdTiebreaker() throws ObjectNotFoundException {
     when(request.getRemoteUser()).thenReturn("john");
     when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
     campaignRest.getMyItems(request, null, 0, 20, null);
 
     verify(campaignService).getMyItems(eq("john"), eq((String) null), any());
-    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_PATH), captureMyItemsPageable());
+    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_ID), captureMyItemsPageable());
   }
 
   @Test
@@ -440,9 +442,26 @@ class CleanupCampaignRestTest {
     when(request.getRemoteUser()).thenReturn("john");
     when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
+    // 'id' is the PRIMARY KEY, the only sortable field that already yields a
+    // total order: it must not get a second key piled on top of it
+    campaignRest.getMyItems(request, null, 0, 20, "id,asc");
+
+    assertEquals(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "id")), captureMyItemsPageable());
+  }
+
+  @Test
+  void getMyItemsAppendsTheIdTiebreakerToAPathSortToo() throws ObjectNotFoundException {
+    when(request.getRemoteUser()).thenReturn("john");
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
     campaignRest.getMyItems(request, null, 0, 20, "path,asc");
 
-    assertEquals(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "path")), captureMyItemsPageable());
+    // PATH is nullable and only unique in practice — the sole uniqueness on the
+    // table is UK_DOC_CLEANUP_ITEM_NODE (CAMPAIGN_ID, NODE_UUID). A file deleted
+    // and recreated at the same path across a resumed scan yields two rows
+    // sharing a path, so ordering on it alone is NOT total
+    assertEquals(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "path").and(Sort.by(Sort.Direction.ASC, "id"))),
+                 captureMyItemsPageable());
   }
 
   @Test

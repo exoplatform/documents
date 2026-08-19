@@ -278,6 +278,39 @@ class CleanupExecutionServiceTest {
   }
 
   @Test
+  void shouldRecordTheBytesReclaimedByAPartiallyPurgedSkippedItem() {
+    // A versions purge that fails PARTWAY returns SKIPPED while carrying the
+    // bytes its successful removals already freed. Recording those bytes only for
+    // PURGED items would silently drop them from the campaign's reclaimed total
+    // (summed over the item rows), under-reporting the work really done
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    CleanupCampaignItem partialItem = item(18L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
+    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
+                                                                                                 .thenReturn(new PageImpl<>(List.of(partialItem)))
+                                                                                                 .thenReturn(new PageImpl<>(List.of()));
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
+                                                                     .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_VERSIONS,
+                                                                                                                  CleanupAction.PURGE_VERSIONS)));
+    when(cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONS, 5))
+                                                                .thenReturn(CleanupPurgeResult.skipped("cleanup.purgeVersionsError: version in use",
+                                                                                                       300L));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    ArgumentCaptor<CleanupCampaignItem> itemCaptor = ArgumentCaptor.forClass(CleanupCampaignItem.class);
+    verify(campaignStorage).saveItem(itemCaptor.capture());
+    CleanupCampaignItem saved = itemCaptor.getValue();
+    assertEquals(CleanupItemState.SKIPPED, saved.getState(), "The item must stay SKIPPED: it still needs attention");
+    assertEquals("cleanup.purgeVersionsError: version in use", saved.getFailureReason());
+    assertEquals(300L, saved.getReclaimedBytes(), "The bytes reclaimed before the failure must be persisted");
+    assertEquals(0L, saved.getPurgedAt(), "A partial purge is not a purge: no purge date");
+  }
+
+  @Test
   void shouldAbortExecutionWhenCampaignNoLongerExecuting() {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.CANCELLED));
 

@@ -471,10 +471,16 @@ public class CleanupJcrStorage {
    * @param maxVersionsPerFile number of versions to keep
    * @return purge outcome with reclaimed bytes, GONE only when the node really
    *         disappeared, or SKIPPED with a reason (a JCR read failure is
-   *         SKIPPED, never GONE)
+   *         SKIPPED, never GONE). A version removal failing PARTWAY leaves the
+   *         item SKIPPED — an administrator must still see the file needs
+   *         attention — but the bytes already reclaimed by the removals that DID
+   *         succeed are carried on the result: {@code removeVersion} is
+   *         immediate, so those bytes are really gone and dropping them would
+   *         under-report the campaign's reclaimed total.
    */
   public CleanupPurgeResult purgeVersions(String nodeUuid, int maxVersionsPerFile) {
     Session session = null;
+    long reclaimedBytes = 0;
     try {
       session = getSystemSession();
       Node node = getNodeByIdentifierOrNull(session, nodeUuid);
@@ -487,7 +493,6 @@ public class CleanupJcrStorage {
       String baseVersionName = node.getBaseVersion().getName();
       int versionCount = countVersions(versionHistory);
       int toRemove = versionCount - maxVersionsPerFile;
-      long reclaimedBytes = 0;
       if (toRemove > 0) {
         // VersionIterator is ordered by creation date: oldest versions first
         VersionIterator versions = versionHistory.getAllVersions();
@@ -506,7 +511,8 @@ public class CleanupJcrStorage {
       return CleanupPurgeResult.purged(reclaimedBytes);
     } catch (Exception e) {
       LOG.warn("Error purging versions of node {}", nodeUuid, e);
-      return CleanupPurgeResult.skipped("cleanup.purgeVersionsError: " + e.getMessage());
+      // SKIPPED, but carrying whatever was already reclaimed: see the javadoc
+      return CleanupPurgeResult.skipped("cleanup.purgeVersionsError: " + e.getMessage(), reclaimedBytes);
     } finally {
       logout(session);
     }
