@@ -31,6 +31,16 @@ public class MyItemsSummaryRestEntity {
 
   private Long              deadline;
 
+  /**
+   * SERVER-COMPUTED: milliseconds left before the review window closes, 0 once
+   * the grace deadline elapsed (which is when the service starts refusing a
+   * keep, whatever the campaign state still says). A DURATION, not an instant,
+   * so the UI counts it down locally instead of comparing {@link #deadline} to a
+   * possibly skewed browser clock — which could close the review while the
+   * server would still accept a keep, or the other way round.
+   */
+  private long              remainingMillis;
+
   private long              candidateCount;
 
   private long              keptCount;

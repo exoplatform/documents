@@ -17,6 +17,7 @@
 
 import * as cleanupService from './js/CleanupService.js';
 import * as cleanupUtils from './js/CleanupUtils.js';
+import * as documentsUtils from '../../js/DocumentsUtils.js';
 
 if (!Vue.prototype.$cleanupService) {
   window.Object.defineProperty(Vue.prototype, '$cleanupService', {
@@ -26,5 +27,27 @@ if (!Vue.prototype.$cleanupService) {
 if (!Vue.prototype.$cleanupUtils) {
   window.Object.defineProperty(Vue.prototype, '$cleanupUtils', {
     value: cleanupUtils,
+  });
+}
+/**
+ * Byte sizes are rendered through the Documents-side DocumentsUtils.getSize
+ * helper (the shared value/unit split) and the shared
+ * 'document.size.label.unit.*' i18n keys — the cleanup apps carry no byte
+ * formatter and no hardcoded English suffix of their own.
+ *
+ * Defined on Vue.prototype rather than exported from CleanupUtils because the
+ * unit label needs $t, which resolves against the calling component's i18n
+ * instance: called from a template as $cleanupSize(bytes), 'this' is the
+ * component, so $t works. A plain module function could not translate anything.
+ */
+if (!Vue.prototype.$cleanupSize) {
+  window.Object.defineProperty(Vue.prototype, '$cleanupSize', {
+    value: function(bytes) {
+      if (bytes == null || isNaN(bytes)) {
+        return '';
+      }
+      const size = documentsUtils.getSize(Number(bytes));
+      return `${size.value} ${this.$t(`document.size.label.unit.${size.unit}`)}`;
+    },
   });
 }

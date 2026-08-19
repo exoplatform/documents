@@ -34,6 +34,7 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
+import org.exoplatform.document.cleanup.util.CleanupEtaUtil;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 import org.exoplatform.services.log.ExoLogger;
@@ -102,15 +103,30 @@ public class CleanupScanService {
     executorService.execute(() -> scanTransactional(campaignId));
   }
 
+  /**
+   * Transactional entry point of the worker: the whole scan of a campaign runs
+   * in ONE container transaction, exactly like the execution purge
+   * ({@link CleanupExecutionService#executeCampaignTransactional(long)}), so the
+   * candidate rows it persists are committed under the same guarantees.
+   * <p>
+   * It is a thin wrapper on purpose: the annotation is woven around THIS method,
+   * so the tests drive {@link #scan(long)} directly and never boot a container
+   * to exercise the worker body — the annotation itself is pinned by reflection
+   * in {@code CleanupScanServiceTest}.
+   *
+   * @param campaignId campaign identifier
+   */
   @ContainerTransactional
   public void scanTransactional(long campaignId) {
     scan(campaignId);
   }
 
   /**
-   * Scan worker, running as system (no conversation state needed).
+   * Scan worker, running as system (no conversation state needed). Visible for
+   * tests, which invoke it directly instead of going through the transactional
+   * wrapper above.
    */
-  private void scan(long campaignId) { // NOSONAR
+  protected void scan(long campaignId) { // NOSONAR
     if (!runningCampaigns.add(campaignId)) {
       // Already running: never double-start a campaign's scan worker
       return;
@@ -175,7 +191,10 @@ public class CleanupScanService {
                                      campaignStorage.saveCandidates(campaignId, candidates);
                                      long scanned = scannedInRoot.addAndGet(scannedCount);
                                      long processed = rootProcessedBase + Math.min(scanned, rootTotal);
-                                     long etaSeconds = computeEtaSeconds(startTime, processedAtStart, processed, total);
+                                     long etaSeconds = CleanupEtaUtil.computeEtaSeconds(startTime,
+                                                                                        processedAtStart,
+                                                                                        processed,
+                                                                                        total);
                                      campaignStorage.updateProgress(campaignId,
                                                                     total,
                                                                     processed,
@@ -200,7 +219,7 @@ public class CleanupScanService {
           campaignStorage.updateProgress(campaignId,
                                          total,
                                          processedBase,
-                                         computeEtaSeconds(startTime, processedAtStart, processedBase, total),
+                                         CleanupEtaUtil.computeEtaSeconds(startTime, processedAtStart, processedBase, total),
                                          SCAN_ROOTS.get(rootIndex + 1),
                                          0);
         }
@@ -224,16 +243,6 @@ public class CleanupScanService {
   private boolean isAborted(long campaignId) {
     CleanupCampaign campaign = campaignStorage.getCampaign(campaignId);
     return campaign == null || campaign.getState() != CleanupCampaignState.DRY_RUN_RUNNING;
-  }
-
-  private long computeEtaSeconds(long startTime, long processedAtStart, long processed, long total) {
-    long elapsedMillis = System.currentTimeMillis() - startTime;
-    long processedSinceStart = processed - processedAtStart;
-    if (elapsedMillis <= 0 || processedSinceStart <= 0) {
-      return 0;
-    }
-    double throughputPerMilli = (double) processedSinceStart / elapsedMillis;
-    return (long) ((total - processed) / throughputPerMilli / 1000);
   }
 
 }

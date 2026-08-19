@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -40,8 +41,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -388,16 +392,195 @@ class CleanupCampaignStorageTest {
 
   @Test
   void getItemsMapsNullableFiltersToDao() {
-    when(itemDAO.findByFilters(eq(CAMPAIGN_ID), eq(7L), eq(CANDIDATE_STATE), eq("DELETE"), eq(1024L), any()))
+    when(itemDAO.findByFilters(eq(CAMPAIGN_ID),
+                               eq(7L),
+                               eq(CANDIDATE_STATE),
+                               eq("DELETE"),
+                               eq(1024L),
+                               eq("%report%"),
+                               any())).thenReturn(new PageImpl<>(List.of()));
+
+    storage.getItems(CAMPAIGN_ID, 7L, CleanupItemState.CANDIDATE, CleanupAction.DELETE, 1024L, "Report", PageRequest.of(0, 10));
+    // The search composes with every other filter, in ONE query
+    verify(itemDAO).findByFilters(eq(CAMPAIGN_ID),
+                                 eq(7L),
+                                 eq(CANDIDATE_STATE),
+                                 eq("DELETE"),
+                                 eq(1024L),
+                                 eq("%report%"),
+                                 any());
+
+    when(itemDAO.findByFilters(eq(CAMPAIGN_ID),
+                               eq((Long) null),
+                               eq((String) null),
+                               eq((String) null),
+                               eq((Long) null),
+                               eq((String) null),
+                               any())).thenReturn(new PageImpl<>(List.of()));
+    storage.getItems(CAMPAIGN_ID, null, null, null, null, "   ", PageRequest.of(0, 10));
+    // A blank term means NO filter at all, never an empty '%%' match
+    verify(itemDAO).findByFilters(eq(CAMPAIGN_ID),
+                                 eq((Long) null),
+                                 eq((String) null),
+                                 eq((String) null),
+                                 eq((Long) null),
+                                 eq((String) null),
+                                 any());
+  }
+
+  @Test
+  void getItemsByOwnersPassesTheEscapedSearchPatternAlongTheOwners() {
+    Pageable pageable = PageRequest.of(1, 25);
+    when(itemDAO.findByOwnersAndSearch(eq(CAMPAIGN_ID), eq(List.of(5L, 6L)), eq("%q1|_25|%%"), eq(pageable)))
                                                                                                              .thenReturn(new PageImpl<>(List.of()));
 
-    storage.getItems(CAMPAIGN_ID, 7L, CleanupItemState.CANDIDATE, CleanupAction.DELETE, 1024L, PageRequest.of(0, 10));
-    verify(itemDAO).findByFilters(eq(CAMPAIGN_ID), eq(7L), eq(CANDIDATE_STATE), eq("DELETE"), eq(1024L), any());
+    storage.getItemsByOwners(CAMPAIGN_ID, List.of(5L, 6L), " Q1_25% ", pageable);
 
-    when(itemDAO.findByFilters(eq(CAMPAIGN_ID), eq((Long) null), eq((String) null), eq((String) null), eq((Long) null), any()))
-                                                                                                                               .thenReturn(new PageImpl<>(List.of()));
-    storage.getItems(CAMPAIGN_ID, null, null, null, null, PageRequest.of(0, 10));
-    verify(itemDAO).findByFilters(eq(CAMPAIGN_ID), eq((Long) null), eq((String) null), eq((String) null), eq((Long) null), any());
+    // Trimmed, lower-cased and run through the SAME escaping as the JCR-event
+    // queries: the user's own '_' and '%' must match literally, not wildcard
+    verify(itemDAO).findByOwnersAndSearch(eq(CAMPAIGN_ID), eq(List.of(5L, 6L)), eq("%q1|_25|%%"), eq(pageable));
+
+    when(itemDAO.findByOwnersAndSearch(eq(CAMPAIGN_ID), eq(List.of(5L)), eq((String) null), any()))
+                                                                                                  .thenReturn(new PageImpl<>(List.of()));
+    storage.getItemsByOwners(CAMPAIGN_ID, List.of(5L), null, pageable);
+    verify(itemDAO).findByOwnersAndSearch(eq(CAMPAIGN_ID), eq(List.of(5L)), eq((String) null), any());
+  }
+
+  @Test
+  void chunkOwnerIdsNeverExceedsTheInClauseCapAndKeepsEveryId() {
+    List<Long> ownerIdentityIds = ownerIds(950);
+
+    List<List<Long>> chunks = CleanupCampaignStorage.chunkOwnerIds(ownerIdentityIds);
+
+    // Oracle rejects an IN list above 1000 expressions (ORA-01795): the cap is
+    // what keeps a user managing a thousand spaces from breaking their own page
+    assertEquals(2, chunks.size());
+    assertEquals(CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE, chunks.get(0).size());
+    assertEquals(50, chunks.get(1).size());
+    // No id is lost and none is duplicated by the split
+    assertEquals(ownerIdentityIds, chunks.stream().flatMap(List::stream).toList());
+    // Exactly at the cap: still a single query
+    assertEquals(1, CleanupCampaignStorage.chunkOwnerIds(ownerIds(CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE)).size());
+    // Empty (or absent) means ONE empty chunk, so callers keep issuing their
+    // single query and returning its result instead of faking a zero
+    assertEquals(List.of(List.of()), CleanupCampaignStorage.chunkOwnerIds(List.of()));
+    assertEquals(List.of(List.of()), CleanupCampaignStorage.chunkOwnerIds(null));
+  }
+
+  @Test
+  void ownerScopedCountsAndSumsAreQueriedPerChunkAndAddedUp() {
+    List<Long> ownerIdentityIds = ownerIds(950);
+    List<Long> firstChunk = ownerIdentityIds.subList(0, CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE);
+    List<Long> secondChunk = ownerIdentityIds.subList(CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE, 950);
+    when(itemDAO.countByCampaignIdAndOwnerIdentityIdInAndState(CAMPAIGN_ID, firstChunk, CANDIDATE_STATE)).thenReturn(7L);
+    when(itemDAO.countByCampaignIdAndOwnerIdentityIdInAndState(CAMPAIGN_ID, secondChunk, CANDIDATE_STATE)).thenReturn(3L);
+    when(itemDAO.sumReclaimableBytesByOwnersAndState(CAMPAIGN_ID, firstChunk, CANDIDATE_STATE)).thenReturn(2048L);
+    when(itemDAO.sumReclaimableBytesByOwnersAndState(CAMPAIGN_ID, secondChunk, CANDIDATE_STATE)).thenReturn(1024L);
+    when(itemDAO.sumReclaimedBytesByOwners(CAMPAIGN_ID, firstChunk)).thenReturn(500L);
+    when(itemDAO.sumReclaimedBytesByOwners(CAMPAIGN_ID, secondChunk)).thenReturn(100L);
+
+    // Counts and sums merge ADDITIVELY across chunks, which is exact: the owner
+    // sets are disjoint by construction
+    assertEquals(10L, storage.countItemsByOwnersAndState(CAMPAIGN_ID, ownerIdentityIds, CleanupItemState.CANDIDATE));
+    assertEquals(3072L,
+                 storage.sumReclaimableBytesByOwnersAndState(CAMPAIGN_ID, ownerIdentityIds, CleanupItemState.CANDIDATE));
+    assertEquals(600L, storage.sumReclaimedBytesByOwners(CAMPAIGN_ID, ownerIdentityIds));
+    // One query per chunk, each one under the IN-list cap
+    verify(itemDAO).countByCampaignIdAndOwnerIdentityIdInAndState(CAMPAIGN_ID, firstChunk, CANDIDATE_STATE);
+    verify(itemDAO).countByCampaignIdAndOwnerIdentityIdInAndState(CAMPAIGN_ID, secondChunk, CANDIDATE_STATE);
+  }
+
+  @Test
+  void getItemsByOwnersMergesTheChunkPagesInTheRequestedOrder() {
+    List<Long> ownerIdentityIds = ownerIds(950);
+    Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "fileSize").and(Sort.by(Sort.Direction.ASC, "path")));
+    // Each chunk is asked for the rows up to the requested page, in the SAME
+    // ordering, so the merge below can be exact
+    Pageable expectedChunkPageable = PageRequest.of(0, 2, pageable.getSort());
+    stubChunkPages(ownerIdentityIds, expectedChunkPageable);
+
+    Page<CleanupCampaignItem> page = storage.getItemsByOwners(CAMPAIGN_ID, ownerIdentityIds, null, pageable);
+
+    // Merged by fileSize DESCENDING across both chunks: a reversed comparator
+    // would answer the two SMALLEST files here
+    assertEquals(List.of("/a-500.pdf", "/b-300.pdf"), page.getContent().stream().map(CleanupCampaignItem::getPath).toList());
+    // The total is the exact sum of the chunks' own totals (5 + 6), the owner
+    // sets being disjoint
+    assertEquals(11L, page.getTotalElements());
+    assertEquals(0, page.getNumber());
+    assertEquals(2, page.getSize());
+    verify(itemDAO, times(2)).findByOwnersAndSearch(eq(CAMPAIGN_ID), anyList(), any(), eq(expectedChunkPageable));
+  }
+
+  @Test
+  void getItemsByOwnersSlicesTheRequestedPageOutOfTheMergedChunks() {
+    List<Long> ownerIdentityIds = ownerIds(950);
+    Pageable pageable = PageRequest.of(1, 2, Sort.by(Sort.Direction.DESC, "fileSize").and(Sort.by(Sort.Direction.ASC, "path")));
+    // Page 1 of size 2: each chunk must yield the first FOUR rows, so the
+    // requested page can be filled even when it comes entirely from one chunk
+    Pageable expectedChunkPageable = PageRequest.of(0, 4, pageable.getSort());
+    stubChunkPages(ownerIdentityIds, expectedChunkPageable);
+
+    Page<CleanupCampaignItem> page = storage.getItemsByOwners(CAMPAIGN_ID, ownerIdentityIds, null, pageable);
+
+    // Rows 3 and 4 of the merge, not rows 1-2 and not the raw chunk order
+    assertEquals(List.of("/c-200.pdf", "/d-100.pdf"), page.getContent().stream().map(CleanupCampaignItem::getPath).toList());
+    assertEquals(11L, page.getTotalElements());
+    assertEquals(1, page.getNumber());
+  }
+
+  /**
+   * Two chunk pages whose rows INTERLEAVE once merged by fileSize descending
+   * (500 and 100 in the first chunk, 300 and 200 in the second): a merge that
+   * just concatenated the chunks, or sorted them the other way round, cannot
+   * produce the expected slices.
+   */
+  private void stubChunkPages(List<Long> ownerIdentityIds, Pageable chunkPageable) {
+    List<Long> firstChunk = ownerIdentityIds.subList(0, CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE);
+    List<Long> secondChunk = ownerIdentityIds.subList(CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE, ownerIdentityIds.size());
+    when(itemDAO.findByOwnersAndSearch(CAMPAIGN_ID, firstChunk, null, chunkPageable))
+                                                                                    .thenReturn(new PageImpl<>(List.of(itemEntity("/a-500.pdf",
+                                                                                                                                 500),
+                                                                                                                      itemEntity("/d-100.pdf",
+                                                                                                                                 100)),
+                                                                                                               chunkPageable,
+                                                                                                               5L));
+
+    when(itemDAO.findByOwnersAndSearch(CAMPAIGN_ID, secondChunk, null, chunkPageable))
+                                                                                     .thenReturn(new PageImpl<>(List.of(itemEntity("/b-300.pdf",
+                                                                                                                                   300),
+                                                                                                                        itemEntity("/c-200.pdf",
+                                                                                                                                    200)),
+                                                                                                                chunkPageable,
+                                                                                                                6L));
+  }
+
+  private List<Long> ownerIds(int total) {
+    return java.util.stream.LongStream.rangeClosed(1, total).boxed().toList();
+  }
+
+  private CleanupCampaignItemEntity itemEntity(String path, long fileSize) {
+    CleanupCampaignItemEntity entity = new CleanupCampaignItemEntity();
+    entity.setId(fileSize);
+    entity.setCampaignId(CAMPAIGN_ID);
+    entity.setNodeUuid("uuid" + path);
+    entity.setPath(path);
+    entity.setFileSize(fileSize);
+    entity.setVersionsSize(0);
+    entity.setAction(CleanupAction.DELETE.name());
+    entity.setState(CANDIDATE_STATE);
+    return entity;
+  }
+
+  @Test
+  void searchPatternEscapesWildcardsAndIgnoresBlankTerms() {
+    assertEquals("%invoice%", CleanupCampaignStorage.searchPattern("Invoice"));
+    assertEquals("%100|%%", CleanupCampaignStorage.searchPattern("100%"));
+    assertEquals("%a|_b%", CleanupCampaignStorage.searchPattern("a_b"));
+    assertEquals("%a||b%", CleanupCampaignStorage.searchPattern("a|b"));
+    assertNull(CleanupCampaignStorage.searchPattern(null));
+    assertNull(CleanupCampaignStorage.searchPattern(""));
+    assertNull(CleanupCampaignStorage.searchPattern("   "));
   }
 
   @Test

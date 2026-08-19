@@ -39,12 +39,14 @@ import org.exoplatform.document.cleanup.model.CleanupPurgeResult;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
+import org.exoplatform.document.cleanup.util.CleanupEtaUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
+import io.meeds.common.ContainerTransactional;
 import io.meeds.social.util.JsonUtils;
 
 import jakarta.annotation.PreDestroy;
@@ -107,7 +109,7 @@ public class CleanupExecutionService {
     campaign.setEtaSeconds(0);
     // Guarded by the lifecycle: only LOCKED may enter EXECUTING
     campaign = campaignLifecycle.transition(campaign, CleanupCampaignState.EXECUTING);
-    executorService.execute(() -> executeCampaign(campaignId));
+    executorService.execute(() -> executeCampaignTransactional(campaignId));
     return campaign;
   }
 
@@ -119,7 +121,12 @@ public class CleanupExecutionService {
    * @param campaignId campaign identifier
    */
   public void resumeExecution(long campaignId) {
-    executorService.execute(() -> executeCampaign(campaignId));
+    executorService.execute(() -> executeCampaignTransactional(campaignId));
+  }
+
+  @ContainerTransactional
+  public void executeCampaignTransactional(long campaignId) { // NOSONAR
+    executeCampaign(campaignId);
   }
 
   /**
@@ -155,7 +162,7 @@ public class CleanupExecutionService {
           processItem(item, params);
         }
         processed += batch.getNumberOfElements();
-        long etaSeconds = computeEtaSeconds(startTime, processedAtStart, processed, total);
+        long etaSeconds = CleanupEtaUtil.computeEtaSeconds(startTime, processedAtStart, processed, total);
         campaignStorage.updateProgress(campaignId, total, processed, etaSeconds, null, 0);
         webSocketService.sendToAdministrators(new CleanupWsMessage(CleanupWsMessage.PROGRESS_EVENT,
                                                                    campaignId,
@@ -244,16 +251,6 @@ public class CleanupExecutionService {
   private boolean isAborted(long campaignId) {
     CleanupCampaign campaign = campaignStorage.getCampaign(campaignId);
     return campaign == null || campaign.getState() != CleanupCampaignState.EXECUTING;
-  }
-
-  private long computeEtaSeconds(long startTime, long processedAtStart, long processed, long total) {
-    long elapsedMillis = System.currentTimeMillis() - startTime;
-    long processedSinceStart = processed - processedAtStart;
-    if (elapsedMillis <= 0 || processedSinceStart <= 0) {
-      return 0;
-    }
-    double throughputPerMilli = (double) processedSinceStart / elapsedMillis;
-    return (long) ((total - processed) / throughputPerMilli / 1000);
   }
 
 }

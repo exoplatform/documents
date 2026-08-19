@@ -18,6 +18,8 @@ package org.exoplatform.document.cleanup.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,7 +43,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import javax.jcr.ItemNotFoundException;
@@ -650,6 +652,27 @@ class CleanupJcrStorageTest {
   }
 
   @Test
+  void addExemptionMixinIsIdempotentWhenMixinAlreadyPresent() throws RepositoryException {
+    // keepItem DELIBERATELY accepts an already-EXEMPTED item (a re-keep, e.g. two
+    // browser tabs, or a keep replayed after a timeout). A second addMixin throws
+    // in JCR, so without the guard that harmless re-keep would come back as
+    // cleanup.keepFailed — while the decision metadata must still be refreshed
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_KEPT)).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
+    when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(true);
+
+    assertEquals(CleanupExemptionResult.ADDED, cleanupJcrStorage.addExemptionMixin(NODE_UUID_KEPT, "mary"));
+
+    verify(node, never()).addMixin(anyString());
+    // The decision properties ARE re-written and committed: the mixin being
+    // there already doesn't make the call a no-op
+    verify(node).setProperty(eq(CleanupJcrStorage.EXO_CLEANUP_EXEMPTED_DATE), any(Calendar.class));
+    verify(node).setProperty(CleanupJcrStorage.EXO_CLEANUP_EXEMPTED_BY, "mary");
+    verify(session).save();
+  }
+
+  @Test
   void addExemptionMixinReturnsNotFoundWhenNodeIsGone() throws RepositoryException {
     when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
 
@@ -707,6 +730,47 @@ class CleanupJcrStorageTest {
 
     assertFalse(revalidation.isUnknown());
     assertTrue(revalidation.isExempted());
+  }
+
+  @Test
+  void revalidateStillCandidateCarriesTheFreshlyEvaluatedActionAndSizes() throws RepositoryException {
+    // The candidate-mapping branch of revalidate had ZERO storage-level coverage:
+    // replacing it with unknown() kept the suite green, so neither the criterion
+    // evaluation nor the refreshed sizes the execution relies on were pinned
+    Node node = qualifyingNode(PATH_A, NODE_UUID_A, false, null, null);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(node);
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertFalse(revalidation.isUnknown(), "A readable node is a definitive outcome");
+    assertTrue(revalidation.isExists());
+    assertFalse(revalidation.isExempted());
+    assertNotNull(revalidation.getCandidate(), "A still-qualifying node must come back as a candidate");
+    // The node is a year old and above the size floor: DELETE, with the sizes
+    // read again from JCR (this is what refreshes a stale item)
+    assertEquals(CleanupAction.DELETE, revalidation.getCandidate().getAction());
+    assertEquals(NODE_UUID_A, revalidation.getCandidate().getNodeUuid());
+    assertEquals(PATH_A, revalidation.getCandidate().getPath());
+    assertEquals(2048L, revalidation.getCandidate().getFileSize());
+    assertEquals(0L, revalidation.getCandidate().getVersionsSize());
+    verify(session).logout();
+  }
+
+  @Test
+  void revalidateNoLongerCandidateIsANullCandidateNeverAnUnknownOutcome() throws RepositoryException {
+    // A node that stopped qualifying (here: no creation date and no content, so
+    // the criterion evaluator returns no action) must be told apart from a read
+    // failure: null candidate + exists, which the shared mapping turns into
+    // SPARED_BY_MODIFICATION — whereas unknown() would leave the item CANDIDATE
+    Node node = node(PATH_A);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(node);
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertFalse(revalidation.isUnknown(), "Not qualifying anymore is a DEFINITIVE outcome, not an unknown one");
+    assertTrue(revalidation.isExists());
+    assertNull(revalidation.getCandidate());
+    verify(session).logout();
   }
 
   @Test
@@ -809,36 +873,89 @@ class CleanupJcrStorageTest {
   }
 
   /**
-   * The four per-item write primitives, each named and invoked on a
-   * {@link CleanupJcrStorage}. Feeds the session-release invariant below: this is
-   * THE invariant of the session-lifecycle change, and without an assertion per
-   * primitive, deleting any of their {@code finally} blocks would keep the suite
-   * green while leaking one session per campaign item.
+   * The FIVE per-item primitives, each named, invoked on a
+   * {@link CleanupJcrStorage} and folded to the outcome its happy path must
+   * answer. Feeds the session-release invariant below: this is THE invariant of
+   * the session-lifecycle change, and without an assertion per primitive,
+   * deleting any of their {@code finally} blocks would keep the suite green while
+   * leaking one session per campaign item.
+   * <p>
+   * {@code revalidate} belongs here even though it only reads: it runs once per
+   * item too, and its only logout assertion elsewhere sits on the node-missing
+   * path — so moving its logout into the catch blocks used to leak the session of
+   * every successfully revalidated item unnoticed.
+   * <p>
+   * The expected outcome is what makes the 'happy path' variant really one: the
+   * shared setup below has to drive each primitive through its WORKING branch
+   * (versions actually removed, mixin actually removed), otherwise the test
+   * silently degrades into 'the session is released while every primitive
+   * early-returns or fails'.
    */
-  static Stream<Arguments> perItemWritePrimitives() {
+  static Stream<Arguments> perItemPrimitives() {
+    CleanupParams primitiveParams = new CleanupParams(6, 1024L, 7, 5, List.of(), 100);
     return Stream.of(Arguments.of("addExemptionMixin",
-                                  (Consumer<CleanupJcrStorage>) storage -> storage.addExemptionMixin(NODE_UUID_DOOMED, "john")),
+                                  (Function<CleanupJcrStorage, Object>) storage -> storage.addExemptionMixin(NODE_UUID_DOOMED,
+                                                                                                             "john"),
+                                  CleanupExemptionResult.ADDED),
                      Arguments.of("removeExemptionMixin",
-                                  (Consumer<CleanupJcrStorage>) storage -> storage.removeExemptionMixin(NODE_UUID_DOOMED)),
-                     Arguments.of("deleteNode", (Consumer<CleanupJcrStorage>) storage -> storage.deleteNode(NODE_UUID_DOOMED)),
+                                  (Function<CleanupJcrStorage, Object>) storage -> storage.removeExemptionMixin(NODE_UUID_DOOMED),
+                                  CleanupExemptionResult.ADDED),
+                     Arguments.of("deleteNode",
+                                  (Function<CleanupJcrStorage, Object>) storage -> storage.deleteNode(NODE_UUID_DOOMED)
+                                                                                         .getState(),
+                                  CleanupItemState.PURGED),
                      Arguments.of("purgeVersions",
-                                  (Consumer<CleanupJcrStorage>) storage -> storage.purgeVersions(NODE_UUID_DOOMED, 2)));
+                                  (Function<CleanupJcrStorage, Object>) storage -> storage.purgeVersions(NODE_UUID_DOOMED, 2)
+                                                                                          .getState(),
+                                  CleanupItemState.PURGED),
+                     Arguments.of("revalidate",
+                                  (Function<CleanupJcrStorage, Object>) storage -> storage.revalidate(NODE_UUID_DOOMED,
+                                                                                                      primitiveParams)
+                                                                                          .isExempted(),
+                                  Boolean.TRUE));
   }
 
   @ParameterizedTest(name = "{0} releases its system session on the happy path")
-  @MethodSource("perItemWritePrimitives")
-  void perItemWritePrimitiveReleasesItsSessionOnTheHappyPath(String name,
-                                                             Consumer<CleanupJcrStorage> primitive) throws RepositoryException {
+  @MethodSource("perItemPrimitives")
+  void perItemPrimitiveReleasesItsSessionOnTheHappyPath(String name,
+                                                        Function<CleanupJcrStorage, Object> primitive,
+                                                        Object expectedOutcome) throws RepositoryException {
     Node node = mock(Node.class);
     org.mockito.Mockito.lenient().when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
     org.mockito.Mockito.lenient().when(node.getPath()).thenReturn(PATH_F);
+    // Versionable AND checked in: purgeVersions really walks a version history
+    // (instead of taking its notVersionable early return) and the mixin writes
+    // really check the node out first
+    org.mockito.Mockito.lenient().when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    org.mockito.Mockito.lenient().when(node.isCheckedOut()).thenReturn(false);
+    // Mixin present, so removeExemptionMixin really removes one (instead of
+    // taking its mixin-absent no-op) and revalidate really maps an outcome
+    org.mockito.Mockito.lenient().when(node.isNodeType(CleanupJcrStorage.EXO_CLEANUP_EXEMPTION)).thenReturn(true);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    org.mockito.Mockito.lenient().when(node.getVersionHistory()).thenReturn(versionHistory);
+    Version baseVersion = mock(Version.class);
+    org.mockito.Mockito.lenient().when(baseVersion.getName()).thenReturn("4");
+    org.mockito.Mockito.lenient().when(node.getBaseVersion()).thenReturn(baseVersion);
+    VersionIterator countIterator = mock(VersionIterator.class);
+    org.mockito.Mockito.lenient().when(countIterator.getSize()).thenReturn(5L); // root + 4 versions
+    // Built BEFORE the getAllVersions() stubbing: the helpers stub their own
+    // mocks, and nesting that inside an in-progress when() is unfinished stubbing
+    VersionIterator walkIterator = lenientVersionIterator(version(JCR_ROOT_VERSION, 0L),
+                                                         version("1", 100L),
+                                                         version("2", 200L),
+                                                         version("3", 300L),
+                                                         version("4", 400L));
+    org.mockito.Mockito.lenient().when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
     Node parentFolder = mock(Node.class);
     org.mockito.Mockito.lenient().when(node.getParent()).thenReturn(parentFolder);
     org.mockito.Mockito.lenient().when(parentFolder.getDepth()).thenReturn(5);
     org.mockito.Mockito.lenient().when(parentFolder.hasNodes()).thenReturn(true);
 
-    primitive.accept(cleanupJcrStorage);
+    Object outcome = primitive.apply(cleanupJcrStorage);
 
+    // The primitive really went through its working branch — 4 versions down to
+    // 2, a mixin removed, a node deleted — not through an early return
+    assertEquals(expectedOutcome, outcome, name + " must report its happy-path outcome");
     // getSystemSession opens a BRAND-NEW session per call and these primitives
     // run once per campaign item: dropping the finally would leak tens of
     // thousands of live sessions on a large campaign
@@ -847,15 +964,18 @@ class CleanupJcrStorageTest {
   }
 
   @ParameterizedTest(name = "{0} releases its system session when the JCR read throws")
-  @MethodSource("perItemWritePrimitives")
-  void perItemWritePrimitiveReleasesItsSessionOnAThrowingPath(String name,
-                                                              Consumer<CleanupJcrStorage> primitive) throws RepositoryException {
+  @MethodSource("perItemPrimitives")
+  void perItemPrimitiveReleasesItsSessionOnAThrowingPath(String name,
+                                                         Function<CleanupJcrStorage, Object> primitive,
+                                                         Object happyOutcome) throws RepositoryException {
     when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
-    primitive.accept(cleanupJcrStorage);
+    Object outcome = primitive.apply(cleanupJcrStorage);
 
-    // The failure path must release the session just as the happy path does:
-    // a repository going flaky is exactly when sessions would pile up
+    // A read failure is never reported as the happy outcome (FAILED / SKIPPED /
+    // unknown), and the failure path must release the session just as the happy
+    // path does: a repository going flaky is exactly when sessions would pile up
+    assertNotEquals(happyOutcome, outcome, name + " must not report a happy outcome on a JCR read failure");
     verify(session).logout();
   }
 
@@ -966,6 +1086,18 @@ class CleanupJcrStorageTest {
     Iterator<Version> iterator = Arrays.asList(versions).iterator();
     VersionIterator versionIterator = mock(VersionIterator.class);
     when(versionIterator.hasNext()).thenAnswer(invocation -> iterator.hasNext());
+    org.mockito.Mockito.lenient().when(versionIterator.nextVersion()).thenAnswer(invocation -> iterator.next());
+    return versionIterator;
+  }
+
+  /**
+   * Same as {@link #versionIterator(Version...)} with fully lenient stubbing, for
+   * the parameterized rows that don't all walk the version history.
+   */
+  private VersionIterator lenientVersionIterator(Version... versions) {
+    Iterator<Version> iterator = Arrays.asList(versions).iterator();
+    VersionIterator versionIterator = mock(VersionIterator.class);
+    org.mockito.Mockito.lenient().when(versionIterator.hasNext()).thenAnswer(invocation -> iterator.hasNext());
     org.mockito.Mockito.lenient().when(versionIterator.nextVersion()).thenAnswer(invocation -> iterator.next());
     return versionIterator;
   }

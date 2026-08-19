@@ -18,6 +18,7 @@ package org.exoplatform.document.cleanup.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,17 +29,16 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,6 +60,8 @@ import org.exoplatform.document.cleanup.storage.CleanupJcrStorage.ScanBatchConsu
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 
+import io.meeds.common.ContainerTransactional;
+
 /**
  * Scan worker tests pinning the count-first denominator, the per-batch
  * candidate persistence + path checkpoint/ETA updates + progress push, the
@@ -67,6 +69,15 @@ import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
  * the abort check between batches, the checkpoint-resumable error handling and
  * the running-campaign guard the watchdog depends on. The JCR walking itself is
  * mocked through {@link CleanupJcrStorage}'s streaming callback.
+ * <p>
+ * The worker body is driven SYNCHRONOUSLY: the service's real single-thread
+ * executor is replaced by a mock, and {@link CleanupScanService#scan(long)} is
+ * invoked directly. Going through the scheduled
+ * {@code scanTransactional} instead would run the {@code @ContainerTransactional}
+ * aspect, which boots a real PortalContainer in a plain JUnit run — seconds of
+ * build time, an unrelated component-instantiation ERROR in the log, and a
+ * timeout-based wait betting on the machine's speed. The annotation itself is
+ * pinned by reflection below, so the contract is still covered.
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupScanServiceTest {
@@ -74,13 +85,6 @@ class CleanupScanServiceTest {
   private static final long        CAMPAIGN_ID = 12L;
 
   private static final int         BATCH_SIZE  = 2;
-
-  /**
-   * The worker runs in a container transaction, so the first scan of the JVM
-   * pays the persistence-stack initialisation (several seconds); the wait must
-   * exceed it, otherwise whichever scan test runs first flakes.
-   */
-  private static final int         WORKER_WAIT = 20000;
 
   @Mock
   private CleanupCampaignStorage   campaignStorage;
@@ -100,10 +104,19 @@ class CleanupScanServiceTest {
   @InjectMocks
   private CleanupScanService       scanService;
 
+  @Mock
+  private ExecutorService          workerExecutor;
+
   private CleanupCampaign          campaign;
 
   @BeforeEach
-  void setUp() {
+  void setUp() throws ReflectiveOperationException {
+    // Replace the service's REAL single-thread executor with a mock: the tests
+    // drive the worker body themselves (see the class comment), so no background
+    // thread — and no container-booting transactional aspect — is involved
+    Field executorField = CleanupScanService.class.getDeclaredField("executorService");
+    executorField.setAccessible(true); // NOSONAR test wiring
+    executorField.set(scanService, workerExecutor); // NOSONAR
     campaign = new CleanupCampaign();
     campaign.setId(CAMPAIGN_ID);
     campaign.setName("Scan me");
@@ -146,10 +159,13 @@ class CleanupScanServiceTest {
     }).when(cleanupJcrStorage).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
 
     scanService.startScan(CAMPAIGN_ID);
+    scanService.scan(CAMPAIGN_ID);
 
-    verify(campaignLifecycle, timeout(WORKER_WAIT)).transition(campaign, CleanupCampaignState.SIMULATED);
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
     // DRAFT campaigns first transition into DRY_RUN_RUNNING
     verify(campaignLifecycle).transition(campaign, CleanupCampaignState.DRY_RUN_RUNNING);
+    // startScan only SCHEDULES the worker: no live thread leaks out of the test
+    verify(workerExecutor).execute(any());
     // The denominator is counted once per root, before any batch
     verify(cleanupJcrStorage).countFiles("/Users");
     verify(cleanupJcrStorage).countFiles("/Groups/spaces");
@@ -165,29 +181,39 @@ class CleanupScanServiceTest {
                                            argThat(candidates -> "uuid-2".equals(candidates.get(0)
                                                                                            .getNodeUuid())));
     // Progress after each batch carries the last processed PATH as checkpoint
-    // (the numeric scanned count is for progress display only)
+    // (the numeric scanned count is for progress display only) and the ETA
+    // computed by CleanupEtaUtil — asserted EXACTLY, not with anyLong(): here 2
+    // of 3 items are done, so the remaining one is estimated at half the elapsed
+    // time, i.e. 0 s for any run under 2 s. The arithmetic itself is pinned by
+    // CleanupEtaUtilTest; what this pins is that the value reaching the storage
+    // (and the push below) really is that computation's result
     verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
                                            eq(3L),
                                            eq(2L),
-                                           anyLong(),
+                                           eq(0L),
                                            eq("/Users/j___/john/Private/b.pdf"),
                                            eq(2L));
     verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
                                            eq(3L),
                                            eq(3L),
-                                           anyLong(),
+                                           eq(0L),
                                            eq("/Users/j___/john/Private/c.pdf"),
                                            eq(3L));
     // Once a root completes, the checkpoint advances to the NEXT root so a
     // crash between roots never re-iterates the completed one
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(3L), eq(3L), anyLong(), eq("/Groups/spaces"), eq(0L));
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(3L), eq(3L), anyLong(), eq("/Trash"), eq(0L));
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(3L), eq(3L), eq(0L), eq("/Groups/spaces"), eq(0L));
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(3L), eq(3L), eq(0L), eq("/Trash"), eq(0L));
     // Administrators are notified per batch with counters only
     ArgumentCaptor<CleanupWsMessage> messageCaptor = ArgumentCaptor.forClass(CleanupWsMessage.class);
     verify(webSocketService, org.mockito.Mockito.times(2)).sendToAdministrators(messageCaptor.capture());
+    assertEquals(List.of(2L, 3L),
+                 messageCaptor.getAllValues().stream().map(CleanupWsMessage::getProcessed).toList(),
+                 "One push per batch, carrying that batch's cumulated count");
     assertEquals(CleanupWsMessage.PROGRESS_EVENT, messageCaptor.getValue().getWsEventName());
     assertEquals(3L, messageCaptor.getValue().getTotal());
     assertEquals(3L, messageCaptor.getValue().getProcessed());
+    // The pushed ETA is the very same computed value as the persisted one
+    assertEquals(0L, messageCaptor.getValue().getEtaSeconds());
     // Terminal counters are frozen on the campaign before the final transition
     assertEquals(3, campaign.getTotalCount());
     assertEquals(3, campaign.getProcessedCount());
@@ -215,8 +241,9 @@ class CleanupScanServiceTest {
     }).when(cleanupJcrStorage).scanRoot(eq("/Trash"), isNull(), anyInt(), any(), any());
 
     scanService.startScan(CAMPAIGN_ID);
+    scanService.scan(CAMPAIGN_ID);
 
-    verify(campaignLifecycle, timeout(WORKER_WAIT)).transition(campaign, CleanupCampaignState.SIMULATED);
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
     // A campaign already DRY_RUN_RUNNING is resumed, not re-transitioned
     verify(campaignLifecycle, never()).transition(campaign, CleanupCampaignState.DRY_RUN_RUNNING);
     // The checkpoint path identifies the in-progress root: completed roots are
@@ -231,15 +258,17 @@ class CleanupScanServiceTest {
     // The following root starts from scratch
     verify(cleanupJcrStorage).scanRoot(eq("/Trash"), isNull(), eq(BATCH_SIZE), any(), any());
     // Progress counts include the skipped roots and the pre-resume scanned
-    // count in the numerator; the checkpoint carries the new last path
+    // count in the numerator; the checkpoint carries the new last path. The ETA
+    // is exact (see the count-first test): only 2 items were processed by THIS
+    // run, so the single remaining one is estimated at half the elapsed time
     verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
                                            eq(10L),
                                            eq(9L),
-                                           anyLong(),
+                                           eq(0L),
                                            eq("/Groups/spaces/marketing/Documents/d.pdf"),
                                            eq(4L));
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(10L), eq(9L), anyLong(), eq("/Trash"), eq(0L));
-    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(10L), eq(10L), anyLong(), eq("/Trash/x.pdf"), eq(1L));
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(10L), eq(9L), eq(0L), eq("/Trash"), eq(0L));
+    verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(10L), eq(10L), eq(0L), eq("/Trash/x.pdf"), eq(1L));
   }
 
   @Test
@@ -259,8 +288,9 @@ class CleanupScanServiceTest {
     }).when(cleanupJcrStorage).scanRoot(eq("/Groups/spaces"), isNull(), anyInt(), any(), any());
 
     scanService.startScan(CAMPAIGN_ID);
+    scanService.scan(CAMPAIGN_ID);
 
-    verify(campaignLifecycle, timeout(WORKER_WAIT)).transition(campaign, CleanupCampaignState.SIMULATED);
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
     verify(cleanupJcrStorage, never()).scanRoot(eq("/Users"), any(), anyInt(), any(), any());
     // No resume path, and the stale legacy offset is NEVER used to position:
     // the scanned-in-root count restarts from zero
@@ -268,7 +298,7 @@ class CleanupScanServiceTest {
     verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID),
                                            eq(9L),
                                            eq(7L),
-                                           anyLong(),
+                                           eq(0L),
                                            eq("/Groups/spaces/marketing/Documents/b.pdf"),
                                            eq(2L));
   }
@@ -294,11 +324,12 @@ class CleanupScanServiceTest {
     }).when(cleanupJcrStorage).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
 
     scanService.startScan(CAMPAIGN_ID);
+    scanService.scan(CAMPAIGN_ID);
 
-    verify(cleanupJcrStorage, timeout(WORKER_WAIT)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
+    verify(cleanupJcrStorage).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
     // The aborted batch is neither persisted nor checkpointed, and the
     // remaining roots are never scanned
-    verify(campaignStorage, after(200).never()).saveCandidates(anyLong(), anyList());
+    verify(campaignStorage, never()).saveCandidates(anyLong(), anyList());
     verify(campaignStorage, never()).updateProgress(anyLong(), anyLong(), anyLong(), anyLong(), anyString(), anyLong());
     verify(cleanupJcrStorage, never()).scanRoot(eq("/Groups/spaces"), any(), anyInt(), any(), any());
     verify(cleanupJcrStorage, never()).scanRoot(eq("/Trash"), any(), anyInt(), any(), any());
@@ -316,31 +347,54 @@ class CleanupScanServiceTest {
     }).when(cleanupJcrStorage).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
 
     scanService.startScan(CAMPAIGN_ID);
+    scanService.scan(CAMPAIGN_ID);
 
-    verify(cleanupJcrStorage, timeout(WORKER_WAIT)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
+    verify(cleanupJcrStorage).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
     // The worker swallows the failure: no terminal transition, state untouched
-    verify(campaignLifecycle, after(200).never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
     assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
     verify(campaignStorage, never()).updateProgress(anyLong(), anyLong(), anyLong(), anyLong(), anyString(), anyLong());
     assertTrue(campaign.getCheckpointOffset() == 0, "The persisted checkpoint stays untouched for the resume");
     // The running-campaign id was removed in the finally block even on fatal
-    // error — the property the watchdog resume depends on: a new startScan
-    // relaunches the worker instead of no-oping
-    scanService.startScan(CAMPAIGN_ID);
-    verify(cleanupJcrStorage, timeout(WORKER_WAIT).times(2)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
+    // error — the property the watchdog resume depends on: a relaunched worker
+    // runs the scan again instead of no-oping
+    scanService.scan(CAMPAIGN_ID);
+    verify(cleanupJcrStorage, org.mockito.Mockito.times(2)).scanRoot(eq("/Users"), isNull(), anyInt(), any(), any());
   }
 
   @Test
-  void scanIsNoOpWhileTheWorkerIsAlive() throws ReflectiveOperationException, ObjectNotFoundException {
+  void scanIsNoOpWhileTheWorkerIsAlive() throws ReflectiveOperationException {
     campaign.setState(CleanupCampaignState.DRY_RUN_RUNNING);
     runningCampaigns().add(CAMPAIGN_ID);
 
-    scanService.startScan(CAMPAIGN_ID);
+    scanService.scan(CAMPAIGN_ID);
 
     // The double-start guard makes the watchdog-triggered worker a no-op while
     // the campaign id is in the running set: the scan never even counts
-    verify(cleanupJcrStorage, after(500).never()).countFiles(anyString());
+    verify(cleanupJcrStorage, never()).countFiles(anyString());
     verify(campaignStorage, never()).updateProgress(anyLong(), anyLong(), anyLong(), anyLong(), anyString(), anyLong());
+  }
+
+  @Test
+  void startScanOnlyHandsTheWorkerToTheExecutorNeverRunsItInline() throws ObjectNotFoundException {
+    campaign.setState(CleanupCampaignState.DRY_RUN_RUNNING);
+
+    scanService.startScan(CAMPAIGN_ID);
+
+    // The endpoint answers 202 and follows up on CometD: the walk must NOT run
+    // on the caller's thread
+    verify(workerExecutor).execute(any());
+    verify(cleanupJcrStorage, never()).countFiles(anyString());
+  }
+
+  @Test
+  void theScheduledScanEntryPointRunsInAContainerTransaction() throws NoSuchMethodException {
+    // The tests drive scan() directly, so nothing else would notice the
+    // annotation disappearing from the method the executor actually schedules —
+    // and the candidate rows of a whole scan would stop sharing one transaction
+    assertNotNull(CleanupScanService.class.getMethod("scanTransactional", long.class)
+                                         .getAnnotation(ContainerTransactional.class),
+                  "scanTransactional must stay annotated @ContainerTransactional");
   }
 
   @SuppressWarnings("unchecked")

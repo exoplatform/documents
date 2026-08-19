@@ -26,7 +26,8 @@
       <template v-else-if="summary && summary.state === 'PUBLISHED'">
         <document-cleanup-review-summary-banner
           :summary="summary"
-          :review-closed="reviewClosed" />
+          :review-closed="reviewClosed"
+          :remaining-millis="remaining" />
         <document-cleanup-review-items-list
           :review-closed="reviewClosed"
           class="mt-4"
@@ -63,6 +64,14 @@ export default {
     return {
       summary: null,
       loading: true,
+      // Remaining review time as computed BY THE SERVER at the last refresh, plus
+      // the local instant it was received at. Only the DIFFERENCE of two local
+      // clock reads is ever used (see 'remaining'), so the browser clock only has
+      // to measure elapsed time — it is never compared to a server epoch. A
+      // skewed client can no longer close the review while the server would still
+      // accept a keep, nor keep offering actions the server already refuses.
+      remainingMillis: 0,
+      syncedAt: Date.now(),
       now: Date.now(),
       deadlineTimerId: null,
     };
@@ -71,8 +80,11 @@ export default {
     cleanupInProgress() {
       return ['LOCKED', 'EXECUTING'].includes(this.summary?.state);
     },
+    remaining() {
+      return Math.max(0, this.remainingMillis - (this.now - this.syncedAt));
+    },
     reviewClosed() {
-      return !!this.summary?.deadline && this.summary.deadline <= this.now;
+      return !!this.summary?.deadline && this.remaining <= 0;
     },
     deadlinePending() {
       return this.summary?.state === 'PUBLISHED' && !!this.summary?.deadline && !this.reviewClosed;
@@ -102,14 +114,22 @@ export default {
       this.refreshDeadlineTimer();
     },
     loadSummary() {
-      this.now = Date.now();
       return this.$cleanupService.getMySummary()
-        .then(summary => this.summary = summary)
-        .catch(() => this.summary = null)
+        .then(summary => this.applySummary(summary))
+        .catch(() => this.applySummary(null))
         .finally(() => {
           this.loading = false;
           this.refreshDeadlineTimer();
         });
+    },
+    // Re-syncs the countdown on EVERY refresh: the value received is the server's
+    // own remaining time, so the local drift accumulated since the previous
+    // refresh is discarded instead of compounding
+    applySummary(summary) {
+      this.summary = summary;
+      this.remainingMillis = summary?.remainingMillis || 0;
+      this.syncedAt = Date.now();
+      this.now = this.syncedAt;
     },
     refreshDeadlineTimer() {
       this.stopDeadlineTimer();

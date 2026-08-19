@@ -17,6 +17,20 @@
 -->
 <template>
   <div>
+    <!-- Own row ABOVE the selection/bulk bar, which is left untouched: searched
+         server-side (on the item path, so both the file name and its folders
+         match), never by filtering the page already loaded -->
+    <v-text-field
+      v-model="search"
+      :label="$t('cleanup.review.items.search')"
+      prepend-inner-icon="fas fa-search"
+      class="pa-0 mb-2"
+      style="max-width: 320px"
+      dense
+      outlined
+      hide-details
+      clearable
+      @input="onSearchTyped" />
     <div v-if="selectedItems.length && !reviewClosed" class="d-flex align-center mb-2">
       <span class="text-color">
         {{ $t('cleanup.review.items.selected', {0: selectedItems.length}) }}
@@ -50,6 +64,7 @@
       :no-data-text="$t('cleanup.review.items.empty')"
       :show-select="!reviewClosed"
       item-key="id"
+      must-sort
       @update:options="loadItems">
       <template slot="item.path" slot-scope="{item}">
         <div
@@ -63,7 +78,7 @@
         {{ $t(`cleanup.item.action.${item.action}`) }}
       </template>
       <template slot="item.fileSize" slot-scope="{item}">
-        {{ $cleanupUtils.formatBytes(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize) }}
+        {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize) }}
       </template>
       <template slot="item.state" slot-scope="{item}">
         <v-chip small outlined>
@@ -112,6 +127,15 @@
   </div>
 </template>
 <script>
+const SEARCH_DEBOUNCE_MS = 400;
+// Fallback label for a reason code carrying no i18n key of its own — e.g. the
+// class name applyToItems falls back to when an exception has no message.
+const UNKNOWN_REASON_KEY = 'cleanup.review.items.failureUnknown';
+// The item table has NO name column: the DTO's 'name' is the last segment of the
+// path, so the Name column is sorted (server-side) on the path.
+const SORT_FIELDS = {name: 'path'};
+const DEFAULT_SORT_FIELD = 'fileSize';
+
 export default {
   props: {
     reviewClosed: {
@@ -127,9 +151,15 @@ export default {
       loading: false,
       keepInProgress: false,
       unkeepInProgress: false,
+      search: null,
+      searchDebounce: null,
       options: {
         page: 1,
         itemsPerPage: 20,
+        // Biggest reclaimable files first: what a reviewer wants to decide on
+        // first. The server appends the stable 'path' tiebreaker.
+        sortBy: [DEFAULT_SORT_FIELD],
+        sortDesc: [true],
       },
       itemsPerPageOptions: [20, 50, 100],
     };
@@ -147,13 +177,17 @@ export default {
     selectedKeptIds() {
       return this.selectedItems.filter(item => item.state === 'EXEMPTED').map(item => item.id);
     },
+    // Server-sorted columns only (SORT_FIELDS maps 'name' onto the path). The
+    // planned-action and the row-actions columns stay unsortable. The size column
+    // orders on 'fileSize' — the reclaimable size shown for a PURGE_VERSIONS row
+    // is the versions size, but fileSize remains the meaningful ranking here
     headers() {
       return [
-        {text: this.$t('cleanup.review.items.name'), value: 'name', align: 'left', sortable: false},
-        {text: this.$t('cleanup.review.items.path'), value: 'path', align: 'left', sortable: false},
+        {text: this.$t('cleanup.review.items.name'), value: 'name', align: 'left'},
+        {text: this.$t('cleanup.review.items.path'), value: 'path', align: 'left'},
         {text: this.$t('cleanup.review.items.action'), value: 'action', align: 'center', sortable: false},
-        {text: this.$t('cleanup.review.items.size'), value: 'fileSize', align: 'center', sortable: false},
-        {text: this.$t('cleanup.review.items.state'), value: 'state', align: 'center', sortable: false},
+        {text: this.$t('cleanup.review.items.size'), value: 'fileSize', align: 'center'},
+        {text: this.$t('cleanup.review.items.state'), value: 'state', align: 'center'},
         {text: this.$t('cleanup.review.items.actions'), value: 'keep', align: 'center', sortable: false},
       ];
     },
@@ -168,12 +202,36 @@ export default {
   created() {
     this.loadItems();
   },
+  beforeDestroy() {
+    if (this.searchDebounce) {
+      window.clearTimeout(this.searchDebounce);
+    }
+  },
   methods: {
+    // Debounced so a typed term costs ONE query, not one per keystroke; a new
+    // term always restarts at page 1, otherwise the user could land on an empty
+    // page of a much shorter result set
+    onSearchTyped(text) {
+      this.search = text || null;
+      if (this.searchDebounce) {
+        window.clearTimeout(this.searchDebounce);
+      }
+      this.searchDebounce = window.setTimeout(() => {
+        this.options = {...this.options, page: 1};
+        this.loadItems();
+      }, SEARCH_DEBOUNCE_MS);
+    },
     loadItems() {
       this.loading = true;
       this.selectedItems = [];
-      const {page, itemsPerPage} = this.options;
-      return this.$cleanupService.getMyItems(page - 1, itemsPerPage)
+      const {page, itemsPerPage, sortBy, sortDesc} = this.options;
+      const sortField = SORT_FIELDS[sortBy[0]] || sortBy[0] || DEFAULT_SORT_FIELD;
+      return this.$cleanupService.getMyItems({
+        search: this.search,
+        page: page - 1,
+        size: itemsPerPage,
+        sort: `${sortField},${sortDesc[0] === false ? 'asc' : 'desc'}`,
+      })
         .then(data => {
           this.items = data?.items?.map(i => ({
             ...i,
@@ -191,7 +249,7 @@ export default {
       item.loading = true;
       return this.$cleanupService.keepItem(item.id)
         .then(() => this.keptDone(1))
-        .catch(() => this.displayAlert(this.$t('cleanup.review.items.keepError'), 'error'))
+        .catch(error => this.displayAlert(this.decisionError('keep', error), 'error'))
         .finally(() => item.loading = false);
     },
     keepSelected() {
@@ -212,7 +270,7 @@ export default {
       this[`${action}InProgress`] = true;
       return submit(itemIds)
         .then(result => this.bulkDone(result, action))
-        .catch(() => this.displayAlert(this.$t(`cleanup.review.items.${action}Error`), 'error'))
+        .catch(error => this.displayAlert(this.decisionError(action, error), 'error'))
         .finally(() => {
           decidedItems.forEach(item => item.loading = false);
           this[`${action}InProgress`] = false;
@@ -226,7 +284,7 @@ export default {
           this.$emit('kept');
           return this.loadItems();
         })
-        .catch(() => this.displayAlert(this.$t('cleanup.review.items.unkeepError'), 'error'))
+        .catch(error => this.displayAlert(this.decisionError('unkeep', error), 'error'))
         .finally(() => item.loading = false);
     },
     keptDone(count) {
@@ -238,18 +296,45 @@ export default {
     // are told apart: total failure (nothing decided), PARTIAL success (naming
     // both counts — '2 could not be kept' alone reads the same whether 8 or 0
     // succeeded), and full success. The list is refreshed either way.
+    //
+    // The per-item REASONS are reported too, grouped by code: the backend already
+    // answers localizable message codes (cleanup.notOwner, cleanup.reviewClosed,
+    // cleanup.itemNotCandidate...) and throwing them away left the user with a
+    // bare count and a 'please try again' that is wrong for all of them but one.
     bulkDone(result, action) {
       const succeeded = result?.succeeded || 0;
-      const failures = result?.failures?.length || 0;
-      if (failures && succeeded) {
-        this.displayAlert(this.$t(`cleanup.review.items.${action}Partial`, {0: succeeded, 1: failures}), 'warning');
-      } else if (failures) {
-        this.displayAlert(this.$t(`cleanup.review.items.${action}Failures`, {0: failures}), 'warning');
+      const failures = result?.failures || [];
+      if (failures.length) {
+        const headline = succeeded
+          ? this.$t(`cleanup.review.items.${action}Partial`, {0: succeeded, 1: failures.length})
+          : this.$t(`cleanup.review.items.${action}Failures`, {0: failures.length});
+        this.displayAlert(`${headline} ${this.failureDetail(failures)}`, 'warning');
       } else {
         this.displayAlert(this.$t(`cleanup.review.items.${action}Success`, {0: succeeded}));
       }
       this.$emit('kept');
       return this.loadItems();
+    },
+    // '3 × You are not allowed to decide for this file, 1 × The review period is
+    // over' — plus the retry hint ONLY when every reason is the transient one
+    failureDetail(failures) {
+      const detail = this.$cleanupUtils.groupFailuresByReason(failures)
+        .map(group => `${group.count} × ${this.reasonLabel(group.reason)}`)
+        .join(', ');
+      return this.$cleanupUtils.isRetryable(failures)
+        ? `${detail}. ${this.$t('cleanup.review.items.retryHint')}`
+        : `${detail}.`;
+    },
+    // A message code with no bundle entry must never be shown raw: an unknown
+    // code falls back to a generic sentence instead of leaking 'IllegalState...'
+    reasonLabel(reason) {
+      const label = reason && this.$t(reason);
+      return !label || label === reason ? this.$t(UNKNOWN_REASON_KEY) : label;
+    },
+    // Single-item endpoints answer the same message codes in the error body, so
+    // the very same localization applies there
+    decisionError(action, error) {
+      return `${this.$t(`cleanup.review.items.${action}Error`)} ${this.reasonLabel(error?.message?.trim())}`;
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {

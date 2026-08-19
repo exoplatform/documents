@@ -46,17 +46,17 @@
         <tr>
           <td>{{ $t('cleanup.admin.compare.new') }}</td>
           <td class="text-center">{{ comparison.newCount }}</td>
-          <td class="text-center">{{ $cleanupUtils.formatBytes(comparison.newBytes) }}</td>
+          <td class="text-center">{{ $cleanupSize(comparison.newBytes) }}</td>
         </tr>
         <tr>
           <td>{{ $t('cleanup.admin.compare.gone') }}</td>
           <td class="text-center">{{ comparison.goneCount }}</td>
-          <td class="text-center">{{ $cleanupUtils.formatBytes(comparison.goneBytes) }}</td>
+          <td class="text-center">{{ $cleanupSize(comparison.goneBytes) }}</td>
         </tr>
         <tr>
           <td>{{ $t('cleanup.admin.compare.persisting') }}</td>
           <td class="text-center">{{ comparison.persistingCount }}</td>
-          <td class="text-center">{{ $cleanupUtils.formatBytes(comparison.persistingBytes) }}</td>
+          <td class="text-center">{{ $cleanupSize(comparison.persistingBytes) }}</td>
         </tr>
       </tbody>
     </v-simple-table>

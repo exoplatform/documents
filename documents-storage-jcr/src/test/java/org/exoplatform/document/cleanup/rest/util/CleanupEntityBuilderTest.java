@@ -60,6 +60,8 @@ class CleanupEntityBuilderTest {
 
   private static final long OWNER_IDENTITY_ID = 55L;
 
+  private static final long ONE_HOUR_MILLIS   = 3600000L;
+
   @Mock
   private IdentityManager   identityManager;
 
@@ -124,6 +126,55 @@ class CleanupEntityBuilderTest {
     campaign.setItemsRetained(false);
     assertFalse(CleanupEntityBuilder.build(campaign).isArchiveAvailable(),
                 "No report without an archive nor retained items");
+  }
+
+  @Test
+  void executableIsComputedFromTheServerClockNeverLeftToTheClient() {
+    CleanupCampaign campaign = campaign();
+
+    // PUBLISHED with a deadline still in the future: the server would refuse the
+    // execution with cleanup.graceNotElapsed, so the UI must find executable=false
+    campaign.setState(CleanupCampaignState.PUBLISHED);
+    campaign.setLockDate(System.currentTimeMillis() + ONE_HOUR_MILLIS);
+    assertFalse(CleanupEntityBuilder.build(campaign).isExecutable(),
+                "The grace period is still running: Execute must be refused");
+
+    // PUBLISHED past its deadline: the locking cron may not have run yet, but the
+    // service DOES accept the execution (it locks the campaign itself)
+    campaign.setLockDate(System.currentTimeMillis() - ONE_HOUR_MILLIS);
+    assertTrue(CleanupEntityBuilder.build(campaign).isExecutable(),
+               "Past the grace deadline the execution is accepted, even while still PUBLISHED");
+
+    // LOCKED: executable whatever the deadline says
+    campaign.setState(CleanupCampaignState.LOCKED);
+    campaign.setLockDate(System.currentTimeMillis() + ONE_HOUR_MILLIS);
+    assertTrue(CleanupEntityBuilder.build(campaign).isExecutable(), "A LOCKED campaign is always executable");
+
+    // Anything before publication is never executable
+    campaign.setState(CleanupCampaignState.SIMULATED);
+    campaign.setLockDate(0);
+    assertFalse(CleanupEntityBuilder.build(campaign).isExecutable());
+    campaign.setState(CleanupCampaignState.COMPLETED);
+    campaign.setLockDate(System.currentTimeMillis() - ONE_HOUR_MILLIS);
+    assertFalse(CleanupEntityBuilder.build(campaign).isExecutable(), "A completed campaign is not executable anymore");
+  }
+
+  @Test
+  void remainingMillisIsAServerComputedDurationFlooredAtZero() {
+    CleanupCampaign campaign = campaign();
+
+    // A DURATION, so the client counts it down instead of comparing the deadline
+    // to its own clock
+    campaign.setLockDate(System.currentTimeMillis() + ONE_HOUR_MILLIS);
+    long remainingMillis = CleanupEntityBuilder.build(campaign).getRemainingMillis();
+    assertTrue(remainingMillis > ONE_HOUR_MILLIS - 5000 && remainingMillis <= ONE_HOUR_MILLIS,
+               "An hour of grace left must be reported as ~an hour, got " + remainingMillis);
+
+    // Elapsed, and never-set, both mean zero — never a negative countdown
+    campaign.setLockDate(System.currentTimeMillis() - ONE_HOUR_MILLIS);
+    assertEquals(0, CleanupEntityBuilder.build(campaign).getRemainingMillis());
+    campaign.setLockDate(0);
+    assertEquals(0, CleanupEntityBuilder.build(campaign).getRemainingMillis());
   }
 
   @Test
@@ -242,6 +293,8 @@ class CleanupEntityBuilderTest {
     assertEquals(3L, entity.getCampaignId());
     assertEquals(CleanupCampaignState.PUBLISHED.name(), entity.getState());
     assertEquals(7000L, entity.getDeadline());
+    // A deadline long past (epoch + 7 s) leaves no review time at all
+    assertEquals(0, entity.getRemainingMillis());
     assertEquals(4, entity.getCandidateCount());
     assertEquals(1, entity.getKeptCount());
     assertEquals(400, entity.getCandidateBytes());
@@ -257,10 +310,26 @@ class CleanupEntityBuilderTest {
 
     entity = CleanupEntityBuilder.build(summary);
     assertNull(entity.getDeadline(), "A zero deadline must map to null");
+    assertEquals(0, entity.getRemainingMillis(), "No deadline means no remaining review time");
     assertNotNull(entity.getOutcome());
     assertEquals(2, entity.getOutcome().getDeletedCount());
     assertEquals(300, entity.getOutcome().getFreedBytes());
     assertEquals(1, entity.getOutcome().getKeptCount());
+  }
+
+  @Test
+  void userSummaryCarriesTheServerComputedReviewTimeLeft() {
+    // The review window is the SERVER's: shipping it as a remaining duration is
+    // what stops a skewed browser from closing the review while the service would
+    // still accept a keep (or from offering actions it already refuses)
+    CleanupUserSummary summary = new CleanupUserSummary();
+    summary.setState(CleanupCampaignState.PUBLISHED);
+    summary.setDeadline(System.currentTimeMillis() + ONE_HOUR_MILLIS);
+
+    long remainingMillis = CleanupEntityBuilder.build(summary).getRemainingMillis();
+
+    assertTrue(remainingMillis > ONE_HOUR_MILLIS - 5000 && remainingMillis <= ONE_HOUR_MILLIS,
+               "An hour of review left must be reported as ~an hour, got " + remainingMillis);
   }
 
   @Test

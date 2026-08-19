@@ -572,6 +572,8 @@ public class CleanupCampaignService {
    * @param state optional item state filter
    * @param action optional action filter
    * @param minSize optional minimal content size filter
+   * @param search optional case-insensitive search on the item path (covers the
+   *          file name and its folders alike)
    * @param pageable page, size and sort
    * @return page of items
    * @throws ObjectNotFoundException when the campaign doesn't exist
@@ -581,9 +583,10 @@ public class CleanupCampaignService {
                                                     CleanupItemState state,
                                                     CleanupAction action,
                                                     Long minSize,
+                                                    String search,
                                                     Pageable pageable) throws ObjectNotFoundException {
     getCampaign(campaignId);
-    return campaignStorage.getItems(campaignId, ownerIdentityId, state, action, minSize, pageable);
+    return campaignStorage.getItems(campaignId, ownerIdentityId, state, action, minSize, search, pageable);
   }
 
   /**
@@ -618,20 +621,24 @@ public class CleanupCampaignService {
 
   /**
    * Items of the currently relevant campaign owned by the user (own files and
-   * files of spaces they manage), sorted by size descending.
+   * files of spaces they manage). The paging AND the ordering are the caller's
+   * (the REST layer validates the requested sort field against its allowlist and
+   * appends the stable tiebreaker), so this method never imposes an order of its
+   * own.
    *
    * @param username user
-   * @param page page index
-   * @param size page size
+   * @param search optional case-insensitive search on the item path (covers the
+   *          file name and its folders alike)
+   * @param pageable page, size and sort
    * @return page of items
    * @throws ObjectNotFoundException when no relevant campaign exists
    */
-  public Page<CleanupCampaignItem> getMyItems(String username, int page, int size) throws ObjectNotFoundException {
+  public Page<CleanupCampaignItem> getMyItems(String username,
+                                              String search,
+                                              Pageable pageable) throws ObjectNotFoundException {
     CleanupCampaign campaign = getUserVisibleCampaign();
     List<Long> ownerIdentityIds = getUserOwnedIdentityIds(username);
-    return campaignStorage.getItemsByOwners(campaign.getId(),
-                                            ownerIdentityIds,
-                                            PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "fileSize")));
+    return campaignStorage.getItemsByOwners(campaign.getId(), ownerIdentityIds, search, pageable);
   }
 
   /**

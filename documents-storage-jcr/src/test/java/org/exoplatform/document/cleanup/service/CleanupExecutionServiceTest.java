@@ -61,7 +61,20 @@ import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
+import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 
+import io.meeds.common.ContainerTransactional;
+
+/**
+ * Execution worker tests. Like the scan ones, they drive the worker body
+ * SYNCHRONOUSLY through {@link CleanupExecutionService#executeCampaign(long)},
+ * the service's real executor being replaced by a mock: going through the
+ * scheduled {@code executeCampaignTransactional} would run the
+ * {@code @ContainerTransactional} aspect and boot a real PortalContainer in a
+ * plain JUnit run. The transactional wrapper is covered by the two contract tests
+ * at the end instead — that it is what gets scheduled, and that it still carries
+ * the annotation.
+ */
 @ExtendWith(MockitoExtension.class)
 class CleanupExecutionServiceTest {
 
@@ -366,16 +379,68 @@ class CleanupExecutionServiceTest {
     assertEquals(CleanupItemState.PURGED, thirdItem.getState());
     assertEquals(CleanupItemState.PURGED, fourthItem.getState());
     // Progress is persisted AFTER EACH BATCH, cumulatively: a crash mid-run
-    // resumes from the last persisted count, never from zero
+    // resumes from the last persisted count, never from zero. The ETA is asserted
+    // EXACTLY, not with anyLong(): 2 of the 4 items are done after batch 1, so
+    // the remaining 2 are estimated at the elapsed time itself — 0 s for any run
+    // under a second (the arithmetic is pinned by CleanupEtaUtilTest)
     InOrder inOrder = inOrder(campaignStorage);
-    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(4L), eq(2L), anyLong(), isNull(), eq(0L));
-    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(4L), eq(4L), anyLong(), isNull(), eq(0L));
-    // One progress push per batch on the CometD channel
-    verify(webSocketService, org.mockito.Mockito.atLeast(2)).sendToAdministrators(any());
+    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(4L), eq(2L), eq(0L), isNull(), eq(0L));
+    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), eq(4L), eq(4L), eq(0L), isNull(), eq(0L));
+    // EXACTLY one progress push per batch on the CometD channel, plus the single
+    // stateChanged the real lifecycle emits on COMPLETED. atLeast(2) was
+    // unfalsifiable here: that stateChanged alone satisfied it, so moving the
+    // per-batch push out of the loop kept the assertion green
+    ArgumentCaptor<CleanupWsMessage> messageCaptor = ArgumentCaptor.forClass(CleanupWsMessage.class);
+    verify(webSocketService, org.mockito.Mockito.times(3)).sendToAdministrators(messageCaptor.capture());
+    List<CleanupWsMessage> progressMessages = messageCaptor.getAllValues()
+                                                           .stream()
+                                                           .filter(message -> CleanupWsMessage.PROGRESS_EVENT.equals(message.getWsEventName()))
+                                                           .toList();
+    assertEquals(2, progressMessages.size(), "One PROGRESS push per batch, no more, no less");
+    assertEquals(List.of(2L, 4L),
+                 progressMessages.stream().map(CleanupWsMessage::getProcessed).toList(),
+                 "Each push carries its own batch's cumulated count, in order");
+    assertEquals(List.of(4L, 4L), progressMessages.stream().map(CleanupWsMessage::getTotal).toList());
+    assertEquals(List.of(0L, 0L),
+                 progressMessages.stream().map(CleanupWsMessage::getEtaSeconds).toList(),
+                 "The pushed ETA is the same computed value as the persisted one");
+    assertEquals(CleanupWsMessage.STATE_CHANGED_EVENT,
+                 messageCaptor.getAllValues().get(2).getWsEventName(),
+                 "The terminal transition is the LAST push, after both batches");
     ArgumentCaptor<CleanupCampaign> captor = ArgumentCaptor.forClass(CleanupCampaign.class);
     verify(campaignStorage).saveCampaign(captor.capture());
     assertEquals(CleanupCampaignState.COMPLETED, captor.getValue().getState());
     assertEquals(4L, captor.getValue().getProcessedCount());
+  }
+
+  @Test
+  void bothStartAndResumeScheduleTheTransactionalWorkerEntryPoint() throws ObjectNotFoundException {
+    // The purge used to run OUTSIDE any container transaction while the scan ran
+    // inside one. Both launch paths must now go through the SAME transactional
+    // entry point — pinned by running the scheduled Runnable against a spy whose
+    // entry point is stubbed out (so the woven aspect never boots a container)
+    CleanupExecutionService spiedService = org.mockito.Mockito.spy(executionService);
+    org.mockito.Mockito.doNothing().when(spiedService).executeCampaignTransactional(anyLong());
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.LOCKED));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    spiedService.startExecution(CAMPAIGN_ID);
+    spiedService.resumeExecution(CAMPAIGN_ID);
+
+    ArgumentCaptor<Runnable> workerCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(workerExecutor, org.mockito.Mockito.times(2)).execute(workerCaptor.capture());
+    workerCaptor.getAllValues().forEach(Runnable::run);
+    verify(spiedService, org.mockito.Mockito.times(2)).executeCampaignTransactional(CAMPAIGN_ID);
+  }
+
+  @Test
+  void theScheduledExecutionEntryPointRunsInAContainerTransaction() throws NoSuchMethodException {
+    // The tests drive executeCampaign() directly, so nothing else would notice
+    // the annotation disappearing from the method the executor schedules — and
+    // the whole purge would go back to running outside any transaction
+    assertNotNull(CleanupExecutionService.class.getMethod("executeCampaignTransactional", long.class)
+                                              .getAnnotation(ContainerTransactional.class),
+                  "executeCampaignTransactional must stay annotated @ContainerTransactional");
   }
 
   private CleanupCampaignItem purgeableItem(long id, String nodeUuid) {

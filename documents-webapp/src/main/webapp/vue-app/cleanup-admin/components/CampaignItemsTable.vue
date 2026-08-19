@@ -53,6 +53,20 @@
         outlined
         hide-details
         @change="reload" />
+      <!-- Searched server-side (on the item path, which covers the file name and
+           its folders): filtering the current page client-side would silently
+           hide matches living on the other pages -->
+      <v-text-field
+        v-model="search"
+        :label="$t('cleanup.admin.items.filter.search')"
+        prepend-inner-icon="fas fa-search"
+        class="ms-2 pa-0"
+        style="max-width: 260px"
+        dense
+        outlined
+        hide-details
+        clearable
+        @input="onSearchTyped" />
     </div>
     <v-data-table
       :headers="headers"
@@ -85,13 +99,13 @@
         </v-chip>
       </template>
       <template slot="item.fileSize" slot-scope="{item}">
-        {{ $cleanupUtils.formatBytes(item.fileSize) }}
+        {{ $cleanupSize(item.fileSize) }}
       </template>
       <template slot="item.versionsSize" slot-scope="{item}">
-        {{ $cleanupUtils.formatBytes(item.versionsSize) }}
+        {{ $cleanupSize(item.versionsSize) }}
       </template>
       <template slot="item.reclaimedBytes" slot-scope="{item}">
-        {{ $cleanupUtils.formatBytes(item.reclaimedBytes) }}
+        {{ $cleanupSize(item.reclaimedBytes) }}
       </template>
     </v-data-table>
   </div>
@@ -100,6 +114,11 @@
 const MEGA_BYTE = 1048576;
 const ITEM_STATES = ['CANDIDATE', 'EXEMPTED', 'SPARED_BY_MODIFICATION', 'GONE', 'PURGED', 'SKIPPED'];
 const ITEM_ACTIONS = ['DELETE', 'PURGE_VERSIONS'];
+const SEARCH_DEBOUNCE_MS = 400;
+// The item table has NO name column: the DTO's 'name' is the last segment of the
+// path, so the Name column is sorted (server-side) on the path.
+const SORT_FIELDS = {name: 'path'};
+const DEFAULT_SORT_FIELD = 'fileSize';
 
 export default {
   props: {
@@ -116,10 +135,12 @@ export default {
       stateFilter: null,
       actionFilter: null,
       minSizeMb: null,
+      search: null,
+      searchDebounce: null,
       options: {
         page: 1,
         itemsPerPage: 20,
-        sortBy: ['fileSize'],
+        sortBy: [DEFAULT_SORT_FIELD],
         sortDesc: [true],
       },
       itemsPerPageOptions: [20, 50, 100],
@@ -127,15 +148,18 @@ export default {
   },
   computed: {
     headers() {
+      // Only the columns the server can order on are sortable (SORT_FIELDS maps
+      // 'name' onto the path); 'ownerFullName' is resolved after the query, so it
+      // stays unsortable
       return [
-        {text: this.$t('cleanup.admin.items.name'), value: 'name', align: 'left', sortable: false},
-        {text: this.$t('cleanup.admin.items.path'), value: 'path', align: 'left', sortable: false},
+        {text: this.$t('cleanup.admin.items.name'), value: 'name', align: 'left'},
+        {text: this.$t('cleanup.admin.items.path'), value: 'path', align: 'left'},
         {text: this.$t('cleanup.admin.items.owner'), value: 'ownerFullName', align: 'center', sortable: false},
-        {text: this.$t('cleanup.admin.items.action'), value: 'action', align: 'center', sortable: false},
-        {text: this.$t('cleanup.admin.items.state'), value: 'state', align: 'center', sortable: false},
+        {text: this.$t('cleanup.admin.items.action'), value: 'action', align: 'center'},
+        {text: this.$t('cleanup.admin.items.state'), value: 'state', align: 'center'},
         {text: this.$t('cleanup.admin.items.fileSize'), value: 'fileSize', align: 'center'},
-        {text: this.$t('cleanup.admin.items.versionsSize'), value: 'versionsSize', align: 'center', sortable: false},
-        {text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center', sortable: false},
+        {text: this.$t('cleanup.admin.items.versionsSize'), value: 'versionsSize', align: 'center'},
+        {text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center'},
       ];
     },
     stateFilterItems() {
@@ -161,6 +185,9 @@ export default {
     this.loadItems();
   },
   beforeDestroy() {
+    if (this.searchDebounce) {
+      window.clearTimeout(this.searchDebounce);
+    }
     document.removeEventListener('click', this.closeMenus);
   },
   methods: {
@@ -168,16 +195,28 @@ export default {
       this.options = {...this.options, page: 1};
       this.loadItems();
     },
+    // Debounced so a typed term costs ONE query, not one per keystroke; a new
+    // term always restarts at page 1, otherwise the user could land on an empty
+    // page of a much shorter result set
+    onSearchTyped(text) {
+      this.search = text || null;
+      if (this.searchDebounce) {
+        window.clearTimeout(this.searchDebounce);
+      }
+      this.searchDebounce = window.setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
+    },
     loadItems() {
       this.loading = true;
       const {page, itemsPerPage, sortBy, sortDesc} = this.options;
+      const sortField = SORT_FIELDS[sortBy[0]] || sortBy[0] || DEFAULT_SORT_FIELD;
       return this.$cleanupService.getCampaignItems(this.campaignId, {
         state: this.stateFilter,
         action: this.actionFilter,
         minSize: this.minSizeMb != null && this.minSizeMb !== '' ? Math.round(this.minSizeMb * MEGA_BYTE) : null,
+        search: this.search,
         page: page - 1,
         size: itemsPerPage,
-        sort: `${sortBy[0] || 'fileSize'},${sortDesc[0] === false ? 'asc' : 'desc'}`,
+        sort: `${sortField},${sortDesc[0] === false ? 'asc' : 'desc'}`,
       }).then(data => {
         this.items = data?.items || [];
         this.totalItems = data?.totalItems || 0;

@@ -19,6 +19,7 @@ package org.exoplatform.document.cleanup.rest.util;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 
+import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
@@ -70,7 +71,23 @@ public class CleanupEntityBuilder {
     // A report is downloadable while the item rows are retained (CSV built
     // live) or once archived to the FileService (CSV served from the archive)
     entity.setArchiveAvailable(campaign.getArchiveFileId() != null || campaign.isItemsRetained());
+    // The Execute gate and the grace countdown are computed HERE, against the
+    // server clock, and shipped as a boolean + a duration: the client never
+    // compares a server epoch to its own (possibly skewed) clock
+    long now = System.currentTimeMillis();
+    boolean graceElapsed = campaign.getLockDate() > 0 && campaign.getLockDate() <= now;
+    entity.setExecutable(campaign.getState() == CleanupCampaignState.LOCKED
+                         || (campaign.getState() == CleanupCampaignState.PUBLISHED && graceElapsed));
+    entity.setRemainingMillis(remainingMillis(campaign.getLockDate(), now));
     return entity;
+  }
+
+  /**
+   * Milliseconds left before an epoch-millis deadline, floored at 0 — which also
+   * covers 'no deadline set yet' (a campaign before publication).
+   */
+  private static long remainingMillis(long deadline, long now) {
+    return deadline > now ? deadline - now : 0;
   }
 
   public static CampaignItemRestEntity build(CleanupCampaignItem item, IdentityManager identityManager) {
@@ -133,6 +150,10 @@ public class CleanupEntityBuilder {
     entity.setCampaignId(summary.getCampaignId());
     entity.setState(summary.getState().name());
     entity.setDeadline(toNullable(summary.getDeadline()));
+    // Same server-clock discipline as the campaign DTO: the review window is
+    // shipped as a remaining DURATION the UI counts down, never as an instant
+    // the browser has to compare to its own clock
+    entity.setRemainingMillis(remainingMillis(summary.getDeadline(), System.currentTimeMillis()));
     entity.setCandidateCount(summary.getCandidateCount());
     entity.setKeptCount(summary.getKeptCount());
     entity.setCandidateBytes(summary.getCandidateBytes());

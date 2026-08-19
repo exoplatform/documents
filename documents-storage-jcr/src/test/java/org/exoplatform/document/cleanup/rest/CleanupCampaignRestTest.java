@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -82,6 +81,13 @@ class CleanupCampaignRestTest {
   private static final String    BAD_REQUEST_CODE = "cleanup.invalidState";
 
   private static final long      CAMPAIGN_ID      = 12L;
+
+  /**
+   * The ordering BOTH item tables must end up with by default: the size-first
+   * business ordering, made total by the unique 'path' tiebreaker.
+   */
+  private static final Sort      FILE_SIZE_DESC_THEN_PATH = Sort.by(Sort.Direction.DESC, "fileSize")
+                                                                .and(Sort.by(Sort.Direction.ASC, "path"));
 
   @Mock
   private CleanupCampaignService campaignService;
@@ -224,6 +230,7 @@ class CleanupCampaignRestTest {
                                           eq(CleanupItemState.CANDIDATE),
                                           eq(CleanupAction.DELETE),
                                           eq(1024L),
+                                          eq("report"),
                                           any())).thenReturn(new PageImpl<>(List.of(item(3))));
 
     PagedResult<CampaignItemRestEntity> result = campaignRest.getCampaignItems(CAMPAIGN_ID,
@@ -231,6 +238,7 @@ class CleanupCampaignRestTest {
                                                                                "candidate",
                                                                                "delete",
                                                                                1024L,
+                                                                               "report",
                                                                                2,
                                                                                5,
                                                                                "path,asc");
@@ -243,16 +251,18 @@ class CleanupCampaignRestTest {
                                              eq(CleanupItemState.CANDIDATE),
                                              eq(CleanupAction.DELETE),
                                              eq(1024L),
+                                             eq("report"),
                                              pageableCaptor.capture());
     Pageable pageable = pageableCaptor.getValue();
+    // 'path' is already unique per campaign: no tiebreaker is piled on top of it
     assertEquals(PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "path")), pageable);
   }
 
   @Test
-  void getCampaignItemsDefaultsToFileSizeDescendingSort() throws ObjectNotFoundException {
-    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+  void getCampaignItemsDefaultsToFileSizeDescendingSortWithPathTiebreaker() throws ObjectNotFoundException {
+    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
-    campaignRest.getCampaignItems(CAMPAIGN_ID, null, null, null, null, 0, 20, null);
+    campaignRest.getCampaignItems(CAMPAIGN_ID, null, null, null, null, null, 0, 20, null);
 
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     verify(campaignService).getCampaignItems(eq(CAMPAIGN_ID),
@@ -260,8 +270,21 @@ class CleanupCampaignRestTest {
                                              eq((CleanupItemState) null),
                                              eq((CleanupAction) null),
                                              eq((Long) null),
+                                             eq((String) null),
                                              pageableCaptor.capture());
-    assertEquals(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "fileSize")), pageableCaptor.getValue());
+    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_PATH), pageableCaptor.getValue());
+  }
+
+  @Test
+  void getCampaignItemsAppendsThePathTiebreakerToANonUniqueRequestedSort() throws ObjectNotFoundException {
+    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    campaignRest.getCampaignItems(CAMPAIGN_ID, null, null, null, null, null, 0, 20, "fileSize,desc");
+
+    // fileSize is NOT unique: without the appended 'path ASC' an offset-paged
+    // query over a block of equal sizes could repeat a row on one page and skip
+    // another one entirely
+    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_PATH), captureItemsPageable());
   }
 
   @Test
@@ -269,6 +292,7 @@ class CleanupCampaignRestTest {
     ResponseStatusException exception =
                                       assertThrows(ResponseStatusException.class,
                                                    () -> campaignRest.getCampaignItems(CAMPAIGN_ID,
+                                                                                       null,
                                                                                        null,
                                                                                        null,
                                                                                        null,
@@ -288,6 +312,7 @@ class CleanupCampaignRestTest {
                                                                                          "notAState",
                                                                                          null,
                                                                                          null,
+                                                                                         null,
                                                                                          0,
                                                                                          20,
                                                                                          null));
@@ -297,11 +322,12 @@ class CleanupCampaignRestTest {
 
   @Test
   void getCampaignItemsMapsNotFoundTo404() throws ObjectNotFoundException {
-    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any()))
-                                                                                        .thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any()))
+                                                                                               .thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
 
     ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                                                      () -> campaignRest.getCampaignItems(CAMPAIGN_ID,
+                                                                                         null,
                                                                                          null,
                                                                                          null,
                                                                                          null,
@@ -385,24 +411,60 @@ class CleanupCampaignRestTest {
   }
 
   @Test
-  void getMyItemsPassesRemoteUserAndPaging() throws ObjectNotFoundException {
+  void getMyItemsPassesRemoteUserSearchAndPageable() throws ObjectNotFoundException {
     when(request.getRemoteUser()).thenReturn("john");
-    when(campaignService.getMyItems("john", 1, 10)).thenReturn(new PageImpl<>(List.of(item(5))));
+    when(campaignService.getMyItems(eq("john"), eq("invoice"), any())).thenReturn(new PageImpl<>(List.of(item(5))));
 
-    PagedResult<CampaignItemRestEntity> result = campaignRest.getMyItems(request, 1, 10);
+    PagedResult<CampaignItemRestEntity> result = campaignRest.getMyItems(request, "invoice", 1, 10, "fileSize,desc");
 
     assertEquals(1, result.getItems().size());
     assertEquals(5, result.getItems().get(0).getId());
-    verify(campaignService).getMyItems("john", 1, 10);
+    // The USER endpoint builds the Pageable exactly like the admin one, stable
+    // tiebreaker included — the service must not order on its own anymore
+    assertEquals(PageRequest.of(1, 10, FILE_SIZE_DESC_THEN_PATH), captureMyItemsPageable());
+  }
+
+  @Test
+  void getMyItemsDefaultsToFileSizeDescendingSortWithPathTiebreaker() throws ObjectNotFoundException {
+    when(request.getRemoteUser()).thenReturn("john");
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    campaignRest.getMyItems(request, null, 0, 20, null);
+
+    verify(campaignService).getMyItems(eq("john"), eq((String) null), any());
+    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_PATH), captureMyItemsPageable());
+  }
+
+  @Test
+  void getMyItemsHonoursARequestedUniqueSortWithoutPilingUpATiebreaker() throws ObjectNotFoundException {
+    when(request.getRemoteUser()).thenReturn("john");
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    campaignRest.getMyItems(request, null, 0, 20, "path,asc");
+
+    assertEquals(PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "path")), captureMyItemsPageable());
+  }
+
+  @Test
+  void getMyItemsRejectsUnknownSortField() {
+    // Same allowlist and same 400 message code as the admin endpoint
+    ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                     () -> campaignRest.getMyItems(request,
+                                                                                   null,
+                                                                                   0,
+                                                                                   20,
+                                                                                   "ownerFullName,asc"));
+    assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    assertEquals("cleanup.invalidSortField", exception.getReason());
   }
 
   @Test
   void getMyItemsMapsNotFoundTo404() throws ObjectNotFoundException {
     when(request.getRemoteUser()).thenReturn("john");
-    when(campaignService.getMyItems(eq("john"), anyInt(), anyInt())).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
 
     ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                                                     () -> campaignRest.getMyItems(request, 0, 20));
+                                                     () -> campaignRest.getMyItems(request, null, 0, 20, null));
     assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
     assertEquals(NOT_FOUND_CODE, exception.getReason());
   }
@@ -422,6 +484,18 @@ class CleanupCampaignRestTest {
     when(campaignService.getMyItemsSummary("mary")).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> campaignRest.getMyItemsSummary(request)).getStatusCode());
+  }
+
+  private Pageable captureItemsPageable() throws ObjectNotFoundException {
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(campaignService).getCampaignItems(anyLong(), any(), any(), any(), any(), any(), pageableCaptor.capture());
+    return pageableCaptor.getValue();
+  }
+
+  private Pageable captureMyItemsPageable() throws ObjectNotFoundException {
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(campaignService).getMyItems(any(), any(), pageableCaptor.capture());
+    return pageableCaptor.getValue();
   }
 
   private CleanupCampaign campaign(long id, String name) {

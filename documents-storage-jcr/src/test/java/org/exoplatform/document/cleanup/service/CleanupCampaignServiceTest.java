@@ -55,6 +55,9 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
@@ -109,6 +112,19 @@ class CleanupCampaignServiceTest {
   private static final String      USERNAME                    = "john";
 
   private static final String      SPACE_NAME                  = "marketing";
+
+  /**
+   * The states {@code CleanupCampaignService.getUserVisibleCampaign} looks up
+   * FIRST, mirroring the service's own private ACTIVE_STATES. Stubbing this exact
+   * list — instead of anyList() — is what keeps the COMPLETED fallback query
+   * distinguishable in the tests below.
+   */
+  private static final List<CleanupCampaignState> ACTIVE_STATES =
+                                                               List.of(CleanupCampaignState.PUBLISHED,
+                                                                       CleanupCampaignState.LOCKED,
+                                                                       CleanupCampaignState.EXECUTING);
+
+  private static final List<CleanupCampaignState> COMPLETED_STATES = List.of(CleanupCampaignState.COMPLETED);
 
   @Mock
   private CleanupCampaignStorage   campaignStorage;
@@ -1406,10 +1422,10 @@ class CleanupCampaignServiceTest {
     // the spaces past the cap — silently, with no error anywhere
     mockPublishedCampaignForUserReview();
     ListAccess<Space> managerSpaces = mockManagedSpaces(250);
-    when(campaignStorage.getItemsByOwners(eq(CAMPAIGN_ID), anyList(), any()))
-                                                                            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item(CleanupItemState.CANDIDATE))));
+    when(campaignStorage.getItemsByOwners(eq(CAMPAIGN_ID), anyList(), any(), any()))
+                                                                                   .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item(CleanupItemState.CANDIDATE))));
 
-    Page<CleanupCampaignItem> page = campaignService.getMyItems(USERNAME, 0, 20);
+    Page<CleanupCampaignItem> page = campaignService.getMyItems(USERNAME, null, PageRequest.of(0, 20));
 
     assertEquals(1, page.getContent().size());
     // 250 spaces, 100 per page: three loads, the last one asking for the
@@ -1425,6 +1441,106 @@ class CleanupCampaignServiceTest {
                  "The user's own identity plus EVERY managed space identity, none truncated at the page size");
     assertTrue(ownerIdentityIds.contains(5L), "The user's own identity must be resolved");
     assertTrue(ownerIdentityIds.contains(1249L), "A space beyond the first page must be resolved too");
+  }
+
+  @Test
+  void shouldHandTheWholeOwnerListToTheStorageEvenBeyondTheInClauseCap() throws Exception {
+    // The service must NEVER trim the resolved owner list to fit a database's IN
+    // limit — trimming would silently hide the candidates of the spaces past the
+    // cut. Chunking is the Storage layer's job (CleanupCampaignStorageTest pins
+    // the per-chunk queries and the merge)
+    mockPublishedCampaignForUserReview();
+    mockManagedSpaces(1000);
+    when(campaignStorage.getItemsByOwners(eq(CAMPAIGN_ID), anyList(), any(), any()))
+                                                                                   .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item(CleanupItemState.CANDIDATE))));
+
+    campaignService.getMyItems(USERNAME, null, PageRequest.of(0, 20));
+
+    assertEquals(1001, captureMyItemsOwnerIds().size(), "The user's own identity plus the 1000 managed spaces, untrimmed");
+  }
+
+  @Test
+  void shouldServeTheLatestCompletedCampaignWhenNoneIsActive() throws Exception {
+    // No active campaign: the user still gets their outcome, from the MOST
+    // RECENTLY completed campaign — the older one must never win (a reversed
+    // comparator picks id 71 here)
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    when(campaignStorage.getCampaignsByStates(COMPLETED_STATES)).thenReturn(List.of(terminalCampaign(71L, 1_000L),
+                                                                                   terminalCampaign(72L, 5_000L)));
+    when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(userIdentity("5", USERNAME));
+    mockNoManagedSpaces();
+
+    CleanupUserSummary summary = campaignService.getMyItemsSummary(USERNAME);
+
+    assertEquals(72L, summary.getCampaignId(), "The campaign completed LAST is the relevant one");
+    assertEquals(CleanupCampaignState.COMPLETED, summary.getState());
+    assertNotNull(summary.getOutcome(), "A completed campaign carries the user's personal outcome");
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenNoCampaignIsRelevantForTheUser() {
+    // Neither active nor ever completed: the review endpoints must answer 404
+    // with a localizable code, not an empty page pretending nothing is scheduled
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    when(campaignStorage.getCampaignsByStates(COMPLETED_STATES)).thenReturn(List.of());
+
+    ObjectNotFoundException exception = assertThrows(ObjectNotFoundException.class,
+                                                     () -> campaignService.getMyItemsSummary(USERNAME));
+
+    assertEquals("cleanup.noRelevantCampaign", exception.getMessage());
+    // The owner identities are never even resolved: the campaign lookup fails first
+    verify(campaignStorage, never()).countItemsByOwnersAndState(anyLong(), anyList(), any());
+  }
+
+  @Test
+  void shouldHandTheCallersPageableAndSearchStraightToTheStorageForMyItems() throws Exception {
+    // The review table is server-sorted: the ordering is the REST layer's
+    // (validated field + stable tiebreaker), so the service must forward the
+    // Pageable UNTOUCHED instead of imposing a fileSize DESC of its own
+    mockPublishedCampaignForUserReview();
+    mockManagedSpaces(1);
+    Pageable pageable = PageRequest.of(3, 50, Sort.by(Sort.Direction.ASC, "state").and(Sort.by(Sort.Direction.ASC, "path")));
+    when(campaignStorage.getItemsByOwners(eq(CAMPAIGN_ID), anyList(), eq("invoice"), eq(pageable)))
+                                                                                                  .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item(CleanupItemState.CANDIDATE))));
+
+    Page<CleanupCampaignItem> page = campaignService.getMyItems(USERNAME, "invoice", pageable);
+
+    assertEquals(1, page.getContent().size());
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(campaignStorage).getItemsByOwners(eq(CAMPAIGN_ID), anyList(), eq("invoice"), pageableCaptor.capture());
+    assertEquals(pageable, pageableCaptor.getValue());
+  }
+
+  @Test
+  void shouldForwardTheSearchTermToTheStorageForCampaignItems() throws Exception {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+    Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "fileSize"));
+    when(campaignStorage.getItems(eq(CAMPAIGN_ID),
+                                  eq((Long) null),
+                                  eq(CleanupItemState.CANDIDATE),
+                                  eq((CleanupAction) null),
+                                  eq((Long) null),
+                                  eq("q1"),
+                                  eq(pageable))).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item(CleanupItemState.CANDIDATE))));
+
+    Page<CleanupCampaignItem> page = campaignService.getCampaignItems(CAMPAIGN_ID,
+                                                                     null,
+                                                                     CleanupItemState.CANDIDATE,
+                                                                     null,
+                                                                     null,
+                                                                     "q1",
+                                                                     pageable);
+
+    assertEquals(1, page.getContent().size());
+    // The search composes with the other filters, all of them reaching the
+    // single storage query
+    verify(campaignStorage).getItems(eq(CAMPAIGN_ID),
+                                     eq((Long) null),
+                                     eq(CleanupItemState.CANDIDATE),
+                                     eq((CleanupAction) null),
+                                     eq((Long) null),
+                                     eq("q1"),
+                                     eq(pageable));
   }
 
   @Test
@@ -1527,8 +1643,15 @@ class CleanupCampaignServiceTest {
     return outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
   }
 
+  /**
+   * Stubs the ACTIVE-states query EXACTLY, never anyList(): a lenient anyList()
+   * matched the COMPLETED query too, so the latest-completed fallback and the
+   * 404 branch of getUserVisibleCampaign were unreachable from every user-review
+   * test — and this stubbing also pins that the active campaign is looked up
+   * FIRST, by the active states.
+   */
   private void mockPublishedCampaignForUserReview() {
-    when(campaignStorage.getCampaignsByStates(anyList())).thenReturn(List.of(campaign(CleanupCampaignState.PUBLISHED)));
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of(campaign(CleanupCampaignState.PUBLISHED)));
     when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(userIdentity("5", USERNAME));
   }
 
@@ -1567,10 +1690,18 @@ class CleanupCampaignServiceTest {
     return managerSpaces;
   }
 
+  /** A user managing no space at all: only their own identity is resolved. */
+  @SuppressWarnings("unchecked")
+  private void mockNoManagedSpaces() throws Exception {
+    ListAccess<Space> managerSpaces = org.mockito.Mockito.mock(ListAccess.class);
+    when(spaceService.getManagerSpaces(USERNAME)).thenReturn(managerSpaces);
+    when(managerSpaces.getSize()).thenReturn(0);
+  }
+
   @SuppressWarnings("unchecked")
   private List<Long> captureMyItemsOwnerIds() {
     ArgumentCaptor<List<Long>> ownersCaptor = ArgumentCaptor.forClass(List.class);
-    verify(campaignStorage).getItemsByOwners(eq(CAMPAIGN_ID), ownersCaptor.capture(), any());
+    verify(campaignStorage).getItemsByOwners(eq(CAMPAIGN_ID), ownersCaptor.capture(), any(), any());
     return ownersCaptor.getValue();
   }
 

@@ -25,7 +25,7 @@
         <div class="text-light-color caption">{{ $t('cleanup.review.outcome.deleted') }}</div>
       </div>
       <div class="mx-6 text-center">
-        <div class="text-color font-weight-bold">{{ $cleanupUtils.formatBytes(outcome.freedBytes) }}</div>
+        <div class="text-color font-weight-bold">{{ $cleanupSize(outcome.freedBytes) }}</div>
         <div class="text-light-color caption">{{ $t('cleanup.review.outcome.freed') }}</div>
       </div>
       <div class="mx-6 text-center">

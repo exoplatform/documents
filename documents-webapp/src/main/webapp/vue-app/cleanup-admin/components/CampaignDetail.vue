@@ -34,7 +34,7 @@
         {{ $t('cleanup.admin.campaign.publish') }}
       </v-btn>
       <v-tooltip
-        v-if="executable"
+        v-if="executeOffered"
         :disabled="executeEnabled"
         bottom>
         <template #activator="{ on, attrs }">
@@ -68,8 +68,23 @@
     <div class="text-light-color caption mt-2">
       {{ paramsSummary }}
     </div>
-    <div class="text-light-color caption">
-      {{ datesSummary }}
+    <!-- Each milestone date goes through the platform's shared <date-format>
+         rather than a locally formatted string, so the row is built in the
+         template instead of a joined computed -->
+    <div class="text-light-color caption d-flex flex-wrap align-center">
+      <div
+        v-for="(field, index) in dateFields"
+        :key="field"
+        class="d-flex align-center">
+        <span v-if="index" class="mx-1">|</span>
+        <span>{{ $t(`cleanup.admin.campaign.${field}`) }}:</span>
+        <date-format
+          v-if="campaign[field]"
+          :value="campaign[field]"
+          :format="$cleanupUtils.DATE_TIME_FORMAT"
+          class="ms-1" />
+        <span v-else class="ms-1">-</span>
+      </div>
     </div>
     <document-cleanup-campaign-stats :campaign="campaign" />
     <document-cleanup-campaign-compare-view
@@ -86,6 +101,7 @@
 // path: it also re-evaluates 'now' so the Execute gate and the remaining-time
 // tooltip keep ticking instead of freezing on the value captured at load.
 const REFRESH_PERIOD_MS = 30000;
+const DATE_FIELDS = ['startedDate', 'publishedDate', 'lockDate', 'completedDate'];
 
 export default {
   props: {
@@ -102,54 +118,61 @@ export default {
     return {
       campaign: null,
       actionInProgress: false,
+      // Grace time left as computed BY THE SERVER at the last load, plus the local
+      // instant it was received at. Only the DIFFERENCE of two local clock reads
+      // is ever used (see 'remaining'), never a comparison against a server
+      // epoch: a client running a few minutes ahead used to enable Execute early
+      // and get a 400 'cleanup.graceNotElapsed' back
+      remainingMillis: 0,
+      syncedAt: Date.now(),
       now: Date.now(),
       refreshTimerId: null,
     };
   },
   computed: {
+    dateFields() {
+      return DATE_FIELDS;
+    },
     cancelable() {
       return this.campaign && !['COMPLETED', 'CANCELLED'].includes(this.campaign.state);
     },
-    executable() {
+    // Whether the Execute button is SHOWN at all (a state matter), as opposed to
+    // executeEnabled, which is whether the server would accept it right now
+    executeOffered() {
       return ['PUBLISHED', 'LOCKED'].includes(this.campaign?.state);
     },
     running() {
       return ['DRY_RUN_RUNNING', 'EXECUTING'].includes(this.campaign?.state);
     },
+    remaining() {
+      return Math.max(0, this.remainingMillis - (this.now - this.syncedAt));
+    },
     // A campaign cancelled mid-grace keeps its future lockDate: without the
     // terminal-state guard the grace would stay 'pending' and the fallback timer
     // would keep ticking for weeks on a campaign nothing can happen to anymore
     gracePending() {
-      return !['COMPLETED', 'CANCELLED'].includes(this.campaign?.state)
-        && !!this.graceDeadline && this.graceDeadline > this.now;
+      return !['COMPLETED', 'CANCELLED'].includes(this.campaign?.state) && this.remaining > 0;
     },
     // Ticking is only needed while progress can move or a deadline can elapse
     refreshNeeded() {
       return this.running || this.gracePending;
     },
-    graceDeadline() {
-      return this.campaign?.lockDate
-        || (this.campaign?.publishedDate && (this.campaign.publishedDate + (this.campaign.graceDays || 0) * 86400000)) || 0;
-    },
+    // The server's own verdict, then the locally counted-down remainder so the
+    // button unlocks without waiting for the next refresh — no clock comparison
     executeEnabled() {
-      return this.campaign?.state === 'LOCKED' || (!!this.graceDeadline && this.graceDeadline <= this.now);
+      return !!this.campaign?.executable || (this.executeOffered && this.remaining <= 0);
     },
     remainingTime() {
-      return this.$cleanupUtils.formatRemaining(this.graceDeadline, this.now);
+      return this.$cleanupUtils.formatDuration(this.remaining);
     },
     paramsSummary() {
       return this.$t('cleanup.admin.campaign.paramsSummary', {
         0: this.campaign.periodMonths,
-        1: this.$cleanupUtils.formatBytes(this.campaign.minFileSizeBytes),
+        1: this.$cleanupSize(this.campaign.minFileSizeBytes),
         2: this.campaign.graceDays,
         3: this.campaign.maxVersionsPerFile,
         4: this.campaign.excludedPaths?.length || 0,
       });
-    },
-    datesSummary() {
-      return ['startedDate', 'publishedDate', 'lockDate', 'completedDate']
-        .map(field => `${this.$t(`cleanup.admin.campaign.${field}`)}: ${this.$cleanupUtils.formatDateTime(this.campaign[field]) || '-'}`)
-        .join(' | ');
     },
   },
   watch: {
@@ -174,11 +197,18 @@ export default {
   },
   methods: {
     loadCampaign() {
-      this.now = Date.now();
       return this.$cleanupService.getCampaign(this.campaignId)
-        .then(campaign => this.campaign = campaign)
+        .then(campaign => this.applyCampaign(campaign))
         .catch(() => this.displayAlert(this.$t('cleanup.admin.campaigns.loadError'), 'error'))
         .finally(() => this.refreshTimer());
+    },
+    // Re-syncs the countdown on EVERY load, so the local drift accumulated since
+    // the previous one is discarded instead of compounding
+    applyCampaign(campaign) {
+      this.campaign = campaign;
+      this.remainingMillis = campaign?.remainingMillis || 0;
+      this.syncedAt = Date.now();
+      this.now = this.syncedAt;
     },
     // Coming back to the tab must tick IMMEDIATELY, not only re-arm the timer:
     // no refresh happened while the tab was hidden, so the countdown — and the
@@ -244,8 +274,16 @@ export default {
           return this.loadCampaign();
         })
         .then(() => this.$emit('refresh'))
-        .catch(error => this.displayAlert(this.$t(`cleanup.admin.campaign.${action}Error`, {0: error?.message || ''}), 'error'))
+        .catch(error => this.displayAlert(this.$t(`cleanup.admin.campaign.${action}Error`, {0: this.errorLabel(error)}), 'error'))
         .finally(() => this.actionInProgress = false);
+    },
+    // The REST layer answers a MESSAGE CODE as the error body (cleanup.
+    // graceNotElapsed, cleanup.campaignAlreadyActive...): localize it instead of
+    // dropping the raw Spring body in the toast, and never show an unknown code
+    errorLabel(error) {
+      const code = error?.message?.trim();
+      const label = code && this.$t(code);
+      return !label || label === code ? this.$t('cleanup.admin.campaign.unexpectedError') : label;
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {

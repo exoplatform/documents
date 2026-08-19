@@ -18,16 +18,22 @@ package org.exoplatform.document.cleanup.storage;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -54,6 +60,15 @@ import io.meeds.social.util.JsonUtils;
  */
 @Component
 public class CleanupCampaignStorage {
+
+  /**
+   * Maximum number of owner identity ids sent in a single {@code IN} list.
+   * Oracle rejects an expression list longer than 1000 entries (ORA-01795), and
+   * a user managing that many spaces is the one whose OWN review page would
+   * break — so every owner-scoped query below is chunked, with a margin under
+   * the hard cap.
+   */
+  static final int               MAX_IN_CLAUSE_SIZE = 900;
 
   @Autowired
   private CleanupCampaignDAO     campaignDAO;
@@ -152,17 +167,33 @@ public class CleanupCampaignStorage {
                   .toList();
   }
 
-  public Page<CleanupCampaignItem> getItems(long campaignId,
+  /**
+   * Campaign items matching the provided filters, any of them nullable.
+   *
+   * @param campaignId campaign identifier
+   * @param ownerIdentityId optional owner filter
+   * @param state optional item state filter
+   * @param action optional action filter
+   * @param minSize optional minimal content size filter
+   * @param search optional case-insensitive search on the item PATH — which
+   *          covers the file name (the path's last segment) as well as the
+   *          folders above it, the item table having no name column
+   * @param pageable page, size and sort
+   * @return page of items
+   */
+  public Page<CleanupCampaignItem> getItems(long campaignId, // NOSONAR
                                             Long ownerIdentityId,
                                             CleanupItemState state,
                                             CleanupAction action,
                                             Long minSize,
+                                            String search,
                                             Pageable pageable) {
     return itemDAO.findByFilters(campaignId,
                                  ownerIdentityId,
                                  state == null ? null : state.name(),
                                  action == null ? null : action.name(),
                                  minSize,
+                                 searchPattern(search),
                                  pageable)
                   .map(this::toModel);
   }
@@ -171,8 +202,57 @@ public class CleanupCampaignStorage {
     return itemDAO.findByCampaignIdAndState(campaignId, state.name(), pageable).map(this::toModel);
   }
 
-  public Page<CleanupCampaignItem> getItemsByOwners(long campaignId, List<Long> ownerIdentityIds, Pageable pageable) {
-    return itemDAO.findByCampaignIdAndOwnerIdentityIdIn(campaignId, ownerIdentityIds, pageable).map(this::toModel);
+  /**
+   * Items of the campaign owned by the given identities, optionally narrowed by
+   * the same path search as {@link #getItems}.
+   * <p>
+   * The owner list is CHUNKED (see {@link #MAX_IN_CLAUSE_SIZE}), so a user
+   * managing a thousand spaces doesn't get an ORA-01795 on their own review page.
+   * With a single chunk — the overwhelmingly common case — the DAO page is
+   * returned untouched. With several, each chunk is queried with the SAME total
+   * ordering as requested, {@code (page + 1) * size} rows are taken from each,
+   * they are merged with a comparator mirroring that ordering and the requested
+   * page is sliced out of the merge.
+   * <p>
+   * TRADE-OFF of the multi-chunk path: taking {@code (page + 1) * size} rows per
+   * chunk is what makes the merge exact (the requested page can, at worst, be
+   * filled entirely from one chunk), so deep paging costs more rows per chunk —
+   * bounded, since the review UI pages at 20/50/100. The requested ordering must
+   * be TOTAL for the slice to be stable; the REST layer guarantees that by
+   * appending {@code path ASC} (unique per campaign) to every ordering. The
+   * total element count is the exact sum of the chunks' counts, the owner sets
+   * being disjoint by construction.
+   *
+   * @param campaignId campaign identifier
+   * @param ownerIdentityIds owner identities (the user and the spaces they
+   *          manage)
+   * @param search optional case-insensitive search on the item PATH
+   * @param pageable page, size and sort
+   * @return page of items
+   */
+  public Page<CleanupCampaignItem> getItemsByOwners(long campaignId,
+                                                    List<Long> ownerIdentityIds,
+                                                    String search,
+                                                    Pageable pageable) {
+    String pattern = searchPattern(search);
+    List<List<Long>> chunks = chunkOwnerIds(ownerIdentityIds);
+    if (chunks.size() == 1) {
+      return itemDAO.findByOwnersAndSearch(campaignId, chunks.get(0), pattern, pageable).map(this::toModel);
+    }
+    int upToRequestedPage = (pageable.getPageNumber() + 1) * pageable.getPageSize();
+    Pageable chunkPageable = PageRequest.of(0, upToRequestedPage, pageable.getSort());
+    List<CleanupCampaignItemEntity> merged = new ArrayList<>();
+    long totalElements = 0;
+    for (List<Long> chunk : chunks) {
+      Page<CleanupCampaignItemEntity> chunkPage = itemDAO.findByOwnersAndSearch(campaignId, chunk, pattern, chunkPageable);
+      merged.addAll(chunkPage.getContent());
+      totalElements += chunkPage.getTotalElements();
+    }
+    merged.sort(mergeComparator(pageable.getSort()));
+    int fromIndex = Math.min(pageable.getPageNumber() * pageable.getPageSize(), merged.size());
+    int toIndex = Math.min(upToRequestedPage, merged.size());
+    List<CleanupCampaignItem> items = merged.subList(fromIndex, toIndex).stream().map(this::toModel).toList();
+    return new PageImpl<>(items, pageable, totalElements);
   }
 
   public Page<CleanupCampaignItem> getItemsPage(long campaignId, Pageable pageable) {
@@ -210,24 +290,42 @@ public class CleanupCampaignStorage {
     return itemDAO.countByCampaignIdAndState(campaignId, state.name());
   }
 
+  /**
+   * Chunked like {@link #getItemsByOwners}, but merging is trivial and EXACT
+   * here: the owner sets are disjoint, so the per-chunk counts simply add up.
+   */
   public long countItemsByOwnersAndState(long campaignId, List<Long> ownerIdentityIds, CleanupItemState state) {
-    return itemDAO.countByCampaignIdAndOwnerIdentityIdInAndState(campaignId, ownerIdentityIds, state.name());
+    long count = 0;
+    for (List<Long> chunk : chunkOwnerIds(ownerIdentityIds)) {
+      count += itemDAO.countByCampaignIdAndOwnerIdentityIdInAndState(campaignId, chunk, state.name());
+    }
+    return count;
   }
 
   public long sumReclaimableBytesByState(long campaignId, CleanupItemState state) {
     return itemDAO.sumReclaimableBytesByState(campaignId, state.name());
   }
 
+  /** Chunked and additively merged, see {@link #countItemsByOwnersAndState}. */
   public long sumReclaimableBytesByOwnersAndState(long campaignId, List<Long> ownerIdentityIds, CleanupItemState state) {
-    return itemDAO.sumReclaimableBytesByOwnersAndState(campaignId, ownerIdentityIds, state.name());
+    long sum = 0;
+    for (List<Long> chunk : chunkOwnerIds(ownerIdentityIds)) {
+      sum += itemDAO.sumReclaimableBytesByOwnersAndState(campaignId, chunk, state.name());
+    }
+    return sum;
   }
 
   public long sumReclaimedBytes(long campaignId) {
     return itemDAO.sumReclaimedBytes(campaignId);
   }
 
+  /** Chunked and additively merged, see {@link #countItemsByOwnersAndState}. */
   public long sumReclaimedBytesByOwners(long campaignId, List<Long> ownerIdentityIds) {
-    return itemDAO.sumReclaimedBytesByOwners(campaignId, ownerIdentityIds);
+    long sum = 0;
+    for (List<Long> chunk : chunkOwnerIds(ownerIdentityIds)) {
+      sum += itemDAO.sumReclaimedBytesByOwners(campaignId, chunk);
+    }
+    return sum;
   }
 
   /**
@@ -320,6 +418,72 @@ public class CleanupCampaignStorage {
    */
   static String escapeLike(String value) {
     return value.replace("|", "||").replace("_", "|_").replace("%", "|%");
+  }
+
+  /**
+   * Contains-match LIKE pattern of a free-text search term: lower-cased (the
+   * queries compare {@code LOWER(i.path)}) and run through the very same
+   * {@link #escapeLike(String)} helper as the JCR-event queries, so a term
+   * holding '%', '_' or '|' matches those characters literally instead of
+   * wildcarding. A blank term means NO filter at all, hence the null. Package
+   * visible for tests.
+   */
+  static String searchPattern(String search) {
+    return StringUtils.isBlank(search) ? null : "%" + escapeLike(search.trim()).toLowerCase(Locale.ROOT) + "%";
+  }
+
+  /**
+   * Splits an owner-identity list into {@code IN}-clause-sized chunks. A null or
+   * empty list yields ONE empty chunk, so every caller keeps issuing its single
+   * query (and keeps returning that query's empty result) instead of
+   * short-circuiting to a hand-made zero. Package visible for tests.
+   */
+  static List<List<Long>> chunkOwnerIds(List<Long> ownerIdentityIds) {
+    if (ownerIdentityIds == null || ownerIdentityIds.isEmpty()) {
+      return List.of(List.of());
+    }
+    List<List<Long>> chunks = new ArrayList<>();
+    for (int fromIndex = 0; fromIndex < ownerIdentityIds.size(); fromIndex += MAX_IN_CLAUSE_SIZE) {
+      chunks.add(ownerIdentityIds.subList(fromIndex, Math.min(fromIndex + MAX_IN_CLAUSE_SIZE, ownerIdentityIds.size())));
+    }
+    return chunks;
+  }
+
+  /**
+   * In-memory mirror of a requested {@link Sort}, used to merge the per-chunk
+   * pages of {@link #getItemsByOwners} in the very same order the database
+   * applied inside each chunk. Any key the DAO can be asked to sort on (the REST
+   * layer validates them against its allowlist) has its counterpart here;
+   * anything else is ignored, and an ordering left with no usable key falls back
+   * to the path — the one column that is unique per campaign.
+   */
+  private static Comparator<CleanupCampaignItemEntity> mergeComparator(Sort sort) {
+    Comparator<CleanupCampaignItemEntity> comparator = null;
+    for (Sort.Order order : sort) {
+      Comparator<CleanupCampaignItemEntity> keyComparator = sortKeyComparator(order.getProperty());
+      if (keyComparator == null) {
+        continue;
+      }
+      if (order.isDescending()) {
+        keyComparator = keyComparator.reversed();
+      }
+      comparator = comparator == null ? keyComparator : comparator.thenComparing(keyComparator);
+    }
+    return comparator == null ? sortKeyComparator("path") : comparator;
+  }
+
+  private static Comparator<CleanupCampaignItemEntity> sortKeyComparator(String property) {
+    return switch (property) {
+      case "id" -> Comparator.comparing(CleanupCampaignItemEntity::getId, Comparator.nullsLast(Long::compareTo));
+      case "path" -> Comparator.comparing(CleanupCampaignItemEntity::getPath, Comparator.nullsLast(String::compareTo));
+      case "ownerIdentityId" -> Comparator.comparingLong(CleanupCampaignItemEntity::getOwnerIdentityId);
+      case "fileSize" -> Comparator.comparingLong(CleanupCampaignItemEntity::getFileSize);
+      case "versionsSize" -> Comparator.comparingLong(CleanupCampaignItemEntity::getVersionsSize);
+      case "state" -> Comparator.comparing(CleanupCampaignItemEntity::getState, Comparator.nullsLast(String::compareTo));
+      case "action" -> Comparator.comparing(CleanupCampaignItemEntity::getAction, Comparator.nullsLast(String::compareTo));
+      case "reclaimedBytes" -> Comparator.comparingLong(CleanupCampaignItemEntity::getReclaimedBytes);
+      default -> null;
+    };
   }
 
   private CleanupCampaignItemEntity toEntity(long campaignId, CleanupCandidate candidate) {

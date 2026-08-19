@@ -65,4 +65,21 @@ public class CampaignRestEntity {
 
   private boolean      archiveAvailable;
 
+  /**
+   * SERVER-COMPUTED: whether an execution request would be accepted right now
+   * (campaign LOCKED, or PUBLISHED with its grace deadline already elapsed). The
+   * UI must gate its Execute button on this instead of comparing
+   * {@link #lockDate} to the browser clock: a skewed client would otherwise
+   * enable the button early and surface a 400 'cleanup.graceNotElapsed'.
+   */
+  private boolean      executable;
+
+  /**
+   * SERVER-COMPUTED: milliseconds left before the grace deadline, 0 once it
+   * elapsed (or when there is no deadline). A DURATION, not an instant, so the
+   * UI counts it down locally — re-synced on every refresh — without ever
+   * subtracting a server epoch from its own clock.
+   */
+  private long         remainingMillis;
+
 }

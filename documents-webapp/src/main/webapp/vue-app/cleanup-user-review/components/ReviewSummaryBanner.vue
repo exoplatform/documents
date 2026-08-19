@@ -23,18 +23,30 @@
     colored-border
     class="ma-0">
     <div class="text-color">
-      {{ $t('cleanup.review.banner.candidates', {0: summary.candidateCount, 1: $cleanupUtils.formatBytes(summary.candidateBytes)}) }}
+      {{ $t('cleanup.review.banner.candidates', {0: summary.candidateCount, 1: $cleanupSize(summary.candidateBytes)}) }}
     </div>
     <div v-if="summary.keptCount" class="text-color">
-      {{ $t('cleanup.review.banner.kept', {0: summary.keptCount, 1: $cleanupUtils.formatBytes(summary.keptBytes)}) }}
+      {{ $t('cleanup.review.banner.kept', {0: summary.keptCount, 1: $cleanupSize(summary.keptBytes)}) }}
     </div>
     <!-- Past the grace deadline the review is already frozen server-side, even
          while the campaign is still PUBLISHED (the locking cron runs later) -->
     <div v-if="reviewClosed" class="text-light-color caption mt-1">
       {{ $t('cleanup.review.banner.closed') }}
     </div>
-    <div v-else class="text-light-color caption mt-1">
-      {{ $t('cleanup.review.banner.deadline', {0: $cleanupUtils.formatDateTime(summary.deadline)}) }}
+    <!-- The deadline is rendered by the platform's shared <date-format>, so the
+         sentence is split around it instead of interpolating a pre-formatted
+         string into the i18n message -->
+    <div v-else class="text-light-color caption mt-1 d-flex flex-wrap">
+      <span>{{ $t('cleanup.review.banner.deadline') }}</span>
+      <date-format
+        :value="summary.deadline"
+        :format="$cleanupUtils.DATE_TIME_FORMAT"
+        class="ms-1" />
+      <!-- Countdown of the SERVER-computed remaining time, not of a deadline
+           compared to the browser clock -->
+      <span v-if="remainingLabel" class="ms-1">
+        {{ $t('cleanup.review.banner.remaining', {0: remainingLabel}) }}
+      </span>
     </div>
   </v-alert>
 </template>
@@ -48,6 +60,15 @@ export default {
     reviewClosed: {
       type: Boolean,
       default: false,
+    },
+    remainingMillis: {
+      type: Number,
+      default: 0,
+    },
+  },
+  computed: {
+    remainingLabel() {
+      return this.$cleanupUtils.formatDuration(this.remainingMillis);
     },
   },
 };

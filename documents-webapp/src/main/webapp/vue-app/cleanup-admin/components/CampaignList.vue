@@ -32,7 +32,7 @@
       </v-chip>
     </template>
     <template slot="item.startedDate" slot-scope="{item}">
-      {{ $cleanupUtils.formatDateTime(item.startedDate) }}
+      <date-format :value="item.startedDate" :format="$cleanupUtils.DATE_TIME_FORMAT" />
     </template>
     <template slot="item.progress" slot-scope="{item}">
       <div class="d-flex align-center" style="min-width: 120px">
@@ -48,7 +48,7 @@
       {{ item.candidateCount }}
     </template>
     <template slot="item.reclaimableBytes" slot-scope="{item}">
-      {{ $cleanupUtils.formatBytes(item.reclaimableBytes) }}
+      {{ $cleanupSize(item.reclaimableBytes) }}
     </template>
     <template slot="item.actions" slot-scope="{item}">
       <v-btn

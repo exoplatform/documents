@@ -73,6 +73,16 @@ public class CleanupCampaignRest {
                                                                  "action",
                                                                  "reclaimedBytes");
 
+  /**
+   * Sortable fields that are already unique per campaign, hence already yield a
+   * TOTAL order and need no tiebreaker appended.
+   */
+  private static final Set<String> UNIQUE_ITEM_FIELDS   = Set.of("id", "path");
+
+  private static final String      TIEBREAKER_FIELD     = "path";
+
+  private static final String      DEFAULT_SORT_FIELD   = "fileSize";
+
   @Autowired
   private CleanupCampaignService   campaignService;
 
@@ -218,7 +228,7 @@ public class CleanupCampaignRest {
 
   @Secured("administrators")
   @GetMapping(path = "{id}/items", produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "GET", summary = "Retrieve the items of a cleanup campaign", description = "Retrieve the items of a cleanup campaign, with optional owner/state/action/size filters, paged")
+  @Operation(method = "GET", summary = "Retrieve the items of a cleanup campaign", description = "Retrieve the items of a cleanup campaign, with optional owner/state/action/size filters and an optional path search, paged and sorted")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
@@ -240,6 +250,9 @@ public class CleanupCampaignRest {
                                                               @Parameter(description = "Minimal content size filter, in bytes")
                                                               @RequestParam(name = "minSize", required = false)
                                                               Long minSize,
+                                                              @Parameter(description = "Case-insensitive search on the item path, which covers the file name and its folders alike. Blank or absent means no filtering")
+                                                              @RequestParam(name = "search", required = false)
+                                                              String search,
                                                               @Parameter(description = "Page index")
                                                               @RequestParam(name = "page", required = false, defaultValue = "0")
                                                               int page,
@@ -256,6 +269,7 @@ public class CleanupCampaignRest {
                                                                          parseEnum(CleanupItemState.class, state),
                                                                          parseEnum(CleanupAction.class, action),
                                                                          minSize,
+                                                                         search,
                                                                          pageable),
                                         identityManager);
     } catch (ObjectNotFoundException e) {
@@ -317,22 +331,34 @@ public class CleanupCampaignRest {
 
   @Secured("users")
   @GetMapping(path = "published/my-items", produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "GET", summary = "Retrieve the current user's cleanup candidates", description = "Retrieve the currently relevant campaign's items owned by the user (own files and managed-space files), sorted by size descending")
+  @Operation(method = "GET", summary = "Retrieve the current user's cleanup candidates", description = "Retrieve the currently relevant campaign's items owned by the user (own files and managed-space files), with an optional path search, paged and sorted — by size descending by default")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
     @ApiResponse(responseCode = "404", description = "Not found"),
   })
   public PagedResult<CampaignItemRestEntity> getMyItems(HttpServletRequest request,
+                                                        @Parameter(description = "Case-insensitive search on the item path, which covers the file name and its folders alike. Blank or absent means no filtering")
+                                                        @RequestParam(name = "search", required = false)
+                                                        String search,
                                                         @Parameter(description = "Page index")
                                                         @RequestParam(name = "page", required = false, defaultValue = "0")
                                                         int page,
                                                         @Parameter(description = "Page size")
                                                         @RequestParam(name = "size", required = false, defaultValue = "20")
-                                                        int size) {
+                                                        int size,
+                                                        @Parameter(description = "Sort, as 'field,asc|desc'")
+                                                        @RequestParam(name = "sort", required = false)
+                                                        String sort) {
     try {
-      return CleanupEntityBuilder.build(campaignService.getMyItems(request.getRemoteUser(), page, size), identityManager);
+      // Same allowlist, same default and same stable tiebreaker as the admin
+      // items endpoint: the review table is server-sorted too
+      Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+      return CleanupEntityBuilder.build(campaignService.getMyItems(request.getRemoteUser(), search, pageable), identityManager);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }
   }
 
@@ -351,9 +377,14 @@ public class CleanupCampaignRest {
     }
   }
 
+  /**
+   * Parses a 'field,asc|desc' sort against {@link #SORTABLE_ITEM_FIELDS} —
+   * defaulting to {@code fileSize DESC}, the ordering both item tables open on —
+   * then makes it total with {@link #withTiebreaker(Sort)}.
+   */
   private Sort parseSort(String sort) {
     if (StringUtils.isBlank(sort)) {
-      return Sort.by(Sort.Direction.DESC, "fileSize");
+      return withTiebreaker(Sort.by(Sort.Direction.DESC, DEFAULT_SORT_FIELD));
     }
     String[] parts = sort.split(",");
     String field = parts[0].trim();
@@ -362,7 +393,27 @@ public class CleanupCampaignRest {
     }
     Sort.Direction direction = parts.length > 1 && StringUtils.equalsIgnoreCase(parts[1].trim(), "asc") ? Sort.Direction.ASC :
                                                                                                         Sort.Direction.DESC;
-    return Sort.by(direction, field);
+    return withTiebreaker(Sort.by(direction, field));
+  }
+
+  /**
+   * Appends {@code path ASC} as the LAST key of every ordering, default or
+   * client-requested.
+   * <p>
+   * {@code fileSize} — like {@code state}, {@code action} and
+   * {@code ownerIdentityId} — is NOT unique, so an offset-paged query over a
+   * block of ties has no total order: the database is free to return the same
+   * row on two pages and to never return another one. On a review table that
+   * means a user could page through their whole list and never see a file that
+   * is about to be deleted. {@code path} is unique per campaign, so appending it
+   * makes ANY ordering total.
+   * <p>
+   * Skipped when the requested field is already unique ({@code path} itself, or
+   * {@code id}): a second key would be dead weight in the ORDER BY.
+   */
+  private Sort withTiebreaker(Sort sort) {
+    boolean alreadyTotal = sort.stream().map(Sort.Order::getProperty).anyMatch(UNIQUE_ITEM_FIELDS::contains);
+    return alreadyTotal ? sort : sort.and(Sort.by(Sort.Direction.ASC, TIEBREAKER_FIELD));
   }
 
   private <E extends Enum<E>> E parseEnum(Class<E> enumClass, String value) {

@@ -43,12 +43,24 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
 
   Page<CleanupCampaignItemEntity> findByCampaignIdAndState(long campaignId, String state, Pageable pageable);
 
-  Page<CleanupCampaignItemEntity> findByCampaignIdAndOwnerIdentityIdIn(long campaignId,
-                                                                       List<Long> ownerIdentityIds,
-                                                                       Pageable pageable);
-
   List<CleanupCampaignItemEntity> findByCampaignIdAndNodeUuidIn(long campaignId, Collection<String> nodeUuids);
 
+  /**
+   * Campaign items matching every provided filter, each one null-tolerant so a
+   * single query serves any combination.
+   * <p>
+   * {@code searchPattern} is a case-insensitive contains match on the item
+   * PATH. The item table has NO name column: a
+   * {@code CleanupCampaignItem#getName()} is derived from the path's last
+   * segment, so matching the path covers the file name AND the folders above it
+   * — which is what a cleanup reviewer looks for. The pattern is built by the
+   * Storage layer (lower-cased, wildcards escaped with the '|' escape
+   * character, wrapped in '%'), never by the caller.
+   * <p>
+   * The leading '%' makes the search unindexable: it scans the campaign's rows,
+   * bounded by the CAMPAIGN_ID index (and, for the user-side query below, by
+   * OWNER_IDENTITY_ID too).
+   */
   @Query("""
       SELECT i FROM CleanupCampaignItem i
       WHERE i.campaignId = :campaignId
@@ -56,6 +68,7 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
       AND (:state IS NULL OR i.state = :state)
       AND (:action IS NULL OR i.action = :action)
       AND (:minSize IS NULL OR i.fileSize >= :minSize)
+      AND (:searchPattern IS NULL OR LOWER(i.path) LIKE :searchPattern ESCAPE '|')
       """)
   Page<CleanupCampaignItemEntity> findByFilters(@Param("campaignId")
   long campaignId,
@@ -67,7 +80,29 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
                                                 String action,
                                                 @Param("minSize")
                                                 Long minSize,
+                                                @Param("searchPattern")
+                                                String searchPattern,
                                                 Pageable pageable);
+
+  /**
+   * The user-review counterpart of {@link #findByFilters}: the items of the
+   * campaign owned by the given identities (the user plus the spaces they
+   * manage), optionally narrowed by the same null-tolerant path search — see
+   * that method's javadoc for the pattern contract and the index note.
+   */
+  @Query("""
+      SELECT i FROM CleanupCampaignItem i
+      WHERE i.campaignId = :campaignId
+      AND i.ownerIdentityId IN :ownerIdentityIds
+      AND (:searchPattern IS NULL OR LOWER(i.path) LIKE :searchPattern ESCAPE '|')
+      """)
+  Page<CleanupCampaignItemEntity> findByOwnersAndSearch(@Param("campaignId")
+  long campaignId,
+                                                        @Param("ownerIdentityIds")
+                                                        List<Long> ownerIdentityIds,
+                                                        @Param("searchPattern")
+                                                        String searchPattern,
+                                                        Pageable pageable);
 
   /**
    * Items touched by a JCR event path, in two index-friendly directions (the

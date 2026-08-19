@@ -36,11 +36,11 @@
       </div>
       <div class="me-8">
         <div class="text-light-color caption">{{ $t('cleanup.admin.campaign.reclaimable') }}</div>
-        <div class="text-color font-weight-bold">{{ $cleanupUtils.formatBytes(campaign.reclaimableBytes) }}</div>
+        <div class="text-color font-weight-bold">{{ $cleanupSize(campaign.reclaimableBytes) }}</div>
       </div>
       <div class="me-8">
         <div class="text-light-color caption">{{ $t('cleanup.admin.campaign.reclaimed') }}</div>
-        <div class="text-color font-weight-bold">{{ $cleanupUtils.formatBytes(campaign.reclaimedBytes) }}</div>
+        <div class="text-color font-weight-bold">{{ $cleanupSize(campaign.reclaimedBytes) }}</div>
       </div>
     </div>
   </div>

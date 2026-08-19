@@ -71,14 +71,7 @@ export function executeCampaign(campaignId) {
 }
 
 export function getCampaignItems(campaignId, filters) {
-  const formData = new FormData();
-  Object.entries(filters || {}).forEach(([name, value]) => {
-    if (value != null && value !== '') {
-      formData.append(name, value);
-    }
-  });
-  const params = new URLSearchParams(formData).toString();
-  return fetch(`${BASE_URL}/campaigns/${campaignId}/items?${params}`, {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/items?${toQueryParams(filters)}`, {
     method: 'GET',
     credentials: 'include',
   }).then(handleJsonResponse);
@@ -95,8 +88,11 @@ export function getArchiveUrl(campaignId) {
   return `${BASE_URL}/campaigns/${campaignId}/archive`;
 }
 
-export function getMyItems(page, size) {
-  return fetch(`${BASE_URL}/campaigns/published/my-items?page=${page || 0}&size=${size || 20}`, {
+// Takes the same {search, page, size, sort} shape as getCampaignItems: the
+// review table is paged, sorted AND searched server-side, exactly like the admin
+// one.
+export function getMyItems(filters) {
+  return fetch(`${BASE_URL}/campaigns/published/my-items?${toQueryParams(filters)}`, {
     method: 'GET',
     credentials: 'include',
   }).then(handleJsonResponse);
@@ -147,6 +143,19 @@ export function unkeepItems(itemIds) {
     },
     body: JSON.stringify({itemIds}),
   }).then(handleJsonResponse);
+}
+
+// Null, undefined and empty values are DROPPED rather than sent empty: every
+// filter of both items endpoints is optional server-side, and a blank 'search'
+// or 'state' must mean 'no filter', not 'match nothing'.
+function toQueryParams(filters) {
+  const formData = new FormData();
+  Object.entries(filters || {}).forEach(([name, value]) => {
+    if (value != null && value !== '') {
+      formData.append(name, value);
+    }
+  });
+  return new URLSearchParams(formData).toString();
 }
 
 function handleJsonResponse(resp) {
