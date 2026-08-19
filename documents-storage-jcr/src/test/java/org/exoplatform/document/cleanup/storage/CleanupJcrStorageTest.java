@@ -541,6 +541,7 @@ class CleanupJcrStorageTest {
     Node node = mock(Node.class);
     when(session.getNodeByIdentifier("uuid-referenced")).thenReturn(node);
     when(node.getPath()).thenReturn(PATH_A);
+    stubContentSize(node, 2048L);
     Node parentFolder = mock(Node.class);
     when(node.getParent()).thenReturn(parentFolder);
     doThrow(new javax.jcr.ReferentialIntegrityException("still referenced")).when(session).save();
@@ -550,11 +551,64 @@ class CleanupJcrStorageTest {
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertTrue(result.getFailureReason().startsWith("cleanup.referentialIntegrity"),
                "A referenced node must be SKIPPED with the referential-integrity reason");
+    // The save FAILED: the file is still there, so not a single byte may be
+    // announced as reclaimed even though its size was already measured
+    assertEquals(0L, result.getReclaimedBytes(), "A rolled-back removal must report zero reclaimed bytes");
     // No refresh: the session is logged out right away, which discards the
     // pending changes anyway — a refresh here would be dead code
     verify(session, never()).refresh(anyBoolean());
     verify(session).logout();
     verify(parentFolder, never()).remove();
+  }
+
+  @Test
+  void deleteNodeCarriesTheContentBytesWhenAPostSaveStepFails() throws RepositoryException {
+    // Same shape as purgeVersionsCarriesTheBytesAlreadyReclaimedWhenALaterRemovalFails:
+    // once the removing save committed, the file IS gone. A failure of the only
+    // remaining step (the empty-ancestors sweep) must leave the item SKIPPED — an
+    // administrator still has to see it needed attention — but MUST carry the
+    // bytes really reclaimed, otherwise the campaign's total under-reports a file
+    // that is truly deleted. removeEmptyAncestors only swallows RepositoryException,
+    // so an unchecked failure of its depth logic escapes to deleteNode's catch.
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
+    when(node.getPath()).thenReturn(PATH_F);
+    stubContentSize(node, 2048L);
+    Node parentFolder = mock(Node.class);
+    when(node.getParent()).thenReturn(parentFolder);
+    when(parentFolder.getDepth()).thenThrow(new IllegalStateException("depth unavailable"));
+
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
+
+    assertEquals(CleanupItemState.SKIPPED, result.getState());
+    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    assertEquals(2048L,
+                 result.getReclaimedBytes(),
+                 "The bytes of the file really removed by the committed save must be carried");
+    // The node removal really committed before the failing sweep
+    verify(node).remove();
+    verify(session).save();
+    verify(session).logout();
+  }
+
+  @Test
+  void deleteNodeReportsZeroReclaimedBytesWhenTheFailureHappensBeforeTheSave() throws RepositoryException {
+    // The companion of the test above: the size is measured FIRST, but as long as
+    // the removing save has not committed the file is still there — the SKIPPED
+    // result must announce nothing reclaimed
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_DOOMED)).thenReturn(node);
+    when(node.getPath()).thenReturn(PATH_F);
+    stubContentSize(node, 2048L);
+    when(query.execute()).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
+
+    assertEquals(CleanupItemState.SKIPPED, result.getState());
+    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    assertEquals(0L, result.getReclaimedBytes(), "Nothing was removed yet: zero reclaimed bytes");
+    verify(node, never()).remove();
+    verify(session, never()).save();
   }
 
   @Test
@@ -1204,6 +1258,20 @@ class CleanupJcrStorageTest {
                          .thenReturn(exemptedDateProperty);
     }
     return node;
+  }
+
+  /**
+   * Gives the node a jcr:content/jcr:data of the given length, i.e. the content
+   * bytes {@code deleteNode} reports as reclaimed.
+   */
+  private void stubContentSize(Node node, long size) throws RepositoryException {
+    Node content = mock(Node.class);
+    Property dataProperty = mock(Property.class);
+    when(dataProperty.getLength()).thenReturn(size);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(content);
+    when(content.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    when(content.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
   }
 
   private Node node(String path) throws RepositoryException {

@@ -17,6 +17,7 @@
 package org.exoplatform.document.cleanup.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,15 +51,23 @@ import jakarta.servlet.http.HttpServletRequest;
  * Direct-call controller tests pinning the delegation of the keep endpoints to
  * {@link CleanupCampaignService} (with the authenticated user, never a
  * client-supplied one) and the full exception contract:
- * {@link ObjectNotFoundException} to 404, {@link IllegalAccessException} to
- * 403, {@link IllegalArgumentException} to 400 with the message code.
+ * {@link ObjectNotFoundException} to 404, {@link IllegalAccessException} to 403
+ * with {@link CleanupCampaignService#NOT_OWNER_FAILURE_CODE} (never its own raw
+ * message), {@link IllegalArgumentException} to 400 with the message code.
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupItemRestTest {
 
-  private static final long      ITEM_ID = 42L;
+  private static final long      ITEM_ID                     = 42L;
 
-  private static final String    USER    = "john";
+  private static final String    USER                        = "john";
+
+  /**
+   * Verbatim shape of what {@code CleanupCampaignService.checkOwnership} raises:
+   * a raw English sentence carrying the username. Nothing of it may reach the
+   * client.
+   */
+  private static final String    NOT_OWNER_INTERNAL_SENTENCE = "User %s isn't the owner of the file".formatted(USER);
 
   @Mock
   private CleanupCampaignService campaignService;
@@ -92,12 +101,18 @@ class CleanupItemRestTest {
   }
 
   @Test
-  void keepItemMapsIllegalAccessTo403() throws Exception {
-    doThrow(new IllegalAccessException("cleanup.notOwner")).when(campaignService).keepItem(ITEM_ID, USER);
+  void keepItemMapsIllegalAccessTo403WithTheMessageCodeNeverTheInternalSentence() throws Exception {
+    // The REAL exception checkOwnership raises: a raw English sentence naming the
+    // user and the owning space. Forwarding e.getMessage() put that internal
+    // detail on the wire AND matched no bundle key, so the user read 'an
+    // unexpected error occurred' and cleanup.notOwner could never render
+    doThrow(new IllegalAccessException(NOT_OWNER_INTERNAL_SENTENCE)).when(campaignService).keepItem(ITEM_ID, USER);
 
     ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> itemRest.keepItem(request, ITEM_ID));
     assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
-    assertEquals("cleanup.notOwner", exception.getReason());
+    // The very same code the BULK path reports for this exact refusal
+    assertEquals(CleanupCampaignService.NOT_OWNER_FAILURE_CODE, exception.getReason());
+    assertFalse(exception.getReason().contains(USER), "No internal sentence naming the user may reach the client");
   }
 
   @Test
@@ -166,9 +181,14 @@ class CleanupItemRestTest {
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> itemRest.unkeepItem(request, ITEM_ID)).getStatusCode());
 
-    doThrow(new IllegalAccessException("cleanup.notOwner")).when(campaignService).unkeepItem(ITEM_ID, USER);
-    assertEquals(HttpStatus.FORBIDDEN,
-                 assertThrows(ResponseStatusException.class, () -> itemRest.unkeepItem(request, ITEM_ID)).getStatusCode());
+    // Same authz contract as keepItem: the localizable code, never the raw
+    // English sentence checkOwnership builds with the username in it
+    doThrow(new IllegalAccessException(NOT_OWNER_INTERNAL_SENTENCE)).when(campaignService).unkeepItem(ITEM_ID, USER);
+    ResponseStatusException forbidden = assertThrows(ResponseStatusException.class,
+                                                     () -> itemRest.unkeepItem(request, ITEM_ID));
+    assertEquals(HttpStatus.FORBIDDEN, forbidden.getStatusCode());
+    assertEquals(CleanupCampaignService.NOT_OWNER_FAILURE_CODE, forbidden.getReason());
+    assertFalse(forbidden.getReason().contains(USER), "No internal sentence naming the user may reach the client");
 
     doThrow(new IllegalArgumentException("cleanup.reviewClosed")).when(campaignService).unkeepItem(ITEM_ID, USER);
     ResponseStatusException badRequest = assertThrows(ResponseStatusException.class,

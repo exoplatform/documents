@@ -102,6 +102,9 @@
 // tooltip keep ticking instead of freezing on the value captured at load.
 const REFRESH_PERIOD_MS = 30000;
 const DATE_FIELDS = ['startedDate', 'publishedDate', 'lockDate', 'completedDate'];
+// Generic sentence shown when the code an endpoint answered carries no bundle
+// entry of its own: never leak a raw code (or a raw Spring body) in a toast
+const UNEXPECTED_ERROR_KEY = 'cleanup.admin.campaign.unexpectedError';
 
 export default {
   props: {
@@ -293,16 +296,14 @@ export default {
           return this.loadCampaign();
         })
         .then(() => this.$emit('refresh'))
-        .catch(error => this.displayAlert(this.$t(`cleanup.admin.campaign.${action}Error`, {0: this.errorLabel(error)}), 'error'))
+        // The REST layer answers a MESSAGE CODE as the error body
+        // (cleanup.graceNotElapsed, cleanup.campaignAlreadyActive...): localized
+        // by the shared $cleanupErrorLabel, never dropped raw in the toast
+        .catch(error => {
+          const reason = this.$cleanupErrorLabel(error, UNEXPECTED_ERROR_KEY);
+          this.displayAlert(this.$t(`cleanup.admin.campaign.${action}Error`, {0: reason}), 'error');
+        })
         .finally(() => this.actionInProgress = false);
-    },
-    // The REST layer answers a MESSAGE CODE as the error body (cleanup.
-    // graceNotElapsed, cleanup.campaignAlreadyActive...): localize it instead of
-    // dropping the raw Spring body in the toast, and never show an unknown code
-    errorLabel(error) {
-      const code = error?.message?.trim();
-      const label = code && this.$t(code);
-      return !label || label === code ? this.$t('cleanup.admin.campaign.unexpectedError') : label;
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {

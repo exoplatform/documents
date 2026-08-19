@@ -390,17 +390,25 @@ public class CleanupJcrStorage {
    * @param nodeUuid JCR node identifier
    * @return purge outcome with reclaimed bytes, GONE only when the node really
    *         disappeared, or SKIPPED with a reason (a JCR read failure is
-   *         SKIPPED, never GONE)
+   *         SKIPPED, never GONE). A failure happening AFTER the removing
+   *         {@code session.save()} — the empty-ancestor cleanup is the only step
+   *         left — leaves the item SKIPPED (an administrator must still see the
+   *         file needed attention) but CARRIES the bytes of the file that is
+   *         really deleted, exactly as {@link #purgeVersions(String, int)} does
+   *         for the versions it already removed: dropping them would
+   *         under-report the campaign's reclaimed total
    */
   public CleanupPurgeResult deleteNode(String nodeUuid) {
     Session session = null;
+    long reclaimedBytes = 0;
+    boolean deleted = false;
     try {
       session = getSystemSession();
       Node node = getNodeByIdentifierOrNull(session, nodeUuid);
       if (node == null) {
         return CleanupPurgeResult.gone();
       }
-      long reclaimedBytes = getContentSize(node) + JCRDocumentsUtil.computeVersionsSize(node);
+      reclaimedBytes = getContentSize(node) + JCRDocumentsUtil.computeVersionsSize(node);
       String nodePath = node.getPath();
       // Remove the pointing symlinks first, then the node, in ONE save: a
       // failure of the node removal (e.g. referential integrity) rolls the
@@ -414,13 +422,16 @@ public class CleanupJcrStorage {
       Node parentNode = node.getParent();
       node.remove();
       session.save();
+      // From here on the file IS gone: any later failure must still carry its
+      // bytes on the SKIPPED result
+      deleted = true;
       removeEmptyAncestors(session, parentNode, nodePath);
       return CleanupPurgeResult.purged(reclaimedBytes);
     } catch (ReferentialIntegrityException e) {
-      return CleanupPurgeResult.skipped("cleanup.referentialIntegrity: " + e.getMessage());
+      return CleanupPurgeResult.skipped("cleanup.referentialIntegrity: " + e.getMessage(), deleted ? reclaimedBytes : 0);
     } catch (Exception e) {
       LOG.warn("Error hard-deleting node {}", nodeUuid, e);
-      return CleanupPurgeResult.skipped("cleanup.deleteError: " + e.getMessage());
+      return CleanupPurgeResult.skipped("cleanup.deleteError: " + e.getMessage(), deleted ? reclaimedBytes : 0);
     } finally {
       logout(session);
     }

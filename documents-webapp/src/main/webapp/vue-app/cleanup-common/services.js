@@ -51,3 +51,35 @@ if (!Vue.prototype.$cleanupSize) {
     },
   });
 }
+/**
+ * Localizes ONE cleanup message code — the single implementation shared by every
+ * consumer (the campaign actions, the create drawer, the per-item review
+ * failures), all of which used to carry their own copy of these three lines.
+ *
+ * The cleanup REST endpoints answer a message code as the error body
+ * (cleanup.campaignAlreadyActive, cleanup.notOwner, cleanup.nameMandatory...),
+ * unwrapped from Spring's error envelope by CleanupService (see errorMessage
+ * there). Accepts either that bare code or the rejected Error carrying it, so a
+ * caller never has to dig into error.message itself.
+ *
+ * An UNKNOWN code is never shown raw: it falls back to the caller's own generic
+ * sentence, whose key differs per portlet bundle and is therefore a parameter.
+ *
+ * On Vue.prototype rather than in CleanupUtils, for the same reason as
+ * $cleanupSize above: it needs $t, which resolves against the calling
+ * component's i18n instance.
+ *
+ * @param {String|Error} codeOrError message code, or the Error whose message is
+ *          that code
+ * @param {String} fallbackKey i18n key of the generic sentence shown when the
+ *          code carries no bundle entry
+ */
+if (!Vue.prototype.$cleanupErrorLabel) {
+  window.Object.defineProperty(Vue.prototype, '$cleanupErrorLabel', {
+    value: function(codeOrError, fallbackKey) {
+      const code = (typeof codeOrError === 'string' ? codeOrError : codeOrError?.message)?.trim();
+      const label = code && this.$t(code);
+      return !label || label === code ? this.$t(fallbackKey) : label;
+    },
+  });
+}

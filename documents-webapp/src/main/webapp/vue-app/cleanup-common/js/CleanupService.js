@@ -162,11 +162,12 @@ function toQueryParams(filters) {
 // ResponseStatusException(BAD_REQUEST, 'cleanup.graceNotElapsed') reaches the
 // browser wrapped in Spring's default error envelope
 // ({"timestamp":...,"status":400,"message":"cleanup.graceNotElapsed",...}), not
-// as a bare code. Every consumer of these errors (CampaignDetail.errorLabel,
-// ReviewItemsList.decisionError) localizes error.message as a BARE message code
-// and falls back to a generic 'unexpected error' when it isn't one — so the code
-// is unwrapped HERE, once, instead of in each caller. A non-JSON body is already
-// the message; a body with no message falls back to the status.
+// as a bare code. Every consumer of these errors goes through the shared
+// $cleanupErrorLabel (see ../services.js), which localizes error.message as a
+// BARE message code and falls back to a generic 'unexpected error' when it isn't
+// one — so the code is unwrapped HERE, once, instead of in each caller. A
+// non-JSON body is already the message; a body with no message falls back to the
+// status.
 function errorMessage(text, status) {
   if (text) {
     try {

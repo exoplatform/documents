@@ -98,6 +98,9 @@
 </template>
 <script>
 const MEGA_BYTE = 1048576;
+// Same generic fallback as the campaign actions: a code with no bundle entry is
+// never shown raw
+const UNEXPECTED_ERROR_KEY = 'cleanup.admin.campaign.unexpectedError';
 
 export default {
   data() {
@@ -151,8 +154,15 @@ export default {
         this.displayAlert(this.$t('cleanup.admin.createDrawer.success'));
         this.$emit('created', campaign);
         this.close();
-      }).catch(() => {
-        this.displayAlert(this.$t('cleanup.admin.createDrawer.error'), 'error');
+      }).catch(error => {
+        // The creation endpoint is the ONLY producer of cleanup.campaignAlreadyActive
+        // (one active campaign platform-wide — the likeliest refusal here) and of
+        // the cleanup.nameMandatory / cleanup.invalidPeriodMonths /
+        // cleanup.invalidMinFileSize / cleanup.invalidGraceDays /
+        // cleanup.invalidMaxVersionsPerFile validation codes: discarding the error
+        // made every one of those bundle entries unreachable
+        const reason = this.$cleanupErrorLabel(error, UNEXPECTED_ERROR_KEY);
+        this.displayAlert(this.$t('cleanup.admin.createDrawer.error', {0: reason}), 'error');
       }).finally(() => this.loading = false);
     },
     numberOrNull(value) {

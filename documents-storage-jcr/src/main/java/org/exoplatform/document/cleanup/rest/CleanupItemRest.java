@@ -66,7 +66,11 @@ public class CleanupItemRest {
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalAccessException e) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
+      // The MESSAGE CODE, never e.getMessage(): checkOwnership raises a raw
+      // English sentence naming the user and the owning space — internal detail
+      // that must not reach the client and that no bundle key can localize. The
+      // bulk path already maps this exact refusal to the same code
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, CleanupCampaignService.NOT_OWNER_FAILURE_CODE);
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }
@@ -114,7 +118,9 @@ public class CleanupItemRest {
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalAccessException e) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
+      // Same contract as keepItem above: the localizable code, not the raw
+      // English sentence naming the user and the owning space
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, CleanupCampaignService.NOT_OWNER_FAILURE_CODE);
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }

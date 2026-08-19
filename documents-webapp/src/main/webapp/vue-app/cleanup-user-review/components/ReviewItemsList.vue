@@ -346,16 +346,17 @@ export default {
         ? `${detail}. ${this.$t('cleanup.review.items.retryHint')}`
         : `${detail}.`;
     },
-    // A message code with no bundle entry must never be shown raw: an unknown
-    // code falls back to a generic sentence instead of leaking 'IllegalState...'
-    reasonLabel(reason) {
-      const label = reason && this.$t(reason);
-      return !label || label === reason ? this.$t(UNKNOWN_REASON_KEY) : label;
+    // Through the SHARED $cleanupErrorLabel (cleanup-common): a message code with
+    // no bundle entry must never be shown raw, it falls back to a generic
+    // sentence instead of leaking 'IllegalState...'. Only the fallback key is
+    // local — the bundle differs per portlet
+    reasonLabel(reasonOrError) {
+      return this.$cleanupErrorLabel(reasonOrError, UNKNOWN_REASON_KEY);
     },
     // Single-item endpoints answer the same message codes in the error body, so
-    // the very same localization applies there
+    // the very same localization applies there — the helper unwraps the Error
     decisionError(action, error) {
-      return `${this.$t(`cleanup.review.items.${action}Error`)} ${this.reasonLabel(error?.message?.trim())}`;
+      return `${this.$t(`cleanup.review.items.${action}Error`)} ${this.reasonLabel(error)}`;
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {
