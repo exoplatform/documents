@@ -43,6 +43,60 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
 
   Page<CleanupCampaignItemEntity> findByCampaignIdAndState(long campaignId, String state, Pageable pageable);
 
+  /**
+   * KEYSET page of the items of a campaign in a given state: the ones whose id
+   * is strictly greater than the last one seen, oldest id first. This is what
+   * makes the execution worker's forward progress STRUCTURAL — an offset page 0
+   * re-read relies on every processed item leaving the state, so a single item
+   * that can never be persisted feeds it back forever (a poison pill). Returns a
+   * plain List: the worker drives its loop from the last id it saw, it has no
+   * use for a total count, and skipping it spares one count query per batch.
+   */
+  List<CleanupCampaignItemEntity> findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(long campaignId,
+                                                                                       String state,
+                                                                                       long lastId,
+                                                                                       Pageable pageable);
+
+  /**
+   * KEYSET page of the RETRYABLE failures of a campaign: SKIPPED items whose
+   * failure reason belongs to the allowlist the Service owns and whose attempt
+   * count is still under the bound. Keyset-paged for the same reason as above,
+   * and one that bites harder here: the requeue MUTATES the very state the
+   * filter matches on, so an offset page would skip rows as the result set
+   * shrinks underneath it.
+   */
+  @Query("""
+      SELECT i FROM CleanupCampaignItem i
+      WHERE i.campaignId = :campaignId
+      AND i.state = :state
+      AND i.failureReason IN :failureReasons
+      AND i.attemptCount < :maxAttemptCount
+      AND i.id > :lastId
+      """)
+  List<CleanupCampaignItemEntity> findRetryableFailures(@Param("campaignId")
+  long campaignId,
+                                                        @Param("state")
+                                                        String state,
+                                                        @Param("failureReasons")
+                                                        Collection<String> failureReasons,
+                                                        @Param("maxAttemptCount")
+                                                        long maxAttemptCount,
+                                                        @Param("lastId")
+                                                        long lastId,
+                                                        Pageable pageable);
+
+  /**
+   * Per-reason item counts of a campaign's failures, in ONE grouped query (rows:
+   * failure reason, item count). Never by loading the SKIPPED rows: a campaign
+   * can hold hundreds of thousands of them, and the console only ever displays
+   * the handful of distinct reasons behind them.
+   */
+  @Query("SELECT i.failureReason, COUNT(i) FROM CleanupCampaignItem i" +
+      " WHERE i.campaignId = :campaignId AND i.state = :state GROUP BY i.failureReason")
+  List<Object[]> countFailuresByReason(@Param("campaignId")
+  long campaignId, @Param("state")
+  String state);
+
   List<CleanupCampaignItemEntity> findByCampaignIdAndNodeUuidIn(long campaignId, Collection<String> nodeUuids);
 
   /**

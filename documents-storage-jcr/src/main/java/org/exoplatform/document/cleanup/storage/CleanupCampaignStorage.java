@@ -48,6 +48,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignAggregates;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 
@@ -200,6 +201,84 @@ public class CleanupCampaignStorage {
 
   public Page<CleanupCampaignItem> getItemsByState(long campaignId, CleanupItemState state, Pageable pageable) {
     return itemDAO.findByCampaignIdAndState(campaignId, state.name(), pageable).map(this::toModel);
+  }
+
+  /**
+   * KEYSET page of the items of a campaign in a given state: the ones past
+   * {@code lastId}, oldest id first. The execution worker drives its batch loop
+   * from the last id it saw instead of re-reading page 0 — see the DAO javadoc:
+   * that is what makes its forward progress structural instead of depending on
+   * every item leaving the state.
+   *
+   * @param campaignId campaign identifier
+   * @param state item state
+   * @param lastId last id already seen (0 to start from the beginning)
+   * @param batchSize maximum number of items to read
+   * @return the next items, id ascending, empty when the state is exhausted
+   */
+  public List<CleanupCampaignItem> getItemsByStateAfterId(long campaignId,
+                                                         CleanupItemState state,
+                                                         long lastId,
+                                                         int batchSize) {
+    return itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(campaignId,
+                                                                        state.name(),
+                                                                        lastId,
+                                                                        PageRequest.of(0, batchSize))
+                  .stream()
+                  .map(this::toModel)
+                  .toList();
+  }
+
+  /**
+   * KEYSET page of the SKIPPED items of a campaign whose failure reason is one of
+   * {@code failureReasons} and whose attempt count is still below
+   * {@code maxAttemptCount} — the retry candidates. Keyset-paged because the
+   * requeue mutates the state this very filter matches on.
+   *
+   * @param campaignId campaign identifier
+   * @param failureReasons retryable failure message codes (the Service's
+   *          allowlist)
+   * @param maxAttemptCount exclusive upper bound on the attempts already spent
+   * @param lastId last id already seen (0 to start from the beginning)
+   * @param batchSize maximum number of items to read
+   * @return the next retryable items, id ascending
+   */
+  public List<CleanupCampaignItem> getRetryableFailures(long campaignId,
+                                                       Set<String> failureReasons,
+                                                       long maxAttemptCount,
+                                                       long lastId,
+                                                       int batchSize) {
+    if (failureReasons == null || failureReasons.isEmpty()) {
+      // An empty IN list is invalid SQL on several databases, and the answer is
+      // known anyway: nothing is retryable
+      return List.of();
+    }
+    return itemDAO.findRetryableFailures(campaignId,
+                                         CleanupItemState.SKIPPED.name(),
+                                         failureReasons,
+                                         maxAttemptCount,
+                                         lastId,
+                                         PageRequest.of(0, batchSize, Sort.by("id")))
+                  .stream()
+                  .map(this::toModel)
+                  .toList();
+  }
+
+  /**
+   * Per-reason counts of a campaign's SKIPPED items, from ONE grouped aggregate
+   * query. The {@code retryable} flag of each group is left to its default: it
+   * is a business rule of the Service layer, not of the query (see
+   * {@link CleanupFailureGroup}).
+   *
+   * @param campaignId campaign identifier
+   * @return one group per distinct failure reason, empty when the campaign has
+   *         no failed item left (the retention job purged its item rows)
+   */
+  public List<CleanupFailureGroup> countFailuresByReason(long campaignId) {
+    return itemDAO.countFailuresByReason(campaignId, CleanupItemState.SKIPPED.name())
+                  .stream()
+                  .map(row -> new CleanupFailureGroup((String) row[0], ((Number) row[1]).longValue(), false))
+                  .toList();
   }
 
   /**
@@ -592,6 +671,8 @@ public class CleanupCampaignStorage {
     item.setPurgedAt(toMillis(entity.getPurgedAt()));
     item.setReclaimedBytes(entity.getReclaimedBytes());
     item.setFailureReason(entity.getFailureReason());
+    item.setFailureDetail(entity.getFailureDetail());
+    item.setAttemptCount(entity.getAttemptCount());
     return item;
   }
 
@@ -614,6 +695,8 @@ public class CleanupCampaignStorage {
     entity.setPurgedAt(toDate(item.getPurgedAt()));
     entity.setReclaimedBytes(item.getReclaimedBytes());
     entity.setFailureReason(item.getFailureReason());
+    entity.setFailureDetail(item.getFailureDetail());
+    entity.setAttemptCount(item.getAttemptCount());
     return entity;
   }
 

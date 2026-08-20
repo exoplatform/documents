@@ -97,7 +97,26 @@ public class CleanupCampaignItemEntity implements Serializable {
   @Column(name = "RECLAIMED_BYTES")
   private long              reclaimedBytes;
 
+  /**
+   * Localizable message code of the failure, and NOTHING else: the console looks
+   * it up in an i18n bundle and the grouped-failures aggregate groups on it, so
+   * it must never carry an exception message.
+   */
   @Column(name = "FAILURE_REASON")
   private String            failureReason;
+
+  /**
+   * Compact diagnostic of the failure (head + root exception, see
+   * {@code CleanupThrowableUtil}), mapped as a plain String over the
+   * FAILURE_DETAIL CLOB column — the platform precedent for a CLOB is a bare
+   * {@code @Column} String, no {@code @Lob} and no columnDefinition (cf.
+   * {@code io.meeds.social.space.template.entity.SpaceTemplateEntity}).
+   */
+  @Column(name = "FAILURE_DETAIL")
+  private String            failureDetail;
+
+  /** Purge attempts already spent on this item, incremented by every retry. */
+  @Column(name = "ATTEMPT_COUNT")
+  private long              attemptCount;
 
 }

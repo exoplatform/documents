@@ -39,8 +39,10 @@ import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
+import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
@@ -61,6 +63,8 @@ class CleanupEntityBuilderTest {
   private static final long OWNER_IDENTITY_ID = 55L;
 
   private static final long ONE_HOUR_MILLIS   = 3600000L;
+
+  private static final String FAILURE_DETAIL  = "javax.jcr.ReferentialIntegrityException: referenced by /Groups/spaces/hr";
 
   @Mock
   private IdentityManager   identityManager;
@@ -416,6 +420,58 @@ class CleanupEntityBuilderTest {
     assertTrue(entity.getFailures().isEmpty());
   }
 
+  @Test
+  void buildItemWithholdsTheFailureDetailByDefault() {
+    when(identityManager.getIdentity(OWNER_IDENTITY_ID)).thenReturn(null);
+
+    CampaignItemRestEntity entity = CleanupEntityBuilder.build(item(), identityManager);
+
+    // DENY BY DEFAULT: the overload without the flag is the one a careless caller
+    // reaches for, so it must be the SAFE one
+    assertNull(entity.getFailureDetail(), "The default overload must never serialize the administrator-only detail");
+    assertEquals("some.failure", entity.getFailureReason(), "The bare reason code stays on every path: it leaks nothing");
+    assertEquals(2L, entity.getAttemptCount());
+  }
+
+  @Test
+  void buildItemSerializesTheFailureDetailOnlyWhenExplicitlyAsked() {
+    when(identityManager.getIdentity(OWNER_IDENTITY_ID)).thenReturn(null);
+
+    // A stack trace can name the REFERENCING node of a referential-integrity
+    // failure — e.g. a shortcut in a space the caller is not a member of — so the
+    // administrator endpoint is the only one allowed to carry it
+    assertEquals(FAILURE_DETAIL, CleanupEntityBuilder.build(item(), identityManager, true).getFailureDetail());
+    assertNull(CleanupEntityBuilder.build(item(), identityManager, false).getFailureDetail());
+  }
+
+  @Test
+  void buildPagePropagatesTheFailureDetailFlagToEveryItem() {
+    when(identityManager.getIdentity(OWNER_IDENTITY_ID)).thenReturn(null);
+    PageImpl<CleanupCampaignItem> page = new PageImpl<>(List.of(item(), item()), PageRequest.of(0, 2), 2);
+
+    PagedResult<CampaignItemRestEntity> adminResult = CleanupEntityBuilder.build(page, identityManager, true);
+    PagedResult<CampaignItemRestEntity> userResult = CleanupEntityBuilder.build(page, identityManager, false);
+
+    assertTrue(adminResult.getItems().stream().allMatch(item -> FAILURE_DETAIL.equals(item.getFailureDetail())),
+               "The admin page must carry the detail on EVERY row, not only the first");
+    assertTrue(userResult.getItems().stream().allMatch(item -> item.getFailureDetail() == null),
+               "The user page must carry it on NO row");
+    assertTrue(CleanupEntityBuilder.build(page, identityManager)
+                                   .getItems()
+                                   .stream()
+                                   .allMatch(item -> item.getFailureDetail() == null),
+               "And the flagless page overload must be the safe one too");
+  }
+
+  @Test
+  void buildFailureGroupMapsTheServerSideRetryableFlag() {
+    CampaignFailureGroupRestEntity entity = CleanupEntityBuilder.build(new CleanupFailureGroup("cleanup.deleteError", 12L, true));
+
+    assertEquals("cleanup.deleteError", entity.getReason());
+    assertEquals(12L, entity.getCount());
+    assertTrue(entity.isRetryable());
+  }
+
   private CleanupCampaignItem item() {
     CleanupCampaignItem item = new CleanupCampaignItem();
     item.setId(9L);
@@ -435,6 +491,8 @@ class CleanupEntityBuilderTest {
     item.setPurgedAt(0);
     item.setReclaimedBytes(128);
     item.setFailureReason("some.failure");
+    item.setFailureDetail(FAILURE_DETAIL);
+    item.setAttemptCount(2L);
     return item;
   }
 

@@ -33,6 +33,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -59,6 +60,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
@@ -102,6 +104,32 @@ public class CleanupCampaignService {
    */
   public static final int                         MAX_NAME_LENGTH             = 250;
 
+  /**
+   * Failure message codes a retry may re-attempt. TRANSIENT causes only: a JCR
+   * read that failed once may succeed now, a delete that hit a locked node may
+   * not, an unexpected error is by definition unclassified. Deliberately ABSENT:
+   * {@code cleanup.referentialIntegrity} (another node points at the file — the
+   * repository will refuse identically) and {@code cleanup.notVersionable} (the
+   * node has no version history — it never will grow one by itself). Re-running
+   * those is guaranteed wasted work on possibly hundreds of thousands of rows.
+   * <p>
+   * Public because the REST layer flags each grouped failure with it and the
+   * tests assert against it: what is retryable is a SERVER decision, and the
+   * client must never be the authority on it.
+   */
+  public static final Set<String>                 RETRYABLE_FAILURE_REASONS   = Set.of("cleanup.revalidationFailed",
+                                                                                       "cleanup.deleteError",
+                                                                                       "cleanup.unexpectedError",
+                                                                                       "cleanup.purgeVersionsError");
+
+  /**
+   * Attempts an item may spend, retries included. Bounds the whole retry
+   * mechanism: past it, a failure has proved itself deterministic whatever its
+   * code says, and an administrator re-clicking Retry must not be able to loop on
+   * it forever.
+   */
+  public static final long                        MAX_RETRY_ATTEMPTS          = 3;
+
   private static final Log                        LOG                         = ExoLogger.getLogger(CleanupCampaignService.class);
 
   private static final List<CleanupCampaignState> ACTIVE_STATES               = List.of(CleanupCampaignState.PUBLISHED,
@@ -123,7 +151,13 @@ public class CleanupCampaignService {
    * APPENDED after them.
    */
   private static final String                     CSV_HEADER                  =
-                                                              "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate\n";
+                                                              "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate,attemptCount,failureDetail\n";
+
+  /**
+   * Page size of the retry requeue. Keyset-paged like the execution worker, so
+   * hundreds of thousands of failed items are never loaded into one List.
+   */
+  private static final int                        RETRY_PAGE_SIZE             = 1000;
 
   private static final int                        LISTENER_RETRY_MAX_ATTEMPTS = 10;
 
@@ -363,6 +397,121 @@ public class CleanupCampaignService {
       lockCampaign(campaign);
     }
     return withAggregates(executionService.startExecution(campaignId));
+  }
+
+  /**
+   * Re-attempts the RETRYABLE failed items of a COMPLETED campaign: no new scan,
+   * no new grace period, no new campaign. The requeued items go back to
+   * CANDIDATE and the campaign re-enters EXECUTING, so the very same worker
+   * processes them — and the worker needs NO change for that, its per-item
+   * revalidation against JCR immediately before deleting being what makes a
+   * requeued item safe (an item since exempted, modified or deleted is spared on
+   * its own).
+   * <p>
+   * Lives HERE and not in {@link CleanupExecutionService}, which owns the worker,
+   * because everything specific to a retry is business this Service already owns:
+   * the platform-wide single-active-campaign invariant and the very
+   * {@code publishLock} that makes its check-then-act atomic, plus the retryable
+   * allowlist. The execution part is then delegated to
+   * {@link CleanupExecutionService#startExecution(long)} verbatim — the requeue
+   * having just made the CANDIDATE count equal to the requeued count, its
+   * denominator reset, its lifecycle transition and its worker launch are exactly
+   * what a retry needs, and duplicating them here would be a second code path to
+   * keep in sync.
+   * <p>
+   * A REFUSAL never starts a run: not COMPLETED, another campaign active, or
+   * nothing at all to retry all leave the campaign untouched.
+   *
+   * @param campaignId campaign identifier
+   * @return the campaign, now EXECUTING again, with its item aggregates
+   * @throws ObjectNotFoundException "cleanup.campaignNotFound" when the campaign
+   *           doesn't exist
+   * @throws IllegalArgumentException "cleanup.invalidState" when the campaign
+   *           isn't COMPLETED, "cleanup.campaignAlreadyActive" when another
+   *           campaign is PUBLISHED/LOCKED/EXECUTING,
+   *           "cleanup.noRetryableFailures" when no item qualifies
+   */
+  public CleanupCampaign retryCampaign(long campaignId) throws ObjectNotFoundException {
+    // The SAME lock as publishCampaign, for the same reason: without it two
+    // concurrent retries (or a retry racing a publish) could both pass the
+    // single-active check before either transitions (TOCTOU)
+    synchronized (publishLock) {
+      CleanupCampaign campaign = getCampaign(campaignId);
+      if (campaign.getState() != CleanupCampaignState.COMPLETED) {
+        throw new IllegalArgumentException("cleanup.invalidState");
+      }
+      if (!campaignStorage.getCampaignsByStates(ACTIVE_STATES).isEmpty()) {
+        throw new IllegalArgumentException("cleanup.campaignAlreadyActive");
+      }
+      long requeuedCount = requeueRetryableFailures(campaignId);
+      if (requeuedCount == 0) {
+        // Never silently start a no-op run: the console must be able to say WHY
+        throw new IllegalArgumentException("cleanup.noRetryableFailures");
+      }
+      return withAggregates(executionService.startExecution(campaignId));
+    }
+  }
+
+  /**
+   * Grouped failures of a campaign: one entry per distinct failure message code,
+   * its SKIPPED item count, and whether a retry would re-attempt it — the flag
+   * read from {@link #RETRYABLE_FAILURE_REASONS}, so the console never has to
+   * hold its own copy of that rule.
+   *
+   * @param campaignId campaign identifier
+   * @return the groups, EMPTY when the campaign has no failed item — or when the
+   *         retention job already archived and purged its item rows, the grouped
+   *         counts being computed over those rows and NOT snapshotted in the
+   *         campaign summary
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public List<CleanupFailureGroup> getCampaignFailures(long campaignId) throws ObjectNotFoundException {
+    getCampaign(campaignId);
+    List<CleanupFailureGroup> failureGroups = campaignStorage.countFailuresByReason(campaignId);
+    failureGroups.forEach(group -> group.setRetryable(RETRYABLE_FAILURE_REASONS.contains(group.getReason())));
+    return failureGroups;
+  }
+
+  /**
+   * Requeues the retryable failures of a campaign, KEYSET-paged: a campaign can
+   * hold hundreds of thousands of failed items, none of which may be loaded into
+   * a single List. Keyset and not offset because the requeue mutates the very
+   * state the query filters on — an offset page would walk past rows as the
+   * result set shrinks underneath it.
+   * <p>
+   * Per item: back to CANDIDATE, one more attempt spent, and BOTH failure fields
+   * cleared — a stale reason on a requeued item would be a lie the console would
+   * happily display. {@code reclaimedBytes} is deliberately LEFT ALONE: a
+   * partially reclaimed delete already reported real bytes, and the campaign
+   * total must not lose them. So is {@code purgedAt}.
+   *
+   * @return the number of items requeued
+   */
+  private long requeueRetryableFailures(long campaignId) {
+    long requeuedCount = 0;
+    long lastId = 0;
+    List<CleanupCampaignItem> failedItems = campaignStorage.getRetryableFailures(campaignId,
+                                                                                RETRYABLE_FAILURE_REASONS,
+                                                                                MAX_RETRY_ATTEMPTS,
+                                                                                lastId,
+                                                                                RETRY_PAGE_SIZE);
+    while (!failedItems.isEmpty()) {
+      for (CleanupCampaignItem item : failedItems) {
+        item.setState(CleanupItemState.CANDIDATE);
+        item.setAttemptCount(item.getAttemptCount() + 1);
+        item.setFailureReason(null);
+        item.setFailureDetail(null);
+        campaignStorage.saveItem(item);
+        lastId = item.getId();
+        requeuedCount++;
+      }
+      failedItems = campaignStorage.getRetryableFailures(campaignId,
+                                                        RETRYABLE_FAILURE_REASONS,
+                                                        MAX_RETRY_ATTEMPTS,
+                                                        lastId,
+                                                        RETRY_PAGE_SIZE);
+    }
+    return requeuedCount;
   }
 
   /**
@@ -887,6 +1036,15 @@ public class CleanupCampaignService {
        .append(toIsoUtc(item.getLastModifiedDate()))
        .append(',')
        .append(toIsoUtc(item.getCreatedDate()))
+       // Administrators-only columns, appended LAST: the archive endpoint is
+       // @Secured("administrators"), unlike the user-facing item DTO which never
+       // carries the detail. The detail is a multi-LINE stack trace, so it goes
+       // through the newline-collapsing escaping — the CSV must stay ONE ROW PER
+       // ITEM whatever a JCR exception looks like
+       .append(',')
+       .append(item.getAttemptCount())
+       .append(',')
+       .append(escapeCsv(toSingleLine(item.getFailureDetail()), true))
        .append('\n');
     return row.toString();
   }
@@ -931,14 +1089,44 @@ public class CleanupCampaignService {
     return outputStream.toByteArray();
   }
 
+  /**
+   * The ONE CSV field escaping, used by every column that can carry a comma, a
+   * quote or a line break — a carriage return counting as one too.
+   */
   private String escapeCsv(String value) {
+    return escapeCsv(value, false);
+  }
+
+  /**
+   * Same escaping, with the option to quote UNCONDITIONALLY. The failure-detail
+   * column takes that option: it is the one field whose content is a free-form
+   * exception dump, so it is quoted whether or not this particular dump happens
+   * to hold a separator. A NULL detail still exports as a plain empty field —
+   * quoting emptiness would say nothing and only widen the report.
+   *
+   * @param value raw field value
+   * @param alwaysQuote true to quote even a separator-free value
+   * @return the field as it goes into the row
+   */
+  private String escapeCsv(String value, boolean alwaysQuote) {
     if (value == null) {
       return "";
     }
-    if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+    if (alwaysQuote || value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
       return "\"" + value.replace("\"", "\"\"") + "\"";
     }
     return value;
+  }
+
+  /**
+   * Flattens the line breaks of a value into the literal two-character sequence
+   * {@code \n}, so a multi-line stack trace can NEVER break the row structure of
+   * the report: the CSV stays one row per item, whatever the exception looked
+   * like. Applied on top of {@link #escapeCsv(String)}, never instead of it — the
+   * flattened value still holds commas and quotes.
+   */
+  private String toSingleLine(String value) {
+    return value == null ? null : value.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n");
   }
 
   /**

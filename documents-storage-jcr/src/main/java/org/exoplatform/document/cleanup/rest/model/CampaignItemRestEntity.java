@@ -65,6 +65,18 @@ public class CampaignItemRestEntity {
 
   private long   reclaimedBytes;
 
+  /** Bare, localizable failure message code. Served on EVERY path — it leaks nothing. */
   private String failureReason;
+
+  /**
+   * Compact failure diagnostic (stack frames, exception messages). Serialized on
+   * the ADMINISTRATOR path only, and null everywhere else: it can name nodes
+   * outside the calling user's visibility. See
+   * {@code CleanupEntityBuilder#build(CleanupCampaignItem, IdentityManager, boolean)}.
+   */
+  private String failureDetail;
+
+  /** Purge attempts already spent on this item, retries included. */
+  private long   attemptCount;
 
 }

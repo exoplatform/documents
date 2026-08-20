@@ -17,6 +17,7 @@
 package org.exoplatform.document.cleanup.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -55,9 +56,11 @@ import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
@@ -82,6 +85,9 @@ class CleanupCampaignRestTest {
   private static final String    BAD_REQUEST_CODE = "cleanup.invalidState";
 
   private static final long      CAMPAIGN_ID      = 12L;
+
+  private static final String    FAILURE_DETAIL   =
+                                                "javax.jcr.ReferentialIntegrityException: referenced by /Groups/spaces/hr/Documents/link";
 
   /**
    * The ordering BOTH item tables must end up with by default: the size-first
@@ -563,6 +569,100 @@ class CleanupCampaignRestTest {
     campaign.setName(name);
     campaign.setState(CleanupCampaignState.DRAFT);
     return campaign;
+  }
+
+  @Test
+  void retryCampaignDelegatesAndMapsStatuses() throws ObjectNotFoundException {
+    when(campaignService.retryCampaign(CAMPAIGN_ID)).thenReturn(campaign(CAMPAIGN_ID, "retried"));
+    assertEquals(CAMPAIGN_ID, campaignRest.retryCampaign(CAMPAIGN_ID).getId());
+
+    when(campaignService.retryCampaign(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+    ResponseStatusException notFound = assertThrows(ResponseStatusException.class, () -> campaignRest.retryCampaign(404L));
+    assertEquals(HttpStatus.NOT_FOUND, notFound.getStatusCode());
+    assertEquals(NOT_FOUND_CODE, notFound.getReason(), "The message code must travel as the status reason");
+
+    when(campaignService.retryCampaign(400L)).thenThrow(new IllegalArgumentException("cleanup.noRetryableFailures"));
+    ResponseStatusException badRequest = assertThrows(ResponseStatusException.class, () -> campaignRest.retryCampaign(400L));
+    assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
+    assertEquals("cleanup.noRetryableFailures", badRequest.getReason());
+  }
+
+  @Test
+  void retryCampaignAnswersAcceptedLikeEveryAsynchronousAction() throws NoSuchMethodException {
+    // The purge is handed off to a worker thread: answering 200 would tell the
+    // console the work is done
+    assertEquals(HttpStatus.ACCEPTED,
+                 CleanupCampaignRest.class.getMethod("retryCampaign", long.class)
+                                          .getAnnotation(ResponseStatus.class)
+                                          .value());
+  }
+
+  @Test
+  void getCampaignFailuresMapsEveryGroupAndItsRetryableFlag() throws ObjectNotFoundException {
+    when(campaignService.getCampaignFailures(CAMPAIGN_ID)).thenReturn(List.of(new CleanupFailureGroup("cleanup.deleteError",
+                                                                                                     12L,
+                                                                                                     true),
+                                                                             new CleanupFailureGroup("cleanup.referentialIntegrity",
+                                                                                                     3L,
+                                                                                                     false)));
+
+    List<CampaignFailureGroupRestEntity> failures = campaignRest.getCampaignFailures(CAMPAIGN_ID);
+
+    assertEquals(2, failures.size());
+    assertEquals("cleanup.deleteError", failures.get(0).getReason());
+    assertEquals(12L, failures.get(0).getCount());
+    assertTrue(failures.get(0).isRetryable());
+    assertFalse(failures.get(1).isRetryable());
+  }
+
+  @Test
+  void getCampaignFailuresMapsNotFound() throws ObjectNotFoundException {
+    when(campaignService.getCampaignFailures(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class, () -> campaignRest.getCampaignFailures(404L)).getStatusCode());
+  }
+
+  @Test
+  void getCampaignItemsServesTheFailureDetailToAdministrators() throws ObjectNotFoundException {
+    CleanupCampaignItem failedItem = item(3);
+    failedItem.setFailureReason("cleanup.deleteError");
+    failedItem.setFailureDetail(FAILURE_DETAIL);
+    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any()))
+                                                                                              .thenReturn(new PageImpl<>(List.of(failedItem)));
+
+    PagedResult<CampaignItemRestEntity> result = campaignRest.getCampaignItems(CAMPAIGN_ID,
+                                                                               null,
+                                                                               null,
+                                                                               null,
+                                                                               null,
+                                                                               null,
+                                                                               0,
+                                                                               20,
+                                                                               null);
+
+    // @Secured("administrators"): this is the ONE path allowed to expose a stack
+    // trace that can name nodes outside a given user's visibility
+    assertEquals(FAILURE_DETAIL, result.getItems().get(0).getFailureDetail());
+  }
+
+  @Test
+  void getMyItemsWithholdsTheFailureDetailFromEndUsers() throws ObjectNotFoundException {
+    CleanupCampaignItem failedItem = item(3);
+    failedItem.setFailureReason("cleanup.deleteError");
+    failedItem.setFailureDetail(FAILURE_DETAIL);
+    when(request.getRemoteUser()).thenReturn("john");
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of(failedItem)));
+
+    PagedResult<CampaignItemRestEntity> result = campaignRest.getMyItems(request, null, 0, 20, null);
+
+    // @Secured("users"): a referential-integrity dump names the REFERENCING node,
+    // e.g. a shortcut in a space the caller is not a member of
+    assertNull(result.getItems().get(0).getFailureDetail(),
+               "The user-facing endpoint must never serialize the failure detail");
+    assertEquals("cleanup.deleteError",
+                 result.getItems().get(0).getFailureReason(),
+                 "The bare reason code stays: it is a localizable message code, it leaks nothing");
   }
 
   private CleanupCampaignItem item(long id) {

@@ -49,6 +49,7 @@ import org.exoplatform.document.cleanup.model.CleanupPurgeResult;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 import org.exoplatform.document.cleanup.util.CleanupCriterionEvaluator;
+import org.exoplatform.document.cleanup.util.CleanupThrowableUtil;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -428,10 +429,19 @@ public class CleanupJcrStorage {
       removeEmptyAncestors(session, parentNode, nodePath);
       return CleanupPurgeResult.purged(reclaimedBytes);
     } catch (ReferentialIntegrityException e) {
-      return CleanupPurgeResult.skipped("cleanup.referentialIntegrity: " + e.getMessage(), deleted ? reclaimedBytes : 0);
+      // The reason stays a BARE message code (the console localizes it, the
+      // grouped-failures aggregate groups on it); the exception text goes to the
+      // administrator-only detail
+      return CleanupPurgeResult.skipped("cleanup.referentialIntegrity",
+                                        CleanupThrowableUtil.formatFailureDetail(e),
+                                        deleted ? reclaimedBytes : 0);
     } catch (Exception e) {
+      // LOG first, persist the compact detail second: if the persist fails, the
+      // full stack trace is already in the server log
       LOG.warn("Error hard-deleting node {}", nodeUuid, e);
-      return CleanupPurgeResult.skipped("cleanup.deleteError: " + e.getMessage(), deleted ? reclaimedBytes : 0);
+      return CleanupPurgeResult.skipped("cleanup.deleteError",
+                                        CleanupThrowableUtil.formatFailureDetail(e),
+                                        deleted ? reclaimedBytes : 0);
     } finally {
       logout(session);
     }
@@ -521,9 +531,13 @@ public class CleanupJcrStorage {
       }
       return CleanupPurgeResult.purged(reclaimedBytes);
     } catch (Exception e) {
+      // LOG first, persist the compact detail second: if the persist fails, the
+      // full stack trace is already in the server log
       LOG.warn("Error purging versions of node {}", nodeUuid, e);
       // SKIPPED, but carrying whatever was already reclaimed: see the javadoc
-      return CleanupPurgeResult.skipped("cleanup.purgeVersionsError: " + e.getMessage(), reclaimedBytes);
+      return CleanupPurgeResult.skipped("cleanup.purgeVersionsError",
+                                        CleanupThrowableUtil.formatFailureDetail(e),
+                                        reclaimedBytes);
     } finally {
       logout(session);
     }

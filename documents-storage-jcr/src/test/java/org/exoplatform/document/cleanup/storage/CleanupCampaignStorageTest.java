@@ -17,6 +17,7 @@
 package org.exoplatform.document.cleanup.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,6 +35,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,6 +60,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 
 /**
@@ -81,6 +84,10 @@ class CleanupCampaignStorageTest {
   private static final long      CAMPAIGN_ID        = 3L;
 
   private static final long      OTHER_CAMPAIGN_ID  = 4L;
+
+  private static final String    SKIPPED_STATE      = "SKIPPED";
+
+  private static final String    FAILURE_DETAIL     = "javax.jcr.RepositoryException: boom";
 
   @Mock
   private CleanupCampaignDAO     campaignDAO;
@@ -327,6 +334,10 @@ class CleanupCampaignStorageTest {
     assertEquals(item.getPurgedAt(), saved.getPurgedAt());
     assertEquals(item.getReclaimedBytes(), saved.getReclaimedBytes());
     assertEquals(item.getFailureReason(), saved.getFailureReason());
+    assertEquals(FAILURE_DETAIL, entity.getFailureDetail(), "The diagnostic must reach the CLOB column");
+    assertEquals(item.getFailureDetail(), saved.getFailureDetail());
+    assertEquals(2L, entity.getAttemptCount());
+    assertEquals(item.getAttemptCount(), saved.getAttemptCount());
     // Back to the model: a report column read from a row it never came back on
     // would render empty for every item
     assertEquals(item.getLastModifiedDate(), saved.getLastModifiedDate());
@@ -697,6 +708,91 @@ class CleanupCampaignStorageTest {
                                                                                                                 6L));
   }
 
+  @Test
+  void getItemsByStateAfterIdAsksTheKeysetQueryForTheIdsPastTheLastOneSeen() {
+    when(itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
+                                                                     eq(CANDIDATE_STATE),
+                                                                     anyLong(),
+                                                                     any())).thenReturn(List.of(itemEntity(USERS_ROOT_PATH,
+                                                                                                           2048,
+                                                                                                           42L)));
+
+    List<CleanupCampaignItem> items = storage.getItemsByStateAfterId(CAMPAIGN_ID, CleanupItemState.CANDIDATE, 41L, 200);
+
+    assertEquals(1, items.size());
+    assertEquals(42L, items.get(0).getId());
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
+                                                                        eq(CANDIDATE_STATE),
+                                                                        eq(41L),
+                                                                        pageableCaptor.capture());
+    // The batch size is the page SIZE, and the page index is always 0: the
+    // position comes from the id, never from an offset
+    assertEquals(0, pageableCaptor.getValue().getPageNumber());
+    assertEquals(200, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void getRetryableFailuresPassesTheAllowlistTheBoundAndTheKeysetPosition() {
+    when(itemDAO.findRetryableFailures(eq(CAMPAIGN_ID), eq(SKIPPED_STATE), anyCollection(), anyLong(), anyLong(), any()))
+                                                                                                                        .thenReturn(List.of(itemEntity(USERS_ROOT_PATH,
+                                                                                                                                                       2048,
+                                                                                                                                                       55L)));
+
+    List<CleanupCampaignItem> items = storage.getRetryableFailures(CAMPAIGN_ID,
+                                                                  Set.of("cleanup.deleteError"),
+                                                                  3L,
+                                                                  54L,
+                                                                  1000);
+
+    assertEquals(1, items.size());
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findRetryableFailures(eq(CAMPAIGN_ID),
+                                         eq(SKIPPED_STATE),
+                                         eq(Set.of("cleanup.deleteError")),
+                                         eq(3L),
+                                         eq(54L),
+                                         pageableCaptor.capture());
+    assertEquals(Sort.by("id"), pageableCaptor.getValue().getSort(), "The keyset walk must be ordered by id");
+  }
+
+  @Test
+  void getRetryableFailuresShortCircuitsOnAnEmptyAllowlist() {
+    // An empty IN list is invalid SQL on several databases, and the answer is
+    // known without asking: nothing is retryable
+    assertTrue(storage.getRetryableFailures(CAMPAIGN_ID, Set.of(), 3L, 0L, 1000).isEmpty());
+    assertTrue(storage.getRetryableFailures(CAMPAIGN_ID, null, 3L, 0L, 1000).isEmpty());
+
+    verifyNoInteractions(itemDAO);
+  }
+
+  @Test
+  void countFailuresByReasonFoldsTheGroupedAggregateRows() {
+    when(itemDAO.countFailuresByReason(CAMPAIGN_ID, SKIPPED_STATE))
+                                                                   .thenReturn(List.of(new Object[] { "cleanup.deleteError",
+                                                                                                      12L },
+                                                                                       new Object[] {
+                                                                                                      "cleanup.referentialIntegrity",
+                                                                                                      3L }));
+
+    List<CleanupFailureGroup> groups = storage.countFailuresByReason(CAMPAIGN_ID);
+
+    assertEquals(2, groups.size());
+    assertEquals("cleanup.deleteError", groups.get(0).getReason());
+    assertEquals(12L, groups.get(0).getCount());
+    assertEquals(3L, groups.get(1).getCount());
+    // The retryable rule belongs to the Service: the Storage must never decide it
+    assertFalse(groups.get(0).isRetryable(), "The Storage leaves the retryable flag to the Service");
+    assertFalse(groups.get(1).isRetryable());
+  }
+
+  @Test
+  void countFailuresByReasonReturnsNoGroupWithoutAnyFailedItem() {
+    when(itemDAO.countFailuresByReason(CAMPAIGN_ID, SKIPPED_STATE)).thenReturn(List.of());
+
+    assertTrue(storage.countFailuresByReason(CAMPAIGN_ID).isEmpty());
+  }
+
   private List<Long> ownerIds(int total) {
     return java.util.stream.LongStream.rangeClosed(1, total).boxed().toList();
   }
@@ -841,6 +937,8 @@ class CleanupCampaignStorageTest {
     item.setPurgedAt(7000L);
     item.setReclaimedBytes(128);
     item.setFailureReason("some.failure");
+    item.setFailureDetail(FAILURE_DETAIL);
+    item.setAttemptCount(2L);
     return item;
   }
 

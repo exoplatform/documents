@@ -35,6 +35,12 @@ export const DATE_TIME_FORMAT = {
  * keep/un-keep endpoints report is a permanent refusal (not the owner, review
  * closed, item not decidable anymore...), so telling the user to try again would
  * send them in circles.
+ *
+ * Scoped to the USER's keep/un-keep decisions, and to them only. The purge's own
+ * failure codes (cleanup.referentialIntegrity, cleanup.deleteError...) are a
+ * DIFFERENT notion and must NOT be added here: their retryability is decided by
+ * the server, which answers it per group on the campaign failures endpoint, and
+ * the admin UI reads that verdict instead of re-deriving one from the code.
  */
 export const RETRYABLE_FAILURE_REASONS = ['cleanup.keepFailed', 'cleanup.unkeepFailed'];
 

@@ -488,7 +488,9 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    assertEquals("cleanup.deleteError", result.getFailureReason(), "The reason must stay a BARE message code");
+    assertTrue(result.getFailureDetail().contains(JCR_DOWN_ERROR_MSG),
+               "The exception text belongs to the DETAIL: " + result.getFailureDetail());
     verify(node, never()).remove();
     verify(session, never()).save();
     verify(session).logout();
@@ -548,8 +550,11 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.deleteNode("uuid-referenced");
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.referentialIntegrity"),
-               "A referenced node must be SKIPPED with the referential-integrity reason");
+    assertEquals("cleanup.referentialIntegrity",
+                 result.getFailureReason(),
+                 "The reason must be the BARE message code: the console localizes it and the failure groups group on it");
+    assertTrue(result.getFailureDetail().startsWith("javax.jcr.ReferentialIntegrityException: still referenced"),
+               "The exception text belongs to the DETAIL, never to the reason: " + result.getFailureDetail());
     // The save FAILED: the file is still there, so not a single byte may be
     // announced as reclaimed even though its size was already measured
     assertEquals(0L, result.getReclaimedBytes(), "A rolled-back removal must report zero reclaimed bytes");
@@ -580,7 +585,9 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    assertEquals("cleanup.deleteError", result.getFailureReason(), "The reason must stay a BARE message code");
+    assertTrue(result.getFailureDetail().startsWith("java.lang.IllegalStateException: depth unavailable"),
+               "The exception text belongs to the DETAIL: " + result.getFailureDetail());
     assertEquals(2048L,
                  result.getReclaimedBytes(),
                  "The bytes of the file really removed by the committed save must be carried");
@@ -604,7 +611,9 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_DOOMED);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    assertEquals("cleanup.deleteError", result.getFailureReason(), "The reason must stay a BARE message code");
+    assertTrue(result.getFailureDetail().contains(JCR_DOWN_ERROR_MSG),
+               "The exception text belongs to the DETAIL: " + result.getFailureDetail());
     assertEquals(0L, result.getReclaimedBytes(), "Nothing was removed yet: zero reclaimed bytes");
     verify(node, never()).remove();
     verify(session, never()).save();
@@ -676,7 +685,9 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 1);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
+    assertEquals("cleanup.purgeVersionsError", result.getFailureReason(), "The reason must stay a BARE message code");
+    assertTrue(result.getFailureDetail().startsWith("javax.jcr.RepositoryException: version in use"),
+               "The exception text belongs to the DETAIL: " + result.getFailureDetail());
     assertEquals(0L, result.getReclaimedBytes(), "The very first removal failed: nothing was reclaimed");
   }
 
@@ -713,7 +724,7 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 2);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
+    assertEquals("cleanup.purgeVersionsError", result.getFailureReason(), "The reason must stay a BARE message code");
     assertEquals(300L,
                  result.getReclaimedBytes(),
                  "The bytes of the two versions really removed before the failure must be carried");
@@ -884,7 +895,9 @@ class CleanupJcrStorageTest {
     // A transient repository failure must NEVER be reported as 'the file
     // disappeared': GONE is a definitive outcome recorded on the item
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.deleteError"));
+    assertEquals("cleanup.deleteError", result.getFailureReason(), "The reason must stay a BARE message code");
+    assertTrue(result.getFailureDetail().contains(JCR_DOWN_ERROR_MSG),
+               "The exception text belongs to the DETAIL: " + result.getFailureDetail());
     verify(session, never()).save();
   }
 
@@ -895,7 +908,9 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_FLAKY, 2);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
-    assertTrue(result.getFailureReason().startsWith("cleanup.purgeVersionsError"));
+    assertEquals("cleanup.purgeVersionsError", result.getFailureReason(), "The reason must stay a BARE message code");
+    assertTrue(result.getFailureDetail().contains(JCR_DOWN_ERROR_MSG),
+               "The exception text belongs to the DETAIL: " + result.getFailureDetail());
   }
 
   @Test

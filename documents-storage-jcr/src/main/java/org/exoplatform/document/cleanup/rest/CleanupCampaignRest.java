@@ -47,6 +47,7 @@ import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
@@ -269,6 +270,65 @@ public class CleanupCampaignRest {
     }
   }
 
+  /**
+   * A sub-resource POST, unlike the rename PATCH next to it: a retry is an
+   * ACTION with a lifecycle transition behind it (COMPLETED back to EXECUTING),
+   * not the update of an attribute.
+   * <p>
+   * ASYNCHRONOUS like {@code execute}: the failed items are requeued and the
+   * campaign switched to EXECUTING synchronously, the purge itself is handed off
+   * to a worker thread — hence the 202. Progress is pushed on the
+   * {@code /eXo/Application/CleanupCampaign} CometD channel.
+   */
+  @Secured("administrators")
+  @PostMapping(path = "{id}/retry", produces = MediaType.APPLICATION_JSON_VALUE)
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  @Operation(method = "POST", summary = "Retry the failed items of a completed cleanup campaign", description = "Requeue the retryable failed items of a COMPLETED campaign and re-execute it asynchronously — no new scan, no new grace period. Returns 202: the purge progress is followed on the CometD channel /eXo/Application/CleanupCampaign")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "202", description = "Retry accepted, progress followed on the CometD channel"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public CampaignRestEntity retryCampaign(
+                                          @Parameter(description = "Campaign identifier", required = true)
+                                          @PathVariable("id")
+                                          long id) {
+    try {
+      return CleanupEntityBuilder.build(campaignService.retryCampaign(id));
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+  }
+
+  /**
+   * Grouped failures of a campaign, so the console can show WHY items were
+   * skipped and which of those failures a retry would re-attempt — the
+   * {@code retryable} flag is the SERVER's answer, the client never decides it.
+   * <p>
+   * Answers an EMPTY list when the campaign has no failed item, and also once the
+   * retention job archived and purged its item rows: the groups are computed over
+   * those rows and are not part of the summary snapshotted at completion.
+   */
+  @Secured("administrators")
+  @GetMapping(path = "{id}/failures", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "GET", summary = "Retrieve the grouped failures of a cleanup campaign", description = "Per-reason counts of a campaign's skipped items, each flagged retryable or not. Empty once the retention job purged the item rows")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public List<CampaignFailureGroupRestEntity> getCampaignFailures(
+                                                                 @Parameter(description = "Campaign identifier", required = true)
+                                                                 @PathVariable("id")
+                                                                 long id) {
+    try {
+      return campaignService.getCampaignFailures(id).stream().map(CleanupEntityBuilder::build).toList();
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
   @Secured("administrators")
   @GetMapping(path = "{id}/items", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(method = "GET", summary = "Retrieve the items of a cleanup campaign", description = "Retrieve the items of a cleanup campaign, with optional owner/state/action/size filters and an optional path search, paged and sorted")
@@ -314,7 +374,13 @@ public class CleanupCampaignRest {
                                                                          minSize,
                                                                          search,
                                                                          pageable),
-                                        identityManager);
+                                        identityManager,
+                                        // ADMINISTRATORS-only endpoint: the
+                                        // failure detail may name nodes outside a
+                                        // given user's visibility, so it is
+                                        // serialized HERE and nowhere else — see
+                                        // the builder's javadoc
+                                        true);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalArgumentException e) {
@@ -397,7 +463,12 @@ public class CleanupCampaignRest {
       // Same allowlist, same default and same stable tiebreaker as the admin
       // items endpoint: the review table is server-sorted too
       Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-      return CleanupEntityBuilder.build(campaignService.getMyItems(request.getRemoteUser(), search, pageable), identityManager);
+      // The failure detail is EXPLICITLY withheld here: this endpoint is
+      // @Secured("users"), and a stack trace can name a referencing node in a
+      // space the caller is not a member of. The bare failureReason code stays
+      return CleanupEntityBuilder.build(campaignService.getMyItems(request.getRemoteUser(), search, pageable),
+                                        identityManager,
+                                        false);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalArgumentException e) {

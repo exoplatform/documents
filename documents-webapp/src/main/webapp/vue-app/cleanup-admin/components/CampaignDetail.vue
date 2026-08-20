@@ -135,6 +135,54 @@
       </div>
     </div>
     <document-cleanup-campaign-stats :campaign="campaign" />
+    <!-- The grouped skip reasons of a FINISHED run, and the only place a retry
+         is offered from. Nothing is shown when the endpoint answers an empty
+         list: no failure, or item rows the retention job already purged -->
+    <div v-if="failures.length" class="mt-4">
+      <div class="d-flex align-center flex-wrap">
+        <number-format :value="totalFailures" class="text-color font-weight-bold" />
+        <span class="ms-1 text-color">{{ $t('cleanup.admin.failures.headline', {0: failures.length}) }}</span>
+        <v-spacer />
+        <!-- Kept VISIBLE but disabled when nothing is retryable, rather than
+             vanishing silently: the tooltip is what tells the admin the
+             remaining failures are deterministic and would fail identically.
+             Wrapped in a div because a disabled v-btn emits no mouse event, so
+             it would never open its own tooltip (same trick as Execute above) -->
+        <v-tooltip bottom>
+          <template #activator="{ on, attrs }">
+            <div v-bind="attrs" v-on="on">
+              <v-btn
+                :aria-label="$t('cleanup.admin.failures.retry')"
+                :disabled="!retryEnabled"
+                :loading="actionInProgress"
+                class="btn btn-primary"
+                @click="retry">
+                {{ $t('cleanup.admin.failures.retry') }}
+              </v-btn>
+            </div>
+          </template>
+          <span>{{ retryTooltip }}</span>
+        </v-tooltip>
+      </div>
+      <!-- Retryability is the SERVER's verdict, carried by each group and never
+           re-derived from the reason code here: the execution codes and the
+           review-side RETRYABLE_FAILURE_REASONS of CleanupUtils are two
+           different notions (see retry() below) -->
+      <div
+        v-for="group in failures"
+        :key="group.reason"
+        class="d-flex align-center mt-1">
+        <v-chip
+          :color="group.retryable ? 'warning' : 'grey'"
+          class="me-2"
+          outlined
+          x-small>
+          {{ $t(group.retryable ? 'cleanup.admin.failures.retryable' : 'cleanup.admin.failures.permanent') }}
+        </v-chip>
+        <number-format :value="group.count" class="text-color font-weight-bold" />
+        <span class="ms-2 text-light-color caption">{{ failureLabel(group.reason) }}</span>
+      </div>
+    </div>
     <document-cleanup-campaign-compare-view
       :campaign="campaign"
       :campaigns="campaigns"
@@ -195,6 +243,11 @@ export default {
       // not overwrite a newer campaign (see loadCampaign)
       loadToken: 0,
       lastEventRefresh: 0,
+      // Execution failures grouped BY THE SERVER ([{reason, count, retryable}]),
+      // plus the id of the campaign they were requested for: applyCampaign runs
+      // on every load, and this must stay ONE request per completion
+      failures: [],
+      failuresLoadedFor: null,
     };
   },
   computed: {
@@ -235,6 +288,17 @@ export default {
     },
     remainingTime() {
       return this.$cleanupDuration(this.remaining);
+    },
+    totalFailures() {
+      return this.failures.reduce((total, group) => total + (group.count || 0), 0);
+    },
+    // ONE retryable group is enough: the server requeues what it judges
+    // retryable and leaves the rest alone
+    retryEnabled() {
+      return this.failures.some(group => group.retryable);
+    },
+    retryTooltip() {
+      return this.$t(this.retryEnabled ? 'cleanup.admin.failures.retryTooltip' : 'cleanup.admin.failures.retryDisabled');
     },
     paramsSummary() {
       return this.$t('cleanup.admin.campaign.paramsSummary', {
@@ -294,6 +358,44 @@ export default {
       this.remainingMillis = campaign?.remainingMillis || 0;
       this.syncedAt = Date.now();
       this.now = this.syncedAt;
+      this.syncFailures();
+    },
+    // The grouped failures are the report of a run that ENDED: they are only
+    // asked for in COMPLETED — the sole state a purge has actually run in, so a
+    // campaign that never executed is never queried — and they are dropped as
+    // soon as the campaign leaves it (a retry sends it back to EXECUTING),
+    // instead of leaving the previous attempt's counts on screen. Coming back to
+    // COMPLETED therefore reloads them fresh.
+    syncFailures() {
+      const campaignId = this.campaign?.id;
+      if (!campaignId || this.campaign.state !== 'COMPLETED') {
+        this.failures = [];
+        this.failuresLoadedFor = null;
+        return;
+      }
+      if (this.failuresLoadedFor === campaignId) {
+        return;
+      }
+      // Marked BEFORE the request, a failed one included: applyCampaign is
+      // called by the fallback tick, the CometD refresh and every action
+      // follow-up, and none of them must turn into a second query
+      this.failuresLoadedFor = campaignId;
+      this.failures = [];
+      return this.$cleanupService.getCampaignFailures(campaignId)
+        .then(failures => {
+          // Dropped when the admin already switched campaign: same supersession
+          // discipline as loadCampaign
+          if (this.failuresLoadedFor === campaignId) {
+            this.failures = failures || [];
+          }
+        })
+        .catch(() => this.displayAlert(this.$t('cleanup.admin.failures.loadError'), 'error'));
+    },
+    // Localized through the SHARED $cleanupErrorLabel, like every other cleanup
+    // message code: a reason with no bundle entry falls back to the generic
+    // sentence rather than being shown raw
+    failureLabel(reason) {
+      return this.$cleanupErrorLabel(reason, UNEXPECTED_ERROR_KEY);
     },
     // Coming back to the tab must tick IMMEDIATELY, not only re-arm the timer:
     // no refresh happened while the tab was hidden, so the countdown — and the
@@ -413,12 +515,27 @@ export default {
     cancel() {
       this.callAction(this.$cleanupService.cancelCampaign(this.campaignId), 'cancel');
     },
-    callAction(promise, action) {
+    // Requeues the retryable failures. WHICH ones are retryable is the server's
+    // call, never re-derived here — and it has nothing to do with the
+    // RETRYABLE_FAILURE_REASONS of CleanupUtils, which qualify the USER's bulk
+    // keep/un-keep refusals, a different set of codes entirely.
+    //
+    // The endpoint answers the updated campaign, back to EXECUTING, so it is
+    // applied instead of refetched. Nothing else is needed for the run to read
+    // as live: 'running' already covers EXECUTING, so the refreshNeeded watcher
+    // re-arms the fallback poll, and the CometD handlers key on the campaign id
+    // rather than on the state they were registered in.
+    retry() {
+      this.callAction(this.$cleanupService.retryCampaign(this.campaignId), 'retry', true);
+    },
+    // 'applyResult' is for the endpoints answering the updated campaign (retry):
+    // it is applied directly, where a void endpoint still needs the extra GET
+    callAction(promise, action, applyResult) {
       this.actionInProgress = true;
       return promise
-        .then(() => {
+        .then(campaign => {
           this.displayAlert(this.$t(`cleanup.admin.campaign.${action}Success`));
-          return this.loadCampaign();
+          return applyResult ? this.applyCampaign(campaign) : this.loadCampaign();
         })
         .then(() => this.$emit('refresh'))
         // The REST layer answers a MESSAGE CODE as the error body

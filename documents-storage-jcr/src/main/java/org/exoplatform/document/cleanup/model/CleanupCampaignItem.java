@@ -66,6 +66,21 @@ public class CleanupCampaignItem {
 
   private long             reclaimedBytes;
 
+  /**
+   * Localizable message code of the failure, never concatenated with an
+   * exception message: the console localizes it and the grouped-failures
+   * aggregate groups on it.
+   */
   private String           failureReason;
+
+  /**
+   * Compact diagnostic of the failure, for an ADMINISTRATOR only — it names
+   * nodes and paths the item's own owner may not see. Served on the admin item
+   * endpoint and the CSV report exclusively, see the REST layer.
+   */
+  private String           failureDetail;
+
+  /** Purge attempts already spent on this item, incremented by every retry. */
+  private long             attemptCount;
 
 }

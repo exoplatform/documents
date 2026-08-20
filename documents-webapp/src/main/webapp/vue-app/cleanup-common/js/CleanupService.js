@@ -159,6 +159,29 @@ export function unkeepItems(itemIds) {
   }).then(handleJsonResponse);
 }
 
+// Requeues the items a previous execution could not process, and answers the
+// full updated campaign (back to EXECUTING) — applied by the caller instead of
+// refetching, exactly like renameCampaign. NO body: WHICH failures are
+// retryable is decided server-side, the client never selects them.
+export function retryCampaign(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/retry`, {
+    method: 'POST',
+    credentials: 'include',
+  }).then(handleJsonResponse);
+}
+
+// Answers the execution failures of a finished campaign, folded server-side into
+// [{reason, count, retryable}] — one entry per distinct message code, with the
+// server's OWN retryability verdict. An empty array is not proof the run was
+// clean: it is also what a campaign whose item rows the retention job already
+// purged answers.
+export function getCampaignFailures(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/failures`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(handleJsonResponse);
+}
+
 // Null, undefined and empty values are DROPPED rather than sent empty: every
 // filter of both items endpoints is optional server-side, and a blank 'search'
 // or 'state' must mean 'no filter', not 'match nothing'.

@@ -16,18 +16,17 @@
  */
 package org.exoplatform.document.cleanup.service;
 
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
@@ -41,6 +40,7 @@ import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.util.CleanupEtaUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
+import org.exoplatform.document.cleanup.util.CleanupThrowableUtil;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 import org.exoplatform.services.log.ExoLogger;
@@ -151,17 +151,31 @@ public class CleanupExecutionService {
       long processedAtStart = processed;
       long startTime = System.currentTimeMillis();
 
-      Page<CleanupCampaignItem> batch = campaignStorage.getItemsByState(campaignId,
-                                                                        CleanupItemState.CANDIDATE,
-                                                                        PageRequest.of(0, batchSize, Sort.by("id")));
+      // KEYSET paging, never an offset page-0 re-read: the loop walks the ids
+      // upwards, so the worker CANNOT revisit an item within a run whatever
+      // happens to it. Re-reading page 0 relied on every processed item leaving
+      // CANDIDATE — one item that can never be persisted then fed itself back
+      // forever, and the stalled-worker watchdog kept relaunching the same run.
+      // Resumability is untouched: a fresh run restarts from id 0 and the
+      // already-processed items are simply no longer CANDIDATE
+      long lastId = 0;
+      List<CleanupCampaignItem> batch = campaignStorage.getItemsByStateAfterId(campaignId,
+                                                                              CleanupItemState.CANDIDATE,
+                                                                              lastId,
+                                                                              batchSize);
       while (!batch.isEmpty()) {
         if (isAborted(campaignId)) {
           return;
         }
-        for (CleanupCampaignItem item : batch.getContent()) {
+        for (CleanupCampaignItem item : batch) {
           processItem(item, params);
         }
-        processed += batch.getNumberOfElements();
+        // The cursor MUST advance here, and from the batch itself: the query
+        // answers ids ascending, so the last element carries the highest id met.
+        // Leaving it at its previous value would re-read the very same window and
+        // hand back the poison pill the keyset paging exists to defuse
+        lastId = batch.get(batch.size() - 1).getId();
+        processed += batch.size();
         long etaSeconds = CleanupEtaUtil.computeEtaSeconds(startTime, processedAtStart, processed, total);
         campaignStorage.updateProgress(campaignId, total, processed, etaSeconds, null, 0);
         webSocketService.sendToAdministrators(new CleanupWsMessage(CleanupWsMessage.PROGRESS_EVENT,
@@ -170,10 +184,11 @@ public class CleanupExecutionService {
                                                                    processed,
                                                                    total,
                                                                    etaSeconds));
-        // Processed items always leave the CANDIDATE state, so page 0 shrinks
-        batch = campaignStorage.getItemsByState(campaignId,
-                                                CleanupItemState.CANDIDATE,
-                                                PageRequest.of(0, batchSize, Sort.by("id")));
+        // Per-batch transaction boundary: commits this batch and opens a fresh
+        // one, so a database failure inside a later batch can no longer roll
+        // back the batches that already completed
+        restartTransaction();
+        batch = campaignStorage.getItemsByStateAfterId(campaignId, CleanupItemState.CANDIDATE, lastId, batchSize);
       }
 
       completeCampaign(campaignId, total, processed);
@@ -205,16 +220,74 @@ public class CleanupExecutionService {
         item.setState(result.getState());
         item.setReclaimedBytes(result.getReclaimedBytes());
         item.setFailureReason(result.getFailureReason());
+        item.setFailureDetail(result.getFailureDetail());
         if (result.getState() == CleanupItemState.PURGED) {
           item.setPurgedAt(System.currentTimeMillis());
         }
       }
+      // The save is INSIDE the guarded region: it used to sit outside it, so a
+      // failing save (an oversized value, a dead connection) escaped the batch
+      // loop and the whole worker, leaving the item CANDIDATE in the database
+      // with its SKIPPED state set in memory only — the watchdog then restarted
+      // the worker on the very same item, forever
+      saveItem(item);
     } catch (Exception e) {
+      // LOG first, persist the compact detail second: if the persist fails in
+      // turn, the full stack trace is already in the server log
       LOG.warn("Error purging cleanup campaign item {} ({}), skipping it", item.getId(), item.getPath(), e);
       item.setState(CleanupItemState.SKIPPED);
-      item.setFailureReason("cleanup.unexpectedError: " + e.getMessage());
+      item.setFailureReason("cleanup.unexpectedError");
+      item.setFailureDetail(CleanupThrowableUtil.formatFailureDetail(e));
+      saveItem(item);
     }
-    campaignStorage.saveItem(item);
+  }
+
+  /**
+   * Persists an item's outcome, NEVER rethrowing into the batch loop: a single
+   * unsavable item must not abort the purge of every item after it.
+   * <p>
+   * On failure, ONE minimal fallback save is attempted, carrying the state and
+   * the bare failure code with a null detail — the detail is by far the likeliest
+   * cause of an oversized-value failure, so dropping it is what has a chance of
+   * getting the row through. If even that fails, it is logged and the worker
+   * moves on: the item stays CANDIDATE, and the keyset paging guarantees this run
+   * will not meet it again.
+   */
+  private void saveItem(CleanupCampaignItem item) {
+    try {
+      campaignStorage.saveItem(item);
+    } catch (Exception e) {
+      LOG.error("Error saving cleanup campaign item {} ({}), retrying without its failure detail",
+                item.getId(),
+                item.getPath(),
+                e);
+      item.setFailureDetail(null);
+      try {
+        campaignStorage.saveItem(item);
+      } catch (Exception fallbackException) {
+        LOG.error("Error saving cleanup campaign item {} ({}) even without its failure detail, moving on",
+                  item.getId(),
+                  item.getPath(),
+                  fallbackException);
+      }
+    }
+  }
+
+  /**
+   * Commits the current batch and opens a fresh transaction. Extracted as a
+   * single static call so the worker tests — which drive the worker body directly,
+   * with no PortalContainer booted — can neutralize it.
+   * <p>
+   * The NO-ARG form is the correct one here: {@code ContainerTransactionalAspect}
+   * sets the current container to the PortalContainer before its
+   * {@code RequestLifeCycle.begin} and restores it afterwards, so
+   * {@code ExoContainerContext.getCurrentContainer()} inside the worker IS the
+   * right container. And {@code restartTransaction} ends then begins the SAME
+   * number of nested lifecycles, so the aspect's own {@code end()} in its finally
+   * block stays balanced.
+   */
+  protected void restartTransaction() {
+    RequestLifeCycle.restartTransaction();
   }
 
   private void completeCampaign(long campaignId, long total, long processed) {

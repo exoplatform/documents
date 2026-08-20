@@ -128,4 +128,18 @@
         </addColumn>
     </changeSet>
 
+    <!-- Failure DIAGNOSTIC of an item, split from its localizable FAILURE_REASON
+         message code: a CLOB, because a JCR stack trace with an embedded SQL
+         error does not fit a bounded column. ATTEMPT_COUNT carries the retry
+         attempts already spent on the item. Both are NULLABLE and added, never
+         backfilled — the rows of a campaign already executed keep a NULL detail
+         and a 0 attempt count, and a purge running while this changeset applies
+         is left untouched -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-7">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM">
+            <column name="FAILURE_DETAIL" type="CLOB"/>
+            <column name="ATTEMPT_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

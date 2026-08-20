@@ -19,6 +19,7 @@ package org.exoplatform.document.cleanup.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -74,6 +75,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
@@ -132,7 +134,7 @@ class CleanupCampaignServiceTest {
    * every column added since is appended after them.
    */
   private static final String                     CSV_HEADER       =
-                                                               "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate\n";
+                                                               "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate,attemptCount,failureDetail\n";
 
   @Mock
   private CleanupCampaignStorage   campaignStorage;
@@ -911,8 +913,10 @@ class CleanupCampaignServiceTest {
                                                                                  CleanupCampaignState.EXECUTING,
                                                                                  Set.of(CleanupCampaignState.COMPLETED,
                                                                                         CleanupCampaignState.CANCELLED),
+                                                                                 // COMPLETED is no longer terminal:
+                                                                                 // a RETRY re-enters EXECUTING
                                                                                  CleanupCampaignState.COMPLETED,
-                                                                                 Set.of(),
+                                                                                 Set.of(CleanupCampaignState.EXECUTING),
                                                                                  CleanupCampaignState.CANCELLED,
                                                                                  Set.of());
     lenient().when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -1488,7 +1492,7 @@ class CleanupCampaignServiceTest {
     assertTrue(csv.startsWith(CSV_HEADER), "The streamed report must open with the CSV header");
     assertTrue(CSV_HEADER.startsWith("nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,"),
                "The historical columns must keep their position");
-    assertTrue(CSV_HEADER.endsWith(",ownerName,lastModifiedDate,createdDate\n"),
+    assertTrue(CSV_HEADER.endsWith(",ownerName,lastModifiedDate,createdDate,attemptCount,failureDetail\n"),
                "The columns added since must be appended, in that order");
     assertTrue(csv.contains("\"/Users/j___/john/Private/report,final.pdf\""),
                "A comma-carrying path must stay quoted in the streamed rows");
@@ -1779,7 +1783,7 @@ class CleanupCampaignServiceTest {
     assertTrue(csv.contains("\"John, Smith\""), "The owner display name must be exported, escaped like any other value");
     // ISO-8601 UTC, never a localized string: the CSV is a machine-readable
     // export, unlike the dates the UI renders
-    assertTrue(csv.contains(",2020-09-13T12:26:40Z,2017-07-14T02:40:00Z\n"),
+    assertTrue(csv.contains(",2020-09-13T12:26:40Z,2017-07-14T02:40:00Z,0,\n"),
                "The last-modified and creation dates must be appended as ISO-8601 UTC, in that order");
   }
 
@@ -1823,10 +1827,12 @@ class CleanupCampaignServiceTest {
     String csv = streamCsvOf(item);
 
     String[] cells = csv.substring(csv.indexOf('\n') + 1).trim().split(",", -1);
-    assertEquals(12, cells.length, "The row must keep every column of the header");
+    assertEquals(14, cells.length, "The row must keep every column of the header");
     assertEquals("", cells[9], "An unresolvable owner degrades to an EMPTY name, it never fails the export");
     assertEquals("", cells[10], "An unset date is exported empty");
     assertEquals("", cells[11]);
+    assertEquals("0", cells[12], "An item never retried carries a zero attempt count");
+    assertEquals("", cells[13], "An item with no failure detail exports an empty last column");
   }
 
   private String streamCsvOf(CleanupCampaignItem item) throws Exception {
@@ -1931,6 +1937,260 @@ class CleanupCampaignServiceTest {
   private void mockPublishedCampaignWithItem(CleanupItemState itemState) {
     when(campaignStorage.getItem(ITEM_ID)).thenReturn(item(itemState));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.PUBLISHED));
+  }
+
+  @Test
+  void shouldRequeueOnlyRetryableFailuresBelowTheAttemptBoundOnRetry() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    CleanupCampaignItem failedItem = skippedItem(51L, "cleanup.deleteError", 1L);
+    failedItem.setReclaimedBytes(4096L);
+    failedItem.setPurgedAt(7000L);
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(failedItem))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    campaignService.retryCampaign(CAMPAIGN_ID);
+
+    // The ALLOWLIST and the bound are the SERVER's, passed to the query — never
+    // the client's, and never re-derived per call site
+    ArgumentCaptor<Set<String>> reasonsCaptor = ArgumentCaptor.forClass(Set.class);
+    ArgumentCaptor<Long> boundCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(campaignStorage, atLeastOnce()).getRetryableFailures(eq(CAMPAIGN_ID),
+                                                               reasonsCaptor.capture(),
+                                                               boundCaptor.capture(),
+                                                               anyLong(),
+                                                               anyInt());
+    assertEquals(CleanupCampaignService.RETRYABLE_FAILURE_REASONS, reasonsCaptor.getValue());
+    assertEquals(CleanupCampaignService.MAX_RETRY_ATTEMPTS, boundCaptor.getValue());
+    // A deterministic failure is NOT in the allowlist: re-running it would be
+    // guaranteed wasted work on possibly hundreds of thousands of rows
+    assertFalse(CleanupCampaignService.RETRYABLE_FAILURE_REASONS.contains("cleanup.referentialIntegrity"),
+                "A referenced node will be refused identically: never retryable");
+    assertFalse(CleanupCampaignService.RETRYABLE_FAILURE_REASONS.contains("cleanup.notVersionable"),
+                "A non-versionable node never grows a version history by itself: never retryable");
+    assertEquals(Set.of("cleanup.revalidationFailed",
+                        "cleanup.deleteError",
+                        "cleanup.unexpectedError",
+                        "cleanup.purgeVersionsError"),
+                 CleanupCampaignService.RETRYABLE_FAILURE_REASONS);
+  }
+
+  @Test
+  void shouldResetTheRequeuedItemFieldsButKeepItsReclaimedBytesOnRetry() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    CleanupCampaignItem failedItem = skippedItem(52L, "cleanup.unexpectedError", 2L);
+    failedItem.setFailureDetail("java.lang.IllegalStateException: boom");
+    failedItem.setReclaimedBytes(4096L);
+    failedItem.setPurgedAt(7000L);
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(failedItem))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    campaignService.retryCampaign(CAMPAIGN_ID);
+
+    ArgumentCaptor<CleanupCampaignItem> itemCaptor = ArgumentCaptor.forClass(CleanupCampaignItem.class);
+    verify(campaignStorage).saveItem(itemCaptor.capture());
+    CleanupCampaignItem requeued = itemCaptor.getValue();
+    assertEquals(CleanupItemState.CANDIDATE, requeued.getState(), "A requeued item goes back to CANDIDATE");
+    assertEquals(3L, requeued.getAttemptCount(), "The attempt count must be incremented, that is what bounds the retries");
+    assertNull(requeued.getFailureReason(), "A stale reason on a requeued item would be a lie");
+    assertNull(requeued.getFailureDetail(), "...and so would a stale detail");
+    assertEquals(4096L,
+                 requeued.getReclaimedBytes(),
+                 "A partially reclaimed delete already reported REAL bytes: the campaign total must not lose them");
+    assertEquals(7000L, requeued.getPurgedAt(), "The purge date is left alone too");
+  }
+
+  @Test
+  void shouldResetTheProgressAndRelaunchTheWorkerThroughStartExecutionOnRetry() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(skippedItem(53L,
+                                                                                                                                     "cleanup.deleteError",
+                                                                                                                                     0L)))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    CleanupCampaign executing = campaign(CleanupCampaignState.EXECUTING);
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(executing);
+
+    CleanupCampaign retried = campaignService.retryCampaign(CAMPAIGN_ID);
+
+    // The requeue happens BEFORE the execution start: startExecution counts the
+    // CANDIDATE items to set its denominators, so requeueing after it would leave
+    // the progress bar at zero out of zero
+    InOrder inOrder = inOrder(campaignStorage, executionService);
+    inOrder.verify(campaignStorage).saveItem(any());
+    inOrder.verify(executionService).startExecution(CAMPAIGN_ID);
+    assertEquals(CleanupCampaignState.EXECUTING, retried.getState());
+  }
+
+  @Test
+  void shouldRejectRetryOfACampaignThatIsNotCompleted() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    assertEquals(CLEANUP_INVALID_STATE_ERROR, exception.getMessage());
+    verify(campaignStorage, never()).saveItem(any());
+  }
+
+  @Test
+  void shouldRejectRetryWhenAnotherCampaignIsActive() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    CleanupCampaign activeCampaign = campaign(CleanupCampaignState.PUBLISHED);
+    activeCampaign.setId(99L);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of(activeCampaign));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    // The SAME single-active-campaign invariant as a publication, honoured
+    // through the same guard: a retry deletes files, it is an execution
+    assertEquals("cleanup.campaignAlreadyActive", exception.getMessage());
+    verify(campaignStorage, never()).saveItem(any());
+    verify(campaignStorage, never()).getRetryableFailures(anyLong(), any(), anyLong(), anyLong(), anyInt());
+  }
+
+  @Test
+  void shouldRejectRetryWhenNothingIsRequeued() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt())).thenReturn(List.of());
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    // Never a silent no-op run: the console must be able to explain the refusal
+    assertEquals("cleanup.noRetryableFailures", exception.getMessage());
+    verify(executionService, never()).startExecution(anyLong());
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenRetryingAnUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    ObjectNotFoundException exception = assertThrows(ObjectNotFoundException.class,
+                                                     () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    assertEquals("cleanup.campaignNotFound", exception.getMessage());
+  }
+
+  @Test
+  void shouldRequeueEveryPageOfFailuresWithoutLoadingThemAllAtOnce() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    CleanupCampaignItem firstPageItem = skippedItem(61L, "cleanup.deleteError", 0L);
+    CleanupCampaignItem secondPageItem = skippedItem(62L, "cleanup.unexpectedError", 0L);
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(firstPageItem))
+                                                                                                     .thenReturn(List.of(secondPageItem))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    campaignService.retryCampaign(CAMPAIGN_ID);
+
+    // EVERY page is requeued, and the paging is KEYSET-driven: the second query
+    // asks for the ids past the last one seen, so the requeue cannot walk past
+    // rows as the SKIPPED set shrinks underneath it
+    verify(campaignStorage, times(2)).saveItem(any());
+    ArgumentCaptor<Long> lastIdCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(campaignStorage, times(3)).getRetryableFailures(eq(CAMPAIGN_ID),
+                                                          any(),
+                                                          anyLong(),
+                                                          lastIdCaptor.capture(),
+                                                          anyInt());
+    assertEquals(List.of(0L, 61L, 62L), lastIdCaptor.getAllValues(), "Each page must resume from the last id seen");
+  }
+
+  @Test
+  void shouldFlagEachGroupedFailureWithTheServerSideRetryableRule() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    when(campaignStorage.countFailuresByReason(CAMPAIGN_ID))
+                                                            .thenReturn(List.of(new CleanupFailureGroup("cleanup.deleteError",
+                                                                                                        12L,
+                                                                                                        false),
+                                                                                new CleanupFailureGroup("cleanup.referentialIntegrity",
+                                                                                                        3L,
+                                                                                                        false)));
+
+    List<CleanupFailureGroup> failures = campaignService.getCampaignFailures(CAMPAIGN_ID);
+
+    assertEquals(2, failures.size());
+    assertEquals(12L, failures.get(0).getCount());
+    assertTrue(failures.get(0).isRetryable(), "A transient delete failure is worth re-attempting");
+    assertFalse(failures.get(1).isRetryable(), "A referential-integrity failure will be refused identically");
+  }
+
+  @Test
+  void shouldReturnNoGroupedFailureOnceTheItemRowsWerePurged() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    when(campaignStorage.countFailuresByReason(CAMPAIGN_ID)).thenReturn(List.of());
+
+    // The groups are computed over the ITEM ROWS and are NOT part of the summary
+    // snapshotted at completion: once the retention job archived them, there is
+    // nothing left to group
+    assertTrue(campaignService.getCampaignFailures(CAMPAIGN_ID).isEmpty());
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenGroupingTheFailuresOfAnUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> campaignService.getCampaignFailures(CAMPAIGN_ID));
+  }
+
+  @Test
+  void shouldKeepTheCsvRowIntactWhenExportingAMultiLineFailureDetail() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.SKIPPED);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+    item.setFailureReason("cleanup.deleteError");
+    // Both line-break flavours, CRLF included: a Windows-produced dump must not
+    // yield two flattened sequences where one is expected
+    item.setFailureDetail("javax.jcr.RepositoryException: boom\r\n at Storage.delete(Storage.java:42)\n at Worker.run(Worker.java:7)");
+    item.setAttemptCount(2L);
+
+    String csv = streamCsvOf(item);
+
+    // ONE ROW PER ITEM, whatever a stack trace looks like: every line break is
+    // flattened to the literal two-character sequence and the field is quoted
+    assertEquals(2, csv.split("\n", -1).length - 1, "The report must hold exactly the header row and ONE item row");
+    assertTrue(csv.contains(",cleanup.deleteError,"), "The bare reason column is unaffected: " + csv);
+    assertTrue(csv.trim()
+                  .endsWith(",2,\"javax.jcr.RepositoryException: boom\\n at Storage.delete(Storage.java:42)\\n at Worker.run(Worker.java:7)\""),
+               "attemptCount then the QUOTED, flattened detail must be the LAST two columns: " + csv);
+  }
+
+  @Test
+  void shouldExportAnEmptyFailureDetailAsAPlainEmptyColumn() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.PURGED);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+
+    String csv = streamCsvOf(item);
+
+    // Quoting emptiness would say nothing and only widen a report that can hold
+    // millions of rows
+    assertTrue(csv.trim().endsWith(",0,"), "A purged item exports a zero attempt count and an empty detail: " + csv);
+  }
+
+  private CleanupCampaignItem skippedItem(long id, String failureReason, long attemptCount) {
+    CleanupCampaignItem item = item(CleanupItemState.SKIPPED);
+    item.setId(id);
+    item.setFailureReason(failureReason);
+    item.setAttemptCount(attemptCount);
+    return item;
   }
 
   private CleanupCampaign campaign(CleanupCampaignState state) {
