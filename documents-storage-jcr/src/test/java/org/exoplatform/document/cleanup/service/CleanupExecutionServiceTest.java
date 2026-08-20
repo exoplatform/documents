@@ -60,6 +60,7 @@ import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
+import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupPurgeResult;
@@ -70,6 +71,7 @@ import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 
 import io.meeds.common.ContainerTransactional;
+import io.meeds.social.util.JsonUtils;
 
 /**
  * Execution worker tests. Like the scan ones, they drive the worker body
@@ -266,6 +268,34 @@ class CleanupExecutionServiceTest {
     assertTrue(campaignCaptor.getValue().getCompletedDate() > 0);
     assertNotNull(campaignCaptor.getValue().getSummaryJson());
     assertTrue(campaignCaptor.getValue().getSummaryJson().contains("reclaimedBytes"));
+  }
+
+  @Test
+  void shouldCarryTheIncompleteScanVerdictForwardIntoTheCompletionSnapshot() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    // The verdict the DRY RUN left on this very column at SIMULATED: two subtrees
+    // it could never walk, so the report was never a complete picture
+    CleanupCampaignSummary scanSummary = new CleanupCampaignSummary();
+    scanSummary.setScanIncomplete(true);
+    scanSummary.setFailedScanUnitCount(2);
+    campaign.setSummaryJson(JsonUtils.toJsonString(scanSummary));
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of());
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    ArgumentCaptor<CleanupCampaign> campaignCaptor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage).saveCampaign(campaignCaptor.capture());
+    CleanupCampaignSummary saved = JsonUtils.fromJsonString(campaignCaptor.getValue().getSummaryJson(),
+                                                            CleanupCampaignSummary.class);
+    // Completion OVERWRITES this one column with the purge aggregates: rebuilding
+    // it from scratch is what would quietly erase the fact that the report the
+    // purge just ran from did not cover the whole tree
+    assertTrue(saved.isScanIncomplete(), "The dry run's incomplete verdict must survive the completion snapshot");
+    assertEquals(2, saved.getFailedScanUnitCount());
   }
 
   @Test

@@ -17,7 +17,9 @@
 package org.exoplatform.document.cleanup.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +42,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.exoplatform.document.cleanup.constant.CleanupScanUnitState;
 import org.exoplatform.document.cleanup.dao.CleanupScanUnitDAO;
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
 
 /**
@@ -148,7 +151,8 @@ class CleanupScanUnitStorageTest {
     assertEquals(USERS_UNIT, unit.getUnitPath());
     assertEquals(SCANNED_PATH, unit.getLastScannedPath());
     assertEquals(12, unit.getScannedCount());
-    assertEquals(40, unit.getTotalCount());
+    assertEquals(40L, unit.getTotalCount().longValue());
+    assertEquals(2, unit.getAttemptCount());
     assertEquals("cleanup.scanUnitFailed", unit.getFailureReason());
   }
 
@@ -175,8 +179,60 @@ class CleanupScanUnitStorageTest {
     storage.updateUnitTotal(UNIT_ID, 99);
 
     assertEquals(CleanupScanUnitState.RUNNING.name(), entity.getState());
-    assertEquals(99, entity.getTotalCount());
+    assertEquals(99L, entity.getTotalCount().longValue());
     assertEquals(SCANNED_PATH, entity.getLastScannedPath(), "The checkpoint must survive a state or total update");
+    // updateUnitState is NOT the claim: it must never spend a walk attempt, or
+    // the writer recording a unit DONE would consume one of the three
+    assertEquals(2, entity.getAttemptCount());
+  }
+
+  @Test
+  void claimingAUnitMarksItRunningAndSpendsOneWalkAttempt() {
+    CleanupScanUnitEntity entity = entity(CleanupScanUnitState.FAILED);
+    when(scanUnitDAO.findById(UNIT_ID)).thenReturn(Optional.of(entity));
+    when(scanUnitDAO.save(entity)).thenReturn(entity);
+
+    long attempts = storage.claimUnit(UNIT_ID);
+
+    // The two writes are ONE operation on purpose: an attempt counted anywhere
+    // else than where the unit is handed to a reader is an attempt that can be
+    // skipped, and a permanently failing subtree would then be re-walked forever
+    assertEquals(CleanupScanUnitState.RUNNING.name(), entity.getState());
+    assertEquals(3, entity.getAttemptCount());
+    assertEquals(3, attempts, "The claim answers the attempts spent, this one included");
+    assertEquals(SCANNED_PATH, entity.getLastScannedPath(), "A claim must not reset the resume checkpoint");
+    verify(scanUnitDAO).save(entity);
+  }
+
+  @Test
+  void claimingAnUnknownUnitIsANoOpAnsweringNoAttempt() {
+    when(scanUnitDAO.findById(UNIT_ID)).thenReturn(Optional.empty());
+
+    assertEquals(0, storage.claimUnit(UNIT_ID));
+    verify(scanUnitDAO, never()).save(any());
+  }
+
+  @Test
+  void settledFailuresAndGroupedReasonsAreBothDatabaseAggregates() {
+    when(scanUnitDAO.countSettledFailures(CAMPAIGN_ID,
+                                          CleanupScanUnitState.FAILED.name(),
+                                          3L)).thenReturn(4L);
+    when(scanUnitDAO.countFailuresByReason(CAMPAIGN_ID,
+                                           CleanupScanUnitState.FAILED.name()))
+                                                                             .thenReturn(List.<Object[]>of(new Object[] {
+                                                                                 "cleanup.scanUnitFailed", 4L }));
+
+    assertEquals(4L, storage.countSettledFailedUnits(CAMPAIGN_ID, 3L));
+    List<CleanupFailureGroup> groups = storage.countFailuresByReason(CAMPAIGN_ID);
+    assertEquals(1, groups.size());
+    assertEquals("cleanup.scanUnitFailed", groups.get(0).getReason());
+    assertEquals(4L, groups.get(0).getCount());
+    // Retryability is a SERVICE rule, never the query's: the grouped rows carry
+    // it false and the Service is the only place allowed to decide otherwise
+    assertFalse(groups.get(0).isRetryable());
+    // Never by loading the unit rows: a campaign holds one row per subtree of the
+    // whole tree, and only the counts are ever displayed
+    verify(scanUnitDAO, never()).findByCampaignIdAndStateNotOrderByIdAsc(anyLong(), any());
   }
 
   @Test
@@ -198,6 +254,7 @@ class CleanupScanUnitStorageTest {
 
     storage.updateUnitState(UNIT_ID, CleanupScanUnitState.DONE);
     storage.updateUnitTotal(UNIT_ID, 5);
+    storage.claimUnit(UNIT_ID);
     storage.updateUnitProgress(UNIT_ID, SCANNED_PATH, 5);
     storage.updateUnitFailure(UNIT_ID, "cleanup.scanUnitFailed");
 
@@ -234,7 +291,29 @@ class CleanupScanUnitStorageTest {
 
     assertNull(unit.getLastScannedPath(), "A never-started unit must resume from the beginning of its subtree");
     assertEquals(0, unit.getScannedCount());
-    assertEquals(0, unit.getTotalCount());
+    // NULL and not 0: 'never counted' must stay distinguishable from 'counted,
+    // and empty', or the estimation phase re-counts every empty bucket on every
+    // single resume
+    assertNull(unit.getTotalCount(), "A never-counted unit must carry no total at all");
+    assertEquals(0, unit.getAttemptCount());
+  }
+
+  @Test
+  void aCountedButEmptyUnitMapsBackAsZeroAndNotAsUncounted() {
+    CleanupScanUnitEntity entity = new CleanupScanUnitEntity();
+    entity.setId(UNIT_ID);
+    entity.setCampaignId(CAMPAIGN_ID);
+    entity.setUnitPath(TRASH_UNIT);
+    entity.setState(CleanupScanUnitState.PENDING.name());
+    // Counted, and legitimately empty — an unused first-letter bucket of /Users
+    entity.setTotalCount(0L);
+    when(scanUnitDAO.findByCampaignIdAndStateNotOrderByIdAsc(CAMPAIGN_ID,
+                                                             CleanupScanUnitState.DONE.name())).thenReturn(List.of(entity));
+
+    CleanupScanUnit unit = storage.getUnitsToProcess(CAMPAIGN_ID).get(0);
+
+    assertNotNull(unit.getTotalCount(), "An empty bucket was COUNTED: it must never look uncounted again");
+    assertEquals(0L, unit.getTotalCount().longValue());
   }
 
   private CleanupScanUnitEntity entity(CleanupScanUnitState state) {
@@ -245,7 +324,8 @@ class CleanupScanUnitStorageTest {
     entity.setState(state.name());
     entity.setLastScannedPath(SCANNED_PATH);
     entity.setScannedCount(12);
-    entity.setTotalCount(40);
+    entity.setTotalCount(40L);
+    entity.setAttemptCount(2);
     entity.setFailureReason("cleanup.scanUnitFailed");
     return entity;
   }

@@ -670,6 +670,39 @@ class CleanupCampaignRestTest {
   }
 
   @Test
+  void getCampaignScanFailuresMapsEveryGroupOfSubtreesTheScanCouldNotWalk() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanFailures(CAMPAIGN_ID)).thenReturn(List.of(new CleanupFailureGroup("cleanup.scanUnitFailed",
+                                                                                                         4L,
+                                                                                                         false)));
+
+    List<CampaignFailureGroupRestEntity> scanFailures = campaignRest.getCampaignScanFailures(CAMPAIGN_ID);
+
+    // The SAME shape as the item failures, so one console block renders both
+    assertEquals(1, scanFailures.size());
+    assertEquals("cleanup.scanUnitFailed", scanFailures.get(0).getReason());
+    assertEquals(4L, scanFailures.get(0).getCount());
+    // No console retry for a settled subtree, and the SERVER is the one saying so
+    assertFalse(scanFailures.get(0).isRetryable());
+  }
+
+  @Test
+  void getCampaignScanFailuresAnswersAnEmptyListForAScanCoveringTheWholeTree() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanFailures(CAMPAIGN_ID)).thenReturn(List.of());
+
+    // The normal case, and the one the console keeps its block hidden on
+    assertTrue(campaignRest.getCampaignScanFailures(CAMPAIGN_ID).isEmpty());
+  }
+
+  @Test
+  void getCampaignScanFailuresMapsNotFound() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanFailures(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class,
+                              () -> campaignRest.getCampaignScanFailures(404L)).getStatusCode());
+  }
+
+  @Test
   void getCampaignItemsServesTheFailureDetailToAdministrators() throws ObjectNotFoundException {
     CleanupCampaignItem failedItem = item(3);
     failedItem.setFailureReason("cleanup.deleteError");

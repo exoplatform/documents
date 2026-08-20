@@ -2389,6 +2389,33 @@ class CleanupCampaignServiceTest {
   }
 
   @Test
+  void shouldServeTheGroupedScanFailuresOfACampaignFromTheScanService() throws ObjectNotFoundException {
+    CleanupCampaign simulatedCampaign = campaign(CleanupCampaignState.SIMULATED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(simulatedCampaign);
+    when(scanService.getScanFailures(simulatedCampaign)).thenReturn(List.of(new CleanupFailureGroup("cleanup.scanUnitFailed",
+                                                                                                    4L,
+                                                                                                    false)));
+
+    List<CleanupFailureGroup> scanFailures = campaignService.getCampaignScanFailures(CAMPAIGN_ID);
+
+    // Delegated to the service that OWNS the scan and its unit rows, on the very
+    // campaign this one resolved — so the 404 stays this layer's job and the
+    // verdict stays the scan's
+    assertEquals(1, scanFailures.size());
+    assertEquals("cleanup.scanUnitFailed", scanFailures.get(0).getReason());
+    assertEquals(4L, scanFailures.get(0).getCount());
+    verify(scanService).getScanFailures(simulatedCampaign);
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenGroupingTheScanFailuresOfAnUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> campaignService.getCampaignScanFailures(CAMPAIGN_ID));
+    verify(scanService, never()).getScanFailures(any());
+  }
+
+  @Test
   void shouldKeepTheCsvRowIntactWhenExportingAMultiLineFailureDetail() throws Exception {
     CleanupCampaignItem item = item(CleanupItemState.SKIPPED);
     item.setPath("/Users/j___/john/Private/report.pdf");

@@ -47,6 +47,30 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
   long countByCampaignIdAndState(long campaignId, String state);
 
   /**
+   * Units of a campaign whose walk failed and which spent every attempt they
+   * had: they are SETTLED, so they no longer hold the dry-run's completion back
+   * — and they are exactly what makes the produced report INCOMPLETE.
+   */
+  @Query("SELECT COUNT(u) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId AND u.state = :state"
+      + " AND u.attemptCount >= :maxAttemptCount")
+  long countSettledFailures(@Param("campaignId")
+  long campaignId, @Param("state")
+  String state, @Param("maxAttemptCount")
+  long maxAttemptCount);
+
+  /**
+   * Per-reason unit counts of a campaign's failed subtrees, in ONE grouped query
+   * (rows: failure reason, unit count) — the very shape
+   * {@code CleanupCampaignItemDAO#countFailuresByReason} answers for items, so
+   * the console renders both through the same block.
+   */
+  @Query("SELECT u.failureReason, COUNT(u) FROM CleanupScanUnit u" +
+      " WHERE u.campaignId = :campaignId AND u.state = :state GROUP BY u.failureReason")
+  List<Object[]> countFailuresByReason(@Param("campaignId")
+  long campaignId, @Param("state")
+  String state);
+
+  /**
    * Scanned-nodes sum over the units of a campaign — the progress numerator,
    * computed by the database. NEVER by loading the unit rows: the numerator is
    * re-read on every resume, and a run only ever needs the total.

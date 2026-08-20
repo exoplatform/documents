@@ -568,6 +568,31 @@ public class CleanupCampaignService {
   }
 
   /**
+   * Grouped failures of a campaign's dry-run SCAN: one entry per distinct failure
+   * message code, with the number of SUBTREES that carry it. The unit-level twin
+   * of {@link #getCampaignFailures(long)}, answering the same shape so the
+   * console renders both through one block.
+   * <p>
+   * A dry run used to report SIMULATED at 100% over a report silently missing
+   * whole subtrees — the only trace being a log line no administrator can read.
+   * This is that trace, made readable: whoever is about to publish the report
+   * sees how much of the tree it does NOT cover.
+   * <p>
+   * Delegates to {@link CleanupScanService}, which owns the scan and its unit
+   * rows, after resolving the campaign here so an unknown id answers 404 exactly
+   * like every other campaign endpoint.
+   *
+   * @param campaignId campaign identifier
+   * @return the groups, EMPTY when the campaign's scan covered the whole tree —
+   *         which is the case of every campaign scanned before this bound
+   *         existed
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public List<CleanupFailureGroup> getCampaignScanFailures(long campaignId) throws ObjectNotFoundException {
+    return scanService.getScanFailures(getCampaign(campaignId));
+  }
+
+  /**
    * Requeues the retryable failures of a campaign, KEYSET-paged: a campaign can
    * hold hundreds of thousands of failed items, none of which may be loaded into
    * a single List. Keyset and not offset because the requeue mutates the very

@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 import org.exoplatform.document.cleanup.constant.CleanupScanUnitState;
 import org.exoplatform.document.cleanup.dao.CleanupScanUnitDAO;
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
 
 /**
@@ -92,11 +93,58 @@ public class CleanupScanUnitStorage {
     return scanUnitDAO.countByCampaignIdAndState(campaignId, state.name());
   }
 
+  /**
+   * Failed units of a campaign that spent every walk attempt they had — the
+   * SETTLED ones, which no longer hold the completion of the dry-run back.
+   *
+   * @param campaignId campaign identifier
+   * @param maxAttemptCount attempts a unit may spend, the first walk included
+   * @return the number of settled-failed units
+   */
+  public long countSettledFailedUnits(long campaignId, long maxAttemptCount) {
+    return scanUnitDAO.countSettledFailures(campaignId, CleanupScanUnitState.FAILED.name(), maxAttemptCount);
+  }
+
+  /**
+   * Per-reason counts of a campaign's FAILED units, from ONE grouped aggregate
+   * query — the unit-level twin of
+   * {@code CleanupCampaignStorage#countFailuresByReason}. The {@code retryable}
+   * flag of each group is left to its default: what is worth re-attempting is a
+   * Service rule, not a query's (see {@link CleanupFailureGroup}).
+   *
+   * @param campaignId campaign identifier
+   * @return one group per distinct failure reason, empty when no unit of the
+   *         campaign failed
+   */
+  public List<CleanupFailureGroup> countFailuresByReason(long campaignId) {
+    return scanUnitDAO.countFailuresByReason(campaignId, CleanupScanUnitState.FAILED.name())
+                      .stream()
+                      .map(row -> new CleanupFailureGroup((String) row[0], ((Number) row[1]).longValue(), false))
+                      .toList();
+  }
+
   public void updateUnitState(long unitId, CleanupScanUnitState state) {
     scanUnitDAO.findById(unitId).ifPresent(entity -> {
       entity.setState(state.name());
       scanUnitDAO.save(entity);
     });
+  }
+
+  /**
+   * CLAIMS a unit for a walk: RUNNING, and ONE more attempt spent. The two are
+   * written together on purpose — an attempt counted anywhere else than where the
+   * unit is handed to a reader is an attempt that can be skipped, and the bound
+   * on a permanently failing subtree would then never be reached.
+   *
+   * @param unitId unit identifier
+   * @return the attempts spent by the unit, this claim included
+   */
+  public long claimUnit(long unitId) {
+    return scanUnitDAO.findById(unitId).map(entity -> {
+      entity.setState(CleanupScanUnitState.RUNNING.name());
+      entity.setAttemptCount(entity.getAttemptCount() + 1);
+      return scanUnitDAO.save(entity).getAttemptCount();
+    }).orElse(0L);
   }
 
   /**
@@ -169,6 +217,7 @@ public class CleanupScanUnitStorage {
     unit.setLastScannedPath(entity.getLastScannedPath());
     unit.setScannedCount(entity.getScannedCount());
     unit.setTotalCount(entity.getTotalCount());
+    unit.setAttemptCount(entity.getAttemptCount());
     unit.setFailureReason(entity.getFailureReason());
     return unit;
   }

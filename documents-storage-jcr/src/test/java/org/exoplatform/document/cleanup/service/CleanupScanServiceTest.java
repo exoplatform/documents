@@ -16,9 +16,11 @@
  */
 package org.exoplatform.document.cleanup.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -65,9 +67,12 @@ import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupScanUnitState;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
+import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.service.CleanupScanService.ScanBatch;
 import org.exoplatform.document.cleanup.service.CleanupScanService.ScanRun;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
@@ -77,6 +82,7 @@ import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 
 import io.meeds.common.ContainerTransactional;
+import io.meeds.social.util.JsonUtils;
 
 /**
  * Parallel scan worker tests, pinning the four phases (plan / estimate in
@@ -113,6 +119,9 @@ class CleanupScanServiceTest {
   private static final long        STAY_BLOCKED_MS   = 500L;
 
   private static final int         READER_MAX_LOOPS  = 50;
+
+  /** SHORT injected reader-wait deadline: the real one is 2 h. */
+  private static final long        DEADLINE_MS       = 1500L;
 
   private static final String      USERS_UNIT        = "/Users/j___";                     // NOSONAR
 
@@ -200,7 +209,17 @@ class CleanupScanServiceTest {
       transitioned.setState(invocation.getArgument(1));
       return transitioned;
     });
+    // The REAL deadline is 2 h: every test but the deadline one runs with a value
+    // it can never reach, so no test can ever depend on wall-clock timing
+    readersDeadline(AWAIT_TIMEOUT_MS * 100);
     recordWritingThreads();
+  }
+
+  /** Injects the reader-wait deadline, in millis. */
+  private void readersDeadline(long deadlineMillis) throws ReflectiveOperationException {
+    Field deadlineField = CleanupScanService.class.getDeclaredField("readersDeadlineMillis");
+    deadlineField.setAccessible(true); // NOSONAR test wiring
+    deadlineField.set(scanService, deadlineMillis); // NOSONAR
   }
 
   @Test
@@ -220,7 +239,7 @@ class CleanupScanServiceTest {
     unitsToProcess(trashUnit, usersUnit);
     when(cleanupJcrStorage.countFiles(TRASH_UNIT)).thenReturn(0L);
     when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(3L);
-    unitAggregates(3L, 0L);
+    unitAggregates(3L, 0L, 3L);
     unitOutcomes(2L, 2L, 0L);
     emitBatches(USERS_UNIT, batch(PATH_B, 2, candidate("uuid-0", PATH_A)), batch(PATH_C, 1, candidate("uuid-2", PATH_C)));
 
@@ -235,10 +254,12 @@ class CleanupScanServiceTest {
     verify(scanUnitStorage).updateUnitTotal(1L, 0L);
     verify(scanUnitStorage).updateUnitTotal(2L, 3L);
     verify(campaignStorage).updateProgress(CAMPAIGN_ID, 3L, 0L, 0L, null, 0L);
-    // (c) SCAN — every unit is marked RUNNING by the coordinator before a reader
-    // may touch it, and a fresh unit carries no resume path
-    verify(scanUnitStorage).updateUnitState(1L, CleanupScanUnitState.RUNNING);
-    verify(scanUnitStorage).updateUnitState(2L, CleanupScanUnitState.RUNNING);
+    // (c) SCAN — every unit is CLAIMED by the coordinator before a reader may
+    // touch it (RUNNING, and one walk attempt spent), and a fresh unit carries no
+    // resume path
+    verify(scanUnitStorage).claimUnit(1L);
+    verify(scanUnitStorage).claimUnit(2L);
+    verify(scanUnitStorage, never()).updateUnitState(anyLong(), eq(CleanupScanUnitState.RUNNING));
     verify(cleanupJcrStorage).scanRoot(eq(USERS_UNIT), isNull(), eq(BATCH_SIZE), any(), any());
     verify(cleanupJcrStorage).scanRoot(eq(TRASH_UNIT), isNull(), eq(BATCH_SIZE), any(), any());
     // Streamed candidates are persisted per batch, and the per-unit checkpoint
@@ -284,7 +305,7 @@ class CleanupScanServiceTest {
     planned(USERS_UNIT);
     unitsToProcess(unit(1L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(2L);
-    unitAggregates(2L, 0L);
+    unitAggregates(2L, 0L, 2L);
     unitOutcomes(1L, 1L, 0L);
     emitBatches(USERS_UNIT, batch(PATH_B, 2, candidate("uuid-0", PATH_A)));
 
@@ -314,7 +335,7 @@ class CleanupScanServiceTest {
     planned(SPACES_UNIT);
     unitsToProcess(unit(1L, SPACES_UNIT));
     when(cleanupJcrStorage.countFiles(SPACES_UNIT)).thenReturn(1L);
-    unitAggregates(1L, 0L);
+    unitAggregates(1L, 0L, 1L);
     // No unit row yet — THE legacy shape: a campaign-level checkpoint and
     // nothing partitioned. Planned first, counted as one unit afterwards
     when(scanUnitStorage.countUnits(CAMPAIGN_ID)).thenReturn(0L, 1L);
@@ -341,10 +362,10 @@ class CleanupScanServiceTest {
     planned(TRASH_UNIT, USERS_UNIT);
     CleanupScanUnit countedUnit = unit(1L, TRASH_UNIT);
     // Counted by a previous run: never counted again
-    countedUnit.setTotalCount(7);
+    countedUnit.setTotalCount(7L);
     unitsToProcess(countedUnit, unit(2L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(5L);
-    unitAggregates(12L, 0L);
+    unitAggregates(12L, 0L, 12L);
     unitOutcomes(2L, 2L, 0L);
 
     scanService.scan(CAMPAIGN_ID);
@@ -365,10 +386,10 @@ class CleanupScanServiceTest {
     CleanupScanUnit resumedUnit = unit(1L, USERS_UNIT);
     resumedUnit.setLastScannedPath(PATH_A);
     resumedUnit.setScannedCount(4);
-    resumedUnit.setTotalCount(6);
+    resumedUnit.setTotalCount(6L);
     planned(USERS_UNIT);
     unitsToProcess(resumedUnit);
-    unitAggregates(6L, 4L);
+    unitAggregates(6L, 4L, 6L);
     unitOutcomes(1L, 1L, 0L);
     emitBatches(USERS_UNIT, batch(PATH_C, 2, candidate("uuid-2", PATH_C)));
 
@@ -389,7 +410,7 @@ class CleanupScanServiceTest {
     planned(SPACES_UNIT, USERS_UNIT);
     unitsToProcess(unit(1L, SPACES_UNIT), unit(2L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(anyString())).thenReturn(1L);
-    unitAggregates(2L, 0L);
+    unitAggregates(2L, 0L, 2L);
     unitOutcomes(2L, 2L, 0L);
     emitBatches(SPACES_UNIT, batch(SPACES_PATH, 1, candidate("uuid-space", SPACES_PATH)));
     emitBatches(USERS_UNIT, batch(PATH_A, 1, candidate("uuid-user", PATH_A)));
@@ -412,7 +433,7 @@ class CleanupScanServiceTest {
     planned(USERS_UNIT);
     unitsToProcess(unit(1L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(12L);
-    unitAggregates(12L, 0L);
+    unitAggregates(12L, 0L, 12L);
     unitOutcomes(1L, 1L, 0L);
     CountDownLatch writerGate = new CountDownLatch(1);
     CountDownLatch writerReached = new CountDownLatch(1);
@@ -456,8 +477,11 @@ class CleanupScanServiceTest {
     planned(SPACES_UNIT, USERS_UNIT);
     unitsToProcess(unit(1L, SPACES_UNIT), unit(2L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(anyString())).thenReturn(1L);
-    unitAggregates(2L, 1L);
+    unitAggregates(2L, 0L, 1L);
     unitOutcomes(2L, 1L, 1L);
+    // The failed subtree spent its three walks: it is SETTLED, so it no longer
+    // holds the completion back — and the report it produced is INCOMPLETE
+    settledFailures(1L);
     doThrow(new IllegalStateException("JCR failure")).when(cleanupJcrStorage)
                                                      .scanRoot(eq(SPACES_UNIT), isNull(), anyInt(), any(), any());
     emitBatches(USERS_UNIT, batch(PATH_A, 1, candidate("uuid-user", PATH_A)));
@@ -473,6 +497,153 @@ class CleanupScanServiceTest {
     verify(scanUnitStorage).updateUnitState(2L, CleanupScanUnitState.DONE);
     verify(campaignStorage).saveCandidates(eq(CAMPAIGN_ID), anyList());
     verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
+    // But NEVER as a complete one: the numerator is what the units really walked,
+    // so the console can no longer read 100% over a report missing a subtree
+    assertEquals(2, campaign.getTotalCount());
+    assertEquals(1, campaign.getProcessedCount(), "A partial scan must report the walked count, never the denominator");
+    // And the verdict is RECORDED on the campaign, not left to a log line
+    assertNotNull(scanSummary(), "A settled failure must snapshot the incomplete verdict on the campaign");
+    assertTrue(scanSummary().isScanIncomplete());
+    assertEquals(1, scanSummary().getFailedScanUnitCount());
+  }
+
+  @Test
+  void aFailedUnitStillRetryableLeavesTheCampaignRunningForTheWatchdog() {
+    planned(SPACES_UNIT, USERS_UNIT);
+    unitsToProcess(unit(1L, SPACES_UNIT), unit(2L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(anyString())).thenReturn(1L);
+    unitAggregates(2L, 0L, 1L);
+    unitOutcomes(2L, 1L, 1L);
+    // The failed subtree has attempts LEFT: nothing settled it
+    settledFailures(0L);
+    doThrow(new IllegalStateException("JCR failure")).when(cleanupJcrStorage)
+                                                     .scanRoot(eq(SPACES_UNIT), isNull(), anyInt(), any(), any());
+    emitBatches(USERS_UNIT, batch(PATH_A, 1, candidate("uuid-user", PATH_A)));
+
+    scanService.scan(CAMPAIGN_ID);
+
+    // THE bug this pins: transitioning here made the run the LAST one of the
+    // campaign, so a TRANSIENT JCR failure became a permanently missing subtree
+    // — silently, at a console reading 100%. The campaign stays DRY_RUN_RUNNING,
+    // which is exactly what resumeStalledWorkers picks up on its next tick
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+    assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
+    assertNull(campaign.getSummaryJson(), "An unfinished scan has no verdict to record yet");
+    // The unit is left FAILED and not DONE, so getUnitsToProcess hands it back
+    verify(scanUnitStorage).updateUnitFailure(1L, "cleanup.scanUnitFailed");
+  }
+
+  @Test
+  void aSettledFailedUnitStopsHoldingTheDryRunBack() {
+    planned(SPACES_UNIT, USERS_UNIT);
+    unitsToProcess(unit(1L, SPACES_UNIT), unit(2L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(anyString())).thenReturn(1L);
+    unitAggregates(2L, 0L, 1L);
+    unitOutcomes(2L, 1L, 1L);
+    doThrow(new IllegalStateException("JCR failure")).when(cleanupJcrStorage)
+                                                     .scanRoot(eq(SPACES_UNIT), isNull(), anyInt(), any(), any());
+    emitBatches(USERS_UNIT, batch(PATH_A, 1, candidate("uuid-user", PATH_A)));
+
+    // Attempts left: refused. Then exhausted: reported, and flagged incomplete
+    settledFailures(0L);
+    scanService.scan(CAMPAIGN_ID);
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+
+    settledFailures(1L);
+    scanService.scan(CAMPAIGN_ID);
+
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
+    assertTrue(scanSummary().isScanIncomplete());
+  }
+
+  @Test
+  void aScanCoveringTheWholeTreeRecordsNoIncompleteVerdict() {
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(2L);
+    unitAggregates(2L, 0L, 2L);
+    unitOutcomes(1L, 1L, 0L);
+    emitBatches(USERS_UNIT, batch(PATH_B, 2, candidate("uuid-0", PATH_A)));
+
+    scanService.scan(CAMPAIGN_ID);
+
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
+    // The marker must be ABSENT, not merely false: a complete report is the
+    // normal case and must not claim a verdict it has no reason to carry
+    assertNull(campaign.getSummaryJson(), "A complete scan must record no incomplete verdict");
+    assertEquals(2, campaign.getProcessedCount());
+  }
+
+  @Test
+  void everyClaimSpendsExactlyOneWalkAttemptPerUnitPerRun() {
+    planned(SPACES_UNIT, USERS_UNIT);
+    unitsToProcess(unit(1L, SPACES_UNIT), unit(2L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(anyString())).thenReturn(1L);
+    unitAggregates(2L, 0L, 2L);
+    // Neither run completes the campaign (it stays DRY_RUN_RUNNING), which is
+    // precisely the watchdog-relaunch shape this counts the attempts of
+    unitOutcomes(2L, 0L, 0L);
+
+    scanService.scan(CAMPAIGN_ID);
+    scanService.scan(CAMPAIGN_ID);
+
+    assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
+
+    // ONE claim per unit per run and no more: the bound on a permanently failing
+    // subtree is only reachable if every run really spends an attempt on it
+    verify(scanUnitStorage, times(2)).claimUnit(1L);
+    verify(scanUnitStorage, times(2)).claimUnit(2L);
+  }
+
+  @Test
+  void anEmptyBucketIsCountedOnceAndNeverCountedAgain() {
+    planned(TRASH_UNIT, USERS_UNIT);
+    CleanupScanUnit emptyBucket = unit(1L, TRASH_UNIT);
+    // COUNTED by a previous run, and genuinely empty — not 'never counted'
+    emptyBucket.setTotalCount(0L);
+    CleanupScanUnit uncountedUnit = unit(2L, USERS_UNIT);
+    unitsToProcess(emptyBucket, uncountedUnit);
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(5L);
+    unitAggregates(5L, 0L, 5L);
+    unitOutcomes(2L, 2L, 0L);
+
+    scanService.scan(CAMPAIGN_ID);
+
+    // A 0 total used to mean 'never counted', so an empty first-letter bucket of
+    // /Users was re-counted by the estimation phase of every single resume
+    verify(cleanupJcrStorage, never()).countFiles(TRASH_UNIT);
+    verify(scanUnitStorage, never()).updateUnitTotal(eq(1L), anyLong());
+    // The uncounted one IS counted, so the distinction did not just disable the
+    // estimation altogether
+    verify(cleanupJcrStorage).countFiles(USERS_UNIT);
+    verify(scanUnitStorage).updateUnitTotal(2L, 5L);
+  }
+
+  @Test
+  void scanFailuresAreServedOnlyForAScanRecordedIncomplete() {
+    when(scanUnitStorage.countFailuresByReason(CAMPAIGN_ID)).thenReturn(List.of(new CleanupFailureGroup("cleanup.scanUnitFailed",
+                                                                                                        4L,
+                                                                                                        false)));
+
+    // No verdict at all, and an explicit COMPLETE verdict: nothing to report
+    assertTrue(scanService.getScanFailures(campaign).isEmpty());
+    assertTrue(scanService.getScanFailures(null).isEmpty());
+    campaign.setSummaryJson(JsonUtils.toJsonString(new CleanupCampaignSummary()));
+    assertTrue(scanService.getScanFailures(campaign).isEmpty(),
+               "A scan that covered the whole tree has no missing subtree to report");
+    verify(scanUnitStorage, never()).countFailuresByReason(anyLong());
+
+    CleanupCampaignSummary incomplete = new CleanupCampaignSummary();
+    incomplete.setScanIncomplete(true);
+    incomplete.setFailedScanUnitCount(4);
+    campaign.setSummaryJson(JsonUtils.toJsonString(incomplete));
+    List<CleanupFailureGroup> groups = scanService.getScanFailures(campaign);
+
+    assertEquals(1, groups.size());
+    assertEquals("cleanup.scanUnitFailed", groups.get(0).getReason());
+    assertEquals(4L, groups.get(0).getCount());
+    // No console retry is offered for a settled subtree, and the SERVER says so
+    assertFalse(groups.get(0).isRetryable());
   }
 
   @Test
@@ -480,7 +651,7 @@ class CleanupScanServiceTest {
     planned(USERS_UNIT);
     unitsToProcess(unit(1L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
-    unitAggregates(100L, 0L);
+    unitAggregates(100L, 0L, 0L);
     unitOutcomes(1L, 0L, 0L);
     doThrow(new IllegalStateException("Database down")).when(campaignStorage).saveCandidates(anyLong(), anyList());
     AtomicInteger emitted = boundedEmitter(USERS_UNIT);
@@ -505,11 +676,114 @@ class CleanupScanServiceTest {
   }
 
   @Test
+  void aWriterErrorStopsTheReadersJustLikeAWriterException() throws InterruptedException {
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
+    unitAggregates(100L, 0L, 0L);
+    unitOutcomes(1L, 0L, 0L);
+    // An OOM on a multi-million-node walk is the very failure the bounded queue
+    // exists to prevent, and a deep traversal raises StackOverflowError: an
+    // Exception-only handler let BOTH escape with the failed flag still false,
+    // and every later scan of every campaign then queued behind the hung task
+    doThrow(new StackOverflowError("Deep traversal")).when(campaignStorage).saveCandidates(anyLong(), anyList());
+    AtomicInteger emitted = boundedEmitter(USERS_UNIT);
+
+    // DAEMON, joined with a BOUND: an Error that does not raise the flag leaves
+    // the readers blocked on a queue nothing drains and the coordinator waiting
+    // on them — that must FAIL this test, never hang the build
+    Thread coordinator = coordinatorThread();
+    coordinator.start();
+    coordinator.join(AWAIT_TIMEOUT_MS);
+
+    assertFalse(coordinator.isAlive(), "An Error in the writer must stop the readers, exactly like an Exception");
+    assertTrue(emitted.get() < READER_MAX_LOOPS,
+               "The reader must have been stopped by the writer Error, it emitted " + emitted.get() + " batches");
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+    assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
+  }
+
+  @Test
+  void anErrorInsideTheWriterBodyIsCaughtByTheDrainLoopItself() {
+    ScanRun run = new ScanRun(CAMPAIGN_ID, campaign.getParams(), BATCH_SIZE, 10L, 0L, 1, List.of(unit(1L, USERS_UNIT)));
+    assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-0", PATH_A)), PATH_A, 1)));
+    doThrow(new OutOfMemoryError("Scan heap")).when(campaignStorage).saveCandidates(anyLong(), anyList());
+
+    // Driven DIRECTLY, so the writer RUNNABLE's catch-all cannot rescue it: this
+    // pins the drain loop's OWN handler, the one that must raise the flag while
+    // the poison pill is still to come. The two handlers are deliberately
+    // redundant, and an Error must be caught by BOTH — narrowing either one back
+    // to Exception leaves a hang the other cannot always cover
+    assertDoesNotThrow(() -> scanService.drainQueue(run));
+    assertTrue(run.writerFailed, "An Error inside the drain loop must raise the failed flag, not escape it");
+  }
+
+  @Test
+  void anErrorRaisedByTheWritersOwnEntryPointAlsoStopsTheReaders() throws InterruptedException {
+    // The writer RUNNABLE's own handler, distinct from the drain loop's: should the
+    // transactional entry point blow up before the loop's handler can run, the
+    // readers are left on a queue nothing drains — and an Error escaping an
+    // Exception-only handler is exactly how that happened
+    doThrow(new OutOfMemoryError("Scan heap")).when(scanService).drainQueueTransactional(any());
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
+    unitAggregates(100L, 0L, 0L);
+    unitOutcomes(1L, 0L, 0L);
+    AtomicInteger emitted = boundedEmitter(USERS_UNIT);
+
+    Thread coordinator = coordinatorThread();
+    coordinator.start();
+    coordinator.join(AWAIT_TIMEOUT_MS);
+
+    assertFalse(coordinator.isAlive(), "An Error from the writer's entry point must raise the failed flag like any other");
+    assertTrue(emitted.get() < READER_MAX_LOOPS,
+               "The reader must have been stopped by the writer Error, it emitted " + emitted.get() + " batches");
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+  }
+
+  @Test
+  void theReaderWaitDeadlineInterruptsTheReadersWhenTheWriterVANISHES() throws ReflectiveOperationException,
+                                                                       InterruptedException {
+    // A SHORT injected deadline — never the real 2 h one, which no test may wait
+    // on — and a writer that simply RETURNS: it drains nothing, raises nothing,
+    // and dies. No flag can flip, so only a deadline that consults NO flag can
+    // unblock the readers
+    readersDeadline(DEADLINE_MS);
+    doNothing().when(scanService).drainQueueTransactional(any());
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
+    unitAggregates(100L, 0L, 0L);
+    unitOutcomes(1L, 0L, 0L);
+    AtomicInteger emitted = boundedEmitter(USERS_UNIT);
+
+    Thread coordinator = coordinatorThread();
+    coordinator.start();
+    coordinator.join(AWAIT_TIMEOUT_MS);
+
+    // Without the deadline the readers retry their offers forever, awaitReaders
+    // never returns, the coordinator's finally never runs — so the campaign id is
+    // never released — and every later scan queues behind this hung task
+    assertFalse(coordinator.isAlive(), "The reader wait MUST end on its deadline when the writer vanishes");
+    assertTrue(emitted.get() < READER_MAX_LOOPS,
+               "The readers must have been interrupted by the deadline, they emitted " + emitted.get() + " batches");
+    // Nothing drained anything: the flag path was never reachable here, which is
+    // what makes this the STRUCTURAL guarantee and not another flag
+    verify(scanService, never()).drainQueue(any());
+    verify(campaignStorage, never()).saveCandidates(anyLong(), anyList());
+    // Left resumable, and the worker restartable: the id is out of the running set
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+    assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
+    assertTrue(runningCampaigns().isEmpty(), "The campaign id must be released so the watchdog can relaunch the worker");
+  }
+
+  @Test
   void abortMidRunStopsEveryReaderAndSkipsTheSimulation() {
     planned(USERS_UNIT);
     unitsToProcess(unit(1L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
-    unitAggregates(100L, 0L);
+    unitAggregates(100L, 0L, 0L);
     unitOutcomes(1L, 0L, 0L);
     // The campaign is cancelled while the first batch is being pushed: the
     // writer re-reads the state before writing anything else
@@ -535,9 +809,10 @@ class CleanupScanServiceTest {
     planned(SPACES_UNIT, USERS_UNIT);
     unitsToProcess(unit(1L, SPACES_UNIT), unit(2L, USERS_UNIT));
     when(cleanupJcrStorage.countFiles(anyString())).thenReturn(1L);
-    unitAggregates(2L, 0L);
+    unitAggregates(2L, 0L, 0L);
     // Both units ended FAILED
     unitOutcomes(2L, 0L, 2L);
+    settledFailures(2L);
     doThrow(new IllegalStateException("JCR failure")).when(cleanupJcrStorage)
                                                      .scanRoot(anyString(), isNull(), anyInt(), any(), any());
 
@@ -652,6 +927,7 @@ class CleanupScanServiceTest {
     doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitProgress(anyLong(), any(), anyLong());
     doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitTotal(anyLong(), anyLong());
     doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitState(anyLong(), any());
+    doAnswer(this::recordWritingThread).when(scanUnitStorage).claimUnit(anyLong());
     doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitFailure(anyLong(), any());
   }
 
@@ -668,9 +944,28 @@ class CleanupScanServiceTest {
     when(scanUnitStorage.getUnitsToProcess(CAMPAIGN_ID)).thenReturn(List.of(units));
   }
 
-  private void unitAggregates(long totalCount, long scannedCount) {
+  /** Denominator, plus the numerator BEFORE and AFTER the run. */
+  private void unitAggregates(long totalCount, long scannedAtStart, long scannedAtEnd) {
     when(scanUnitStorage.sumTotalCount(CAMPAIGN_ID)).thenReturn(totalCount);
-    when(scanUnitStorage.sumScannedCount(CAMPAIGN_ID)).thenReturn(scannedCount);
+    // Two reads on purpose: the coordinator seeds the run's numerator from the
+    // first, and completeCampaign re-reads the second to report what was REALLY
+    // walked instead of the denominator
+    when(scanUnitStorage.sumScannedCount(CAMPAIGN_ID)).thenReturn(scannedAtStart, scannedAtEnd);
+  }
+
+  private void settledFailures(long settledFailedCount) {
+    when(scanUnitStorage.countSettledFailedUnits(CAMPAIGN_ID,
+                                                 CleanupScanService.MAX_SCAN_UNIT_ATTEMPTS)).thenReturn(settledFailedCount);
+  }
+
+  /**
+   * Reads back the INCOMPLETE verdict the coordinator snapshotted on the
+   * campaign's summaryJson, or null when it recorded none.
+   */
+  private CleanupCampaignSummary scanSummary() {
+    return campaign.getSummaryJson() == null ? null
+                                             : JsonUtils.fromJsonString(campaign.getSummaryJson(),
+                                                                        CleanupCampaignSummary.class);
   }
 
   private void unitOutcomes(long unitCount, long doneCount, long failedCount) {
@@ -710,6 +1005,8 @@ class CleanupScanServiceTest {
     unit.setCampaignId(CAMPAIGN_ID);
     unit.setUnitPath(unitPath);
     unit.setState(CleanupScanUnitState.PENDING);
+    // NULL, not 0: 'never counted'. A 0 would mean 'counted, and empty'
+    unit.setTotalCount(null);
     return unit;
   }
 

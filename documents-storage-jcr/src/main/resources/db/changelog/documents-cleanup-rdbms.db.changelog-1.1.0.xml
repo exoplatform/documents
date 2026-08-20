@@ -171,7 +171,16 @@
             </column>
             <column name="LAST_SCANNED_PATH" type="NVARCHAR(2000)"/>
             <column name="SCANNED_COUNT" type="BIGINT" defaultValueNumeric="0"/>
-            <column name="TOTAL_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+            <!-- NULLABLE and WITHOUT a default, deliberately: NULL means 'never
+                 counted' and 0 means 'counted, and legitimately empty'. A default of 0
+                 made the two indistinguishable, so a genuinely empty bucket was
+                 re-counted by the estimation phase of every single resume -->
+            <column name="TOTAL_COUNT" type="BIGINT"/>
+            <!-- Walk attempts already spent on this unit, incremented when the
+                 coordinator claims it. It is what BOUNDS the retry of a failed unit: a
+                 subtree that failed MAX_SCAN_UNIT_ATTEMPTS walks is settled-failed and
+                 stops holding the whole dry-run back -->
+            <column name="ATTEMPT_COUNT" type="BIGINT" defaultValueNumeric="0"/>
             <column name="FAILURE_REASON" type="NVARCHAR(2000)"/>
         </createTable>
         <modifySql dbms="mysql">

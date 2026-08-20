@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -299,7 +300,7 @@ public class CleanupExecutionService {
     campaign.setTotalCount(total);
     campaign.setProcessedCount(processed);
     campaign.setEtaSeconds(0);
-    campaign.setSummaryJson(buildSummaryJson(campaignId));
+    campaign.setSummaryJson(buildSummaryJson(campaignId, campaign.getSummaryJson()));
     campaignLifecycle.transition(campaign, CleanupCampaignState.COMPLETED);
   }
 
@@ -307,9 +308,19 @@ public class CleanupExecutionService {
    * Snapshots the campaign aggregates at completion, so they can still be
    * served once the retention job purges the item rows. Writer and reader share
    * {@link CleanupCampaignSummary}, keeping the JSON keys aligned.
+   * <p>
+   * The DRY-RUN's own verdict is CARRIED FORWARD from the summary the scan wrote
+   * at SIMULATED, never rebuilt: a report produced from an incomplete scan stays
+   * flagged incomplete for good, and overwriting this one column at completion
+   * must not be what quietly erases that.
+   *
+   * @param campaignId campaign identifier
+   * @param scanSummaryJson summary the scan left on the campaign, possibly blank
    */
-  private String buildSummaryJson(long campaignId) {
-    CleanupCampaignSummary summary = new CleanupCampaignSummary();
+  private String buildSummaryJson(long campaignId, String scanSummaryJson) {
+    CleanupCampaignSummary summary = StringUtils.isBlank(scanSummaryJson) ? new CleanupCampaignSummary()
+                                                                         : JsonUtils.fromJsonString(scanSummaryJson,
+                                                                                                    CleanupCampaignSummary.class);
     summary.setCandidateCount(campaignStorage.countItemsByState(campaignId, CleanupItemState.CANDIDATE));
     summary.setReclaimableBytes(campaignStorage.sumReclaimableBytesByState(campaignId, CleanupItemState.CANDIDATE));
     summary.setReclaimedBytes(campaignStorage.sumReclaimedBytes(campaignId));

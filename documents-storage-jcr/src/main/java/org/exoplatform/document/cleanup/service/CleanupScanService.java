@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -41,7 +42,9 @@ import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupScanUnitState;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
+import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
@@ -54,6 +57,7 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
 import io.meeds.common.ContainerTransactional;
+import io.meeds.social.util.JsonUtils;
 
 import jakarta.annotation.PreDestroy;
 
@@ -65,13 +69,15 @@ import jakarta.annotation.PreDestroy;
  * bounded queue. Nothing is ever deleted here.
  * <p>
  * THE INVARIANT of the whole design is ONLY THE WRITER TOUCHES JPA while readers
- * are alive. It is held by construction, not by discipline:
+ * are alive. It is held by construction, not by discipline — and it survives a
+ * reader outliving the coordinator (see {@link #awaitReaders}), a reader having
+ * no JPA call to make in the first place:
  * <ul>
  * <li>a reader NEVER calls a storage bean other than
  * {@link CleanupJcrStorage#scanRoot} — no read, no write. It posts envelopes on
  * the queue and reads volatile flags, nothing else</li>
  * <li>the coordinator writes only BEFORE the readers start (planning, per-unit
- * totals, marking the units RUNNING) and AFTER they all finished (the terminal
+ * totals, claiming the units) and AFTER they all finished (the terminal
  * transition) — never in between</li>
  * <li>the terminal state of a unit (DONE / FAILED) is therefore NOT written by
  * the reader that finished it: the reader posts it as the last envelope of its
@@ -80,6 +86,16 @@ import jakarta.annotation.PreDestroy;
  * even the {@code isAborted} campaign re-read stays on the writer's thread; the
  * readers poll the volatile flag it publishes</li>
  * </ul>
+ * <p>
+ * A FAILED UNIT IS RETRIED, BOUNDEDLY. A unit whose walk failed is not terminal:
+ * {@code getUnitsToProcess} hands it back to the next run, so the campaign is
+ * deliberately left DRY_RUN_RUNNING and the watchdog
+ * ({@code CleanupCampaignService#resumeStalledWorkers}) re-walks it — a transient
+ * JCR failure heals itself with no human in the loop. The bound is
+ * {@link #MAX_SCAN_UNIT_ATTEMPTS}: past it the subtree has proved unreadable, the
+ * unit is SETTLED-failed and stops holding the dry-run back. The report is then
+ * marked INCOMPLETE rather than silently partial (see
+ * {@link #completeCampaign(long, long)}).
  * <p>
  * LEGACY CHECKPOINT — a campaign interrupted under the old SEQUENTIAL scheme
  * carries a {@code CHECKPOINT_PATH} on its campaign row and has no unit row. On
@@ -100,6 +116,16 @@ public class CleanupScanService {
   private static final String          SCAN_UNIT_FAILED_REASON    = "cleanup.scanUnitFailed";
 
   /**
+   * Walk attempts a scan unit may spend IN TOTAL, the first walk included —
+   * THREE walks, not one walk plus three retries. Bounds the whole unit retry:
+   * past the third failure the subtree has proved unreadable whatever the cause
+   * was, and the watchdog must not re-walk it on every tick until the end of
+   * time. Mirrors {@code CleanupCampaignService#MAX_RETRY_ATTEMPTS}, which bounds
+   * the item-level retry the same way.
+   */
+  public static final long             MAX_SCAN_UNIT_ATTEMPTS     = 3;
+
+  /**
    * Floor of the batch-queue capacity, which is otherwise twice the reader
    * count. The bound IS the backpressure: a reader that cannot post blocks until
    * the writer catches up, so the readers can never outrun the database. An
@@ -109,11 +135,15 @@ public class CleanupScanService {
   private static final int             MIN_QUEUE_CAPACITY         = 4;
 
   /**
-   * Bound of every blocking queue operation. Neither side ever blocks
-   * indefinitely: a reader re-checks the abort/failed flags between two offers
-   * (a dead writer must not leave it blocked forever), and the writer re-checks
-   * them between two polls — a lost poison pill would otherwise hang the worker
-   * for good.
+   * Bound of every blocking queue operation: a reader re-checks the abort/failed
+   * flags between two offers (a dead writer must not leave it blocked forever),
+   * and the writer re-checks them between two polls — a lost poison pill would
+   * otherwise hang the worker for good.
+   * <p>
+   * Neither side ever blocks indefinitely, but this bound alone is NOT what
+   * guarantees it: it only makes the stop flags observable, and a reader whose
+   * writer died without raising one would retry forever. The guarantee is
+   * {@link #readersDeadlineMillis}, which does not depend on any flag.
    */
   private static final long            QUEUE_TIMEOUT_MILLIS       = 200L;
 
@@ -127,6 +157,25 @@ public class CleanupScanService {
    * rather than waited on forever.
    */
   private static final long            WRITER_JOIN_MILLIS         = 300000L;
+
+  /**
+   * WALL-CLOCK deadline of the whole reader wait, past which the readers are
+   * interrupted UNCONDITIONALLY — the structural half of the no-indefinite-block
+   * guarantee. The flag-based half only covers the abnormal exits somebody
+   * enumerated; this one covers a writer thread that vanished for ANY reason,
+   * including one nobody thought of, because it never consults a flag at all.
+   * <p>
+   * DERIVED, not picked: {@code scanRoot} holds ONE JCR session for a unit's
+   * whole lazy walk and stamps it with
+   * {@code documents.cleanup.jcr.session.timeout} (one hour by default), so a
+   * reader that has been inside its walk for longer than that timeout is already
+   * doomed — its session is gone. The deadline is TWICE that hour, which leaves a
+   * legitimately long walk a full session lifetime of slack before it can ever be
+   * reached, and it is overridable for the deployments that raise the session
+   * timeout.
+   */
+  @Value("${documents.cleanup.scan.readers.deadline:7200000}")
+  private long                         readersDeadlineMillis;
 
   @Autowired
   private CleanupCampaignStorage       campaignStorage;
@@ -285,7 +334,10 @@ public class CleanupScanService {
                              ExecutorService readerPool) throws InterruptedException, ExecutionException {
     Map<CleanupScanUnit, Future<Long>> countings = new HashMap<>();
     for (CleanupScanUnit unit : units) {
-      if (unit.getTotalCount() == 0) {
+      // NULL is 'never counted', and 0 is 'counted, and empty'. Testing for 0
+      // re-counted every genuinely empty bucket — a first-letter bucket of /Users
+      // holding no file — on EVERY resume, for a count already known to be 0
+      if (unit.getTotalCount() == null) {
         countings.put(unit, readerPool.submit(() -> cleanupJcrStorage.countFiles(unit.getUnitPath())));
       }
     }
@@ -304,10 +356,12 @@ public class CleanupScanService {
    * Runs the parallel walk: {@code readerCount} readers, ONE writer, a bounded
    * queue between them.
    * <p>
-   * The units are ALL marked RUNNING here, by the coordinator, BEFORE any reader
-   * starts — that is what keeps a reader out of JPA (see the class comment). The
-   * writer is started right after the readers are submitted and never before: a
-   * bounded queue means the readers block until it drains.
+   * The units are ALL claimed here, by the coordinator, BEFORE any reader starts
+   * — that is what keeps a reader out of JPA (see the class comment) — and the
+   * claim is what SPENDS a walk attempt, so a unit re-walked by the watchdog can
+   * never spend an unbounded number of them. The writer is started right after
+   * the readers are submitted and never before: a bounded queue means the readers
+   * block until it drains.
    */
   private void scanUnits(long campaignId, // NOSONAR
                          CleanupParams params,
@@ -317,7 +371,7 @@ public class CleanupScanService {
                          long total,
                          long processedAtStart) throws InterruptedException {
     for (CleanupScanUnit unit : units) {
-      scanUnitStorage.updateUnitState(unit.getId(), CleanupScanUnitState.RUNNING);
+      scanUnitStorage.claimUnit(unit.getId());
     }
     ScanRun run = new ScanRun(campaignId, params, settingService.getBatchSize(), total, processedAtStart, readerCount, units);
     for (CleanupScanUnit unit : units) {
@@ -382,11 +436,24 @@ public class CleanupScanService {
    * readers would be left blocked forever on a queue nothing drains — so the
    * failed flag is raised on EVERY abnormal exit, not only on a persistence
    * error.
+   * <p>
+   * {@code Throwable} and NOT {@code Exception}, which is the whole point: the
+   * failure this bounded queue exists to prevent is an {@code OutOfMemoryError}
+   * on a multi-million-node walk, and a deep traversal can equally raise a
+   * {@code StackOverflowError}. Catching only {@code Exception} let exactly those
+   * escape with the flag still false, and every future scan of every campaign
+   * then queued behind the hung task of a single-thread coordinator.
+   * <p>
+   * The error is swallowed deliberately rather than rethrown: it is logged here,
+   * the flag it raises IS the recovery (the readers stop, the campaign stays
+   * resumable), and rethrowing would only reprint the trace on an uncaught
+   * handler. The reader wait no longer DEPENDS on this handler anyway — see
+   * {@link #awaitReaders}.
    */
   private void runWriter(ScanRun run) {
     try {
       drainQueueTransactional(run);
-    } catch (Exception e) { // NOSONAR
+    } catch (Throwable e) { // NOSONAR
       run.writerFailed = true;
       LOG.error("The writer of the cleanup campaign {} scan failed to start: the readers are stopped", run.campaignId, e);
     }
@@ -464,9 +531,11 @@ public class CleanupScanService {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       run.writerFailed = true;
-    } catch (Exception e) {
+    } catch (Throwable e) { // NOSONAR
       // The readers MUST observe this: they are blocked on a queue nothing
-      // drains anymore, and would otherwise never stop
+      // drains anymore, and would otherwise never stop. Throwable and not
+      // Exception: an OOM on a multi-million-node walk escaped this handler with
+      // the flag still false, which is precisely the hang this catch prevents
       run.writerFailed = true;
       LOG.error("Error persisting the scan of cleanup campaign {}: the readers are stopped and the scan stays resumable",
                 run.campaignId,
@@ -484,53 +553,160 @@ public class CleanupScanService {
 
   /**
    * Terminal transition, only when the run was not aborted and every unit
-   * actually reached an outcome.
-   * <p>
-   * ALL units failed is NOT a successful simulation: the campaign is left
-   * exactly as it is (DRY_RUN_RUNNING, its unit checkpoints untouched), which is
-   * the very same resumable failure path a JCR outage already took. The watchdog
+   * SETTLED — DONE, or failed with every walk attempt spent. Three refusals, in
+   * this order:
+   * <ol>
+   * <li>ALL units failed is NOT a simulation at all: the campaign is left exactly
+   * as it is (DRY_RUN_RUNNING, its unit checkpoints untouched), which is the very
+   * same resumable failure path a JCR outage already took. The watchdog
    * relaunching it is not a spin — a relaunch only returns after every unit was
    * really re-attempted, so it is throttled by the work itself, and a repository
-   * back online makes the next attempt succeed.
+   * back online makes the next attempt succeed</li>
+   * <li>a unit that FAILED but still has attempts left is not settled either: the
+   * campaign deliberately stays DRY_RUN_RUNNING so the watchdog re-walks that
+   * subtree. Transitioning to SIMULATED here was the whole bug — it was the LAST
+   * run of the campaign, so a transient failure became permanent silently</li>
+   * <li>a unit that never reached an outcome at all (an interrupted run) blocks
+   * the transition as before</li>
+   * </ol>
+   * <p>
+   * Past the refusals the report is published, but never as if it were complete:
+   * {@code processedCount} is what the units ACTUALLY walked — never the
+   * denominator, which used to pin the console at 100% on a report missing whole
+   * subtrees — and a settled failure marks the summary INCOMPLETE (see
+   * {@link CleanupCampaignSummary}), which is what the console reads to say so.
    */
-  private void completeCampaign(long campaignId, long total) {
+  private void completeCampaign(long campaignId, long total) { // NOSONAR
     if (isAborted(campaignId)) {
       return;
     }
     long unitCount = scanUnitStorage.countUnits(campaignId);
     long failedCount = scanUnitStorage.countUnitsByState(campaignId, CleanupScanUnitState.FAILED);
     long doneCount = scanUnitStorage.countUnitsByState(campaignId, CleanupScanUnitState.DONE);
+    long settledFailedCount = scanUnitStorage.countSettledFailedUnits(campaignId, MAX_SCAN_UNIT_ATTEMPTS);
     if (unitCount > 0 && failedCount == unitCount) {
       LOG.error("Every one of the {} scan units of cleanup campaign {} failed: the dry-run is NOT reported as simulated,"
           + " the campaign stays resumable from its unit checkpoints.", unitCount, campaignId);
       return;
-    } else if (doneCount + failedCount < unitCount) {
-      LOG.warn("Only {} of the {} scan units of cleanup campaign {} reached an outcome: the dry-run is NOT reported as"
-          + " simulated, the campaign stays resumable from its unit checkpoints.",
-               doneCount + failedCount,
+    } else if (doneCount + settledFailedCount < unitCount) {
+      LOG.warn("Only {} of the {} scan units of cleanup campaign {} settled ({} failed with attempts left of the {} allowed):"
+          + " the dry-run is NOT reported as simulated, the campaign stays DRY_RUN_RUNNING and the watchdog re-walks them.",
+               doneCount + settledFailedCount,
                unitCount,
-               campaignId);
+               campaignId,
+               failedCount - settledFailedCount,
+               MAX_SCAN_UNIT_ATTEMPTS);
       return;
     }
     CleanupCampaign campaign = campaignStorage.getCampaign(campaignId);
     if (campaign != null && campaign.getState() == CleanupCampaignState.DRY_RUN_RUNNING) {
+      // What was really walked, capped by the denominator exactly like the
+      // per-batch progress writes: a partial scan must READ partial
+      long walked = Math.min(scanUnitStorage.sumScannedCount(campaignId), total);
       campaign.setTotalCount(total);
-      campaign.setProcessedCount(total);
+      campaign.setProcessedCount(walked);
       campaign.setEtaSeconds(0);
+      if (settledFailedCount > 0) {
+        LOG.error("The dry-run of cleanup campaign {} is reported as simulated but INCOMPLETE: {} of its {} scan units could"
+            + " not be walked in {} attempts, so {} of the {} counted nodes are MISSING from the report. Whoever publishes it"
+            + " must know the report does not cover the whole tree.",
+                  campaignId,
+                  settledFailedCount,
+                  unitCount,
+                  MAX_SCAN_UNIT_ATTEMPTS,
+                  total - walked,
+                  total);
+        campaign.setSummaryJson(buildScanSummaryJson(settledFailedCount));
+      }
       campaignLifecycle.transition(campaign, CleanupCampaignState.SIMULATED);
     }
+  }
+
+  /**
+   * Snapshots the dry-run's INCOMPLETE verdict on the campaign row, reusing the
+   * summaryJson column and its typed {@link CleanupCampaignSummary} rather than
+   * adding a column of its own: the purge aggregates it otherwise carries are all
+   * still 0 at this point, and
+   * {@code CleanupExecutionService#buildSummaryJson(long, String)} carries these
+   * two fields FORWARD when it overwrites the column at COMPLETED — so the
+   * verdict outlives the purge instead of being erased by it.
+   */
+  private String buildScanSummaryJson(long settledFailedCount) {
+    CleanupCampaignSummary summary = new CleanupCampaignSummary();
+    summary.setScanIncomplete(true);
+    summary.setFailedScanUnitCount(settledFailedCount);
+    return JsonUtils.toJsonString(summary);
+  }
+
+  /**
+   * Grouped failures of a campaign's SCAN, one entry per distinct failure message
+   * code with the number of subtrees that carry it — the unit-level twin of
+   * {@code CleanupCampaignService#getCampaignFailures}, so the console renders
+   * both through the same block.
+   * <p>
+   * Gated on the campaign's own INCOMPLETE verdict, and NOT on the live unit
+   * rows: a unit that failed while attempts remain is a transient failure the
+   * watchdog is already re-walking, and surfacing it would report a subtree as
+   * missing from a report that is not even finished. Only a scan the coordinator
+   * RECORDED as incomplete has anything to show here.
+   * <p>
+   * Every group is {@code retryable = false}, which is the honest answer: these
+   * subtrees exhausted {@link #MAX_SCAN_UNIT_ATTEMPTS} walks, and there is
+   * deliberately no console retry for them — re-running the scan of a campaign
+   * that already left DRY_RUN_RUNNING is not an edge this lifecycle has.
+   *
+   * @param campaign campaign whose scan failures are wanted
+   * @return the groups, EMPTY when the campaign's scan covered the whole tree
+   */
+  public List<CleanupFailureGroup> getScanFailures(CleanupCampaign campaign) {
+    if (campaign == null || StringUtils.isBlank(campaign.getSummaryJson())
+        || !JsonUtils.fromJsonString(campaign.getSummaryJson(), CleanupCampaignSummary.class).isScanIncomplete()) {
+      return List.of();
+    }
+    return scanUnitStorage.countFailuresByReason(campaign.getId());
   }
 
   /**
    * Waits for every reader to finish, in bounded slices so the stop flag stays
    * observable: a writer failure (or an abort) interrupts the readers, which may
    * otherwise sit inside a long blocking JCR call.
+   * <p>
+   * And it waits under a WALL-CLOCK DEADLINE ({@link #readersDeadlineMillis}),
+   * which is what makes the no-indefinite-block guarantee STRUCTURAL instead of
+   * flag-dependent. The flag path only covers the abnormal writer exits somebody
+   * enumerated: a writer that vanishes some other way raises nothing, the readers
+   * retry their offers forever, this loop's escape hatch is unreachable, the
+   * coordinator's {@code finally} never runs — so the campaign id is never
+   * released — and every later scan of every campaign queues behind the hung task
+   * of a single-thread coordinator, with no state change for the console or the
+   * watchdog to notice. Past the deadline the readers are therefore interrupted
+   * UNCONDITIONALLY, no flag consulted.
+   * <p>
+   * A reader that ignores its interrupt outlives the coordinator, which does NOT
+   * break the JPA invariant: a reader has no storage call to make but
+   * {@code scanRoot}, and {@code post} answers false as soon as the run is
+   * stopped. And nothing terminal is recorded, so the campaign stays
+   * DRY_RUN_RUNNING and the watchdog re-launches the scan from the unit
+   * checkpoints.
    */
   private void awaitReaders(ExecutorService readerPool, ScanRun run) throws InterruptedException {
     // No new task accepted; the submitted ones run to completion
     readerPool.shutdown();
+    long deadline = System.currentTimeMillis() + readersDeadlineMillis;
     boolean interrupted = false;
     while (!readerPool.awaitTermination(READERS_AWAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+      if (System.currentTimeMillis() >= deadline) {
+        // Published so post() stops retrying rather than merely being
+        // interrupted: the readers must UNBLOCK, not just get a flag set
+        run.writerFailed = true;
+        readerPool.shutdownNow();
+        LOG.error("The readers of the cleanup campaign {} scan did not finish within {} ms: the writer thread is presumed"
+            + " DEAD whatever the reason, the readers are interrupted unconditionally and the campaign stays"
+            + " DRY_RUN_RUNNING — the watchdog re-launches it from the unit checkpoints.",
+                  run.campaignId,
+                  readersDeadlineMillis);
+        return;
+      }
       if (run.isStopped() && !interrupted) {
         readerPool.shutdownNow();
         interrupted = true;
@@ -542,7 +718,9 @@ public class CleanupScanService {
    * Posts an envelope, blocking while the queue is full — THAT is the
    * backpressure. Bounded offers rather than a plain {@code put}: a writer that
    * died must never leave a reader blocked forever, so the stop flags are
-   * re-checked between two attempts.
+   * re-checked between two attempts. A writer that died WITHOUT raising one is
+   * caught by the coordinator's deadline instead (see {@link #awaitReaders}) —
+   * this loop is the fast path, not the guarantee.
    *
    * @return true when the envelope was handed over, false when the run stopped
    */

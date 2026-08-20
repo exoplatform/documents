@@ -193,6 +193,19 @@ export function getCampaignFailures(campaignId) {
   }).then(handleJsonResponse);
 }
 
+// Answers the SCAN failures of a campaign — the subtrees its dry run could never
+// walk — folded server-side into the same [{reason, count, retryable}] shape as
+// getCampaignFailures, so one console block renders both. An empty array is the
+// normal answer: only a scan the server RECORDED as incomplete reports anything,
+// and there is deliberately NO retry for these (the watchdog re-walked them while
+// attempts remained, and a settled subtree would fail identically).
+export function getCampaignScanFailures(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/scan-failures`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(handleJsonResponse);
+}
+
 // Null, undefined and empty values are DROPPED rather than sent empty: every
 // filter of both items endpoints is optional server-side, and a blank 'search'
 // or 'state' must mean 'no filter', not 'match nothing'.

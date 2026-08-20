@@ -85,12 +85,26 @@ public class CleanupScanUnitEntity implements Serializable {
   private long              scannedCount;
 
   /**
-   * Nodes counted in this unit by the estimation phase, 0 while never counted.
-   * The campaign denominator is the SUM over the units, so it stays comparable
-   * with the counts of the campaigns scanned by the sequential worker.
+   * Nodes counted in this unit by the estimation phase, NULL while never
+   * counted. The campaign denominator is the SUM over the units, so it stays
+   * comparable with the counts of the campaigns scanned by the sequential
+   * worker.
+   * <p>
+   * A boxed {@code Long} and not a {@code long}, which is the whole point: 0 is
+   * a legitimate COUNT — an empty first-letter bucket of /Users — and with a
+   * primitive it was indistinguishable from 'not counted yet', so every resume
+   * re-counted every empty bucket for nothing.
    */
   @Column(name = "TOTAL_COUNT")
-  private long              totalCount;
+  private Long              totalCount;
+
+  /**
+   * Walk attempts already spent on this unit, incremented when the coordinator
+   * CLAIMS it for a walk. A unit that spent them all is settled-failed: it stops
+   * being re-walked and stops holding the dry-run's completion back.
+   */
+  @Column(name = "ATTEMPT_COUNT")
+  private long              attemptCount;
 
   /**
    * Localizable message code of the unit failure, and NOTHING else — same

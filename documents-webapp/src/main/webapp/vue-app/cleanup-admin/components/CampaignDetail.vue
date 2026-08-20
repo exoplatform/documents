@@ -115,6 +115,38 @@
       </div>
     </div>
     <document-cleanup-campaign-stats :campaign="campaign" />
+    <!-- COMPLETENESS of the report, ABOVE the report itself and above the skip
+         reasons below: a dry run that could not walk a subtree produces a report
+         missing it entirely, and this used to read as a clean 100% run. Shown from
+         SIMULATED on — the state the admin publishes FROM, so the warning arrives
+         before the decision, not after it. No retry is offered: these subtrees
+         already spent every walk attempt they had (the watchdog re-walked them
+         while any remained), so a button here would only fail identically -->
+    <div
+      v-if="scanFailures.length"
+      role="alert"
+      class="d-flex flex-column mt-4">
+      <div class="d-flex align-center flex-wrap">
+        <v-icon size="16" class="warning--text me-2">fas fa-exclamation-triangle</v-icon>
+        <number-format :value="totalScanFailures" class="text-color font-weight-bold" />
+        <span class="ms-1 text-color">{{ $t('cleanup.admin.scanFailures.headline') }}</span>
+      </div>
+      <span class="text-light-color caption">{{ $t('cleanup.admin.scanFailures.warning') }}</span>
+      <div
+        v-for="group in scanFailures"
+        :key="group.reason"
+        class="d-flex align-center mt-1">
+        <v-chip
+          color="warning"
+          class="me-2"
+          outlined
+          x-small>
+          {{ $t('cleanup.admin.scanFailures.notWalked') }}
+        </v-chip>
+        <number-format :value="group.count" class="text-color font-weight-bold" />
+        <span class="ms-2 text-light-color caption">{{ failureLabel(group.reason) }}</span>
+      </div>
+    </div>
     <!-- The grouped skip reasons of a FINISHED run, and the only place a retry
          is offered from. Nothing is shown when the endpoint answers an empty
          list: no failure, or item rows the retention job already purged -->
@@ -221,6 +253,12 @@ export default {
       // on every load, and this must stay ONE request per completion
       failures: [],
       failuresLoadedFor: null,
+      // SCAN failures grouped BY THE SERVER, same [{reason, count, retryable}]
+      // shape, tracked separately: they are the verdict of the DRY RUN and stay
+      // true for every state that follows it, where the execution failures above
+      // only exist once a purge ran
+      scanFailures: [],
+      scanFailuresLoadedFor: null,
     };
   },
   computed: {
@@ -261,6 +299,15 @@ export default {
     },
     totalFailures() {
       return this.failures.reduce((total, group) => total + (group.count || 0), 0);
+    },
+    totalScanFailures() {
+      return this.scanFailures.reduce((total, group) => total + (group.count || 0), 0);
+    },
+    // Every state a dry run has ALREADY produced its report in. DRAFT and
+    // DRY_RUN_RUNNING are excluded because there is no verdict yet, CANCELLED
+    // because nothing will be published from it
+    scanReported() {
+      return ['SIMULATED', 'PUBLISHED', 'LOCKED', 'EXECUTING', 'COMPLETED'].includes(this.campaign?.state);
     },
     // ONE retryable group is enough: the server requeues what it judges
     // retryable and leaves the rest alone
@@ -329,6 +376,7 @@ export default {
       this.syncedAt = Date.now();
       this.now = this.syncedAt;
       this.syncFailures();
+      this.syncScanFailures();
     },
     // The grouped failures are the report of a run that ENDED: they are only
     // asked for in COMPLETED — the sole state a purge has actually run in, so a
@@ -360,6 +408,35 @@ export default {
           }
         })
         .catch(() => this.displayAlert(this.$t('cleanup.admin.failures.loadError'), 'error'));
+    },
+    // The scan verdict is asked for ONCE per campaign, in every state the dry run
+    // already reported in — and re-asked when the admin comes back to the
+    // campaign, exactly like syncFailures. It is NOT dropped when the state moves
+    // on (SIMULATED to PUBLISHED to COMPLETED): the report stays the one that
+    // incomplete scan produced, whatever happens to it afterwards
+    syncScanFailures() {
+      const campaignId = this.campaign?.id;
+      if (!campaignId || !this.scanReported) {
+        this.scanFailures = [];
+        this.scanFailuresLoadedFor = null;
+        return;
+      }
+      if (this.scanFailuresLoadedFor === campaignId) {
+        return;
+      }
+      // Marked BEFORE the request, a failed one included: the same refresh paths
+      // that call applyCampaign must not turn into a second query
+      this.scanFailuresLoadedFor = campaignId;
+      this.scanFailures = [];
+      return this.$cleanupService.getCampaignScanFailures(campaignId)
+        .then(scanFailures => {
+          // Dropped when the admin already switched campaign: same supersession
+          // discipline as loadCampaign
+          if (this.scanFailuresLoadedFor === campaignId) {
+            this.scanFailures = scanFailures || [];
+          }
+        })
+        .catch(() => this.displayAlert(this.$t('cleanup.admin.scanFailures.loadError'), 'error'));
     },
     // Localized through the SHARED $cleanupErrorLabel, like every other cleanup
     // message code: a reason with no bundle entry falls back to the generic

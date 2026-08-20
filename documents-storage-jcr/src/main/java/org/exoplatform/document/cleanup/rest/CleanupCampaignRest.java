@@ -332,6 +332,36 @@ public class CleanupCampaignRest {
     }
   }
 
+  /**
+   * Grouped failures of a campaign's dry-run SCAN, so the console can say that
+   * the report the administrator is about to publish does NOT cover the whole
+   * tree, and WHY — one entry per subtree failure reason, with how many subtrees
+   * carry it.
+   * <p>
+   * Answers an EMPTY list for every campaign whose scan covered the whole tree,
+   * which is the normal case: only a scan the worker RECORDED as incomplete —
+   * subtrees that failed every walk attempt they had — has anything to report
+   * here. A subtree that failed while attempts remain is not one of them: the
+   * campaign is still DRY_RUN_RUNNING and the watchdog is re-walking it.
+   */
+  @Secured("administrators")
+  @GetMapping(path = "{id}/scan-failures", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "GET", summary = "Retrieve the grouped scan failures of a cleanup campaign", description = "Per-reason counts of the subtrees a campaign's dry run could not walk. Empty unless the scan was recorded incomplete")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public List<CampaignFailureGroupRestEntity> getCampaignScanFailures(
+                                                                     @Parameter(description = "Campaign identifier", required = true)
+                                                                     @PathVariable("id")
+                                                                     long id) {
+    try {
+      return campaignService.getCampaignScanFailures(id).stream().map(CleanupEntityBuilder::build).toList();
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
   @Secured("administrators")
   @GetMapping(path = "{id}/items", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(method = "GET", summary = "Retrieve the items of a cleanup campaign", description = "Retrieve the items of a cleanup campaign, with optional owner/state/action/size filters and an optional path search, paged and sorted")

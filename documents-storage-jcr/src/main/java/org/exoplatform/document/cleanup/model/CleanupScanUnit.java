@@ -44,7 +44,14 @@ public class CleanupScanUnit {
 
   private long                 scannedCount;
 
-  private long                 totalCount;
+  /**
+   * Nodes counted in this unit, NULL while it was never counted — which is NOT
+   * the same as 0, a bucket the estimation phase found genuinely empty.
+   */
+  private Long                 totalCount;
+
+  /** Walk attempts already spent on this unit, the first walk included. */
+  private long                 attemptCount;
 
   /** Localizable message code of the unit failure, never an exception message. */
   private String               failureReason;
