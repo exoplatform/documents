@@ -890,6 +890,138 @@ class CleanupJcrStorageTest {
     verify(session).logout();
   }
 
+  /**
+   * The LAZINESS tests below are invisible to a behaviour test: every one of
+   * them would stay green if the evaluation went back to measuring both sizes
+   * up-front, which is exactly what was measured saturating BOTH Infinispan JCR
+   * caches at their 1,000,000-entry cap ('collaboration' for the files,
+   * 'system' for the version histories) and taking the JVM heap from ~5 GB to
+   * ~20 GB on a single sequential dry-run. They pin WHICH JCR reads the
+   * evaluation is allowed to perform, per outcome: a NON-candidate measures
+   * neither size, while an emitted candidate carries both figures — the
+   * laziness buys the scan of the millions of files that qualify for nothing,
+   * never a hole in a reported row.
+   */
+  @Test
+  void nonCandidateIsDecidedWithoutReadingContentNorAnyFrozenVersion() throws RepositoryException {
+    // Recent AND within the version budget (3 <= 5): neither criterion can
+    // qualify it, so the decision must be reached on the dates and the version
+    // count alone
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 1, 4096L, 3, 1024L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertFalse(revalidation.isUnknown(), "The node was readable: the outcome is definitive");
+    assertNull(revalidation.getCandidate(), "A recent file within its version budget is not a candidate");
+    // NOT ONE size read: no jcr:content child materialized...
+    verify(file.node(), never()).hasNode(NodeTypeConstants.JCR_CONTENT);
+    verify(file.node(), never()).getNode(NodeTypeConstants.JCR_CONTENT);
+    // ... and not one version's jcr:frozenNode -> jcr:content -> jcr:data walk,
+    // the ~3 nodes per version that used to be charged to EVERY scanned file
+    for (Version version : file.versions()) {
+      verify(version, never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    }
+    // Cost that REMAINS, pinned on purpose: PURGE_VERSIONS is age-independent,
+    // so the version HISTORY is still read for every versionable file to get
+    // its version count. Removing THAT is the age-gating question, still open
+    verify(file.node()).getVersionHistory();
+  }
+
+  @Test
+  void deleteCandidateCarriesBothMeasuredFigures() throws RepositoryException {
+    // A year old and above the 1024-byte floor: DELETE, decided on the content
+    // size alone — but the emitted row still reports both figures
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 4096L, 3, 1024L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertNotNull(revalidation.getCandidate());
+    assertEquals(CleanupAction.DELETE, revalidation.getCandidate().getAction());
+    assertEquals(4096L, revalidation.getCandidate().getFileSize(), "The content size the DELETE reclaims");
+    assertEquals(3072L,
+                 revalidation.getCandidate().getVersionsSize(),
+                 "The versions size the DECISION didn't need is still measured for the emitted row: the admin table renders"
+                     + " and sorts it, and reporting 0 B there is the very defect the lazy ordering exists to avoid");
+    verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
+    verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+  }
+
+  @Test
+  void recentButOverVersionedFileIsAPurgeVersionsCandidateCarryingBothFigures() throws RepositoryException {
+    // RECENT (one month) but over-versioned (6 > 5). This row is THE reason the
+    // scan query must not be narrowed with a jcr:created predicate and the
+    // criterion must not be age-gated: either would silently drop it
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 1, 4096L, 6, 1024L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertNotNull(revalidation.getCandidate(), "A recent but heavily-versioned file IS a candidate");
+    assertEquals(CleanupAction.PURGE_VERSIONS, revalidation.getCandidate().getAction());
+    assertEquals(6144L, revalidation.getCandidate().getVersionsSize(), "The versions size the purge reclaims");
+    assertEquals(4096L,
+                 revalidation.getCandidate().getFileSize(),
+                 "The content size the DECISION didn't need is still measured for the emitted row: the min-size item filter"
+                     + " of CleanupCampaignItemDAO reads it, and a 0 would drop this row out of a filtered listing");
+    verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
+    verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+  }
+
+  @Test
+  void nonVersionableNodeIsNeverAskedForAVersionHistory() throws RepositoryException {
+    // versionCount 0 => not mix:versionable: neither the version count nor the
+    // versions size has anything to read, and computeVersionsSize would walk a
+    // history this node simply doesn't have
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 4096L, 0, 0L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertEquals(CleanupAction.DELETE, revalidation.getCandidate().getAction());
+    assertEquals(4096L, revalidation.getCandidate().getFileSize());
+    assertEquals(0L,
+                 revalidation.getCandidate().getVersionsSize(),
+                 "0 because there are no versions — NOT because the measurement was skipped");
+    verify(file.node(), never()).getVersionHistory();
+  }
+
+  @Test
+  void sizeFloorStillRejectsTheCandidateAfterTheMeasurement() throws RepositoryException {
+    // Aged, so the cheap gate lets it through and the content IS measured — and
+    // then rejected, one byte under the 1024-byte floor
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 1023L, 3, 1024L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertFalse(revalidation.isUnknown());
+    assertNull(revalidation.getCandidate(), "Under the size floor: not a candidate, laziness or not");
+    // The laziness must not turn the floor into a no-op: the measurement really
+    // happened and really rejected the node
+    verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
+  }
+
+  @Test
+  void agedFileUnderTheFloorFallsThroughToPurgeVersionsWithBothSizesMeasured() throws RepositoryException {
+    // Aged AND over-versioned, with a content size under the floor: the eager
+    // criterion fell through from the DELETE branch to the PURGE_VERSIONS one,
+    // and that fall-through is preserved — which is also the ONE outcome paying
+    // for both measurements
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 512L, 6, 1024L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertNotNull(revalidation.getCandidate());
+    assertEquals(CleanupAction.PURGE_VERSIONS, revalidation.getCandidate().getAction());
+    assertEquals(512L, revalidation.getCandidate().getFileSize(), "Measured while testing the DELETE branch");
+    assertEquals(6144L, revalidation.getCandidate().getVersionsSize(), "Measured while testing the PURGE_VERSIONS branch");
+    verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
+    verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+  }
+
   @Test
   void deleteNodeReportsFailedReadAsSkippedNeverAsGone() throws RepositoryException {
     when(session.getNodeByIdentifier(NODE_UUID_FLAKY)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
@@ -1175,6 +1307,72 @@ class CleanupJcrStorageTest {
     // ... and the listener field is cleared, so unregister is a no-op
     cleanupJcrStorage.unregisterObservationListener();
     verify(observationManager, never()).removeEventListener(any(EventListener.class));
+  }
+
+  /**
+   * A scanned nt:file and the mocks whose reads the laziness tests verify: its
+   * jcr:content child and its versions (index 0 being jcr:rootVersion).
+   */
+  private record ScannedFile(ExtendedNode node, Node content, List<Version> versions) {
+  }
+
+  /**
+   * A scanned nt:file whose every read is stubbed LENIENTLY — the point being
+   * that a test asserts which of them the evaluation performed, so a stub left
+   * unused is the expected outcome, not a broken test.
+   *
+   * @param createdMonthsAgo age of jcr:created; no last-modified property is
+   *          stubbed, so the criterion falls back to it (as it does on a file
+   *          never modified since its upload)
+   * @param contentSize jcr:content/jcr:data length
+   * @param versionCount number of versions past jcr:rootVersion; 0 leaves the
+   *          node NON-versionable, with no version history at all
+   * @param versionSize frozen content length of each of those versions
+   */
+  private ScannedFile scannedFile(String path, // NOSONAR
+                                  String uuid,
+                                  int createdMonthsAgo,
+                                  long contentSize,
+                                  int versionCount,
+                                  long versionSize) throws RepositoryException {
+    ExtendedNode node = mock(ExtendedNode.class);
+    org.mockito.Mockito.lenient().when(node.getPath()).thenReturn(path);
+    org.mockito.Mockito.lenient().when(node.getIdentifier()).thenReturn(uuid);
+    Calendar created = Calendar.getInstance();
+    created.add(Calendar.MONTH, -createdMonthsAgo);
+    Property createdProperty = mock(Property.class);
+    org.mockito.Mockito.lenient().when(createdProperty.getDate()).thenReturn(created);
+    org.mockito.Mockito.lenient().when(node.hasProperty(NodeTypeConstants.JCR_CREATED_DATE)).thenReturn(true);
+    org.mockito.Mockito.lenient().when(node.getProperty(NodeTypeConstants.JCR_CREATED_DATE)).thenReturn(createdProperty);
+    Node content = mock(Node.class);
+    Property dataProperty = mock(Property.class);
+    org.mockito.Mockito.lenient().when(dataProperty.getLength()).thenReturn(contentSize);
+    org.mockito.Mockito.lenient().when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    org.mockito.Mockito.lenient().when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(content);
+    org.mockito.Mockito.lenient().when(content.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    org.mockito.Mockito.lenient().when(content.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
+    List<Version> versions = new ArrayList<>();
+    if (versionCount > 0) {
+      org.mockito.Mockito.lenient().when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+      versions.add(version(JCR_ROOT_VERSION, 0L));
+      for (int i = 1; i <= versionCount; i++) {
+        versions.add(version(String.valueOf(i), versionSize));
+      }
+      // Built BEFORE the getAllVersions() stubbing: the helpers stub their own
+      // mocks, and nesting that inside an in-progress when() is unfinished
+      // stubbing. First iterator = the version COUNT (getSize), second = the
+      // versions-size WALK, which only a purge-reclaiming outcome ever asks for
+      VersionIterator countIterator = mock(VersionIterator.class);
+      org.mockito.Mockito.lenient().when(countIterator.getSize()).thenReturn((long) versions.size());
+      VersionIterator walkIterator = lenientVersionIterator(versions.toArray(new Version[0]));
+      VersionHistory versionHistory = mock(VersionHistory.class);
+      org.mockito.Mockito.lenient().when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
+      org.mockito.Mockito.lenient().when(node.getVersionHistory()).thenReturn(versionHistory);
+    }
+    Identity ownerIdentity = new Identity("organization", "john");
+    ownerIdentity.setId("7");
+    org.mockito.Mockito.lenient().when(identityManager.getOrCreateUserIdentity("john")).thenReturn(ownerIdentity);
+    return new ScannedFile(node, content, versions);
   }
 
   private void setField(String name, Object value) throws ReflectiveOperationException {

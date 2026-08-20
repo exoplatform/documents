@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.LongSupplier;
 
 import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
@@ -668,6 +669,46 @@ public class CleanupJcrStorage {
     }
   }
 
+  /**
+   * Evaluates one scanned nt:file against the campaign criteria, reading from
+   * JCR as LITTLE as the decision allows.
+   * <p>
+   * The read order is load-bearing, do NOT flatten it back: measuring both
+   * sizes up-front for every nt:file was measured saturating BOTH Infinispan
+   * JCR caches at their 1,000,000-entry cap — 'collaboration' (the files) and
+   * 'system' (the version histories) — with the JVM heap climbing from ~5 GB to
+   * ~20 GB on a single sequential dry-run. So:
+   * <ol>
+   * <li>the CHEAP reads first: path, the two dates, and the version count (for
+   * a mix:versionable node only, as the version count of a non-versionable node
+   * is 0 by definition)</li>
+   * <li>the criterion decides on those alone and a non-candidate returns here,
+   * having touched neither jcr:content nor a single frozen node</li>
+   * <li>a size is measured only when the DECISION turns on it: the content size
+   * for the DELETE test, the versions size for the PURGE_VERSIONS one — the
+   * latter being the expensive one, about three nodes per version
+   * (jcr:frozenNode -> jcr:content -> jcr:data)</li>
+   * <li>and once an action IS chosen, BOTH figures are measured for the emitted
+   * candidate, whichever one the decision happened to need</li>
+   * </ol>
+   * That last step is deliberate and must not be 'optimised' away: the emitted
+   * candidate feeds the admin items table, which renders AND sorts both a file
+   * size and a versions size, and the min-size item filter of
+   * {@code CleanupCampaignItemDAO}, which filters on the file size. Leaving the
+   * size the decision did not need at 0 would quietly report 0 B and drop rows
+   * out of a filtered listing — the same class of defect this ordering exists
+   * to remove. It also costs close to nothing: the cache saturation comes from
+   * the NON-candidates, which step 2 already excludes, and candidates are a
+   * minority of a scan.
+   * <p>
+   * Cost that REMAINS: PURGE_VERSIONS is age-independent, so the version
+   * HISTORY is still read for every versionable file to get its version count —
+   * that is what keeps pressuring the 'system' workspace cache, and this method
+   * does not remove it. Age-gating PURGE_VERSIONS (or narrowing the scan query
+   * on jcr:created) is what would; both would silently drop the
+   * recent-but-heavily-versioned candidates and are an OPEN policy question,
+   * deliberately not pre-empted here.
+   */
   private CleanupCandidate toCandidate(Node node, CleanupParams params) throws RepositoryException {
     String path = node.getPath();
     long createdTime = node.hasProperty(NodeTypeConstants.JCR_CREATED_DATE) ? node.getProperty(NodeTypeConstants.JCR_CREATED_DATE)
@@ -675,31 +716,40 @@ public class CleanupJcrStorage {
                                                                                   .getTimeInMillis() :
                                                                             0;
     long lastModifiedTime = JCRDocumentsUtil.getLastModifiedDate(node);
-    long fileSize = getContentSize(node);
-    long versionsSize = JCRDocumentsUtil.computeVersionsSize(node);
-    int versionCount = node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) ? countVersions(node.getVersionHistory()) : 0;
+    boolean versionable = node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE);
+    int versionCount = versionable ? countVersions(node.getVersionHistory()) : 0;
+    // Guarded on mix:versionable: computeVersionsSize walks a version history a
+    // non-versionable node simply doesn't have
+    LazySize fileSize = new LazySize(() -> getContentSize(node));
+    LazySize versionsSize = new LazySize(() -> versionable ? JCRDocumentsUtil.computeVersionsSize(node) : 0);
     // Candidacy policy defined in the api module, applied here at scan time to
     // avoid shipping every node upward. The exemption mixin doesn't disqualify
     // a node anymore: a still-qualifying exempted file is emitted flagged
     // exempted, so it stays visible as 'Kept' in every campaign
-    var action = CleanupCriterionEvaluator.evaluate(createdTime,
-                                                    lastModifiedTime,
-                                                    fileSize,
-                                                    versionsSize,
-                                                    versionCount,
-                                                    path,
-                                                    params,
-                                                    System.currentTimeMillis());
+    var action = CleanupCriterionEvaluator.evaluateLazily(createdTime,
+                                                          lastModifiedTime,
+                                                          versionCount,
+                                                          path,
+                                                          params,
+                                                          System.currentTimeMillis(),
+                                                          fileSize,
+                                                          versionsSize);
     if (action == null) {
+      // Before ANY size read: this early return is the whole point of the
+      // ordering above
       return null;
     }
     Identity ownerIdentity = JCRDocumentsUtil.getOwnerIdentityFromNodePath(path, identityManager, spaceService);
     long ownerIdentityId = ownerIdentity == null ? 0 : Long.parseLong(ownerIdentity.getId());
+    // A candidate carries BOTH figures, so the reported sizes stay exactly what
+    // they were before this ordering existed: the one the decision already
+    // measured comes back from the LazySize without a second JCR read, the
+    // other is measured here
     CleanupCandidate candidate = new CleanupCandidate(((ExtendedNode) node).getIdentifier(),
                                                       path,
                                                       ownerIdentityId,
-                                                      fileSize,
-                                                      versionsSize,
+                                                      fileSize.getAsLong(),
+                                                      versionsSize.getAsLong(),
                                                       action,
                                                       createdTime,
                                                       lastModifiedTime);
@@ -709,6 +759,35 @@ public class CleanupJcrStorage {
       candidate.setExemptedDate(getDateProperty(node, EXO_CLEANUP_EXEMPTED_DATE));
     }
     return candidate;
+  }
+
+  /**
+   * A JCR size measurement performed AT MOST ONCE, and only if somebody asks
+   * for it: the criterion asks only for the size its decision turns on, the
+   * candidate build then asks for both, and the one already measured is
+   * answered from the memo instead of being read from JCR a second time.
+   */
+  private static final class LazySize implements LongSupplier {
+
+    private final LongSupplier reader;
+
+    private long               value;
+
+    private boolean            measured;
+
+    private LazySize(LongSupplier reader) {
+      this.reader = reader;
+    }
+
+    @Override
+    public long getAsLong() {
+      if (!measured) {
+        value = reader.getAsLong();
+        measured = true;
+      }
+      return value;
+    }
+
   }
 
   private String getStringProperty(Node node, String propertyName) {
