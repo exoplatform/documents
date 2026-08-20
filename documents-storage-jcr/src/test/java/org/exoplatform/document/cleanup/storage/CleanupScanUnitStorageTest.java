@@ -17,6 +17,7 @@
 package org.exoplatform.document.cleanup.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -86,6 +87,29 @@ class CleanupScanUnitStorageTest {
     assertTrue(saved.stream().allMatch(entity -> entity.getCampaignId() == CAMPAIGN_ID));
     assertTrue(saved.stream().allMatch(entity -> entity.getLastScannedPath() == null),
                "A freshly planned unit carries no checkpoint");
+    // The unique key is the HASH, never the path: a unique constraint on
+    // UNIT_PATH NVARCHAR(2000) is 6008 bytes under the table's CHARSET=UTF8,
+    // past InnoDB's 3072-byte ceiling, so MySQL fails the changeset at DDL time
+    // and the addon does not deploy. An unset hash would violate NOT NULL on
+    // every insert, so this is pinned rather than assumed
+    assertEquals(List.of(CleanupScanUnitEntity.hashUnitPath(SPACES_UNIT), CleanupScanUnitEntity.hashUnitPath(TRASH_UNIT)),
+                 saved.stream().map(CleanupScanUnitEntity::getUnitPathHash).toList());
+    assertTrue(saved.stream().allMatch(entity -> entity.getUnitPathHash().length() == 64),
+               "A SHA-256 hex digest is 64 characters, which is what the column is sized for");
+  }
+
+  @Test
+  void unitPathHashDistinguishesPathsAndIsStable() {
+    // Stable across calls — the hash IS the identity of a unit for the unique
+    // constraint, so a differing digest for the same path would let a resume
+    // plan the same subtree twice
+    assertEquals(CleanupScanUnitEntity.hashUnitPath(USERS_UNIT), CleanupScanUnitEntity.hashUnitPath(USERS_UNIT));
+    assertNotEquals(CleanupScanUnitEntity.hashUnitPath(USERS_UNIT), CleanupScanUnitEntity.hashUnitPath(SPACES_UNIT));
+    // Two long paths sharing a 3072-byte prefix must still differ — the whole
+    // point of hashing rather than truncating the path
+    String prefix = "/Users/" + "a".repeat(3000);
+    assertNotEquals(CleanupScanUnitEntity.hashUnitPath(prefix + "/one"), CleanupScanUnitEntity.hashUnitPath(prefix + "/two"));
+    assertEquals(64, CleanupScanUnitEntity.hashUnitPath(null).length(), "A null path still hashes, so NOT NULL can never be violated");
   }
 
   @Test

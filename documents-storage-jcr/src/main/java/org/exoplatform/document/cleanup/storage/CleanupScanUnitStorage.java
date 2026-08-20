@@ -155,6 +155,7 @@ public class CleanupScanUnitStorage {
     CleanupScanUnitEntity entity = new CleanupScanUnitEntity();
     entity.setCampaignId(campaignId);
     entity.setUnitPath(unitPath);
+    entity.setUnitPathHash(CleanupScanUnitEntity.hashUnitPath(unitPath));
     entity.setState(CleanupScanUnitState.PENDING.name());
     return entity;
   }

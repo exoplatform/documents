@@ -157,6 +157,15 @@
             <column name="UNIT_PATH" type="NVARCHAR(2000)">
                 <constraints nullable="false"/>
             </column>
+            <!-- SHA-256 hex of UNIT_PATH, carried ONLY to be the unique key: a unique
+                 constraint on UNIT_PATH itself cannot be created on MySQL, where the
+                 table's own CHARSET=UTF8 makes 8 + 2000*3 = 6008 bytes against InnoDB's
+                 3072-byte ceiling, so Liquibase halts and the addon does not deploy.
+                 Same reason changeset -5 keyed the item table on the short NODE_UUID and
+                 not on its adjacent PATH NVARCHAR(2000) -->
+            <column name="UNIT_PATH_HASH" type="NVARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
             <column name="STATE" type="NVARCHAR(50)">
                 <constraints nullable="false"/>
             </column>
@@ -184,7 +193,7 @@
             <column name="STATE"/>
         </createIndex>
         <addUniqueConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT"
-                             columnNames="CAMPAIGN_ID, UNIT_PATH"
+                             columnNames="CAMPAIGN_ID, UNIT_PATH_HASH"
                              constraintName="UK_DOC_CLEANUP_SCAN_UNIT_PATH"/>
     </changeSet>
 
