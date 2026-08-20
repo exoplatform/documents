@@ -46,55 +46,20 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
  * visible as 'Kept' in every campaign.
  * <p>
  * The criterion is split in two: a CHEAP decision (path exclusion, the two
- * dates, the size of the removal set) and the EXPENSIVE size measurements, supplied
- * lazily. {@link #evaluateLazily} pulls a size only once the cheap decision
- * needs it to answer, so a scan pays a size read only for the nodes that reach
- * the size floor test at all — see the ordering rationale on
- * {@link #evaluateLazily}. {@link #evaluate} is the eager facade over the very
- * same policy (both sizes already at hand), so the policy stays defined ONCE
- * for the scan and the revalidation paths alike.
+ * dates, the size of the removal set) and the EXPENSIVE size measurements,
+ * supplied lazily. {@link #evaluateLazily} pulls a size only once the cheap
+ * decision needs it to answer, so a scan pays a size read only for the nodes
+ * that reach the size floor test at all — see the ordering rationale there. It
+ * is the ONE entry point, for the scan and the revalidation paths alike (both
+ * reach it through {@code CleanupJcrStorage#toCandidate}) and for the tests: a
+ * caller already holding a size passes {@code () -> size}, which keeps the
+ * policy defined exactly once instead of behind an eager facade no production
+ * caller could have.
  */
 public class CleanupCriterionEvaluator {
 
   private CleanupCriterionEvaluator() {
     // static utility
-  }
-
-  /**
-   * Eager facade over {@link #evaluateLazily}, for callers already holding both
-   * sizes (typically a test, or a caller that measured them for another
-   * purpose). Delegates so the policy is defined exactly once.
-   *
-   * @param createdTime node creation time (epoch millis, 0 = unknown)
-   * @param lastModifiedTime node last modification time (epoch millis, 0 =
-   *          unknown, falls back to createdTime)
-   * @param fileSize content size in bytes
-   * @param purgeableVersionsSize cumulated size of the versions the purge would
-   *          remove, in bytes
-   * @param purgeableVersionCount number of versions the purge would remove, as
-   *          selected by {@link #selectVersionsToRemove}
-   * @param path node path
-   * @param params campaign parameters snapshot
-   * @param nowMillis evaluation time (epoch millis)
-   * @return the qualifying {@link CleanupAction}, or null when the node is not
-   *         a candidate
-   */
-  public static CleanupAction evaluate(long createdTime, // NOSONAR
-                                       long lastModifiedTime,
-                                       long fileSize,
-                                       long purgeableVersionsSize,
-                                       int purgeableVersionCount,
-                                       String path,
-                                       CleanupParams params,
-                                       long nowMillis) {
-    return evaluateLazily(createdTime,
-                          lastModifiedTime,
-                          purgeableVersionCount,
-                          path,
-                          params,
-                          nowMillis,
-                          () -> fileSize,
-                          () -> purgeableVersionsSize);
   }
 
   /**
@@ -177,8 +142,10 @@ public class CleanupCriterionEvaluator {
   }
 
   /**
-   * Same criterion as {@link #evaluate}, with the two sizes supplied lazily:
-   * a supplier is invoked ONLY when the decision cannot be reached without it.
+   * The candidate criterion, with the two sizes supplied lazily: a supplier is
+   * invoked ONLY when the decision cannot be reached without it. A caller
+   * already holding a size hands over {@code () -> size} rather than reaching
+   * for a second, eager entry point — there is none, on purpose.
    * <p>
    * WHY the ordering matters (do not 'simplify' it away): a sequential dry-run
    * measuring both sizes up-front for every nt:file was measured saturating
@@ -237,6 +204,17 @@ public class CleanupCriterionEvaluator {
       // alone, and do not expect a test to pin this one
       return null;
     }
+    // DELIBERATE DIVERGENCE, do NOT 'align' it — pending a PO decision.
+    // The floor is applied to the CONTENT size alone, while what a DELETE row
+    // REPORTS as reclaimable is content + the whole version history
+    // (CleanupCampaignItemDAO.RECLAIMABLE_BYTES, which the hard delete really
+    // frees). §3.4 words the floor as 'the action's reclaimable bytes', so
+    // testing the corrected figure here would be arguably truer — and would
+    // make a 3 MB file carrying 10 MB of history clear a 5 MB floor where it
+    // does not today. That WIDENS CANDIDACY, i.e. changes which files a
+    // campaign proposes to destroy: a functional decision belonging to the PO,
+    // explicitly withheld from this correction, which only fixed the REPORTED
+    // figure. Pinned by CleanupJcrStorageTest, so nobody widens it silently
     if (aged && fileSizeSupplier.getAsLong() >= params.getMinFileSizeBytes()) {
       return CleanupAction.DELETE;
     } else if (purgeable && purgeableVersionsSizeSupplier.getAsLong() >= params.getMinFileSizeBytes()) {

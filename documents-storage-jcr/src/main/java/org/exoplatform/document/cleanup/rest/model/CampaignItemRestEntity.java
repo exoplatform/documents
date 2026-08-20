@@ -45,6 +45,11 @@ public class CampaignItemRestEntity {
 
   private long   fileSize;
 
+  /**
+   * Version bytes this item's ACTION reclaims — the whole version history for a
+   * DELETE, the removal set for a PURGE_VERSIONS. The console renders it as
+   * 'Versions size', which holds for both readings.
+   */
   private long   versionsSize;
 
   private Long   lastModifiedDate;

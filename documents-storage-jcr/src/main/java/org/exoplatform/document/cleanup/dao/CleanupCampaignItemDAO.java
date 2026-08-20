@@ -31,13 +31,30 @@ import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignItemEntity, Long> {
 
   /**
-   * Reclaimable bytes of an item: content size for a DELETE action, versions
-   * size for a PURGE_VERSIONS one. The 'DELETE' literal must stay equal to
-   * {@code CleanupAction.DELETE.name()} (the entity stores the action as a
-   * plain string) — guarded by CleanupCampaignItemDAOTest. Defined once and
-   * concatenated (compile-time constant) into the queries below.
+   * Reclaimable bytes of an item — the bytes the item's OWN action frees:
+   * <ul>
+   * <li>DELETE: the content size PLUS {@code versionsSize}. A hard delete
+   * destroys the file's whole version history along with its content, and
+   * {@code CleanupJcrStorage#deleteNode} reports exactly that sum back as
+   * {@code reclaimedBytes} — summing content alone here under-reported every
+   * DELETE candidate by the entire weight of its versions, on the very number
+   * an administrator publishes a campaign on</li>
+   * <li>PURGE_VERSIONS: {@code versionsSize} alone, the content being
+   * untouched</li>
+   * </ul>
+   * This works as a plain sum because {@code versionsSize} means 'the version
+   * bytes THIS action reclaims', not 'the whole history' nor 'the purgeable
+   * subset': the scan writes the whole history on a DELETE row and the removal
+   * set on a PURGE_VERSIONS one (see
+   * {@code CleanupJcrStorage#toCandidate}), so prediction and execution report
+   * the same figure.
+   * <p>
+   * The 'DELETE' literal must stay equal to {@code CleanupAction.DELETE.name()}
+   * (the entity stores the action as a plain string) — guarded by
+   * CleanupCampaignItemDAOTest. Defined once and concatenated (compile-time
+   * constant) into the queries below.
    */
-  String RECLAIMABLE_BYTES = "CASE WHEN i.action = 'DELETE' THEN i.fileSize ELSE i.versionsSize END";
+  String RECLAIMABLE_BYTES = "CASE WHEN i.action = 'DELETE' THEN i.fileSize + i.versionsSize ELSE i.versionsSize END";
 
   Page<CleanupCampaignItemEntity> findByCampaignId(long campaignId, Pageable pageable);
 

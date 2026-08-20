@@ -127,6 +127,26 @@ class CleanupCampaignItemDAOTest {
   }
 
   /**
+   * The two branches of the reclaimable expression, asserted on the JPQL text
+   * because nothing in this plain-JUnit suite executes it against rows: a DELETE
+   * frees its content AND the whole version history it destroys, a
+   * PURGE_VERSIONS frees the versions alone. Dropping the {@code + i.versionsSize}
+   * addend parses perfectly and silently under-reports every DELETE candidate by
+   * the entire weight of its versions — on the one figure an administrator
+   * publishes a campaign on, and the reason the completion summary's reclaimed
+   * total exceeded the reclaimable it had announced.
+   */
+  @Test
+  void shouldSumTheContentAndTheWholeVersionHistoryForADeleteAction() {
+    String fragment = normalize(CleanupCampaignItemDAO.RECLAIMABLE_BYTES);
+
+    assertTrue(fragment.contains("THEN i.fileSize + i.versionsSize"),
+               "A DELETE destroys the content AND the whole version history: both terms must be summed — " + fragment);
+    assertTrue(fragment.contains("ELSE i.versionsSize END"),
+               "A PURGE_VERSIONS leaves the content in place: the versions size alone — " + fragment);
+  }
+
+  /**
    * The guard that actually replaces "nothing parses these queries": a renamed
    * entity, an unknown field path or a syntax error in ANY {@code @Query} of the
    * cleanup DAOs fails here, at test time, instead of failing the Spring Data

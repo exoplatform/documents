@@ -56,6 +56,11 @@ public class CleanupCampaignItemEntity implements Serializable {
   @Column(name = "FILE_SIZE")
   private long              fileSize;
 
+  /**
+   * Version bytes this item's ACTION reclaims — the whole version history for a
+   * DELETE, the removal set for a PURGE_VERSIONS. Action-dependent by design,
+   * see {@link org.exoplatform.document.cleanup.dao.CleanupCampaignItemDAO#RECLAIMABLE_BYTES}.
+   */
   @Column(name = "VERSIONS_SIZE")
   private long              versionsSize;
 

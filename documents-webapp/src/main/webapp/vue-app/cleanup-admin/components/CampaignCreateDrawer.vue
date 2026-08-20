@@ -78,13 +78,19 @@
           outlined
           dense />
         <v-label for="cleanupGraceDays" class="mt-2">{{ $t('cleanup.admin.createDrawer.graceDays') }}</v-label>
+        <!-- The `min` is not always 0: on a PUBLISHED campaign the server only
+             accepts an EXTENSION (cleanup.graceDaysCannotBeReduced), a deadline
+             having been promised to the owners of the candidate files. Bound AND
+             validated, because a number input's `min` only governs its spinner
+             — a typed or pasted value goes straight through it -->
         <v-text-field
           id="cleanupGraceDays"
           v-model.number="graceDays"
           :disabled="!graceEditable"
           :aria-label="$t('cleanup.admin.createDrawer.graceDays')"
+          :min="graceDaysMin"
+          :rules="graceDaysRules"
           type="number"
-          min="0"
           class="pt-2 pb-4"
           outlined
           dense />
@@ -232,6 +238,31 @@ export default {
     graceFrozen() {
       return this.editMode && !this.graceEditable;
     },
+    // A PUBLISHED grace period is ONE-WAY: the server refuses any value below
+    // the published one (cleanup.graceDaysCannotBeReduced), so the drawer must
+    // not OFFER one. Everywhere else the floor is the plain 0 the field always
+    // had — 0 being a real grace period, not an absent one
+    graceDaysMin() {
+      return this.editMode && this.campaign.state === 'PUBLISHED' && this.campaign.graceDays != null
+        ? this.campaign.graceDays
+        : 0;
+    },
+    // The SERVER's message codes, localized here, in the SERVER's own check
+    // order — the bound first, then the direction — so the field and the
+    // response never name different reasons for the same value. An empty field
+    // is left to the platform default, hence no rule on null
+    graceDaysRules() {
+      return [v => {
+        const graceDays = this.numberOrNull(v);
+        if (graceDays === null) {
+          return true;
+        }
+        if (graceDays < 0) {
+          return this.$t('cleanup.invalidGraceDays');
+        }
+        return graceDays >= this.graceDaysMin || this.$t('cleanup.graceDaysCannotBeReduced');
+      }];
+    },
     // Only PUBLISHED has a deadline to project: before publication there is no
     // start instant to add the grace period to
     deadlineShown() {
@@ -339,10 +370,13 @@ export default {
         // active campaign platform-wide — the likeliest refusal there) and of
         // the cleanup.invalidPeriodMonths / cleanup.invalidMinFileSize /
         // cleanup.invalidMaxVersionsPerFile validation codes; the update path
-        // answers cleanup.campaignNotFound, cleanup.nothingToUpdate or
-        // cleanup.invalidState, and both share cleanup.nameMandatory /
-        // cleanup.nameTooLong / cleanup.invalidGraceDays. Discarding the error
-        // made every one of those bundle entries unreachable.
+        // answers cleanup.campaignNotFound, cleanup.nothingToUpdate,
+        // cleanup.invalidState or cleanup.graceDaysCannotBeReduced (the field
+        // rule above front-runs that last one, but a stale campaign snapshot
+        // still lets the server have the final word), and both share
+        // cleanup.nameMandatory / cleanup.nameTooLong /
+        // cleanup.invalidGraceDays. Discarding the error made every one of those
+        // bundle entries unreachable.
         const reason = this.$cleanupErrorLabel(error, UNEXPECTED_ERROR_KEY);
         this.displayAlert(this.$t(editMode ? 'cleanup.admin.editDrawer.error' : 'cleanup.admin.createDrawer.error', {0: reason}), 'error');
       }).finally(() => this.loading = false);

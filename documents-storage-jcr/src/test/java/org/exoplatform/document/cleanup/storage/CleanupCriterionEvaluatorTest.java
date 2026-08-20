@@ -216,42 +216,24 @@ class CleanupCriterionEvaluatorTest {
 
   @Test
   void shouldNeverReturnCandidateWhenUnderExcludedPrefix() {
-    CleanupParams params = params(List.of("/Groups/spaces/marketing"));
-    assertNull(CleanupCriterionEvaluator.evaluate(monthsAgo(12),
-                                                  monthsAgo(8),
-                                                  MIN_FILE_SIZE,
-                                                  0,
-                                                  0,
-                                                  PATH,
-                                                  params,
-                                                  NOW));
+    assertNull(evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE, 0, 0, PATH, params(List.of("/Groups/spaces/marketing"))));
   }
 
   @Test
   void shouldNotExcludeSiblingPathSharingThePrefixString() {
-    CleanupParams params = params(List.of("/Groups/spaces/market"));
     assertEquals(CleanupAction.DELETE,
-                 CleanupCriterionEvaluator.evaluate(monthsAgo(12),
-                                                    monthsAgo(8),
-                                                    MIN_FILE_SIZE,
-                                                    0,
-                                                    0,
-                                                    PATH,
-                                                    params,
-                                                    NOW));
+                 evaluate(monthsAgo(12), monthsAgo(8), MIN_FILE_SIZE, 0, 0, PATH, params(List.of("/Groups/spaces/market"))));
   }
 
   @Test
   void shouldExcludeExactPathAndTolerateTrailingSlashInPrefix() {
-    CleanupParams params = params(List.of("/Groups/spaces/marketing/Documents/report.pdf/"));
-    assertNull(CleanupCriterionEvaluator.evaluate(monthsAgo(12),
-                                                  monthsAgo(8),
-                                                  MIN_FILE_SIZE,
-                                                  0,
-                                                  0,
-                                                  PATH,
-                                                  params,
-                                                  NOW));
+    assertNull(evaluate(monthsAgo(12),
+                        monthsAgo(8),
+                        MIN_FILE_SIZE,
+                        0,
+                        0,
+                        PATH,
+                        params(List.of("/Groups/spaces/marketing/Documents/report.pdf/"))));
   }
 
   private CleanupAction evaluate(long createdTime,
@@ -260,14 +242,33 @@ class CleanupCriterionEvaluatorTest {
                                  long purgeableVersionsSize,
                                  int purgeableVersionCount,
                                  String path) {
-    return CleanupCriterionEvaluator.evaluate(createdTime,
-                                              lastModifiedTime,
-                                              fileSize,
-                                              purgeableVersionsSize,
-                                              purgeableVersionCount,
-                                              path,
-                                              params(List.of()),
-                                              NOW);
+    return evaluate(createdTime, lastModifiedTime, fileSize, purgeableVersionsSize, purgeableVersionCount, path, params(List.of()));
+  }
+
+  /**
+   * The evaluator has ONE entry point, the lazy one: these tests already hold
+   * both sizes, so they hand them over as {@code () -> size} suppliers. There is
+   * deliberately no eager facade to call instead — its stated audience ('a
+   * caller already holding both sizes') could not exist in production, the
+   * purgeable COUNT it also takes being producible only by a caller that has
+   * already walked the version history, i.e. one holding the removal set and
+   * wanting {@code evaluateLazily} anyway.
+   */
+  private CleanupAction evaluate(long createdTime, // NOSONAR
+                                 long lastModifiedTime,
+                                 long fileSize,
+                                 long purgeableVersionsSize,
+                                 int purgeableVersionCount,
+                                 String path,
+                                 CleanupParams params) {
+    return CleanupCriterionEvaluator.evaluateLazily(createdTime,
+                                                    lastModifiedTime,
+                                                    purgeableVersionCount,
+                                                    path,
+                                                    params,
+                                                    NOW,
+                                                    () -> fileSize,
+                                                    () -> purgeableVersionsSize);
   }
 
   private List<String> select(Map<String, Long> versionCreationDates) {

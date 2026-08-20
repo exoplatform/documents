@@ -40,6 +40,12 @@ public class CleanupCandidate {
 
   private long          fileSize;
 
+  /**
+   * Version bytes THE CHOSEN ACTION reclaims: the whole version history for a
+   * DELETE (which destroys it), the size of the removal set for a
+   * PURGE_VERSIONS. See {@code CleanupJcrStorage#toCandidate}, and
+   * {@code CleanupCampaignItemDAO#RECLAIMABLE_BYTES} which sums it accordingly.
+   */
   private long          versionsSize;
 
   private CleanupAction action;

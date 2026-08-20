@@ -376,6 +376,11 @@ public class CleanupCampaignService {
    * administrator is reviewing: it is NOT a candidacy criterion, the scan
    * selecting on the period, the minimum file size and the excluded paths alone.
    * <p>
+   * Once the campaign is PUBLISHED the grace period may only be EXTENDED, never
+   * shortened (architect decision W22) — see {@link #applyGraceDays}. Before
+   * publication it is free in both directions, nothing having been promised
+   * yet.
+   * <p>
    * On a PUBLISHED campaign — and ONLY there — the lock date is recomputed from
    * the PUBLICATION date, never from now: anchoring on now would slide the
    * deadline forward on every save, so saving the same value twice would push it
@@ -412,7 +417,9 @@ public class CleanupCampaignService {
    *           blank, "cleanup.nameTooLong" past {@link #MAX_NAME_LENGTH}
    *           characters, "cleanup.invalidState" when the grace period is edited
    *           outside {@link #GRACE_EDITABLE_STATES},
-   *           "cleanup.invalidGraceDays" when it is negative
+   *           "cleanup.invalidGraceDays" when it is negative,
+   *           "cleanup.graceDaysCannotBeReduced" when it is LOWERED on a
+   *           PUBLISHED campaign
    */
   public CleanupCampaign updateCampaign(long campaignId, String name, Integer graceDays) throws ObjectNotFoundException {
     // Existence first, validation second: the REST contract answers 404 before
@@ -443,17 +450,34 @@ public class CleanupCampaignService {
    * the value was set at publication or edited afterwards. Before publication
    * there is no deadline to recompute yet: the lock date is left ALONE, and
    * publication will derive it from the edited value on its own.
+   * <p>
+   * A PUBLISHED grace period is ONE-WAY — it may only be EXTENDED (architect
+   * decision W22). Publication PROMISES a deadline to the owners of the
+   * candidate files, and lowering it (14 to 7 on day 8) closes their review on
+   * the spot: every keep and un-keep answers {@code cleanup.reviewClosed}, the
+   * cron LOCKS the campaign at its next tick, and files whose owners were
+   * promised six more days are hard-deleted — no trash transit, so the only
+   * recovery is a database/JCR snapshot. The announcement being manual, nobody
+   * would even tell them the deadline moved. Extending is always allowed, and
+   * re-saving the SAME value is NOT a reduction (it stays idempotent, like the
+   * deadline rederivation itself). Before publication the value is free in both
+   * directions: nothing has been promised yet.
    *
    * @return the rederived grace deadline to persist, or NULL when there is none
    *         to rederive — which the targeted write reads as 'do not touch the
    *         LOCK_DATE column', so a pre-publication edit cannot zero a deadline
    *         it has no business setting
+   * @throws IllegalArgumentException "cleanup.invalidState" outside
+   *           {@link #GRACE_EDITABLE_STATES}, "cleanup.invalidGraceDays" when
+   *           the value is out of bounds, "cleanup.graceDaysCannotBeReduced"
+   *           when it is lowered on a PUBLISHED campaign
    */
   private Long applyGraceDays(CleanupCampaign campaign, Integer graceDays) {
     if (!GRACE_EDITABLE_STATES.contains(campaign.getState())) {
       throw new IllegalArgumentException("cleanup.invalidState");
     }
     validateGraceDays(graceDays);
+    checkGraceDaysNotReduced(campaign, graceDays);
     CleanupParams params = campaign.getParams();
     if (params == null) {
       // Defensive only: the Storage always maps a params object, whatever the
@@ -1335,6 +1359,38 @@ public class CleanupCampaignService {
   private void validateGraceDays(Integer graceDays) {
     if (graceDays == null || graceDays < 0) {
       throw new IllegalArgumentException("cleanup.invalidGraceDays");
+    }
+  }
+
+  /**
+   * The DIRECTION guard on a PUBLISHED grace period (architect decision W22):
+   * once published it may only grow. Deliberately narrow, so it forbids exactly
+   * one thing and nothing more:
+   * <ul>
+   * <li>only in PUBLISHED — DRAFT and SIMULATED promised nothing, so the value
+   * stays free there, ZERO included</li>
+   * <li>a STRICT comparison, so re-saving the SAME value still succeeds: it
+   * moves no deadline, and the console's partial update can legitimately carry
+   * an unchanged field</li>
+   * <li>no current value to compare against (the defensive no-params campaign
+   * of {@link #applyGraceDays}) means no promise on record: the edit goes
+   * through rather than being refused on a value nobody can read</li>
+   * </ul>
+   * Runs AFTER {@link #validateGraceDays(Integer)}, so an out-of-bounds value
+   * still answers its own bound code rather than this one, and BEFORE the new
+   * value is written into the snapshot — the comparison needs the value still
+   * in place.
+   *
+   * @throws IllegalArgumentException "cleanup.graceDaysCannotBeReduced" when the
+   *           new grace period is strictly shorter than the published one
+   */
+  private void checkGraceDaysNotReduced(CleanupCampaign campaign, Integer graceDays) {
+    if (campaign.getState() != CleanupCampaignState.PUBLISHED || campaign.getParams() == null) {
+      return;
+    }
+    Integer publishedGraceDays = campaign.getParams().getGraceDays();
+    if (publishedGraceDays != null && graceDays < publishedGraceDays) {
+      throw new IllegalArgumentException("cleanup.graceDaysCannotBeReduced");
     }
   }
 

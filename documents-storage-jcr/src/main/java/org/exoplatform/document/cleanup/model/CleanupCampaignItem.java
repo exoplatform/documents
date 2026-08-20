@@ -40,6 +40,11 @@ public class CleanupCampaignItem {
 
   private long             fileSize;
 
+  /**
+   * Version bytes this item's ACTION reclaims — the whole version history for a
+   * DELETE, the removal set for a PURGE_VERSIONS. Action-dependent by design,
+   * see {@code CleanupCampaignItemDAO#RECLAIMABLE_BYTES}.
+   */
   private long             versionsSize;
 
   /** Last modification date of the file, as read by the scan. */

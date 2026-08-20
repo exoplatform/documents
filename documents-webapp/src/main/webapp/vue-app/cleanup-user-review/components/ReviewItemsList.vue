@@ -89,8 +89,13 @@
       <template slot="item.action" slot-scope="{item}">
         {{ $t(`cleanup.item.action.${item.action}`) }}
       </template>
+      <!-- Mirrors the server's RECLAIMABLE_BYTES exactly: a PURGE_VERSIONS row
+           reclaims its versions, a DELETE row reclaims its content AND its whole
+           version history, which the delete destroys too. Getting this wrong is
+           visible on this very screen — the banner totals the same expression, so
+           a row showing less than it contributes makes the list stop adding up -->
       <template slot="item.fileSize" slot-scope="{item}">
-        {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize) }}
+        {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize + item.versionsSize) }}
       </template>
       <template slot="item.state" slot-scope="{item}">
         <v-chip

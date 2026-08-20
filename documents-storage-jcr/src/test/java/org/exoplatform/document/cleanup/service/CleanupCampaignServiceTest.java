@@ -624,22 +624,124 @@ class CleanupCampaignServiceTest {
    * campaign at its next tick. This method transitions NOTHING itself — the
    * single PUBLISHED to LOCKED authority stays the scheduler and the manual
    * execution trigger.
+   * <p>
+   * Reached by an EXTENSION, the only direction a published grace period may
+   * move (W22): the campaign was published 30 days ago, so even 7 to 20 days
+   * lands the deadline 10 days in the past. A REDUCTION would reach the same
+   * place and is refused — see
+   * {@link #shouldRefuseToShortenTheGracePeriodOfAPublishedCampaign()}.
    */
   @Test
   void shouldAllowAGraceDeadlineRecomputedIntoThePastWithoutLockingTheCampaign() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     long publishedDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
     campaign.setPublishedDate(publishedDate);
-    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(60));
+    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(7));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
 
-    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 1);
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 20);
 
-    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(1), updated.getLockDate());
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(20), updated.getLockDate());
     assertTrue(updated.getLockDate() < System.currentTimeMillis(), "The recomputed deadline is expected to be in the past");
     assertEquals(CleanupCampaignState.PUBLISHED, updated.getState());
     verify(campaignLifecycle, never()).transition(any(), any());
     verify(campaignLifecycle, never()).transition(any(), any(), any());
+  }
+
+  /**
+   * W22 — a PUBLISHED grace period is ONE-WAY. Publication PROMISES a deadline
+   * to the owners of the candidate files: lowering 14 to 7 on day 8 closes their
+   * review on the spot ({@code cleanup.reviewClosed} on every keep and un-keep),
+   * the cron LOCKS the campaign at its next tick, and files whose owners were
+   * promised six more days are hard-deleted — no trash transit, so the only
+   * recovery is a snapshot. A refusal writes NOTHING, not even the grace period
+   * into the in-memory snapshot.
+   */
+  @Test
+  void shouldRefuseToShortenTheGracePeriodOfAPublishedCampaign() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    long publishedDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(8);
+    campaign.setPublishedDate(publishedDate);
+    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(14));
+    campaign.getParams().setGraceDays(14);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, null, 7));
+
+    assertEquals("cleanup.graceDaysCannotBeReduced", exception.getMessage());
+    assertEquals(14, campaign.getParams().getGraceDays(), "The refused reduction must not have been applied");
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(14), campaign.getLockDate(), "... nor the deadline moved");
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+  }
+
+  /**
+   * The other half of the same rule: EXTENDING is always allowed — that is the
+   * legitimate need the editable grace period exists for — and re-saving the
+   * SAME value is NOT a reduction, so it must still succeed (the console's
+   * partial update can carry an unchanged field, and the deadline rederivation
+   * is idempotent anyway).
+   */
+  @Test
+  void shouldAllowExtendingAndResavingTheGracePeriodOfAPublishedCampaign() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    long publishedDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(8);
+    campaign.setPublishedDate(publishedDate);
+    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(14));
+    campaign.getParams().setGraceDays(14);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign extended = campaignService.updateCampaign(CAMPAIGN_ID, null, 21);
+
+    assertEquals(21, extended.getParams().getGraceDays());
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(21), extended.getLockDate(), "Still publishedDate + graceDays");
+
+    // The SAME value again: no reduction, so no refusal — and no deadline slide
+    CleanupCampaign resaved = campaignService.updateCampaign(CAMPAIGN_ID, null, 21);
+
+    assertEquals(21, resaved.getParams().getGraceDays());
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(21), resaved.getLockDate());
+    verify(campaignStorage, times(2)).updateEditableAttributes(CAMPAIGN_ID, null, 21, publishedDate + TimeUnit.DAYS.toMillis(21));
+  }
+
+  /**
+   * Before publication nothing has been promised, so the value is free in BOTH
+   * directions — a DRAFT or SIMULATED campaign can still be lowered all the way
+   * to zero. Pinned per state, because the guard's narrowness is the whole point:
+   * it forbids exactly one thing.
+   */
+  @Test
+  void shouldAllowShorteningTheGracePeriodBeforePublication() throws ObjectNotFoundException {
+    for (CleanupCampaignState state : List.of(CleanupCampaignState.DRAFT, CleanupCampaignState.SIMULATED)) {
+      reset(campaignStorage);
+      CleanupCampaign campaign = campaign(state);
+      campaign.getParams().setGraceDays(14);
+      when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+      CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 0);
+
+      assertEquals(0, updated.getParams().getGraceDays(), "A reduction must stay allowed in " + state);
+      verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 0, null);
+    }
+  }
+
+  /**
+   * The check ORDER, so a refusal always names the right reason: the state guard
+   * comes first, then the bound check, then the direction guard. A NEGATIVE value
+   * on a PUBLISHED campaign is a reduction too, but its own bound code is the
+   * useful one to report.
+   */
+  @Test
+  void shouldReportTheBoundCodeRatherThanTheDirectionCodeForANegativeGracePeriod() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    campaign.setPublishedDate(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(8));
+    campaign.getParams().setGraceDays(14);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, null, -1));
+
+    assertEquals("cleanup.invalidGraceDays", exception.getMessage());
   }
 
   /**

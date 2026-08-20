@@ -44,6 +44,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupExemptionResult;
 import org.exoplatform.document.cleanup.listener.CleanupJcrObservationListener;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
@@ -697,7 +698,8 @@ public class CleanupJcrStorage {
    * (jcr:frozenNode -> jcr:content -> jcr:data), and now charged ONLY to the
    * versions the purge would actually remove, never to the survivors</li>
    * <li>and once an action IS chosen, BOTH figures are measured for the emitted
-   * candidate, whichever one the decision happened to need</li>
+   * candidate, whichever one the decision happened to need — the versions
+   * figure being the one the CHOSEN action reclaims, see the note below</li>
    * </ol>
    * That last step is deliberate and must not be 'optimised' away: the emitted
    * candidate feeds the admin items table, which renders AND sorts both a file
@@ -709,11 +711,25 @@ public class CleanupJcrStorage {
    * the NON-candidates, which step 2 already excludes, and candidates are a
    * minority of a scan.
    * <p>
-   * NOTE on what {@code versionsSize} now reports: the size of the REMOVAL SET,
-   * i.e. the bytes the purge would really reclaim — not the whole history's
-   * weight. That is both the figure {@code CleanupCampaignItemDAO}'s reclaimable
-   * expression wants for a PURGE_VERSIONS row and the only one compatible with
-   * never measuring a surviving version.
+   * WHAT {@code versionsSize} MEANS, and it is action-dependent BY DESIGN: the
+   * version bytes THE CHOSEN ACTION RECLAIMS.
+   * <ul>
+   * <li>PURGE_VERSIONS: the size of the REMOVAL SET, i.e. the bytes the purge
+   * would really reclaim — not the whole history's weight, which is also the
+   * only figure compatible with never measuring a surviving version</li>
+   * <li>DELETE: the size of the WHOLE version history, because a hard delete
+   * destroys all of it. Measured with the very same
+   * {@link JCRDocumentsUtil#computeVersionsSize(Node)}
+   * {@link #deleteNode(String)} sums into its reported {@code reclaimedBytes},
+   * so the prediction and the execution cannot drift apart. The removal set is
+   * NOT measured on this branch — the two measurements are exclusive, one
+   * action, one figure</li>
+   * </ul>
+   * That is exactly what {@code CleanupCampaignItemDAO.RECLAIMABLE_BYTES} sums
+   * ({@code fileSize + versionsSize} for a DELETE, {@code versionsSize}
+   * otherwise). It is ALSO why the whole history is walked for a DELETE
+   * candidate only: never for a non-candidate (step 2 returns first), never for
+   * a PURGE_VERSIONS one.
    * <p>
    * Cost that REMAINS: the version HISTORY is still read for every versionable
    * file, because the count rule of the purge policy is age-independent — see
@@ -756,6 +772,13 @@ public class CleanupJcrStorage {
     }
     Identity ownerIdentity = JCRDocumentsUtil.getOwnerIdentityFromNodePath(path, identityManager, spaceService);
     long ownerIdentityId = ownerIdentity == null ? 0 : Long.parseLong(ownerIdentity.getId());
+    // The version bytes THIS action reclaims — the whole history for a DELETE,
+    // which destroys it, the removal set for a purge. EXCLUSIVE by
+    // construction: a DELETE candidate never measures the removal set (the
+    // criterion did not need it either), a PURGE_VERSIONS one never walks the
+    // whole history, and a non-candidate returned above measures neither
+    long versionsSize = action == CleanupAction.DELETE ? JCRDocumentsUtil.computeVersionsSize(node)
+                                                       : purgeableVersionsSize.getAsLong();
     // A candidate carries BOTH figures, so no reported size is ever left at 0
     // for want of a measurement: the one the decision already measured comes
     // back from the LazySize without a second JCR read, the other is measured
@@ -764,7 +787,7 @@ public class CleanupJcrStorage {
                                                       path,
                                                       ownerIdentityId,
                                                       fileSize.getAsLong(),
-                                                      purgeableVersionsSize.getAsLong(),
+                                                      versionsSize,
                                                       action,
                                                       createdTime,
                                                       lastModifiedTime);

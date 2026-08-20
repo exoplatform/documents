@@ -176,7 +176,7 @@ public class CleanupCampaignRest {
    */
   @Secured("administrators")
   @PatchMapping(path = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "PATCH", summary = "Update a cleanup campaign", description = "Partially update the editable attributes of a cleanup campaign — its name and its grace period — each one applied only when the body carries it. The name is pure metadata and is editable in any state, a completed or cancelled campaign included; the grace period is state-guarded and only editable while the campaign is DRAFT, SIMULATED or PUBLISHED, and editing it on a PUBLISHED campaign moves its grace deadline")
+  @Operation(method = "PATCH", summary = "Update a cleanup campaign", description = "Partially update the editable attributes of a cleanup campaign — its name and its grace period — each one applied only when the body carries it. The name is pure metadata and is editable in any state, a completed or cancelled campaign included; the grace period is state-guarded and only editable while the campaign is DRAFT, SIMULATED or PUBLISHED, and editing it on a PUBLISHED campaign moves its grace deadline — which may then only be EXTENDED, never shortened, a deadline having been promised to the owners of the candidate files")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),

@@ -1020,14 +1020,50 @@ class CleanupJcrStorageTest {
     // Cost that REMAINS, pinned on purpose: the count rule is age-independent, so
     // the version HISTORY is still read for every versionable file — names and
     // OWN creation dates only. Removing THAT waits on EXO-81951, see
-    // CleanupJcrStorage#buildScanQuery
-    verify(file.node()).getVersionHistory();
+    // CleanupJcrStorage#buildScanQuery. Read exactly ONCE: the whole-history
+    // measurement a DELETE row now reports must never reach a non-candidate,
+    // which is the overwhelming majority of a scan
+    verify(file.node(), times(1)).getVersionHistory();
+  }
+
+  /**
+   * THE WITHHELD DECISION, pinned so it cannot drift silently. The size floor is
+   * applied to the CONTENT size alone, while a DELETE row now REPORTS content +
+   * the whole version history as reclaimable. §3.4 words the floor as 'the
+   * action's reclaimable bytes', so aligning the two would make this very file a
+   * candidate — i.e. WIDEN which files a campaign proposes to destroy, a
+   * functional change belonging to the PO and deliberately not made here.
+   */
+  @Test
+  void aFileWhoseContentIsUnderTheFloorIsNoDeleteCandidateHoweverHeavyItsHistoryIs() throws RepositoryException {
+    // Aged, 512 B of content under the 1024 B floor, and 3 RECENT versions of
+    // 4096 B each within the cap: 12 KB of history nothing can reclaim, because
+    // neither action qualifies
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 512L, 3, 4096L, 1);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertFalse(revalidation.isUnknown());
+    assertNull(revalidation.getCandidate(),
+               "The floor still rejects on the CONTENT size alone: widening it to content + history is the PO's call");
+    // The content WAS measured and really rejected the node...
+    verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
+    // ... and the history was never weighed: a non-candidate pays no size read
+    for (Version version : file.versions()) {
+      verify(version, never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    }
+    verify(file.node(), times(1)).getVersionHistory();
   }
 
   @Test
   void deleteCandidateCarriesBothMeasuredFigures() throws RepositoryException {
     // A year old and above the 1024-byte floor: DELETE, decided on the content
-    // size alone — but the emitted row still reports both figures
+    // size alone — but the emitted row still reports both figures, and its
+    // versions figure is the bytes THIS action reclaims: the WHOLE history,
+    // because a hard delete destroys all of it. Reporting the purge policy's
+    // removal set here under-reported every DELETE candidate by the base and
+    // root versions the delete takes down too
     ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 4096L, 3, 1024L);
     when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
 
@@ -1036,17 +1072,50 @@ class CleanupJcrStorageTest {
     assertNotNull(revalidation.getCandidate());
     assertEquals(CleanupAction.DELETE, revalidation.getCandidate().getAction());
     assertEquals(4096L, revalidation.getCandidate().getFileSize(), "The content size the DELETE reclaims");
-    assertEquals(2048L,
+    assertEquals(3072L,
                  revalidation.getCandidate().getVersionsSize(),
-                 "The versions size the DECISION didn't need is still measured for the emitted row: the admin table renders"
-                     + " and sorts it, and reporting 0 B there is the very defect the lazy ordering exists to avoid. TWO"
-                     + " versions of 1024 B, not three: the base version is not reclaimable");
+                 "The WHOLE history: the root version (0 B) plus the THREE 1024 B versions, the base one INCLUDED — a delete"
+                     + " frees it too, unlike a purge, whose removal set stops at 2048 B here");
     verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
-    verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
-    verify(file.versions().get(2)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
-    // The frozen-node hop is charged to the REMOVAL SET alone
-    verify(file.versions().get(0), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
-    verify(file.versions().get(3), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    // Every version is measured, base and root included: that is what 'the whole
+    // history' means, and what deleteNode sums back at execution
+    for (Version version : file.versions()) {
+      verify(version).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    }
+    // TWO history reads and no more: the criterion's names-and-dates walk, then
+    // the whole-history measurement. The removal set is NOT measured on this
+    // branch — one action, one figure
+    verify(file.node(), times(2)).getVersionHistory();
+  }
+
+  /**
+   * The invariant the reclaimable figure exists for: what the dry-run PREDICTS a
+   * DELETE candidate frees is what the execution REPORTS having freed. The
+   * prediction is {@code fileSize + versionsSize} — see
+   * {@code CleanupCampaignItemDAO#RECLAIMABLE_BYTES} — and the execution is
+   * {@code deleteNode}'s {@code reclaimedBytes}, computed on the very same node.
+   * Summing the content alone made the completion summary systematically exceed
+   * the reclaimable it had announced, with nothing in the console explaining the
+   * gap.
+   */
+  @Test
+  void theReclaimablePredictedForADeleteCandidateIsWhatDeleteNodeReportsAtExecution() throws RepositoryException {
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 4096L, 3, 1024L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupCandidate candidate = cleanupJcrStorage.revalidate(NODE_UUID_A, params).getCandidate();
+    CleanupPurgeResult executed = cleanupJcrStorage.deleteNode(NODE_UUID_A);
+
+    assertNotNull(candidate);
+    assertEquals(CleanupAction.DELETE, candidate.getAction());
+    assertEquals(CleanupItemState.PURGED, executed.getState());
+    // The RECLAIMABLE_BYTES expression of a DELETE row, computed here in Java:
+    // the JPQL itself is guarded by CleanupCampaignItemDAOTest
+    long predicted = candidate.getFileSize() + candidate.getVersionsSize();
+    assertEquals(7168L, predicted, "4096 B of content + 3072 B of version history");
+    assertEquals(predicted,
+                 executed.getReclaimedBytes(),
+                 "The prediction and the execution must report the SAME bytes for the same file");
   }
 
   @Test
@@ -1077,6 +1146,11 @@ class CleanupJcrStorageTest {
     for (int index : new int[] { 0, 3, 4, 5, 6, 7, 8 }) {
       verify(file.versions().get(index), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
     }
+    // ONE history read: the criterion's names-and-dates walk. The WHOLE-history
+    // measurement belongs to the DELETE branch alone — measuring it here would
+    // charge this row the ~3 nodes per version of every surviving version, which
+    // is precisely the read the laziness exists to avoid
+    verify(file.node(), times(1)).getVersionHistory();
   }
 
   @Test
