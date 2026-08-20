@@ -198,6 +198,13 @@ export default {
       this.options = {...this.options, page: 1};
       this.loadItems();
     },
+    // Live refresh while a run progresses: re-reads the CURRENT page with the
+    // current filters, sort and search — unlike reload(), which restarts at
+    // page 1 because the result set itself changed. Superseded responses are
+    // dropped by loadItems' own token.
+    refreshCurrentPage() {
+      this.loadItems();
+    },
     // Debounced so a typed term costs ONE query, not one per keystroke; a new
     // term always restarts at page 1, otherwise the user could land on an empty
     // page of a much shorter result set

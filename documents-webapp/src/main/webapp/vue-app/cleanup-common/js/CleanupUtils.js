@@ -48,30 +48,35 @@ export const RETRYABLE_FAILURE_REASONS = ['cleanup.keepFailed', 'cleanup.unkeepF
  * @param {number} remainingMillis milliseconds left, 0 or negative for none
  * @returns {string} human-readable duration, empty when nothing is left
  */
-export function formatDuration(remainingMillis) {
-  if (!remainingMillis || remainingMillis <= 0) {
-    return '';
+/**
+ * Splits a duration into the units a human reads, most significant first, and
+ * keeps at most the TWO most significant non-zero ones: '2d 4h', '2h 46m',
+ * '46m 41s', '41s'. Seconds only ever show up when the whole duration is under
+ * an hour — nobody reads '2d 4h 17m 3s'.
+ *
+ * Pure on purpose: the unit LABELS are localized by $cleanupDuration (see
+ * ../services.js), which is the only place with a $t to call.
+ *
+ * @param {Number} millis duration in milliseconds
+ * @returns {Array} [{unit, value}] with unit in 'day'|'hour'|'minute'|'second'
+ */
+export function durationParts(millis) {
+  if (!millis || millis <= 0) {
+    return [];
   }
-  const totalMinutes = Math.ceil(remainingMillis / 60000);
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  if (days) {
-    return hours ? `${days}d ${hours}h` : `${days}d`;
-  } else if (hours) {
-    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
-  } else {
-    return `${minutes}m`;
+  const totalSeconds = Math.floor(millis / 1000);
+  const parts = [
+    {unit: 'day', value: Math.floor(totalSeconds / 86400)},
+    {unit: 'hour', value: Math.floor((totalSeconds % 86400) / 3600)},
+    {unit: 'minute', value: Math.floor((totalSeconds % 3600) / 60)},
+    {unit: 'second', value: totalSeconds % 60},
+  ];
+  const firstIndex = parts.findIndex(part => part.value > 0);
+  if (firstIndex < 0) {
+    // Under a second, but not zero: never render an empty duration
+    return [{unit: 'second', value: 0}];
   }
-}
-
-export function formatEta(etaSeconds) {
-  if (etaSeconds == null || etaSeconds < 0) {
-    return '';
-  }
-  const minutes = Math.floor(etaSeconds / 60);
-  const seconds = Math.floor(etaSeconds % 60);
-  return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
+  return parts.slice(firstIndex, firstIndex + 2).filter(part => part.value > 0);
 }
 
 export function progressPercentage(processed, total) {

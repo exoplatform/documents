@@ -22,9 +22,14 @@
         :value="progress"
         height="8"
         rounded />
-      <span class="ms-3 text-no-wrap">
-        {{ $t('cleanup.admin.campaign.progressLabel', {0: progress, 1: campaign.processedCount, 2: campaign.totalCount}) }}
-      </span>
+      <div class="ms-3 d-flex align-center text-no-wrap">
+        <span>{{ $t('cleanup.admin.campaign.progressPercent', {0: progress}) }}</span>
+        <span class="ms-1">(</span>
+        <number-format :value="campaign.processedCount" />
+        <span class="mx-1">/</span>
+        <number-format :value="campaign.totalCount" />
+        <span>)</span>
+      </div>
       <span v-if="eta" class="ms-3 text-no-wrap text-light-color">
         {{ $t('cleanup.admin.campaign.eta', {0: eta}) }}
       </span>
@@ -32,7 +37,7 @@
     <div class="d-flex flex-wrap mt-4">
       <div class="me-8">
         <div class="text-light-color caption">{{ $t('cleanup.admin.campaign.candidates') }}</div>
-        <div class="text-color font-weight-bold">{{ campaign.candidateCount }}</div>
+        <number-format :value="campaign.candidateCount" class="text-color font-weight-bold" />
       </div>
       <div class="me-8">
         <div class="text-light-color caption">{{ $t('cleanup.admin.campaign.reclaimable') }}</div>
@@ -61,7 +66,7 @@ export default {
       return this.$cleanupUtils.progressPercentage(this.campaign?.processedCount, this.campaign?.totalCount);
     },
     eta() {
-      return this.$cleanupUtils.formatEta(this.campaign?.etaSeconds);
+      return this.$cleanupDuration(this.campaign?.etaSeconds * 1000);
     },
   },
 };

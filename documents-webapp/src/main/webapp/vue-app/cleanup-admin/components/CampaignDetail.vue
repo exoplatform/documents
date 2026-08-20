@@ -92,6 +92,7 @@
       :campaigns="campaigns"
       class="mt-4" />
     <document-cleanup-campaign-items-table
+      ref="itemsTable"
       :campaign-id="campaign.id"
       class="mt-4" />
   </div>
@@ -101,6 +102,9 @@
 // path: it also re-evaluates 'now' so the Execute gate and the remaining-time
 // tooltip keep ticking instead of freezing on the value captured at load.
 const REFRESH_PERIOD_MS = 30000;
+// Live refresh on CometD progress events, throttled: a scan pushes one event
+// per batch, so an unthrottled refresh would be thousands of reloads
+const REFRESH_THROTTLE_MS = 5000;
 const DATE_FIELDS = ['startedDate', 'publishedDate', 'lockDate', 'completedDate'];
 // Generic sentence shown when the code an endpoint answered carries no bundle
 // entry of its own: never leak a raw code (or a raw Spring body) in a toast
@@ -135,6 +139,7 @@ export default {
       // refresh all load, so several can be in flight at once and a slow one must
       // not overwrite a newer campaign (see loadCampaign)
       loadToken: 0,
+      lastEventRefresh: 0,
     };
   },
   computed: {
@@ -171,7 +176,7 @@ export default {
       return !!this.campaign?.executable || (this.executeOffered && this.remaining <= 0);
     },
     remainingTime() {
-      return this.$cleanupUtils.formatDuration(this.remaining);
+      return this.$cleanupDuration(this.remaining);
     },
     paramsSummary() {
       return this.$t('cleanup.admin.campaign.paramsSummary', {
@@ -272,7 +277,23 @@ export default {
           totalCount: message.total,
           etaSeconds: message.etaSeconds,
         });
+        this.refreshWhatTheEventDoesNotCarry();
       }
+    },
+    // A progress event carries the counters only, so the candidate count, the
+    // reclaimable bytes and the report rows would stay frozen at their
+    // page-load values for the whole run. Refreshing them on every event would
+    // mean one reload per batch (thousands over a large campaign), so the
+    // refresh is THROTTLED: at most one every REFRESH_THROTTLE_MS, which is
+    // what makes the report read as live without hammering the endpoints.
+    refreshWhatTheEventDoesNotCarry() {
+      const now = Date.now();
+      if (now - this.lastEventRefresh < REFRESH_THROTTLE_MS) {
+        return;
+      }
+      this.lastEventRefresh = now;
+      this.loadCampaign();
+      this.$refs.itemsTable?.refreshCurrentPage();
     },
     applyStateChangedEvent(event) {
       if (event?.detail?.campaignId === this.campaignId) {
