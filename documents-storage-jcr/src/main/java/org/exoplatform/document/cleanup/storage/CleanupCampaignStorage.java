@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -234,7 +235,7 @@ public class CleanupCampaignStorage {
                                  action == null ? null : action.name(),
                                  minSize,
                                  searchPattern(search),
-                                 pageable)
+                                 withQuerySort(pageable))
                   .map(this::toModel);
   }
 
@@ -328,7 +329,9 @@ public class CleanupCampaignStorage {
    * managing a thousand spaces doesn't get an ORA-01795 on their own review page.
    * With a single chunk — the overwhelmingly common case — the DAO page is
    * returned untouched. With several, each chunk is queried with the SAME total
-   * ordering as requested, {@code (page + 1) * size} rows are taken from each,
+   * ordering as requested ({@link #querySort(Sort)}-translated for both paths
+   * alike, so the computed reclaimable key is ordered by the database and not
+   * silently dropped), {@code (page + 1) * size} rows are taken from each,
    * they are merged with a comparator mirroring that ordering and the requested
    * page is sliced out of the merge.
    * <p>
@@ -355,10 +358,10 @@ public class CleanupCampaignStorage {
     String pattern = searchPattern(search);
     List<List<Long>> chunks = chunkOwnerIds(ownerIdentityIds);
     if (chunks.size() == 1) {
-      return itemDAO.findByOwnersAndSearch(campaignId, chunks.get(0), pattern, pageable).map(this::toModel);
+      return itemDAO.findByOwnersAndSearch(campaignId, chunks.get(0), pattern, withQuerySort(pageable)).map(this::toModel);
     }
     int upToRequestedPage = (pageable.getPageNumber() + 1) * pageable.getPageSize();
-    Pageable chunkPageable = PageRequest.of(0, upToRequestedPage, pageable.getSort());
+    Pageable chunkPageable = PageRequest.of(0, upToRequestedPage, querySort(pageable.getSort()));
     List<CleanupCampaignItemEntity> merged = new ArrayList<>();
     long totalElements = 0;
     for (List<Long> chunk : chunks) {
@@ -568,11 +571,75 @@ public class CleanupCampaignStorage {
   }
 
   /**
+   * Translates a REQUESTED ordering into the one the DATABASE can apply, which
+   * today means exactly one key: the logical
+   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY} becomes an
+   * {@code ORDER BY} over {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES_ORDER_BY}
+   * — the very expression every reclaimable aggregate sums, so the list is
+   * ranked by the same definition of 'reclaimable' the campaign totals add up.
+   * A plain {@code Sort.by(field)} cannot express it: it is a computed CASE, not
+   * a column, hence {@link JpaSort#unsafe(Sort.Direction, String...)} (legal
+   * here, and only here, because both item queries are declared {@code @Query}
+   * ones).
+   * <p>
+   * Every other key is passed through untouched, direction and POSITION
+   * included: the id tiebreaker the REST layer appends must stay the LAST key,
+   * or the ordering stops being total and offset paging starts repeating and
+   * skipping rows.
+   * <p>
+   * Package visible for tests.
+   */
+  static Sort querySort(Sort sort) {
+    if (sort == null || sort.getOrderFor(CleanupConstants.RECLAIMABLE_SORT_KEY) == null) {
+      return sort;
+    }
+    List<Sort.Order> orders = new ArrayList<>();
+    for (Sort.Order order : sort) {
+      if (CleanupConstants.RECLAIMABLE_SORT_KEY.equals(order.getProperty())) {
+        JpaSort.unsafe(order.getDirection(), CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY).forEach(orders::add);
+      } else {
+        orders.add(order);
+      }
+    }
+    return Sort.by(orders);
+  }
+
+  /**
+   * The {@link #querySort(Sort)} of a whole {@link Pageable}, returned unchanged
+   * when the ordering needs no translation.
+   */
+  private static Pageable withQuerySort(Pageable pageable) {
+    Sort sort = pageable.getSort();
+    Sort querySort = querySort(sort);
+    return querySort == sort ? pageable : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), querySort);
+  }
+
+  /**
+   * The reclaimable bytes of an item computed in Java, the in-memory mirror of
+   * {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES}: a DELETE frees its content
+   * AND the whole version history it destroys, a PURGE_VERSIONS frees the
+   * versions alone. Package visible for tests, which pin it against the JPQL the
+   * database applies — the two must rank a set of rows identically, otherwise a
+   * user managing enough spaces to be chunked gets a differently ordered list
+   * from one managing few.
+   */
+  static long reclaimableBytes(CleanupCampaignItemEntity item) {
+    return CleanupAction.DELETE.name().equals(item.getAction()) ? item.getFileSize() + item.getVersionsSize()
+                                                                : item.getVersionsSize();
+  }
+
+  /**
    * In-memory mirror of a requested {@link Sort}, used to merge the per-chunk
    * pages of {@link #getItemsByOwners} in the very same order the database
    * applied inside each chunk. Any key the DAO can be asked to sort on (the REST
-   * layer validates them against its allowlist) has its counterpart here;
-   * anything else is ignored, and an ordering left with no usable key falls back
+   * layer validates them against its allowlist) has its counterpart here — the
+   * computed reclaimable key included, whose counterpart mirrors the JPQL
+   * expression the chunk queries were ordered by (see {@link #querySort(Sort)}):
+   * the two MUST rank the same rows the same way, or the multi-chunk answer
+   * would differ from the single-chunk one for identical data.
+   * <p>
+   * The merge is fed the REQUESTED (logical) ordering, not the translated one;
+   * anything unknown is ignored, and an ordering left with no usable key falls back
    * to the id — the primary key, hence the only column whose uniqueness the
    * schema really enforces (the path is nullable and only unique in practice).
    * <p>
@@ -609,6 +676,11 @@ public class CleanupCampaignStorage {
       case "state" -> Comparator.comparing(CleanupCampaignItemEntity::getState, Comparator.nullsLast(String::compareTo));
       case "action" -> Comparator.comparing(CleanupCampaignItemEntity::getAction, Comparator.nullsLast(String::compareTo));
       case "reclaimedBytes" -> Comparator.comparingLong(CleanupCampaignItemEntity::getReclaimedBytes);
+      // Both spellings of the SAME key: the logical one the caller requests, and
+      // the JPQL expression querySort() turns it into — so the merge keeps
+      // mirroring the database whichever of the two orderings reaches it
+      case CleanupConstants.RECLAIMABLE_SORT_KEY, CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY ->
+        Comparator.comparingLong(CleanupCampaignStorage::reclaimableBytes);
       default -> null;
     };
   }

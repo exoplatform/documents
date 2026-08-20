@@ -56,6 +56,26 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
    */
   String RECLAIMABLE_BYTES = "CASE WHEN i.action = 'DELETE' THEN i.fileSize + i.versionsSize ELSE i.versionsSize END";
 
+  /**
+   * {@link #RECLAIMABLE_BYTES} as an {@code ORDER BY} key, which is how the
+   * review list — asked for it under the logical key
+   * {@code CleanupConstants#RECLAIMABLE_BYTES_SORT_KEY} — gets ordered by what
+   * each row actually FREES instead of by its
+   * content size alone — a 1 MB file carrying 500 MB of history displayed 501 MB
+   * and sorted as 1 MB, which defeats the very triage the ordering exists for.
+   * <p>
+   * Concatenated from the constant above rather than restated: an ORDER BY
+   * drifting from the SUM the campaign totals would rank rows by one definition
+   * of 'reclaimable' and add them up by another.
+   * <p>
+   * The PARENTHESES are load-bearing, not cosmetic: the Storage hands this
+   * expression over as a {@code JpaSort.unsafe} order, and Spring Data prefixes
+   * a sort property with the query alias UNLESS it holds a '(' (see
+   * {@code JpaQueryTransformerSupport#shouldPrefixWithAlias}) — bare, the CASE
+   * would be rendered as {@code i.CASE WHEN ...} and the query would not parse.
+   */
+  String RECLAIMABLE_BYTES_ORDER_BY = "(" + RECLAIMABLE_BYTES + ")";
+
   Page<CleanupCampaignItemEntity> findByCampaignId(long campaignId, Pageable pageable);
 
   Page<CleanupCampaignItemEntity> findByCampaignIdAndState(long campaignId, String state, Pageable pageable);

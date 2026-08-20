@@ -94,7 +94,7 @@
            version history, which the delete destroys too. Getting this wrong is
            visible on this very screen — the banner totals the same expression, so
            a row showing less than it contributes makes the list stop adding up -->
-      <template slot="item.fileSize" slot-scope="{item}">
+      <template slot="item.reclaimableBytes" slot-scope="{item}">
         {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize + item.versionsSize) }}
       </template>
       <template slot="item.state" slot-scope="{item}">
@@ -155,7 +155,10 @@ const UNKNOWN_REASON_KEY = 'cleanup.review.items.failureUnknown';
 // The item table has NO name column: the DTO's 'name' is the last segment of the
 // path, so the Name column is sorted (server-side) on the path.
 const SORT_FIELDS = {name: 'path'};
-const DEFAULT_SORT_FIELD = 'fileSize';
+// The size column shows — and is ordered on — the RECLAIMABLE bytes, which is a
+// computed server-side key ('reclaimableBytes'), not an item field: a DELETE row
+// frees its content plus the history the delete destroys.
+const DEFAULT_SORT_FIELD = 'reclaimableBytes';
 
 export default {
   props: {
@@ -203,17 +206,19 @@ export default {
     },
     // Server-sorted columns only (SORT_FIELDS maps 'name' onto the path). The
     // planned-action and the row-actions columns stay unsortable. The size column
-    // orders on 'fileSize' — the reclaimable size shown for a PURGE_VERSIONS row
-    // is the versions size, but fileSize remains the meaningful ranking here.
-    // 'lastModifiedDate' needs no SORT_FIELDS entry: it IS the server-side field
-    // name, and it is already in the endpoint's sortable allowlist
+    // orders on 'reclaimableBytes' — the same expression it DISPLAYS, so the
+    // biggest win of the list really is its first row: ordering it on 'fileSize'
+    // instead ranked a 1 MB file carrying 500 MB of history as 1 MB while showing
+    // 501 MB. 'lastModifiedDate' needs no SORT_FIELDS entry: it IS the
+    // server-side field name, and it is already in the endpoint's sortable
+    // allowlist
     headers() {
       return [
         {text: this.$t('cleanup.review.items.name'), value: 'name', align: 'left'},
         {text: this.$t('cleanup.review.items.path'), value: 'path', align: 'left'},
         {text: this.$t('cleanup.review.items.lastModifiedDate'), value: 'lastModifiedDate', align: 'center'},
         {text: this.$t('cleanup.review.items.action'), value: 'action', align: 'center', sortable: false},
-        {text: this.$t('cleanup.review.items.size'), value: 'fileSize', align: 'center'},
+        {text: this.$t('cleanup.review.items.size'), value: 'reclaimableBytes', align: 'center'},
         {text: this.$t('cleanup.review.items.state'), value: 'state', align: 'center'},
         {text: this.$t('cleanup.review.items.actions'), value: 'keep', align: 'center', sortable: false},
       ];

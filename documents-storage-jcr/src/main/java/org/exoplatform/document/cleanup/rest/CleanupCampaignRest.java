@@ -55,6 +55,7 @@ import org.exoplatform.document.cleanup.rest.model.PagedResult;
 import org.exoplatform.document.cleanup.rest.model.UpdateCampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
+import org.exoplatform.document.cleanup.util.CleanupConstants;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -67,15 +68,22 @@ import jakarta.servlet.http.HttpServletRequest;
 @RequestMapping("/cleanup/campaigns")
 public class CleanupCampaignRest {
 
-  private static final Set<String> SORTABLE_ITEM_FIELDS = Set.of("id",
-                                                                 "path",
-                                                                 "ownerIdentityId",
-                                                                 "fileSize",
-                                                                 "versionsSize",
-                                                                 "lastModifiedDate",
-                                                                 "state",
-                                                                 "action",
-                                                                 "reclaimedBytes");
+  /**
+   * Sortable keys, all of them item-entity attributes but ONE: the computed
+   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY}, which the Storage layer
+   * translates into an ORDER BY over the reclaimable expression itself. An
+   * unknown key still gets a 400 — this set stays the whole contract.
+   */
+  private static final Set<String> SORTABLE_ITEM_FIELDS  = Set.of("id",
+                                                                  "path",
+                                                                  "ownerIdentityId",
+                                                                  "fileSize",
+                                                                  "versionsSize",
+                                                                  "lastModifiedDate",
+                                                                  "state",
+                                                                  "action",
+                                                                  "reclaimedBytes",
+                                                                  CleanupConstants.RECLAIMABLE_SORT_KEY);
 
   /**
    * Sortable fields that are already unique per item row, hence already yield a
@@ -87,11 +95,27 @@ public class CleanupCampaignRest {
    * the same path across a resumed scan yields two rows sharing a path, at which
    * point an ordering ending on the path stops being total.
    */
-  private static final Set<String> UNIQUE_ITEM_FIELDS   = Set.of("id");
+  private static final Set<String> UNIQUE_ITEM_FIELDS    = Set.of("id");
 
-  private static final String      TIEBREAKER_FIELD     = "id";
+  private static final String      TIEBREAKER_FIELD      = "id";
 
-  private static final String      DEFAULT_SORT_FIELD   = "fileSize";
+  /**
+   * Default ordering of the ADMIN items table: its size column shows the item's
+   * CONTENT size (and its minSize filter narrows on that same column), so
+   * ranking it by {@code fileSize} is ranking it by what it displays.
+   */
+  private static final String      DEFAULT_ITEM_SORT     = "fileSize";
+
+  /**
+   * Default ordering of the USER review list: what each row actually FREES, not
+   * its content size alone. The two diverge for a DELETE — which reclaims its
+   * content PLUS the version history the delete destroys — so a 1 MB file
+   * carrying 500 MB of history displayed 501 MB while sorting as 1 MB, and the
+   * row freeing the most could sit at the bottom of a list the UI labels sorted
+   * by size. That ordering exists for TRIAGE: a user holding ten thousand
+   * candidates keeps what matters by starting at the top of it.
+   */
+  private static final String      DEFAULT_MY_ITEMS_SORT = CleanupConstants.RECLAIMABLE_SORT_KEY;
 
   @Autowired
   private CleanupCampaignService   campaignService;
@@ -399,7 +423,7 @@ public class CleanupCampaignRest {
                                                               @RequestParam(name = "sort", required = false)
                                                               String sort) {
     try {
-      Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+      Pageable pageable = PageRequest.of(page, size, parseSort(sort, DEFAULT_ITEM_SORT));
       return CleanupEntityBuilder.build(campaignService.getCampaignItems(id,
                                                                          ownerIdentityId,
                                                                          parseEnum(CleanupItemState.class, state),
@@ -473,7 +497,7 @@ public class CleanupCampaignRest {
 
   @Secured("users")
   @GetMapping(path = "published/my-items", produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "GET", summary = "Retrieve the current user's cleanup candidates", description = "Retrieve the currently relevant campaign's items owned by the user (own files and managed-space files), with an optional path search, paged and sorted — by size descending by default")
+  @Operation(method = "GET", summary = "Retrieve the current user's cleanup candidates", description = "Retrieve the currently relevant campaign's items owned by the user (own files and managed-space files), with an optional path search, paged and sorted — by reclaimable size descending by default")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
@@ -493,9 +517,10 @@ public class CleanupCampaignRest {
                                                         @RequestParam(name = "sort", required = false)
                                                         String sort) {
     try {
-      // Same allowlist, same default and same stable tiebreaker as the admin
-      // items endpoint: the review table is server-sorted too
-      Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+      // Same allowlist and same stable tiebreaker as the admin items endpoint (the
+      // review table is server-sorted too), but its OWN default: this list ranks
+      // rows by what each one frees, see DEFAULT_MY_ITEMS_SORT
+      Pageable pageable = PageRequest.of(page, size, parseSort(sort, DEFAULT_MY_ITEMS_SORT));
       // The failure detail is EXPLICITLY withheld here: this endpoint is
       // @Secured("users"), and a stack trace can name a referencing node in a
       // space the caller is not a member of. The bare failureReason code stays
@@ -526,12 +551,15 @@ public class CleanupCampaignRest {
 
   /**
    * Parses a 'field,asc|desc' sort against {@link #SORTABLE_ITEM_FIELDS} —
-   * defaulting to {@code fileSize DESC}, the ordering both item tables open on —
-   * then makes it total with {@link #withTiebreaker(Sort)}.
+   * defaulting, DESCENDING, to the field the calling endpoint opens on
+   * ({@link #DEFAULT_ITEM_SORT} for the admin table,
+   * {@link #DEFAULT_MY_ITEMS_SORT} for the user review list, which rank on
+   * different figures because they DISPLAY different ones) — then makes it total
+   * with {@link #withTiebreaker(Sort)}.
    */
-  private Sort parseSort(String sort) {
+  private Sort parseSort(String sort, String defaultField) {
     if (StringUtils.isBlank(sort)) {
-      return withTiebreaker(Sort.by(Sort.Direction.DESC, DEFAULT_SORT_FIELD));
+      return withTiebreaker(Sort.by(Sort.Direction.DESC, defaultField));
     }
     String[] parts = sort.split(",");
     String field = parts[0].trim();
@@ -547,12 +575,12 @@ public class CleanupCampaignRest {
    * Appends {@code id ASC} as the LAST key of every ordering, default or
    * client-requested.
    * <p>
-   * {@code fileSize} — like {@code state}, {@code action}, {@code path} and
-   * {@code ownerIdentityId} — is NOT unique, so an offset-paged query over a
-   * block of ties has no total order: the database is free to return the same
-   * row on two pages and to never return another one. On a review table that
-   * means a user could page through their whole list and never see a file that
-   * is about to be deleted. {@code id} is the primary key, so appending it makes
+   * {@code fileSize} — like the computed reclaimable key, {@code state},
+   * {@code action}, {@code path} and {@code ownerIdentityId} — is NOT unique, so
+   * an offset-paged query over a block of ties has no total order: the database
+   * is free to return the same row on two pages and to never return another one.
+   * On a review table that means a user could page through their whole list and
+   * never see a file that is about to be deleted. {@code id} is the primary key, so appending it makes
    * ANY ordering total — and, unlike the path, it depends on no invariant the
    * schema does not enforce (see {@link #UNIQUE_ITEM_FIELDS}).
    * <p>

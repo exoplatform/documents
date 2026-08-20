@@ -19,6 +19,7 @@ package org.exoplatform.document.cleanup.storage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -31,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -43,11 +45,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.JpaSort;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -62,6 +66,7 @@ import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.util.CleanupConstants;
 
 /**
  * Storage tests pinning the entity/model mapping round-trip, the candidate
@@ -592,6 +597,108 @@ class CleanupCampaignStorageTest {
   }
 
   @Test
+  void getItemsTranslatesTheReclaimableSortKeyIntoAQueryLevelOrderBy() {
+    Pageable pageable = PageRequest.of(0, 20, RECLAIMABLE_DESC_THEN_ID);
+    when(itemDAO.findByFilters(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    storage.getItems(CAMPAIGN_ID, null, null, null, null, null, pageable);
+
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findByFilters(anyLong(), any(), any(), any(), any(), any(), pageableCaptor.capture());
+    assertQuerySort(pageableCaptor.getValue().getSort());
+    // Paging is untouched by the translation
+    assertEquals(0, pageableCaptor.getValue().getPageNumber());
+    assertEquals(20, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void getItemsByOwnersTranslatesTheReclaimableSortKeyOnTheSingleChunkPathToo() {
+    // The single-chunk path is the overwhelmingly common one: leaving the computed
+    // key untranslated HERE would silently order almost every review list by
+    // nothing the database understands
+    Pageable pageable = PageRequest.of(1, 10, RECLAIMABLE_DESC_THEN_ID);
+    when(itemDAO.findByOwnersAndSearch(anyLong(), anyList(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    storage.getItemsByOwners(CAMPAIGN_ID, List.of(5L, 6L), null, pageable);
+
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findByOwnersAndSearch(anyLong(), anyList(), any(), pageableCaptor.capture());
+    assertQuerySort(pageableCaptor.getValue().getSort());
+    assertEquals(1, pageableCaptor.getValue().getPageNumber());
+    assertEquals(10, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void querySortLeavesAnOrderingWithoutTheReclaimableKeyExactlyAsRequested() {
+    Sort requested = Sort.by(Sort.Direction.DESC, "fileSize").and(Sort.by(Sort.Direction.ASC, "id"));
+
+    assertSame(requested,
+               CleanupCampaignStorage.querySort(requested),
+               "An ordering the database can already apply must not be rewritten");
+  }
+
+  /**
+   * The finding's exact case, on the MULTI-CHUNK path: the merge must rank a 1 MB
+   * file carrying 500 MB of version history above a 100 MB file carrying none,
+   * and put the LARGEST file of the fixture (900 MB, PURGE_VERSIONS, 2 MB of
+   * purgeable versions) last. Ordering on fileSize — what this list did before —
+   * would open on that 900 MB row.
+   * <p>
+   * The rows are spread over BOTH chunks, and the two tied at 100 MB sit in
+   * different ones, so the id tiebreaker is exercised across chunks too.
+   */
+  @Test
+  void getItemsByOwnersMergesTheChunkPagesByWhatEachRowActuallyReclaims() {
+    List<Long> ownerIdentityIds = ownerIds(950);
+    Pageable pageable = PageRequest.of(0, 3, RECLAIMABLE_DESC_THEN_ID);
+    stubDatabaseOrdering(reclaimableFixture());
+
+    Page<CleanupCampaignItem> page = storage.getItemsByOwners(CAMPAIGN_ID, ownerIdentityIds, null, pageable);
+
+    assertEquals(List.of(1L, 4L, 2L),
+                 page.getContent().stream().map(CleanupCampaignItem::getId).toList(),
+                 "501 MB (1 MB of content + 500 MB of history) first, then 300 MB, then the first of the two 100 MB ties");
+  }
+
+  /**
+   * The consistency the chunking must not break: for the SAME rows and the SAME
+   * requested page, a user whose owner ids fit one chunk and a user whose ids
+   * span two must get the SAME list. The DAO stub orders by the expression it is
+   * HANDED (see {@link #databaseComparator(Sort)}), so it models the database
+   * rather than the Storage's own comparator — an in-memory merge left on
+   * {@code fileSize} while the SQL orders on the reclaimable expression fails
+   * here, which is exactly the divergence chunking makes invisible in production.
+   */
+  @Test
+  void getItemsByOwnersOrdersTheChunkedPathExactlyLikeTheSingleChunkOne() {
+    List<CleanupCampaignItemEntity> rows = reclaimableFixture();
+    stubDatabaseOrdering(rows);
+    List<Long> chunkedOwnerIds = ownerIds(950);
+    // The distinct owners of the very same rows, small enough to stay ONE chunk
+    List<Long> singleChunkOwnerIds = rows.stream().map(CleanupCampaignItemEntity::getOwnerIdentityId).distinct().sorted().toList();
+    assertEquals(1, CleanupCampaignStorage.chunkOwnerIds(singleChunkOwnerIds).size());
+    assertTrue(CleanupCampaignStorage.chunkOwnerIds(chunkedOwnerIds).size() > 1);
+
+    for (int pageNumber = 0; pageNumber < 2; pageNumber++) {
+      Pageable pageable = PageRequest.of(pageNumber, 3, RECLAIMABLE_DESC_THEN_ID);
+
+      List<Long> singleChunk = storage.getItemsByOwners(CAMPAIGN_ID, singleChunkOwnerIds, null, pageable)
+                                      .getContent()
+                                      .stream()
+                                      .map(CleanupCampaignItem::getId)
+                                      .toList();
+      List<Long> chunked = storage.getItemsByOwners(CAMPAIGN_ID, chunkedOwnerIds, null, pageable)
+                                  .getContent()
+                                  .stream()
+                                  .map(CleanupCampaignItem::getId)
+                                  .toList();
+
+      assertEquals(singleChunk, chunked, "Page " + pageNumber + " must not depend on how many chunks the owner ids needed");
+      assertFalse(singleChunk.isEmpty(), "A vacuous comparison would pass whatever the merge does");
+    }
+  }
+
+  @Test
   void chunkOwnerIdsNeverExceedsTheInClauseCapAndKeepsEveryId() {
     List<Long> ownerIdentityIds = ownerIds(950);
 
@@ -874,6 +981,121 @@ class CleanupCampaignStorageTest {
     when(itemDAO.countFailuresByReason(CAMPAIGN_ID, SKIPPED_STATE)).thenReturn(List.of());
 
     assertTrue(storage.countFailuresByReason(CAMPAIGN_ID).isEmpty());
+  }
+
+  /**
+   * The ordering the {@code published/my-items} endpoint opens on: the computed
+   * reclaimable key, descending, made total by the id tiebreaker.
+   */
+  private static final Sort RECLAIMABLE_DESC_THEN_ID = Sort.by(Sort.Direction.DESC, CleanupConstants.RECLAIMABLE_SORT_KEY)
+                                                           .and(Sort.by(Sort.Direction.ASC, "id"));
+
+  /** One megabyte, so the fixtures below read as the sizes the finding described. */
+  private static final long MB                       = 1024L * 1024L;
+
+  /** Owner id landing in the FIRST chunk of a 950-long owner list (index 0). */
+  private static final long FIRST_CHUNK_OWNER        = 1L;
+
+  /** Owner id landing in the SECOND chunk of that same list (index MAX_IN_CLAUSE_SIZE). */
+  private static final long LAST_CHUNK_OWNER         = CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE + 1L;
+
+  /**
+   * Asserts an ordering handed to the DAO carries the reclaimable expression as
+   * an UNSAFE JpaSort order (a computed CASE cannot be a plain field reference),
+   * with the id tiebreaker still LAST — the position that makes the ordering
+   * total.
+   */
+  private void assertQuerySort(Sort sort) {
+    List<Sort.Order> orders = sort.toList();
+    assertEquals(2, orders.size());
+    assertEquals(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY, orders.get(0).getProperty());
+    assertEquals(Sort.Direction.DESC, orders.get(0).getDirection());
+    assertTrue(orders.get(0) instanceof JpaSort.JpaOrder jpaOrder && jpaOrder.isUnsafe(),
+               "A computed expression must travel as an unsafe JpaSort order, or Spring Data treats it as a property path");
+    assertEquals("id", orders.get(1).getProperty());
+    assertEquals(Sort.Direction.ASC, orders.get(1).getDirection());
+  }
+
+  /**
+   * Six candidate rows whose reclaimable ranking (501, 300, 100, 100, 50, 2 MB)
+   * has NOTHING to do with their content sizes (1, 100, 900, 0, 0, 50 MB), spread
+   * over the first and the last owner id of a 950-long list — hence over both
+   * chunks — with the two rows tied at 100 MB in different chunks.
+   */
+  private List<CleanupCampaignItemEntity> reclaimableFixture() {
+    return List.of(reclaimableEntity(1L, FIRST_CHUNK_OWNER, CleanupAction.DELETE, MB, 500 * MB),
+                   reclaimableEntity(2L, LAST_CHUNK_OWNER, CleanupAction.DELETE, 100 * MB, 0),
+                   reclaimableEntity(3L, FIRST_CHUNK_OWNER, CleanupAction.PURGE_VERSIONS, 900 * MB, 2 * MB),
+                   reclaimableEntity(4L, LAST_CHUNK_OWNER, CleanupAction.DELETE, 0, 300 * MB),
+                   reclaimableEntity(5L, FIRST_CHUNK_OWNER, CleanupAction.DELETE, 0, 100 * MB),
+                   reclaimableEntity(6L, LAST_CHUNK_OWNER, CleanupAction.PURGE_VERSIONS, 50 * MB, 50 * MB));
+  }
+
+  private CleanupCampaignItemEntity reclaimableEntity(long id,
+                                                      long ownerIdentityId,
+                                                      CleanupAction action,
+                                                      long fileSize,
+                                                      long versionsSize) {
+    CleanupCampaignItemEntity entity = itemEntity("/item-" + id, fileSize, id);
+    entity.setOwnerIdentityId(ownerIdentityId);
+    entity.setVersionsSize(versionsSize);
+    entity.setAction(action.name());
+    return entity;
+  }
+
+  /**
+   * Answers every owner query like the DATABASE would: the rows of the queried
+   * owner chunk, ordered by the very expression the Storage asked the ORDER BY
+   * on, sliced to the requested page. Deliberately independent of the Storage's
+   * in-memory merge comparator — that is what makes a divergence between the two
+   * orderings visible instead of self-consistent.
+   */
+  private void stubDatabaseOrdering(List<CleanupCampaignItemEntity> rows) {
+    Answer<Page<CleanupCampaignItemEntity>> answer = invocation -> {
+      List<Long> chunk = invocation.getArgument(1);
+      Pageable pageable = invocation.getArgument(3);
+      List<CleanupCampaignItemEntity> matching = rows.stream()
+                                                     .filter(row -> chunk.contains(row.getOwnerIdentityId()))
+                                                     .sorted(databaseComparator(pageable.getSort()))
+                                                     .toList();
+      int fromIndex = Math.min((int) pageable.getOffset(), matching.size());
+      int toIndex = Math.min(fromIndex + pageable.getPageSize(), matching.size());
+      return new PageImpl<>(matching.subList(fromIndex, toIndex), pageable, matching.size());
+    };
+    when(itemDAO.findByOwnersAndSearch(anyLong(), anyList(), any(), any())).thenAnswer(answer);
+  }
+
+  /**
+   * The ordering a database would apply for the {@link Sort} it received, keyed on
+   * the JPQL text itself: a sort key this stub cannot model is a key the Storage
+   * would have sent to a real database in a form it never validated, so it FAILS
+   * rather than silently falling back.
+   */
+  private Comparator<CleanupCampaignItemEntity> databaseComparator(Sort sort) {
+    Comparator<CleanupCampaignItemEntity> comparator = null;
+    for (Sort.Order order : sort) {
+      Comparator<CleanupCampaignItemEntity> key = databaseKeyComparator(order.getProperty());
+      if (order.isDescending()) {
+        key = key.reversed();
+      }
+      comparator = comparator == null ? key : comparator.thenComparing(key);
+    }
+    return comparator;
+  }
+
+  private Comparator<CleanupCampaignItemEntity> databaseKeyComparator(String property) {
+    if (CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY.equals(property)) {
+      return Comparator.comparingLong(row -> CleanupAction.DELETE.name().equals(row.getAction()) ? row.getFileSize()
+          + row.getVersionsSize() : row.getVersionsSize());
+    }
+    if ("id".equals(property)) {
+      return Comparator.comparingLong(CleanupCampaignItemEntity::getId);
+    }
+    if ("fileSize".equals(property)) {
+      return Comparator.comparingLong(CleanupCampaignItemEntity::getFileSize);
+    }
+    throw new AssertionError("The DAO was asked to order on '" + property
+        + "', which matches no column of the item table nor the reclaimable expression");
   }
 
   private List<Long> ownerIds(int total) {

@@ -24,6 +24,21 @@ import java.util.List;
  */
 public class CleanupConstants {
 
+  /**
+   * Logical sort key naming the RECLAIMABLE ordering of campaign items — the one
+   * and only name for it, shared by the REST sortable-field allowlist and by the
+   * Storage translating it into an ORDER BY over
+   * {@code CleanupCampaignItemDAO#RECLAIMABLE_BYTES_ORDER_BY} (the very
+   * expression every reclaimable aggregate sums).
+   * <p>
+   * Lives HERE, and not with the JPQL it ends up as, because it crosses layers:
+   * the REST layer must accept it without importing a DAO, the Storage must
+   * recognize it, and a second literal in either place would let the two drift
+   * apart silently. Deliberately NOT an attribute of the item entity — it names
+   * a computed expression, not a column.
+   */
+  public static final String       RECLAIMABLE_SORT_KEY  = "reclaimableBytes";
+
   /** Root of the user drives in the collaboration workspace. */
   public static final String       USERS_ROOT            = "/Users";
 

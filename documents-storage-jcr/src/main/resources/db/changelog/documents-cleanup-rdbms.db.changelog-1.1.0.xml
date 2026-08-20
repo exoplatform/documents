@@ -214,4 +214,42 @@
                              constraintName="UK_DOC_CLEANUP_SCAN_UNIT_PATH"/>
     </changeSet>
 
+    <!-- FILE_SIZE and VERSIONS_SIZE feed ARITHMETIC, not just a display: the
+         reclaimable figure of a row is FILE_SIZE + VERSIONS_SIZE for a DELETE
+         (see CleanupCampaignItemDAO#RECLAIMABLE_BYTES), and under SQL
+         three-valued logic NULL + n is NULL while SUM SKIPS a NULL — so one such
+         row would drop out of sumReclaimableBytesByState, of the campaigns-list
+         aggregates and of both comparison queries ENTIRELY, under-reporting the
+         campaign by that whole row instead of by its versions alone, and
+         silently. COALESCE(SUM(...), 0) does not cover it: it guards an EMPTY
+         result, not a NULL addend. The aggregates are the ONE path reading these
+         columns without materializing the entity — which maps both as a
+         primitive long, so a NULL is unreachable from the application today; the
+         constraint is what keeps it unreachable. Same defect class, and same fix,
+         as ATTEMPT_COUNT in changeset -8. Existing NULLs (there are none from the
+         application, but a row hand-fixed by a DBA is not impossible) are set to
+         0 as part of the constraint change, and the zero DEFAULT is (re)declared
+         AFTER it: on MySQL the NOT NULL modification rewrites the column
+         definition and would drop a default declared before it. No index or key
+         is added — both columns are BIGINT, but the MySQL row-size lesson of
+         changesets -5/-8 is that a key belongs on the narrow column only -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-11">
+        <addNotNullConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                              columnName="FILE_SIZE"
+                              columnDataType="BIGINT"
+                              defaultNullValue="0"/>
+        <addNotNullConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                              columnName="VERSIONS_SIZE"
+                              columnDataType="BIGINT"
+                              defaultNullValue="0"/>
+        <addDefaultValue tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                         columnName="FILE_SIZE"
+                         columnDataType="BIGINT"
+                         defaultValueNumeric="0"/>
+        <addDefaultValue tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                         columnName="VERSIONS_SIZE"
+                         columnDataType="BIGINT"
+                         defaultValueNumeric="0"/>
+    </changeSet>
+
 </databaseChangeLog>

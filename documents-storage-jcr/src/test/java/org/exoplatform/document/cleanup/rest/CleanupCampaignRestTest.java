@@ -68,6 +68,7 @@ import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
 import org.exoplatform.document.cleanup.rest.model.UpdateCampaignRestEntity;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
+import org.exoplatform.document.cleanup.util.CleanupConstants;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -94,8 +95,16 @@ class CleanupCampaignRestTest {
    * The ordering BOTH item tables must end up with by default: the size-first
    * business ordering, made total by the primary-key 'id' tiebreaker.
    */
-  private static final Sort      FILE_SIZE_DESC_THEN_ID = Sort.by(Sort.Direction.DESC, "fileSize")
-                                                              .and(Sort.by(Sort.Direction.ASC, "id"));
+  private static final Sort      FILE_SIZE_DESC_THEN_ID   = Sort.by(Sort.Direction.DESC, "fileSize")
+                                                                .and(Sort.by(Sort.Direction.ASC, "id"));
+
+  /**
+   * What the USER review list opens on: the computed reclaimable key — the same
+   * figure the list displays and the campaign totals — made total by the id
+   * tiebreaker. The Storage layer turns that key into a query-level ORDER BY.
+   */
+  private static final Sort      RECLAIMABLE_DESC_THEN_ID = Sort.by(Sort.Direction.DESC, CleanupConstants.RECLAIMABLE_SORT_KEY)
+                                                                .and(Sort.by(Sort.Direction.ASC, "id"));
 
   @Mock
   private CleanupCampaignService campaignService;
@@ -370,6 +379,26 @@ class CleanupCampaignRestTest {
   }
 
   @Test
+  void getCampaignItemsAcceptsTheReclaimableSortKeyWithoutDefaultingToIt() throws ObjectNotFoundException {
+    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    // The ADMIN table's size column shows the CONTENT size (and its minSize filter
+    // narrows on that same column), so it keeps defaulting to 'fileSize' — the
+    // reclaimable ordering stays available on request, never imposed here
+    campaignRest.getCampaignItems(CAMPAIGN_ID,
+                                  null,
+                                  null,
+                                  null,
+                                  null,
+                                  null,
+                                  0,
+                                  20,
+                                  CleanupConstants.RECLAIMABLE_SORT_KEY + ",desc");
+
+    assertEquals(PageRequest.of(0, 20, RECLAIMABLE_DESC_THEN_ID), captureItemsPageable());
+  }
+
+  @Test
   void getCampaignItemsAppendsTheIdTiebreakerToANonUniqueRequestedSort() throws ObjectNotFoundException {
     when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
@@ -519,14 +548,34 @@ class CleanupCampaignRestTest {
   }
 
   @Test
-  void getMyItemsDefaultsToFileSizeDescendingSortWithIdTiebreaker() throws ObjectNotFoundException {
+  void getMyItemsDefaultsToTheReclaimableSortWithIdTiebreaker() throws ObjectNotFoundException {
     when(request.getRemoteUser()).thenReturn("john");
     when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
     campaignRest.getMyItems(request, null, 0, 20, null);
 
     verify(campaignService).getMyItems(eq("john"), eq((String) null), any());
-    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_ID), captureMyItemsPageable());
+    // The review list DISPLAYS what each row frees — content plus the version
+    // history a delete destroys — so that is what it must be ranked by. Defaulting
+    // to 'fileSize' showed 501 MB on a row it sorted as 1 MB, burying the biggest
+    // win of a list the UI labels 'sorted by size'
+    assertEquals(PageRequest.of(0, 20, RECLAIMABLE_DESC_THEN_ID), captureMyItemsPageable());
+  }
+
+  @Test
+  void getMyItemsHonoursAnExplicitlyRequestedReclaimableSort() throws ObjectNotFoundException {
+    when(request.getRemoteUser()).thenReturn("john");
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    // The default is not the only way in: the key is in the allowlist, so a client
+    // can ask for it — ascending here, which the ordering must honour
+    campaignRest.getMyItems(request, null, 0, 20, CleanupConstants.RECLAIMABLE_SORT_KEY + ",asc");
+
+    assertEquals(PageRequest.of(0,
+                                20,
+                                Sort.by(Sort.Direction.ASC, CleanupConstants.RECLAIMABLE_SORT_KEY)
+                                    .and(Sort.by(Sort.Direction.ASC, "id"))),
+                 captureMyItemsPageable());
   }
 
   @Test

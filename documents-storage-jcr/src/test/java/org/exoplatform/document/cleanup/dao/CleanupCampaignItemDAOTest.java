@@ -33,6 +33,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.junit.jupiter.api.AfterAll;
@@ -44,9 +48,13 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.query.parser.PartTree;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
+import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignEntity;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 import org.exoplatform.document.cleanup.rest.CleanupCampaignRest;
+import org.exoplatform.document.cleanup.util.CleanupConstants;
+
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Parameter;
@@ -88,7 +96,22 @@ class CleanupCampaignItemDAOTest {
                                                                            CleanupCampaignDAO.class,
                                                                            CleanupCampaignEntity.class);
 
+  private static final String        ITEM_TABLE         = "DOCUMENTS_CLEANUP_CAMPAIGN_ITEM";
+
+  private static final String        CHANGELOG_RESOURCE = "db/changelog/documents-cleanup-rdbms.db.changelog-1.1.0.xml";
+
+  /** One megabyte, so the fixtures below read as the sizes the finding described. */
+  private static final long          MB                 = 1024L * 1024L;
+
   private static SessionFactory       sessionFactory;
+
+  /**
+   * A SECOND Hibernate bootstrap over the same two entities, this one WITH a
+   * generated schema: the tests below do not parse the reclaimable expression,
+   * they RUN it over rows. Kept apart from the parse-only factory above so the
+   * guards that need no table keep needing none.
+   */
+  private static SessionFactory       executionSessionFactory;
 
   /**
    * The smallest thing able to PARSE JPQL: Hibernate bootstrapped over the two
@@ -108,12 +131,28 @@ class CleanupCampaignItemDAOTest {
     configuration.setProperty("hibernate.connection.password", "");
     configuration.setProperty("hibernate.hbm2ddl.auto", "none");
     sessionFactory = configuration.buildSessionFactory();
+    executionSessionFactory = executionConfiguration().buildSessionFactory();
+  }
+
+  private static Configuration executionConfiguration() {
+    Configuration configuration = new Configuration();
+    configuration.addAnnotatedClass(CleanupCampaignEntity.class);
+    configuration.addAnnotatedClass(CleanupCampaignItemEntity.class);
+    configuration.setProperty("hibernate.connection.driver_class", "org.hsqldb.jdbc.JDBCDriver");
+    configuration.setProperty("hibernate.connection.url", "jdbc:hsqldb:mem:cleanupDaoQueryExecution");
+    configuration.setProperty("hibernate.connection.username", "sa");
+    configuration.setProperty("hibernate.connection.password", "");
+    configuration.setProperty("hibernate.hbm2ddl.auto", "create");
+    return configuration;
   }
 
   @AfterAll
   static void closeMinimalHibernate() {
     if (sessionFactory != null) {
       sessionFactory.close();
+    }
+    if (executionSessionFactory != null) {
+      executionSessionFactory.close();
     }
   }
 
@@ -144,6 +183,107 @@ class CleanupCampaignItemDAOTest {
                "A DELETE destroys the content AND the whole version history: both terms must be summed — " + fragment);
     assertTrue(fragment.contains("ELSE i.versionsSize END"),
                "A PURGE_VERSIONS leaves the content in place: the versions size alone — " + fragment);
+  }
+
+  /**
+   * The ORDER BY form of the reclaimable expression must BE the expression the
+   * aggregates sum, not a second copy of it: the review list is ranked by one
+   * definition of 'reclaimable' and the campaign banner totals another the moment
+   * the two texts drift, and a restated CASE drifts silently (it parses, it
+   * sums, it just ranks by something else).
+   * <p>
+   * The parentheses are asserted too, and are not cosmetics: Spring Data prefixes
+   * an unsafe sort property with the query alias unless it holds a '(' (see
+   * {@code JpaQueryTransformerSupport#shouldPrefixWithAlias}), which would render
+   * the key as {@code i.CASE WHEN ...} and break the query at runtime.
+   */
+  @Test
+  void shouldOrderByTheVeryExpressionTheReclaimableAggregatesSum() {
+    assertEquals("(" + CleanupCampaignItemDAO.RECLAIMABLE_BYTES + ")",
+                 CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY,
+                 "The ORDER BY key must be the aggregated expression itself, parenthesized — never a restatement of it");
+    assertTrue(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY.startsWith("("),
+               "Spring Data would prefix an unparenthesized sort expression with the query alias");
+  }
+
+  /**
+   * The finding's exact case, executed on real rows instead of asserted on query
+   * text: a 1 MB file carrying 500 MB of version history must rank ABOVE a 100 MB
+   * file carrying none, because deleting it frees 501 MB. Ordering on
+   * {@code fileSize} — what this list did before — puts it second to last.
+   * <p>
+   * A PURGE_VERSIONS row is in the fixture on purpose, and it is the LARGEST file
+   * of the four: it reclaims its versions alone (2 MB), so it must rank last. The
+   * two rows tied at 100 MB pin the {@code id} tiebreaker, without which offset
+   * paging over a block of ties repeats rows and drops others.
+   */
+  @Test
+  void shouldRankItemsByWhatTheirOwnActionActuallyReclaims() {
+    long campaignId = 9001L;
+    try (EntityManager entityManager = executionSessionFactory.createEntityManager()) {
+      // Reclaimable: 501 MB, 100 MB, 100 MB (tie), 2 MB — file sizes: 1, 100, 0, 900
+      long smallFileHugeHistory = persist(entityManager, campaignId, "/a-small-huge-history", CleanupAction.DELETE, MB, 500 * MB);
+      long bigFileNoHistory = persist(entityManager, campaignId, "/b-big-no-history", CleanupAction.DELETE, 100 * MB, 0);
+      long emptyFileTiedHistory = persist(entityManager, campaignId, "/c-tied", CleanupAction.DELETE, 0, 100 * MB);
+      long hugeFilePurgedVersions =
+                                  persist(entityManager, campaignId, "/d-purge", CleanupAction.PURGE_VERSIONS, 900 * MB, 2 * MB);
+
+      assertEquals(List.of(smallFileHugeHistory, bigFileNoHistory, emptyFileTiedHistory, hugeFilePurgedVersions),
+                   reclaimableOrderedIds(entityManager, campaignId),
+                   "Rows must be ranked by what each action frees, ties broken on the id");
+    }
+  }
+
+  /**
+   * Finding B, from the aggregate side: a row whose sizes are ZERO must still be
+   * counted in — and contribute 0 to — the reclaimable sum. It is the readable
+   * half of what the NOT NULL constraint of changeset -11 protects: were such a
+   * column NULL, {@code NULL + n} would be NULL, {@code SUM} would SKIP the row
+   * and the campaign would under-report by that WHOLE row, not by its versions.
+   */
+  @Test
+  void shouldStillSumEveryRowWhenOneCarriesZeroSizes() {
+    long campaignId = 9002L;
+    try (EntityManager entityManager = executionSessionFactory.createEntityManager()) {
+      persist(entityManager, campaignId, "/zero", CleanupAction.DELETE, 0, 0);
+      persist(entityManager, campaignId, "/delete", CleanupAction.DELETE, MB, 2 * MB);
+      persist(entityManager, campaignId, "/purge", CleanupAction.PURGE_VERSIONS, 900 * MB, 4 * MB);
+
+      Object[] row = (Object[]) entityManager.createQuery("SELECT COUNT(i), COALESCE(SUM("
+          + CleanupCampaignItemDAO.RECLAIMABLE_BYTES + "), 0) FROM CleanupCampaignItem i WHERE i.campaignId = :campaignId")
+                                            .setParameter("campaignId", campaignId)
+                                            .getSingleResult();
+
+      assertEquals(3L, ((Number) row[0]).longValue(), "The zero-sized row must stay in the population");
+      assertEquals(3 * MB + 4 * MB, ((Number) row[1]).longValue(), "3 MB from the delete, 4 MB from the purge, 0 from the zero row");
+    }
+  }
+
+  /**
+   * The constraint itself, read from the changelog: the two columns the
+   * reclaimable expression ADDS must be NOT NULL with a zero backfill, added by a
+   * new changeset rather than by amending the table creation (-2), which a
+   * deployed platform has already applied. {@code columnDataType} is asserted
+   * because several databases require it to alter a column's nullability.
+   */
+  @Test
+  void shouldConstrainTheSummedSizeColumnsNotNullInTheChangelog() throws Exception {
+    NodeList constraints = changelog().getElementsByTagName("addNotNullConstraint");
+    Map<String, Element> byColumn = new java.util.HashMap<>();
+    for (int index = 0; index < constraints.getLength(); index++) {
+      Element constraint = (Element) constraints.item(index);
+      if (ITEM_TABLE.equals(constraint.getAttribute("tableName"))) {
+        byColumn.put(constraint.getAttribute("columnName"), constraint);
+      }
+    }
+    for (String column : List.of("FILE_SIZE", "VERSIONS_SIZE")) {
+      Element constraint = byColumn.get(column);
+      assertNotNull(constraint,
+                    column + " feeds the reclaimable arithmetic: a NULL there vanishes from every SUM, so it must be NOT NULL");
+      assertEquals("0", constraint.getAttribute("defaultNullValue"), column + ": existing NULLs must be backfilled with 0");
+      assertFalse(constraint.getAttribute("columnDataType").isBlank(),
+                  column + ": the column data type is required by some databases to alter nullability");
+    }
   }
 
   /**
@@ -274,7 +414,17 @@ class CleanupCampaignItemDAOTest {
   @Test
   void shouldKeepTheRestSortableFieldsResolvableOnTheItemEntity() throws ReflectiveOperationException {
     EntityType<CleanupCampaignItemEntity> itemEntity = sessionFactory.getMetamodel().entity(CleanupCampaignItemEntity.class);
+    assertTrue(restSortableItemFields().contains(CleanupConstants.RECLAIMABLE_SORT_KEY),
+               "The reclaimable ordering must stay an ASKABLE sort key, not only the default of one endpoint");
     for (String field : restSortableItemFields()) {
+      if (CleanupConstants.RECLAIMABLE_SORT_KEY.equals(field)) {
+        // The ONE key that is deliberately NOT a column: it names the reclaimable
+        // CASE expression, which the Storage turns into a query-level ORDER BY
+        // (pinned by CleanupCampaignStorageTest). Resolving it here would mean it
+        // had silently become a plain field again — and a plain field cannot rank
+        // a DELETE row by content PLUS versions
+        continue;
+      }
       try {
         itemEntity.getAttribute(field);
       } catch (IllegalArgumentException e) {
@@ -359,6 +509,57 @@ class CleanupCampaignItemDAOTest {
     Query query = CleanupCampaignItemDAO.class.getMethod(methodName, parameterTypes).getAnnotation(Query.class);
     assertNotNull(query, methodName + " must stay annotated @Query");
     return normalize(query.value());
+  }
+
+  /**
+   * Persists one candidate row and returns its generated id, which the ordering
+   * assertions use as the tiebreaker: rows are inserted in a deliberate order, so
+   * a tie must resolve to the one inserted FIRST.
+   */
+  private long persist(EntityManager entityManager,
+                       long campaignId,
+                       String path,
+                       CleanupAction action,
+                       long fileSize,
+                       long versionsSize) {
+    CleanupCampaignItemEntity item = new CleanupCampaignItemEntity();
+    item.setCampaignId(campaignId);
+    item.setNodeUuid("uuid" + campaignId + path);
+    item.setPath(path);
+    item.setOwnerIdentityId(1L);
+    item.setFileSize(fileSize);
+    item.setVersionsSize(versionsSize);
+    item.setAction(action.name());
+    item.setState(CleanupItemState.CANDIDATE.name());
+    entityManager.getTransaction().begin();
+    entityManager.persist(item);
+    entityManager.getTransaction().commit();
+    return item.getId();
+  }
+
+  /**
+   * The item ids of a campaign in the ORDER the database applies for the
+   * reclaimable ranking: the production ORDER BY key, followed by the {@code id}
+   * tiebreaker the REST layer appends to every non-unique ordering.
+   */
+  private List<Long> reclaimableOrderedIds(EntityManager entityManager, long campaignId) {
+    return entityManager.createQuery("SELECT i FROM CleanupCampaignItem i WHERE i.campaignId = :campaignId ORDER BY "
+        + CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY + " DESC, i.id ASC", CleanupCampaignItemEntity.class)
+                        .setParameter("campaignId", campaignId)
+                        .getResultList()
+                        .stream()
+                        .map(CleanupCampaignItemEntity::getId)
+                        .toList();
+  }
+
+  /** The cleanup changelog, parsed from the classpath resource the addon ships. */
+  private Document changelog() throws Exception {
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+    try (java.io.InputStream changelog = getClass().getClassLoader().getResourceAsStream(CHANGELOG_RESOURCE)) {
+      assertNotNull(changelog, CHANGELOG_RESOURCE + " must stay on the classpath");
+      return factory.newDocumentBuilder().parse(changelog);
+    }
   }
 
   /**
