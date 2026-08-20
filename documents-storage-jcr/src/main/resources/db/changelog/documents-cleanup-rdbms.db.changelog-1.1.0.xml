@@ -142,4 +142,50 @@
         </addColumn>
     </changeSet>
 
+    <!-- Partitions of the parallel dry-run scan: one row per subtree walked by one
+         reader thread, carrying its OWN state, path checkpoint and counters. A new
+         table, so strictly additive: a campaign scanned by the sequential worker
+         simply has no unit row, and gets re-planned into units on its next resume -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-8">
+        <createTable tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT">
+            <column name="ID" type="BIGINT" autoIncrement="${autoIncrement}" startWith="1">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="PK_DOCUMENTS_CLEANUP_SCAN_UNIT"/>
+            </column>
+            <column name="CAMPAIGN_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="UNIT_PATH" type="NVARCHAR(2000)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="STATE" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="LAST_SCANNED_PATH" type="NVARCHAR(2000)"/>
+            <column name="SCANNED_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="TOTAL_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="FAILURE_REASON" type="NVARCHAR(2000)"/>
+        </createTable>
+        <modifySql dbms="mysql">
+            <append value=" ENGINE=INNODB CHARSET=UTF8 COLLATE utf8_general_ci"/>
+        </modifySql>
+    </changeSet>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-9" dbms="hsqldb,oracle,postgresql">
+        <createSequence sequenceName="SEQ_DOCUMENTS_CLEANUP_SCAN_UNIT_ID" startValue="1"/>
+    </changeSet>
+
+    <!-- The unique constraint is what makes unit planning IDEMPOTENT when a scan
+         resumes, exactly as UK_DOC_CLEANUP_ITEM_NODE makes candidate saving
+         idempotent: a re-plan can never duplicate a unit nor reset the checkpoint
+         of a subtree already walked -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-10">
+        <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT" indexName="IDX_DOC_CLEANUP_SCAN_UNIT_STATE">
+            <column name="CAMPAIGN_ID"/>
+            <column name="STATE"/>
+        </createIndex>
+        <addUniqueConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT"
+                             columnNames="CAMPAIGN_ID, UNIT_PATH"
+                             constraintName="UK_DOC_CLEANUP_SCAN_UNIT_PATH"/>
+    </changeSet>
+
 </databaseChangeLog>

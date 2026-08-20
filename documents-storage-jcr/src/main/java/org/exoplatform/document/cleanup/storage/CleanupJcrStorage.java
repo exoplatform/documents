@@ -122,6 +122,54 @@ public class CleanupJcrStorage {
   private Session                       observationSession;
 
   /**
+   * Enumerates the PARTITIONS of a dry-run scan — the subtrees a reader thread
+   * each walks on its own — by applying the per-root policy of
+   * {@link CleanupConstants}: the direct children of a split root
+   * ({@link CleanupConstants#SPLIT_SCAN_ROOTS}) become units, an unsplit root
+   * ({@link CleanupConstants#UNSPLIT_SCAN_ROOTS}) is itself one unit. Depth 1
+   * only — read the SPLIT_SCAN_ROOTS comment on what a direct child of /Users
+   * really is before touching this.
+   * <p>
+   * A root that does not exist is SKIPPED without failing the scan (/Trash is
+   * legitimately absent on a fresh instance), and the paths come back sorted so
+   * that re-planning a resumed campaign is deterministic.
+   *
+   * @return the planned unit paths, sorted
+   * @throws IllegalStateException on a JCR failure, so the caller leaves the
+   *           campaign resumable instead of scanning a partial tree
+   */
+  public List<String> listScanUnits() {
+    Session session = null;
+    try {
+      session = getSystemSession();
+      List<String> unitPaths = new ArrayList<>();
+      for (String rootPath : CleanupConstants.SPLIT_SCAN_ROOTS) {
+        Node rootNode = getNodeByPathOrNull(session, rootPath);
+        if (rootNode == null) {
+          LOG.debug("Cleanup scan root {} does not exist, no scan unit planned for it", rootPath);
+          continue;
+        }
+        NodeIterator children = rootNode.getNodes();
+        while (children.hasNext()) {
+          unitPaths.add(children.nextNode().getPath());
+        }
+      }
+      for (String rootPath : CleanupConstants.UNSPLIT_SCAN_ROOTS) {
+        if (getNodeByPathOrNull(session, rootPath) == null) {
+          LOG.debug("Cleanup scan root {} does not exist, no scan unit planned for it", rootPath);
+        } else {
+          unitPaths.add(rootPath);
+        }
+      }
+      return unitPaths.stream().sorted().toList();
+    } catch (Exception e) {
+      throw new IllegalStateException("Error enumerating the cleanup scan units", e);
+    } finally {
+      logout(session);
+    }
+  }
+
+  /**
    * @param rootPath scanned tree root path (e.g. /Users or /Groups/spaces)
    * @return total number of nt:file nodes under the given root
    */
@@ -290,6 +338,19 @@ public class CleanupJcrStorage {
    * durably discard the user's keep decision, or record a file as vanished
    * while it is still there.
    */
+  /**
+   * Node lookup BY PATH tolerating a missing node (null), used only by the unit
+   * enumeration: a scan root absent from the workspace must skip its units, not
+   * fail the whole scan.
+   */
+  private Node getNodeByPathOrNull(Session session, String path) throws RepositoryException {
+    try {
+      return session.itemExists(path) ? (Node) session.getItem(path) : null;
+    } catch (PathNotFoundException | ItemNotFoundException e) {
+      return null;
+    }
+  }
+
   private Node getNodeByIdentifierOrNull(Session session, String nodeUuid) throws RepositoryException {
     try {
       return ((ExtendedSession) session).getNodeByIdentifier(nodeUuid);

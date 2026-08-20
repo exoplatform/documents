@@ -82,6 +82,7 @@ class CleanupSettingServiceTest {
     setField("defaultExcludedPaths", "");
     setField("batchSize", 200);
     setField("reportRetentionCampaigns", 3);
+    setField("scanThreads", 10);
   }
 
   @Test
@@ -103,6 +104,25 @@ class CleanupSettingServiceTest {
     assertEquals(List.of("/Users/root", "/Groups/spaces/admin"),
                  cleanupSettingService.getDefaultParams().getExcludedPaths(),
                  "The CSV property must be trimmed and blank entries dropped");
+  }
+
+  @Test
+  void getScanThreadsFallsBackToTheConservativeDefault() {
+    // Ten readers is the architect's call for PROD: the binding resource is
+    // repository load and workspace-cache eviction, not the connection pool
+    assertEquals(10, cleanupSettingService.getScanThreads());
+  }
+
+  @ParameterizedTest
+  @CsvSource({ "0, 1", "-4, 1", "1, 1", "10, 10", "20, 20", "21, 20", "500, 20" })
+  void getScanThreadsClampsAnOutOfRangeConfiguration(int configured, int expected) throws ReflectiveOperationException {
+    setField("scanThreads", configured);
+
+    // A typo in exo.properties must never be able to fan a background
+    // simulation out over the repository — nor to leave it with no reader
+    assertEquals(expected, cleanupSettingService.getScanThreads());
+    assertTrue(cleanupSettingService.getScanThreads() >= CleanupSettingService.MIN_SCAN_THREADS);
+    assertTrue(cleanupSettingService.getScanThreads() <= CleanupSettingService.MAX_SCAN_THREADS);
   }
 
   @SuppressWarnings({ "rawtypes", "unchecked" })

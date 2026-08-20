@@ -126,6 +126,10 @@ class CleanupJcrStorageTest {
 
   private static final String  USERS_PATH          = "/Users";                              // NOSONAR
 
+  private static final String  SPACES_ROOT_PATH    = "/Groups/spaces";                      // NOSONAR
+
+  private static final String  TRASH_ROOT_PATH     = "/Trash";                              // NOSONAR
+
   private static final String  PATH_A              = "/Users/j___/john/Private/a.pdf";      // NOSONAR
 
   private static final String  PATH_B              = "/Users/j___/john/Private/b.pdf";      // NOSONAR
@@ -1286,6 +1290,80 @@ class CleanupJcrStorageTest {
     when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(content);
     when(content.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
     when(content.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
+  }
+
+  @Test
+  void listScanUnitsSplitsTheSplitRootsByTheirDirectChildren() throws RepositoryException {
+    // /Users and /Groups/spaces are partitioned ONE level down: under the
+    // READABLE distribution those children are first-letter buckets, not homes
+    splitRoot(USERS_PATH, "/Users/j___", "/Users/m___");
+    splitRoot(SPACES_ROOT_PATH, "/Groups/spaces/marketing", "/Groups/spaces/sales");
+    unsplitRoot(TRASH_ROOT_PATH);
+
+    List<String> unitPaths = cleanupJcrStorage.listScanUnits();
+
+    assertEquals(List.of("/Groups/spaces/marketing", "/Groups/spaces/sales", TRASH_ROOT_PATH, "/Users/j___", "/Users/m___"),
+                 unitPaths,
+                 "The children of the split roots are the units, /Trash is ONE unit, and the order is stable (sorted)");
+    // ONE session for the whole enumeration, released when it is over
+    verify(repository).getSystemSession(CleanupJcrStorage.COLLABORATION);
+    verify(session).logout();
+  }
+
+  @Test
+  void listScanUnitsTakesTheTrashRootWholeNeverByItsChildren() throws RepositoryException {
+    splitRoot(USERS_PATH);
+    splitRoot(SPACES_ROOT_PATH);
+    Node trashNode = unsplitRoot(TRASH_ROOT_PATH);
+
+    List<String> unitPaths = cleanupJcrStorage.listScanUnits();
+
+    // A dedicated trash cleaner already exists on the platform: partitioning
+    // /Trash buys nothing, so its children are never even listed
+    assertEquals(List.of(TRASH_ROOT_PATH), unitPaths);
+    verify(trashNode, never()).getNodes();
+  }
+
+  @Test
+  void listScanUnitsSkipsAMissingRootWithoutFailingTheScan() throws RepositoryException {
+    splitRoot(USERS_PATH, "/Users/j___");
+    // /Groups/spaces and /Trash are absent — legitimate on a fresh instance
+    when(session.itemExists(SPACES_ROOT_PATH)).thenReturn(false);
+    when(session.itemExists(TRASH_ROOT_PATH)).thenReturn(false);
+
+    assertEquals(List.of("/Users/j___"), cleanupJcrStorage.listScanUnits());
+  }
+
+  @Test
+  void listScanUnitsPropagatesAJcrFailureToStayResumable() throws RepositoryException {
+    when(session.itemExists(anyString())).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
+
+    // Never a PARTIAL plan: half the tree enumerated would silently drop the
+    // other half out of the simulation
+    assertThrows(IllegalStateException.class, () -> cleanupJcrStorage.listScanUnits());
+    verify(session).logout();
+  }
+
+  private Node splitRoot(String rootPath, String... childPaths) throws RepositoryException {
+    Node rootNode = mock(Node.class);
+    when(session.itemExists(rootPath)).thenReturn(true);
+    when(session.getItem(rootPath)).thenReturn(rootNode);
+    Node[] children = new Node[childPaths.length];
+    for (int i = 0; i < childPaths.length; i++) {
+      children[i] = node(childPaths[i]);
+    }
+    // Built BEFORE the stubbing: nodeIterator() stubs its own mock, and Mockito
+    // rejects a stubbing nested inside another one's argument
+    NodeIterator childIterator = nodeIterator(children);
+    when(rootNode.getNodes()).thenReturn(childIterator);
+    return rootNode;
+  }
+
+  private Node unsplitRoot(String rootPath) throws RepositoryException {
+    Node rootNode = mock(Node.class);
+    when(session.itemExists(rootPath)).thenReturn(true);
+    org.mockito.Mockito.lenient().when(session.getItem(rootPath)).thenReturn(rootNode);
+    return rootNode;
   }
 
   private Node node(String path) throws RepositoryException {

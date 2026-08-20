@@ -35,6 +35,31 @@ public class CleanupConstants {
   /** Roots scanned (and watched) by cleanup campaigns. */
   public static final List<String> SCAN_ROOTS            = List.of(USERS_ROOT, SPACES_ROOT, TRASH_ROOT);
 
+  /**
+   * Scan roots whose DIRECT CHILDREN are the parallel scan units — depth 1, and
+   * deliberately not deeper.
+   * <p>
+   * NOTE what a direct child of /Users actually is: under eXo's {@code READABLE}
+   * data distribution ({@code depth = 4}, suffix {@code ___}) the children of
+   * /Users are FIRST-LETTER BUCKETS ({@code /Users/r___}), NOT user homes — a
+   * home sits at {@code /Users/r___/ro___/roo___/root}. So this yields ~26-40
+   * units of very UNEQUAL size, and the largest bucket alone bounds the
+   * wall-clock of the whole scan.
+   * <p>
+   * That imbalance is ACCEPTED, on purpose: enumeration stays a single
+   * one-level listing with no knowledge of the distribution's depth or suffix
+   * baked in, and the per-unit rows make the long tail measurable before anyone
+   * pays for a smarter split. Do NOT "improve" it by walking deeper.
+   */
+  public static final List<String> SPLIT_SCAN_ROOTS      = List.of(USERS_ROOT, SPACES_ROOT);
+
+  /**
+   * Scan roots taken WHOLE as a single unit, never partitioned: /Trash already
+   * has a dedicated trash cleaner on the platform, so splitting it buys nothing
+   * — it is scanned for the report only.
+   */
+  public static final List<String> UNSPLIT_SCAN_ROOTS    = List.of(TRASH_ROOT);
+
   /** Name of the user drive-root folder holding private documents. */
   public static final String       USER_PRIVATE_FOLDER   = "Private";
 
