@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,7 +66,7 @@ import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
-import org.exoplatform.document.cleanup.rest.model.RenameCampaignRestEntity;
+import org.exoplatform.document.cleanup.rest.model.UpdateCampaignRestEntity;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
 import org.exoplatform.social.core.manager.IdentityManager;
 
@@ -165,42 +166,87 @@ class CleanupCampaignRestTest {
   }
 
   @Test
-  void renameCampaignDelegatesTheBodyNameAndAnswersTheUpdatedDto() throws ObjectNotFoundException {
-    RenameCampaignRestEntity body = new RenameCampaignRestEntity();
+  void updateCampaignDelegatesBothBodyFieldsAndAnswersTheUpdatedDto() throws ObjectNotFoundException {
+    UpdateCampaignRestEntity body = new UpdateCampaignRestEntity();
     body.setName("  Renamed campaign  ");
-    when(campaignService.renameCampaign(eq(CAMPAIGN_ID), any())).thenReturn(campaign(CAMPAIGN_ID, "Renamed campaign"));
+    body.setGraceDays(21);
+    when(campaignService.updateCampaign(eq(CAMPAIGN_ID), any(), any())).thenReturn(campaign(CAMPAIGN_ID, "Renamed campaign"));
 
-    CampaignRestEntity renamed = campaignRest.renameCampaign(CAMPAIGN_ID, body);
+    CampaignRestEntity updated = campaignRest.updateCampaign(CAMPAIGN_ID, body);
 
     // The DTO the list and the header re-render from
-    assertEquals(CAMPAIGN_ID, renamed.getId());
-    assertEquals("Renamed campaign", renamed.getName());
-    // Passed through VERBATIM: trimming (and validating) the name is the
-    // Service's business, this layer carries none — see the service test pinning
-    // the trim before persisting
-    verify(campaignService).renameCampaign(CAMPAIGN_ID, "  Renamed campaign  ");
+    assertEquals(CAMPAIGN_ID, updated.getId());
+    assertEquals("Renamed campaign", updated.getName());
+    // Both fields passed through VERBATIM: trimming them, validating them and
+    // deciding which state may edit which is the Service's business, this layer
+    // carries none — see the service tests pinning the trim and the state guard
+    verify(campaignService).updateCampaign(CAMPAIGN_ID, "  Renamed campaign  ", 21);
+  }
+
+  /**
+   * A partial body reaches the Service as a partial one: an absent field stays
+   * NULL rather than being defaulted here, null being what means 'leave that
+   * attribute unchanged'. Zero is forwarded as zero — a MEANINGFUL grace period,
+   * not an absent one.
+   */
+  @Test
+  void updateCampaignForwardsAnAbsentFieldAsNullAndAZeroGraceAsZero() throws ObjectNotFoundException {
+    when(campaignService.updateCampaign(eq(CAMPAIGN_ID), any(), any())).thenReturn(campaign(CAMPAIGN_ID, "Q3 cleanup"));
+
+    UpdateCampaignRestEntity nameOnly = new UpdateCampaignRestEntity();
+    nameOnly.setName("Q4 cleanup");
+    campaignRest.updateCampaign(CAMPAIGN_ID, nameOnly);
+    verify(campaignService).updateCampaign(CAMPAIGN_ID, "Q4 cleanup", null);
+
+    UpdateCampaignRestEntity graceOnly = new UpdateCampaignRestEntity();
+    graceOnly.setGraceDays(0);
+    campaignRest.updateCampaign(CAMPAIGN_ID, graceOnly);
+    verify(campaignService).updateCampaign(CAMPAIGN_ID, null, 0);
   }
 
   @Test
-  void renameCampaignMapsNotFoundTo404() throws ObjectNotFoundException {
-    when(campaignService.renameCampaign(anyLong(), any())).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+  void updateCampaignMapsNotFoundTo404() throws ObjectNotFoundException {
+    when(campaignService.updateCampaign(anyLong(), any(), any())).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
 
     ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                                                     () -> campaignRest.renameCampaign(CAMPAIGN_ID,
-                                                                                       new RenameCampaignRestEntity()));
+                                                     () -> campaignRest.updateCampaign(CAMPAIGN_ID,
+                                                                                       new UpdateCampaignRestEntity()));
     assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
     assertEquals(NOT_FOUND_CODE, exception.getReason());
   }
 
   @Test
-  void renameCampaignMapsIllegalArgumentTo400WithTheMessageCode() throws ObjectNotFoundException {
-    when(campaignService.renameCampaign(anyLong(), any())).thenThrow(new IllegalArgumentException("cleanup.nameTooLong"));
+  void updateCampaignMapsIllegalArgumentTo400WithTheMessageCode() throws ObjectNotFoundException {
+    when(campaignService.updateCampaign(anyLong(), any(), any())).thenThrow(new IllegalArgumentException("cleanup.nameTooLong"));
 
     ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                                                     () -> campaignRest.renameCampaign(CAMPAIGN_ID,
-                                                                                       new RenameCampaignRestEntity()));
+                                                     () -> campaignRest.updateCampaign(CAMPAIGN_ID,
+                                                                                       new UpdateCampaignRestEntity()));
     assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
     assertEquals("cleanup.nameTooLong", exception.getReason());
+  }
+
+  /**
+   * Every message code the Service can refuse a patch with reaches the client as
+   * the 400 REASON: the console localizes it, so it must never be swallowed nor
+   * replaced by a generic sentence.
+   */
+  @Test
+  void updateCampaignCarriesEveryRefusalMessageCode() throws ObjectNotFoundException {
+    for (String messageCode : List.of("cleanup.nothingToUpdate",
+                                      "cleanup.nameMandatory",
+                                      "cleanup.invalidState",
+                                      "cleanup.invalidGraceDays")) {
+      // doThrow, not when/thenThrow: re-stubbing an already-throwing mock through
+      // when() would invoke it — and throw — while stubbing it
+      doThrow(new IllegalArgumentException(messageCode)).when(campaignService).updateCampaign(anyLong(), any(), any());
+
+      ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                       () -> campaignRest.updateCampaign(CAMPAIGN_ID,
+                                                                                         new UpdateCampaignRestEntity()));
+      assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+      assertEquals(messageCode, exception.getReason());
+    }
   }
 
   @Test

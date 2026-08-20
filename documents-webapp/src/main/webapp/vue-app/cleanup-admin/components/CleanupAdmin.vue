@@ -38,8 +38,10 @@
       </div>
       <document-cleanup-campaign-detail
         v-if="selectedCampaignId"
+        ref="campaignDetail"
         :campaign-id="selectedCampaignId"
         :campaigns="campaigns"
+        @edit="$refs.createDrawer.open($event)"
         @refresh="loadCampaigns"
         @closed="selectedCampaignId = null" />
       <document-cleanup-campaign-list
@@ -47,9 +49,15 @@
         :campaigns="campaigns"
         :loading="loading"
         @open="selectedCampaignId = $event.id" />
+      <!-- ONE drawer instance for both modes: the New campaign button opens it
+           empty, the campaign detail's Edit button opens it on a campaign
+           (open(campaign)). Hosted here rather than duplicated in the detail
+           view, so the name and the grace period are validated and reported in
+           exactly one place -->
       <document-cleanup-campaign-create-drawer
         ref="createDrawer"
-        @created="campaignCreated" />
+        @created="campaignCreated"
+        @updated="campaignUpdated" />
     </v-card>
   </v-app>
 </template>
@@ -118,6 +126,14 @@ export default {
     campaignCreated(campaign) {
       this.loadCampaigns()
         .then(() => this.selectedCampaignId = campaign?.id || null);
+    },
+    // The update endpoint answers the FULL updated campaign: applied straight
+    // onto the open detail — so its header, state chip and grace countdown
+    // re-sync from the response without a refetch — and the list is reloaded so
+    // the row re-renders too. The drawer already reported the outcome.
+    campaignUpdated(campaign) {
+      this.$refs.campaignDetail?.applyCampaign(campaign);
+      this.loadCampaigns();
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {

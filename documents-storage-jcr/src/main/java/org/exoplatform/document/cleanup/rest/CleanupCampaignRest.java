@@ -52,7 +52,7 @@ import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
-import org.exoplatform.document.cleanup.rest.model.RenameCampaignRestEntity;
+import org.exoplatform.document.cleanup.rest.model.UpdateCampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -165,32 +165,35 @@ public class CleanupCampaignRest {
   }
 
   /**
-   * PATCH on the campaign resource rather than a {@code {id}/rename}
-   * sub-resource: this updates an ATTRIBUTE of the campaign, it triggers no
-   * action and no lifecycle transition — unlike the {@code publish} /
-   * {@code execute} sub-resources next to it, which do. Answers the updated
-   * campaign so the console re-renders its list and its header from the
-   * response instead of refetching.
+   * PATCH on the campaign resource rather than an {@code {id}/rename} or
+   * {@code {id}/grace} sub-resource: this updates ATTRIBUTES of the campaign, it
+   * triggers no action and no lifecycle transition — unlike the {@code publish} /
+   * {@code execute} sub-resources next to it, which do. ONE endpoint for the
+   * whole editable set, each field applied only when the body carries it: a
+   * second endpoint per attribute would multiply round-trips for a form the
+   * console submits at once. Answers the updated campaign so the console
+   * re-renders its list and its header from the response instead of refetching.
    */
   @Secured("administrators")
   @PatchMapping(path = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "PATCH", summary = "Rename a cleanup campaign", description = "Rename a cleanup campaign, in any state — the name is pure metadata, so a completed or cancelled campaign can be relabelled too")
+  @Operation(method = "PATCH", summary = "Update a cleanup campaign", description = "Partially update the editable attributes of a cleanup campaign — its name and its grace period — each one applied only when the body carries it. The name is pure metadata and is editable in any state, a completed or cancelled campaign included; the grace period is state-guarded and only editable while the campaign is DRAFT, SIMULATED or PUBLISHED, and editing it on a PUBLISHED campaign moves its grace deadline")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
     @ApiResponse(responseCode = "404", description = "Not found"),
   })
-  public CampaignRestEntity renameCampaign(
+  public CampaignRestEntity updateCampaign(
                                            @Parameter(description = "Campaign identifier", required = true)
                                            @PathVariable("id")
                                            long id,
                                            @io.swagger.v3.oas.annotations.parameters.RequestBody
                                            @RequestBody
-                                           RenameCampaignRestEntity renameEntity) {
+                                           UpdateCampaignRestEntity updateEntity) {
     try {
-      // The name is passed through verbatim: trimming and validating it is the
-      // Service's business, this layer holds none
-      return CleanupEntityBuilder.build(campaignService.renameCampaign(id, renameEntity.getName()));
+      // Both fields are passed through verbatim: trimming them, validating them
+      // and deciding which state may edit which is the Service's business, this
+      // layer holds none
+      return CleanupEntityBuilder.build(campaignService.updateCampaign(id, updateEntity.getName(), updateEntity.getGraceDays()));
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalArgumentException e) {

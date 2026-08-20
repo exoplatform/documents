@@ -49,17 +49,28 @@ export function createCampaign(campaign) {
   }).then(handleJsonResponse);
 }
 
-// PATCH on the campaign resource, not a /rename sub-resource: it updates an
-// ATTRIBUTE, it triggers no action. Answers the updated campaign, which the
-// caller applies instead of refetching.
-export function renameCampaign(campaignId, name) {
+// PATCH on the campaign resource, not an /update or /rename sub-resource: it
+// updates ATTRIBUTES, it triggers no action. Answers the FULL updated campaign,
+// which the caller applies instead of refetching.
+//
+// PARTIAL update: 'updates' carries ONLY the attributes to change ({name},
+// {graceDays}, or both). An attribute that is absent (or null) is left
+// UNTOUCHED server-side, which is why the caller must not send the whole
+// campaign back: that would overwrite fields nobody edited. Sending neither is
+// refused with 'cleanup.nothingToUpdate', so the caller checks there is
+// something to send before calling.
+//
+// Careful with graceDays: 0 is a MEANINGFUL value (a zero grace period elapses
+// at publication), never 'empty' — a caller building 'updates' must test
+// against null/undefined, not falsiness, or a deliberate 0 is silently dropped.
+export function updateCampaign(campaignId, updates) {
   return fetch(`${BASE_URL}/campaigns/${campaignId}`, {
     method: 'PATCH',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({name}),
+    body: JSON.stringify(updates || {}),
   }).then(handleJsonResponse);
 }
 
@@ -161,7 +172,7 @@ export function unkeepItems(itemIds) {
 
 // Requeues the items a previous execution could not process, and answers the
 // full updated campaign (back to EXECUTING) — applied by the caller instead of
-// refetching, exactly like renameCampaign. NO body: WHICH failures are
+// refetching, exactly like updateCampaign. NO body: WHICH failures are
 // retryable is decided server-side, the client never selects them.
 export function retryCampaign(campaignId) {
   return fetch(`${BASE_URL}/campaigns/${campaignId}/retry`, {

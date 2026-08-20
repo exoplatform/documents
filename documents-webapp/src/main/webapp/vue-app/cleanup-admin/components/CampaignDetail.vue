@@ -18,53 +18,33 @@
 <template>
   <div v-if="campaign">
     <div class="d-flex align-center flex-wrap">
-      <!-- The name is pure metadata (no state transition, nothing keys off it),
-           so it is editable in ANY state — terminal ones included: relabelling
-           an already-completed report is a legitimate need. Inline field rather
-           than a drawer: it edits one attribute -->
-      <template v-if="renaming">
-        <v-text-field
-          ref="nameField"
-          v-model="editedName"
-          :disabled="renameInProgress"
-          :maxlength="nameMaxLength"
-          :aria-label="$t('cleanup.admin.campaign.name')"
-          class="pa-0 ma-0 flex-grow-0"
-          style="max-width: 320px"
-          dense
-          outlined
-          hide-details
-          @keyup.enter="saveName"
-          @keyup.esc="cancelRename" />
-        <v-btn
-          :aria-label="$t('cleanup.admin.campaign.renameSave')"
-          :loading="renameInProgress"
-          class="ms-1"
-          icon
-          small
-          @click="saveName">
-          <v-icon size="14">fas fa-check</v-icon>
-        </v-btn>
-        <v-btn
-          :aria-label="$t('cleanup.admin.campaign.renameCancel')"
-          :disabled="renameInProgress"
-          icon
-          small
-          @click="cancelRename">
-          <v-icon size="14">fas fa-times</v-icon>
-        </v-btn>
-      </template>
-      <template v-else>
-        <h5 class="my-0 text-color font-weight-bold">{{ campaign.name }}</h5>
-        <v-btn
-          :aria-label="$t('cleanup.admin.campaign.rename')"
-          class="ms-1"
-          icon
-          small
-          @click="startRename">
-          <v-icon size="14">fas fa-pencil-alt</v-icon>
-        </v-btn>
-      </template>
+      <h5 class="my-0 text-color font-weight-bold">{{ campaign.name }}</h5>
+      <!-- ONE edit path, the drawer — the name used to be renamed inline right
+           here as well, which meant two validations and two error surfaces for
+           the same attribute: exactly the divergence just fixed server-side,
+           where creation and update now share one validation. The name is pure
+           metadata (no state transition, nothing keys off it) so it stays
+           editable in ANY state, terminal ones included — relabelling an
+           already-completed report is a legitimate need; the grace period is
+           the field the drawer gates by state. The drawer itself is hosted ONCE
+           by CleanupAdmin (see the 'edit' event below), never a second copy -->
+      <v-tooltip bottom>
+        <template #activator="{on, attrs}">
+          <div
+            v-bind="attrs"
+            class="ms-1"
+            v-on="on">
+            <v-btn
+              :aria-label="$t('cleanup.admin.campaign.edit')"
+              icon
+              small
+              @click="edit">
+              <v-icon size="14">fas fa-pencil-alt</v-icon>
+            </v-btn>
+          </div>
+        </template>
+        <span>{{ $t('cleanup.admin.campaign.editTooltip') }}</span>
+      </v-tooltip>
       <v-chip
         :color="$cleanupUtils.campaignStateColor(campaign.state)"
         :outlined="!$cleanupUtils.isLoudState(campaign.state)"
@@ -205,10 +185,6 @@ const DATE_FIELDS = ['startedDate', 'publishedDate', 'lockDate', 'completedDate'
 // Generic sentence shown when the code an endpoint answered carries no bundle
 // entry of its own: never leak a raw code (or a raw Spring body) in a toast
 const UNEXPECTED_ERROR_KEY = 'cleanup.admin.campaign.unexpectedError';
-// Mirrors CleanupCampaignService.MAX_NAME_LENGTH, itself mirroring the NAME
-// column (NVARCHAR(250)): the field is capped client-side so the admin cannot
-// type a name the server would only refuse on submit
-const NAME_MAX_LENGTH = 250;
 
 export default {
   props: {
@@ -225,9 +201,6 @@ export default {
     return {
       campaign: null,
       actionInProgress: false,
-      renaming: false,
-      renameInProgress: false,
-      editedName: '',
       // Grace time left as computed BY THE SERVER at the last load, plus the local
       // instant it was received at. Only the DIFFERENCE of two local clock reads
       // is ever used (see 'remaining'), never a comparison against a server
@@ -253,9 +226,6 @@ export default {
   computed: {
     dateFields() {
       return DATE_FIELDS;
-    },
-    nameMaxLength() {
-      return NAME_MAX_LENGTH;
     },
     cancelable() {
       return this.campaign && !['COMPLETED', 'CANCELLED'].includes(this.campaign.state);
@@ -460,51 +430,12 @@ export default {
         this.loadCampaign().then(() => this.$emit('refresh'));
       }
     },
-    startRename() {
-      this.editedName = this.campaign?.name || '';
-      this.renaming = true;
-      // Focused on the next tick: the field is only rendered once 'renaming' is
-      // applied
-      this.$nextTick(() => this.$refs.nameField?.focus());
-    },
-    cancelRename() {
-      this.renaming = false;
-      this.editedName = '';
-    },
-    // An empty name is refused HERE too, not only through the 400 the server
-    // answers: the round trip would report the very same message code for a
-    // mistake the field can tell on the spot. Every other failure (including the
-    // too-long name, which the maxlength cap already prevents) leaves the field
-    // OPEN so the admin can correct it instead of losing what they typed.
-    saveName() {
-      if (this.renameInProgress) {
-        return;
-      }
-      const name = this.editedName?.trim();
-      if (!name) {
-        this.renameFailed('cleanup.nameMandatory');
-        return;
-      }
-      this.renameInProgress = true;
-      return this.$cleanupService.renameCampaign(this.campaignId, name)
-        .then(campaign => {
-          // The endpoint answers the updated campaign: applied directly, so the
-          // header and the list re-render without a refetch
-          this.applyCampaign(campaign);
-          this.renaming = false;
-          this.editedName = '';
-          this.displayAlert(this.$t('cleanup.admin.campaign.renameSuccess'));
-          this.$emit('refresh');
-        })
-        .catch(error => this.renameFailed(error))
-        .finally(() => this.renameInProgress = false);
-    },
-    // Same localization discipline as callAction: the REST layer answers a
-    // MESSAGE CODE as the error body, localized through the shared
-    // $cleanupErrorLabel and never dropped raw in the toast
-    renameFailed(codeOrError) {
-      const reason = this.$cleanupErrorLabel(codeOrError, UNEXPECTED_ERROR_KEY);
-      this.displayAlert(this.$t('cleanup.admin.campaign.renameError', {0: reason}), 'error');
+    // Asks CleanupAdmin, which hosts the ONE create/edit drawer instance, to
+    // open it on this campaign. The updated campaign it answers comes back
+    // through applyCampaign, so the header, the state chip and the grace
+    // countdown all re-sync from the response — the drawer owns the toasts.
+    edit() {
+      this.$emit('edit', this.campaign);
     },
     publish() {
       this.callAction(this.$cleanupService.publishCampaign(this.campaignId), 'publish');

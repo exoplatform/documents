@@ -123,6 +123,29 @@ public class CleanupCampaignService {
                                                                                        "cleanup.purgeVersionsError");
 
   /**
+   * States in which the GRACE PERIOD of a campaign may still be edited. The
+   * grace period is the ONE parameter that is not a candidacy criterion — it is
+   * read in a single place, to derive the lock date from the publication date —
+   * so editing it can never invalidate the dry-run the administrator is
+   * reviewing, and the guard is deliberately narrower than 'any state' rather
+   * than absent.
+   * <p>
+   * LOCKED is REJECTED on purpose: extending the grace of a locked campaign
+   * would mean going back to PUBLISHED, an edge that does NOT exist in
+   * {@code CleanupCampaignLifecycle.ALLOWED_TRANSITIONS} — and exiting PUBLISHED
+   * unregisters the freshness observation listener, so a reverse edge would have
+   * to re-register it. Out of scope; do NOT 'fix' this casually. EXECUTING,
+   * COMPLETED and CANCELLED are rejected because the grace period is MEANINGLESS
+   * once the purge ran.
+   * <p>
+   * Public because the tests and any future caller must share this rule rather
+   * than restate it.
+   */
+  public static final Set<CleanupCampaignState>   GRACE_EDITABLE_STATES       = Set.of(CleanupCampaignState.DRAFT,
+                                                                                       CleanupCampaignState.SIMULATED,
+                                                                                       CleanupCampaignState.PUBLISHED);
+
+  /**
    * Attempts an item may spend, retries included. Bounds the whole retry
    * mechanism: past it, a failure has proved itself deterministic whatever its
    * code says, and an administrator re-clicking Retry must not be able to loop on
@@ -322,30 +345,102 @@ public class CleanupCampaignService {
   }
 
   /**
-   * Renames a campaign, in ANY state — terminal ones included. The name is pure
-   * METADATA: nothing keys off it and no lifecycle transition is involved, so
-   * correcting the label of an already-completed report is a legitimate need and
-   * there is no state guard here. Names are not unique (creation doesn't check
-   * either), so no uniqueness constraint is enforced.
+   * PARTIAL update of a campaign's editable attributes: its name, its grace
+   * period, or both. A null argument means 'leave that attribute unchanged', so
+   * the two fields are strictly independent — and their guards are per FIELD,
+   * not per request.
    * <p>
-   * The name goes through the very SAME validation as the creation path
-   * ({@link #validateName(String)}): the two cannot diverge, and neither can let
-   * a name longer than the NAME column reach the database.
+   * The NAME is editable in ANY state, terminal ones included: it is pure
+   * METADATA, nothing keys off it and no lifecycle transition is involved, so
+   * correcting the label of an already-completed report is a legitimate need.
+   * Names are not unique (creation doesn't check either), so no uniqueness
+   * constraint is enforced. It goes through the very SAME validation as the
+   * creation path ({@link #validateName(String)}): the two cannot diverge, and
+   * neither can let a name longer than the NAME column reach the database.
+   * <p>
+   * The GRACE PERIOD is state-guarded ({@link #GRACE_EDITABLE_STATES}) and
+   * validated by the very same bound check as the creation path
+   * ({@link #validateGraceDays(Integer)}), so the two cannot diverge either —
+   * ZERO stays valid on both. Editing it can never invalidate the dry-run the
+   * administrator is reviewing: it is NOT a candidacy criterion, the scan
+   * selecting on the period, the minimum file size and the excluded paths alone.
+   * <p>
+   * On a PUBLISHED campaign — and ONLY there — the lock date is recomputed from
+   * the PUBLICATION date, never from now: anchoring on now would slide the
+   * deadline forward on every save, so saving the same value twice would push it
+   * out twice. Everything downstream reads the lock date (the end users'
+   * remaining time included, through their summary's deadline), so that one
+   * field propagates the new deadline with NO second code path.
+   * <p>
+   * A recomputed deadline landing in the PAST is allowed and is not an error: it
+   * closes the review window immediately ({@code cleanup.reviewClosed}) and the
+   * grace-deadline cron locks the campaign at its next tick — exactly what
+   * already happens with a zero grace period, tolerated for up to the cron
+   * period (see {@link #checkReviewWindowOpen(CleanupCampaign)}). This method
+   * deliberately performs NO transition of its own: the single PUBLISHED to
+   * LOCKED authority stays {@link #lockExpiredPublishedCampaign()} and the
+   * manual execution trigger.
    *
    * @param campaignId campaign identifier
-   * @param name new campaign name, mandatory — trimmed before being persisted
-   * @return the renamed campaign, with its item aggregates
+   * @param name new campaign name, null to leave it unchanged — trimmed before
+   *          being persisted
+   * @param graceDays new grace period in days, null to leave it unchanged — 0 is
+   *          a MEANINGFUL value, not an absent one
+   * @return the updated campaign, with its item aggregates
    * @throws ObjectNotFoundException "cleanup.campaignNotFound" when the campaign
    *           doesn't exist
-   * @throws IllegalArgumentException "cleanup.nameMandatory" when blank,
-   *           "cleanup.nameTooLong" past {@link #MAX_NAME_LENGTH} characters
+   * @throws IllegalArgumentException "cleanup.nothingToUpdate" when both
+   *           arguments are null, "cleanup.nameMandatory" when the name is
+   *           blank, "cleanup.nameTooLong" past {@link #MAX_NAME_LENGTH}
+   *           characters, "cleanup.invalidState" when the grace period is edited
+   *           outside {@link #GRACE_EDITABLE_STATES},
+   *           "cleanup.invalidGraceDays" when it is negative
    */
-  public CleanupCampaign renameCampaign(long campaignId, String name) throws ObjectNotFoundException {
+  public CleanupCampaign updateCampaign(long campaignId, String name, Integer graceDays) throws ObjectNotFoundException {
     // Existence first, validation second: the REST contract answers 404 before
     // 400, exactly like every sibling method here
     CleanupCampaign campaign = getCampaign(campaignId);
-    campaign.setName(validateName(name));
+    if (name == null && graceDays == null) {
+      // Never silently no-op: the console must be able to say WHY nothing
+      // happened
+      throw new IllegalArgumentException("cleanup.nothingToUpdate");
+    }
+    if (name != null) {
+      campaign.setName(validateName(name));
+    }
+    if (graceDays != null) {
+      applyGraceDays(campaign, graceDays);
+    }
     return withAggregates(campaignStorage.saveCampaign(campaign));
+  }
+
+  /**
+   * Writes a new grace period into a campaign's snapshotted parameters, and
+   * REDERIVES the lock date from it while the campaign is PUBLISHED — the very
+   * same {@code publishedDate + graceDays} formula
+   * {@link #publishCampaign(long)} establishes, so the invariant holds whether
+   * the value was set at publication or edited afterwards. Before publication
+   * there is no deadline to recompute yet: the lock date is left ALONE, and
+   * publication will derive it from the edited value on its own.
+   */
+  private void applyGraceDays(CleanupCampaign campaign, Integer graceDays) {
+    if (!GRACE_EDITABLE_STATES.contains(campaign.getState())) {
+      throw new IllegalArgumentException("cleanup.invalidState");
+    }
+    validateGraceDays(graceDays);
+    CleanupParams params = campaign.getParams();
+    if (params == null) {
+      // Defensive only: the Storage always maps a params object, whatever the
+      // state. An in-memory campaign that never went through the Storage could
+      // still carry none, and losing the edit silently would be worse than
+      // creating the holder here
+      params = new CleanupParams();
+      campaign.setParams(params);
+    }
+    params.setGraceDays(graceDays);
+    if (campaign.getState() == CleanupCampaignState.PUBLISHED) {
+      campaign.setLockDate(campaign.getPublishedDate() + TimeUnit.DAYS.toMillis(graceDays));
+    }
   }
 
   /**
@@ -1130,7 +1225,7 @@ public class CleanupCampaignService {
   }
 
   /**
-   * The ONE campaign-name validation, shared by the creation and the rename
+   * The ONE campaign-name validation, shared by the creation and the update
    * paths so they can never diverge: mandatory, and no longer than the NAME
    * column (see {@link #MAX_NAME_LENGTH}). The trimmed name is RETURNED rather
    * than validated in place — surrounding whitespace must not be persisted, and
@@ -1166,11 +1261,26 @@ public class CleanupCampaignService {
     if (params.getMinFileSizeBytes() == null || params.getMinFileSizeBytes() < 0) {
       throw new IllegalArgumentException("cleanup.invalidMinFileSize");
     }
-    if (params.getGraceDays() == null || params.getGraceDays() < 0) {
-      throw new IllegalArgumentException("cleanup.invalidGraceDays");
-    }
+    validateGraceDays(params.getGraceDays());
     if (params.getMaxVersionsPerFile() == null || params.getMaxVersionsPerFile() < 1) {
       throw new IllegalArgumentException("cleanup.invalidMaxVersionsPerFile");
+    }
+  }
+
+  /**
+   * The ONE grace-period bound check, shared by the creation path (through
+   * {@link #validateParams(CleanupParams)}) and the update path so they can
+   * never diverge — the same discipline {@link #validateName(String)} already
+   * applies to the name. ZERO IS VALID: the grace deadline then elapses at
+   * publication.
+   *
+   * @param graceDays grace period in days
+   * @throws IllegalArgumentException "cleanup.invalidGraceDays" when unset or
+   *           negative
+   */
+  private void validateGraceDays(Integer graceDays) {
+    if (graceDays == null || graceDays < 0) {
+      throw new IllegalArgumentException("cleanup.invalidGraceDays");
     }
   }
 
