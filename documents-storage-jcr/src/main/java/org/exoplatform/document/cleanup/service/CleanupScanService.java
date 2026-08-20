@@ -840,7 +840,23 @@ public class CleanupScanService {
         if (!interrupted) {
           readerPool.shutdownNow();
           interrupted = true;
+          // ONE grace slice, so the ordinary cancel — every reader parked in
+          // post(), which answers false the moment the run is stopped — still
+          // ends tidily with its threads gone
+          continue;
         }
+        // BOUNDED, and it has to be: an interrupt does nothing to a
+        // query.execute() in flight or to a long resume fast-forward, which is
+        // the very reader isWriterWedged exists to protect. Waiting for it here
+        // would hold the single-thread coordinator for as long as that walk
+        // takes, with the campaign id still held — so every later scan of every
+        // campaign would queue behind a cancelled one. Abandoning it is exactly
+        // as safe as the class javadoc argues: a daemon thread, no storage call
+        // but scanRoot, and post() already refuses it the queue
+        LOG.warn("The readers of the cleanup campaign {} scan did not all stop within {} ms of their interrupt: they are"
+            + " abandoned rather than waited for, the campaign stays DRY_RUN_RUNNING and the watchdog re-launches it from"
+            + " the unit checkpoints.", run.campaignId, READERS_AWAIT_MILLIS);
+        return;
       } else if (!writerThread.isAlive()) {
         // PRIMARY signal, and it is a fact and not a presumption: the only
         // consumer of the queue is gone, so the readers can only block on it

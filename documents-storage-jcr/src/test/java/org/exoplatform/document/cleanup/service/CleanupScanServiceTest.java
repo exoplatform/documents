@@ -1039,6 +1039,59 @@ class CleanupScanServiceTest {
   }
 
   @Test
+  void aCANCELLEDRunWhoseReaderIGNORESItsInterruptStillReleasesTheCoordinator() throws InterruptedException,
+                                                                              ReflectiveOperationException {
+    // The case the duration cap used to cover by accident. An admin cancels
+    // mid-scan, shutdownNow() interrupts the readers — and an interrupt does
+    // NOTHING to a query.execute() in flight or to a long resume fast-forward,
+    // which is the very reader isWriterWedged exists to protect. The inactivity
+    // bound cannot help either: it is left at a value no test can reach, and it
+    // only fires over a NON-EMPTY queue, while here the writer has already
+    // returned on the abort. So the stopped branch must bound itself
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
+    unitAggregates(100L, 0L, 0L);
+    unitOutcomes(1L, 0L, 0L);
+    doAnswer(invocation -> {
+      campaign.setState(CleanupCampaignState.CANCELLED);
+      return null;
+    }).when(webSocketService).sendToAdministrators(any());
+    AtomicInteger sliceCount = new AtomicInteger();
+    doAnswer(invocation -> {
+      ScanBatchConsumer batchConsumer = invocation.getArgument(4);
+      batchConsumer.onBatch(List.of(candidate("uuid-uncooperative", PATH_A)), PATH_A, 1);
+      // Uncooperative ON PURPOSE: it swallows the interrupt instead of honouring
+      // it, exactly as a JCR call in flight does. BOUNDED all the same, so a
+      // regression fails on the join below rather than hanging the build
+      while (sliceCount.incrementAndGet() < READER_MAX_LOOPS) {
+        try {
+          Thread.sleep(AWAIT_TIMEOUT_MS / READER_MAX_LOOPS);
+        } catch (InterruptedException e) { // NOSONAR the whole point of this reader
+          // swallowed, and the interrupt status deliberately NOT restored
+        }
+      }
+      return null;
+    }).when(cleanupJcrStorage).scanRoot(eq(USERS_UNIT), isNull(), anyInt(), any(), any());
+
+    Thread coordinator = coordinatorThread();
+    coordinator.start();
+    coordinator.join(AWAIT_TIMEOUT_MS);
+
+    // Waiting for that reader would hold the SINGLE-THREAD coordinator for as
+    // long as its walk takes, with the campaign id still held — so every later
+    // scan of every campaign would queue behind a campaign that was cancelled
+    assertFalse(coordinator.isAlive(), "A reader ignoring its interrupt MUST NOT hold the coordinator on a cancelled run");
+    assertTrue(sliceCount.get() < READER_MAX_LOOPS,
+               "The coordinator must return while that reader is still running, it reached slice " + sliceCount.get());
+    assertTrue(runningCampaigns().isEmpty(), "The campaign id must be released so the watchdog can relaunch the worker");
+    // Abandoned, never declared done: nothing terminal is recorded for a cancelled
+    // campaign, and the unit keeps its checkpoint for the next run
+    verify(scanUnitStorage, never()).updateUnitState(anyLong(), eq(CleanupScanUnitState.DONE));
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+  }
+
+  @Test
   void abortMidRunStopsEveryReaderAndSkipsTheSimulation() {
     planned(USERS_UNIT);
     unitsToProcess(unit(1L, USERS_UNIT));
