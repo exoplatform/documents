@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * Copyright (C) 2026 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ *
+-->
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">
+
+    <!-- Managing both DB that use sequences and db that use auto increment -->
+    <property name="autoIncrement" value="true" dbms="mysql,mssql,h2,sybase,db2,hsqldb"/>
+    <property name="autoIncrement" value="false" dbms="oracle,postgresql"/>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-0">
+        <createTable tableName="DOCUMENTS_CLEANUP_CAMPAIGN">
+            <column name="ID" type="BIGINT" autoIncrement="${autoIncrement}" startWith="1">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="PK_DOCUMENTS_CLEANUP_CAMPAIGN"/>
+            </column>
+            <column name="NAME" type="NVARCHAR(250)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="STATE" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="PERIOD_MONTHS" type="INT"/>
+            <column name="MIN_FILE_SIZE_BYTES" type="BIGINT"/>
+            <column name="GRACE_DAYS" type="INT"/>
+            <column name="MAX_VERSIONS_PER_FILE" type="INT"/>
+            <column name="EXCLUDED_PATHS" type="NVARCHAR(4000)"/>
+            <column name="STARTED_DATE" type="TIMESTAMP"/>
+            <column name="PUBLISHED_DATE" type="TIMESTAMP"/>
+            <column name="LOCK_DATE" type="TIMESTAMP"/>
+            <column name="COMPLETED_DATE" type="TIMESTAMP"/>
+            <column name="TOTAL_COUNT" type="BIGINT"/>
+            <column name="PROCESSED_COUNT" type="BIGINT"/>
+            <column name="ETA_SECONDS" type="BIGINT"/>
+            <column name="CHECKPOINT_OFFSET" type="BIGINT"/>
+            <column name="CHECKPOINT_PATH" type="NVARCHAR(2000)"/>
+            <column name="SUMMARY_JSON" type="NVARCHAR(4000)"/>
+            <column name="ARCHIVE_FILE_ID" type="BIGINT"/>
+        </createTable>
+        <modifySql dbms="mysql">
+            <append value=" ENGINE=INNODB CHARSET=UTF8 COLLATE utf8_general_ci"/>
+        </modifySql>
+    </changeSet>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-1" dbms="hsqldb,oracle,postgresql">
+        <createSequence sequenceName="SEQ_DOCUMENTS_CLEANUP_CAMPAIGN_ID" startValue="1"/>
+    </changeSet>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-2">
+        <createTable tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM">
+            <column name="ID" type="BIGINT" autoIncrement="${autoIncrement}" startWith="1">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="PK_DOCUMENTS_CLEANUP_ITEM"/>
+            </column>
+            <column name="CAMPAIGN_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="NODE_UUID" type="NVARCHAR(250)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="PATH" type="NVARCHAR(2000)"/>
+            <column name="OWNER_IDENTITY_ID" type="BIGINT"/>
+            <column name="FILE_SIZE" type="BIGINT"/>
+            <column name="VERSIONS_SIZE" type="BIGINT"/>
+            <column name="ACTION" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="STATE" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="COMPUTED_AT" type="TIMESTAMP"/>
+            <column name="DECIDED_BY" type="NVARCHAR(250)"/>
+            <column name="DECIDED_AT" type="TIMESTAMP"/>
+            <column name="PURGED_AT" type="TIMESTAMP"/>
+            <column name="RECLAIMED_BYTES" type="BIGINT"/>
+            <column name="FAILURE_REASON" type="NVARCHAR(2000)"/>
+        </createTable>
+        <modifySql dbms="mysql">
+            <append value=" ENGINE=INNODB CHARSET=UTF8 COLLATE utf8_general_ci"/>
+        </modifySql>
+    </changeSet>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-3" dbms="hsqldb,oracle,postgresql">
+        <createSequence sequenceName="SEQ_DOCUMENTS_CLEANUP_CAMPAIGN_ITEM_ID" startValue="1"/>
+    </changeSet>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-4">
+        <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_CAMPAIGN">
+            <column name="CAMPAIGN_ID"/>
+        </createIndex>
+        <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_OWNER">
+            <column name="CAMPAIGN_ID"/>
+            <column name="OWNER_IDENTITY_ID"/>
+        </createIndex>
+        <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_STATE">
+            <column name="CAMPAIGN_ID"/>
+            <column name="STATE"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-5">
+        <addUniqueConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                             columnNames="CAMPAIGN_ID, NODE_UUID"
+                             constraintName="UK_DOC_CLEANUP_ITEM_NODE"/>
+    </changeSet>
+
+</databaseChangeLog>

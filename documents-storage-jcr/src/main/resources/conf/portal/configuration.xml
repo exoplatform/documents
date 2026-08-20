@@ -68,6 +68,7 @@
           <name>autoCreatedInNewRepository</name>
           <description>Documents node types</description>
           <value>jar:/conf/documents-nodetypes.xml</value>
+          <value>jar:/conf/documents-cleanup-nodetypes.xml</value>
         </values-param>
       </init-params>
     </component-plugin>

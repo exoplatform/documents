@@ -54,6 +54,8 @@ module.exports = {
     documentGadget: './src/main/webapp/vue-app/document-gadget/main.js',
     filesSearch: './src/main/webapp/vue-app/files-search/main.js',
     restrictedDrive: './src/main/webapp/vue-app/restricted-drive/main.js',
+    documentCleanupAdmin: './src/main/webapp/vue-app/cleanup-admin/main.js',
+    documentCleanupUserReview: './src/main/webapp/vue-app/cleanup-user-review/main.js',
   },
   output: {
     path: path.join(__dirname, 'target/documents-portlet/'),
