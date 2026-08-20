@@ -18,14 +18,17 @@ package org.exoplatform.document.cleanup.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,10 +37,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -54,6 +60,7 @@ import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
+import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupPurgeResult;
@@ -64,6 +71,7 @@ import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 
 import io.meeds.common.ContainerTransactional;
+import io.meeds.social.util.JsonUtils;
 
 /**
  * Execution worker tests. Like the scan ones, they drive the worker body
@@ -91,6 +99,8 @@ class CleanupExecutionServiceTest {
   private static final String      NODE_UUID_GONE          = "uuid-gone";
 
   private static final long        CAMPAIGN_ID             = 1L;
+
+  private static final String      JCR_ERROR_MESSAGE       = "JCR repository unreachable";
 
   private static final long        CANDIDATE_FILE_SIZE     = 2097152L;
 
@@ -132,6 +142,13 @@ class CleanupExecutionServiceTest {
     Field executorField = CleanupExecutionService.class.getDeclaredField("executorService");
     executorField.setAccessible(true); // NOSONAR test wiring
     executorField.set(executionService, workerExecutor); // NOSONAR
+    // The worker commits each batch through RequestLifeCycle.restartTransaction(),
+    // which resolves the CURRENT CONTAINER: in a plain JUnit run there is none,
+    // and asking for it would boot a RootContainer. The production path keeps the
+    // single static call; the test neutralizes it on a spy — lenient, since the
+    // tests that never reach a batch boundary never call it
+    executionService = spy(executionService);
+    lenient().doNothing().when(executionService).restartTransaction();
   }
 
   @Test
@@ -187,15 +204,15 @@ class CleanupExecutionServiceTest {
     CleanupCampaignItem deletedItem = item(15L, NODE_UUID_DELETED, CleanupAction.DELETE);
     CleanupCampaignItem purgedVersionsItem = item(16L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
 
-    Page<CleanupCampaignItem> batch = new PageImpl<>(List.of(goneItem,
-                                                             exemptedItem,
-                                                             sparedItem,
-                                                             skippedItem,
-                                                             deletedItem,
-                                                             purgedVersionsItem));
-    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
-                                                                                                 .thenReturn(batch)
-                                                                                                 .thenReturn(new PageImpl<>(List.of()));
+    List<CleanupCampaignItem> batch = List.of(goneItem,
+                                                  exemptedItem,
+                                                  sparedItem,
+                                                  skippedItem,
+                                                  deletedItem,
+                                                  purgedVersionsItem);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(batch)
+                                                .thenReturn(List.of());
 
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_GONE), any())).thenReturn(CleanupRevalidation.gone());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_EXEMPTED), any())).thenReturn(CleanupRevalidation.exempted());
@@ -209,9 +226,9 @@ class CleanupExecutionServiceTest {
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
                                                                      .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_VERSIONS,
                                                                                                                   CleanupAction.PURGE_VERSIONS)));
-    when(cleanupJcrStorage.deleteNode(NODE_UUID_SKIPPED)).thenReturn(CleanupPurgeResult.skipped("cleanup.referentialIntegrity: referenced"));
+    when(cleanupJcrStorage.deleteNode(NODE_UUID_SKIPPED)).thenReturn(CleanupPurgeResult.skipped("cleanup.referentialIntegrity", "javax.jcr.ReferentialIntegrityException: referenced"));
     when(cleanupJcrStorage.deleteNode(NODE_UUID_DELETED)).thenReturn(CleanupPurgeResult.purged(100L));
-    when(cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONS, 5)).thenReturn(CleanupPurgeResult.purged(50L));
+    when(cleanupJcrStorage.purgeVersions(eq(NODE_UUID_VERSIONS), any())).thenReturn(CleanupPurgeResult.purged(50L));
 
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -254,14 +271,42 @@ class CleanupExecutionServiceTest {
   }
 
   @Test
+  void shouldCarryTheIncompleteScanVerdictForwardIntoTheCompletionSnapshot() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    // The verdict the DRY RUN left on this very column at SIMULATED: two subtrees
+    // it could never walk, so the report was never a complete picture
+    CleanupCampaignSummary scanSummary = new CleanupCampaignSummary();
+    scanSummary.setScanIncomplete(true);
+    scanSummary.setFailedScanUnitCount(2);
+    campaign.setSummaryJson(JsonUtils.toJsonString(scanSummary));
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of());
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    ArgumentCaptor<CleanupCampaign> campaignCaptor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage).saveCampaign(campaignCaptor.capture());
+    CleanupCampaignSummary saved = JsonUtils.fromJsonString(campaignCaptor.getValue().getSummaryJson(),
+                                                            CleanupCampaignSummary.class);
+    // Completion OVERWRITES this one column with the purge aggregates: rebuilding
+    // it from scratch is what would quietly erase the fact that the report the
+    // purge just ran from did not cover the whole tree
+    assertTrue(saved.isScanIncomplete(), "The dry run's incomplete verdict must survive the completion snapshot");
+    assertEquals(2, saved.getFailedScanUnitCount());
+  }
+
+  @Test
   void shouldSkipItemWhenRevalidationOutcomeIsUnknown() {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getBatchSize()).thenReturn(200);
     CleanupCampaignItem unknownItem = item(17L, "uuid-unknown", CleanupAction.DELETE);
-    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
-                                                                                                 .thenReturn(new PageImpl<>(List.of(unknownItem)))
-                                                                                                 .thenReturn(new PageImpl<>(List.of()));
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(unknownItem))
+                                                .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq("uuid-unknown"), any())).thenReturn(CleanupRevalidation.unknown());
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -274,7 +319,7 @@ class CleanupExecutionServiceTest {
     assertEquals(CleanupItemState.SKIPPED, unknownItem.getState());
     assertEquals("cleanup.revalidationFailed", unknownItem.getFailureReason());
     verify(cleanupJcrStorage, org.mockito.Mockito.never()).deleteNode(any());
-    verify(cleanupJcrStorage, org.mockito.Mockito.never()).purgeVersions(any(), org.mockito.ArgumentMatchers.anyInt());
+    verify(cleanupJcrStorage, org.mockito.Mockito.never()).purgeVersions(any(), any());
   }
 
   @Test
@@ -287,14 +332,15 @@ class CleanupExecutionServiceTest {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getBatchSize()).thenReturn(200);
     CleanupCampaignItem partialItem = item(18L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
-    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
-                                                                                                 .thenReturn(new PageImpl<>(List.of(partialItem)))
-                                                                                                 .thenReturn(new PageImpl<>(List.of()));
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(partialItem))
+                                                .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
                                                                      .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_VERSIONS,
                                                                                                                   CleanupAction.PURGE_VERSIONS)));
-    when(cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONS, 5))
-                                                                .thenReturn(CleanupPurgeResult.skipped("cleanup.purgeVersionsError: version in use",
+    when(cleanupJcrStorage.purgeVersions(eq(NODE_UUID_VERSIONS), any()))
+                                                                .thenReturn(CleanupPurgeResult.skipped("cleanup.purgeVersionsError",
+                                                                                                       "javax.jcr.RepositoryException: version in use",
                                                                                                        300L));
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -305,9 +351,220 @@ class CleanupExecutionServiceTest {
     verify(campaignStorage).saveItem(itemCaptor.capture());
     CleanupCampaignItem saved = itemCaptor.getValue();
     assertEquals(CleanupItemState.SKIPPED, saved.getState(), "The item must stay SKIPPED: it still needs attention");
-    assertEquals("cleanup.purgeVersionsError: version in use", saved.getFailureReason());
+    assertEquals("cleanup.purgeVersionsError", saved.getFailureReason(), "The reason must stay a BARE message code");
+    assertEquals("javax.jcr.RepositoryException: version in use",
+                 saved.getFailureDetail(),
+                 "The exception text belongs to the detail, never to the reason");
     assertEquals(300L, saved.getReclaimedBytes(), "The bytes reclaimed before the failure must be persisted");
     assertEquals(0L, saved.getPurgedAt(), "A partial purge is not a purge: no purge date");
+  }
+
+  @Test
+  void shouldHandTheWholeCampaignParamsSnapshotToThePurge() {
+    // The purge policy unions an AGE rule and a COUNT rule, so the period is as
+    // load-bearing as the version cap: handing the purge the cap alone would
+    // make the execution remove a DIFFERENT set from the one the revalidation
+    // just counted, right under the administrator's eyes
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    CleanupCampaignItem versionsItem = item(19L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(versionsItem))
+                                                .thenReturn(List.of());
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
+                                                                     .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_VERSIONS,
+                                                                                                                  CleanupAction.PURGE_VERSIONS)));
+    when(cleanupJcrStorage.purgeVersions(eq(NODE_UUID_VERSIONS), any())).thenReturn(CleanupPurgeResult.purged(50L));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    verify(cleanupJcrStorage).revalidate(NODE_UUID_VERSIONS, campaign.getParams());
+    verify(cleanupJcrStorage).purgeVersions(NODE_UUID_VERSIONS, campaign.getParams());
+  }
+
+  @Test
+  void shouldSplitTheUnexpectedErrorCodeFromItsExceptionText() {
+    // THE localization contract: the reason is a BARE message code the console
+    // looks up in its bundle, so concatenating the exception message into it used
+    // to leave the UI displaying a raw untranslated key
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    CleanupCampaignItem explodingItem = item(19L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(explodingItem))
+                                                .thenReturn(List.of());
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_SKIPPED), any())).thenThrow(new IllegalStateException(JCR_ERROR_MESSAGE));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    assertEquals(CleanupItemState.SKIPPED, explodingItem.getState());
+    assertEquals("cleanup.unexpectedError", explodingItem.getFailureReason(), "The reason must stay a BARE message code");
+    assertTrue(explodingItem.getFailureDetail().startsWith("java.lang.IllegalStateException: " + JCR_ERROR_MESSAGE),
+               "The exception text belongs to the detail: " + explodingItem.getFailureDetail());
+  }
+
+  @Test
+  void shouldFallBackToADetaillessSaveWhenTheFirstSaveFails() {
+    // An oversized FAILURE_DETAIL is by far the likeliest reason a save of a
+    // failed item blows up, so the fallback drops exactly that and keeps the
+    // state and the bare code — which is what the console and the retry need
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    CleanupCampaignItem failedItem = item(20L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(failedItem))
+                                                .thenReturn(List.of());
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_SKIPPED), any())).thenThrow(new IllegalStateException(JCR_ERROR_MESSAGE));
+    when(campaignStorage.saveItem(any())).thenThrow(new IllegalStateException("value too long for column FAILURE_DETAIL"))
+                                         .thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    ArgumentCaptor<CleanupCampaignItem> itemCaptor = ArgumentCaptor.forClass(CleanupCampaignItem.class);
+    verify(campaignStorage, org.mockito.Mockito.times(2)).saveItem(itemCaptor.capture());
+    CleanupCampaignItem fallbackSaved = itemCaptor.getAllValues().get(1);
+    assertEquals(CleanupItemState.SKIPPED, fallbackSaved.getState(), "The fallback save must still carry the state");
+    assertEquals("cleanup.unexpectedError", fallbackSaved.getFailureReason(), "...and the bare failure code");
+    assertNull(fallbackSaved.getFailureDetail(), "...but NOT the detail: it is the likeliest cause of the failure");
+    // The run still completes: one unsavable item never aborts the campaign
+    ArgumentCaptor<CleanupCampaign> campaignCaptor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage).saveCampaign(campaignCaptor.capture());
+    assertEquals(CleanupCampaignState.COMPLETED, campaignCaptor.getValue().getState());
+  }
+
+  @Test
+  void shouldMoveOnWhenEvenTheDetaillessFallbackSaveFails() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    CleanupCampaignItem unsavableItem = item(21L, NODE_UUID_DELETED, CleanupAction.DELETE);
+    CleanupCampaignItem nextItem = purgeableItem(22L, "uuid-next");
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(unsavableItem, nextItem))
+                                                .thenReturn(List.of());
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
+                                                                    .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_DELETED,
+                                                                                                                 CleanupAction.DELETE)));
+    when(cleanupJcrStorage.deleteNode(NODE_UUID_DELETED)).thenReturn(CleanupPurgeResult.purged(100L));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> {
+      CleanupCampaignItem item = invocation.getArgument(0);
+      if (item.getId() == 21L) {
+        throw new IllegalStateException("Database gone");
+      }
+      return item;
+    });
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // NEVER rethrown into the batch loop: the items AFTER the unsavable one are
+    // still processed, and the campaign still completes
+    assertEquals(CleanupItemState.PURGED, nextItem.getState(), "The item after the unsavable one must still be processed");
+    ArgumentCaptor<CleanupCampaign> campaignCaptor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage).saveCampaign(campaignCaptor.capture());
+    assertEquals(CleanupCampaignState.COMPLETED, campaignCaptor.getValue().getState());
+  }
+
+  /**
+   * Bound on the keyset queries the poison-pill test answers before it starts
+   * handing back empty pages. Two are enough for a correct worker (one full
+   * page, then the empty one ending the run); the slack lets a broken cursor be
+   * CAUGHT by an assertion rather than spin until the machine gives up.
+   */
+  private static final int QUERY_COUNT_BOUND = 4;
+
+  @Test
+  @Timeout(30)
+  void shouldPageByKeysetSoAnUnsavableItemCannotLoopForever() {
+    // The poison pill: the loop used to re-read page 0 of the CANDIDATE items and
+    // relied on every processed item LEAVING that state. An item whose save can
+    // never succeed stays CANDIDATE, so page 0 kept returning it — forever, and
+    // the stalled-worker watchdog kept relaunching the same run. Keyset paging
+    // makes the forward progress structural: the worker asks for ids PAST the last
+    // one it saw, so it cannot revisit an item within a run whatever happens to it
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(2);
+    CleanupCampaignItem unsavableItem = item(30L, NODE_UUID_DELETED, CleanupAction.DELETE);
+    CleanupCampaignItem savableItem = purgeableItem(31L, "uuid-31");
+    // The storage is stubbed as a REAL keyset store: it answers the ids strictly
+    // above the requested one, and the unsavable item never leaves CANDIDATE.
+    // The query count is BOUNDED and the bound answers an empty page: a worker
+    // whose cursor does not advance must fail this test in milliseconds, on the
+    // assertion below, instead of spinning. It used to prove the fix by LOOPING —
+    // and @Timeout does not interrupt a spinning loop, it only reports once the
+    // loop returns, so the run filled the disk with the failure logging first
+    AtomicInteger queryCount = new AtomicInteger();
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenAnswer(invocation -> queryCount.incrementAndGet() > QUERY_COUNT_BOUND ?
+                                                                                                       List.of() :
+                                                                                                       Stream.of(unsavableItem, savableItem)
+                                                                                                             .filter(item -> item.getState() == CleanupItemState.CANDIDATE)
+                                                                                                             .filter(item -> item.getId() > (long) invocation.getArgument(2))
+                                                                                                             .toList());
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
+                                                                    .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_DELETED,
+                                                                                                                 CleanupAction.DELETE)));
+    when(cleanupJcrStorage.deleteNode(NODE_UUID_DELETED)).thenReturn(CleanupPurgeResult.purged(100L));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> {
+      CleanupCampaignItem item = invocation.getArgument(0);
+      if (item.getId() == 30L) {
+        // Never persisted: the item stays CANDIDATE in the store
+        item.setState(CleanupItemState.CANDIDATE);
+        throw new IllegalStateException("Database gone");
+      }
+      return item;
+    });
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // The run TERMINATES, and each item was met exactly once
+    assertEquals(2,
+                 queryCount.get(),
+                 "One full page then the empty page ending the run: more means the cursor stalled");
+    verify(cleanupJcrStorage, org.mockito.Mockito.times(1)).deleteNode(NODE_UUID_DELETED);
+    verify(cleanupJcrStorage, org.mockito.Mockito.times(1)).deleteNode("uuid-31");
+    ArgumentCaptor<CleanupCampaign> campaignCaptor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage).saveCampaign(campaignCaptor.capture());
+    assertEquals(CleanupCampaignState.COMPLETED, campaignCaptor.getValue().getState());
+  }
+
+  @Test
+  void shouldRestartTheTransactionOnceAfterEachBatch() {
+    // Per-batch commit boundary: without it, a database failure inside one batch
+    // rolls back every batch before it — a whole purge run's worth of recorded
+    // outcomes lost for one late failure
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(1);
+    CleanupCampaignItem firstItem = purgeableItem(41L, "uuid-41");
+    CleanupCampaignItem secondItem = purgeableItem(42L, "uuid-42");
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(firstItem))
+                                                .thenReturn(List.of(secondItem))
+                                                .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // Once per BATCH, after its progress update — not once per item, not once
+    // per run
+    verify(executionService, org.mockito.Mockito.times(2)).restartTransaction();
+    InOrder inOrder = inOrder(campaignStorage, executionService);
+    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), anyLong(), eq(1L), anyLong(), isNull(), eq(0L));
+    inOrder.verify(executionService).restartTransaction();
+    inOrder.verify(campaignStorage).updateProgress(eq(CAMPAIGN_ID), anyLong(), eq(2L), anyLong(), isNull(), eq(0L));
+    inOrder.verify(executionService).restartTransaction();
   }
 
   @Test
@@ -336,8 +593,8 @@ class CleanupExecutionServiceTest {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getBatchSize()).thenReturn(200);
-    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
-                                                                                                 .thenThrow(new IllegalStateException("Database gone"));
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenThrow(new IllegalStateException("Database gone"));
 
     executionService.executeCampaign(CAMPAIGN_ID);
 
@@ -361,9 +618,9 @@ class CleanupExecutionServiceTest {
     when(settingService.getBatchSize()).thenReturn(1);
     CleanupCampaignItem firstItem = item(11L, NODE_UUID_DELETED, CleanupAction.DELETE);
     CleanupCampaignItem secondItem = item(12L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
-    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
-                                                                                                 .thenReturn(new PageImpl<>(List.of(firstItem)))
-                                                                                                 .thenReturn(new PageImpl<>(List.of(secondItem)));
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(firstItem))
+                                                .thenReturn(List.of(secondItem));
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
                                                                     .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_DELETED,
                                                                                                                  CleanupAction.DELETE)));
@@ -394,12 +651,10 @@ class CleanupExecutionServiceTest {
     CleanupCampaignItem thirdItem = purgeableItem(13L, "uuid-3");
     CleanupCampaignItem fourthItem = purgeableItem(14L, "uuid-4");
     // Two full pages of candidates, then the empty page ending the run
-    when(campaignStorage.getItemsByState(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any()))
-                                                                                                 .thenReturn(new PageImpl<>(List.of(firstItem,
-                                                                                                                                    secondItem)))
-                                                                                                 .thenReturn(new PageImpl<>(List.of(thirdItem,
-                                                                                                                                    fourthItem)))
-                                                                                                 .thenReturn(new PageImpl<>(List.of()));
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(firstItem, secondItem))
+                                                .thenReturn(List.of(thirdItem, fourthItem))
+                                                .thenReturn(List.of());
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -407,6 +662,18 @@ class CleanupExecutionServiceTest {
 
     // EVERY item of EVERY page is processed (not only the first page)
     verify(campaignStorage, org.mockito.Mockito.times(4)).saveItem(any());
+    // The keyset cursor is asserted EXACTLY, not with anyLong(): a cursor left at
+    // its initial value re-reads the same window, which is precisely the poison
+    // pill keyset paging is here to defuse. The stubbed pages above would keep
+    // this test green either way — only pinning the argument catches it
+    ArgumentCaptor<Long> lastIdCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(campaignStorage, org.mockito.Mockito.times(3)).getItemsByStateAfterId(eq(CAMPAIGN_ID),
+                                                                                eq(CleanupItemState.CANDIDATE),
+                                                                                lastIdCaptor.capture(),
+                                                                                anyInt());
+    assertEquals(List.of(0L, 12L, 14L),
+                 lastIdCaptor.getAllValues(),
+                 "Each batch must resume PAST the highest id of the previous one");
     assertEquals(CleanupItemState.PURGED, firstItem.getState());
     assertEquals(CleanupItemState.PURGED, secondItem.getState());
     assertEquals(CleanupItemState.PURGED, thirdItem.getState());
@@ -452,18 +719,17 @@ class CleanupExecutionServiceTest {
     // inside one. Both launch paths must now go through the SAME transactional
     // entry point — pinned by running the scheduled Runnable against a spy whose
     // entry point is stubbed out (so the woven aspect never boots a container)
-    CleanupExecutionService spiedService = org.mockito.Mockito.spy(executionService);
-    org.mockito.Mockito.doNothing().when(spiedService).executeCampaignTransactional(anyLong());
+    org.mockito.Mockito.doNothing().when(executionService).executeCampaignTransactional(anyLong());
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.LOCKED));
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    spiedService.startExecution(CAMPAIGN_ID);
-    spiedService.resumeExecution(CAMPAIGN_ID);
+    executionService.startExecution(CAMPAIGN_ID);
+    executionService.resumeExecution(CAMPAIGN_ID);
 
     ArgumentCaptor<Runnable> workerCaptor = ArgumentCaptor.forClass(Runnable.class);
     verify(workerExecutor, org.mockito.Mockito.times(2)).execute(workerCaptor.capture());
     workerCaptor.getAllValues().forEach(Runnable::run);
-    verify(spiedService, org.mockito.Mockito.times(2)).executeCampaignTransactional(CAMPAIGN_ID);
+    verify(executionService, org.mockito.Mockito.times(2)).executeCampaignTransactional(CAMPAIGN_ID);
   }
 
   @Test

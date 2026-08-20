@@ -29,6 +29,8 @@ import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
 import io.meeds.social.util.JsonUtils;
 
@@ -40,6 +42,19 @@ import io.meeds.social.util.JsonUtils;
  */
 @Service
 public class CleanupSettingService {
+
+  /** Lower bound of the dry-run scan reader-thread count: never zero reader. */
+  public static final int      MIN_SCAN_THREADS   = 1;
+
+  /**
+   * Upper bound of the dry-run scan reader-thread count. A configured value
+   * outside [{@link #MIN_SCAN_THREADS}, {@link #MAX_SCAN_THREADS}] is CLAMPED,
+   * never honoured: a typo in exo.properties must not be able to fan a
+   * background simulation out over the repository.
+   */
+  public static final int      MAX_SCAN_THREADS   = 20;
+
+  private static final Log     LOG                = ExoLogger.getLogger(CleanupSettingService.class);
 
   private static final Context CLEANUP_CONTEXT    = Context.GLOBAL.id("DocumentsCleanup");
 
@@ -78,6 +93,20 @@ public class CleanupSettingService {
 
   @Value("${documents.cleanup.report.retention.campaigns:3}")
   private int                  reportRetentionCampaigns;
+
+  /**
+   * Reader threads of the parallel dry-run scan. Kept MODEST and configurable,
+   * and the reason is repository load — NOT connection exhaustion: this
+   * deployment's {@code exo-jcr_portal} pool is provisioned at 300 connections,
+   * so ~10 concurrent reader sessions are a small fraction of it. What actually
+   * costs is the JCR workspace CACHE: parallel deep traversals stream millions
+   * of nodes through it and evict the live working set interactive users depend
+   * on, so the platform gets slower while a background simulation runs. Ten is
+   * the architect's call for PROD; a deployment with a smaller pool or a busier
+   * repository lowers it through the property.
+   */
+  @Value("${documents.cleanup.scan.threads:10}")
+  private int                  scanThreads;
 
   /**
    * @return the current platform default parameters (persisted overrides,
@@ -140,6 +169,24 @@ public class CleanupSettingService {
 
   public int getReportRetentionCampaigns() {
     return reportRetentionCampaigns;
+  }
+
+  /**
+   * @return the configured dry-run scan reader-thread count, CLAMPED to
+   *         [{@link #MIN_SCAN_THREADS}, {@link #MAX_SCAN_THREADS}] — an
+   *         out-of-range value is logged and corrected, never applied
+   */
+  public int getScanThreads() {
+    if (scanThreads < MIN_SCAN_THREADS || scanThreads > MAX_SCAN_THREADS) {
+      int clamped = Math.min(Math.max(scanThreads, MIN_SCAN_THREADS), MAX_SCAN_THREADS);
+      LOG.warn("documents.cleanup.scan.threads is configured to {}, outside the supported [{}, {}] range: using {} instead",
+               scanThreads,
+               MIN_SCAN_THREADS,
+               MAX_SCAN_THREADS,
+               clamped);
+      return clamped;
+    }
+    return scanThreads;
   }
 
   private List<String> getExcludedPaths() {

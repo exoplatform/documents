@@ -56,8 +56,30 @@ public class CleanupCampaignItemEntity implements Serializable {
   @Column(name = "FILE_SIZE")
   private long              fileSize;
 
+  /**
+   * Version bytes this item's ACTION reclaims — the whole version history for a
+   * DELETE, the removal set for a PURGE_VERSIONS. Action-dependent by design,
+   * see {@link org.exoplatform.document.cleanup.dao.CleanupCampaignItemDAO#RECLAIMABLE_BYTES}.
+   */
   @Column(name = "VERSIONS_SIZE")
   private long              versionsSize;
+
+  /**
+   * Last modification date of the candidate file, as read by the scan. Nullable:
+   * rows recorded before this column existed keep a NULL, and so does a file
+   * whose date was unreadable.
+   */
+  @Column(name = "LAST_MODIFIED_DATE")
+  private Date              lastModifiedDate;
+
+  /**
+   * Creation date of the candidate file, as read by the scan. Persisted although
+   * only the last-modified one is displayed: BOTH dates being older than the
+   * campaign period is what made the file a candidate, so a report carrying only
+   * one of them cannot explain its own rows. Nullable, see above.
+   */
+  @Column(name = "CREATED_DATE")
+  private Date              createdDate;
 
   @Column(name = "ACTION", nullable = false)
   private String            action;
@@ -80,7 +102,26 @@ public class CleanupCampaignItemEntity implements Serializable {
   @Column(name = "RECLAIMED_BYTES")
   private long              reclaimedBytes;
 
+  /**
+   * Localizable message code of the failure, and NOTHING else: the console looks
+   * it up in an i18n bundle and the grouped-failures aggregate groups on it, so
+   * it must never carry an exception message.
+   */
   @Column(name = "FAILURE_REASON")
   private String            failureReason;
+
+  /**
+   * Compact diagnostic of the failure (head + root exception, see
+   * {@code CleanupThrowableUtil}), mapped as a plain String over the
+   * FAILURE_DETAIL CLOB column — the platform precedent for a CLOB is a bare
+   * {@code @Column} String, no {@code @Lob} and no columnDefinition (cf.
+   * {@code io.meeds.social.space.template.entity.SpaceTemplateEntity}).
+   */
+  @Column(name = "FAILURE_DETAIL")
+  private String            failureDetail;
+
+  /** Purge attempts already spent on this item, incremented by every retry. */
+  @Column(name = "ATTEMPT_COUNT")
+  private long              attemptCount;
 
 }

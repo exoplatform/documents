@@ -19,6 +19,7 @@ package org.exoplatform.document.cleanup.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -74,6 +75,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
@@ -125,6 +127,14 @@ class CleanupCampaignServiceTest {
                                                                        CleanupCampaignState.EXECUTING);
 
   private static final List<CleanupCampaignState> COMPLETED_STATES = List.of(CleanupCampaignState.COMPLETED);
+
+  /**
+   * The report's column contract, mirroring the service's own private
+   * CSV_HEADER: the historical columns come first, in their original order, and
+   * every column added since is appended after them.
+   */
+  private static final String                     CSV_HEADER       =
+                                                               "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate,attemptCount,failureDetail\n";
 
   @Mock
   private CleanupCampaignStorage   campaignStorage;
@@ -327,6 +337,460 @@ class CleanupCampaignServiceTest {
                                                       () -> campaignService.createCampaign(" ", null));
 
     assertEquals("cleanup.nameMandatory", exception.getMessage());
+  }
+
+  /**
+   * The NAME column is NVARCHAR(250): before the shared validation, a longer
+   * name reached the INSERT and failed with a raw database error. Creation and
+   * rename go through the SAME check, so neither path can regress alone.
+   */
+  @Test
+  void shouldRejectCampaignCreationWithNameLongerThanColumn() {
+    IllegalArgumentException exception =
+                                       assertThrows(IllegalArgumentException.class,
+                                                    () -> campaignService.createCampaign(tooLongName(), new CleanupParams()));
+
+    assertEquals("cleanup.nameTooLong", exception.getMessage());
+    verify(campaignStorage, never()).createCampaign(any());
+  }
+
+  @Test
+  void shouldUpdateCampaignNameInARunningState() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "Q4 cleanup", null);
+
+    assertEquals("Q4 cleanup", updated.getName());
+    // Pure metadata: no lifecycle transition, so no state change and no
+    // stateChanged WebSocket event
+    assertEquals(CleanupCampaignState.PUBLISHED, updated.getState());
+    verify(campaignLifecycle, never()).transition(any(), any());
+    verify(campaignLifecycle, never()).transition(any(), any(), any());
+  }
+
+  /**
+   * A rename is allowed in a TERMINAL state too: correcting the label of an
+   * already-completed report is a legitimate need, and the name keys nothing.
+   */
+  @Test
+  void shouldUpdateNameOfCompletedCampaign() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "Q3 cleanup (final)", null);
+
+    assertEquals("Q3 cleanup (final)", updated.getName());
+    assertEquals(CleanupCampaignState.COMPLETED, updated.getState());
+  }
+
+  /**
+   * Existence FIRST: the 404 is answered before any field is even looked at, so
+   * a PATCH on an unknown campaign never reports a validation problem instead.
+   */
+  @Test
+  void shouldThrowNotFoundWhenUpdatingUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    ObjectNotFoundException exception = assertThrows(ObjectNotFoundException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, null, null));
+
+    assertEquals("cleanup.campaignNotFound", exception.getMessage());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+  }
+
+  /**
+   * An empty patch is REFUSED, never silently accepted as a no-op: the console
+   * must be able to say why nothing happened.
+   */
+  @Test
+  void shouldRejectUpdateCarryingNeitherField() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.PUBLISHED));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, null, null));
+
+    assertEquals("cleanup.nothingToUpdate", exception.getMessage());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+  }
+
+  @Test
+  void shouldRejectUpdateWithoutName() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, " ", null));
+
+    assertEquals("cleanup.nameMandatory", exception.getMessage());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+  }
+
+  @Test
+  void shouldRejectUpdateWithNameLongerThanColumn() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, tooLongName(), null));
+
+    assertEquals("cleanup.nameTooLong", exception.getMessage());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+  }
+
+  /**
+   * The name is trimmed BEFORE being persisted, and a rename writes the NAME
+   * column and NOTHING ELSE: the grace period, the deadline and every progress
+   * column are not even MENTIONED to the Storage. This is the whole point of the
+   * targeted write — the name is editable in every state, so a rename races the
+   * workers' progress updates and the grace-deadline cron on this very row, and
+   * a whole-row save would push the snapshot read above back over theirs.
+   */
+  @Test
+  void shouldTrimTheNameAndWriteNothingButTheNameWhenUpdatingTheNameOnly() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    campaign.setPublishedDate(1234L);
+    campaign.setLockDate(5678L);
+    campaign.setTotalCount(42);
+    campaign.setProcessedCount(7);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "  Q4 cleanup  ", null);
+
+    // The trimmed NAME alone: null grace period, null deadline
+    verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, "Q4 cleanup", null, null);
+    // The whole-row write is what this finding is about: it must be GONE
+    verify(campaignStorage, never()).saveCampaign(any());
+    // ... and the returned DTO still carries every other field, untouched
+    assertEquals("Q4 cleanup", updated.getName());
+    assertEquals(CAMPAIGN_ID, updated.getId());
+    assertEquals(CleanupCampaignState.PUBLISHED, updated.getState());
+    assertEquals(1234L, updated.getPublishedDate());
+    // A name-only patch must move NEITHER the grace period nor the deadline
+    assertEquals(5678L, updated.getLockDate());
+    assertEquals(42, updated.getTotalCount());
+    assertEquals(7, updated.getProcessedCount());
+    assertNotNull(updated.getParams());
+    assertEquals(7, updated.getParams().getGraceDays());
+  }
+
+  /**
+   * Symmetric case: a grace-only patch must leave the NAME alone. The two fields
+   * are strictly independent, which is the whole point of a partial update.
+   */
+  @Test
+  void shouldKeepTheNameWhenUpdatingTheGracePeriodOnly() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.SIMULATED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 21);
+
+    assertEquals("Q3 cleanup", updated.getName());
+    assertEquals(21, updated.getParams().getGraceDays());
+    // Symmetrically targeted: the NAME column is not written at all, and the
+    // campaign not being PUBLISHED, neither is the deadline
+    verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 21, null);
+  }
+
+  @Test
+  void shouldUpdateTheNameAndTheGracePeriodAtOnce() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.DRAFT);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "  Q4 cleanup  ", 3);
+
+    assertEquals("Q4 cleanup", updated.getName());
+    assertEquals(3, updated.getParams().getGraceDays());
+    // ONE write for the whole patch, not one per field
+    verify(campaignStorage, times(1)).updateEditableAttributes(CAMPAIGN_ID, "Q4 cleanup", 3, null);
+  }
+
+  /**
+   * The shared rule, exposed rather than restated: LOCKED is deliberately ABSENT
+   * — extending the grace of a locked campaign would need a LOCKED to PUBLISHED
+   * edge the lifecycle doesn't have, and re-registering the freshness listener
+   * that exiting PUBLISHED unregistered.
+   */
+  @Test
+  void shouldExposeTheGraceEditableStates() {
+    assertEquals(Set.of(CleanupCampaignState.DRAFT, CleanupCampaignState.SIMULATED, CleanupCampaignState.PUBLISHED),
+                 CleanupCampaignService.GRACE_EDITABLE_STATES);
+    assertFalse(CleanupCampaignService.GRACE_EDITABLE_STATES.contains(CleanupCampaignState.LOCKED));
+  }
+
+  /**
+   * The guard is per FIELD, not per request — the whole point of a partial
+   * update: in every state that refuses a grace edit, a NAME change still
+   * succeeds on the very same campaign.
+   */
+  @Test
+  void shouldRefuseGraceEditOutsideTheEditableStatesWhileStillAllowingARename() throws ObjectNotFoundException {
+    for (CleanupCampaignState state : List.of(CleanupCampaignState.LOCKED,
+                                              CleanupCampaignState.EXECUTING,
+                                              CleanupCampaignState.COMPLETED,
+                                              CleanupCampaignState.CANCELLED)) {
+      reset(campaignStorage);
+      CleanupCampaign campaign = campaign(state);
+      when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                        () -> campaignService.updateCampaign(CAMPAIGN_ID, null, 14),
+                                                        "The grace period must not be editable in " + state);
+
+      assertEquals(CLEANUP_INVALID_STATE_ERROR, exception.getMessage());
+      assertEquals(7, campaign.getParams().getGraceDays(), "The refused grace edit must not have been applied in " + state);
+      // A refusal writes NOTHING: not the grace period, and not the name either
+      verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+
+      // Same state, same campaign: the NAME is pure metadata, so it is editable
+      // there anyway
+      assertEquals("Renamed in " + state,
+                   campaignService.updateCampaign(CAMPAIGN_ID, "Renamed in " + state, null).getName());
+    }
+  }
+
+  @Test
+  void shouldAcceptGraceEditInEveryEditableState() throws ObjectNotFoundException {
+    for (CleanupCampaignState state : CleanupCampaignService.GRACE_EDITABLE_STATES) {
+      reset(campaignStorage);
+      CleanupCampaign campaign = campaign(state);
+      when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+      CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 14);
+
+      assertEquals(14, updated.getParams().getGraceDays(), "The grace period must be editable in " + state);
+      assertEquals(state, updated.getState(), "Editing the grace period must trigger no transition, in " + state);
+    }
+  }
+
+  @Test
+  void shouldRejectNegativeGracePeriod() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, null, -1));
+
+    // The SAME message code the creation path already uses for that bound
+    assertEquals("cleanup.invalidGraceDays", exception.getMessage());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+  }
+
+  /**
+   * ZERO is a valid grace period, not an absent one: the deadline then elapses
+   * at publication (see the publication test pinning the same rule).
+   */
+  @Test
+  void shouldAcceptZeroGracePeriod() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.SIMULATED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 0);
+
+    assertEquals(0, updated.getParams().getGraceDays());
+  }
+
+  /**
+   * The regression this anchor exists to prevent: the recomputed deadline is
+   * {@code publishedDate + graceDays}, NEVER {@code now + graceDays}. The
+   * publication is pinned 30 days in the past, so the two differ unmistakably —
+   * and saving the SAME value twice must be idempotent instead of pushing the
+   * deadline out twice.
+   */
+  @Test
+  void shouldRecomputeTheLockDateFromThePublishedDateWhenPublished() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    long publishedDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+    campaign.setPublishedDate(publishedDate);
+    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(7));
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 40);
+
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(40), updated.getLockDate());
+    assertTrue(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(40) - updated.getLockDate() > TimeUnit.DAYS.toMillis(29),
+               "The grace deadline must be anchored on the publication date, NEVER on now");
+    // The rederived deadline is WRITTEN, and it is the only column a grace edit
+    // adds to the grace period itself
+    verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 40, publishedDate + TimeUnit.DAYS.toMillis(40));
+
+    // Idempotent: saving the same value again must not slide the deadline
+    CleanupCampaign resaved = campaignService.updateCampaign(CAMPAIGN_ID, null, 40);
+
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(40), resaved.getLockDate());
+    verify(campaignStorage, times(2)).updateEditableAttributes(CAMPAIGN_ID, null, 40, publishedDate + TimeUnit.DAYS.toMillis(40));
+  }
+
+  /**
+   * A recomputed deadline landing in the PAST is allowed and is not an error: it
+   * closes the review window immediately, and the grace-deadline cron locks the
+   * campaign at its next tick. This method transitions NOTHING itself — the
+   * single PUBLISHED to LOCKED authority stays the scheduler and the manual
+   * execution trigger.
+   * <p>
+   * Reached by an EXTENSION, the only direction a published grace period may
+   * move (W22): the campaign was published 30 days ago, so even 7 to 20 days
+   * lands the deadline 10 days in the past. A REDUCTION would reach the same
+   * place and is refused — see
+   * {@link #shouldRefuseToShortenTheGracePeriodOfAPublishedCampaign()}.
+   */
+  @Test
+  void shouldAllowAGraceDeadlineRecomputedIntoThePastWithoutLockingTheCampaign() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    long publishedDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30);
+    campaign.setPublishedDate(publishedDate);
+    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(7));
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 20);
+
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(20), updated.getLockDate());
+    assertTrue(updated.getLockDate() < System.currentTimeMillis(), "The recomputed deadline is expected to be in the past");
+    assertEquals(CleanupCampaignState.PUBLISHED, updated.getState());
+    verify(campaignLifecycle, never()).transition(any(), any());
+    verify(campaignLifecycle, never()).transition(any(), any(), any());
+  }
+
+  /**
+   * W22 — a PUBLISHED grace period is ONE-WAY. Publication PROMISES a deadline
+   * to the owners of the candidate files: lowering 14 to 7 on day 8 closes their
+   * review on the spot ({@code cleanup.reviewClosed} on every keep and un-keep),
+   * the cron LOCKS the campaign at its next tick, and files whose owners were
+   * promised six more days are hard-deleted — no trash transit, so the only
+   * recovery is a snapshot. A refusal writes NOTHING, not even the grace period
+   * into the in-memory snapshot.
+   */
+  @Test
+  void shouldRefuseToShortenTheGracePeriodOfAPublishedCampaign() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    long publishedDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(8);
+    campaign.setPublishedDate(publishedDate);
+    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(14));
+    campaign.getParams().setGraceDays(14);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, null, 7));
+
+    assertEquals("cleanup.graceDaysCannotBeReduced", exception.getMessage());
+    assertEquals(14, campaign.getParams().getGraceDays(), "The refused reduction must not have been applied");
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(14), campaign.getLockDate(), "... nor the deadline moved");
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
+  }
+
+  /**
+   * The other half of the same rule: EXTENDING is always allowed — that is the
+   * legitimate need the editable grace period exists for — and re-saving the
+   * SAME value is NOT a reduction, so it must still succeed (the console's
+   * partial update can carry an unchanged field, and the deadline rederivation
+   * is idempotent anyway).
+   */
+  @Test
+  void shouldAllowExtendingAndResavingTheGracePeriodOfAPublishedCampaign() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    long publishedDate = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(8);
+    campaign.setPublishedDate(publishedDate);
+    campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(14));
+    campaign.getParams().setGraceDays(14);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign extended = campaignService.updateCampaign(CAMPAIGN_ID, null, 21);
+
+    assertEquals(21, extended.getParams().getGraceDays());
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(21), extended.getLockDate(), "Still publishedDate + graceDays");
+
+    // The SAME value again: no reduction, so no refusal — and no deadline slide
+    CleanupCampaign resaved = campaignService.updateCampaign(CAMPAIGN_ID, null, 21);
+
+    assertEquals(21, resaved.getParams().getGraceDays());
+    assertEquals(publishedDate + TimeUnit.DAYS.toMillis(21), resaved.getLockDate());
+    verify(campaignStorage, times(2)).updateEditableAttributes(CAMPAIGN_ID, null, 21, publishedDate + TimeUnit.DAYS.toMillis(21));
+  }
+
+  /**
+   * Before publication nothing has been promised, so the value is free in BOTH
+   * directions — a DRAFT or SIMULATED campaign can still be lowered all the way
+   * to zero. Pinned per state, because the guard's narrowness is the whole point:
+   * it forbids exactly one thing.
+   */
+  @Test
+  void shouldAllowShorteningTheGracePeriodBeforePublication() throws ObjectNotFoundException {
+    for (CleanupCampaignState state : List.of(CleanupCampaignState.DRAFT, CleanupCampaignState.SIMULATED)) {
+      reset(campaignStorage);
+      CleanupCampaign campaign = campaign(state);
+      campaign.getParams().setGraceDays(14);
+      when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+      CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 0);
+
+      assertEquals(0, updated.getParams().getGraceDays(), "A reduction must stay allowed in " + state);
+      verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 0, null);
+    }
+  }
+
+  /**
+   * The check ORDER, so a refusal always names the right reason: the state guard
+   * comes first, then the bound check, then the direction guard. A NEGATIVE value
+   * on a PUBLISHED campaign is a reduction too, but its own bound code is the
+   * useful one to report.
+   */
+  @Test
+  void shouldReportTheBoundCodeRatherThanTheDirectionCodeForANegativeGracePeriod() {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    campaign.setPublishedDate(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(8));
+    campaign.getParams().setGraceDays(14);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.updateCampaign(CAMPAIGN_ID, null, -1));
+
+    assertEquals("cleanup.invalidGraceDays", exception.getMessage());
+  }
+
+  /**
+   * Before publication there is no deadline to recompute: the lock date is left
+   * ALONE, publication deriving it from the edited value on its own. Pinned with
+   * a sentinel so 'untouched' is asserted, not merely 'still zero'.
+   */
+  @Test
+  void shouldNotTouchTheLockDateWhenTheCampaignIsNotPublishedYet() throws ObjectNotFoundException {
+    for (CleanupCampaignState state : List.of(CleanupCampaignState.DRAFT, CleanupCampaignState.SIMULATED)) {
+      reset(campaignStorage);
+      CleanupCampaign campaign = campaign(state);
+      campaign.setPublishedDate(0);
+      campaign.setLockDate(4242L);
+      when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+      CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 14);
+
+      assertEquals(14, updated.getParams().getGraceDays());
+      assertEquals(4242L, updated.getLockDate(), "The lock date must not be recomputed in " + state);
+      // Not published yet: the LOCK_DATE column is not written AT ALL, so the
+      // sentinel cannot be zeroed by a deadline this state has no business
+      // deriving
+      verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 14, null);
+    }
+  }
+
+  /**
+   * Defensive path: a campaign carrying no snapshotted parameters must not lose
+   * the edit — the holder is created rather than the write silently skipped.
+   */
+  @Test
+  void shouldUpdateTheGracePeriodOfACampaignWithoutParams() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.DRAFT);
+    campaign.setParams(null);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 5);
+
+    assertNotNull(updated.getParams());
+    assertEquals(5, updated.getParams().getGraceDays());
+  }
+
+  /**
+   * One character past the NAME column width — the boundary the check has to
+   * refuse, whatever the exact limit is written as.
+   */
+  private String tooLongName() {
+    return "n".repeat(CleanupCampaignService.MAX_NAME_LENGTH + 1);
   }
 
   @Test
@@ -786,8 +1250,10 @@ class CleanupCampaignServiceTest {
                                                                                  CleanupCampaignState.EXECUTING,
                                                                                  Set.of(CleanupCampaignState.COMPLETED,
                                                                                         CleanupCampaignState.CANCELLED),
+                                                                                 // COMPLETED is no longer terminal:
+                                                                                 // a RETRY re-enters EXECUTING
                                                                                  CleanupCampaignState.COMPLETED,
-                                                                                 Set.of(),
+                                                                                 Set.of(CleanupCampaignState.EXECUTING),
                                                                                  CleanupCampaignState.CANCELLED,
                                                                                  Set.of());
     lenient().when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -1358,8 +1824,13 @@ class CleanupCampaignServiceTest {
     campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
 
     String csv = outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
-    assertTrue(csv.startsWith("nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason\n"),
-               "The streamed report must open with the CSV header");
+    // The historical columns keep their POSITION and the ones added since are
+    // APPENDED: a consumer parsing the report by index must not break
+    assertTrue(csv.startsWith(CSV_HEADER), "The streamed report must open with the CSV header");
+    assertTrue(CSV_HEADER.startsWith("nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,"),
+               "The historical columns must keep their position");
+    assertTrue(CSV_HEADER.endsWith(",ownerName,lastModifiedDate,createdDate,attemptCount,failureDetail\n"),
+               "The columns added since must be appended, in that order");
     assertTrue(csv.contains("\"/Users/j___/john/Private/report,final.pdf\""),
                "A comma-carrying path must stay quoted in the streamed rows");
     assertTrue(csv.contains(",4096,"));
@@ -1633,6 +2104,74 @@ class CleanupCampaignServiceTest {
     assertTrue(csv.contains(",/Users/j___/john/Private/plain.pdf,"), "A plain value must be written as-is");
   }
 
+  @Test
+  void shouldAppendTheResolvedOwnerNameAndIsoCandidacyDatesToTheCsvRows() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.CANDIDATE);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+    item.setLastModifiedDate(1600000000000L);
+    item.setCreatedDate(1500000000000L);
+    Identity owner = userIdentity("5", USERNAME);
+    // A display name is user data: it can carry the separator itself
+    owner.getProfile().setProperty(org.exoplatform.social.core.identity.model.Profile.FULL_NAME, "John, Smith");
+    when(identityManager.getIdentity(5L)).thenReturn(owner);
+
+    String csv = streamCsvOf(item);
+
+    assertTrue(csv.contains("\"John, Smith\""), "The owner display name must be exported, escaped like any other value");
+    // ISO-8601 UTC, never a localized string: the CSV is a machine-readable
+    // export, unlike the dates the UI renders
+    assertTrue(csv.contains(",2020-09-13T12:26:40Z,2017-07-14T02:40:00Z,0,\n"),
+               "The last-modified and creation dates must be appended as ISO-8601 UTC, in that order");
+  }
+
+  @Test
+  void shouldResolveEachCsvOwnerNameOnlyOnceForTheWholeExport() throws Exception {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(true);
+    CleanupCampaignItem firstPageItem = item(CleanupItemState.PURGED);
+    firstPageItem.setNodeUuid("uuid-page-1");
+    CleanupCampaignItem secondPageItem = item(CleanupItemState.PURGED);
+    secondPageItem.setNodeUuid("uuid-page-2");
+    // Both rows share owner 5: the export streams pages over potentially
+    // millions of rows, so the identity lookups must be bounded by the number of
+    // DISTINCT owners — and the memo must span the pages, not restart on each
+    when(campaignStorage.getItemsPage(eq(CAMPAIGN_ID), any())).thenAnswer(invocation -> {
+      Pageable pageable = invocation.getArgument(1);
+      return new org.springframework.data.domain.PageImpl<>(List.of(pageable.getPageNumber() == 0 ? firstPageItem :
+                                                                 secondPageItem),
+                                                            pageable,
+                                                            1500L);
+    });
+    when(identityManager.getIdentity(5L)).thenReturn(userIdentity("5", USERNAME));
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
+
+    String csv = outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
+    assertEquals(2,
+                 csv.split("," + USERNAME + ",", -1).length - 1,
+                 "Both rows must carry the resolved owner name, the memo serving the second one");
+    verify(identityManager, times(1)).getIdentity(5L);
+  }
+
+  @Test
+  void shouldDegradeAnUnresolvableCsvOwnerToAnEmptyNameWithoutFailingTheExport() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.CANDIDATE);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+    when(identityManager.getIdentity(5L)).thenThrow(new IllegalStateException("Identity storage unreachable"));
+
+    String csv = streamCsvOf(item);
+
+    String[] cells = csv.substring(csv.indexOf('\n') + 1).trim().split(",", -1);
+    assertEquals(14, cells.length, "The row must keep every column of the header");
+    assertEquals("", cells[9], "An unresolvable owner degrades to an EMPTY name, it never fails the export");
+    assertEquals("", cells[10], "An unset date is exported empty");
+    assertEquals("", cells[11]);
+    assertEquals("0", cells[12], "An item never retried carries a zero attempt count");
+    assertEquals("", cells[13], "An item with no failure detail exports an empty last column");
+  }
+
   private String streamCsvOf(CleanupCampaignItem item) throws Exception {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
     when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(true);
@@ -1735,6 +2274,287 @@ class CleanupCampaignServiceTest {
   private void mockPublishedCampaignWithItem(CleanupItemState itemState) {
     when(campaignStorage.getItem(ITEM_ID)).thenReturn(item(itemState));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.PUBLISHED));
+  }
+
+  @Test
+  void shouldRequeueOnlyRetryableFailuresBelowTheAttemptBoundOnRetry() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    CleanupCampaignItem failedItem = skippedItem(51L, "cleanup.deleteError", 1L);
+    failedItem.setReclaimedBytes(4096L);
+    failedItem.setPurgedAt(7000L);
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(failedItem))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    campaignService.retryCampaign(CAMPAIGN_ID);
+
+    // The ALLOWLIST and the bound are the SERVER's, passed to the query — never
+    // the client's, and never re-derived per call site
+    ArgumentCaptor<Set<String>> reasonsCaptor = ArgumentCaptor.forClass(Set.class);
+    ArgumentCaptor<Long> boundCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(campaignStorage, atLeastOnce()).getRetryableFailures(eq(CAMPAIGN_ID),
+                                                               reasonsCaptor.capture(),
+                                                               boundCaptor.capture(),
+                                                               anyLong(),
+                                                               anyInt());
+    assertEquals(CleanupCampaignService.RETRYABLE_FAILURE_REASONS, reasonsCaptor.getValue());
+    assertEquals(CleanupCampaignService.MAX_RETRY_ATTEMPTS, boundCaptor.getValue());
+    // A deterministic failure is NOT in the allowlist: re-running it would be
+    // guaranteed wasted work on possibly hundreds of thousands of rows
+    assertFalse(CleanupCampaignService.RETRYABLE_FAILURE_REASONS.contains("cleanup.referentialIntegrity"),
+                "A referenced node will be refused identically: never retryable");
+    assertFalse(CleanupCampaignService.RETRYABLE_FAILURE_REASONS.contains("cleanup.notVersionable"),
+                "A non-versionable node never grows a version history by itself: never retryable");
+    assertEquals(Set.of("cleanup.revalidationFailed",
+                        "cleanup.deleteError",
+                        "cleanup.unexpectedError",
+                        "cleanup.purgeVersionsError"),
+                 CleanupCampaignService.RETRYABLE_FAILURE_REASONS);
+  }
+
+  @Test
+  void shouldResetTheRequeuedItemFieldsButKeepItsReclaimedBytesOnRetry() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    CleanupCampaignItem failedItem = skippedItem(52L, "cleanup.unexpectedError", 2L);
+    failedItem.setFailureDetail("java.lang.IllegalStateException: boom");
+    failedItem.setReclaimedBytes(4096L);
+    failedItem.setPurgedAt(7000L);
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(failedItem))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    campaignService.retryCampaign(CAMPAIGN_ID);
+
+    ArgumentCaptor<CleanupCampaignItem> itemCaptor = ArgumentCaptor.forClass(CleanupCampaignItem.class);
+    verify(campaignStorage).saveItem(itemCaptor.capture());
+    CleanupCampaignItem requeued = itemCaptor.getValue();
+    assertEquals(CleanupItemState.CANDIDATE, requeued.getState(), "A requeued item goes back to CANDIDATE");
+    assertEquals(3L, requeued.getAttemptCount(), "The attempt count must be incremented, that is what bounds the retries");
+    assertNull(requeued.getFailureReason(), "A stale reason on a requeued item would be a lie");
+    assertNull(requeued.getFailureDetail(), "...and so would a stale detail");
+    assertEquals(4096L,
+                 requeued.getReclaimedBytes(),
+                 "A partially reclaimed delete already reported REAL bytes: the campaign total must not lose them");
+    assertEquals(7000L, requeued.getPurgedAt(), "The purge date is left alone too");
+  }
+
+  @Test
+  void shouldResetTheProgressAndRelaunchTheWorkerThroughStartExecutionOnRetry() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(skippedItem(53L,
+                                                                                                                                     "cleanup.deleteError",
+                                                                                                                                     0L)))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    CleanupCampaign executing = campaign(CleanupCampaignState.EXECUTING);
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(executing);
+
+    CleanupCampaign retried = campaignService.retryCampaign(CAMPAIGN_ID);
+
+    // The requeue happens BEFORE the execution start: startExecution counts the
+    // CANDIDATE items to set its denominators, so requeueing after it would leave
+    // the progress bar at zero out of zero
+    InOrder inOrder = inOrder(campaignStorage, executionService);
+    inOrder.verify(campaignStorage).saveItem(any());
+    inOrder.verify(executionService).startExecution(CAMPAIGN_ID);
+    assertEquals(CleanupCampaignState.EXECUTING, retried.getState());
+  }
+
+  @Test
+  void shouldRejectRetryOfACampaignThatIsNotCompleted() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    assertEquals(CLEANUP_INVALID_STATE_ERROR, exception.getMessage());
+    verify(campaignStorage, never()).saveItem(any());
+  }
+
+  @Test
+  void shouldRejectRetryWhenAnotherCampaignIsActive() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    CleanupCampaign activeCampaign = campaign(CleanupCampaignState.PUBLISHED);
+    activeCampaign.setId(99L);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of(activeCampaign));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    // The SAME single-active-campaign invariant as a publication, honoured
+    // through the same guard: a retry deletes files, it is an execution
+    assertEquals("cleanup.campaignAlreadyActive", exception.getMessage());
+    verify(campaignStorage, never()).saveItem(any());
+    verify(campaignStorage, never()).getRetryableFailures(anyLong(), any(), anyLong(), anyLong(), anyInt());
+  }
+
+  @Test
+  void shouldRejectRetryWhenNothingIsRequeued() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt())).thenReturn(List.of());
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    // Never a silent no-op run: the console must be able to explain the refusal
+    assertEquals("cleanup.noRetryableFailures", exception.getMessage());
+    verify(executionService, never()).startExecution(anyLong());
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenRetryingAnUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    ObjectNotFoundException exception = assertThrows(ObjectNotFoundException.class,
+                                                     () -> campaignService.retryCampaign(CAMPAIGN_ID));
+
+    assertEquals("cleanup.campaignNotFound", exception.getMessage());
+  }
+
+  @Test
+  void shouldRequeueEveryPageOfFailuresWithoutLoadingThemAllAtOnce() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.getCampaignsByStates(ACTIVE_STATES)).thenReturn(List.of());
+    CleanupCampaignItem firstPageItem = skippedItem(61L, "cleanup.deleteError", 0L);
+    CleanupCampaignItem secondPageItem = skippedItem(62L, "cleanup.unexpectedError", 0L);
+    when(campaignStorage.getRetryableFailures(eq(CAMPAIGN_ID), any(), anyLong(), anyLong(), anyInt()))
+                                                                                                     .thenReturn(List.of(firstPageItem))
+                                                                                                     .thenReturn(List.of(secondPageItem))
+                                                                                                     .thenReturn(List.of());
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(executionService.startExecution(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.EXECUTING));
+
+    campaignService.retryCampaign(CAMPAIGN_ID);
+
+    // EVERY page is requeued, and the paging is KEYSET-driven: the second query
+    // asks for the ids past the last one seen, so the requeue cannot walk past
+    // rows as the SKIPPED set shrinks underneath it
+    verify(campaignStorage, times(2)).saveItem(any());
+    ArgumentCaptor<Long> lastIdCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(campaignStorage, times(3)).getRetryableFailures(eq(CAMPAIGN_ID),
+                                                          any(),
+                                                          anyLong(),
+                                                          lastIdCaptor.capture(),
+                                                          anyInt());
+    assertEquals(List.of(0L, 61L, 62L), lastIdCaptor.getAllValues(), "Each page must resume from the last id seen");
+  }
+
+  @Test
+  void shouldFlagEachGroupedFailureWithTheServerSideRetryableRule() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    when(campaignStorage.countFailuresByReason(CAMPAIGN_ID))
+                                                            .thenReturn(List.of(new CleanupFailureGroup("cleanup.deleteError",
+                                                                                                        12L,
+                                                                                                        false),
+                                                                                new CleanupFailureGroup("cleanup.referentialIntegrity",
+                                                                                                        3L,
+                                                                                                        false)));
+
+    List<CleanupFailureGroup> failures = campaignService.getCampaignFailures(CAMPAIGN_ID);
+
+    assertEquals(2, failures.size());
+    assertEquals(12L, failures.get(0).getCount());
+    assertTrue(failures.get(0).isRetryable(), "A transient delete failure is worth re-attempting");
+    assertFalse(failures.get(1).isRetryable(), "A referential-integrity failure will be refused identically");
+  }
+
+  @Test
+  void shouldReturnNoGroupedFailureOnceTheItemRowsWerePurged() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+    when(campaignStorage.countFailuresByReason(CAMPAIGN_ID)).thenReturn(List.of());
+
+    // The groups are computed over the ITEM ROWS and are NOT part of the summary
+    // snapshotted at completion: once the retention job archived them, there is
+    // nothing left to group
+    assertTrue(campaignService.getCampaignFailures(CAMPAIGN_ID).isEmpty());
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenGroupingTheFailuresOfAnUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> campaignService.getCampaignFailures(CAMPAIGN_ID));
+  }
+
+  @Test
+  void shouldServeTheGroupedScanFailuresOfACampaignFromTheScanService() throws ObjectNotFoundException {
+    CleanupCampaign simulatedCampaign = campaign(CleanupCampaignState.SIMULATED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(simulatedCampaign);
+    when(scanService.getScanFailures(simulatedCampaign)).thenReturn(List.of(new CleanupFailureGroup("cleanup.scanUnitFailed",
+                                                                                                    4L,
+                                                                                                    false)));
+
+    List<CleanupFailureGroup> scanFailures = campaignService.getCampaignScanFailures(CAMPAIGN_ID);
+
+    // Delegated to the service that OWNS the scan and its unit rows, on the very
+    // campaign this one resolved — so the 404 stays this layer's job and the
+    // verdict stays the scan's
+    assertEquals(1, scanFailures.size());
+    assertEquals("cleanup.scanUnitFailed", scanFailures.get(0).getReason());
+    assertEquals(4L, scanFailures.get(0).getCount());
+    verify(scanService).getScanFailures(simulatedCampaign);
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenGroupingTheScanFailuresOfAnUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> campaignService.getCampaignScanFailures(CAMPAIGN_ID));
+    verify(scanService, never()).getScanFailures(any());
+  }
+
+  @Test
+  void shouldKeepTheCsvRowIntactWhenExportingAMultiLineFailureDetail() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.SKIPPED);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+    item.setFailureReason("cleanup.deleteError");
+    // Both line-break flavours, CRLF included: a Windows-produced dump must not
+    // yield two flattened sequences where one is expected
+    item.setFailureDetail("javax.jcr.RepositoryException: boom\r\n at Storage.delete(Storage.java:42)\n at Worker.run(Worker.java:7)");
+    item.setAttemptCount(2L);
+
+    String csv = streamCsvOf(item);
+
+    // ONE ROW PER ITEM, whatever a stack trace looks like: every line break is
+    // flattened to the literal two-character sequence and the field is quoted
+    assertEquals(2, csv.split("\n", -1).length - 1, "The report must hold exactly the header row and ONE item row");
+    assertTrue(csv.contains(",cleanup.deleteError,"), "The bare reason column is unaffected: " + csv);
+    assertTrue(csv.trim()
+                  .endsWith(",2,\"javax.jcr.RepositoryException: boom\\n at Storage.delete(Storage.java:42)\\n at Worker.run(Worker.java:7)\""),
+               "attemptCount then the QUOTED, flattened detail must be the LAST two columns: " + csv);
+  }
+
+  @Test
+  void shouldExportAnEmptyFailureDetailAsAPlainEmptyColumn() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.PURGED);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+
+    String csv = streamCsvOf(item);
+
+    // Quoting emptiness would say nothing and only widen a report that can hold
+    // millions of rows
+    assertTrue(csv.trim().endsWith(",0,"), "A purged item exports a zero attempt count and an empty detail: " + csv);
+  }
+
+  private CleanupCampaignItem skippedItem(long id, String failureReason, long attemptCount) {
+    CleanupCampaignItem item = item(CleanupItemState.SKIPPED);
+    item.setId(id);
+    item.setFailureReason(failureReason);
+    item.setAttemptCount(attemptCount);
+    return item;
   }
 
   private CleanupCampaign campaign(CleanupCampaignState state) {

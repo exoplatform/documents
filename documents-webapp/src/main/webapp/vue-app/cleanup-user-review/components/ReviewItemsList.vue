@@ -74,14 +74,35 @@
           {{ item.path }}
         </div>
       </template>
+      <!-- Rendered by the platform's shared <date-format>, never a locally
+           formatted string, exactly like the admin report table; a row scanned
+           before the column existed carries no date at all, hence the dash.
+           text-no-wrap so a wrapped date cannot grow the row height -->
+      <template slot="item.lastModifiedDate" slot-scope="{item}">
+        <date-format
+          v-if="item.lastModifiedDate"
+          :value="item.lastModifiedDate"
+          :format="$cleanupUtils.DATE_TIME_FORMAT"
+          class="text-no-wrap" />
+        <span v-else>-</span>
+      </template>
       <template slot="item.action" slot-scope="{item}">
         {{ $t(`cleanup.item.action.${item.action}`) }}
       </template>
-      <template slot="item.fileSize" slot-scope="{item}">
-        {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize) }}
+      <!-- Mirrors the server's RECLAIMABLE_BYTES exactly: a PURGE_VERSIONS row
+           reclaims its versions, a DELETE row reclaims its content AND its whole
+           version history, which the delete destroys too. Getting this wrong is
+           visible on this very screen — the banner totals the same expression, so
+           a row showing less than it contributes makes the list stop adding up -->
+      <template slot="item.reclaimableBytes" slot-scope="{item}">
+        {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize + item.versionsSize) }}
       </template>
       <template slot="item.state" slot-scope="{item}">
-        <v-chip small outlined>
+        <v-chip
+          :color="$cleanupUtils.itemStateColor(item.state)"
+          :outlined="!$cleanupUtils.isLoudState(item.state)"
+          :dark="$cleanupUtils.isLoudState(item.state)"
+          small>
           {{ $t(`cleanup.item.state.${item.state}`) }}
         </v-chip>
       </template>
@@ -134,7 +155,10 @@ const UNKNOWN_REASON_KEY = 'cleanup.review.items.failureUnknown';
 // The item table has NO name column: the DTO's 'name' is the last segment of the
 // path, so the Name column is sorted (server-side) on the path.
 const SORT_FIELDS = {name: 'path'};
-const DEFAULT_SORT_FIELD = 'fileSize';
+// The size column shows — and is ordered on — the RECLAIMABLE bytes, which is a
+// computed server-side key ('reclaimableBytes'), not an item field: a DELETE row
+// frees its content plus the history the delete destroys.
+const DEFAULT_SORT_FIELD = 'reclaimableBytes';
 
 export default {
   props: {
@@ -182,14 +206,19 @@ export default {
     },
     // Server-sorted columns only (SORT_FIELDS maps 'name' onto the path). The
     // planned-action and the row-actions columns stay unsortable. The size column
-    // orders on 'fileSize' — the reclaimable size shown for a PURGE_VERSIONS row
-    // is the versions size, but fileSize remains the meaningful ranking here
+    // orders on 'reclaimableBytes' — the same expression it DISPLAYS, so the
+    // biggest win of the list really is its first row: ordering it on 'fileSize'
+    // instead ranked a 1 MB file carrying 500 MB of history as 1 MB while showing
+    // 501 MB. 'lastModifiedDate' needs no SORT_FIELDS entry: it IS the
+    // server-side field name, and it is already in the endpoint's sortable
+    // allowlist
     headers() {
       return [
         {text: this.$t('cleanup.review.items.name'), value: 'name', align: 'left'},
         {text: this.$t('cleanup.review.items.path'), value: 'path', align: 'left'},
+        {text: this.$t('cleanup.review.items.lastModifiedDate'), value: 'lastModifiedDate', align: 'center'},
         {text: this.$t('cleanup.review.items.action'), value: 'action', align: 'center', sortable: false},
-        {text: this.$t('cleanup.review.items.size'), value: 'fileSize', align: 'center'},
+        {text: this.$t('cleanup.review.items.size'), value: 'reclaimableBytes', align: 'center'},
         {text: this.$t('cleanup.review.items.state'), value: 'state', align: 'center'},
         {text: this.$t('cleanup.review.items.actions'), value: 'keep', align: 'center', sortable: false},
       ];

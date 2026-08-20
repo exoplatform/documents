@@ -90,13 +90,75 @@
       <template slot="item.ownerFullName" slot-scope="{item}">
         {{ item.ownerFullName }}
       </template>
+      <!-- Rendered by the platform's shared <date-format>, never a locally
+           formatted string; a row scanned before the column existed carries no
+           date at all, hence the dash -->
+      <template slot="item.lastModifiedDate" slot-scope="{item}">
+        <date-format
+          v-if="item.lastModifiedDate"
+          :value="item.lastModifiedDate"
+          :format="$cleanupUtils.DATE_TIME_FORMAT"
+          class="text-no-wrap" />
+        <span v-else>-</span>
+      </template>
       <template slot="item.action" slot-scope="{item}">
         {{ $t(`cleanup.item.action.${item.action}`) }}
       </template>
+      <!-- The failure feedback hangs off the state chip instead of a column of
+           its own: a reason plus a 2 KB stack trace in every row would wreck a
+           table whose rows overwhelmingly did NOT fail. The tooltip is
+           DISABLED rather than rendered empty on those rows (same pattern as the
+           Execute gate in the campaign header), which also keeps one single chip
+           definition instead of two copies drifting apart -->
       <template slot="item.state" slot-scope="{item}">
-        <v-chip small outlined>
-          {{ $t(`cleanup.item.state.${item.state}`) }}
-        </v-chip>
+        <div class="d-flex align-center justify-center">
+          <v-tooltip
+            :disabled="!item.failureReason"
+            :open-delay="500"
+            bottom>
+            <template #activator="{ on, attrs }">
+              <v-chip
+                :color="$cleanupUtils.itemStateColor(item.state)"
+                :outlined="!$cleanupUtils.isLoudState(item.state)"
+                :dark="$cleanupUtils.isLoudState(item.state)"
+                small
+                v-bind="attrs"
+                v-on="on">
+                {{ $t(`cleanup.item.state.${item.state}`) }}
+              </v-chip>
+            </template>
+            <span v-if="item.failureReason" class="d-block">
+              {{ $t('cleanup.admin.items.failureTooltip', {0: failureLabel(item)}) }}
+            </span>
+            <!-- The requeue count belongs to the SAME tooltip: it qualifies the
+                 failure, it is not worth a column -->
+            <span v-if="item.attemptCount > 0" class="d-block">
+              {{ $t('cleanup.admin.items.attempt', {0: item.attemptCount}) }}
+            </span>
+          </v-tooltip>
+          <!-- Offered ONLY when the row carries a stack trace: failureDetail is
+               served by this administrator endpoint alone (it can name nodes the
+               reviewer of a published campaign must not see), so a button
+               copying nothing must never be shown -->
+          <v-tooltip
+            v-if="item.failureDetail"
+            :open-delay="500"
+            bottom>
+            <template #activator="{ on, attrs }">
+              <v-btn
+                :aria-label="$t('cleanup.admin.items.copyStackTrace')"
+                class="ms-1"
+                icon
+                x-small
+                v-bind="attrs"
+                v-on="on"
+                @click="copyStackTrace(item)">
+                <v-icon size="14">fas fa-copy</v-icon>
+              </v-btn>
+            </template>
+            <span>{{ $t('cleanup.admin.items.copyStackTrace') }}</span>
+          </v-tooltip>
+        </div>
       </template>
       <template slot="item.fileSize" slot-scope="{item}">
         {{ $cleanupSize(item.fileSize) }}
@@ -115,6 +177,10 @@ const MEGA_BYTE = 1048576;
 const ITEM_STATES = ['CANDIDATE', 'EXEMPTED', 'SPARED_BY_MODIFICATION', 'GONE', 'PURGED', 'SKIPPED'];
 const ITEM_ACTIONS = ['DELETE', 'PURGE_VERSIONS'];
 const SEARCH_DEBOUNCE_MS = 400;
+// Generic sentence shown when the failure code carried by a row has no bundle
+// entry of its own: a raw code (or a raw exception class name) must never reach
+// the tooltip
+const UNKNOWN_FAILURE_KEY = 'cleanup.admin.campaign.unexpectedError';
 // The item table has NO name column: the DTO's 'name' is the last segment of the
 // path, so the Name column is sorted (server-side) on the path.
 const SORT_FIELDS = {name: 'path'};
@@ -158,6 +224,7 @@ export default {
         {text: this.$t('cleanup.admin.items.name'), value: 'name', align: 'left'},
         {text: this.$t('cleanup.admin.items.path'), value: 'path', align: 'left'},
         {text: this.$t('cleanup.admin.items.owner'), value: 'ownerFullName', align: 'center', sortable: false},
+        {text: this.$t('cleanup.admin.items.lastModifiedDate'), value: 'lastModifiedDate', align: 'center'},
         {text: this.$t('cleanup.admin.items.action'), value: 'action', align: 'center'},
         {text: this.$t('cleanup.admin.items.state'), value: 'state', align: 'center'},
         {text: this.$t('cleanup.admin.items.fileSize'), value: 'fileSize', align: 'center'},
@@ -196,6 +263,13 @@ export default {
   methods: {
     reload() {
       this.options = {...this.options, page: 1};
+      this.loadItems();
+    },
+    // Live refresh while a run progresses: re-reads the CURRENT page with the
+    // current filters, sort and search — unlike reload(), which restarts at
+    // page 1 because the result set itself changed. Superseded responses are
+    // dropped by loadItems' own token.
+    refreshCurrentPage() {
       this.loadItems();
     },
     // Debounced so a typed term costs ONE query, not one per keystroke; a new
@@ -238,15 +312,68 @@ export default {
         if (token !== this.loadToken) {
           return;
         }
-        document.dispatchEvent(new CustomEvent('notification-alert', {detail: {
-          message: this.$t('cleanup.admin.items.loadError'),
-          type: 'error',
-        }}));
+        this.displayAlert(this.$t('cleanup.admin.items.loadError'), 'error');
       }).finally(() => {
         if (token === this.loadToken) {
           this.loading = false;
         }
       });
+    },
+    // Through the SHARED $cleanupErrorLabel: failureReason is a BARE message
+    // code (cleanup.referentialIntegrity, cleanup.deleteError...), never a code
+    // concatenated with an exception message anymore, so it localizes like every
+    // other cleanup code and falls back to a generic sentence when unknown
+    failureLabel(item) {
+      return this.$cleanupErrorLabel(item?.failureReason, UNKNOWN_FAILURE_KEY);
+    },
+    // A stack trace the admin silently did not get is worse than a message: the
+    // Clipboard API rejects on an insecure origin and when the permission is
+    // denied, so EVERY path here ends on a toast, success or failure.
+    copyStackTrace(item) {
+      const detail = item?.failureDetail;
+      if (!detail) {
+        return;
+      }
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(detail)
+          .then(() => this.displayAlert(this.$t('cleanup.admin.items.stackTraceCopied')))
+          .catch(() => this.copyThroughTextarea(detail));
+      } else {
+        this.copyThroughTextarea(detail);
+      }
+    },
+    // Legacy fallback for the deployments the Clipboard API refuses to serve. A
+    // TEXTAREA, not the input the rest of the app copies single-line paths with:
+    // an input would flatten the multi-line trace into one line.
+    copyThroughTextarea(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', 'readonly');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      let copied = false;
+      try {
+        copied = document.execCommand('copy');
+      } catch (e) {
+        // Deprecated API: a browser that removed it throws instead of answering
+        // false, and the toast below is the only acceptable outcome either way
+        copied = false;
+      } finally {
+        document.body.removeChild(textarea);
+      }
+      if (copied) {
+        this.displayAlert(this.$t('cleanup.admin.items.stackTraceCopied'));
+      } else {
+        this.displayAlert(this.$t('cleanup.admin.items.copyFailed'), 'error');
+      }
+    },
+    displayAlert(message, type) {
+      document.dispatchEvent(new CustomEvent('notification-alert', {detail: {
+        message,
+        type: type || 'success',
+      }}));
     },
     closeMenus(event) {
       if (this?.$refs?.menu1

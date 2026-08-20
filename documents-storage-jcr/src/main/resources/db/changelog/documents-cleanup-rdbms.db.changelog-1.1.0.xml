@@ -118,4 +118,138 @@
                              constraintName="UK_DOC_CLEANUP_ITEM_NODE"/>
     </changeSet>
 
+    <!-- Candidacy dates of the scanned file: both are NULLABLE and added, never
+         backfilled, so the rows of a campaign already scanned keep a NULL and a
+         dry-run running while this changeset applies is left untouched -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-6">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM">
+            <column name="LAST_MODIFIED_DATE" type="TIMESTAMP"/>
+            <column name="CREATED_DATE" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Failure DIAGNOSTIC of an item, split from its localizable FAILURE_REASON
+         message code: a CLOB, because a JCR stack trace with an embedded SQL
+         error does not fit a bounded column. ATTEMPT_COUNT carries the retry
+         attempts already spent on the item. Both are NULLABLE and added, never
+         backfilled — the rows of a campaign already executed keep a NULL detail
+         and a 0 attempt count, and a purge running while this changeset applies
+         is left untouched -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-7">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM">
+            <column name="FAILURE_DETAIL" type="CLOB"/>
+            <column name="ATTEMPT_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Partitions of the parallel dry-run scan: one row per subtree walked by one
+         reader thread, carrying its OWN state, path checkpoint and counters. A new
+         table, so strictly additive: a campaign scanned by the sequential worker
+         simply has no unit row, and gets re-planned into units on its next resume -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-8">
+        <createTable tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT">
+            <column name="ID" type="BIGINT" autoIncrement="${autoIncrement}" startWith="1">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="PK_DOCUMENTS_CLEANUP_SCAN_UNIT"/>
+            </column>
+            <column name="CAMPAIGN_ID" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="UNIT_PATH" type="NVARCHAR(2000)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- SHA-256 hex of UNIT_PATH, carried ONLY to be the unique key: a unique
+                 constraint on UNIT_PATH itself cannot be created on MySQL, where the
+                 table's own CHARSET=UTF8 makes 8 + 2000*3 = 6008 bytes against InnoDB's
+                 3072-byte ceiling, so Liquibase halts and the addon does not deploy.
+                 Same reason changeset -5 keyed the item table on the short NODE_UUID and
+                 not on its adjacent PATH NVARCHAR(2000) -->
+            <column name="UNIT_PATH_HASH" type="NVARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="STATE" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="LAST_SCANNED_PATH" type="NVARCHAR(2000)"/>
+            <column name="SCANNED_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+            <!-- NULLABLE and WITHOUT a default, deliberately: NULL means 'never
+                 counted' and 0 means 'counted, and legitimately empty'. A default of 0
+                 made the two indistinguishable, so a genuinely empty bucket was
+                 re-counted by the estimation phase of every single resume -->
+            <column name="TOTAL_COUNT" type="BIGINT"/>
+            <!-- Walk attempts already spent on this unit, incremented when the
+                 coordinator claims it. It is what BOUNDS the retry of a failed unit: a
+                 subtree that failed MAX_SCAN_UNIT_ATTEMPTS walks is settled-failed and
+                 stops holding the whole dry-run back -->
+            <!-- NOT NULL on purpose: the work-list query reads
+                 NOT (STATE = FAILED AND ATTEMPT_COUNT >= :max), and SQL three-valued logic
+                 turns that into UNKNOWN for a NULL — silently dropping a FAILED unit from
+                 the work list, so its subtree would never be walked again AND never settle,
+                 holding completion open for good. The entity writes a primitive long, so a
+                 NULL is unreachable today; the constraint is what keeps it unreachable -->
+            <column name="ATTEMPT_COUNT" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="FAILURE_REASON" type="NVARCHAR(2000)"/>
+        </createTable>
+        <modifySql dbms="mysql">
+            <append value=" ENGINE=INNODB CHARSET=UTF8 COLLATE utf8_general_ci"/>
+        </modifySql>
+    </changeSet>
+
+    <changeSet author="documents" id="documents-cleanup-1.1.0-9" dbms="hsqldb,oracle,postgresql">
+        <createSequence sequenceName="SEQ_DOCUMENTS_CLEANUP_SCAN_UNIT_ID" startValue="1"/>
+    </changeSet>
+
+    <!-- The unique constraint is what makes unit planning IDEMPOTENT when a scan
+         resumes, exactly as UK_DOC_CLEANUP_ITEM_NODE makes candidate saving
+         idempotent: a re-plan can never duplicate a unit nor reset the checkpoint
+         of a subtree already walked -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-10">
+        <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT" indexName="IDX_DOC_CLEANUP_SCAN_UNIT_STATE">
+            <column name="CAMPAIGN_ID"/>
+            <column name="STATE"/>
+        </createIndex>
+        <addUniqueConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT"
+                             columnNames="CAMPAIGN_ID, UNIT_PATH_HASH"
+                             constraintName="UK_DOC_CLEANUP_SCAN_UNIT_PATH"/>
+    </changeSet>
+
+    <!-- FILE_SIZE and VERSIONS_SIZE feed ARITHMETIC, not just a display: the
+         reclaimable figure of a row is FILE_SIZE + VERSIONS_SIZE for a DELETE
+         (see CleanupCampaignItemDAO#RECLAIMABLE_BYTES), and under SQL
+         three-valued logic NULL + n is NULL while SUM SKIPS a NULL — so one such
+         row would drop out of sumReclaimableBytesByState, of the campaigns-list
+         aggregates and of both comparison queries ENTIRELY, under-reporting the
+         campaign by that whole row instead of by its versions alone, and
+         silently. COALESCE(SUM(...), 0) does not cover it: it guards an EMPTY
+         result, not a NULL addend. The aggregates are the ONE path reading these
+         columns without materializing the entity — which maps both as a
+         primitive long, so a NULL is unreachable from the application today; the
+         constraint is what keeps it unreachable. Same defect class, and same fix,
+         as ATTEMPT_COUNT in changeset -8. Existing NULLs (there are none from the
+         application, but a row hand-fixed by a DBA is not impossible) are set to
+         0 as part of the constraint change, and the zero DEFAULT is (re)declared
+         AFTER it: on MySQL the NOT NULL modification rewrites the column
+         definition and would drop a default declared before it. No index or key
+         is added — both columns are BIGINT, but the MySQL row-size lesson of
+         changesets -5/-8 is that a key belongs on the narrow column only -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-11">
+        <addNotNullConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                              columnName="FILE_SIZE"
+                              columnDataType="BIGINT"
+                              defaultNullValue="0"/>
+        <addNotNullConstraint tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                              columnName="VERSIONS_SIZE"
+                              columnDataType="BIGINT"
+                              defaultNullValue="0"/>
+        <addDefaultValue tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                         columnName="FILE_SIZE"
+                         columnDataType="BIGINT"
+                         defaultValueNumeric="0"/>
+        <addDefaultValue tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM"
+                         columnName="VERSIONS_SIZE"
+                         columnDataType="BIGINT"
+                         defaultValueNumeric="0"/>
+    </changeSet>
+
 </databaseChangeLog>

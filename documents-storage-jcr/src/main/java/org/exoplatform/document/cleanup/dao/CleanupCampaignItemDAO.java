@@ -31,17 +31,108 @@ import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignItemEntity, Long> {
 
   /**
-   * Reclaimable bytes of an item: content size for a DELETE action, versions
-   * size for a PURGE_VERSIONS one. The 'DELETE' literal must stay equal to
-   * {@code CleanupAction.DELETE.name()} (the entity stores the action as a
-   * plain string) — guarded by CleanupCampaignItemDAOTest. Defined once and
-   * concatenated (compile-time constant) into the queries below.
+   * Reclaimable bytes of an item — the bytes the item's OWN action frees:
+   * <ul>
+   * <li>DELETE: the content size PLUS {@code versionsSize}. A hard delete
+   * destroys the file's whole version history along with its content, and
+   * {@code CleanupJcrStorage#deleteNode} reports exactly that sum back as
+   * {@code reclaimedBytes} — summing content alone here under-reported every
+   * DELETE candidate by the entire weight of its versions, on the very number
+   * an administrator publishes a campaign on</li>
+   * <li>PURGE_VERSIONS: {@code versionsSize} alone, the content being
+   * untouched</li>
+   * </ul>
+   * This works as a plain sum because {@code versionsSize} means 'the version
+   * bytes THIS action reclaims', not 'the whole history' nor 'the purgeable
+   * subset': the scan writes the whole history on a DELETE row and the removal
+   * set on a PURGE_VERSIONS one (see
+   * {@code CleanupJcrStorage#toCandidate}), so prediction and execution report
+   * the same figure.
+   * <p>
+   * The 'DELETE' literal must stay equal to {@code CleanupAction.DELETE.name()}
+   * (the entity stores the action as a plain string) — guarded by
+   * CleanupCampaignItemDAOTest. Defined once and concatenated (compile-time
+   * constant) into the queries below.
    */
-  String RECLAIMABLE_BYTES = "CASE WHEN i.action = 'DELETE' THEN i.fileSize ELSE i.versionsSize END";
+  String RECLAIMABLE_BYTES = "CASE WHEN i.action = 'DELETE' THEN i.fileSize + i.versionsSize ELSE i.versionsSize END";
+
+  /**
+   * {@link #RECLAIMABLE_BYTES} as an {@code ORDER BY} key, which is how the
+   * review list — asked for it under the logical key
+   * {@code CleanupConstants#RECLAIMABLE_BYTES_SORT_KEY} — gets ordered by what
+   * each row actually FREES instead of by its
+   * content size alone — a 1 MB file carrying 500 MB of history displayed 501 MB
+   * and sorted as 1 MB, which defeats the very triage the ordering exists for.
+   * <p>
+   * Concatenated from the constant above rather than restated: an ORDER BY
+   * drifting from the SUM the campaign totals would rank rows by one definition
+   * of 'reclaimable' and add them up by another.
+   * <p>
+   * The PARENTHESES are load-bearing, not cosmetic: the Storage hands this
+   * expression over as a {@code JpaSort.unsafe} order, and Spring Data prefixes
+   * a sort property with the query alias UNLESS it holds a '(' (see
+   * {@code JpaQueryTransformerSupport#shouldPrefixWithAlias}) — bare, the CASE
+   * would be rendered as {@code i.CASE WHEN ...} and the query would not parse.
+   */
+  String RECLAIMABLE_BYTES_ORDER_BY = "(" + RECLAIMABLE_BYTES + ")";
 
   Page<CleanupCampaignItemEntity> findByCampaignId(long campaignId, Pageable pageable);
 
   Page<CleanupCampaignItemEntity> findByCampaignIdAndState(long campaignId, String state, Pageable pageable);
+
+  /**
+   * KEYSET page of the items of a campaign in a given state: the ones whose id
+   * is strictly greater than the last one seen, oldest id first. This is what
+   * makes the execution worker's forward progress STRUCTURAL — an offset page 0
+   * re-read relies on every processed item leaving the state, so a single item
+   * that can never be persisted feeds it back forever (a poison pill). Returns a
+   * plain List: the worker drives its loop from the last id it saw, it has no
+   * use for a total count, and skipping it spares one count query per batch.
+   */
+  List<CleanupCampaignItemEntity> findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(long campaignId,
+                                                                                       String state,
+                                                                                       long lastId,
+                                                                                       Pageable pageable);
+
+  /**
+   * KEYSET page of the RETRYABLE failures of a campaign: SKIPPED items whose
+   * failure reason belongs to the allowlist the Service owns and whose attempt
+   * count is still under the bound. Keyset-paged for the same reason as above,
+   * and one that bites harder here: the requeue MUTATES the very state the
+   * filter matches on, so an offset page would skip rows as the result set
+   * shrinks underneath it.
+   */
+  @Query("""
+      SELECT i FROM CleanupCampaignItem i
+      WHERE i.campaignId = :campaignId
+      AND i.state = :state
+      AND i.failureReason IN :failureReasons
+      AND i.attemptCount < :maxAttemptCount
+      AND i.id > :lastId
+      """)
+  List<CleanupCampaignItemEntity> findRetryableFailures(@Param("campaignId")
+  long campaignId,
+                                                        @Param("state")
+                                                        String state,
+                                                        @Param("failureReasons")
+                                                        Collection<String> failureReasons,
+                                                        @Param("maxAttemptCount")
+                                                        long maxAttemptCount,
+                                                        @Param("lastId")
+                                                        long lastId,
+                                                        Pageable pageable);
+
+  /**
+   * Per-reason item counts of a campaign's failures, in ONE grouped query (rows:
+   * failure reason, item count). Never by loading the SKIPPED rows: a campaign
+   * can hold hundreds of thousands of them, and the console only ever displays
+   * the handful of distinct reasons behind them.
+   */
+  @Query("SELECT i.failureReason, COUNT(i) FROM CleanupCampaignItem i" +
+      " WHERE i.campaignId = :campaignId AND i.state = :state GROUP BY i.failureReason")
+  List<Object[]> countFailuresByReason(@Param("campaignId")
+  long campaignId, @Param("state")
+  String state);
 
   List<CleanupCampaignItemEntity> findByCampaignIdAndNodeUuidIn(long campaignId, Collection<String> nodeUuids);
 

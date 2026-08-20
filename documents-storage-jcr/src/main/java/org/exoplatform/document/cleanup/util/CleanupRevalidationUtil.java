@@ -43,7 +43,7 @@ public class CleanupRevalidationUtil {
    * <li>node no longer a candidate:
    * {@link CleanupItemState#SPARED_BY_MODIFICATION}</li>
    * <li>node still a candidate: refreshes the item's action, fileSize,
-   * versionsSize and computedAt</li>
+   * versionsSize, candidacy dates (last-modified and created) and computedAt</li>
    * </ul>
    * The item is mutated, never persisted here.
    *
@@ -69,6 +69,10 @@ public class CleanupRevalidationUtil {
       item.setAction(revalidation.getCandidate().getAction());
       item.setFileSize(revalidation.getCandidate().getFileSize());
       item.setVersionsSize(revalidation.getCandidate().getVersionsSize());
+      // Re-read from the revalidated node: a row re-scanned after the file was
+      // touched must not keep the date of the previous scan
+      item.setLastModifiedDate(revalidation.getCandidate().getLastModifiedTime());
+      item.setCreatedDate(revalidation.getCandidate().getCreatedTime());
       item.setComputedAt(System.currentTimeMillis());
       return true;
     }

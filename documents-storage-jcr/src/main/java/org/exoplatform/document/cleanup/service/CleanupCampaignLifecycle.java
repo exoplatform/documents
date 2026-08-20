@@ -50,6 +50,16 @@ import org.exoplatform.document.cleanup.websocket.CleanupWsMessage;
 @Component
 public class CleanupCampaignLifecycle {
 
+  /**
+   * The ONE allowed-transitions table of a campaign's lifecycle.
+   * <p>
+   * COMPLETED is no longer a dead end: it may re-enter EXECUTING, and ONLY for a
+   * RETRY of the campaign's failed items — no new scan, no new grace period. That
+   * edge is safe precisely because the execution worker revalidates every item
+   * against JCR immediately before deleting it, so an item since exempted,
+   * modified or deleted is spared on its own. Every other guard is unchanged:
+   * CANCELLED stays terminal, and nothing else may enter EXECUTING but LOCKED.
+   */
   private static final Map<CleanupCampaignState, Set<CleanupCampaignState>> ALLOWED_TRANSITIONS =
                                                                                                 Map.of(DRAFT,
                                                                                                        Set.of(DRY_RUN_RUNNING,
@@ -69,7 +79,7 @@ public class CleanupCampaignLifecycle {
                                                                                                        Set.of(COMPLETED,
                                                                                                               CANCELLED),
                                                                                                        COMPLETED,
-                                                                                                       Set.of(),
+                                                                                                       Set.of(EXECUTING),
                                                                                                        CANCELLED,
                                                                                                        Set.of());
 

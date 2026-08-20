@@ -31,6 +31,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.annotation.Secured;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -46,12 +47,15 @@ import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
+import org.exoplatform.document.cleanup.rest.model.UpdateCampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
+import org.exoplatform.document.cleanup.util.CleanupConstants;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,14 +68,22 @@ import jakarta.servlet.http.HttpServletRequest;
 @RequestMapping("/cleanup/campaigns")
 public class CleanupCampaignRest {
 
-  private static final Set<String> SORTABLE_ITEM_FIELDS = Set.of("id",
-                                                                 "path",
-                                                                 "ownerIdentityId",
-                                                                 "fileSize",
-                                                                 "versionsSize",
-                                                                 "state",
-                                                                 "action",
-                                                                 "reclaimedBytes");
+  /**
+   * Sortable keys, all of them item-entity attributes but ONE: the computed
+   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY}, which the Storage layer
+   * translates into an ORDER BY over the reclaimable expression itself. An
+   * unknown key still gets a 400 — this set stays the whole contract.
+   */
+  private static final Set<String> SORTABLE_ITEM_FIELDS  = Set.of("id",
+                                                                  "path",
+                                                                  "ownerIdentityId",
+                                                                  "fileSize",
+                                                                  "versionsSize",
+                                                                  "lastModifiedDate",
+                                                                  "state",
+                                                                  "action",
+                                                                  "reclaimedBytes",
+                                                                  CleanupConstants.RECLAIMABLE_SORT_KEY);
 
   /**
    * Sortable fields that are already unique per item row, hence already yield a
@@ -83,11 +95,27 @@ public class CleanupCampaignRest {
    * the same path across a resumed scan yields two rows sharing a path, at which
    * point an ordering ending on the path stops being total.
    */
-  private static final Set<String> UNIQUE_ITEM_FIELDS   = Set.of("id");
+  private static final Set<String> UNIQUE_ITEM_FIELDS    = Set.of("id");
 
-  private static final String      TIEBREAKER_FIELD     = "id";
+  private static final String      TIEBREAKER_FIELD      = "id";
 
-  private static final String      DEFAULT_SORT_FIELD   = "fileSize";
+  /**
+   * Default ordering of the ADMIN items table: its size column shows the item's
+   * CONTENT size (and its minSize filter narrows on that same column), so
+   * ranking it by {@code fileSize} is ranking it by what it displays.
+   */
+  private static final String      DEFAULT_ITEM_SORT     = "fileSize";
+
+  /**
+   * Default ordering of the USER review list: what each row actually FREES, not
+   * its content size alone. The two diverge for a DELETE — which reclaims its
+   * content PLUS the version history the delete destroys — so a 1 MB file
+   * carrying 500 MB of history displayed 501 MB while sorting as 1 MB, and the
+   * row freeing the most could sit at the bottom of a list the UI labels sorted
+   * by size. That ordering exists for TRIAGE: a user holding ten thousand
+   * candidates keeps what matters by starting at the top of it.
+   */
+  private static final String      DEFAULT_MY_ITEMS_SORT = CleanupConstants.RECLAIMABLE_SORT_KEY;
 
   @Autowired
   private CleanupCampaignService   campaignService;
@@ -157,6 +185,43 @@ public class CleanupCampaignRest {
       return CleanupEntityBuilder.build(campaignService.getCampaign(id));
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
+  /**
+   * PATCH on the campaign resource rather than an {@code {id}/rename} or
+   * {@code {id}/grace} sub-resource: this updates ATTRIBUTES of the campaign, it
+   * triggers no action and no lifecycle transition — unlike the {@code publish} /
+   * {@code execute} sub-resources next to it, which do. ONE endpoint for the
+   * whole editable set, each field applied only when the body carries it: a
+   * second endpoint per attribute would multiply round-trips for a form the
+   * console submits at once. Answers the updated campaign so the console
+   * re-renders its list and its header from the response instead of refetching.
+   */
+  @Secured("administrators")
+  @PatchMapping(path = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "PATCH", summary = "Update a cleanup campaign", description = "Partially update the editable attributes of a cleanup campaign — its name and its grace period — each one applied only when the body carries it. The name is pure metadata and is editable in any state, a completed or cancelled campaign included; the grace period is state-guarded and only editable while the campaign is DRAFT, SIMULATED or PUBLISHED, and editing it on a PUBLISHED campaign moves its grace deadline — which may then only be EXTENDED, never shortened, a deadline having been promised to the owners of the candidate files")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public CampaignRestEntity updateCampaign(
+                                           @Parameter(description = "Campaign identifier", required = true)
+                                           @PathVariable("id")
+                                           long id,
+                                           @io.swagger.v3.oas.annotations.parameters.RequestBody
+                                           @RequestBody
+                                           UpdateCampaignRestEntity updateEntity) {
+    try {
+      // Both fields are passed through verbatim: trimming them, validating them
+      // and deciding which state may edit which is the Service's business, this
+      // layer holds none
+      return CleanupEntityBuilder.build(campaignService.updateCampaign(id, updateEntity.getName(), updateEntity.getGraceDays()));
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }
   }
 
@@ -232,6 +297,95 @@ public class CleanupCampaignRest {
     }
   }
 
+  /**
+   * A sub-resource POST, unlike the rename PATCH next to it: a retry is an
+   * ACTION with a lifecycle transition behind it (COMPLETED back to EXECUTING),
+   * not the update of an attribute.
+   * <p>
+   * ASYNCHRONOUS like {@code execute}: the failed items are requeued and the
+   * campaign switched to EXECUTING synchronously, the purge itself is handed off
+   * to a worker thread — hence the 202. Progress is pushed on the
+   * {@code /eXo/Application/CleanupCampaign} CometD channel.
+   */
+  @Secured("administrators")
+  @PostMapping(path = "{id}/retry", produces = MediaType.APPLICATION_JSON_VALUE)
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  @Operation(method = "POST", summary = "Retry the failed items of a completed cleanup campaign", description = "Requeue the retryable failed items of a COMPLETED campaign and re-execute it asynchronously — no new scan, no new grace period. Returns 202: the purge progress is followed on the CometD channel /eXo/Application/CleanupCampaign")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "202", description = "Retry accepted, progress followed on the CometD channel"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public CampaignRestEntity retryCampaign(
+                                          @Parameter(description = "Campaign identifier", required = true)
+                                          @PathVariable("id")
+                                          long id) {
+    try {
+      return CleanupEntityBuilder.build(campaignService.retryCampaign(id));
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+  }
+
+  /**
+   * Grouped failures of a campaign, so the console can show WHY items were
+   * skipped and which of those failures a retry would re-attempt — the
+   * {@code retryable} flag is the SERVER's answer, the client never decides it.
+   * <p>
+   * Answers an EMPTY list when the campaign has no failed item, and also once the
+   * retention job archived and purged its item rows: the groups are computed over
+   * those rows and are not part of the summary snapshotted at completion.
+   */
+  @Secured("administrators")
+  @GetMapping(path = "{id}/failures", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "GET", summary = "Retrieve the grouped failures of a cleanup campaign", description = "Per-reason counts of a campaign's skipped items, each flagged retryable or not. Empty once the retention job purged the item rows")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public List<CampaignFailureGroupRestEntity> getCampaignFailures(
+                                                                 @Parameter(description = "Campaign identifier", required = true)
+                                                                 @PathVariable("id")
+                                                                 long id) {
+    try {
+      return campaignService.getCampaignFailures(id).stream().map(CleanupEntityBuilder::build).toList();
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
+  /**
+   * Grouped failures of a campaign's dry-run SCAN, so the console can say that
+   * the report the administrator is about to publish does NOT cover the whole
+   * tree, and WHY — one entry per subtree failure reason, with how many subtrees
+   * carry it.
+   * <p>
+   * Answers an EMPTY list for every campaign whose scan covered the whole tree,
+   * which is the normal case: only a scan the worker RECORDED as incomplete —
+   * subtrees that failed every walk attempt they had — has anything to report
+   * here. A subtree that failed while attempts remain is not one of them: the
+   * campaign is still DRY_RUN_RUNNING and the watchdog is re-walking it.
+   */
+  @Secured("administrators")
+  @GetMapping(path = "{id}/scan-failures", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "GET", summary = "Retrieve the grouped scan failures of a cleanup campaign", description = "Per-reason counts of the subtrees a campaign's dry run could not walk. Empty unless the scan was recorded incomplete")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public List<CampaignFailureGroupRestEntity> getCampaignScanFailures(
+                                                                     @Parameter(description = "Campaign identifier", required = true)
+                                                                     @PathVariable("id")
+                                                                     long id) {
+    try {
+      return campaignService.getCampaignScanFailures(id).stream().map(CleanupEntityBuilder::build).toList();
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
   @Secured("administrators")
   @GetMapping(path = "{id}/items", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(method = "GET", summary = "Retrieve the items of a cleanup campaign", description = "Retrieve the items of a cleanup campaign, with optional owner/state/action/size filters and an optional path search, paged and sorted")
@@ -269,7 +423,7 @@ public class CleanupCampaignRest {
                                                               @RequestParam(name = "sort", required = false)
                                                               String sort) {
     try {
-      Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+      Pageable pageable = PageRequest.of(page, size, parseSort(sort, DEFAULT_ITEM_SORT));
       return CleanupEntityBuilder.build(campaignService.getCampaignItems(id,
                                                                          ownerIdentityId,
                                                                          parseEnum(CleanupItemState.class, state),
@@ -277,7 +431,13 @@ public class CleanupCampaignRest {
                                                                          minSize,
                                                                          search,
                                                                          pageable),
-                                        identityManager);
+                                        identityManager,
+                                        // ADMINISTRATORS-only endpoint: the
+                                        // failure detail may name nodes outside a
+                                        // given user's visibility, so it is
+                                        // serialized HERE and nowhere else — see
+                                        // the builder's javadoc
+                                        true);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalArgumentException e) {
@@ -337,7 +497,7 @@ public class CleanupCampaignRest {
 
   @Secured("users")
   @GetMapping(path = "published/my-items", produces = MediaType.APPLICATION_JSON_VALUE)
-  @Operation(method = "GET", summary = "Retrieve the current user's cleanup candidates", description = "Retrieve the currently relevant campaign's items owned by the user (own files and managed-space files), with an optional path search, paged and sorted — by size descending by default")
+  @Operation(method = "GET", summary = "Retrieve the current user's cleanup candidates", description = "Retrieve the currently relevant campaign's items owned by the user (own files and managed-space files), with an optional path search, paged and sorted — by reclaimable size descending by default")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
@@ -357,10 +517,16 @@ public class CleanupCampaignRest {
                                                         @RequestParam(name = "sort", required = false)
                                                         String sort) {
     try {
-      // Same allowlist, same default and same stable tiebreaker as the admin
-      // items endpoint: the review table is server-sorted too
-      Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-      return CleanupEntityBuilder.build(campaignService.getMyItems(request.getRemoteUser(), search, pageable), identityManager);
+      // Same allowlist and same stable tiebreaker as the admin items endpoint (the
+      // review table is server-sorted too), but its OWN default: this list ranks
+      // rows by what each one frees, see DEFAULT_MY_ITEMS_SORT
+      Pageable pageable = PageRequest.of(page, size, parseSort(sort, DEFAULT_MY_ITEMS_SORT));
+      // The failure detail is EXPLICITLY withheld here: this endpoint is
+      // @Secured("users"), and a stack trace can name a referencing node in a
+      // space the caller is not a member of. The bare failureReason code stays
+      return CleanupEntityBuilder.build(campaignService.getMyItems(request.getRemoteUser(), search, pageable),
+                                        identityManager,
+                                        false);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalArgumentException e) {
@@ -385,12 +551,15 @@ public class CleanupCampaignRest {
 
   /**
    * Parses a 'field,asc|desc' sort against {@link #SORTABLE_ITEM_FIELDS} —
-   * defaulting to {@code fileSize DESC}, the ordering both item tables open on —
-   * then makes it total with {@link #withTiebreaker(Sort)}.
+   * defaulting, DESCENDING, to the field the calling endpoint opens on
+   * ({@link #DEFAULT_ITEM_SORT} for the admin table,
+   * {@link #DEFAULT_MY_ITEMS_SORT} for the user review list, which rank on
+   * different figures because they DISPLAY different ones) — then makes it total
+   * with {@link #withTiebreaker(Sort)}.
    */
-  private Sort parseSort(String sort) {
+  private Sort parseSort(String sort, String defaultField) {
     if (StringUtils.isBlank(sort)) {
-      return withTiebreaker(Sort.by(Sort.Direction.DESC, DEFAULT_SORT_FIELD));
+      return withTiebreaker(Sort.by(Sort.Direction.DESC, defaultField));
     }
     String[] parts = sort.split(",");
     String field = parts[0].trim();
@@ -406,12 +575,12 @@ public class CleanupCampaignRest {
    * Appends {@code id ASC} as the LAST key of every ordering, default or
    * client-requested.
    * <p>
-   * {@code fileSize} — like {@code state}, {@code action}, {@code path} and
-   * {@code ownerIdentityId} — is NOT unique, so an offset-paged query over a
-   * block of ties has no total order: the database is free to return the same
-   * row on two pages and to never return another one. On a review table that
-   * means a user could page through their whole list and never see a file that
-   * is about to be deleted. {@code id} is the primary key, so appending it makes
+   * {@code fileSize} — like the computed reclaimable key, {@code state},
+   * {@code action}, {@code path} and {@code ownerIdentityId} — is NOT unique, so
+   * an offset-paged query over a block of ties has no total order: the database
+   * is free to return the same row on two pages and to never return another one.
+   * On a review table that means a user could page through their whole list and
+   * never see a file that is about to be deleted. {@code id} is the primary key, so appending it makes
    * ANY ordering total — and, unlike the path, it depends on no invariant the
    * schema does not enforce (see {@link #UNIQUE_ITEM_FIELDS}).
    * <p>

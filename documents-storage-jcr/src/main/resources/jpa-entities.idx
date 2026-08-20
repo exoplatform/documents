@@ -1,2 +1,3 @@
 org.exoplatform.document.cleanup.entity.CleanupCampaignEntity
 org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity
+org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity

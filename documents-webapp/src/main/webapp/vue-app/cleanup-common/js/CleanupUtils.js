@@ -35,43 +35,105 @@ export const DATE_TIME_FORMAT = {
  * keep/un-keep endpoints report is a permanent refusal (not the owner, review
  * closed, item not decidable anymore...), so telling the user to try again would
  * send them in circles.
+ *
+ * Scoped to the USER's keep/un-keep decisions, and to them only. The purge's own
+ * failure codes (cleanup.referentialIntegrity, cleanup.deleteError...) are a
+ * DIFFERENT notion and must NOT be added here: their retryability is decided by
+ * the server, which answers it per group on the campaign failures endpoint, and
+ * the admin UI reads that verdict instead of re-deriving one from the code.
  */
 export const RETRYABLE_FAILURE_REASONS = ['cleanup.keepFailed', 'cleanup.unkeepFailed'];
 
 /**
- * Renders a REMAINING DURATION — never a deadline compared to the browser clock.
- * The server ships the remaining milliseconds (campaign/summary DTO
- * 'remainingMillis'), the caller counts them down locally and hands the result
- * here, so a skewed client can no longer disagree with the server about whether
- * a window is still open.
+ * State -> Vuetify colour, defined ONCE for the three tables and the campaign
+ * header that render these chips: a per-template ternary would drift the day a
+ * state is added, and the same state must not read differently depending on
+ * where it is shown.
  *
- * @param {number} remainingMillis milliseconds left, 0 or negative for none
- * @returns {string} human-readable duration, empty when nothing is left
+ * The scale carries meaning rather than decoration: what still needs a decision
+ * is amber, what refused needs attention and is red, what is settled fades to
+ * grey, and what is safe is green.
  */
-export function formatDuration(remainingMillis) {
-  if (!remainingMillis || remainingMillis <= 0) {
-    return '';
-  }
-  const totalMinutes = Math.ceil(remainingMillis / 60000);
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  if (days) {
-    return hours ? `${days}d ${hours}h` : `${days}d`;
-  } else if (hours) {
-    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
-  } else {
-    return `${minutes}m`;
-  }
+const ITEM_STATE_COLORS = {
+  CANDIDATE: 'warning',              // slated for deletion: the rows to look at
+  EXEMPTED: 'success',               // kept by its owner
+  SPARED_BY_MODIFICATION: 'info',    // spared, but by a side effect, not a decision
+  GONE: 'grey lighten-1',            // vanished on its own, nothing was done
+  PURGED: 'grey',                    // done, unremarkable
+  SKIPPED: 'error',                  // something refused: needs attention
+};
+
+const CAMPAIGN_STATE_COLORS = {
+  DRAFT: 'grey',
+  DRY_RUN_RUNNING: 'info',           // working, and harmless
+  SIMULATED: 'indigo',               // a decision point: publish or not
+  PUBLISHED: 'warning',              // the users' clock is running
+  LOCKED: 'deep-orange',             // review closed, purge imminent
+  EXECUTING: 'error',                // deleting right now
+  COMPLETED: 'success',
+  CANCELLED: 'grey darken-1',
+};
+
+/**
+ * The two states worth shouting: a purge in flight and a refusal. They render
+ * as filled chips, everything else stays outlined so a table of thirty rows
+ * does not turn into thirty coloured blocks.
+ */
+const LOUD_STATES = ['EXECUTING', 'SKIPPED'];
+
+/**
+ * @param {String} state item state
+ * @returns {String} Vuetify colour for that state, grey when unknown
+ */
+export function itemStateColor(state) {
+  return ITEM_STATE_COLORS[state] || 'grey';
 }
 
-export function formatEta(etaSeconds) {
-  if (etaSeconds == null || etaSeconds < 0) {
-    return '';
+/**
+ * @param {String} state campaign state
+ * @returns {String} Vuetify colour for that state, grey when unknown
+ */
+export function campaignStateColor(state) {
+  return CAMPAIGN_STATE_COLORS[state] || 'grey';
+}
+
+/**
+ * @param {String} state item or campaign state
+ * @returns {Boolean} true when the chip must be filled rather than outlined
+ */
+export function isLoudState(state) {
+  return LOUD_STATES.includes(state);
+}
+
+/**
+ * Splits a duration into the units a human reads, most significant first, and
+ * keeps at most the TWO most significant non-zero ones: '2d 4h', '2h 46m',
+ * '46m 41s', '41s'. Seconds only ever show up when the whole duration is under
+ * an hour — nobody reads '2d 4h 17m 3s'.
+ *
+ * Pure on purpose: the unit LABELS are localized by $cleanupDuration (see
+ * ../services.js), which is the only place with a $t to call.
+ *
+ * @param {Number} millis duration in milliseconds
+ * @returns {Array} [{unit, value}] with unit in 'day'|'hour'|'minute'|'second'
+ */
+export function durationParts(millis) {
+  if (!millis || millis <= 0) {
+    return [];
   }
-  const minutes = Math.floor(etaSeconds / 60);
-  const seconds = Math.floor(etaSeconds % 60);
-  return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
+  const totalSeconds = Math.floor(millis / 1000);
+  const parts = [
+    {unit: 'day', value: Math.floor(totalSeconds / 86400)},
+    {unit: 'hour', value: Math.floor((totalSeconds % 86400) / 3600)},
+    {unit: 'minute', value: Math.floor((totalSeconds % 3600) / 60)},
+    {unit: 'second', value: totalSeconds % 60},
+  ];
+  const firstIndex = parts.findIndex(part => part.value > 0);
+  if (firstIndex < 0) {
+    // Under a second, but not zero: never render an empty duration
+    return [{unit: 'second', value: 0}];
+  }
+  return parts.slice(firstIndex, firstIndex + 2).filter(part => part.value > 0);
 }
 
 export function progressPercentage(processed, total) {

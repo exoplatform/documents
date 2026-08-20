@@ -40,7 +40,22 @@ public class CleanupCampaignItem {
 
   private long             fileSize;
 
+  /**
+   * Version bytes this item's ACTION reclaims — the whole version history for a
+   * DELETE, the removal set for a PURGE_VERSIONS. Action-dependent by design,
+   * see {@code CleanupCampaignItemDAO#RECLAIMABLE_BYTES}.
+   */
   private long             versionsSize;
+
+  /** Last modification date of the file, as read by the scan. */
+  private long             lastModifiedDate;
+
+  /**
+   * Creation date of the file, as read by the scan. Carried along the
+   * last-modified one — both being older than the campaign period is what made
+   * the file a candidate.
+   */
+  private long             createdDate;
 
   private CleanupAction    action;
 
@@ -56,6 +71,21 @@ public class CleanupCampaignItem {
 
   private long             reclaimedBytes;
 
+  /**
+   * Localizable message code of the failure, never concatenated with an
+   * exception message: the console localizes it and the grouped-failures
+   * aggregate groups on it.
+   */
   private String           failureReason;
+
+  /**
+   * Compact diagnostic of the failure, for an ADMINISTRATOR only — it names
+   * nodes and paths the item's own owner may not see. Served on the admin item
+   * endpoint and the CSV report exclusively, see the REST layer.
+   */
+  private String           failureDetail;
+
+  /** Purge attempts already spent on this item, incremented by every retry. */
+  private long             attemptCount;
 
 }

@@ -17,7 +17,9 @@
 package org.exoplatform.document.cleanup.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -30,10 +32,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,11 +45,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.JpaSort;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -58,7 +64,9 @@ import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.util.CleanupConstants;
 
 /**
  * Storage tests pinning the entity/model mapping round-trip, the candidate
@@ -81,6 +89,10 @@ class CleanupCampaignStorageTest {
   private static final long      CAMPAIGN_ID        = 3L;
 
   private static final long      OTHER_CAMPAIGN_ID  = 4L;
+
+  private static final String    SKIPPED_STATE      = "SKIPPED";
+
+  private static final String    FAILURE_DETAIL     = "javax.jcr.RepositoryException: boom";
 
   @Mock
   private CleanupCampaignDAO     campaignDAO;
@@ -176,6 +188,89 @@ class CleanupCampaignStorageTest {
     assertEquals(400, entity.getCheckpointOffset());
   }
 
+  /**
+   * THE finding this method exists for: a rename is a TARGETED write. Every
+   * column the schedule-driven writers own — the state the lifecycle owns, the
+   * progress counters and the scan checkpoint the workers own, the summary and
+   * the archive file id the retention job owns — must come out of the write
+   * EXACTLY as it went in, because the whole-row save this replaces used to
+   * carry a stale snapshot of all of them back over their writes.
+   */
+  @Test
+  void updateEditableAttributesWritesTheNameAndNothingElse() {
+    CleanupCampaignEntity entity = liveEntity();
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.of(entity));
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, "Renamed campaign", null, null);
+
+    verify(campaignDAO).save(entity);
+    assertEquals("Renamed campaign", entity.getName());
+    // The lifecycle's column: a rename racing the lock tick must not undo a
+    // LOCKED transition by writing PUBLISHED back
+    assertEquals(CleanupCampaignState.LOCKED.name(), entity.getState());
+    // The workers' columns: a rename must not rewind the scan onto an older
+    // checkpoint, nor make the progress bar go backwards
+    assertEquals(120, entity.getProcessedCount());
+    assertEquals(400, entity.getTotalCount());
+    assertEquals("/Groups/spaces/engineering", entity.getCheckpointPath());
+    assertEquals(90, entity.getCheckpointOffset());
+    assertEquals(30, entity.getEtaSeconds());
+    // The retention job's columns: nulling these ORPHANS the CSV report in the
+    // file service, and the UI can never recover from it
+    assertEquals("{\"candidateCount\":5}", entity.getSummaryJson());
+    assertEquals(77L, entity.getArchiveFileId());
+    // A rename touches NEITHER the grace period nor the deadline
+    assertEquals(7, entity.getGraceDays());
+    assertEquals(new Date(5678L), entity.getLockDate());
+  }
+
+  /**
+   * A grace edit writes the grace period AND the deadline derived from it — the
+   * Service being the one that derived it — and still nothing else, the NAME
+   * included.
+   */
+  @Test
+  void updateEditableAttributesWritesTheGracePeriodAndItsDeadlineOnly() {
+    CleanupCampaignEntity entity = liveEntity();
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.of(entity));
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, null, 21, 9999L);
+
+    verify(campaignDAO).save(entity);
+    assertEquals(21, entity.getGraceDays());
+    assertEquals(new Date(9999L), entity.getLockDate());
+    assertEquals("Live campaign", entity.getName(), "A grace-only edit must not write the NAME column");
+    assertEquals(CleanupCampaignState.LOCKED.name(), entity.getState());
+    assertEquals(120, entity.getProcessedCount());
+    assertEquals("/Groups/spaces/engineering", entity.getCheckpointPath());
+    assertEquals("{\"candidateCount\":5}", entity.getSummaryJson());
+    assertEquals(77L, entity.getArchiveFileId());
+  }
+
+  /**
+   * A null deadline means 'leave the LOCK_DATE column ALONE' — which is what a
+   * grace edit before publication passes, having no deadline to derive yet.
+   */
+  @Test
+  void updateEditableAttributesLeavesTheLockDateAloneWhenNoneIsRederived() {
+    CleanupCampaignEntity entity = liveEntity();
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.of(entity));
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, null, 21, null);
+
+    assertEquals(21, entity.getGraceDays());
+    assertEquals(new Date(5678L), entity.getLockDate(), "A null deadline must never zero the LOCK_DATE column");
+  }
+
+  @Test
+  void updateEditableAttributesIgnoresMissingCampaign() {
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.empty());
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, "Renamed campaign", 21, 9999L);
+
+    verify(campaignDAO, never()).save(any());
+  }
+
   @Test
   void updateProgressIgnoresMissingCampaign() {
     when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.empty());
@@ -209,6 +304,32 @@ class CleanupCampaignStorageTest {
     assertEquals(1024, savedEntity.getVersionsSize());
     assertEquals(CleanupAction.DELETE.name(), savedEntity.getAction());
     assertEquals(CleanupItemState.CANDIDATE.name(), savedEntity.getState(), "A new candidate always starts as CANDIDATE");
+    // The dates that MADE the file a candidate are what the report explains
+    // itself with: dropping them here would leave the column empty forever
+    assertEquals(new Date(200L), savedEntity.getLastModifiedDate());
+    assertEquals(new Date(100L), savedEntity.getCreatedDate());
+  }
+
+  @Test
+  void saveCandidatesPersistsUnreadableCandidacyDatesAsNull() {
+    when(itemDAO.findByCampaignIdAndNodeUuidIn(eq(CAMPAIGN_ID), anyCollection())).thenReturn(List.of());
+    CleanupCandidate undatedCandidate = new CleanupCandidate("uuid-undated",
+                                                             "/Users/j___/john/Private/undated.pdf",
+                                                             7L,
+                                                             2048,
+                                                             1024,
+                                                             CleanupAction.DELETE,
+                                                             0,
+                                                             0);
+
+    storage.saveCandidates(CAMPAIGN_ID, List.of(undatedCandidate));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CleanupCampaignItemEntity>> savedCaptor = ArgumentCaptor.forClass(List.class);
+    verify(itemDAO).saveAll(savedCaptor.capture());
+    CleanupCampaignItemEntity savedEntity = savedCaptor.getValue().get(0);
+    assertNull(savedEntity.getLastModifiedDate(), "A zero-millis date must persist as NULL, never as the epoch");
+    assertNull(savedEntity.getCreatedDate(), "A zero-millis date must persist as NULL, never as the epoch");
   }
 
   @Test
@@ -283,6 +404,8 @@ class CleanupCampaignStorageTest {
     assertEquals(CleanupItemState.PURGED.name(), entity.getState());
     assertEquals(new Date(5000L), entity.getComputedAt());
     assertNull(entity.getDecidedAt());
+    assertEquals(new Date(3000L), entity.getLastModifiedDate());
+    assertEquals(new Date(2000L), entity.getCreatedDate());
 
     assertEquals(item.getId(), saved.getId());
     assertEquals(item.getCampaignId(), saved.getCampaignId());
@@ -299,6 +422,33 @@ class CleanupCampaignStorageTest {
     assertEquals(item.getPurgedAt(), saved.getPurgedAt());
     assertEquals(item.getReclaimedBytes(), saved.getReclaimedBytes());
     assertEquals(item.getFailureReason(), saved.getFailureReason());
+    assertEquals(FAILURE_DETAIL, entity.getFailureDetail(), "The diagnostic must reach the CLOB column");
+    assertEquals(item.getFailureDetail(), saved.getFailureDetail());
+    assertEquals(2L, entity.getAttemptCount());
+    assertEquals(item.getAttemptCount(), saved.getAttemptCount());
+    // Back to the model: a report column read from a row it never came back on
+    // would render empty for every item
+    assertEquals(item.getLastModifiedDate(), saved.getLastModifiedDate());
+    assertEquals(item.getCreatedDate(), saved.getCreatedDate());
+  }
+
+  @Test
+  void saveItemMapsUnsetCandidacyDatesToNullAndBackToZero() {
+    when(itemDAO.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    CleanupCampaignItem item = item();
+    item.setLastModifiedDate(0);
+    item.setCreatedDate(0);
+
+    CleanupCampaignItem saved = storage.saveItem(item);
+
+    ArgumentCaptor<CleanupCampaignItemEntity> entityCaptor = ArgumentCaptor.forClass(CleanupCampaignItemEntity.class);
+    verify(itemDAO).save(entityCaptor.capture());
+    assertNull(entityCaptor.getValue().getLastModifiedDate(), "A zero-millis date must persist as NULL");
+    assertNull(entityCaptor.getValue().getCreatedDate(), "A zero-millis date must persist as NULL");
+    // ... and a NULL column comes back as 0, the model's 'not set', so the DTO
+    // maps it to a null date instead of the epoch
+    assertEquals(0, saved.getLastModifiedDate());
+    assertEquals(0, saved.getCreatedDate());
   }
 
   @Test
@@ -444,6 +594,108 @@ class CleanupCampaignStorageTest {
                                                                                                   .thenReturn(new PageImpl<>(List.of()));
     storage.getItemsByOwners(CAMPAIGN_ID, List.of(5L), null, pageable);
     verify(itemDAO).findByOwnersAndSearch(eq(CAMPAIGN_ID), eq(List.of(5L)), eq((String) null), any());
+  }
+
+  @Test
+  void getItemsTranslatesTheReclaimableSortKeyIntoAQueryLevelOrderBy() {
+    Pageable pageable = PageRequest.of(0, 20, RECLAIMABLE_DESC_THEN_ID);
+    when(itemDAO.findByFilters(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    storage.getItems(CAMPAIGN_ID, null, null, null, null, null, pageable);
+
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findByFilters(anyLong(), any(), any(), any(), any(), any(), pageableCaptor.capture());
+    assertQuerySort(pageableCaptor.getValue().getSort());
+    // Paging is untouched by the translation
+    assertEquals(0, pageableCaptor.getValue().getPageNumber());
+    assertEquals(20, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void getItemsByOwnersTranslatesTheReclaimableSortKeyOnTheSingleChunkPathToo() {
+    // The single-chunk path is the overwhelmingly common one: leaving the computed
+    // key untranslated HERE would silently order almost every review list by
+    // nothing the database understands
+    Pageable pageable = PageRequest.of(1, 10, RECLAIMABLE_DESC_THEN_ID);
+    when(itemDAO.findByOwnersAndSearch(anyLong(), anyList(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    storage.getItemsByOwners(CAMPAIGN_ID, List.of(5L, 6L), null, pageable);
+
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findByOwnersAndSearch(anyLong(), anyList(), any(), pageableCaptor.capture());
+    assertQuerySort(pageableCaptor.getValue().getSort());
+    assertEquals(1, pageableCaptor.getValue().getPageNumber());
+    assertEquals(10, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void querySortLeavesAnOrderingWithoutTheReclaimableKeyExactlyAsRequested() {
+    Sort requested = Sort.by(Sort.Direction.DESC, "fileSize").and(Sort.by(Sort.Direction.ASC, "id"));
+
+    assertSame(requested,
+               CleanupCampaignStorage.querySort(requested),
+               "An ordering the database can already apply must not be rewritten");
+  }
+
+  /**
+   * The finding's exact case, on the MULTI-CHUNK path: the merge must rank a 1 MB
+   * file carrying 500 MB of version history above a 100 MB file carrying none,
+   * and put the LARGEST file of the fixture (900 MB, PURGE_VERSIONS, 2 MB of
+   * purgeable versions) last. Ordering on fileSize — what this list did before —
+   * would open on that 900 MB row.
+   * <p>
+   * The rows are spread over BOTH chunks, and the two tied at 100 MB sit in
+   * different ones, so the id tiebreaker is exercised across chunks too.
+   */
+  @Test
+  void getItemsByOwnersMergesTheChunkPagesByWhatEachRowActuallyReclaims() {
+    List<Long> ownerIdentityIds = ownerIds(950);
+    Pageable pageable = PageRequest.of(0, 3, RECLAIMABLE_DESC_THEN_ID);
+    stubDatabaseOrdering(reclaimableFixture());
+
+    Page<CleanupCampaignItem> page = storage.getItemsByOwners(CAMPAIGN_ID, ownerIdentityIds, null, pageable);
+
+    assertEquals(List.of(1L, 4L, 2L),
+                 page.getContent().stream().map(CleanupCampaignItem::getId).toList(),
+                 "501 MB (1 MB of content + 500 MB of history) first, then 300 MB, then the first of the two 100 MB ties");
+  }
+
+  /**
+   * The consistency the chunking must not break: for the SAME rows and the SAME
+   * requested page, a user whose owner ids fit one chunk and a user whose ids
+   * span two must get the SAME list. The DAO stub orders by the expression it is
+   * HANDED (see {@link #databaseComparator(Sort)}), so it models the database
+   * rather than the Storage's own comparator — an in-memory merge left on
+   * {@code fileSize} while the SQL orders on the reclaimable expression fails
+   * here, which is exactly the divergence chunking makes invisible in production.
+   */
+  @Test
+  void getItemsByOwnersOrdersTheChunkedPathExactlyLikeTheSingleChunkOne() {
+    List<CleanupCampaignItemEntity> rows = reclaimableFixture();
+    stubDatabaseOrdering(rows);
+    List<Long> chunkedOwnerIds = ownerIds(950);
+    // The distinct owners of the very same rows, small enough to stay ONE chunk
+    List<Long> singleChunkOwnerIds = rows.stream().map(CleanupCampaignItemEntity::getOwnerIdentityId).distinct().sorted().toList();
+    assertEquals(1, CleanupCampaignStorage.chunkOwnerIds(singleChunkOwnerIds).size());
+    assertTrue(CleanupCampaignStorage.chunkOwnerIds(chunkedOwnerIds).size() > 1);
+
+    for (int pageNumber = 0; pageNumber < 2; pageNumber++) {
+      Pageable pageable = PageRequest.of(pageNumber, 3, RECLAIMABLE_DESC_THEN_ID);
+
+      List<Long> singleChunk = storage.getItemsByOwners(CAMPAIGN_ID, singleChunkOwnerIds, null, pageable)
+                                      .getContent()
+                                      .stream()
+                                      .map(CleanupCampaignItem::getId)
+                                      .toList();
+      List<Long> chunked = storage.getItemsByOwners(CAMPAIGN_ID, chunkedOwnerIds, null, pageable)
+                                  .getContent()
+                                  .stream()
+                                  .map(CleanupCampaignItem::getId)
+                                  .toList();
+
+      assertEquals(singleChunk, chunked, "Page " + pageNumber + " must not depend on how many chunks the owner ids needed");
+      assertFalse(singleChunk.isEmpty(), "A vacuous comparison would pass whatever the merge does");
+    }
   }
 
   @Test
@@ -646,6 +898,206 @@ class CleanupCampaignStorageTest {
                                                                                                                 6L));
   }
 
+  @Test
+  void getItemsByStateAfterIdAsksTheKeysetQueryForTheIdsPastTheLastOneSeen() {
+    when(itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
+                                                                     eq(CANDIDATE_STATE),
+                                                                     anyLong(),
+                                                                     any())).thenReturn(List.of(itemEntity(USERS_ROOT_PATH,
+                                                                                                           2048,
+                                                                                                           42L)));
+
+    List<CleanupCampaignItem> items = storage.getItemsByStateAfterId(CAMPAIGN_ID, CleanupItemState.CANDIDATE, 41L, 200);
+
+    assertEquals(1, items.size());
+    assertEquals(42L, items.get(0).getId());
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
+                                                                        eq(CANDIDATE_STATE),
+                                                                        eq(41L),
+                                                                        pageableCaptor.capture());
+    // The batch size is the page SIZE, and the page index is always 0: the
+    // position comes from the id, never from an offset
+    assertEquals(0, pageableCaptor.getValue().getPageNumber());
+    assertEquals(200, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void getRetryableFailuresPassesTheAllowlistTheBoundAndTheKeysetPosition() {
+    when(itemDAO.findRetryableFailures(eq(CAMPAIGN_ID), eq(SKIPPED_STATE), anyCollection(), anyLong(), anyLong(), any()))
+                                                                                                                        .thenReturn(List.of(itemEntity(USERS_ROOT_PATH,
+                                                                                                                                                       2048,
+                                                                                                                                                       55L)));
+
+    List<CleanupCampaignItem> items = storage.getRetryableFailures(CAMPAIGN_ID,
+                                                                  Set.of("cleanup.deleteError"),
+                                                                  3L,
+                                                                  54L,
+                                                                  1000);
+
+    assertEquals(1, items.size());
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    verify(itemDAO).findRetryableFailures(eq(CAMPAIGN_ID),
+                                         eq(SKIPPED_STATE),
+                                         eq(Set.of("cleanup.deleteError")),
+                                         eq(3L),
+                                         eq(54L),
+                                         pageableCaptor.capture());
+    assertEquals(Sort.by("id"), pageableCaptor.getValue().getSort(), "The keyset walk must be ordered by id");
+  }
+
+  @Test
+  void getRetryableFailuresShortCircuitsOnAnEmptyAllowlist() {
+    // An empty IN list is invalid SQL on several databases, and the answer is
+    // known without asking: nothing is retryable
+    assertTrue(storage.getRetryableFailures(CAMPAIGN_ID, Set.of(), 3L, 0L, 1000).isEmpty());
+    assertTrue(storage.getRetryableFailures(CAMPAIGN_ID, null, 3L, 0L, 1000).isEmpty());
+
+    verifyNoInteractions(itemDAO);
+  }
+
+  @Test
+  void countFailuresByReasonFoldsTheGroupedAggregateRows() {
+    when(itemDAO.countFailuresByReason(CAMPAIGN_ID, SKIPPED_STATE))
+                                                                   .thenReturn(List.of(new Object[] { "cleanup.deleteError",
+                                                                                                      12L },
+                                                                                       new Object[] {
+                                                                                                      "cleanup.referentialIntegrity",
+                                                                                                      3L }));
+
+    List<CleanupFailureGroup> groups = storage.countFailuresByReason(CAMPAIGN_ID);
+
+    assertEquals(2, groups.size());
+    assertEquals("cleanup.deleteError", groups.get(0).getReason());
+    assertEquals(12L, groups.get(0).getCount());
+    assertEquals(3L, groups.get(1).getCount());
+    // The retryable rule belongs to the Service: the Storage must never decide it
+    assertFalse(groups.get(0).isRetryable(), "The Storage leaves the retryable flag to the Service");
+    assertFalse(groups.get(1).isRetryable());
+  }
+
+  @Test
+  void countFailuresByReasonReturnsNoGroupWithoutAnyFailedItem() {
+    when(itemDAO.countFailuresByReason(CAMPAIGN_ID, SKIPPED_STATE)).thenReturn(List.of());
+
+    assertTrue(storage.countFailuresByReason(CAMPAIGN_ID).isEmpty());
+  }
+
+  /**
+   * The ordering the {@code published/my-items} endpoint opens on: the computed
+   * reclaimable key, descending, made total by the id tiebreaker.
+   */
+  private static final Sort RECLAIMABLE_DESC_THEN_ID = Sort.by(Sort.Direction.DESC, CleanupConstants.RECLAIMABLE_SORT_KEY)
+                                                           .and(Sort.by(Sort.Direction.ASC, "id"));
+
+  /** One megabyte, so the fixtures below read as the sizes the finding described. */
+  private static final long MB                       = 1024L * 1024L;
+
+  /** Owner id landing in the FIRST chunk of a 950-long owner list (index 0). */
+  private static final long FIRST_CHUNK_OWNER        = 1L;
+
+  /** Owner id landing in the SECOND chunk of that same list (index MAX_IN_CLAUSE_SIZE). */
+  private static final long LAST_CHUNK_OWNER         = CleanupCampaignStorage.MAX_IN_CLAUSE_SIZE + 1L;
+
+  /**
+   * Asserts an ordering handed to the DAO carries the reclaimable expression as
+   * an UNSAFE JpaSort order (a computed CASE cannot be a plain field reference),
+   * with the id tiebreaker still LAST — the position that makes the ordering
+   * total.
+   */
+  private void assertQuerySort(Sort sort) {
+    List<Sort.Order> orders = sort.toList();
+    assertEquals(2, orders.size());
+    assertEquals(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY, orders.get(0).getProperty());
+    assertEquals(Sort.Direction.DESC, orders.get(0).getDirection());
+    assertTrue(orders.get(0) instanceof JpaSort.JpaOrder jpaOrder && jpaOrder.isUnsafe(),
+               "A computed expression must travel as an unsafe JpaSort order, or Spring Data treats it as a property path");
+    assertEquals("id", orders.get(1).getProperty());
+    assertEquals(Sort.Direction.ASC, orders.get(1).getDirection());
+  }
+
+  /**
+   * Six candidate rows whose reclaimable ranking (501, 300, 100, 100, 50, 2 MB)
+   * has NOTHING to do with their content sizes (1, 100, 900, 0, 0, 50 MB), spread
+   * over the first and the last owner id of a 950-long list — hence over both
+   * chunks — with the two rows tied at 100 MB in different chunks.
+   */
+  private List<CleanupCampaignItemEntity> reclaimableFixture() {
+    return List.of(reclaimableEntity(1L, FIRST_CHUNK_OWNER, CleanupAction.DELETE, MB, 500 * MB),
+                   reclaimableEntity(2L, LAST_CHUNK_OWNER, CleanupAction.DELETE, 100 * MB, 0),
+                   reclaimableEntity(3L, FIRST_CHUNK_OWNER, CleanupAction.PURGE_VERSIONS, 900 * MB, 2 * MB),
+                   reclaimableEntity(4L, LAST_CHUNK_OWNER, CleanupAction.DELETE, 0, 300 * MB),
+                   reclaimableEntity(5L, FIRST_CHUNK_OWNER, CleanupAction.DELETE, 0, 100 * MB),
+                   reclaimableEntity(6L, LAST_CHUNK_OWNER, CleanupAction.PURGE_VERSIONS, 50 * MB, 50 * MB));
+  }
+
+  private CleanupCampaignItemEntity reclaimableEntity(long id,
+                                                      long ownerIdentityId,
+                                                      CleanupAction action,
+                                                      long fileSize,
+                                                      long versionsSize) {
+    CleanupCampaignItemEntity entity = itemEntity("/item-" + id, fileSize, id);
+    entity.setOwnerIdentityId(ownerIdentityId);
+    entity.setVersionsSize(versionsSize);
+    entity.setAction(action.name());
+    return entity;
+  }
+
+  /**
+   * Answers every owner query like the DATABASE would: the rows of the queried
+   * owner chunk, ordered by the very expression the Storage asked the ORDER BY
+   * on, sliced to the requested page. Deliberately independent of the Storage's
+   * in-memory merge comparator — that is what makes a divergence between the two
+   * orderings visible instead of self-consistent.
+   */
+  private void stubDatabaseOrdering(List<CleanupCampaignItemEntity> rows) {
+    Answer<Page<CleanupCampaignItemEntity>> answer = invocation -> {
+      List<Long> chunk = invocation.getArgument(1);
+      Pageable pageable = invocation.getArgument(3);
+      List<CleanupCampaignItemEntity> matching = rows.stream()
+                                                     .filter(row -> chunk.contains(row.getOwnerIdentityId()))
+                                                     .sorted(databaseComparator(pageable.getSort()))
+                                                     .toList();
+      int fromIndex = Math.min((int) pageable.getOffset(), matching.size());
+      int toIndex = Math.min(fromIndex + pageable.getPageSize(), matching.size());
+      return new PageImpl<>(matching.subList(fromIndex, toIndex), pageable, matching.size());
+    };
+    when(itemDAO.findByOwnersAndSearch(anyLong(), anyList(), any(), any())).thenAnswer(answer);
+  }
+
+  /**
+   * The ordering a database would apply for the {@link Sort} it received, keyed on
+   * the JPQL text itself: a sort key this stub cannot model is a key the Storage
+   * would have sent to a real database in a form it never validated, so it FAILS
+   * rather than silently falling back.
+   */
+  private Comparator<CleanupCampaignItemEntity> databaseComparator(Sort sort) {
+    Comparator<CleanupCampaignItemEntity> comparator = null;
+    for (Sort.Order order : sort) {
+      Comparator<CleanupCampaignItemEntity> key = databaseKeyComparator(order.getProperty());
+      if (order.isDescending()) {
+        key = key.reversed();
+      }
+      comparator = comparator == null ? key : comparator.thenComparing(key);
+    }
+    return comparator;
+  }
+
+  private Comparator<CleanupCampaignItemEntity> databaseKeyComparator(String property) {
+    if (CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY.equals(property)) {
+      return Comparator.comparingLong(row -> CleanupAction.DELETE.name().equals(row.getAction()) ? row.getFileSize()
+          + row.getVersionsSize() : row.getVersionsSize());
+    }
+    if ("id".equals(property)) {
+      return Comparator.comparingLong(CleanupCampaignItemEntity::getId);
+    }
+    if ("fileSize".equals(property)) {
+      return Comparator.comparingLong(CleanupCampaignItemEntity::getFileSize);
+    }
+    throw new AssertionError("The DAO was asked to order on '" + property
+        + "', which matches no column of the item table nor the reclaimable expression");
+  }
+
   private List<Long> ownerIds(int total) {
     return java.util.stream.LongStream.rangeClosed(1, total).boxed().toList();
   }
@@ -763,6 +1215,28 @@ class CleanupCampaignStorageTest {
     return campaign;
   }
 
+  /**
+   * A campaign row as the schedule-driven writers leave it: mid-execution
+   * progress, a scan checkpoint, a completion summary and an archived CSV. Every
+   * one of those columns is a loss a whole-row PATCH would cause.
+   */
+  private CleanupCampaignEntity liveEntity() {
+    CleanupCampaignEntity entity = new CleanupCampaignEntity();
+    entity.setId(CAMPAIGN_ID);
+    entity.setName("Live campaign");
+    entity.setState(CleanupCampaignState.LOCKED.name());
+    entity.setGraceDays(7);
+    entity.setLockDate(new Date(5678L));
+    entity.setTotalCount(400);
+    entity.setProcessedCount(120);
+    entity.setEtaSeconds(30);
+    entity.setCheckpointPath("/Groups/spaces/engineering");
+    entity.setCheckpointOffset(90);
+    entity.setSummaryJson("{\"candidateCount\":5}");
+    entity.setArchiveFileId(77L);
+    return entity;
+  }
+
   private CleanupCampaignEntity entity() {
     CleanupCampaignEntity entity = new CleanupCampaignEntity();
     entity.setId(CAMPAIGN_ID);
@@ -783,11 +1257,15 @@ class CleanupCampaignStorageTest {
     item.setAction(CleanupAction.PURGE_VERSIONS);
     item.setState(CleanupItemState.PURGED);
     item.setComputedAt(5000L);
+    item.setLastModifiedDate(3000L);
+    item.setCreatedDate(2000L);
     item.setDecidedBy("john");
     item.setDecidedAt(0);
     item.setPurgedAt(7000L);
     item.setReclaimedBytes(128);
     item.setFailureReason("some.failure");
+    item.setFailureDetail(FAILURE_DETAIL);
+    item.setAttemptCount(2L);
     return item;
   }
 

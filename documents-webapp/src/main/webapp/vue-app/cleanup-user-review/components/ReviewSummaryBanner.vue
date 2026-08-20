@@ -68,7 +68,7 @@ export default {
   },
   computed: {
     remainingLabel() {
-      return this.$cleanupUtils.formatDuration(this.remainingMillis);
+      return this.$cleanupDuration(this.remainingMillis);
     },
   },
 };

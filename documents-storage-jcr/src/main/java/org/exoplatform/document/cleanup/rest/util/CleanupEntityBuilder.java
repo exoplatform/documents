@@ -24,16 +24,18 @@ import org.exoplatform.document.cleanup.model.CleanupBulkResult;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
+import org.exoplatform.document.cleanup.util.CleanupIdentityUtil;
 import org.exoplatform.social.core.identity.model.Identity;
-import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 /**
@@ -90,7 +92,42 @@ public class CleanupEntityBuilder {
     return deadline > now ? deadline - now : 0;
   }
 
+  /**
+   * Item DTO WITHOUT its failure detail — the safe default, see
+   * {@link #build(CleanupCampaignItem, IdentityManager, boolean)}.
+   *
+   * @param item item to map
+   * @param identityManager identity manager resolving the owner
+   * @return the item DTO, its failureDetail left null
+   */
   public static CampaignItemRestEntity build(CleanupCampaignItem item, IdentityManager identityManager) {
+    return build(item, identityManager, false);
+  }
+
+  /**
+   * Item DTO, its administrator-only failure DETAIL included only when asked for.
+   * <p>
+   * THE FLAG IS A SECURITY BOUNDARY, not a convenience: this very DTO is served
+   * both to administrators ({@code GET {id}/items}) and to end users
+   * ({@code GET published/my-items}, {@code @Secured("users")}). The failure
+   * detail carries exception messages and stack frames that can name nodes and
+   * paths OUTSIDE the calling user's visibility — a
+   * {@code ReferentialIntegrityException} names the REFERENCING node, e.g. a
+   * shortcut living in a space the user is not a member of. So the admin endpoint
+   * passes true and the user one passes false, explicitly, and the default
+   * overload above omits it.
+   * <p>
+   * {@code failureReason} stays on BOTH paths: it is now a bare, stable message
+   * code, so it leaks nothing.
+   *
+   * @param item item to map
+   * @param identityManager identity manager resolving the owner
+   * @param includeFailureDetail true ONLY on an administrator-restricted endpoint
+   * @return the item DTO
+   */
+  public static CampaignItemRestEntity build(CleanupCampaignItem item,
+                                             IdentityManager identityManager,
+                                             boolean includeFailureDetail) {
     CampaignItemRestEntity entity = new CampaignItemRestEntity();
     entity.setId(item.getId());
     entity.setCampaignId(item.getCampaignId());
@@ -101,6 +138,8 @@ public class CleanupEntityBuilder {
     fillOwner(entity, item.getOwnerIdentityId(), identityManager);
     entity.setFileSize(item.getFileSize());
     entity.setVersionsSize(item.getVersionsSize());
+    entity.setLastModifiedDate(toNullable(item.getLastModifiedDate()));
+    entity.setCreatedDate(toNullable(item.getCreatedDate()));
     entity.setAction(item.getAction().name());
     entity.setState(item.getState().name());
     entity.setComputedAt(toNullable(item.getComputedAt()));
@@ -109,14 +148,58 @@ public class CleanupEntityBuilder {
     entity.setPurgedAt(toNullable(item.getPurgedAt()));
     entity.setReclaimedBytes(item.getReclaimedBytes());
     entity.setFailureReason(item.getFailureReason());
+    entity.setAttemptCount(item.getAttemptCount());
+    if (includeFailureDetail) {
+      entity.setFailureDetail(item.getFailureDetail());
+    }
     return entity;
   }
 
+  /**
+   * Page of item DTOs WITHOUT their failure detail — the safe default, see
+   * {@link #build(Page, IdentityManager, boolean)}.
+   *
+   * @param page page of items to map
+   * @param identityManager identity manager resolving the owners
+   * @return the paged DTOs, their failureDetail left null
+   */
   public static PagedResult<CampaignItemRestEntity> build(Page<CleanupCampaignItem> page, IdentityManager identityManager) {
-    return new PagedResult<>(page.getContent().stream().map(item -> build(item, identityManager)).toList(),
+    return build(page, identityManager, false);
+  }
+
+  /**
+   * Page of item DTOs, their administrator-only failure detail included only when
+   * asked for — same security boundary as
+   * {@link #build(CleanupCampaignItem, IdentityManager, boolean)}, read that
+   * javadoc before touching this flag.
+   *
+   * @param page page of items to map
+   * @param identityManager identity manager resolving the owners
+   * @param includeFailureDetail true ONLY on an administrator-restricted endpoint
+   * @return the paged DTOs
+   */
+  public static PagedResult<CampaignItemRestEntity> build(Page<CleanupCampaignItem> page,
+                                                          IdentityManager identityManager,
+                                                          boolean includeFailureDetail) {
+    return new PagedResult<>(page.getContent()
+                                 .stream()
+                                 .map(item -> build(item, identityManager, includeFailureDetail))
+                                 .toList(),
                              page.getNumber(),
                              page.getSize(),
                              page.getTotalElements());
+  }
+
+  /**
+   * @param failureGroup grouped failure to map
+   * @return the grouped-failure DTO
+   */
+  public static CampaignFailureGroupRestEntity build(CleanupFailureGroup failureGroup) {
+    CampaignFailureGroupRestEntity entity = new CampaignFailureGroupRestEntity();
+    entity.setReason(failureGroup.getReason());
+    entity.setCount(failureGroup.getCount());
+    entity.setRetryable(failureGroup.isRetryable());
+    return entity;
   }
 
   public static CampaignComparisonRestEntity build(CleanupComparison comparison) {
@@ -192,9 +275,8 @@ public class CleanupEntityBuilder {
     }
     entity.setOwnerType(identity.isSpace() ? "space" : "user");
     entity.setOwnerRemoteId(identity.getRemoteId());
-    Profile profile = identity.getProfile();
-    entity.setOwnerFullName(profile == null || StringUtils.isBlank(profile.getFullName()) ? identity.getRemoteId() :
-                                                                                          profile.getFullName());
+    // Same resolution as the CSV report's owner name, defined once
+    entity.setOwnerFullName(CleanupIdentityUtil.displayName(identity));
   }
 
 }

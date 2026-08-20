@@ -52,6 +52,24 @@ if (!Vue.prototype.$cleanupSize) {
   });
 }
 /**
+ * Localizes a duration, most significant units first: '2d 4h', '2h 46m',
+ * '46m 41s'. The unit split is the pure durationParts() of CleanupUtils; only
+ * the labels are localized here, which is why this lives on the prototype (it
+ * needs $t) exactly like $cleanupSize above.
+ *
+ * @param {Number} millis duration in milliseconds
+ * @returns {String} localized duration, empty when there is nothing to count
+ */
+if (!Vue.prototype.$cleanupDuration) {
+  window.Object.defineProperty(Vue.prototype, '$cleanupDuration', {
+    value: function(millis) {
+      return cleanupUtils.durationParts(millis)
+        .map(part => this.$t(`cleanup.duration.${part.unit}`, {0: part.value}))
+        .join(' ');
+    },
+  });
+}
+/**
  * Localizes ONE cleanup message code — the single implementation shared by every
  * consumer (the campaign actions, the create drawer, the per-item review
  * failures), all of which used to carry their own copy of these three lines.

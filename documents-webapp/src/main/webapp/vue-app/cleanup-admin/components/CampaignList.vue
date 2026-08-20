@@ -27,12 +27,24 @@
     sort-desc
     @click:row="$emit('open', $event)">
     <template slot="item.state" slot-scope="{item}">
-      <v-chip small outlined>
+      <v-chip
+        :color="$cleanupUtils.campaignStateColor(item.state)"
+        :outlined="!$cleanupUtils.isLoudState(item.state)"
+        :dark="$cleanupUtils.isLoudState(item.state)"
+        small>
         {{ $t(`cleanup.campaign.state.${item.state}`) }}
       </v-chip>
     </template>
     <template slot="item.startedDate" slot-scope="{item}">
-      <date-format :value="item.startedDate" :format="$cleanupUtils.DATE_TIME_FORMAT" />
+      <v-tooltip v-if="item.startedDate" bottom>
+        <template #activator="{on, attrs}">
+          <span v-bind="attrs" v-on="on">
+            <relative-date-format :value="new Date(item.startedDate)" />
+          </span>
+        </template>
+        <date-format :value="item.startedDate" :format="$cleanupUtils.DATE_TIME_FORMAT" />
+      </v-tooltip>
+      <span v-else>-</span>
     </template>
     <template slot="item.progress" slot-scope="{item}">
       <div class="d-flex align-center" style="min-width: 120px">

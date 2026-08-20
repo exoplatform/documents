@@ -25,11 +25,15 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -56,11 +60,13 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
+import org.exoplatform.document.cleanup.util.CleanupIdentityUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -90,6 +96,74 @@ public class CleanupCampaignService {
    */
   public static final String                      NOT_OWNER_FAILURE_CODE      = "cleanup.notOwner";
 
+  /**
+   * Maximum campaign name length, mirroring the NAME column of
+   * DOCUMENTS_CLEANUP_CAMPAIGN — {@code NVARCHAR(250) NOT NULL}. Nothing used to
+   * check it, so a longer name reached the INSERT and failed with a raw database
+   * error instead of a 400 carrying a message code the console can localize.
+   */
+  public static final int                         MAX_NAME_LENGTH             = 250;
+
+  /**
+   * Failure message codes a retry may re-attempt. TRANSIENT causes only: a JCR
+   * read that failed once may succeed now, a delete that hit a locked node may
+   * not, an unexpected error is by definition unclassified. Deliberately ABSENT:
+   * {@code cleanup.referentialIntegrity} (another node points at the file — the
+   * repository will refuse identically) and {@code cleanup.notVersionable} (the
+   * node has no version history — it never will grow one by itself). Re-running
+   * those is guaranteed wasted work on possibly hundreds of thousands of rows.
+   * <p>
+   * Public because the REST layer flags each grouped failure with it and the
+   * tests assert against it: what is retryable is a SERVER decision, and the
+   * client must never be the authority on it.
+   */
+  public static final Set<String>                 RETRYABLE_FAILURE_REASONS   = Set.of("cleanup.revalidationFailed",
+                                                                                       "cleanup.deleteError",
+                                                                                       "cleanup.unexpectedError",
+                                                                                       "cleanup.purgeVersionsError");
+
+  /**
+   * States in which the GRACE PERIOD of a campaign may still be edited. The
+   * grace period is the ONE parameter that is not a candidacy criterion — it is
+   * read in a single place, to derive the lock date from the publication date —
+   * so editing it can never invalidate the dry-run the administrator is
+   * reviewing, and the guard is deliberately narrower than 'any state' rather
+   * than absent.
+   * <p>
+   * LOCKED is REJECTED on purpose: extending the grace of a locked campaign
+   * would mean going back to PUBLISHED, an edge that does NOT exist in
+   * {@code CleanupCampaignLifecycle.ALLOWED_TRANSITIONS} — and exiting PUBLISHED
+   * unregisters the freshness observation listener, so a reverse edge would have
+   * to re-register it. Out of scope; do NOT 'fix' this casually. EXECUTING,
+   * COMPLETED and CANCELLED are rejected because the grace period is MEANINGLESS
+   * once the purge ran.
+   * <p>
+   * Public because the tests and any future caller must share this rule rather
+   * than restate it.
+   */
+  public static final Set<CleanupCampaignState>   GRACE_EDITABLE_STATES       = Set.of(CleanupCampaignState.DRAFT,
+                                                                                       CleanupCampaignState.SIMULATED,
+                                                                                       CleanupCampaignState.PUBLISHED);
+
+  /**
+   * RETRIES an item may spend AFTER its initial purge attempt — three of them,
+   * so a doomed item is purge-attempted four times in all. The initial attempt
+   * spends no attempt: only the requeue increments the counter, and the requeue
+   * filter is {@code attemptCount < 3}.
+   * <p>
+   * Deliberately NOT the same arithmetic as
+   * {@code CleanupScanService#MAX_SCAN_UNIT_ATTEMPTS}, which bounds THREE walks
+   * in total: a scan unit spends an attempt on its very first walk, because the
+   * coordinator claiming a unit is what increments it. Same value, same purpose
+   * — bounding a retry so it cannot loop forever — counted from a different
+   * origin, and neither is a typo of the other.
+   * <p>
+   * Bounds the whole item retry mechanism: past it, a failure has proved itself
+   * deterministic whatever its code says, and an administrator re-clicking Retry
+   * must not be able to loop on it forever.
+   */
+  public static final long                        MAX_RETRY_ATTEMPTS          = 3;
+
   private static final Log                        LOG                         = ExoLogger.getLogger(CleanupCampaignService.class);
 
   private static final List<CleanupCampaignState> ACTIVE_STATES               = List.of(CleanupCampaignState.PUBLISHED,
@@ -105,8 +179,19 @@ public class CleanupCampaignService {
 
   private static final int                        CSV_PAGE_SIZE               = 1000;
 
+  /**
+   * Column order of the CSV report. The historical columns keep their POSITION
+   * — a consumer parsing by index must not break — and the ones added since are
+   * APPENDED after them.
+   */
   private static final String                     CSV_HEADER                  =
-                                                              "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason\n";
+                                                              "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate,attemptCount,failureDetail\n";
+
+  /**
+   * Page size of the retry requeue. Keyset-paged like the execution worker, so
+   * hundreds of thousands of failed items are never loaded into one List.
+   */
+  private static final int                        RETRY_PAGE_SIZE             = 1000;
 
   private static final int                        LISTENER_RETRY_MAX_ATTEMPTS = 10;
 
@@ -245,6 +330,7 @@ public class CleanupCampaignService {
    * @param overrides partial parameter overrides, null fields defaulted
    * @return the created campaign
    * @throws IllegalArgumentException "cleanup.nameMandatory",
+   *           "cleanup.nameTooLong" (past {@link #MAX_NAME_LENGTH} characters),
    *           "cleanup.invalidPeriodMonths" (must be &gt;= 1),
    *           "cleanup.invalidMinFileSize" (must be &gt;= 0),
    *           "cleanup.invalidGraceDays" (must be &gt;= 0 — ZERO IS a valid
@@ -252,13 +338,11 @@ public class CleanupCampaignService {
    *           "cleanup.invalidMaxVersionsPerFile" (must be &gt;= 1)
    */
   public CleanupCampaign createCampaign(String name, CleanupParams overrides) {
-    if (StringUtils.isBlank(name)) {
-      throw new IllegalArgumentException("cleanup.nameMandatory");
-    }
+    String validatedName = validateName(name);
     CleanupParams params = settingService.getEffectiveParams(overrides);
     validateParams(params);
     CleanupCampaign campaign = new CleanupCampaign();
-    campaign.setName(name);
+    campaign.setName(validatedName);
     campaign.setState(CleanupCampaignState.DRAFT);
     campaign.setParams(params);
     campaign.setStartedDate(System.currentTimeMillis());
@@ -269,6 +353,147 @@ public class CleanupCampaignService {
       throw new IllegalStateException("Freshly created cleanup campaign not found", e);
     }
     return withAggregates(campaignStorage.getCampaign(campaign.getId()));
+  }
+
+  /**
+   * PARTIAL update of a campaign's editable attributes: its name, its grace
+   * period, or both. A null argument means 'leave that attribute unchanged', so
+   * the two fields are strictly independent — and their guards are per FIELD,
+   * not per request.
+   * <p>
+   * The NAME is editable in ANY state, terminal ones included: it is pure
+   * METADATA, nothing keys off it and no lifecycle transition is involved, so
+   * correcting the label of an already-completed report is a legitimate need.
+   * Names are not unique (creation doesn't check either), so no uniqueness
+   * constraint is enforced. It goes through the very SAME validation as the
+   * creation path ({@link #validateName(String)}): the two cannot diverge, and
+   * neither can let a name longer than the NAME column reach the database.
+   * <p>
+   * The GRACE PERIOD is state-guarded ({@link #GRACE_EDITABLE_STATES}) and
+   * validated by the very same bound check as the creation path
+   * ({@link #validateGraceDays(Integer)}), so the two cannot diverge either —
+   * ZERO stays valid on both. Editing it can never invalidate the dry-run the
+   * administrator is reviewing: it is NOT a candidacy criterion, the scan
+   * selecting on the period, the minimum file size and the excluded paths alone.
+   * <p>
+   * Once the campaign is PUBLISHED the grace period may only be EXTENDED, never
+   * shortened (architect decision W22) — see {@link #applyGraceDays}. Before
+   * publication it is free in both directions, nothing having been promised
+   * yet.
+   * <p>
+   * On a PUBLISHED campaign — and ONLY there — the lock date is recomputed from
+   * the PUBLICATION date, never from now: anchoring on now would slide the
+   * deadline forward on every save, so saving the same value twice would push it
+   * out twice. Everything downstream reads the lock date (the end users'
+   * remaining time included, through their summary's deadline), so that one
+   * field propagates the new deadline with NO second code path.
+   * <p>
+   * A recomputed deadline landing in the PAST is allowed and is not an error: it
+   * closes the review window immediately ({@code cleanup.reviewClosed}) and the
+   * grace-deadline cron locks the campaign at its next tick — exactly what
+   * already happens with a zero grace period, tolerated for up to the cron
+   * period (see {@link #checkReviewWindowOpen(CleanupCampaign)}). This method
+   * deliberately performs NO transition of its own: the single PUBLISHED to
+   * LOCKED authority stays {@link #lockExpiredPublishedCampaign()} and the
+   * manual execution trigger.
+   * <p>
+   * Persisted as a TARGETED write of the two or three columns this operation
+   * owns ({@link CleanupCampaignStorage#updateEditableAttributes}), never as a
+   * whole-row save of the snapshot read above: the name is editable in EVERY
+   * state, so this write races the two schedule-driven writers of the same row
+   * — the workers' progress updates and the grace-deadline cron — and a
+   * read-modify-write would silently undo theirs.
+   *
+   * @param campaignId campaign identifier
+   * @param name new campaign name, null to leave it unchanged — trimmed before
+   *          being persisted
+   * @param graceDays new grace period in days, null to leave it unchanged — 0 is
+   *          a MEANINGFUL value, not an absent one
+   * @return the updated campaign, with its item aggregates
+   * @throws ObjectNotFoundException "cleanup.campaignNotFound" when the campaign
+   *           doesn't exist
+   * @throws IllegalArgumentException "cleanup.nothingToUpdate" when both
+   *           arguments are null, "cleanup.nameMandatory" when the name is
+   *           blank, "cleanup.nameTooLong" past {@link #MAX_NAME_LENGTH}
+   *           characters, "cleanup.invalidState" when the grace period is edited
+   *           outside {@link #GRACE_EDITABLE_STATES},
+   *           "cleanup.invalidGraceDays" when it is negative,
+   *           "cleanup.graceDaysCannotBeReduced" when it is LOWERED on a
+   *           PUBLISHED campaign
+   */
+  public CleanupCampaign updateCampaign(long campaignId, String name, Integer graceDays) throws ObjectNotFoundException {
+    // Existence first, validation second: the REST contract answers 404 before
+    // 400, exactly like every sibling method here
+    CleanupCampaign campaign = getCampaign(campaignId);
+    if (name == null && graceDays == null) {
+      // Never silently no-op: the console must be able to say WHY nothing
+      // happened
+      throw new IllegalArgumentException("cleanup.nothingToUpdate");
+    }
+    String validatedName = name == null ? null : validateName(name);
+    if (validatedName != null) {
+      campaign.setName(validatedName);
+    }
+    Long rederivedLockDate = graceDays == null ? null : applyGraceDays(campaign, graceDays);
+    // TARGETED write, never a whole-row save of the snapshot read above: the
+    // progress updates of the workers and the grace-deadline cron write this
+    // very row on a schedule (see the Storage method's javadoc)
+    campaignStorage.updateEditableAttributes(campaignId, validatedName, graceDays, rederivedLockDate);
+    return withAggregates(campaign);
+  }
+
+  /**
+   * Writes a new grace period into a campaign's snapshotted parameters, and
+   * REDERIVES the lock date from it while the campaign is PUBLISHED — the very
+   * same {@code publishedDate + graceDays} formula
+   * {@link #publishCampaign(long)} establishes, so the invariant holds whether
+   * the value was set at publication or edited afterwards. Before publication
+   * there is no deadline to recompute yet: the lock date is left ALONE, and
+   * publication will derive it from the edited value on its own.
+   * <p>
+   * A PUBLISHED grace period is ONE-WAY — it may only be EXTENDED (architect
+   * decision W22). Publication PROMISES a deadline to the owners of the
+   * candidate files, and lowering it (14 to 7 on day 8) closes their review on
+   * the spot: every keep and un-keep answers {@code cleanup.reviewClosed}, the
+   * cron LOCKS the campaign at its next tick, and files whose owners were
+   * promised six more days are hard-deleted — no trash transit, so the only
+   * recovery is a database/JCR snapshot. The announcement being manual, nobody
+   * would even tell them the deadline moved. Extending is always allowed, and
+   * re-saving the SAME value is NOT a reduction (it stays idempotent, like the
+   * deadline rederivation itself). Before publication the value is free in both
+   * directions: nothing has been promised yet.
+   *
+   * @return the rederived grace deadline to persist, or NULL when there is none
+   *         to rederive — which the targeted write reads as 'do not touch the
+   *         LOCK_DATE column', so a pre-publication edit cannot zero a deadline
+   *         it has no business setting
+   * @throws IllegalArgumentException "cleanup.invalidState" outside
+   *           {@link #GRACE_EDITABLE_STATES}, "cleanup.invalidGraceDays" when
+   *           the value is out of bounds, "cleanup.graceDaysCannotBeReduced"
+   *           when it is lowered on a PUBLISHED campaign
+   */
+  private Long applyGraceDays(CleanupCampaign campaign, Integer graceDays) {
+    if (!GRACE_EDITABLE_STATES.contains(campaign.getState())) {
+      throw new IllegalArgumentException("cleanup.invalidState");
+    }
+    validateGraceDays(graceDays);
+    checkGraceDaysNotReduced(campaign, graceDays);
+    CleanupParams params = campaign.getParams();
+    if (params == null) {
+      // Defensive only: the Storage always maps a params object, whatever the
+      // state. An in-memory campaign that never went through the Storage could
+      // still carry none, and losing the edit silently would be worse than
+      // creating the holder here
+      params = new CleanupParams();
+      campaign.setParams(params);
+    }
+    params.setGraceDays(graceDays);
+    if (campaign.getState() != CleanupCampaignState.PUBLISHED) {
+      return null;
+    }
+    long lockDate = campaign.getPublishedDate() + TimeUnit.DAYS.toMillis(graceDays);
+    campaign.setLockDate(lockDate);
+    return lockDate;
   }
 
   /**
@@ -320,6 +545,146 @@ public class CleanupCampaignService {
       lockCampaign(campaign);
     }
     return withAggregates(executionService.startExecution(campaignId));
+  }
+
+  /**
+   * Re-attempts the RETRYABLE failed items of a COMPLETED campaign: no new scan,
+   * no new grace period, no new campaign. The requeued items go back to
+   * CANDIDATE and the campaign re-enters EXECUTING, so the very same worker
+   * processes them — and the worker needs NO change for that, its per-item
+   * revalidation against JCR immediately before deleting being what makes a
+   * requeued item safe (an item since exempted, modified or deleted is spared on
+   * its own).
+   * <p>
+   * Lives HERE and not in {@link CleanupExecutionService}, which owns the worker,
+   * because everything specific to a retry is business this Service already owns:
+   * the platform-wide single-active-campaign invariant and the very
+   * {@code publishLock} that makes its check-then-act atomic, plus the retryable
+   * allowlist. The execution part is then delegated to
+   * {@link CleanupExecutionService#startExecution(long)} verbatim — the requeue
+   * having just made the CANDIDATE count equal to the requeued count, its
+   * denominator reset, its lifecycle transition and its worker launch are exactly
+   * what a retry needs, and duplicating them here would be a second code path to
+   * keep in sync.
+   * <p>
+   * A REFUSAL never starts a run: not COMPLETED, another campaign active, or
+   * nothing at all to retry all leave the campaign untouched.
+   *
+   * @param campaignId campaign identifier
+   * @return the campaign, now EXECUTING again, with its item aggregates
+   * @throws ObjectNotFoundException "cleanup.campaignNotFound" when the campaign
+   *           doesn't exist
+   * @throws IllegalArgumentException "cleanup.invalidState" when the campaign
+   *           isn't COMPLETED, "cleanup.campaignAlreadyActive" when another
+   *           campaign is PUBLISHED/LOCKED/EXECUTING,
+   *           "cleanup.noRetryableFailures" when no item qualifies
+   */
+  public CleanupCampaign retryCampaign(long campaignId) throws ObjectNotFoundException {
+    // The SAME lock as publishCampaign, for the same reason: without it two
+    // concurrent retries (or a retry racing a publish) could both pass the
+    // single-active check before either transitions (TOCTOU)
+    synchronized (publishLock) {
+      CleanupCampaign campaign = getCampaign(campaignId);
+      if (campaign.getState() != CleanupCampaignState.COMPLETED) {
+        throw new IllegalArgumentException("cleanup.invalidState");
+      }
+      if (!campaignStorage.getCampaignsByStates(ACTIVE_STATES).isEmpty()) {
+        throw new IllegalArgumentException("cleanup.campaignAlreadyActive");
+      }
+      long requeuedCount = requeueRetryableFailures(campaignId);
+      if (requeuedCount == 0) {
+        // Never silently start a no-op run: the console must be able to say WHY
+        throw new IllegalArgumentException("cleanup.noRetryableFailures");
+      }
+      return withAggregates(executionService.startExecution(campaignId));
+    }
+  }
+
+  /**
+   * Grouped failures of a campaign: one entry per distinct failure message code,
+   * its SKIPPED item count, and whether a retry would re-attempt it — the flag
+   * read from {@link #RETRYABLE_FAILURE_REASONS}, so the console never has to
+   * hold its own copy of that rule.
+   *
+   * @param campaignId campaign identifier
+   * @return the groups, EMPTY when the campaign has no failed item — or when the
+   *         retention job already archived and purged its item rows, the grouped
+   *         counts being computed over those rows and NOT snapshotted in the
+   *         campaign summary
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public List<CleanupFailureGroup> getCampaignFailures(long campaignId) throws ObjectNotFoundException {
+    getCampaign(campaignId);
+    List<CleanupFailureGroup> failureGroups = campaignStorage.countFailuresByReason(campaignId);
+    failureGroups.forEach(group -> group.setRetryable(RETRYABLE_FAILURE_REASONS.contains(group.getReason())));
+    return failureGroups;
+  }
+
+  /**
+   * Grouped failures of a campaign's dry-run SCAN: one entry per distinct failure
+   * message code, with the number of SUBTREES that carry it. The unit-level twin
+   * of {@link #getCampaignFailures(long)}, answering the same shape so the
+   * console renders both through one block.
+   * <p>
+   * A dry run used to report SIMULATED at 100% over a report silently missing
+   * whole subtrees — the only trace being a log line no administrator can read.
+   * This is that trace, made readable: whoever is about to publish the report
+   * sees how much of the tree it does NOT cover.
+   * <p>
+   * Delegates to {@link CleanupScanService}, which owns the scan and its unit
+   * rows, after resolving the campaign here so an unknown id answers 404 exactly
+   * like every other campaign endpoint.
+   *
+   * @param campaignId campaign identifier
+   * @return the groups, EMPTY when the campaign's scan covered the whole tree —
+   *         which is the case of every campaign scanned before this bound
+   *         existed
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public List<CleanupFailureGroup> getCampaignScanFailures(long campaignId) throws ObjectNotFoundException {
+    return scanService.getScanFailures(getCampaign(campaignId));
+  }
+
+  /**
+   * Requeues the retryable failures of a campaign, KEYSET-paged: a campaign can
+   * hold hundreds of thousands of failed items, none of which may be loaded into
+   * a single List. Keyset and not offset because the requeue mutates the very
+   * state the query filters on — an offset page would walk past rows as the
+   * result set shrinks underneath it.
+   * <p>
+   * Per item: back to CANDIDATE, one more attempt spent, and BOTH failure fields
+   * cleared — a stale reason on a requeued item would be a lie the console would
+   * happily display. {@code reclaimedBytes} is deliberately LEFT ALONE: a
+   * partially reclaimed delete already reported real bytes, and the campaign
+   * total must not lose them. So is {@code purgedAt}.
+   *
+   * @return the number of items requeued
+   */
+  private long requeueRetryableFailures(long campaignId) {
+    long requeuedCount = 0;
+    long lastId = 0;
+    List<CleanupCampaignItem> failedItems = campaignStorage.getRetryableFailures(campaignId,
+                                                                                RETRYABLE_FAILURE_REASONS,
+                                                                                MAX_RETRY_ATTEMPTS,
+                                                                                lastId,
+                                                                                RETRY_PAGE_SIZE);
+    while (!failedItems.isEmpty()) {
+      for (CleanupCampaignItem item : failedItems) {
+        item.setState(CleanupItemState.CANDIDATE);
+        item.setAttemptCount(item.getAttemptCount() + 1);
+        item.setFailureReason(null);
+        item.setFailureDetail(null);
+        campaignStorage.saveItem(item);
+        lastId = item.getId();
+        requeuedCount++;
+      }
+      failedItems = campaignStorage.getRetryableFailures(campaignId,
+                                                        RETRYABLE_FAILURE_REASONS,
+                                                        MAX_RETRY_ATTEMPTS,
+                                                        lastId,
+                                                        RETRY_PAGE_SIZE);
+    }
+    return requeuedCount;
   }
 
   /**
@@ -773,12 +1138,17 @@ public class CleanupCampaignService {
   private void writeCsv(long campaignId, OutputStream outputStream) throws IOException {
     Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
     writer.write(CSV_HEADER);
+    // Owner display names resolved ONCE per distinct owner for the whole export:
+    // a report can hold millions of rows for a few thousand owners at most, so
+    // one IdentityManager lookup per row would dominate the export cost. Local
+    // to this export (never a shared cache): a name is read as of the download.
+    Map<Long, String> ownerNames = new HashMap<>();
     int pageIndex = 0;
     Page<CleanupCampaignItem> page;
     do {
       page = campaignStorage.getItemsPage(campaignId, PageRequest.of(pageIndex++, CSV_PAGE_SIZE, Sort.by("id")));
       for (CleanupCampaignItem item : page.getContent()) {
-        writer.write(toCsvRow(item));
+        writer.write(toCsvRow(item, ownerNames));
       }
       // Never left buffered: the client gets each page as it is read
       writer.flush();
@@ -812,7 +1182,7 @@ public class CleanupCampaignService {
     }
   }
 
-  private String toCsvRow(CleanupCampaignItem item) {
+  private String toCsvRow(CleanupCampaignItem item, Map<Long, String> ownerNames) {
     StringBuilder row = new StringBuilder();
     row.append(escapeCsv(item.getNodeUuid()))
        .append(',')
@@ -831,8 +1201,54 @@ public class CleanupCampaignService {
        .append(item.getReclaimedBytes())
        .append(',')
        .append(escapeCsv(item.getFailureReason()))
+       // Appended columns — a display name can carry a comma or a quote, so it
+       // goes through the very same escaping as the path
+       .append(',')
+       .append(escapeCsv(ownerName(item.getOwnerIdentityId(), ownerNames)))
+       .append(',')
+       .append(toIsoUtc(item.getLastModifiedDate()))
+       .append(',')
+       .append(toIsoUtc(item.getCreatedDate()))
+       // Administrators-only columns, appended LAST: the archive endpoint is
+       // @Secured("administrators"), unlike the user-facing item DTO which never
+       // carries the detail. The detail is a multi-LINE stack trace, so it goes
+       // through the newline-collapsing escaping — the CSV must stay ONE ROW PER
+       // ITEM whatever a JCR exception looks like
+       .append(',')
+       .append(item.getAttemptCount())
+       .append(',')
+       .append(escapeCsv(toSingleLine(item.getFailureDetail()), true))
        .append('\n');
     return row.toString();
+  }
+
+  /**
+   * Owner display name of a row, memoized in the export-local map: the number of
+   * {@link IdentityManager} lookups is bounded by the number of DISTINCT owners
+   * of the campaign, not by its row count. An unresolvable identity is memoized
+   * as an EMPTY name — it must degrade the row, never fail the download nor be
+   * looked up again on every row.
+   */
+  private String ownerName(long ownerIdentityId, Map<Long, String> ownerNames) {
+    return ownerNames.computeIfAbsent(ownerIdentityId, this::resolveOwnerName);
+  }
+
+  private String resolveOwnerName(long ownerIdentityId) {
+    try {
+      return CleanupIdentityUtil.displayName(identityManager.getIdentity(ownerIdentityId));
+    } catch (Exception e) {
+      LOG.debug("Error resolving the cleanup report owner name of identity {}", ownerIdentityId, e);
+      return "";
+    }
+  }
+
+  /**
+   * A report date as ISO-8601 UTC (e.g. 2026-08-20T09:15:30Z), empty when unset:
+   * the CSV is a MACHINE-readable export, so its dates are never localized —
+   * unlike the ones the UI renders through the platform's date component.
+   */
+  private String toIsoUtc(long millis) {
+    return millis == 0 ? "" : DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(millis));
   }
 
   /**
@@ -846,14 +1262,67 @@ public class CleanupCampaignService {
     return outputStream.toByteArray();
   }
 
+  /**
+   * The ONE CSV field escaping, used by every column that can carry a comma, a
+   * quote or a line break — a carriage return counting as one too.
+   */
   private String escapeCsv(String value) {
+    return escapeCsv(value, false);
+  }
+
+  /**
+   * Same escaping, with the option to quote UNCONDITIONALLY. The failure-detail
+   * column takes that option: it is the one field whose content is a free-form
+   * exception dump, so it is quoted whether or not this particular dump happens
+   * to hold a separator. A NULL detail still exports as a plain empty field —
+   * quoting emptiness would say nothing and only widen the report.
+   *
+   * @param value raw field value
+   * @param alwaysQuote true to quote even a separator-free value
+   * @return the field as it goes into the row
+   */
+  private String escapeCsv(String value, boolean alwaysQuote) {
     if (value == null) {
       return "";
     }
-    if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+    if (alwaysQuote || value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
       return "\"" + value.replace("\"", "\"\"") + "\"";
     }
     return value;
+  }
+
+  /**
+   * Flattens the line breaks of a value into the literal two-character sequence
+   * {@code \n}, so a multi-line stack trace can NEVER break the row structure of
+   * the report: the CSV stays one row per item, whatever the exception looked
+   * like. Applied on top of {@link #escapeCsv(String)}, never instead of it — the
+   * flattened value still holds commas and quotes.
+   */
+  private String toSingleLine(String value) {
+    return value == null ? null : value.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n");
+  }
+
+  /**
+   * The ONE campaign-name validation, shared by the creation and the update
+   * paths so they can never diverge: mandatory, and no longer than the NAME
+   * column (see {@link #MAX_NAME_LENGTH}). The trimmed name is RETURNED rather
+   * than validated in place — surrounding whitespace must not be persisted, and
+   * a name that only fits once trimmed must not be refused.
+   *
+   * @param name raw campaign name
+   * @return the trimmed name to persist
+   * @throws IllegalArgumentException "cleanup.nameMandatory" when blank,
+   *           "cleanup.nameTooLong" past {@link #MAX_NAME_LENGTH} characters
+   */
+  private String validateName(String name) {
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("cleanup.nameMandatory");
+    }
+    String trimmedName = name.trim();
+    if (trimmedName.length() > MAX_NAME_LENGTH) {
+      throw new IllegalArgumentException("cleanup.nameTooLong");
+    }
+    return trimmedName;
   }
 
   /**
@@ -870,11 +1339,58 @@ public class CleanupCampaignService {
     if (params.getMinFileSizeBytes() == null || params.getMinFileSizeBytes() < 0) {
       throw new IllegalArgumentException("cleanup.invalidMinFileSize");
     }
-    if (params.getGraceDays() == null || params.getGraceDays() < 0) {
-      throw new IllegalArgumentException("cleanup.invalidGraceDays");
-    }
+    validateGraceDays(params.getGraceDays());
     if (params.getMaxVersionsPerFile() == null || params.getMaxVersionsPerFile() < 1) {
       throw new IllegalArgumentException("cleanup.invalidMaxVersionsPerFile");
+    }
+  }
+
+  /**
+   * The ONE grace-period bound check, shared by the creation path (through
+   * {@link #validateParams(CleanupParams)}) and the update path so they can
+   * never diverge — the same discipline {@link #validateName(String)} already
+   * applies to the name. ZERO IS VALID: the grace deadline then elapses at
+   * publication.
+   *
+   * @param graceDays grace period in days
+   * @throws IllegalArgumentException "cleanup.invalidGraceDays" when unset or
+   *           negative
+   */
+  private void validateGraceDays(Integer graceDays) {
+    if (graceDays == null || graceDays < 0) {
+      throw new IllegalArgumentException("cleanup.invalidGraceDays");
+    }
+  }
+
+  /**
+   * The DIRECTION guard on a PUBLISHED grace period (architect decision W22):
+   * once published it may only grow. Deliberately narrow, so it forbids exactly
+   * one thing and nothing more:
+   * <ul>
+   * <li>only in PUBLISHED — DRAFT and SIMULATED promised nothing, so the value
+   * stays free there, ZERO included</li>
+   * <li>a STRICT comparison, so re-saving the SAME value still succeeds: it
+   * moves no deadline, and the console's partial update can legitimately carry
+   * an unchanged field</li>
+   * <li>no current value to compare against (the defensive no-params campaign
+   * of {@link #applyGraceDays}) means no promise on record: the edit goes
+   * through rather than being refused on a value nobody can read</li>
+   * </ul>
+   * Runs AFTER {@link #validateGraceDays(Integer)}, so an out-of-bounds value
+   * still answers its own bound code rather than this one, and BEFORE the new
+   * value is written into the snapshot — the comparison needs the value still
+   * in place.
+   *
+   * @throws IllegalArgumentException "cleanup.graceDaysCannotBeReduced" when the
+   *           new grace period is strictly shorter than the published one
+   */
+  private void checkGraceDaysNotReduced(CleanupCampaign campaign, Integer graceDays) {
+    if (campaign.getState() != CleanupCampaignState.PUBLISHED || campaign.getParams() == null) {
+      return;
+    }
+    Integer publishedGraceDays = campaign.getParams().getGraceDays();
+    if (publishedGraceDays != null && graceDays < publishedGraceDays) {
+      throw new IllegalArgumentException("cleanup.graceDaysCannotBeReduced");
     }
   }
 

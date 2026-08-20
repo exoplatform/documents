@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -48,6 +49,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignAggregates;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 
@@ -118,6 +120,45 @@ public class CleanupCampaignStorage {
       entity.setEtaSeconds(etaSeconds);
       entity.setCheckpointPath(checkpointPath);
       entity.setCheckpointOffset(checkpointOffset);
+      campaignDAO.save(entity);
+    });
+  }
+
+  /**
+   * TARGETED write of the attributes an administrator PATCH owns: the NAME, and
+   * the grace period together with the grace DEADLINE derived from it. The row
+   * is re-read inside the transaction and ONLY those columns are set — the very
+   * same idiom as {@link #updateProgress}, for the very same reason.
+   * <p>
+   * Deliberately NOT a whole-row {@link #saveCampaign(CleanupCampaign)}: this
+   * row is written on a SCHEDULE by two other writers — the progress updates of
+   * the scan and purge workers, and the grace-deadline cron — and the campaign
+   * table carries no {@code @Version}. A read-modify-write of every column would
+   * push the snapshot read before the edit back over whatever they wrote in
+   * between: a rewound scan checkpoint (hours of re-walking), a {@code state}
+   * undoing the lifecycle's PUBLISHED to LOCKED transition, or a nulled
+   * ARCHIVE_FILE_ID orphaning the CSV report in the file service for good.
+   * <p>
+   * Every argument is nullable and means 'leave that column ALONE'. Which of
+   * them an edit actually changed is the Service's business, not this layer's.
+   *
+   * @param campaignId campaign identifier
+   * @param name new campaign name, null to leave the NAME column untouched
+   * @param graceDays new grace period, null to leave GRACE_DAYS untouched
+   * @param lockDate new grace deadline (epoch millis), null to leave LOCK_DATE
+   *          untouched — only a grace edit on a PUBLISHED campaign rederives it
+   */
+  public void updateEditableAttributes(long campaignId, String name, Integer graceDays, Long lockDate) {
+    campaignDAO.findById(campaignId).ifPresent(entity -> {
+      if (name != null) {
+        entity.setName(name);
+      }
+      if (graceDays != null) {
+        entity.setGraceDays(graceDays);
+      }
+      if (lockDate != null) {
+        entity.setLockDate(toDate(lockDate));
+      }
       campaignDAO.save(entity);
     });
   }
@@ -194,12 +235,90 @@ public class CleanupCampaignStorage {
                                  action == null ? null : action.name(),
                                  minSize,
                                  searchPattern(search),
-                                 pageable)
+                                 withQuerySort(pageable))
                   .map(this::toModel);
   }
 
   public Page<CleanupCampaignItem> getItemsByState(long campaignId, CleanupItemState state, Pageable pageable) {
     return itemDAO.findByCampaignIdAndState(campaignId, state.name(), pageable).map(this::toModel);
+  }
+
+  /**
+   * KEYSET page of the items of a campaign in a given state: the ones past
+   * {@code lastId}, oldest id first. The execution worker drives its batch loop
+   * from the last id it saw instead of re-reading page 0 — see the DAO javadoc:
+   * that is what makes its forward progress structural instead of depending on
+   * every item leaving the state.
+   *
+   * @param campaignId campaign identifier
+   * @param state item state
+   * @param lastId last id already seen (0 to start from the beginning)
+   * @param batchSize maximum number of items to read
+   * @return the next items, id ascending, empty when the state is exhausted
+   */
+  public List<CleanupCampaignItem> getItemsByStateAfterId(long campaignId,
+                                                         CleanupItemState state,
+                                                         long lastId,
+                                                         int batchSize) {
+    return itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(campaignId,
+                                                                        state.name(),
+                                                                        lastId,
+                                                                        PageRequest.of(0, batchSize))
+                  .stream()
+                  .map(this::toModel)
+                  .toList();
+  }
+
+  /**
+   * KEYSET page of the SKIPPED items of a campaign whose failure reason is one of
+   * {@code failureReasons} and whose attempt count is still below
+   * {@code maxAttemptCount} — the retry candidates. Keyset-paged because the
+   * requeue mutates the state this very filter matches on.
+   *
+   * @param campaignId campaign identifier
+   * @param failureReasons retryable failure message codes (the Service's
+   *          allowlist)
+   * @param maxAttemptCount exclusive upper bound on the attempts already spent
+   * @param lastId last id already seen (0 to start from the beginning)
+   * @param batchSize maximum number of items to read
+   * @return the next retryable items, id ascending
+   */
+  public List<CleanupCampaignItem> getRetryableFailures(long campaignId,
+                                                       Set<String> failureReasons,
+                                                       long maxAttemptCount,
+                                                       long lastId,
+                                                       int batchSize) {
+    if (failureReasons == null || failureReasons.isEmpty()) {
+      // An empty IN list is invalid SQL on several databases, and the answer is
+      // known anyway: nothing is retryable
+      return List.of();
+    }
+    return itemDAO.findRetryableFailures(campaignId,
+                                         CleanupItemState.SKIPPED.name(),
+                                         failureReasons,
+                                         maxAttemptCount,
+                                         lastId,
+                                         PageRequest.of(0, batchSize, Sort.by("id")))
+                  .stream()
+                  .map(this::toModel)
+                  .toList();
+  }
+
+  /**
+   * Per-reason counts of a campaign's SKIPPED items, from ONE grouped aggregate
+   * query. The {@code retryable} flag of each group is left to its default: it
+   * is a business rule of the Service layer, not of the query (see
+   * {@link CleanupFailureGroup}).
+   *
+   * @param campaignId campaign identifier
+   * @return one group per distinct failure reason, empty when the campaign has
+   *         no failed item left (the retention job purged its item rows)
+   */
+  public List<CleanupFailureGroup> countFailuresByReason(long campaignId) {
+    return itemDAO.countFailuresByReason(campaignId, CleanupItemState.SKIPPED.name())
+                  .stream()
+                  .map(row -> new CleanupFailureGroup((String) row[0], ((Number) row[1]).longValue(), false))
+                  .toList();
   }
 
   /**
@@ -210,7 +329,9 @@ public class CleanupCampaignStorage {
    * managing a thousand spaces doesn't get an ORA-01795 on their own review page.
    * With a single chunk — the overwhelmingly common case — the DAO page is
    * returned untouched. With several, each chunk is queried with the SAME total
-   * ordering as requested, {@code (page + 1) * size} rows are taken from each,
+   * ordering as requested ({@link #querySort(Sort)}-translated for both paths
+   * alike, so the computed reclaimable key is ordered by the database and not
+   * silently dropped), {@code (page + 1) * size} rows are taken from each,
    * they are merged with a comparator mirroring that ordering and the requested
    * page is sliced out of the merge.
    * <p>
@@ -237,10 +358,10 @@ public class CleanupCampaignStorage {
     String pattern = searchPattern(search);
     List<List<Long>> chunks = chunkOwnerIds(ownerIdentityIds);
     if (chunks.size() == 1) {
-      return itemDAO.findByOwnersAndSearch(campaignId, chunks.get(0), pattern, pageable).map(this::toModel);
+      return itemDAO.findByOwnersAndSearch(campaignId, chunks.get(0), pattern, withQuerySort(pageable)).map(this::toModel);
     }
     int upToRequestedPage = (pageable.getPageNumber() + 1) * pageable.getPageSize();
-    Pageable chunkPageable = PageRequest.of(0, upToRequestedPage, pageable.getSort());
+    Pageable chunkPageable = PageRequest.of(0, upToRequestedPage, querySort(pageable.getSort()));
     List<CleanupCampaignItemEntity> merged = new ArrayList<>();
     long totalElements = 0;
     for (List<Long> chunk : chunks) {
@@ -450,11 +571,75 @@ public class CleanupCampaignStorage {
   }
 
   /**
+   * Translates a REQUESTED ordering into the one the DATABASE can apply, which
+   * today means exactly one key: the logical
+   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY} becomes an
+   * {@code ORDER BY} over {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES_ORDER_BY}
+   * — the very expression every reclaimable aggregate sums, so the list is
+   * ranked by the same definition of 'reclaimable' the campaign totals add up.
+   * A plain {@code Sort.by(field)} cannot express it: it is a computed CASE, not
+   * a column, hence {@link JpaSort#unsafe(Sort.Direction, String...)} (legal
+   * here, and only here, because both item queries are declared {@code @Query}
+   * ones).
+   * <p>
+   * Every other key is passed through untouched, direction and POSITION
+   * included: the id tiebreaker the REST layer appends must stay the LAST key,
+   * or the ordering stops being total and offset paging starts repeating and
+   * skipping rows.
+   * <p>
+   * Package visible for tests.
+   */
+  static Sort querySort(Sort sort) {
+    if (sort == null || sort.getOrderFor(CleanupConstants.RECLAIMABLE_SORT_KEY) == null) {
+      return sort;
+    }
+    List<Sort.Order> orders = new ArrayList<>();
+    for (Sort.Order order : sort) {
+      if (CleanupConstants.RECLAIMABLE_SORT_KEY.equals(order.getProperty())) {
+        JpaSort.unsafe(order.getDirection(), CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY).forEach(orders::add);
+      } else {
+        orders.add(order);
+      }
+    }
+    return Sort.by(orders);
+  }
+
+  /**
+   * The {@link #querySort(Sort)} of a whole {@link Pageable}, returned unchanged
+   * when the ordering needs no translation.
+   */
+  private static Pageable withQuerySort(Pageable pageable) {
+    Sort sort = pageable.getSort();
+    Sort querySort = querySort(sort);
+    return querySort == sort ? pageable : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), querySort);
+  }
+
+  /**
+   * The reclaimable bytes of an item computed in Java, the in-memory mirror of
+   * {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES}: a DELETE frees its content
+   * AND the whole version history it destroys, a PURGE_VERSIONS frees the
+   * versions alone. Package visible for tests, which pin it against the JPQL the
+   * database applies — the two must rank a set of rows identically, otherwise a
+   * user managing enough spaces to be chunked gets a differently ordered list
+   * from one managing few.
+   */
+  static long reclaimableBytes(CleanupCampaignItemEntity item) {
+    return CleanupAction.DELETE.name().equals(item.getAction()) ? item.getFileSize() + item.getVersionsSize()
+                                                                : item.getVersionsSize();
+  }
+
+  /**
    * In-memory mirror of a requested {@link Sort}, used to merge the per-chunk
    * pages of {@link #getItemsByOwners} in the very same order the database
    * applied inside each chunk. Any key the DAO can be asked to sort on (the REST
-   * layer validates them against its allowlist) has its counterpart here;
-   * anything else is ignored, and an ordering left with no usable key falls back
+   * layer validates them against its allowlist) has its counterpart here — the
+   * computed reclaimable key included, whose counterpart mirrors the JPQL
+   * expression the chunk queries were ordered by (see {@link #querySort(Sort)}):
+   * the two MUST rank the same rows the same way, or the multi-chunk answer
+   * would differ from the single-chunk one for identical data.
+   * <p>
+   * The merge is fed the REQUESTED (logical) ordering, not the translated one;
+   * anything unknown is ignored, and an ordering left with no usable key falls back
    * to the id — the primary key, hence the only column whose uniqueness the
    * schema really enforces (the path is nullable and only unique in practice).
    * <p>
@@ -486,9 +671,16 @@ public class CleanupCampaignStorage {
       case "ownerIdentityId" -> Comparator.comparingLong(CleanupCampaignItemEntity::getOwnerIdentityId);
       case "fileSize" -> Comparator.comparingLong(CleanupCampaignItemEntity::getFileSize);
       case "versionsSize" -> Comparator.comparingLong(CleanupCampaignItemEntity::getVersionsSize);
+      case "lastModifiedDate" ->
+        Comparator.comparing(CleanupCampaignItemEntity::getLastModifiedDate, Comparator.nullsLast(Date::compareTo));
       case "state" -> Comparator.comparing(CleanupCampaignItemEntity::getState, Comparator.nullsLast(String::compareTo));
       case "action" -> Comparator.comparing(CleanupCampaignItemEntity::getAction, Comparator.nullsLast(String::compareTo));
       case "reclaimedBytes" -> Comparator.comparingLong(CleanupCampaignItemEntity::getReclaimedBytes);
+      // Both spellings of the SAME key: the logical one the caller requests, and
+      // the JPQL expression querySort() turns it into — so the merge keeps
+      // mirroring the database whichever of the two orderings reaches it
+      case CleanupConstants.RECLAIMABLE_SORT_KEY, CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY ->
+        Comparator.comparingLong(CleanupCampaignStorage::reclaimableBytes);
       default -> null;
     };
   }
@@ -501,6 +693,10 @@ public class CleanupCampaignStorage {
     entity.setOwnerIdentityId(candidate.getOwnerIdentityId());
     entity.setFileSize(candidate.getFileSize());
     entity.setVersionsSize(candidate.getVersionsSize());
+    // The two dates that MADE the file a candidate, kept for the report; an
+    // unreadable (0) date persists as NULL rather than as the epoch
+    entity.setLastModifiedDate(toDate(candidate.getLastModifiedTime()));
+    entity.setCreatedDate(toDate(candidate.getCreatedTime()));
     entity.setAction(candidate.getAction().name());
     if (candidate.isExempted()) {
       // A previously-exempted file stays visible as 'Kept' in every campaign,
@@ -576,6 +772,8 @@ public class CleanupCampaignStorage {
     item.setOwnerIdentityId(entity.getOwnerIdentityId());
     item.setFileSize(entity.getFileSize());
     item.setVersionsSize(entity.getVersionsSize());
+    item.setLastModifiedDate(toMillis(entity.getLastModifiedDate()));
+    item.setCreatedDate(toMillis(entity.getCreatedDate()));
     item.setAction(CleanupAction.valueOf(entity.getAction()));
     item.setState(CleanupItemState.valueOf(entity.getState()));
     item.setComputedAt(toMillis(entity.getComputedAt()));
@@ -584,6 +782,8 @@ public class CleanupCampaignStorage {
     item.setPurgedAt(toMillis(entity.getPurgedAt()));
     item.setReclaimedBytes(entity.getReclaimedBytes());
     item.setFailureReason(entity.getFailureReason());
+    item.setFailureDetail(entity.getFailureDetail());
+    item.setAttemptCount(entity.getAttemptCount());
     return item;
   }
 
@@ -596,6 +796,8 @@ public class CleanupCampaignStorage {
     entity.setOwnerIdentityId(item.getOwnerIdentityId());
     entity.setFileSize(item.getFileSize());
     entity.setVersionsSize(item.getVersionsSize());
+    entity.setLastModifiedDate(toDate(item.getLastModifiedDate()));
+    entity.setCreatedDate(toDate(item.getCreatedDate()));
     entity.setAction(item.getAction().name());
     entity.setState(item.getState().name());
     entity.setComputedAt(toDate(item.getComputedAt()));
@@ -604,6 +806,8 @@ public class CleanupCampaignStorage {
     entity.setPurgedAt(toDate(item.getPurgedAt()));
     entity.setReclaimedBytes(item.getReclaimedBytes());
     entity.setFailureReason(item.getFailureReason());
+    entity.setFailureDetail(item.getFailureDetail());
+    entity.setAttemptCount(item.getAttemptCount());
     return entity;
   }
 

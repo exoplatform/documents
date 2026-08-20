@@ -24,24 +24,43 @@ import lombok.Data;
  * served by CleanupCampaignService once the retention job purged the item rows
  * (the live aggregates would then all be 0). The JSON keys are the field names:
  * writer and reader share this single class so they can never drift.
+ * <p>
+ * It also carries the DRY-RUN's own verdict ({@link #scanIncomplete},
+ * {@link #failedScanUnitCount}), written by CleanupScanService at the SIMULATED
+ * transition — a typed field of an existing column rather than a new one, and
+ * the campaign row rather than a live re-count of the unit rows: whether the
+ * report an administrator is about to publish covers the whole tree is a fact
+ * DECIDED ONCE, by the coordinator that owns the completion rule, and it must
+ * still read the same later on. CleanupExecutionService therefore CARRIES BOTH
+ * FORWARD when it snapshots the purge aggregates over the same column.
  */
 @Data
 public class CleanupCampaignSummary {
 
-  private long candidateCount;
+  private long    candidateCount;
 
-  private long reclaimableBytes;
+  private long    reclaimableBytes;
 
-  private long reclaimedBytes;
+  private long    reclaimedBytes;
 
-  private long purgedCount;
+  private long    purgedCount;
 
-  private long exemptedCount;
+  private long    exemptedCount;
 
-  private long sparedCount;
+  private long    sparedCount;
 
-  private long goneCount;
+  private long    goneCount;
 
-  private long skippedCount;
+  private long    skippedCount;
+
+  /**
+   * Whether the dry-run reached SIMULATED with at least one subtree it could
+   * never walk: the produced report is then a PARTIAL picture of the tree, and
+   * says so instead of reading complete.
+   */
+  private boolean scanIncomplete;
+
+  /** Scan units that settled failed, and are missing from the report. */
+  private long    failedScanUnitCount;
 
 }

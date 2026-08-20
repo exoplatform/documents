@@ -49,6 +49,31 @@ export function createCampaign(campaign) {
   }).then(handleJsonResponse);
 }
 
+// PATCH on the campaign resource, not an /update or /rename sub-resource: it
+// updates ATTRIBUTES, it triggers no action. Answers the FULL updated campaign,
+// which the caller applies instead of refetching.
+//
+// PARTIAL update: 'updates' carries ONLY the attributes to change ({name},
+// {graceDays}, or both). An attribute that is absent (or null) is left
+// UNTOUCHED server-side, which is why the caller must not send the whole
+// campaign back: that would overwrite fields nobody edited. Sending neither is
+// refused with 'cleanup.nothingToUpdate', so the caller checks there is
+// something to send before calling.
+//
+// Careful with graceDays: 0 is a MEANINGFUL value (a zero grace period elapses
+// at publication), never 'empty' — a caller building 'updates' must test
+// against null/undefined, not falsiness, or a deliberate 0 is silently dropped.
+export function updateCampaign(campaignId, updates) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates || {}),
+  }).then(handleJsonResponse);
+}
+
 export function cancelCampaign(campaignId) {
   return fetch(`${BASE_URL}/campaigns/${campaignId}`, {
     method: 'DELETE',
@@ -142,6 +167,42 @@ export function unkeepItems(itemIds) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({itemIds}),
+  }).then(handleJsonResponse);
+}
+
+// Requeues the items a previous execution could not process, and answers the
+// full updated campaign (back to EXECUTING) — applied by the caller instead of
+// refetching, exactly like updateCampaign. NO body: WHICH failures are
+// retryable is decided server-side, the client never selects them.
+export function retryCampaign(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/retry`, {
+    method: 'POST',
+    credentials: 'include',
+  }).then(handleJsonResponse);
+}
+
+// Answers the execution failures of a finished campaign, folded server-side into
+// [{reason, count, retryable}] — one entry per distinct message code, with the
+// server's OWN retryability verdict. An empty array is not proof the run was
+// clean: it is also what a campaign whose item rows the retention job already
+// purged answers.
+export function getCampaignFailures(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/failures`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(handleJsonResponse);
+}
+
+// Answers the SCAN failures of a campaign — the subtrees its dry run could never
+// walk — folded server-side into the same [{reason, count, retryable}] shape as
+// getCampaignFailures, so one console block renders both. An empty array is the
+// normal answer: only a scan the server RECORDED as incomplete reports anything,
+// and there is deliberately NO retry for these (the watchdog re-walked them while
+// attempts remained, and a settled subtree would fail identically).
+export function getCampaignScanFailures(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/scan-failures`, {
+    method: 'GET',
+    credentials: 'include',
   }).then(handleJsonResponse);
 }
 

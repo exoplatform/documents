@@ -17,6 +17,11 @@
 package org.exoplatform.document.cleanup.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +45,29 @@ class CleanupConstantsTest {
     // Hierarchical layout: user homes nested at a variable depth
     assertEquals(6, CleanupConstants.getDriveMinDepth("/Users/t___/te___/tes___/testuser1/Private/docs/file.pdf"));
     assertEquals(4, CleanupConstants.getDriveMinDepth("/Users/r/root/Private/file.pdf"));
+  }
+
+  @Test
+  void shouldSplitTheUserAndSpaceRootsByTheirChildrenAndTakeTrashWhole() {
+    // The per-root partitioning policy of the parallel scan, in ONE place:
+    // /Users and /Groups/spaces are split ONE level down, /Trash never is
+    assertEquals(List.of(CleanupConstants.USERS_ROOT, CleanupConstants.SPACES_ROOT), CleanupConstants.SPLIT_SCAN_ROOTS);
+    assertEquals(List.of(CleanupConstants.TRASH_ROOT), CleanupConstants.UNSPLIT_SCAN_ROOTS);
+    assertFalse(CleanupConstants.SPLIT_SCAN_ROOTS.contains(CleanupConstants.TRASH_ROOT),
+                "/Trash must never be partitioned: a dedicated trash cleaner already exists on the platform");
+    assertFalse(CleanupConstants.UNSPLIT_SCAN_ROOTS.contains(CleanupConstants.USERS_ROOT),
+                "/Users taken whole would serialise the biggest tree of the platform onto one reader");
+  }
+
+  @Test
+  void shouldPartitionExactlyTheScannedRoots() {
+    // Neither policy set may drift from the scanned roots: a root missing from
+    // both would silently drop out of every simulation
+    assertEquals(CleanupConstants.SCAN_ROOTS.size(),
+                 CleanupConstants.SPLIT_SCAN_ROOTS.size() + CleanupConstants.UNSPLIT_SCAN_ROOTS.size());
+    assertTrue(Stream.concat(CleanupConstants.SPLIT_SCAN_ROOTS.stream(), CleanupConstants.UNSPLIT_SCAN_ROOTS.stream())
+                     .allMatch(CleanupConstants.SCAN_ROOTS::contains),
+               "Every partitioned root must be a scanned root");
   }
 
   @Test

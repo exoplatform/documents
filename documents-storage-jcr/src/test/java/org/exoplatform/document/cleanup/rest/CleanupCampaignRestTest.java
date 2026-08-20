@@ -17,6 +17,7 @@
 package org.exoplatform.document.cleanup.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -55,14 +57,18 @@ import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
+import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
+import org.exoplatform.document.cleanup.rest.model.UpdateCampaignRestEntity;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
+import org.exoplatform.document.cleanup.util.CleanupConstants;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -82,12 +88,23 @@ class CleanupCampaignRestTest {
 
   private static final long      CAMPAIGN_ID      = 12L;
 
+  private static final String    FAILURE_DETAIL   =
+                                                "javax.jcr.ReferentialIntegrityException: referenced by /Groups/spaces/hr/Documents/link";
+
   /**
    * The ordering BOTH item tables must end up with by default: the size-first
    * business ordering, made total by the primary-key 'id' tiebreaker.
    */
-  private static final Sort      FILE_SIZE_DESC_THEN_ID = Sort.by(Sort.Direction.DESC, "fileSize")
-                                                              .and(Sort.by(Sort.Direction.ASC, "id"));
+  private static final Sort      FILE_SIZE_DESC_THEN_ID   = Sort.by(Sort.Direction.DESC, "fileSize")
+                                                                .and(Sort.by(Sort.Direction.ASC, "id"));
+
+  /**
+   * What the USER review list opens on: the computed reclaimable key — the same
+   * figure the list displays and the campaign totals — made total by the id
+   * tiebreaker. The Storage layer turns that key into a query-level ORDER BY.
+   */
+  private static final Sort      RECLAIMABLE_DESC_THEN_ID = Sort.by(Sort.Direction.DESC, CleanupConstants.RECLAIMABLE_SORT_KEY)
+                                                                .and(Sort.by(Sort.Direction.ASC, "id"));
 
   @Mock
   private CleanupCampaignService campaignService;
@@ -155,6 +172,90 @@ class CleanupCampaignRestTest {
                                                      () -> campaignRest.createCampaign(new CampaignRestEntity()));
     assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
     assertEquals("cleanup.nameRequired", exception.getReason());
+  }
+
+  @Test
+  void updateCampaignDelegatesBothBodyFieldsAndAnswersTheUpdatedDto() throws ObjectNotFoundException {
+    UpdateCampaignRestEntity body = new UpdateCampaignRestEntity();
+    body.setName("  Renamed campaign  ");
+    body.setGraceDays(21);
+    when(campaignService.updateCampaign(eq(CAMPAIGN_ID), any(), any())).thenReturn(campaign(CAMPAIGN_ID, "Renamed campaign"));
+
+    CampaignRestEntity updated = campaignRest.updateCampaign(CAMPAIGN_ID, body);
+
+    // The DTO the list and the header re-render from
+    assertEquals(CAMPAIGN_ID, updated.getId());
+    assertEquals("Renamed campaign", updated.getName());
+    // Both fields passed through VERBATIM: trimming them, validating them and
+    // deciding which state may edit which is the Service's business, this layer
+    // carries none — see the service tests pinning the trim and the state guard
+    verify(campaignService).updateCampaign(CAMPAIGN_ID, "  Renamed campaign  ", 21);
+  }
+
+  /**
+   * A partial body reaches the Service as a partial one: an absent field stays
+   * NULL rather than being defaulted here, null being what means 'leave that
+   * attribute unchanged'. Zero is forwarded as zero — a MEANINGFUL grace period,
+   * not an absent one.
+   */
+  @Test
+  void updateCampaignForwardsAnAbsentFieldAsNullAndAZeroGraceAsZero() throws ObjectNotFoundException {
+    when(campaignService.updateCampaign(eq(CAMPAIGN_ID), any(), any())).thenReturn(campaign(CAMPAIGN_ID, "Q3 cleanup"));
+
+    UpdateCampaignRestEntity nameOnly = new UpdateCampaignRestEntity();
+    nameOnly.setName("Q4 cleanup");
+    campaignRest.updateCampaign(CAMPAIGN_ID, nameOnly);
+    verify(campaignService).updateCampaign(CAMPAIGN_ID, "Q4 cleanup", null);
+
+    UpdateCampaignRestEntity graceOnly = new UpdateCampaignRestEntity();
+    graceOnly.setGraceDays(0);
+    campaignRest.updateCampaign(CAMPAIGN_ID, graceOnly);
+    verify(campaignService).updateCampaign(CAMPAIGN_ID, null, 0);
+  }
+
+  @Test
+  void updateCampaignMapsNotFoundTo404() throws ObjectNotFoundException {
+    when(campaignService.updateCampaign(anyLong(), any(), any())).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                     () -> campaignRest.updateCampaign(CAMPAIGN_ID,
+                                                                                       new UpdateCampaignRestEntity()));
+    assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    assertEquals(NOT_FOUND_CODE, exception.getReason());
+  }
+
+  @Test
+  void updateCampaignMapsIllegalArgumentTo400WithTheMessageCode() throws ObjectNotFoundException {
+    when(campaignService.updateCampaign(anyLong(), any(), any())).thenThrow(new IllegalArgumentException("cleanup.nameTooLong"));
+
+    ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                     () -> campaignRest.updateCampaign(CAMPAIGN_ID,
+                                                                                       new UpdateCampaignRestEntity()));
+    assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    assertEquals("cleanup.nameTooLong", exception.getReason());
+  }
+
+  /**
+   * Every message code the Service can refuse a patch with reaches the client as
+   * the 400 REASON: the console localizes it, so it must never be swallowed nor
+   * replaced by a generic sentence.
+   */
+  @Test
+  void updateCampaignCarriesEveryRefusalMessageCode() throws ObjectNotFoundException {
+    for (String messageCode : List.of("cleanup.nothingToUpdate",
+                                      "cleanup.nameMandatory",
+                                      "cleanup.invalidState",
+                                      "cleanup.invalidGraceDays")) {
+      // doThrow, not when/thenThrow: re-stubbing an already-throwing mock through
+      // when() would invoke it — and throw — while stubbing it
+      doThrow(new IllegalArgumentException(messageCode)).when(campaignService).updateCampaign(anyLong(), any(), any());
+
+      ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                       () -> campaignRest.updateCampaign(CAMPAIGN_ID,
+                                                                                         new UpdateCampaignRestEntity()));
+      assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+      assertEquals(messageCode, exception.getReason());
+    }
   }
 
   @Test
@@ -275,6 +376,26 @@ class CleanupCampaignRestTest {
                                              eq((String) null),
                                              pageableCaptor.capture());
     assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_ID), pageableCaptor.getValue());
+  }
+
+  @Test
+  void getCampaignItemsAcceptsTheReclaimableSortKeyWithoutDefaultingToIt() throws ObjectNotFoundException {
+    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    // The ADMIN table's size column shows the CONTENT size (and its minSize filter
+    // narrows on that same column), so it keeps defaulting to 'fileSize' — the
+    // reclaimable ordering stays available on request, never imposed here
+    campaignRest.getCampaignItems(CAMPAIGN_ID,
+                                  null,
+                                  null,
+                                  null,
+                                  null,
+                                  null,
+                                  0,
+                                  20,
+                                  CleanupConstants.RECLAIMABLE_SORT_KEY + ",desc");
+
+    assertEquals(PageRequest.of(0, 20, RECLAIMABLE_DESC_THEN_ID), captureItemsPageable());
   }
 
   @Test
@@ -427,14 +548,34 @@ class CleanupCampaignRestTest {
   }
 
   @Test
-  void getMyItemsDefaultsToFileSizeDescendingSortWithIdTiebreaker() throws ObjectNotFoundException {
+  void getMyItemsDefaultsToTheReclaimableSortWithIdTiebreaker() throws ObjectNotFoundException {
     when(request.getRemoteUser()).thenReturn("john");
     when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
     campaignRest.getMyItems(request, null, 0, 20, null);
 
     verify(campaignService).getMyItems(eq("john"), eq((String) null), any());
-    assertEquals(PageRequest.of(0, 20, FILE_SIZE_DESC_THEN_ID), captureMyItemsPageable());
+    // The review list DISPLAYS what each row frees — content plus the version
+    // history a delete destroys — so that is what it must be ranked by. Defaulting
+    // to 'fileSize' showed 501 MB on a row it sorted as 1 MB, burying the biggest
+    // win of a list the UI labels 'sorted by size'
+    assertEquals(PageRequest.of(0, 20, RECLAIMABLE_DESC_THEN_ID), captureMyItemsPageable());
+  }
+
+  @Test
+  void getMyItemsHonoursAnExplicitlyRequestedReclaimableSort() throws ObjectNotFoundException {
+    when(request.getRemoteUser()).thenReturn("john");
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    // The default is not the only way in: the key is in the allowlist, so a client
+    // can ask for it — ascending here, which the ordering must honour
+    campaignRest.getMyItems(request, null, 0, 20, CleanupConstants.RECLAIMABLE_SORT_KEY + ",asc");
+
+    assertEquals(PageRequest.of(0,
+                                20,
+                                Sort.by(Sort.Direction.ASC, CleanupConstants.RECLAIMABLE_SORT_KEY)
+                                    .and(Sort.by(Sort.Direction.ASC, "id"))),
+                 captureMyItemsPageable());
   }
 
   @Test
@@ -523,6 +664,133 @@ class CleanupCampaignRestTest {
     campaign.setName(name);
     campaign.setState(CleanupCampaignState.DRAFT);
     return campaign;
+  }
+
+  @Test
+  void retryCampaignDelegatesAndMapsStatuses() throws ObjectNotFoundException {
+    when(campaignService.retryCampaign(CAMPAIGN_ID)).thenReturn(campaign(CAMPAIGN_ID, "retried"));
+    assertEquals(CAMPAIGN_ID, campaignRest.retryCampaign(CAMPAIGN_ID).getId());
+
+    when(campaignService.retryCampaign(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+    ResponseStatusException notFound = assertThrows(ResponseStatusException.class, () -> campaignRest.retryCampaign(404L));
+    assertEquals(HttpStatus.NOT_FOUND, notFound.getStatusCode());
+    assertEquals(NOT_FOUND_CODE, notFound.getReason(), "The message code must travel as the status reason");
+
+    when(campaignService.retryCampaign(400L)).thenThrow(new IllegalArgumentException("cleanup.noRetryableFailures"));
+    ResponseStatusException badRequest = assertThrows(ResponseStatusException.class, () -> campaignRest.retryCampaign(400L));
+    assertEquals(HttpStatus.BAD_REQUEST, badRequest.getStatusCode());
+    assertEquals("cleanup.noRetryableFailures", badRequest.getReason());
+  }
+
+  @Test
+  void retryCampaignAnswersAcceptedLikeEveryAsynchronousAction() throws NoSuchMethodException {
+    // The purge is handed off to a worker thread: answering 200 would tell the
+    // console the work is done
+    assertEquals(HttpStatus.ACCEPTED,
+                 CleanupCampaignRest.class.getMethod("retryCampaign", long.class)
+                                          .getAnnotation(ResponseStatus.class)
+                                          .value());
+  }
+
+  @Test
+  void getCampaignFailuresMapsEveryGroupAndItsRetryableFlag() throws ObjectNotFoundException {
+    when(campaignService.getCampaignFailures(CAMPAIGN_ID)).thenReturn(List.of(new CleanupFailureGroup("cleanup.deleteError",
+                                                                                                     12L,
+                                                                                                     true),
+                                                                             new CleanupFailureGroup("cleanup.referentialIntegrity",
+                                                                                                     3L,
+                                                                                                     false)));
+
+    List<CampaignFailureGroupRestEntity> failures = campaignRest.getCampaignFailures(CAMPAIGN_ID);
+
+    assertEquals(2, failures.size());
+    assertEquals("cleanup.deleteError", failures.get(0).getReason());
+    assertEquals(12L, failures.get(0).getCount());
+    assertTrue(failures.get(0).isRetryable());
+    assertFalse(failures.get(1).isRetryable());
+  }
+
+  @Test
+  void getCampaignFailuresMapsNotFound() throws ObjectNotFoundException {
+    when(campaignService.getCampaignFailures(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class, () -> campaignRest.getCampaignFailures(404L)).getStatusCode());
+  }
+
+  @Test
+  void getCampaignScanFailuresMapsEveryGroupOfSubtreesTheScanCouldNotWalk() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanFailures(CAMPAIGN_ID)).thenReturn(List.of(new CleanupFailureGroup("cleanup.scanUnitFailed",
+                                                                                                         4L,
+                                                                                                         false)));
+
+    List<CampaignFailureGroupRestEntity> scanFailures = campaignRest.getCampaignScanFailures(CAMPAIGN_ID);
+
+    // The SAME shape as the item failures, so one console block renders both
+    assertEquals(1, scanFailures.size());
+    assertEquals("cleanup.scanUnitFailed", scanFailures.get(0).getReason());
+    assertEquals(4L, scanFailures.get(0).getCount());
+    // No console retry for a settled subtree, and the SERVER is the one saying so
+    assertFalse(scanFailures.get(0).isRetryable());
+  }
+
+  @Test
+  void getCampaignScanFailuresAnswersAnEmptyListForAScanCoveringTheWholeTree() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanFailures(CAMPAIGN_ID)).thenReturn(List.of());
+
+    // The normal case, and the one the console keeps its block hidden on
+    assertTrue(campaignRest.getCampaignScanFailures(CAMPAIGN_ID).isEmpty());
+  }
+
+  @Test
+  void getCampaignScanFailuresMapsNotFound() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanFailures(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class,
+                              () -> campaignRest.getCampaignScanFailures(404L)).getStatusCode());
+  }
+
+  @Test
+  void getCampaignItemsServesTheFailureDetailToAdministrators() throws ObjectNotFoundException {
+    CleanupCampaignItem failedItem = item(3);
+    failedItem.setFailureReason("cleanup.deleteError");
+    failedItem.setFailureDetail(FAILURE_DETAIL);
+    when(campaignService.getCampaignItems(anyLong(), any(), any(), any(), any(), any(), any()))
+                                                                                              .thenReturn(new PageImpl<>(List.of(failedItem)));
+
+    PagedResult<CampaignItemRestEntity> result = campaignRest.getCampaignItems(CAMPAIGN_ID,
+                                                                               null,
+                                                                               null,
+                                                                               null,
+                                                                               null,
+                                                                               null,
+                                                                               0,
+                                                                               20,
+                                                                               null);
+
+    // @Secured("administrators"): this is the ONE path allowed to expose a stack
+    // trace that can name nodes outside a given user's visibility
+    assertEquals(FAILURE_DETAIL, result.getItems().get(0).getFailureDetail());
+  }
+
+  @Test
+  void getMyItemsWithholdsTheFailureDetailFromEndUsers() throws ObjectNotFoundException {
+    CleanupCampaignItem failedItem = item(3);
+    failedItem.setFailureReason("cleanup.deleteError");
+    failedItem.setFailureDetail(FAILURE_DETAIL);
+    when(request.getRemoteUser()).thenReturn("john");
+    when(campaignService.getMyItems(eq("john"), any(), any())).thenReturn(new PageImpl<>(List.of(failedItem)));
+
+    PagedResult<CampaignItemRestEntity> result = campaignRest.getMyItems(request, null, 0, 20, null);
+
+    // @Secured("users"): a referential-integrity dump names the REFERENCING node,
+    // e.g. a shortcut in a space the caller is not a member of
+    assertNull(result.getItems().get(0).getFailureDetail(),
+               "The user-facing endpoint must never serialize the failure detail");
+    assertEquals("cleanup.deleteError",
+                 result.getItems().get(0).getFailureReason(),
+                 "The bare reason code stays: it is a localizable message code, it leaks nothing");
   }
 
   private CleanupCampaignItem item(long id) {
