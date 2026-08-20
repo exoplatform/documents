@@ -25,9 +25,12 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -61,6 +64,7 @@ import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
+import org.exoplatform.document.cleanup.util.CleanupIdentityUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -105,8 +109,13 @@ public class CleanupCampaignService {
 
   private static final int                        CSV_PAGE_SIZE               = 1000;
 
+  /**
+   * Column order of the CSV report. The historical columns keep their POSITION
+   * — a consumer parsing by index must not break — and the ones added since are
+   * APPENDED after them.
+   */
   private static final String                     CSV_HEADER                  =
-                                                              "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason\n";
+                                                              "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate\n";
 
   private static final int                        LISTENER_RETRY_MAX_ATTEMPTS = 10;
 
@@ -773,12 +782,17 @@ public class CleanupCampaignService {
   private void writeCsv(long campaignId, OutputStream outputStream) throws IOException {
     Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
     writer.write(CSV_HEADER);
+    // Owner display names resolved ONCE per distinct owner for the whole export:
+    // a report can hold millions of rows for a few thousand owners at most, so
+    // one IdentityManager lookup per row would dominate the export cost. Local
+    // to this export (never a shared cache): a name is read as of the download.
+    Map<Long, String> ownerNames = new HashMap<>();
     int pageIndex = 0;
     Page<CleanupCampaignItem> page;
     do {
       page = campaignStorage.getItemsPage(campaignId, PageRequest.of(pageIndex++, CSV_PAGE_SIZE, Sort.by("id")));
       for (CleanupCampaignItem item : page.getContent()) {
-        writer.write(toCsvRow(item));
+        writer.write(toCsvRow(item, ownerNames));
       }
       // Never left buffered: the client gets each page as it is read
       writer.flush();
@@ -812,7 +826,7 @@ public class CleanupCampaignService {
     }
   }
 
-  private String toCsvRow(CleanupCampaignItem item) {
+  private String toCsvRow(CleanupCampaignItem item, Map<Long, String> ownerNames) {
     StringBuilder row = new StringBuilder();
     row.append(escapeCsv(item.getNodeUuid()))
        .append(',')
@@ -831,8 +845,45 @@ public class CleanupCampaignService {
        .append(item.getReclaimedBytes())
        .append(',')
        .append(escapeCsv(item.getFailureReason()))
+       // Appended columns — a display name can carry a comma or a quote, so it
+       // goes through the very same escaping as the path
+       .append(',')
+       .append(escapeCsv(ownerName(item.getOwnerIdentityId(), ownerNames)))
+       .append(',')
+       .append(toIsoUtc(item.getLastModifiedDate()))
+       .append(',')
+       .append(toIsoUtc(item.getCreatedDate()))
        .append('\n');
     return row.toString();
+  }
+
+  /**
+   * Owner display name of a row, memoized in the export-local map: the number of
+   * {@link IdentityManager} lookups is bounded by the number of DISTINCT owners
+   * of the campaign, not by its row count. An unresolvable identity is memoized
+   * as an EMPTY name — it must degrade the row, never fail the download nor be
+   * looked up again on every row.
+   */
+  private String ownerName(long ownerIdentityId, Map<Long, String> ownerNames) {
+    return ownerNames.computeIfAbsent(ownerIdentityId, this::resolveOwnerName);
+  }
+
+  private String resolveOwnerName(long ownerIdentityId) {
+    try {
+      return CleanupIdentityUtil.displayName(identityManager.getIdentity(ownerIdentityId));
+    } catch (Exception e) {
+      LOG.debug("Error resolving the cleanup report owner name of identity {}", ownerIdentityId, e);
+      return "";
+    }
+  }
+
+  /**
+   * A report date as ISO-8601 UTC (e.g. 2026-08-20T09:15:30Z), empty when unset:
+   * the CSV is a MACHINE-readable export, so its dates are never localized —
+   * unlike the ones the UI renders through the platform's date component.
+   */
+  private String toIsoUtc(long millis) {
+    return millis == 0 ? "" : DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(millis));
   }
 
   /**

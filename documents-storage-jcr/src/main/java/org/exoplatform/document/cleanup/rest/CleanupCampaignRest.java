@@ -69,6 +69,7 @@ public class CleanupCampaignRest {
                                                                  "ownerIdentityId",
                                                                  "fileSize",
                                                                  "versionsSize",
+                                                                 "lastModifiedDate",
                                                                  "state",
                                                                  "action",
                                                                  "reclaimedBytes");

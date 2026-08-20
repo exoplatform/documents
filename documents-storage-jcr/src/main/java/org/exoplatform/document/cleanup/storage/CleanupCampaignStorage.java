@@ -486,6 +486,8 @@ public class CleanupCampaignStorage {
       case "ownerIdentityId" -> Comparator.comparingLong(CleanupCampaignItemEntity::getOwnerIdentityId);
       case "fileSize" -> Comparator.comparingLong(CleanupCampaignItemEntity::getFileSize);
       case "versionsSize" -> Comparator.comparingLong(CleanupCampaignItemEntity::getVersionsSize);
+      case "lastModifiedDate" ->
+        Comparator.comparing(CleanupCampaignItemEntity::getLastModifiedDate, Comparator.nullsLast(Date::compareTo));
       case "state" -> Comparator.comparing(CleanupCampaignItemEntity::getState, Comparator.nullsLast(String::compareTo));
       case "action" -> Comparator.comparing(CleanupCampaignItemEntity::getAction, Comparator.nullsLast(String::compareTo));
       case "reclaimedBytes" -> Comparator.comparingLong(CleanupCampaignItemEntity::getReclaimedBytes);
@@ -501,6 +503,10 @@ public class CleanupCampaignStorage {
     entity.setOwnerIdentityId(candidate.getOwnerIdentityId());
     entity.setFileSize(candidate.getFileSize());
     entity.setVersionsSize(candidate.getVersionsSize());
+    // The two dates that MADE the file a candidate, kept for the report; an
+    // unreadable (0) date persists as NULL rather than as the epoch
+    entity.setLastModifiedDate(toDate(candidate.getLastModifiedTime()));
+    entity.setCreatedDate(toDate(candidate.getCreatedTime()));
     entity.setAction(candidate.getAction().name());
     if (candidate.isExempted()) {
       // A previously-exempted file stays visible as 'Kept' in every campaign,
@@ -576,6 +582,8 @@ public class CleanupCampaignStorage {
     item.setOwnerIdentityId(entity.getOwnerIdentityId());
     item.setFileSize(entity.getFileSize());
     item.setVersionsSize(entity.getVersionsSize());
+    item.setLastModifiedDate(toMillis(entity.getLastModifiedDate()));
+    item.setCreatedDate(toMillis(entity.getCreatedDate()));
     item.setAction(CleanupAction.valueOf(entity.getAction()));
     item.setState(CleanupItemState.valueOf(entity.getState()));
     item.setComputedAt(toMillis(entity.getComputedAt()));
@@ -596,6 +604,8 @@ public class CleanupCampaignStorage {
     entity.setOwnerIdentityId(item.getOwnerIdentityId());
     entity.setFileSize(item.getFileSize());
     entity.setVersionsSize(item.getVersionsSize());
+    entity.setLastModifiedDate(toDate(item.getLastModifiedDate()));
+    entity.setCreatedDate(toDate(item.getCreatedDate()));
     entity.setAction(item.getAction().name());
     entity.setState(item.getState().name());
     entity.setComputedAt(toDate(item.getComputedAt()));

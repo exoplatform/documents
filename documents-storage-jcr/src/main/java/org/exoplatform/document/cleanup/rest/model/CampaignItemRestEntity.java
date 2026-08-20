@@ -47,6 +47,10 @@ public class CampaignItemRestEntity {
 
   private long   versionsSize;
 
+  private Long   lastModifiedDate;
+
+  private Long   createdDate;
+
   private String action;
 
   private String state;

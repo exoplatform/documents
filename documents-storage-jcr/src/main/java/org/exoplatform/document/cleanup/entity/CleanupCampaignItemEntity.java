@@ -59,6 +59,23 @@ public class CleanupCampaignItemEntity implements Serializable {
   @Column(name = "VERSIONS_SIZE")
   private long              versionsSize;
 
+  /**
+   * Last modification date of the candidate file, as read by the scan. Nullable:
+   * rows recorded before this column existed keep a NULL, and so does a file
+   * whose date was unreadable.
+   */
+  @Column(name = "LAST_MODIFIED_DATE")
+  private Date              lastModifiedDate;
+
+  /**
+   * Creation date of the candidate file, as read by the scan. Persisted although
+   * only the last-modified one is displayed: BOTH dates being older than the
+   * campaign period is what made the file a candidate, so a report carrying only
+   * one of them cannot explain its own rows. Nullable, see above.
+   */
+  @Column(name = "CREATED_DATE")
+  private Date              createdDate;
+
   @Column(name = "ACTION", nullable = false)
   private String            action;
 

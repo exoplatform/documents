@@ -32,8 +32,8 @@ import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
+import org.exoplatform.document.cleanup.util.CleanupIdentityUtil;
 import org.exoplatform.social.core.identity.model.Identity;
-import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 /**
@@ -101,6 +101,8 @@ public class CleanupEntityBuilder {
     fillOwner(entity, item.getOwnerIdentityId(), identityManager);
     entity.setFileSize(item.getFileSize());
     entity.setVersionsSize(item.getVersionsSize());
+    entity.setLastModifiedDate(toNullable(item.getLastModifiedDate()));
+    entity.setCreatedDate(toNullable(item.getCreatedDate()));
     entity.setAction(item.getAction().name());
     entity.setState(item.getState().name());
     entity.setComputedAt(toNullable(item.getComputedAt()));
@@ -192,9 +194,8 @@ public class CleanupEntityBuilder {
     }
     entity.setOwnerType(identity.isSpace() ? "space" : "user");
     entity.setOwnerRemoteId(identity.getRemoteId());
-    Profile profile = identity.getProfile();
-    entity.setOwnerFullName(profile == null || StringUtils.isBlank(profile.getFullName()) ? identity.getRemoteId() :
-                                                                                          profile.getFullName());
+    // Same resolution as the CSV report's owner name, defined once
+    entity.setOwnerFullName(CleanupIdentityUtil.displayName(identity));
   }
 
 }

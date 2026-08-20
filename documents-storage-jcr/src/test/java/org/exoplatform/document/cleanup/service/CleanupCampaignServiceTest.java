@@ -126,6 +126,14 @@ class CleanupCampaignServiceTest {
 
   private static final List<CleanupCampaignState> COMPLETED_STATES = List.of(CleanupCampaignState.COMPLETED);
 
+  /**
+   * The report's column contract, mirroring the service's own private
+   * CSV_HEADER: the historical columns come first, in their original order, and
+   * every column added since is appended after them.
+   */
+  private static final String                     CSV_HEADER       =
+                                                               "nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,ownerName,lastModifiedDate,createdDate\n";
+
   @Mock
   private CleanupCampaignStorage   campaignStorage;
 
@@ -1358,8 +1366,13 @@ class CleanupCampaignServiceTest {
     campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
 
     String csv = outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
-    assertTrue(csv.startsWith("nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason\n"),
-               "The streamed report must open with the CSV header");
+    // The historical columns keep their POSITION and the ones added since are
+    // APPENDED: a consumer parsing the report by index must not break
+    assertTrue(csv.startsWith(CSV_HEADER), "The streamed report must open with the CSV header");
+    assertTrue(CSV_HEADER.startsWith("nodeUuid,path,ownerIdentityId,action,state,fileSize,versionsSize,reclaimedBytes,failureReason,"),
+               "The historical columns must keep their position");
+    assertTrue(CSV_HEADER.endsWith(",ownerName,lastModifiedDate,createdDate\n"),
+               "The columns added since must be appended, in that order");
     assertTrue(csv.contains("\"/Users/j___/john/Private/report,final.pdf\""),
                "A comma-carrying path must stay quoted in the streamed rows");
     assertTrue(csv.contains(",4096,"));
@@ -1631,6 +1644,72 @@ class CleanupCampaignServiceTest {
     String csv = streamCsvOf(item);
 
     assertTrue(csv.contains(",/Users/j___/john/Private/plain.pdf,"), "A plain value must be written as-is");
+  }
+
+  @Test
+  void shouldAppendTheResolvedOwnerNameAndIsoCandidacyDatesToTheCsvRows() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.CANDIDATE);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+    item.setLastModifiedDate(1600000000000L);
+    item.setCreatedDate(1500000000000L);
+    Identity owner = userIdentity("5", USERNAME);
+    // A display name is user data: it can carry the separator itself
+    owner.getProfile().setProperty(org.exoplatform.social.core.identity.model.Profile.FULL_NAME, "John, Smith");
+    when(identityManager.getIdentity(5L)).thenReturn(owner);
+
+    String csv = streamCsvOf(item);
+
+    assertTrue(csv.contains("\"John, Smith\""), "The owner display name must be exported, escaped like any other value");
+    // ISO-8601 UTC, never a localized string: the CSV is a machine-readable
+    // export, unlike the dates the UI renders
+    assertTrue(csv.contains(",2020-09-13T12:26:40Z,2017-07-14T02:40:00Z\n"),
+               "The last-modified and creation dates must be appended as ISO-8601 UTC, in that order");
+  }
+
+  @Test
+  void shouldResolveEachCsvOwnerNameOnlyOnceForTheWholeExport() throws Exception {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.hasItems(CAMPAIGN_ID)).thenReturn(true);
+    CleanupCampaignItem firstPageItem = item(CleanupItemState.PURGED);
+    firstPageItem.setNodeUuid("uuid-page-1");
+    CleanupCampaignItem secondPageItem = item(CleanupItemState.PURGED);
+    secondPageItem.setNodeUuid("uuid-page-2");
+    // Both rows share owner 5: the export streams pages over potentially
+    // millions of rows, so the identity lookups must be bounded by the number of
+    // DISTINCT owners — and the memo must span the pages, not restart on each
+    when(campaignStorage.getItemsPage(eq(CAMPAIGN_ID), any())).thenAnswer(invocation -> {
+      Pageable pageable = invocation.getArgument(1);
+      return new org.springframework.data.domain.PageImpl<>(List.of(pageable.getPageNumber() == 0 ? firstPageItem :
+                                                                 secondPageItem),
+                                                            pageable,
+                                                            1500L);
+    });
+    when(identityManager.getIdentity(5L)).thenReturn(userIdentity("5", USERNAME));
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    campaignService.writeArchiveCsv(CAMPAIGN_ID, outputStream);
+
+    String csv = outputStream.toString(java.nio.charset.StandardCharsets.UTF_8);
+    assertEquals(2,
+                 csv.split("," + USERNAME + ",", -1).length - 1,
+                 "Both rows must carry the resolved owner name, the memo serving the second one");
+    verify(identityManager, times(1)).getIdentity(5L);
+  }
+
+  @Test
+  void shouldDegradeAnUnresolvableCsvOwnerToAnEmptyNameWithoutFailingTheExport() throws Exception {
+    CleanupCampaignItem item = item(CleanupItemState.CANDIDATE);
+    item.setPath("/Users/j___/john/Private/report.pdf");
+    when(identityManager.getIdentity(5L)).thenThrow(new IllegalStateException("Identity storage unreachable"));
+
+    String csv = streamCsvOf(item);
+
+    String[] cells = csv.substring(csv.indexOf('\n') + 1).trim().split(",", -1);
+    assertEquals(12, cells.length, "The row must keep every column of the header");
+    assertEquals("", cells[9], "An unresolvable owner degrades to an EMPTY name, it never fails the export");
+    assertEquals("", cells[10], "An unset date is exported empty");
+    assertEquals("", cells[11]);
   }
 
   private String streamCsvOf(CleanupCampaignItem item) throws Exception {

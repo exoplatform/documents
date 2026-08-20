@@ -42,6 +42,16 @@ public class CleanupCampaignItem {
 
   private long             versionsSize;
 
+  /** Last modification date of the file, as read by the scan. */
+  private long             lastModifiedDate;
+
+  /**
+   * Creation date of the file, as read by the scan. Carried along the
+   * last-modified one — both being older than the campaign period is what made
+   * the file a candidate.
+   */
+  private long             createdDate;
+
   private CleanupAction    action;
 
   private CleanupItemState state;

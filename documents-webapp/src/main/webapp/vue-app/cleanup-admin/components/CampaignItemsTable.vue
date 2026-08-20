@@ -90,6 +90,17 @@
       <template slot="item.ownerFullName" slot-scope="{item}">
         {{ item.ownerFullName }}
       </template>
+      <!-- Rendered by the platform's shared <date-format>, never a locally
+           formatted string; a row scanned before the column existed carries no
+           date at all, hence the dash -->
+      <template slot="item.lastModifiedDate" slot-scope="{item}">
+        <date-format
+          v-if="item.lastModifiedDate"
+          :value="item.lastModifiedDate"
+          :format="$cleanupUtils.DATE_TIME_FORMAT"
+          class="text-no-wrap" />
+        <span v-else>-</span>
+      </template>
       <template slot="item.action" slot-scope="{item}">
         {{ $t(`cleanup.item.action.${item.action}`) }}
       </template>
@@ -158,6 +169,7 @@ export default {
         {text: this.$t('cleanup.admin.items.name'), value: 'name', align: 'left'},
         {text: this.$t('cleanup.admin.items.path'), value: 'path', align: 'left'},
         {text: this.$t('cleanup.admin.items.owner'), value: 'ownerFullName', align: 'center', sortable: false},
+        {text: this.$t('cleanup.admin.items.lastModifiedDate'), value: 'lastModifiedDate', align: 'center'},
         {text: this.$t('cleanup.admin.items.action'), value: 'action', align: 'center'},
         {text: this.$t('cleanup.admin.items.state'), value: 'state', align: 'center'},
         {text: this.$t('cleanup.admin.items.fileSize'), value: 'fileSize', align: 'center'},

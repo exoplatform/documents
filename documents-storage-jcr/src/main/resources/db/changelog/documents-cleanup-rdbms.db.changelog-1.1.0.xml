@@ -118,4 +118,14 @@
                              constraintName="UK_DOC_CLEANUP_ITEM_NODE"/>
     </changeSet>
 
+    <!-- Candidacy dates of the scanned file: both are NULLABLE and added, never
+         backfilled, so the rows of a campaign already scanned keep a NULL and a
+         dry-run running while this changeset applies is left untouched -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-6">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM">
+            <column name="LAST_MODIFIED_DATE" type="TIMESTAMP"/>
+            <column name="CREATED_DATE" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

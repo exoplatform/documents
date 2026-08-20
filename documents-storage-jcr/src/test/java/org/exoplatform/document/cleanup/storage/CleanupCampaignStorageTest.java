@@ -209,6 +209,32 @@ class CleanupCampaignStorageTest {
     assertEquals(1024, savedEntity.getVersionsSize());
     assertEquals(CleanupAction.DELETE.name(), savedEntity.getAction());
     assertEquals(CleanupItemState.CANDIDATE.name(), savedEntity.getState(), "A new candidate always starts as CANDIDATE");
+    // The dates that MADE the file a candidate are what the report explains
+    // itself with: dropping them here would leave the column empty forever
+    assertEquals(new Date(200L), savedEntity.getLastModifiedDate());
+    assertEquals(new Date(100L), savedEntity.getCreatedDate());
+  }
+
+  @Test
+  void saveCandidatesPersistsUnreadableCandidacyDatesAsNull() {
+    when(itemDAO.findByCampaignIdAndNodeUuidIn(eq(CAMPAIGN_ID), anyCollection())).thenReturn(List.of());
+    CleanupCandidate undatedCandidate = new CleanupCandidate("uuid-undated",
+                                                             "/Users/j___/john/Private/undated.pdf",
+                                                             7L,
+                                                             2048,
+                                                             1024,
+                                                             CleanupAction.DELETE,
+                                                             0,
+                                                             0);
+
+    storage.saveCandidates(CAMPAIGN_ID, List.of(undatedCandidate));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<CleanupCampaignItemEntity>> savedCaptor = ArgumentCaptor.forClass(List.class);
+    verify(itemDAO).saveAll(savedCaptor.capture());
+    CleanupCampaignItemEntity savedEntity = savedCaptor.getValue().get(0);
+    assertNull(savedEntity.getLastModifiedDate(), "A zero-millis date must persist as NULL, never as the epoch");
+    assertNull(savedEntity.getCreatedDate(), "A zero-millis date must persist as NULL, never as the epoch");
   }
 
   @Test
@@ -283,6 +309,8 @@ class CleanupCampaignStorageTest {
     assertEquals(CleanupItemState.PURGED.name(), entity.getState());
     assertEquals(new Date(5000L), entity.getComputedAt());
     assertNull(entity.getDecidedAt());
+    assertEquals(new Date(3000L), entity.getLastModifiedDate());
+    assertEquals(new Date(2000L), entity.getCreatedDate());
 
     assertEquals(item.getId(), saved.getId());
     assertEquals(item.getCampaignId(), saved.getCampaignId());
@@ -299,6 +327,29 @@ class CleanupCampaignStorageTest {
     assertEquals(item.getPurgedAt(), saved.getPurgedAt());
     assertEquals(item.getReclaimedBytes(), saved.getReclaimedBytes());
     assertEquals(item.getFailureReason(), saved.getFailureReason());
+    // Back to the model: a report column read from a row it never came back on
+    // would render empty for every item
+    assertEquals(item.getLastModifiedDate(), saved.getLastModifiedDate());
+    assertEquals(item.getCreatedDate(), saved.getCreatedDate());
+  }
+
+  @Test
+  void saveItemMapsUnsetCandidacyDatesToNullAndBackToZero() {
+    when(itemDAO.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    CleanupCampaignItem item = item();
+    item.setLastModifiedDate(0);
+    item.setCreatedDate(0);
+
+    CleanupCampaignItem saved = storage.saveItem(item);
+
+    ArgumentCaptor<CleanupCampaignItemEntity> entityCaptor = ArgumentCaptor.forClass(CleanupCampaignItemEntity.class);
+    verify(itemDAO).save(entityCaptor.capture());
+    assertNull(entityCaptor.getValue().getLastModifiedDate(), "A zero-millis date must persist as NULL");
+    assertNull(entityCaptor.getValue().getCreatedDate(), "A zero-millis date must persist as NULL");
+    // ... and a NULL column comes back as 0, the model's 'not set', so the DTO
+    // maps it to a null date instead of the epoch
+    assertEquals(0, saved.getLastModifiedDate());
+    assertEquals(0, saved.getCreatedDate());
   }
 
   @Test
@@ -783,6 +834,8 @@ class CleanupCampaignStorageTest {
     item.setAction(CleanupAction.PURGE_VERSIONS);
     item.setState(CleanupItemState.PURGED);
     item.setComputedAt(5000L);
+    item.setLastModifiedDate(3000L);
+    item.setCreatedDate(2000L);
     item.setDecidedBy("john");
     item.setDecidedAt(0);
     item.setPurgedAt(7000L);

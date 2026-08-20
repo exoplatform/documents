@@ -201,6 +201,8 @@ class CleanupEntityBuilderTest {
     assertEquals(CleanupAction.DELETE.name(), entity.getAction());
     assertEquals(CleanupItemState.EXEMPTED.name(), entity.getState());
     assertEquals(5000L, entity.getComputedAt());
+    assertEquals(3000L, entity.getLastModifiedDate(), "The report column reads the item's last-modified date");
+    assertEquals(2000L, entity.getCreatedDate());
     assertEquals("john", entity.getDecidedBy());
     assertEquals(6000L, entity.getDecidedAt());
     assertNull(entity.getPurgedAt(), "A zero purge date must map to null");
@@ -234,6 +236,21 @@ class CleanupEntityBuilderTest {
 
     when(identity.getProfile()).thenReturn(null);
     assertEquals("john", CleanupEntityBuilder.build(item(), identityManager).getOwnerFullName());
+  }
+
+  @Test
+  void buildItemMapsUnsetCandidacyDatesToNull() {
+    when(identityManager.getIdentity(OWNER_IDENTITY_ID)).thenReturn(null);
+    CleanupCampaignItem item = item();
+    item.setLastModifiedDate(0);
+    item.setCreatedDate(0);
+
+    CampaignItemRestEntity entity = CleanupEntityBuilder.build(item, identityManager);
+
+    // A row scanned before the column existed has no date: the UI renders a
+    // dash on a null, and would render the epoch on a 0
+    assertNull(entity.getLastModifiedDate(), "A zero date must map to null, not to the epoch");
+    assertNull(entity.getCreatedDate(), "A zero date must map to null, not to the epoch");
   }
 
   @Test
@@ -411,6 +428,8 @@ class CleanupEntityBuilderTest {
     item.setAction(CleanupAction.DELETE);
     item.setState(CleanupItemState.EXEMPTED);
     item.setComputedAt(5000L);
+    item.setLastModifiedDate(3000L);
+    item.setCreatedDate(2000L);
     item.setDecidedBy("john");
     item.setDecidedAt(6000L);
     item.setPurgedAt(0);
