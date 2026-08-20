@@ -37,13 +37,19 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
+import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.query.parser.PartTree;
 
@@ -52,6 +58,7 @@ import org.exoplatform.document.cleanup.constant.CleanupItemState;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignEntity;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 import org.exoplatform.document.cleanup.rest.CleanupCampaignRest;
+import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -76,9 +83,16 @@ import jakarta.persistence.metamodel.EntityType;
  * (a {@code @Param} renamed while the query keeps the old {@code :token}, which
  * only blows up when Spring Data binds the arguments).
  * <p>
- * NOT covered, by construction: anything that needs the real database — dialect
- * specifics, collation-dependent {@code LIKE}/{@code LOWER} behaviour, index
- * usage and the actual rows a query returns.
+ * A second, narrower guard EXECUTES instead of parsing, over a schema-generating
+ * bootstrap kept apart from the parse-only one: the reclaimable arithmetic
+ * against real rows, and — through a real Spring Data repository proxy obtained
+ * from that same {@code EntityManager} — the whole ordering path of
+ * {@code GET published/my-items}, which nothing else in this module executes end
+ * to end.
+ * <p>
+ * NOT covered, by construction: anything that needs the PRODUCTION database —
+ * dialect specifics, collation-dependent {@code LIKE}/{@code LOWER} behaviour and
+ * index usage.
  */
 class CleanupCampaignItemDAOTest {
 
@@ -102,6 +116,12 @@ class CleanupCampaignItemDAOTest {
 
   /** One megabyte, so the fixtures below read as the sizes the finding described. */
   private static final long          MB                 = 1024L * 1024L;
+
+  /**
+   * The owner every fixture row below belongs to — the one the review list is
+   * queried for, {@code findByOwnersAndSearch} being an OWNER-scoped query.
+   */
+  private static final long          OWNER_IDENTITY_ID  = 1L;
 
   private static SessionFactory       sessionFactory;
 
@@ -186,16 +206,20 @@ class CleanupCampaignItemDAOTest {
   }
 
   /**
-   * The ORDER BY form of the reclaimable expression must BE the expression the
-   * aggregates sum, not a second copy of it: the review list is ranked by one
-   * definition of 'reclaimable' and the campaign banner totals another the moment
-   * the two texts drift, and a restated CASE drifts silently (it parses, it
-   * sums, it just ranks by something else).
+   * DOCUMENTATION of intent, not the guard: the ORDER BY form of the reclaimable
+   * expression must BE the expression the aggregates sum, not a second copy of
+   * it — the review list is ranked by one definition of 'reclaimable' and the
+   * campaign banner totals another the moment the two texts drift, and a restated
+   * CASE drifts silently (it parses, it sums, it just ranks by something else).
    * <p>
-   * The parentheses are asserted too, and are not cosmetics: Spring Data prefixes
-   * an unsafe sort property with the query alias unless it holds a '(' (see
-   * {@code JpaQueryTransformerSupport#shouldPrefixWithAlias}), which would render
-   * the key as {@code i.CASE WHEN ...} and break the query at runtime.
+   * It also states WHY the parentheses are there. It does NOT prove they work:
+   * this is a comparison of the constant against its own shape, so it would keep
+   * passing if the Spring Data internal it works around
+   * ({@code JpaQueryTransformerSupport#shouldPrefixWithAlias}) ever changed. The
+   * guard that would fail is
+   * {@link #shouldRankARealRepositoryPageByReclaimableBytesThroughTheProductionSortTranslation()},
+   * which EXECUTES the whole translation — delete this test if the shape ever
+   * stops being the intent, never that one.
    */
   @Test
   void shouldOrderByTheVeryExpressionTheReclaimableAggregatesSum() {
@@ -204,6 +228,87 @@ class CleanupCampaignItemDAOTest {
                  "The ORDER BY key must be the aggregated expression itself, parenthesized — never a restatement of it");
     assertTrue(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY.startsWith("("),
                "Spring Data would prefix an unparenthesized sort expression with the query alias");
+  }
+
+  /**
+   * THE guard of the reclaimable ordering: the production path
+   * {@code REST default -> CleanupCampaignStorage#querySort -> JpaSort.unsafe ->
+   * rendered SQL}, run end to end against real rows through a REAL Spring Data
+   * repository proxy — built straight off the execution {@code EntityManager}
+   * ({@link JpaRepositoryFactory}), no Spring context involved.
+   * <p>
+   * Everything else that pins this ordering pins a STRING: the sort translation is
+   * asserted structurally by {@code CleanupCampaignStorageTest} (which mocks the
+   * DAO, so nothing is ever executed), the ORDER BY constant is compared against
+   * its own shape above, and
+   * {@link #shouldRankItemsByWhatTheirOwnActionActuallyReclaims()} hand-writes the
+   * expression into its own query — exercising the EXPRESSION while bypassing
+   * {@code querySort} and {@code JpaSort.unsafe}. So the one step nothing executed
+   * was the rendering, and that step rests on an UNPUBLISHED Spring Data internal
+   * ({@code JpaQueryTransformerSupport#shouldPrefixWithAlias}: an unsafe sort
+   * property gets the query alias prefixed unless it holds a '('). Were that
+   * internal to change across an upgrade — spring-data-jpa moves with Spring Boot,
+   * and a Boot 4.1 upgrade is on the roadmap — the string tests would all stay
+   * green while {@code GET published/my-items} answered a 500 on its DEFAULT
+   * ordering, for every user, during the grace period that list exists for.
+   * <p>
+   * Hence: the requested ordering is the one the endpoint defaults to (read from
+   * the REST constants), it is translated by production's OWN
+   * {@code querySort}, and the assertions are that the query PARSES AND RUNS, that
+   * it ranks rows by what each one's action really frees (the finding's case: a
+   * 1 MB file carrying 500 MB of history above a 100 MB file carrying none, ties
+   * broken on the id), and that the rendered {@code ORDER BY} carries the CASE
+   * with NO alias prefix and still ends on the {@code id} tiebreaker.
+   */
+  @Test
+  void shouldRankARealRepositoryPageByReclaimableBytesThroughTheProductionSortTranslation() throws ReflectiveOperationException {
+    long campaignId = 9003L;
+    List<String> executedStatements = new ArrayList<>();
+    StatementInspector inspector = sql -> {
+      executedStatements.add(sql);
+      return sql;
+    };
+    // A session of the EXISTING execution factory (no third bootstrap), opened
+    // with its own statement inspector so the rendered ORDER BY can be read back
+    try (Session session = executionSessionFactory.withOptions().statementInspector(inspector).openSession()) {
+      long smallFileHugeHistory = persist(session, campaignId, "/a-small-huge-history", CleanupAction.DELETE, MB, 500 * MB);
+      long bigFileNoHistory = persist(session, campaignId, "/b-big-no-history", CleanupAction.DELETE, 100 * MB, 0);
+      long emptyFileTiedHistory = persist(session, campaignId, "/c-tied", CleanupAction.DELETE, 0, 100 * MB);
+      long hugeFilePurgedVersions = persist(session, campaignId, "/d-purge", CleanupAction.PURGE_VERSIONS, 900 * MB, 2 * MB);
+
+      CleanupCampaignItemDAO dao = new JpaRepositoryFactory(session).getRepository(CleanupCampaignItemDAO.class);
+      Pageable pageable = PageRequest.of(0, 10, storageQuerySort(myItemsDefaultSort()));
+      executedStatements.clear();
+
+      Page<CleanupCampaignItemEntity> page;
+      try {
+        // The very call getItemsByOwners() makes for the single-chunk case
+        page = dao.findByOwnersAndSearch(campaignId, List.of(OWNER_IDENTITY_ID), null, pageable);
+        page.getContent();
+      } catch (RuntimeException e) {
+        throw new AssertionError("The default ordering of GET published/my-items no longer renders into an executable"
+            + " query. Either CleanupCampaignStorage#querySort stopped translating the reclaimable key into the JPQL"
+            + " expression, or CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY lost its PARENTHESES — Spring Data"
+            + " prefixes an unsafe sort property with the query alias unless it holds a '(', so the CASE would render as"
+            + " 'i.CASE WHEN ...'. If spring-data-jpa itself changed, replace the workaround by whatever it now needs;"
+            + " do NOT relax this test: " + e.getMessage(), e);
+      }
+
+      assertEquals(List.of(smallFileHugeHistory, bigFileNoHistory, emptyFileTiedHistory, hugeFilePurgedVersions),
+                   page.getContent().stream().map(CleanupCampaignItemEntity::getId).toList(),
+                   "The repository page must rank rows by what each action frees, ties broken on the id");
+
+      String renderedOrderBy = renderedOrderBy(executedStatements);
+      assertTrue(renderedOrderBy.contains("case when"),
+                 "The computed reclaimable key must reach the database's ORDER BY, not be dropped or replaced by a column: "
+                     + renderedOrderBy);
+      assertFalse(renderedOrderBy.matches(".*\\w+\\.case\\b.*"),
+                  "An alias prefix leaked into the rendered ORDER BY — the parenthesization no longer holds it back: "
+                      + renderedOrderBy);
+      assertTrue(renderedOrderBy.matches(".*\\.id( asc)?$"),
+                 "The id tiebreaker must stay the LAST rendered order key: without it the ordering is not total, and offset"
+                     + " paging over the block of ties repeats rows while dropping others — " + renderedOrderBy);
+    }
   }
 
   /**
@@ -459,6 +564,64 @@ class CleanupCampaignItemDAOTest {
   }
 
   /**
+   * The ordering {@code GET published/my-items} opens on, rebuilt from the REST
+   * layer's OWN constants: the reclaimable key DESCENDING (the endpoint's default
+   * direction) made total by the {@code id} tiebreaker it appends to every
+   * ordering. Renaming either constant, or pointing the default at another field,
+   * fails the guard below instead of silently moving it off the path under test.
+   */
+  private static Sort myItemsDefaultSort() throws ReflectiveOperationException {
+    String defaultField = restConstant("DEFAULT_MY_ITEMS_SORT", String.class);
+    String tiebreaker = restConstant("TIEBREAKER_FIELD", String.class);
+    assertEquals(CleanupConstants.RECLAIMABLE_SORT_KEY,
+                 defaultField,
+                 "GET published/my-items must keep opening on the reclaimable ranking");
+    return Sort.by(Sort.Direction.DESC, defaultField).and(Sort.by(Sort.Direction.ASC, tiebreaker));
+  }
+
+  /**
+   * PRODUCTION's own translation of a requested ordering into the one the
+   * database can apply, reached reflectively: {@code CleanupCampaignStorage#querySort}
+   * is package visible in the storage package — a Storage internal this guard
+   * deliberately does not widen further — while the harness able to EXECUTE what
+   * it produces lives here. Reconstructing a {@code JpaSort.unsafe} in the test
+   * instead would cover the test's idea of the translation, not the one the
+   * endpoint performs.
+   */
+  private static Sort storageQuerySort(Sort requestedSort) throws ReflectiveOperationException {
+    Method querySort = CleanupCampaignStorage.class.getDeclaredMethod("querySort", Sort.class);
+    querySort.setAccessible(true); // NOSONAR test-only reach into a package-visible Storage internal
+    return (Sort) querySort.invoke(null, requestedSort);
+  }
+
+  /**
+   * The {@code ORDER BY} keys of the paged SELECT the repository actually sent to
+   * the database, lower-cased. Read from the statements the session's inspector
+   * captured, skipping the COUNT query a {@link Page} also issues (it carries no
+   * ordering), and with the dialect's row-limiting tail cut off so the returned
+   * clause holds nothing but the keys — that is what lets the assertions pin the
+   * LAST of them.
+   */
+  private static String renderedOrderBy(List<String> executedStatements) {
+    String orderBy = executedStatements.stream()
+                                       .map(statement -> statement.toLowerCase())
+                                       .filter(statement -> statement.contains("order by"))
+                                       .findFirst()
+                                       .orElse(null);
+    assertNotNull(orderBy,
+                  "No ordered SELECT reached the database, so the ordering under test was never rendered: "
+                      + executedStatements);
+    String keys = orderBy.substring(orderBy.lastIndexOf("order by"));
+    for (String limitClause : List.of(" fetch ", " limit ", " offset ")) {
+      int limitIndex = keys.indexOf(limitClause);
+      if (limitIndex > 0) {
+        keys = keys.substring(0, limitIndex);
+      }
+    }
+    return keys.trim();
+  }
+
+  /**
    * The REST layer's sortable-field allowlist, read reflectively: the allowlist
    * lives there (it is a REST contract), while the metamodel able to validate
    * it lives here.
@@ -473,7 +636,7 @@ class CleanupCampaignItemDAOTest {
   /**
    * Reads a private constant of the REST layer, same rationale as above.
    */
-  private <T> T restConstant(String name, Class<T> type) throws ReflectiveOperationException {
+  private static <T> T restConstant(String name, Class<T> type) throws ReflectiveOperationException {
     Field field = CleanupCampaignRest.class.getDeclaredField(name);
     field.setAccessible(true); // NOSONAR test-only read of a REST contract constant
     return type.cast(field.get(null));
@@ -526,7 +689,7 @@ class CleanupCampaignItemDAOTest {
     item.setCampaignId(campaignId);
     item.setNodeUuid("uuid" + campaignId + path);
     item.setPath(path);
-    item.setOwnerIdentityId(1L);
+    item.setOwnerIdentityId(OWNER_IDENTITY_ID);
     item.setFileSize(fileSize);
     item.setVersionsSize(versionsSize);
     item.setAction(action.name());
