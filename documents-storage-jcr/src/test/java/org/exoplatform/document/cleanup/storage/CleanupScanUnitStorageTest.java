@@ -48,13 +48,16 @@ import org.exoplatform.document.cleanup.model.CleanupScanUnit;
 /**
  * Scan-unit storage tests pinning what the parallel scan's resumability rests
  * on: planning is IDEMPOTENT (an already-planned path is skipped, never
- * re-inserted and never reset), only DONE units are considered finished, and the
+ * re-inserted and never reset), only DONE units and the SETTLED-failed ones are considered finished, and the
  * per-unit checkpoint / state / failure updates each touch their own row.
  */
 @ExtendWith(MockitoExtension.class)
 class CleanupScanUnitStorageTest {
 
   private static final long          CAMPAIGN_ID  = 3L;
+
+  /** Walk attempts a unit may spend, as {@code MAX_SCAN_UNIT_ATTEMPTS} sets it. */
+  private static final long          MAX_ATTEMPTS = 3L;
 
   private static final long          UNIT_ID      = 17L;
 
@@ -134,15 +137,24 @@ class CleanupScanUnitStorageTest {
   }
 
   @Test
-  void getUnitsToProcessExcludesOnlyTheDoneUnits() {
-    when(scanUnitDAO.findByCampaignIdAndStateNotOrderByIdAsc(CAMPAIGN_ID,
-                                                             CleanupScanUnitState.DONE.name())).thenReturn(List.of(entity(CleanupScanUnitState.FAILED),
-                                                                                                                   entity(CleanupScanUnitState.RUNNING)));
+  void getUnitsToProcessAsksForEverythingButDoneAndTheSettledFailures() {
+    when(scanUnitDAO.findUnitsToProcess(CAMPAIGN_ID,
+                                        CleanupScanUnitState.DONE.name(),
+                                        CleanupScanUnitState.FAILED.name(),
+                                        MAX_ATTEMPTS)).thenReturn(List.of(entity(CleanupScanUnitState.FAILED),
+                                                                          entity(CleanupScanUnitState.RUNNING)));
 
-    List<CleanupScanUnit> units = storage.getUnitsToProcess(CAMPAIGN_ID);
+    List<CleanupScanUnit> units = storage.getUnitsToProcess(CAMPAIGN_ID, MAX_ATTEMPTS);
 
-    // A unit left RUNNING by an interrupted run and a FAILED one are BOTH
-    // retried, each from its own persisted path
+    // The two state names and the bound all reach the query: the exclusion is
+    // state-AWARE (settled-FAILED only), and the rows it really filters are
+    // pinned against a database by CleanupScanUnitDAOTest
+    verify(scanUnitDAO).findUnitsToProcess(CAMPAIGN_ID,
+                                          CleanupScanUnitState.DONE.name(),
+                                          CleanupScanUnitState.FAILED.name(),
+                                          MAX_ATTEMPTS);
+    // A unit left RUNNING by an interrupted run and a FAILED one with attempts
+    // left are BOTH retried, each from its own persisted path
     assertEquals(List.of(CleanupScanUnitState.FAILED, CleanupScanUnitState.RUNNING),
                  units.stream().map(CleanupScanUnit::getState).toList());
     CleanupScanUnit unit = units.get(0);
@@ -232,7 +244,7 @@ class CleanupScanUnitStorageTest {
     assertFalse(groups.get(0).isRetryable());
     // Never by loading the unit rows: a campaign holds one row per subtree of the
     // whole tree, and only the counts are ever displayed
-    verify(scanUnitDAO, never()).findByCampaignIdAndStateNotOrderByIdAsc(anyLong(), any());
+    verify(scanUnitDAO, never()).findUnitsToProcess(anyLong(), any(), any(), anyLong());
   }
 
   @Test
@@ -274,7 +286,7 @@ class CleanupScanUnitStorageTest {
     // resume and the worker only ever needs the totals
     assertEquals(1234L, storage.sumScannedCount(CAMPAIGN_ID));
     assertEquals(5678L, storage.sumTotalCount(CAMPAIGN_ID));
-    verify(scanUnitDAO, never()).findByCampaignIdAndStateNotOrderByIdAsc(anyLong(), any());
+    verify(scanUnitDAO, never()).findUnitsToProcess(anyLong(), any(), any(), anyLong());
   }
 
   @Test
@@ -284,10 +296,12 @@ class CleanupScanUnitStorageTest {
     entity.setCampaignId(CAMPAIGN_ID);
     entity.setUnitPath(TRASH_UNIT);
     entity.setState(CleanupScanUnitState.PENDING.name());
-    when(scanUnitDAO.findByCampaignIdAndStateNotOrderByIdAsc(CAMPAIGN_ID,
-                                                             CleanupScanUnitState.DONE.name())).thenReturn(List.of(entity));
+    when(scanUnitDAO.findUnitsToProcess(CAMPAIGN_ID,
+                                        CleanupScanUnitState.DONE.name(),
+                                        CleanupScanUnitState.FAILED.name(),
+                                        MAX_ATTEMPTS)).thenReturn(List.of(entity));
 
-    CleanupScanUnit unit = storage.getUnitsToProcess(CAMPAIGN_ID).get(0);
+    CleanupScanUnit unit = storage.getUnitsToProcess(CAMPAIGN_ID, MAX_ATTEMPTS).get(0);
 
     assertNull(unit.getLastScannedPath(), "A never-started unit must resume from the beginning of its subtree");
     assertEquals(0, unit.getScannedCount());
@@ -307,10 +321,12 @@ class CleanupScanUnitStorageTest {
     entity.setState(CleanupScanUnitState.PENDING.name());
     // Counted, and legitimately empty — an unused first-letter bucket of /Users
     entity.setTotalCount(0L);
-    when(scanUnitDAO.findByCampaignIdAndStateNotOrderByIdAsc(CAMPAIGN_ID,
-                                                             CleanupScanUnitState.DONE.name())).thenReturn(List.of(entity));
+    when(scanUnitDAO.findUnitsToProcess(CAMPAIGN_ID,
+                                        CleanupScanUnitState.DONE.name(),
+                                        CleanupScanUnitState.FAILED.name(),
+                                        MAX_ATTEMPTS)).thenReturn(List.of(entity));
 
-    CleanupScanUnit unit = storage.getUnitsToProcess(CAMPAIGN_ID).get(0);
+    CleanupScanUnit unit = storage.getUnitsToProcess(CAMPAIGN_ID, MAX_ATTEMPTS).get(0);
 
     assertNotNull(unit.getTotalCount(), "An empty bucket was COUNTED: it must never look uncounted again");
     assertEquals(0L, unit.getTotalCount().longValue());

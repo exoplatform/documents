@@ -92,10 +92,17 @@ import jakarta.annotation.PreDestroy;
  * deliberately left DRY_RUN_RUNNING and the watchdog
  * ({@code CleanupCampaignService#resumeStalledWorkers}) re-walks it — a transient
  * JCR failure heals itself with no human in the loop. The bound is
- * {@link #MAX_SCAN_UNIT_ATTEMPTS}: past it the subtree has proved unreadable, the
- * unit is SETTLED-failed and stops holding the dry-run back. The report is then
- * marked INCOMPLETE rather than silently partial (see
- * {@link #completeCampaign(long, long)}).
+ * {@link #MAX_SCAN_UNIT_ATTEMPTS}, and it bounds the WALK and not merely a
+ * counter: past it the subtree has proved unreadable, the unit is SETTLED-failed,
+ * {@code CleanupScanUnitStorage#getUnitsToProcess} stops handing it out — so no
+ * later run claims it, spends an attempt on it or re-walks it — and it stops
+ * holding the dry-run back. The report is then marked INCOMPLETE rather than
+ * silently partial (see {@link #completeCampaign(long, long)}).
+ * <p>
+ * A campaign whose EVERY unit settled-failed (a JCR outage fails them all) is
+ * therefore not a spin either: its work list is empty, every watchdog tick is a
+ * cheap no-op that walks nothing, and the campaign stays visibly stuck in
+ * DRY_RUN_RUNNING — refused as a simulation, loudly logged, but never re-walked.
  * <p>
  * LEGACY CHECKPOINT — a campaign interrupted under the old SEQUENTIAL scheme
  * carries a {@code CHECKPOINT_PATH} on its campaign row and has no unit row. On
@@ -271,7 +278,7 @@ public class CleanupScanService {
 
       // (a) PLAN — idempotent, so a resume re-plans harmlessly
       planUnits(campaign);
-      List<CleanupScanUnit> units = scanUnitStorage.getUnitsToProcess(campaignId);
+      List<CleanupScanUnit> units = scanUnitStorage.getUnitsToProcess(campaignId, MAX_SCAN_UNIT_ATTEMPTS);
 
       // (b) ESTIMATE — in parallel, on the very pool the readers will use
       int readerCount = Math.max(1, Math.min(settingService.getScanThreads(), units.size()));
@@ -557,21 +564,30 @@ public class CleanupScanService {
 
   /**
    * Terminal transition, only when the run was not aborted and every unit
-   * SETTLED — DONE, or failed with every walk attempt spent. Three refusals, in
-   * this order:
+   * SETTLED — DONE, or failed with every walk attempt spent. Two refusals, in
+   * this order (the order matters: the second one is about units that ARE all
+   * settled, so it may only be reached once the first let them through):
    * <ol>
-   * <li>ALL units failed is NOT a simulation at all: the campaign is left exactly
-   * as it is (DRY_RUN_RUNNING, its unit checkpoints untouched), which is the very
-   * same resumable failure path a JCR outage already took. The watchdog
-   * relaunching it is not a spin — a relaunch only returns after every unit was
-   * really re-attempted, so it is throttled by the work itself, and a repository
-   * back online makes the next attempt succeed</li>
-   * <li>a unit that FAILED but still has attempts left is not settled either: the
-   * campaign deliberately stays DRY_RUN_RUNNING so the watchdog re-walks that
-   * subtree. Transitioning to SIMULATED here was the whole bug — it was the LAST
-   * run of the campaign, so a transient failure became permanent silently</li>
-   * <li>a unit that never reached an outcome at all (an interrupted run) blocks
-   * the transition as before</li>
+   * <li>a unit that is not settled yet blocks the transition: one that FAILED
+   * with attempts LEFT, and one that never reached an outcome at all (an
+   * interrupted run). The campaign deliberately stays DRY_RUN_RUNNING so the
+   * watchdog re-walks that subtree — those units are still in the work list
+   * ({@code CleanupScanUnitStorage#getUnitsToProcess}). Transitioning to
+   * SIMULATED here was the whole bug — it was the LAST run of the campaign, so a
+   * transient failure became permanent silently</li>
+   * <li>EVERY unit settled-FAILED is not a simulation at all: a report covering
+   * nothing is not a dry-run, and marking it INCOMPLETE over an empty report
+   * would be a lie rather than a warning. So the campaign is left exactly as it
+   * is — DRY_RUN_RUNNING, its unit checkpoints untouched — and loudly logged.
+   * <p>
+   * It is refused WITHOUT being re-walked, which is the point: the settled units
+   * are out of the work list, so the watchdog's next tick plans nothing, claims
+   * nothing and reads no JCR node. The campaign stays VISIBLY stuck instead of
+   * burning an 800 GB repository every ten minutes to rediscover the same
+   * failure. Re-attempting the tree used to be this guard's justification, and it
+   * was the opposite of the bound {@link #MAX_SCAN_UNIT_ATTEMPTS} promises:
+   * an outage fails ALL the units, so it was precisely the case the bound most
+   * had to cover</li>
    * </ol>
    * <p>
    * Past the refusals the report is published, but never as if it were complete:
@@ -588,11 +604,7 @@ public class CleanupScanService {
     long failedCount = scanUnitStorage.countUnitsByState(campaignId, CleanupScanUnitState.FAILED);
     long doneCount = scanUnitStorage.countUnitsByState(campaignId, CleanupScanUnitState.DONE);
     long settledFailedCount = scanUnitStorage.countSettledFailedUnits(campaignId, MAX_SCAN_UNIT_ATTEMPTS);
-    if (unitCount > 0 && failedCount == unitCount) {
-      LOG.error("Every one of the {} scan units of cleanup campaign {} failed: the dry-run is NOT reported as simulated,"
-          + " the campaign stays resumable from its unit checkpoints.", unitCount, campaignId);
-      return;
-    } else if (doneCount + settledFailedCount < unitCount) {
+    if (doneCount + settledFailedCount < unitCount) {
       LOG.warn("Only {} of the {} scan units of cleanup campaign {} settled ({} failed with attempts left of the {} allowed):"
           + " the dry-run is NOT reported as simulated, the campaign stays DRY_RUN_RUNNING and the watchdog re-walks them.",
                doneCount + settledFailedCount,
@@ -600,6 +612,15 @@ public class CleanupScanService {
                campaignId,
                failedCount - settledFailedCount,
                MAX_SCAN_UNIT_ATTEMPTS);
+      return;
+    } else if (unitCount > 0 && settledFailedCount == unitCount) {
+      LOG.error("Every one of the {} scan units of cleanup campaign {} failed its {} walks: the dry-run is NOT reported as"
+          + " simulated — a report covering NOTHING is not a simulation — and the campaign stays DRY_RUN_RUNNING with its unit"
+          + " checkpoints untouched. It is NOT re-walked either: every unit is settled, so the watchdog now finds an empty work"
+          + " list. Whoever owns this campaign must fix the repository and start a new dry-run.",
+                unitCount,
+                campaignId,
+                MAX_SCAN_UNIT_ATTEMPTS);
       return;
     }
     CleanupCampaign campaign = campaignStorage.getCampaign(campaignId);

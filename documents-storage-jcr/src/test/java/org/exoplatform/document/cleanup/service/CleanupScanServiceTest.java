@@ -593,6 +593,88 @@ class CleanupScanServiceTest {
     // subtree is only reachable if every run really spends an attempt on it
     verify(scanUnitStorage, times(2)).claimUnit(1L);
     verify(scanUnitStorage, times(2)).claimUnit(2L);
+    // And every run asks for its work list WITH the bound: the claim above is
+    // spent on each unit the query hands back, so it is that query — and nothing
+    // in this class — that keeps a settled subtree from being claimed a fourth
+    // time (rows pinned by CleanupScanUnitDAOTest)
+    verify(scanUnitStorage, times(2)).getUnitsToProcess(CAMPAIGN_ID, CleanupScanService.MAX_SCAN_UNIT_ATTEMPTS);
+  }
+
+  @Test
+  void anAllSettledFailedCampaignIsRefusedOnceAndNeverWalkedAgain() {
+    planned(SPACES_UNIT, USERS_UNIT);
+    unitsToProcess(unit(1L, SPACES_UNIT), unit(2L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(anyString())).thenReturn(1L);
+    unitAggregates(2L, 0L, 0L);
+    // Both subtrees failed, and both spent every walk they had — the shape a JCR
+    // outage produces, since an outage fails EVERY unit and not one
+    unitOutcomes(2L, 0L, 2L);
+    settledFailures(2L);
+    doThrow(new IllegalStateException("JCR failure")).when(cleanupJcrStorage)
+                                                     .scanRoot(anyString(), isNull(), anyInt(), any(), any());
+
+    scanService.scan(CAMPAIGN_ID);
+
+    verify(scanUnitStorage).claimUnit(1L);
+    verify(scanUnitStorage).claimUnit(2L);
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+
+    // The watchdog's next tick: every unit is settled, so the work list the query
+    // hands back is EMPTY
+    unitsToProcess();
+    scanService.scan(CAMPAIGN_ID);
+
+    // THE regression: the guard used to refuse the transition on 'every unit
+    // failed' whatever their attempts, so a campaign whose every subtree was
+    // already SETTLED never completed — and the watchdog re-walked the WHOLE tree
+    // every ten minutes, forever, with ATTEMPT_COUNT growing without bound. That
+    // is a full re-walk of an 800 GB corpus per tick, and the exact opposite of
+    // what MAX_SCAN_UNIT_ATTEMPTS promises. Not one further claim, not one
+    // further walk, not one further count
+    verify(scanUnitStorage, times(1)).claimUnit(1L);
+    verify(scanUnitStorage, times(1)).claimUnit(2L);
+    verify(cleanupJcrStorage, times(2)).scanRoot(anyString(), isNull(), anyInt(), any(), any());
+    verify(cleanupJcrStorage, times(2)).countFiles(anyString());
+    // Still refused, and still refused WITHOUT re-walking: a report covering
+    // nothing is not a simulation, so the campaign stays visibly stuck in
+    // DRY_RUN_RUNNING rather than publishing an empty dry-run flagged incomplete
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+    assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
+    assertNull(campaign.getSummaryJson(), "An empty report must not be published as an INCOMPLETE simulation");
+  }
+
+  @Test
+  void aResumeWalksOnlyTheUnitsTheWorkListStillHandsBack() {
+    // A mixed campaign resumed: one unit DONE, one settled-failed, one FAILED
+    // with an attempt left. Only the last one is in the work list — so only it is
+    // claimed and walked, and the campaign completes as INCOMPLETE once it is done
+    planned(TRASH_UNIT, SPACES_UNIT, USERS_UNIT);
+    unitsToProcess(unit(3L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(1L);
+    unitAggregates(3L, 1L, 2L);
+    unitOutcomes(3L, 2L, 1L);
+    settledFailures(1L);
+    emitBatches(USERS_UNIT, batch(PATH_A, 1, candidate("uuid-user", PATH_A)));
+
+    scanService.scan(CAMPAIGN_ID);
+
+    // The DONE unit and the settled-failed one cost NOTHING on a resume: no
+    // claim, no attempt spent, no JCR node read
+    verify(scanUnitStorage, never()).claimUnit(1L);
+    verify(scanUnitStorage, never()).claimUnit(2L);
+    verify(cleanupJcrStorage, never()).countFiles(TRASH_UNIT);
+    verify(cleanupJcrStorage, never()).countFiles(SPACES_UNIT);
+    verify(cleanupJcrStorage, never()).scanRoot(eq(TRASH_UNIT), any(), anyInt(), any(), any());
+    verify(cleanupJcrStorage, never()).scanRoot(eq(SPACES_UNIT), any(), anyInt(), any(), any());
+    // The retryable one IS re-walked — a transient failure must keep healing —
+    // and its outcome settles the campaign, reported INCOMPLETE over the subtree
+    // that never could be read
+    verify(scanUnitStorage).claimUnit(3L);
+    verify(cleanupJcrStorage).scanRoot(eq(USERS_UNIT), isNull(), anyInt(), any(), any());
+    verify(scanUnitStorage).updateUnitState(3L, CleanupScanUnitState.DONE);
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
+    assertTrue(scanSummary().isScanIncomplete());
+    assertEquals(1, scanSummary().getFailedScanUnitCount());
   }
 
   @Test
@@ -940,8 +1022,16 @@ class CleanupScanServiceTest {
     when(cleanupJcrStorage.listScanUnits()).thenReturn(List.of(unitPaths));
   }
 
+  /**
+   * The work list a run is handed. Stubbed on the BOUND the coordinator must pass
+   * ({@code MAX_SCAN_UNIT_ATTEMPTS}): the storage query is what excludes the
+   * settled-failed units, so a coordinator asking without the bound gets no work
+   * list at all here — and the tests below re-stub it between two runs to model
+   * what that filter really returns on a resume.
+   */
   private void unitsToProcess(CleanupScanUnit... units) {
-    when(scanUnitStorage.getUnitsToProcess(CAMPAIGN_ID)).thenReturn(List.of(units));
+    when(scanUnitStorage.getUnitsToProcess(CAMPAIGN_ID,
+                                           CleanupScanService.MAX_SCAN_UNIT_ATTEMPTS)).thenReturn(List.of(units));
   }
 
   /** Denominator, plus the numerator BEFORE and AFTER the run. */

@@ -180,7 +180,15 @@
                  coordinator claims it. It is what BOUNDS the retry of a failed unit: a
                  subtree that failed MAX_SCAN_UNIT_ATTEMPTS walks is settled-failed and
                  stops holding the whole dry-run back -->
-            <column name="ATTEMPT_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+            <!-- NOT NULL on purpose: the work-list query reads
+                 NOT (STATE = FAILED AND ATTEMPT_COUNT >= :max), and SQL three-valued logic
+                 turns that into UNKNOWN for a NULL — silently dropping a FAILED unit from
+                 the work list, so its subtree would never be walked again AND never settle,
+                 holding completion open for good. The entity writes a primitive long, so a
+                 NULL is unreachable today; the constraint is what keeps it unreachable -->
+            <column name="ATTEMPT_COUNT" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
             <column name="FAILURE_REASON" type="NVARCHAR(2000)"/>
         </createTable>
         <modifySql dbms="mysql">

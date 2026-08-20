@@ -74,12 +74,38 @@ public class CleanupScanUnitStorage {
   }
 
   /**
+   * The work list of a run: everything but DONE, MINUS the settled-failed units
+   * — the ones that FAILED after spending every walk attempt they had. Excluding
+   * them is what actually BOUNDS the retry: the attempt count is spent by
+   * {@link #claimUnit(long)}, which the coordinator calls for every unit this
+   * method returns, so a unit left in the work list past the bound keeps being
+   * re-walked at full cost on every watchdog tick and its ATTEMPT_COUNT grows
+   * without end.
+   * <p>
+   * The exclusion is STATE-AWARE, and must stay so: it is
+   * {@code state = FAILED AND attemptCount >= maxAttemptCount}, NEVER a bare
+   * {@code attemptCount < maxAttemptCount}. A unit whose run was interrupted
+   * three times is RUNNING with three attempts spent — neither DONE nor
+   * settled-FAILED — so a state-blind bound would strand it: dropped from the
+   * work list, it could never reach an outcome, and it would hold the dry-run's
+   * completion open forever (see {@code CleanupScanService#completeCampaign},
+   * which settles a campaign only once every unit is DONE or settled-failed).
+   * <p>
+   * The mirror image of {@link #countSettledFailedUnits(long, long)}, and it must
+   * stay so: exactly the units that no longer hold completion back are the units
+   * no longer walked, and a unit that FAILED with attempts left is on the other
+   * side of BOTH rules — still walked, still unsettled — which is what lets a
+   * transient JCR failure heal itself.
+   *
    * @param campaignId campaign identifier
-   * @return the units of the campaign still to process (everything but DONE),
-   *         oldest id first
+   * @param maxAttemptCount attempts a unit may spend, the first walk included
+   * @return the units of the campaign still to process, oldest id first
    */
-  public List<CleanupScanUnit> getUnitsToProcess(long campaignId) {
-    return scanUnitDAO.findByCampaignIdAndStateNotOrderByIdAsc(campaignId, CleanupScanUnitState.DONE.name())
+  public List<CleanupScanUnit> getUnitsToProcess(long campaignId, long maxAttemptCount) {
+    return scanUnitDAO.findUnitsToProcess(campaignId,
+                                          CleanupScanUnitState.DONE.name(),
+                                          CleanupScanUnitState.FAILED.name(),
+                                          maxAttemptCount)
                       .stream()
                       .map(this::toModel)
                       .toList();

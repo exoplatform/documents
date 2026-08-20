@@ -18,9 +18,17 @@ package org.exoplatform.document.cleanup.constant;
 
 /**
  * State of a single dry-run scan unit (a partition of the scanned tree walked by
- * ONE reader thread). Only DONE is terminal for the planner: a unit left RUNNING
- * by an interrupted run, and a FAILED one, are both picked up again by the next
- * run — from their own persisted path checkpoint.
+ * ONE reader thread). DONE is terminal for the planner, and it is the only state
+ * that is terminal ON ITS OWN: a unit left RUNNING by an interrupted run, and a
+ * FAILED one, are both picked up again by the next run — from their own persisted
+ * path checkpoint.
+ * <p>
+ * FAILED is terminal only TOGETHER WITH its attempt count: a unit that spent
+ * {@code CleanupScanService#MAX_SCAN_UNIT_ATTEMPTS} walks is settled-failed, so
+ * {@code CleanupScanUnitStorage#getUnitsToProcess} stops handing it out and it
+ * stops holding the dry-run's completion back. That pairing is why the exclusion
+ * is state-AWARE: an attempt count alone would also settle a RUNNING unit, which
+ * must never be settled — nothing else would ever give it an outcome.
  */
 public enum CleanupScanUnitState {
 

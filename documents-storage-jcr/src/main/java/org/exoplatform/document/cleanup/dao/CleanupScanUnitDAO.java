@@ -28,10 +28,28 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
 
   /**
    * The units of a campaign still to process, oldest id first: everything but
-   * DONE, so a unit left RUNNING by an interrupted run and a FAILED one are both
-   * picked up again — each from its own persisted path checkpoint.
+   * DONE, MINUS the settled-failed ones — a unit that FAILED after spending
+   * every walk attempt it had. So a unit left RUNNING by an interrupted run and a
+   * FAILED one with attempts LEFT are both picked up again, each from its own
+   * persisted path checkpoint, while a subtree already proved unreadable is never
+   * walked again.
+   * <p>
+   * The exclusion is STATE-AWARE — {@code state = FAILED AND attemptCount >=
+   * :maxAttemptCount}, never a bare {@code attemptCount < :maxAttemptCount} — and
+   * that is the trap of this query, not a stylistic choice: a unit interrupted
+   * three times is RUNNING with three attempts spent, so a state-blind bound
+   * would drop it from the work list while it is neither DONE nor
+   * settled-FAILED. It could then never reach an outcome, and
+   * {@code CleanupScanService#completeCampaign} would hold the dry-run open
+   * forever over a unit nothing walks.
    */
-  List<CleanupScanUnitEntity> findByCampaignIdAndStateNotOrderByIdAsc(long campaignId, String state);
+  @Query("SELECT u FROM CleanupScanUnit u WHERE u.campaignId = :campaignId AND u.state <> :doneState"
+      + " AND NOT (u.state = :failedState AND u.attemptCount >= :maxAttemptCount) ORDER BY u.id ASC")
+  List<CleanupScanUnitEntity> findUnitsToProcess(@Param("campaignId")
+  long campaignId, @Param("doneState")
+  String doneState, @Param("failedState")
+  String failedState, @Param("maxAttemptCount")
+  long maxAttemptCount);
 
   /**
    * Unit PATHS of a campaign, as a projection: planning only needs to know which
@@ -50,6 +68,11 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
    * Units of a campaign whose walk failed and which spent every attempt they
    * had: they are SETTLED, so they no longer hold the dry-run's completion back
    * — and they are exactly what makes the produced report INCOMPLETE.
+   * <p>
+   * Its {@code >=} comparison must stay the EXACT complement of the exclusion in
+   * {@link #findUnitsToProcess}: the units this counts as settled are the units
+   * that one stops handing out, so a unit falling between the two would be
+   * neither walked nor settled — a dry-run nothing can ever finish.
    */
   @Query("SELECT COUNT(u) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId AND u.state = :state"
       + " AND u.attemptCount >= :maxAttemptCount")
