@@ -276,6 +276,65 @@
   </portlet>
 
   <portlet>
+    <name>DocumentCleanupAdmin</name>
+    <module>
+      <script>
+        <minify>false</minify>
+        <path>/js/documentCleanupAdmin.bundle.js</path>
+      </script>
+      <depends>
+        <module>commonVueComponents</module>
+      </depends>
+      <depends>
+        <module>extensionRegistry</module>
+      </depends>
+      <depends>
+        <module>vue</module>
+      </depends>
+      <depends>
+        <module>vuetify</module>
+      </depends>
+      <depends>
+        <module>eXoVueI18n</module>
+      </depends>
+      <depends>
+        <module>commons-cometd3</module>
+        <as>cCometd</as>
+      </depends>
+    </module>
+  </portlet>
+
+  <!-- Documents cleanup user-review header extension: an extension module of the
+       Documents portlet (same load-group, per the org norm for extending an
+       existing portlet), discovered and init()'ed by the Documents app's
+       includeExtensions('DocumentsExtension') (the module name carries that
+       suffix). Registers the header button + review drawer into the
+       'documents-header-right' extension point. -->
+  <module>
+    <name>CleanupUserReviewDocumentsExtension</name>
+    <load-group>DocumentsGRP</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentCleanupUserReview.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+  </module>
+
+  <portlet>
     <name>DocumentsUserSettings</name>
     <module>
       <script>
