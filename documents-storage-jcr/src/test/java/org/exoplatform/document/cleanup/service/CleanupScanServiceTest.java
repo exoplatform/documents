@@ -120,8 +120,27 @@ class CleanupScanServiceTest {
 
   private static final int         READER_MAX_LOOPS  = 50;
 
-  /** SHORT injected reader-wait deadline: the real one is 2 h. */
-  private static final long        DEADLINE_MS       = 1500L;
+  /**
+   * SHORT injected writer-inactivity bound: the real one is 2 h. Only the tests
+   * that exercise the watchdog inject it — every other one runs with a value no
+   * test can reach (see {@link #setUp()}).
+   */
+  private static final long        INACTIVITY_MS     = 750L;
+
+  /**
+   * Batches the progress test streams, and the writer's per-batch cost. Their
+   * product must OUTLIVE {@link #INACTIVITY_MS} by a comfortable margin while no
+   * single gap between two drains comes anywhere near it: that is the whole point
+   * of a silence bound, and this is what pins it.
+   */
+  private static final int         PROGRESS_BATCHES  = 20;
+
+  private static final long        WRITE_COST_MS     = 75L;
+
+  /** Hard loop bound of the writer stub that never drains: it must never spin. */
+  private static final int         WRITER_MAX_LOOPS  = 200;
+
+  private static final long        WRITER_POLL_MS    = 50L;
 
   private static final String      USERS_UNIT        = "/Users/j___";                     // NOSONAR
 
@@ -173,6 +192,9 @@ class CleanupScanServiceTest {
   /** Thread name the JCR walk of a unit ran on. */
   private final AtomicReference<String> readingThread = new AtomicReference<>();
 
+  /** The run the writer stub was handed, so a test can read its flags back. */
+  private final AtomicReference<ScanRun> writerRun    = new AtomicReference<>();
+
   @BeforeEach
   void setUp() throws ReflectiveOperationException {
     // Replace the service's REAL single-thread executor with a mock: the tests
@@ -209,17 +231,17 @@ class CleanupScanServiceTest {
       transitioned.setState(invocation.getArgument(1));
       return transitioned;
     });
-    // The REAL deadline is 2 h: every test but the deadline one runs with a value
+    // The REAL bound is 2 h: every test but the watchdog ones runs with a value
     // it can never reach, so no test can ever depend on wall-clock timing
-    readersDeadline(AWAIT_TIMEOUT_MS * 100);
+    writerInactivity(AWAIT_TIMEOUT_MS * 100);
     recordWritingThreads();
   }
 
-  /** Injects the reader-wait deadline, in millis. */
-  private void readersDeadline(long deadlineMillis) throws ReflectiveOperationException {
-    Field deadlineField = CleanupScanService.class.getDeclaredField("readersDeadlineMillis");
-    deadlineField.setAccessible(true); // NOSONAR test wiring
-    deadlineField.set(scanService, deadlineMillis); // NOSONAR
+  /** Injects the writer-inactivity bound, in millis. */
+  private void writerInactivity(long inactivityMillis) throws ReflectiveOperationException {
+    Field inactivityField = CleanupScanService.class.getDeclaredField("writerInactivityMillis");
+    inactivityField.setAccessible(true); // NOSONAR test wiring
+    inactivityField.set(scanService, inactivityMillis); // NOSONAR
   }
 
   @Test
@@ -825,13 +847,87 @@ class CleanupScanServiceTest {
   }
 
   @Test
-  void theReaderWaitDeadlineInterruptsTheReadersWhenTheWriterVANISHES() throws ReflectiveOperationException,
-                                                                       InterruptedException {
-    // A SHORT injected deadline — never the real 2 h one, which no test may wait
-    // on — and a writer that simply RETURNS: it drains nothing, raises nothing,
-    // and dies. No flag can flip, so only a deadline that consults NO flag can
-    // unblock the readers
-    readersDeadline(DEADLINE_MS);
+  void aScanStillMakingProgressIsNeverKilledHOWEVERLongItRuns() throws ReflectiveOperationException {
+    // THE regression that matters most. awaitReaders waits for the WHOLE pool and
+    // every unit was submitted to it beforehand, so that wait IS the scan: the
+    // wall-clock deadline this replaces was a cap on the dry-run's total
+    // DURATION. Over the target corpus a dry-run spans hours to days, so
+    // exceeding it was the EXPECTED case — killed at the deadline, restarted by
+    // the watchdog, killed again, forever, with no error ever reported.
+    // Here the bound is injected SHORT and the run deliberately OUTLIVES it,
+    // while never once falling silent for as long as it
+    writerInactivity(INACTIVITY_MS);
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn((long) PROGRESS_BATCHES);
+    unitAggregates(PROGRESS_BATCHES, 0L, PROGRESS_BATCHES);
+    unitOutcomes(1L, 1L, 0L);
+    // A writer that keeps up, at a cost per batch: the reader outruns it, so the
+    // bounded queue stays FULL throughout — which is exactly the state the
+    // watchdog looks at. Only the drain marker being reset keeps it from firing
+    doAnswer(invocation -> {
+      Thread.sleep(WRITE_COST_MS); // NOSONAR bounded, and the point of the test
+      return null;
+    }).when(campaignStorage).saveCandidates(anyLong(), anyList());
+    countedEmitter(USERS_UNIT, PROGRESS_BATCHES);
+
+    long startTime = System.currentTimeMillis();
+    scanService.scan(CAMPAIGN_ID);
+    long elapsed = System.currentTimeMillis() - startTime;
+
+    // The run really did outlive the bound — without this the test would pass on
+    // a scan that finished before the watchdog could ever have fired
+    assertTrue(elapsed > INACTIVITY_MS,
+               "The scan must have run LONGER than the inactivity bound, it ran " + elapsed + " ms");
+    // And not one batch was lost: a healthy scan is never interrupted, whatever
+    // its duration. A marker that is not reset on progress fails right here
+    verify(campaignStorage, times(PROGRESS_BATCHES)).saveCandidates(eq(CAMPAIGN_ID), anyList());
+    verify(scanUnitStorage).updateUnitState(1L, CleanupScanUnitState.DONE);
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
+    assertEquals(CleanupCampaignState.SIMULATED, campaign.getState());
+    assertEquals(PROGRESS_BATCHES, campaign.getProcessedCount());
+  }
+
+  @Test
+  void aScanWhoseREADERSAreSlowIsNeverKilledWhileNothingWaitsForTheWriter() throws ReflectiveOperationException {
+    // The writer is idle here, and legitimately so: its queue is EMPTY because
+    // the reader has not reached its next batch boundary yet — a huge unit's
+    // query, or a long resume fast-forward, both of which scan without emitting.
+    // Silence over an empty queue is the readers being slow, NOT a wedged writer,
+    // and the watchdog must not confuse the two
+    writerInactivity(INACTIVITY_MS);
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(1L);
+    unitAggregates(1L, 0L, 1L);
+    unitOutcomes(1L, 1L, 0L);
+    CountDownLatch neverOpened = new CountDownLatch(1);
+    doAnswer(invocation -> {
+      // BOUNDED, and deliberately longer than the inactivity bound: the walk
+      // emits NOTHING for that whole stretch, then produces its only batch
+      assertFalse(neverOpened.await(INACTIVITY_MS * 2, TimeUnit.MILLISECONDS), "This gate is never opened");
+      ScanBatchConsumer batchConsumer = invocation.getArgument(4);
+      batchConsumer.onBatch(List.of(candidate("uuid-slow", PATH_A)), PATH_A, 1);
+      return null;
+    }).when(cleanupJcrStorage).scanRoot(eq(USERS_UNIT), isNull(), anyInt(), any(), any());
+
+    scanService.scan(CAMPAIGN_ID);
+
+    // Killing this scan would have interrupted the walk mid-way and left the unit
+    // un-DONE — on a repository that was working perfectly
+    verify(campaignStorage).saveCandidates(eq(CAMPAIGN_ID), anyList());
+    verify(scanUnitStorage).updateUnitState(1L, CleanupScanUnitState.DONE);
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
+    assertEquals(CleanupCampaignState.SIMULATED, campaign.getState());
+  }
+
+  @Test
+  void aDEADWriterThreadStopsTheReadersAtOnceWithoutWaitingForAnyTimer() throws ReflectiveOperationException,
+                                                                        InterruptedException {
+    // A writer that simply RETURNS: it drains nothing, raises nothing, and dies.
+    // No flag can flip, so nothing the readers poll will ever unblock them —
+    // and the inactivity bound is left at a value NO test can reach, so only a
+    // direct check of the writer thread can end this scan
     doNothing().when(scanService).drainQueueTransactional(any());
     planned(USERS_UNIT);
     unitsToProcess(unit(1L, USERS_UNIT));
@@ -844,20 +940,102 @@ class CleanupScanServiceTest {
     coordinator.start();
     coordinator.join(AWAIT_TIMEOUT_MS);
 
-    // Without the deadline the readers retry their offers forever, awaitReaders
-    // never returns, the coordinator's finally never runs — so the campaign id is
-    // never released — and every later scan queues behind this hung task
-    assertFalse(coordinator.isAlive(), "The reader wait MUST end on its deadline when the writer vanishes");
+    // Without the liveness check the readers retry their offers forever,
+    // awaitReaders never returns, the coordinator's finally never runs — so the
+    // campaign id is never released — and every later scan of every campaign
+    // queues behind this hung task of a single-thread executor
+    assertFalse(coordinator.isAlive(), "A dead writer thread MUST stop the readers");
+    // NO timer was involved: the injected bound is a hundred times the join above,
+    // so the wait can only have ended because the writer thread was OBSERVED dead
     assertTrue(emitted.get() < READER_MAX_LOOPS,
-               "The readers must have been interrupted by the deadline, they emitted " + emitted.get() + " batches");
-    // Nothing drained anything: the flag path was never reachable here, which is
-    // what makes this the STRUCTURAL guarantee and not another flag
+               "The readers must have been stopped by the dead writer, they emitted " + emitted.get() + " batches");
     verify(scanService, never()).drainQueue(any());
     verify(campaignStorage, never()).saveCandidates(anyLong(), anyList());
     // Left resumable, and the worker restartable: the id is out of the running set
     verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
     assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
     assertTrue(runningCampaigns().isEmpty(), "The campaign id must be released so the watchdog can relaunch the worker");
+  }
+
+  @Test
+  void aWriterAliveButNEVERDrainingIsStoppedByTheInactivityBound() throws ReflectiveOperationException,
+                                                                  InterruptedException {
+    // The case no liveness check can see: the thread is alive — wedged on a
+    // database lock, say — so only the INACTIVITY bound can end this run
+    writerInactivity(INACTIVITY_MS);
+    AtomicReference<Thread> writerThread = wedgedWriter();
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
+    unitAggregates(100L, 0L, 0L);
+    unitOutcomes(1L, 0L, 0L);
+    AtomicInteger emitted = boundedEmitter(USERS_UNIT);
+
+    Thread coordinator = coordinatorThread();
+    coordinator.start();
+    coordinator.join(AWAIT_TIMEOUT_MS);
+
+    assertFalse(coordinator.isAlive(), "A writer that drains nothing while batches wait MUST be stopped");
+    assertTrue(emitted.get() < READER_MAX_LOOPS,
+               "The readers must have been stopped by the inactivity bound, they emitted " + emitted.get() + " batches");
+    verify(campaignStorage, never()).saveCandidates(anyLong(), anyList());
+    // THE second half of the bug: the flag raised to unblock the readers was the
+    // same flag that kept the writer from ever being told to stop, so the writer
+    // thread leaked — and with it the container transaction its
+    // @ContainerTransactional entry point had opened. One per killed scan
+    assertNotNull(writerThread.get(), "The writer thread must have started");
+    writerThread.get().join(AWAIT_TIMEOUT_MS);
+    assertFalse(writerThread.get().isAlive(), "The writer thread must TERMINATE on the stop path, not be left spinning");
+    // Reaching the writer's finally is what proves its transactional frame
+    // unwound, hence that the container transaction was closed
+    assertNotNull(writerRun.get(), "The writer must have been handed the run");
+    assertTrue(writerRun.get().writerFinished, "The writer's finally must run so its container transaction is closed");
+    // Left resumable, and the worker restartable
+    verify(campaignLifecycle, never()).transition(any(), eq(CleanupCampaignState.SIMULATED));
+    assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState());
+    assertTrue(runningCampaigns().isEmpty(), "The campaign id must be released so the watchdog can relaunch the worker");
+  }
+
+  @Test
+  void theWriterStopsOnTheRunsStoppedFlagEvenWhenNoPoisonPillEverLands() throws InterruptedException {
+    // The drain loop consulted the poison pill and the abort re-read, but never
+    // the run's own stop flags — so on the killed-scan path it saw a campaign
+    // still legitimately DRY_RUN_RUNNING (it MUST stay resumable) and looped for
+    // good, leaking the thread and its open container transaction
+    ScanRun run = new ScanRun(CAMPAIGN_ID, campaign.getParams(), BATCH_SIZE, 10L, 0L, 1, List.of(unit(1L, USERS_UNIT)));
+    assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-0", PATH_A)), PATH_A, 1)));
+    run.writerFailed = true;
+
+    Thread writer = new Thread(() -> scanService.drainQueue(run), "test-scan-writer");
+    writer.setDaemon(true);
+    writer.start();
+    writer.join(AWAIT_TIMEOUT_MS);
+
+    assertFalse(writer.isAlive(), "The drain loop MUST exit on the run's stopped flag, with no pill and no abort");
+    // And it stops BEFORE writing anything else: the batches still queued on a
+    // stopped run are abandoned, never checkpointed, so their nodes are simply
+    // re-walked by the next resume
+    verify(campaignStorage, never()).saveCandidates(anyLong(), anyList());
+    assertEquals(CleanupCampaignState.DRY_RUN_RUNNING, campaign.getState(), "The campaign must be left resumable");
+  }
+
+  @Test
+  void thePoisonPillIsDeliveredEvenOnAStoppedRunWithAFullQueue() {
+    // ONE reader, so a queue capacity of max(1 * 2, 4) = 4
+    ScanRun run = new ScanRun(CAMPAIGN_ID, campaign.getParams(), BATCH_SIZE, 10L, 0L, 1, List.of(unit(1L, USERS_UNIT)));
+    for (int i = 0; i < 4; i++) {
+      assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 1)));
+    }
+    assertFalse(run.queue.offer(ScanBatch.progress(1L, List.of(), PATH_A, 1)), "The queue must be FULL");
+    // The flag raised to unblock the readers is the very flag post() gives up on:
+    // it answered false, the pill was NEVER enqueued, and the writer it was meant
+    // to stop went on spinning
+    run.writerFailed = true;
+
+    scanService.postPoisonPill(run);
+
+    assertTrue(run.queue.contains(ScanRun.POISON_PILL),
+               "The terminal signal must be delivered UNCONDITIONALLY, on a stopped run and a full queue alike");
   }
 
   @Test
@@ -990,6 +1168,45 @@ class CleanupScanServiceTest {
       return null;
     }).when(cleanupJcrStorage).scanRoot(eq(unitPath), isNull(), anyInt(), any(), any());
     return emitted;
+  }
+
+  /**
+   * A reader emitting exactly {@code batchCount} batches, then finishing its unit
+   * — a HEALTHY walk. It never loops unbounded: the count is the bound.
+   */
+  private void countedEmitter(String unitPath, int batchCount) {
+    doAnswer(invocation -> {
+      ScanBatchConsumer batchConsumer = invocation.getArgument(4);
+      for (int i = 0; i < batchCount; i++) {
+        if (!batchConsumer.onBatch(List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 1)) {
+          break;
+        }
+      }
+      return null;
+    }).when(cleanupJcrStorage).scanRoot(eq(unitPath), isNull(), anyInt(), any(), any());
+  }
+
+  /**
+   * A writer that stays ALIVE and drains NOTHING — the wedged-writer shape no
+   * liveness check can see. It polls the run's stop flag on a BOUNDED wait and is
+   * hard-capped at {@link #WRITER_MAX_LOOPS} iterations, so a stop signal that
+   * never reaches it fails the assertions instead of spinning the build.
+   *
+   * @return the thread the writer ran on, so a test can assert it TERMINATED
+   */
+  private AtomicReference<Thread> wedgedWriter() {
+    AtomicReference<Thread> writerThread = new AtomicReference<>();
+    CountDownLatch neverOpened = new CountDownLatch(1);
+    doAnswer(invocation -> {
+      ScanRun run = invocation.getArgument(0);
+      writerRun.set(run);
+      writerThread.set(Thread.currentThread());
+      for (int loop = 0; loop < WRITER_MAX_LOOPS && !run.isStopped(); loop++) {
+        assertFalse(neverOpened.await(WRITER_POLL_MS, TimeUnit.MILLISECONDS), "This gate is never opened");
+      }
+      return null;
+    }).when(scanService).drainQueueTransactional(any());
+    return writerThread;
   }
 
   private Thread coordinatorThread() {

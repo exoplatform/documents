@@ -87,6 +87,35 @@ import jakarta.annotation.PreDestroy;
  * readers poll the volatile flag it publishes</li>
  * </ul>
  * <p>
+ * TERMINATION — what is guaranteed, and by WHICH mechanism. Nothing here bounds
+ * the DURATION of a scan: a dry-run over the target corpus spans hours to DAYS,
+ * is interrupted and resumed, and no mechanism below may ever cut a run short
+ * merely because it took long. What is bounded is BLOCKING WITHOUT PROGRESS, by
+ * four independent mechanisms, each covering what the previous one cannot:
+ * <ul>
+ * <li>a reader blocked on a full queue re-checks the stop flags between two
+ * bounded offers ({@link #QUEUE_TIMEOUT_MILLIS}), so it stops as soon as the
+ * writer raised one — the fast path, and it covers only the failures that DO
+ * raise a flag</li>
+ * <li>a writer thread that VANISHED raises no flag, so the coordinator does not
+ * INFER it from a timer: it observes {@code Thread#isAlive()} on the writer
+ * thread itself, at every slice of the reader wait ({@link #awaitReaders}). A
+ * dead writer stops the readers immediately, with nothing presumed</li>
+ * <li>a writer that is ALIVE but permanently wedged (blocked on a database lock,
+ * say) is caught by an INACTIVITY watchdog: nothing drained for
+ * {@link #writerInactivityMillis} WHILE batches wait in the queue. A silence
+ * bound and not a duration cap, and it can only fire while the writer has work
+ * it is not taking — a healthy scan, however long, never reaches it</li>
+ * <li>the writer is told to stop by TWO independent signals, deliberately: the
+ * poison pill, delivered UNCONDITIONALLY (see {@link #postPoisonPill}), and
+ * {@code ScanRun#isStopped()}, which the drain loop exits on even if no pill
+ * ever lands. Neither depends on the other</li>
+ * </ul>
+ * Every one of them leaves the campaign DRY_RUN_RUNNING and resumable from its
+ * unit checkpoints, lets the writer's frame unwind — so the container
+ * transaction it opened is closed — and releases the campaign id (the
+ * coordinator's {@code finally}) so the watchdog can relaunch the worker.
+ * <p>
  * A FAILED UNIT IS RETRIED, BOUNDEDLY. A unit whose walk failed is not terminal:
  * {@code getUnitsToProcess} hands it back to the next run, so the campaign is
  * deliberately left DRY_RUN_RUNNING and the watchdog
@@ -151,10 +180,11 @@ public class CleanupScanService {
    * and the writer re-checks them between two polls — a lost poison pill would
    * otherwise hang the worker for good.
    * <p>
-   * Neither side ever blocks indefinitely, but this bound alone is NOT what
-   * guarantees it: it only makes the stop flags observable, and a reader whose
-   * writer died without raising one would retry forever. The guarantee is
-   * {@link #readersDeadlineMillis}, which does not depend on any flag.
+   * This bound guarantees NOTHING on its own: it only makes the stop flags
+   * OBSERVABLE, and a reader whose writer died without raising one would retry
+   * forever. What bounds that case is the coordinator watching the writer thread
+   * itself — see the TERMINATION section of the class comment for which
+   * mechanism guarantees what.
    */
   private static final long            QUEUE_TIMEOUT_MILLIS       = 200L;
 
@@ -170,23 +200,52 @@ public class CleanupScanService {
   private static final long            WRITER_JOIN_MILLIS         = 300000L;
 
   /**
-   * WALL-CLOCK deadline of the whole reader wait, past which the readers are
-   * interrupted UNCONDITIONALLY — the structural half of the no-indefinite-block
-   * guarantee. The flag-based half only covers the abnormal exits somebody
-   * enumerated; this one covers a writer thread that vanished for ANY reason,
-   * including one nobody thought of, because it never consults a flag at all.
-   * <p>
-   * DERIVED, not picked: {@code scanRoot} holds ONE JCR session for a unit's
-   * whole lazy walk and stamps it with
-   * {@code documents.cleanup.jcr.session.timeout} (one hour by default), so a
-   * reader that has been inside its walk for longer than that timeout is already
-   * doomed — its session is gone. The deadline is TWICE that hour, which leaves a
-   * legitimately long walk a full session lifetime of slack before it can ever be
-   * reached, and it is overridable for the deployments that raise the session
-   * timeout.
+   * Bound of the LAST-RESORT wait on a writer that overran
+   * {@link #WRITER_JOIN_MILLIS} and was then told to stop and interrupted. Short
+   * on purpose: it is a courtesy wait on a thread already declared lost, and the
+   * coordinator must not add another five minutes to a scan it is abandoning —
+   * the daemon writer holds no JVM shutdown back, and the campaign is resumable
+   * whether or not that thread has unwound by now.
    */
-  @Value("${documents.cleanup.scan.readers.deadline:7200000}")
-  private long                         readersDeadlineMillis;
+  private static final long            WRITER_STOP_JOIN_MILLIS    = 5000L;
+
+  /**
+   * INACTIVITY bound of the writer: how long the writer may drain NOTHING while
+   * batches are waiting for it in the queue, past which it is presumed
+   * permanently wedged and the readers are stopped. It is NOT a cap on the
+   * duration of anything — measuring silence rather than elapsed time is the
+   * whole point.
+   * <p>
+   * IT REPLACES A TOTAL-DURATION DEADLINE, WHICH WAS A DESIGN ERROR. Every unit
+   * is submitted to the reader pool before {@link #awaitReaders} is called, so
+   * that wait IS the scan: any wall-clock deadline on it was a cap on the whole
+   * dry-run's duration. A dry-run over the target corpus spans hours to days, so
+   * exceeding two hours is the EXPECTED case and the cap made the parallel scan
+   * unable to ever finish — killed at the deadline, restarted by the watchdog,
+   * killed again, with no error ever reported. A scan that keeps making progress
+   * must NEVER be stopped, whatever its duration.
+   * <p>
+   * WHY A HEALTHY SCAN CANNOT REACH IT, on three independent counts:
+   * <ol>
+   * <li>it measures SILENCE: the marker is reset by every envelope the writer
+   * drains ({@code ScanRun#markDrained()}), and a reader posts one every
+   * {@code batchSize} SCANNED nodes — not per candidate — so batches arrive
+   * throughout a walk, over a subtree holding no candidate at all included</li>
+   * <li>it is only ever evaluated while the queue is NOT EMPTY, i.e. while the
+   * writer has work in front of it and is not taking it. Readers that are merely
+   * slow (a huge unit's query, a long resume fast-forward) leave the queue empty,
+   * and an empty queue can never trip this bound</li>
+   * <li>the value itself is DERIVED, not picked: {@code scanRoot} holds ONE JCR
+   * session per unit walk, stamped with
+   * {@code documents.cleanup.jcr.session.timeout} (one hour by default), so a
+   * reader still inside a walk longer than that timeout is already doomed. Twice
+   * that hour of total silence WITH work queued therefore means nothing is
+   * moving, whatever the readers are doing — and it is overridable for the
+   * deployments that raise the session timeout.</li>
+   * </ol>
+   */
+  @Value("${documents.cleanup.scan.writer.inactivity.timeout:7200000}")
+  private long                         writerInactivityMillis;
 
   @Autowired
   private CleanupCampaignStorage       campaignStorage;
@@ -391,15 +450,22 @@ public class CleanupScanService {
     Thread writerThread = threadFactory("cleanup-scan-writer-" + campaignId).newThread(() -> runWriter(run));
     writerThread.start();
 
-    awaitReaders(readerPool, run);
-    // Posted only once EVERY reader is done, so it can never be drained before
-    // the last batch of the last unit
-    post(run, ScanRun.POISON_PILL);
+    awaitReaders(readerPool, run, writerThread);
+    // Handed over only once EVERY reader is done, so it can never be drained
+    // before the last batch of the last unit — and UNCONDITIONALLY, never
+    // through post(), which answers false on a stopped run (see postPoisonPill)
+    postPoisonPill(run);
     writerThread.join(WRITER_JOIN_MILLIS);
-    if (writerThread.isAlive()) {
-      LOG.warn("The writer thread of the cleanup campaign {} scan did not finish within {} ms: the scan stays resumable",
-               campaignId,
-               WRITER_JOIN_MILLIS);
+    if (!run.writerFinished) {
+      // The pill could not reach a writer that is not draining. Raise the flag
+      // its drain loop exits on WITHOUT any pill, and interrupt whatever it is
+      // waiting on, so the frame unwinds and the container transaction it opened
+      // is closed instead of being leaked with the thread
+      run.writerFailed = true;
+      writerThread.interrupt();
+      writerThread.join(WRITER_STOP_JOIN_MILLIS);
+      LOG.error("The writer thread of the cleanup campaign {} scan did not finish within {} ms: it was told to stop and"
+          + " interrupted, and the scan stays resumable from its unit checkpoints.", campaignId, WRITER_JOIN_MILLIS);
     }
   }
 
@@ -460,6 +526,15 @@ public class CleanupScanService {
    * resumable), and rethrowing would only reprint the trace on an uncaught
    * handler. The reader wait no longer DEPENDS on this handler anyway — see
    * {@link #awaitReaders}.
+   * <p>
+   * The {@code finally} is load-bearing too, and it is what
+   * {@code ScanRun#writerFinished} means: reaching it proves
+   * {@link #drainQueueTransactional} RETURNED, hence that the container
+   * transaction the woven aspect opened around it was closed by the same
+   * unwinding. A drain loop that never returns leaks that transaction with the
+   * thread — one per killed scan — which is why the loop must always have a way
+   * out that does not depend on a poison pill reaching it, and why the
+   * coordinator reads this flag rather than presuming the writer unwound.
    */
   private void runWriter(ScanRun run) {
     try {
@@ -467,6 +542,8 @@ public class CleanupScanService {
     } catch (Throwable e) { // NOSONAR
       run.writerFailed = true;
       LOG.error("The writer of the cleanup campaign {} scan failed to start: the readers are stopped", run.campaignId, e);
+    } finally {
+      run.writerFinished = true;
     }
   }
 
@@ -490,6 +567,21 @@ public class CleanupScanService {
    * checkpoints THE UNIT THE BATCH CAME FROM, recomputes the aggregate progress
    * and its ETA, pushes the progress event, then commits.
    * <p>
+   * It exits on FOUR signals, and the first two are deliberately redundant: the
+   * poison pill, {@code isStopped()} — the run's own stop flags, so the writer
+   * stops even if no pill ever lands on a full queue — the abort re-read, and a
+   * failure. The pill alone was not enough: the coordinator raised
+   * {@code writerFailed} to unblock the readers, {@code post} then refused to
+   * enqueue the pill precisely BECAUSE the run was stopped, and this loop, which
+   * consulted the pill and the abort but never the stop flags, saw a campaign
+   * still legitimately DRY_RUN_RUNNING and looped forever — leaking the thread
+   * and the container transaction its entry point had opened.
+   * <p>
+   * Every drained envelope also stamps {@code ScanRun#markDrained()}, the marker
+   * the coordinator's inactivity watchdog reads ({@link #awaitReaders}): draining
+   * IS the progress signal of this design, and a writer that stops stamping it
+   * while batches wait for it is a wedged writer.
+   * <p>
    * The aggregate numerator is kept IN MEMORY (seeded from the persisted
    * per-unit counts) rather than re-summed per batch: the sum is already known
    * exactly, and a database aggregate per batch would be pure overhead on a
@@ -503,21 +595,33 @@ public class CleanupScanService {
     try {
       while (true) {
         ScanBatch batch = run.queue.poll(QUEUE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-        if (batch == null) {
+        if (batch == ScanRun.POISON_PILL) {
+          return;
+        } else if (run.isStopped()) {
+          // SECOND, INDEPENDENT terminal signal: the readers are gone and
+          // nothing more is expected on this queue, pill or no pill. Without it
+          // the writer spun here for good — the campaign is deliberately still
+          // DRY_RUN_RUNNING, so the abort re-read below answers false forever
+          return;
+        } else if (batch == null) {
           // Idle: re-check the abort flag rather than block forever on a pill
           // that a crashed coordinator may never post
           if (refreshAborted(run)) {
             return;
           }
           continue;
-        } else if (batch == ScanRun.POISON_PILL) {
-          return;
         } else if (refreshAborted(run)) {
           // Checked BEFORE anything is written, exactly where the sequential
           // worker checked it: an aborted campaign persists no further batch,
           // and no unit is recorded DONE either
           return;
-        } else if (batch.terminalState != null) {
+        }
+        // An envelope was taken off the queue: THE progress signal of this
+        // design, and what the coordinator's inactivity watchdog resets on. It
+        // is stamped for a terminal envelope too — draining one is progress just
+        // as much as persisting a batch of candidates
+        run.markDrained();
+        if (batch.terminalState != null) {
           recordUnitOutcome(batch);
           restartTransaction();
           continue;
@@ -696,16 +800,29 @@ public class CleanupScanService {
    * observable: a writer failure (or an abort) interrupts the readers, which may
    * otherwise sit inside a long blocking JCR call.
    * <p>
-   * And it waits under a WALL-CLOCK DEADLINE ({@link #readersDeadlineMillis}),
-   * which is what makes the no-indefinite-block guarantee STRUCTURAL instead of
-   * flag-dependent. The flag path only covers the abnormal writer exits somebody
-   * enumerated: a writer that vanishes some other way raises nothing, the readers
-   * retry their offers forever, this loop's escape hatch is unreachable, the
-   * coordinator's {@code finally} never runs — so the campaign id is never
-   * released — and every later scan of every campaign queues behind the hung task
-   * of a single-thread coordinator, with no state change for the console or the
-   * watchdog to notice. Past the deadline the readers are therefore interrupted
-   * UNCONDITIONALLY, no flag consulted.
+   * THIS WAIT IS THE SCAN — every unit was submitted to the pool before it — so
+   * it must NOT be bounded by any duration: a dry-run spanning days is the
+   * expected case, and a wall-clock deadline here was a cap on the whole dry-run
+   * (see {@link #writerInactivityMillis}). What is watched instead is the
+   * WRITER's liveness, on two signals, primary first:
+   * <ol>
+   * <li>the writer THREAD ITSELF, {@code Thread#isAlive()}. The failure this
+   * whole check exists for is 'the writer vanished and nobody can tell', and that
+   * is directly observable rather than something to presume from a timer: a dead
+   * writer while the readers still wait stops them at once, with no timer
+   * involved and nothing inferred. The flag path only covers the abnormal exits
+   * somebody enumerated; a writer that vanishes some other way raises nothing,
+   * the readers retry their offers forever, this loop's escape hatch is
+   * unreachable, the coordinator's {@code finally} never runs — so the campaign
+   * id is never released — and every later scan of every campaign queues behind
+   * the hung task of a single-thread coordinator</li>
+   * <li>an INACTIVITY watchdog for a writer that is ALIVE but permanently wedged,
+   * which no liveness check can see: nothing drained for
+   * {@link #writerInactivityMillis} WHILE the queue holds batches waiting for it.
+   * Silence with work queued, never elapsed time — a scan that keeps making
+   * progress resets the marker and one whose readers are merely slow leaves the
+   * queue empty, so neither can ever trip it</li>
+   * </ol>
    * <p>
    * A reader that ignores its interrupt outlives the coordinator, which does NOT
    * break the JPA invariant: a reader has no storage call to make but
@@ -714,38 +831,73 @@ public class CleanupScanService {
    * DRY_RUN_RUNNING and the watchdog re-launches the scan from the unit
    * checkpoints.
    */
-  private void awaitReaders(ExecutorService readerPool, ScanRun run) throws InterruptedException {
+  private void awaitReaders(ExecutorService readerPool, ScanRun run, Thread writerThread) throws InterruptedException {
     // No new task accepted; the submitted ones run to completion
     readerPool.shutdown();
-    long deadline = System.currentTimeMillis() + readersDeadlineMillis;
     boolean interrupted = false;
     while (!readerPool.awaitTermination(READERS_AWAIT_MILLIS, TimeUnit.MILLISECONDS)) {
-      if (System.currentTimeMillis() >= deadline) {
-        // Published so post() stops retrying rather than merely being
-        // interrupted: the readers must UNBLOCK, not just get a flag set
-        run.writerFailed = true;
-        readerPool.shutdownNow();
-        LOG.error("The readers of the cleanup campaign {} scan did not finish within {} ms: the writer thread is presumed"
-            + " DEAD whatever the reason, the readers are interrupted unconditionally and the campaign stays"
-            + " DRY_RUN_RUNNING — the watchdog re-launches it from the unit checkpoints.",
-                  run.campaignId,
-                  readersDeadlineMillis);
+      if (run.isStopped()) {
+        if (!interrupted) {
+          readerPool.shutdownNow();
+          interrupted = true;
+        }
+      } else if (!writerThread.isAlive()) {
+        // PRIMARY signal, and it is a fact and not a presumption: the only
+        // consumer of the queue is gone, so the readers can only block on it
+        stopReaders(readerPool, run);
+        LOG.error("The writer thread of the cleanup campaign {} scan is DEAD while its readers are still walking: nothing"
+            + " drains the queue anymore, so the readers are stopped at once and the campaign stays DRY_RUN_RUNNING —"
+            + " the watchdog re-launches it from the unit checkpoints.", run.campaignId);
         return;
-      }
-      if (run.isStopped() && !interrupted) {
-        readerPool.shutdownNow();
-        interrupted = true;
+      } else if (isWriterWedged(run)) {
+        // SECONDARY signal: alive, but it has not taken one envelope off a
+        // NON-EMPTY queue for the whole inactivity bound
+        stopReaders(readerPool, run);
+        LOG.error("The writer of the cleanup campaign {} scan drained nothing for {} ms while {} batch(es) waited in its"
+            + " queue: it is presumed permanently wedged, the readers are stopped and the campaign stays DRY_RUN_RUNNING —"
+            + " the watchdog re-launches it from the unit checkpoints.",
+                  run.campaignId,
+                  writerInactivityMillis,
+                  run.queue.size());
+        return;
       }
     }
   }
 
   /**
-   * Posts an envelope, blocking while the queue is full — THAT is the
+   * Stops the readers of a run whose writer is gone: the flag is published FIRST
+   * so {@code post} stops retrying rather than the readers being merely
+   * interrupted — they must UNBLOCK, not just carry an interrupt flag into their
+   * next offer.
+   */
+  private void stopReaders(ExecutorService readerPool, ScanRun run) {
+    run.writerFailed = true;
+    readerPool.shutdownNow();
+  }
+
+  /**
+   * @return true when the writer has drained NOTHING for
+   *         {@link #writerInactivityMillis} while batches were waiting for it.
+   *         The non-empty queue is half of the test and not a detail: silence
+   *         over an EMPTY queue means the readers are slow — a huge unit's query,
+   *         a long resume fast-forward — and a healthy scan must never be stopped
+   *         for that
+   */
+  private boolean isWriterWedged(ScanRun run) {
+    return !run.queue.isEmpty() && System.currentTimeMillis() - run.lastDrainedTime >= writerInactivityMillis;
+  }
+
+  /**
+   * Posts a READER's envelope, blocking while the queue is full — THAT is the
    * backpressure. Bounded offers rather than a plain {@code put}: a writer that
    * died must never leave a reader blocked forever, so the stop flags are
    * re-checked between two attempts. A writer that died WITHOUT raising one is
-   * caught by the coordinator's deadline instead (see {@link #awaitReaders}) —
-   * this loop is the fast path, not the guarantee.
+   * caught by the coordinator watching the writer thread instead (see
+   * {@link #awaitReaders}) — this loop is the fast path, not the guarantee.
+   * <p>
+   * It answers FALSE on a stopped run, which is why the poison pill must never go
+   * through here: the terminal signal is needed exactly when the run is stopped
+   * (see {@link #postPoisonPill}).
    *
    * @return true when the envelope was handed over, false when the run stopped
    */
@@ -760,6 +912,52 @@ public class CleanupScanService {
       Thread.currentThread().interrupt();
     }
     return false;
+  }
+
+  /**
+   * Hands the writer its terminal signal, UNCONDITIONALLY. It must not go
+   * through {@link #post}, which gives up as soon as {@code isStopped()} answers
+   * true: the flag raised to unblock the readers was then the very flag that kept
+   * the writer from ever being told to stop — the pill was never enqueued, and
+   * the writer spun on an empty queue forever, holding the container transaction
+   * its {@code @ContainerTransactional} entry point had opened. One leaked
+   * transaction per killed scan.
+   * <p>
+   * The queue MAY BE FULL here, so the delivery must not block forever either.
+   * Two cases, and they are not symmetric:
+   * <ul>
+   * <li>the run is STOPPED: the queued batches are abandoned whatever happens —
+   * nothing will checkpoint them, and their nodes are simply re-walked on the
+   * next resume — so the queue is CLEARED to make room. Dropping work that is
+   * already forfeit is the cheap half of the trade</li>
+   * <li>the run is NOT stopped: those batches are real work the writer is still
+   * expected to persist, so they are never dropped. Every reader has finished by
+   * now, so the queue can only SHRINK — one drained envelope is all the pill
+   * needs — and the offers are therefore retried for as long as the writer keeps
+   * DRAINING, on the very definition of wedged the watchdog uses
+   * ({@link #isWriterWedged}) rather than on a deadline of its own. A healthy but
+   * slow writer is never given up on; a wedged one is, and the drain loop's
+   * {@code isStopped()} exit stops it instead (see {@link #drainQueue})</li>
+   * </ul>
+   *
+   * @param run state of the current scan run
+   */
+  protected void postPoisonPill(ScanRun run) { // NOSONAR visible for tests
+    try {
+      while (!run.queue.offer(ScanRun.POISON_PILL, QUEUE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+        if (run.isStopped()) {
+          run.queue.clear();
+        } else if (isWriterWedged(run)) {
+          LOG.warn("The poison pill of the cleanup campaign {} scan could not be handed to its writer: its queue stayed"
+              + " full and nothing was drained for {} ms. The writer is stopped by the run's stopped flag instead.",
+                   run.campaignId,
+                   writerInactivityMillis);
+          return;
+        }
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   /**
@@ -847,6 +1045,24 @@ public class CleanupScanService {
     /** Writer gave up: the readers MUST stop, nothing drains the queue. */
     volatile boolean               writerFailed;
 
+    /**
+     * The writer's runnable reached its {@code finally}, so its transactional
+     * entry point RETURNED and the container transaction it opened was closed.
+     * Read by the coordinator, which must never presume that instead of a killed
+     * scan leaking one open transaction per run — see {@link #runWriter}.
+     */
+    volatile boolean               writerFinished;
+
+    /**
+     * When the writer last took an envelope off the queue. It is the run's
+     * PROGRESS marker — not a start time and not a deadline — and the only thing
+     * the inactivity watchdog compares against, which is what keeps a scan
+     * spanning DAYS alive as long as it keeps moving (see
+     * {@link #writerInactivityMillis}). Seeded at construction so the first
+     * window is measured from the run's own start.
+     */
+    volatile long                  lastDrainedTime    = System.currentTimeMillis();
+
     ScanRun(long campaignId, // NOSONAR
             CleanupParams params,
             int batchSize,
@@ -867,6 +1083,11 @@ public class CleanupScanService {
 
     boolean isStopped() {
       return aborted || writerFailed;
+    }
+
+    /** Stamps the progress marker the inactivity watchdog resets on. */
+    void markDrained() {
+      lastDrainedTime = System.currentTimeMillis();
     }
 
     /**

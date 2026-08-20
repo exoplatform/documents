@@ -459,7 +459,7 @@ public class CleanupJcrStorage {
    *         {@code session.save()} — the empty-ancestor cleanup is the only step
    *         left — leaves the item SKIPPED (an administrator must still see the
    *         file needed attention) but CARRIES the bytes of the file that is
-   *         really deleted, exactly as {@link #purgeVersions(String, int)} does
+   *         really deleted, exactly as {@link #purgeVersions(String, CleanupParams)} does
    *         for the versions it already removed: dropping them would
    *         under-report the campaign's reclaimed total
    */
