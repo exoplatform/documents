@@ -275,7 +275,7 @@ export default {
         // frozen criteria have to be shown as the dry run computed them with
         this.name = campaign.name || '';
         this.periodMonths = campaign.periodMonths;
-        this.minFileSizeMb = campaign.minFileSizeBytes != null && Math.round(campaign.minFileSizeBytes * 100 / MEGA_BYTE) / 100 || null;
+        this.minFileSizeMb = this.toMegaBytes(campaign.minFileSizeBytes);
         this.graceDays = campaign.graceDays;
         this.maxVersionsPerFile = campaign.maxVersionsPerFile;
         this.excludedPathsText = (campaign.excludedPaths || []).join('\n');
@@ -289,7 +289,7 @@ export default {
       this.$cleanupService.getDefaults()
         .then(defaults => {
           this.periodMonths = defaults?.periodMonths;
-          this.minFileSizeMb = defaults?.minFileSizeBytes != null && Math.round(defaults.minFileSizeBytes * 100 / MEGA_BYTE) / 100 || null;
+          this.minFileSizeMb = this.toMegaBytes(defaults?.minFileSizeBytes);
           this.graceDays = defaults?.graceDays;
           this.maxVersionsPerFile = defaults?.maxVersionsPerFile;
           this.excludedPathsText = (defaults?.excludedPaths || []).join('\n');
@@ -355,6 +355,13 @@ export default {
         maxVersionsPerFile: this.numberOrNull(this.maxVersionsPerFile),
         excludedPaths,
       };
+    },
+    toMegaBytes(bytes) {
+      // Compared to null, NEVER tested for falsiness: 0 is a REAL minimum size
+      // (no minimum at all), and so is every size under ~5 KB, which rounds to
+      // 0 MB here. `x || null` turned all of them into a blank field, so a
+      // deliberately-set minimum was indistinguishable from an unset one
+      return bytes == null ? null : Math.round(bytes * 100 / MEGA_BYTE) / 100;
     },
     numberOrNull(value) {
       // A cleared numeric input yields '' (and '' * N === 0): treat '' / null

@@ -16,6 +16,8 @@
  */
 package org.exoplatform.document.cleanup.util;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
+
 /**
  * Renders a purge failure into the compact diagnostic persisted in the item's
  * FAILURE_DETAIL column — never a full {@code printStackTrace}.
@@ -33,6 +35,13 @@ package org.exoplatform.document.cleanup.util;
  * storage problem of its own. Hence {@link #MAX_FRAMES} frames per block and,
  * as the LAST step of the rendering — so no long single message can bypass it —
  * a hard {@link #MAX_DETAIL_LENGTH} character cap.
+ * <p>
+ * The chain WALK itself is delegated to commons-lang3 ({@link ExceptionUtils}),
+ * which carries a visited-set guard: a CYCLIC chain — A caused by B caused by A,
+ * which a re-wrapping layer can genuinely build — is cut, not spun on. A
+ * hand-rolled walk guarding only the self-cause spun forever on such a cycle,
+ * and it spun inside the purge worker, on a thread nothing interrupts. Only the
+ * frame rendering and the caps are ours.
  */
 public class CleanupThrowableUtil {
 
@@ -64,13 +73,18 @@ public class CleanupThrowableUtil {
     }
     StringBuilder detail = new StringBuilder();
     appendBlock(detail, "", throwable);
-    Throwable rootCause = throwable;
-    int intermediateCount = -1;
-    while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
-      rootCause = rootCause.getCause();
-      intermediateCount++;
+    Throwable rootCause = ExceptionUtils.getRootCause(throwable);
+    if (rootCause == null) {
+      // A cause-less throwable: older commons-lang3 answers null there, newer
+      // ones answer the throwable itself. Normalized, because the identity
+      // comparison below is what decides whether a root block is rendered at all
+      rootCause = throwable;
     }
     if (rootCause != throwable) {
+      // Two links are always rendered — the head and the root — so the omitted
+      // ones are what the chain holds beyond them. Never negative here: a chain
+      // reaching this branch holds at least those two
+      int intermediateCount = ExceptionUtils.getThrowableCount(throwable) - 2;
       if (intermediateCount > 0) {
         // Never a silent drop: the reader is told how many links they are not
         // being shown

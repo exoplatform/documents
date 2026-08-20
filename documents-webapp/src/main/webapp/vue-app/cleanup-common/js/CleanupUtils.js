@@ -45,28 +45,6 @@ export const DATE_TIME_FORMAT = {
 export const RETRYABLE_FAILURE_REASONS = ['cleanup.keepFailed', 'cleanup.unkeepFailed'];
 
 /**
- * Renders a REMAINING DURATION — never a deadline compared to the browser clock.
- * The server ships the remaining milliseconds (campaign/summary DTO
- * 'remainingMillis'), the caller counts them down locally and hands the result
- * here, so a skewed client can no longer disagree with the server about whether
- * a window is still open.
- *
- * @param {number} remainingMillis milliseconds left, 0 or negative for none
- * @returns {string} human-readable duration, empty when nothing is left
- */
-/**
- * Splits a duration into the units a human reads, most significant first, and
- * keeps at most the TWO most significant non-zero ones: '2d 4h', '2h 46m',
- * '46m 41s', '41s'. Seconds only ever show up when the whole duration is under
- * an hour — nobody reads '2d 4h 17m 3s'.
- *
- * Pure on purpose: the unit LABELS are localized by $cleanupDuration (see
- * ../services.js), which is the only place with a $t to call.
- *
- * @param {Number} millis duration in milliseconds
- * @returns {Array} [{unit, value}] with unit in 'day'|'hour'|'minute'|'second'
- */
-/**
  * State -> Vuetify colour, defined ONCE for the three tables and the campaign
  * header that render these chips: a per-template ternary would drift the day a
  * state is added, and the same state must not read differently depending on
@@ -127,6 +105,18 @@ export function isLoudState(state) {
   return LOUD_STATES.includes(state);
 }
 
+/**
+ * Splits a duration into the units a human reads, most significant first, and
+ * keeps at most the TWO most significant non-zero ones: '2d 4h', '2h 46m',
+ * '46m 41s', '41s'. Seconds only ever show up when the whole duration is under
+ * an hour — nobody reads '2d 4h 17m 3s'.
+ *
+ * Pure on purpose: the unit LABELS are localized by $cleanupDuration (see
+ * ../services.js), which is the only place with a $t to call.
+ *
+ * @param {Number} millis duration in milliseconds
+ * @returns {Array} [{unit, value}] with unit in 'day'|'hour'|'minute'|'second'
+ */
 export function durationParts(millis) {
   if (!millis || millis <= 0) {
     return [];

@@ -183,6 +183,89 @@ class CleanupCampaignStorageTest {
     assertEquals(400, entity.getCheckpointOffset());
   }
 
+  /**
+   * THE finding this method exists for: a rename is a TARGETED write. Every
+   * column the schedule-driven writers own — the state the lifecycle owns, the
+   * progress counters and the scan checkpoint the workers own, the summary and
+   * the archive file id the retention job owns — must come out of the write
+   * EXACTLY as it went in, because the whole-row save this replaces used to
+   * carry a stale snapshot of all of them back over their writes.
+   */
+  @Test
+  void updateEditableAttributesWritesTheNameAndNothingElse() {
+    CleanupCampaignEntity entity = liveEntity();
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.of(entity));
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, "Renamed campaign", null, null);
+
+    verify(campaignDAO).save(entity);
+    assertEquals("Renamed campaign", entity.getName());
+    // The lifecycle's column: a rename racing the lock tick must not undo a
+    // LOCKED transition by writing PUBLISHED back
+    assertEquals(CleanupCampaignState.LOCKED.name(), entity.getState());
+    // The workers' columns: a rename must not rewind the scan onto an older
+    // checkpoint, nor make the progress bar go backwards
+    assertEquals(120, entity.getProcessedCount());
+    assertEquals(400, entity.getTotalCount());
+    assertEquals("/Groups/spaces/engineering", entity.getCheckpointPath());
+    assertEquals(90, entity.getCheckpointOffset());
+    assertEquals(30, entity.getEtaSeconds());
+    // The retention job's columns: nulling these ORPHANS the CSV report in the
+    // file service, and the UI can never recover from it
+    assertEquals("{\"candidateCount\":5}", entity.getSummaryJson());
+    assertEquals(77L, entity.getArchiveFileId());
+    // A rename touches NEITHER the grace period nor the deadline
+    assertEquals(7, entity.getGraceDays());
+    assertEquals(new Date(5678L), entity.getLockDate());
+  }
+
+  /**
+   * A grace edit writes the grace period AND the deadline derived from it — the
+   * Service being the one that derived it — and still nothing else, the NAME
+   * included.
+   */
+  @Test
+  void updateEditableAttributesWritesTheGracePeriodAndItsDeadlineOnly() {
+    CleanupCampaignEntity entity = liveEntity();
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.of(entity));
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, null, 21, 9999L);
+
+    verify(campaignDAO).save(entity);
+    assertEquals(21, entity.getGraceDays());
+    assertEquals(new Date(9999L), entity.getLockDate());
+    assertEquals("Live campaign", entity.getName(), "A grace-only edit must not write the NAME column");
+    assertEquals(CleanupCampaignState.LOCKED.name(), entity.getState());
+    assertEquals(120, entity.getProcessedCount());
+    assertEquals("/Groups/spaces/engineering", entity.getCheckpointPath());
+    assertEquals("{\"candidateCount\":5}", entity.getSummaryJson());
+    assertEquals(77L, entity.getArchiveFileId());
+  }
+
+  /**
+   * A null deadline means 'leave the LOCK_DATE column ALONE' — which is what a
+   * grace edit before publication passes, having no deadline to derive yet.
+   */
+  @Test
+  void updateEditableAttributesLeavesTheLockDateAloneWhenNoneIsRederived() {
+    CleanupCampaignEntity entity = liveEntity();
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.of(entity));
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, null, 21, null);
+
+    assertEquals(21, entity.getGraceDays());
+    assertEquals(new Date(5678L), entity.getLockDate(), "A null deadline must never zero the LOCK_DATE column");
+  }
+
+  @Test
+  void updateEditableAttributesIgnoresMissingCampaign() {
+    when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.empty());
+
+    storage.updateEditableAttributes(CAMPAIGN_ID, "Renamed campaign", 21, 9999L);
+
+    verify(campaignDAO, never()).save(any());
+  }
+
   @Test
   void updateProgressIgnoresMissingCampaign() {
     when(campaignDAO.findById(CAMPAIGN_ID)).thenReturn(Optional.empty());
@@ -908,6 +991,28 @@ class CleanupCampaignStorageTest {
     campaign.setSummaryJson("{\"candidateCount\":25}");
     campaign.setArchiveFileId(9L);
     return campaign;
+  }
+
+  /**
+   * A campaign row as the schedule-driven writers leave it: mid-execution
+   * progress, a scan checkpoint, a completion summary and an archived CSV. Every
+   * one of those columns is a loss a whole-row PATCH would cause.
+   */
+  private CleanupCampaignEntity liveEntity() {
+    CleanupCampaignEntity entity = new CleanupCampaignEntity();
+    entity.setId(CAMPAIGN_ID);
+    entity.setName("Live campaign");
+    entity.setState(CleanupCampaignState.LOCKED.name());
+    entity.setGraceDays(7);
+    entity.setLockDate(new Date(5678L));
+    entity.setTotalCount(400);
+    entity.setProcessedCount(120);
+    entity.setEtaSeconds(30);
+    entity.setCheckpointPath("/Groups/spaces/engineering");
+    entity.setCheckpointOffset(90);
+    entity.setSummaryJson("{\"candidateCount\":5}");
+    entity.setArchiveFileId(77L);
+    return entity;
   }
 
   private CleanupCampaignEntity entity() {

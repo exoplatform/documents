@@ -139,9 +139,14 @@ public class CleanupCriterionEvaluator {
     boolean aged = isAged(createdTime, lastModifiedTime, params, nowMillis);
     boolean overVersioned = versionCount > params.getMaxVersionsPerFile();
     if (!aged && !overVersioned) {
-      // THE cheap gate: the overwhelming majority of scanned files leave here,
-      // having cost their two dates and (when versionable) their version count
-      // — and NOT a single size read
+      // EXPOSITORY, not load-bearing: it states where the overwhelming majority
+      // of scanned files leave — having cost their two dates and (when
+      // versionable) their version count, and NOT a single size read. What
+      // ACTUALLY prevents the size reads is the short-circuit of each test
+      // below, whose cheap operand ('aged' / 'overVersioned') is evaluated
+      // first, so removing this gate changes no result and saves no read. The
+      // pair is the coverage; do not trust either half alone, and do not expect
+      // a test to pin this one
       return null;
     }
     if (aged && fileSizeSupplier.getAsLong() >= params.getMinFileSizeBytes()) {

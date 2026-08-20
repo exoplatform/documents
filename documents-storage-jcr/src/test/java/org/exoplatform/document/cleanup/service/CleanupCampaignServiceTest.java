@@ -358,7 +358,6 @@ class CleanupCampaignServiceTest {
   void shouldUpdateCampaignNameInARunningState() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "Q4 cleanup", null);
 
@@ -378,7 +377,6 @@ class CleanupCampaignServiceTest {
   void shouldUpdateNameOfCompletedCampaign() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "Q3 cleanup (final)", null);
 
@@ -398,7 +396,7 @@ class CleanupCampaignServiceTest {
                                                       () -> campaignService.updateCampaign(CAMPAIGN_ID, null, null));
 
     assertEquals("cleanup.campaignNotFound", exception.getMessage());
-    verify(campaignStorage, never()).saveCampaign(any());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
   }
 
   /**
@@ -408,15 +406,12 @@ class CleanupCampaignServiceTest {
   @Test
   void shouldRejectUpdateCarryingNeitherField() {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.PUBLISHED));
-    // Lenient: unused while the refusal holds, but it makes a REGRESSION fail on
-    // the missing refusal instead of on a downstream NPE
-    lenient().when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                                                       () -> campaignService.updateCampaign(CAMPAIGN_ID, null, null));
 
     assertEquals("cleanup.nothingToUpdate", exception.getMessage());
-    verify(campaignStorage, never()).saveCampaign(any());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
   }
 
   @Test
@@ -427,7 +422,7 @@ class CleanupCampaignServiceTest {
                                                       () -> campaignService.updateCampaign(CAMPAIGN_ID, " ", null));
 
     assertEquals("cleanup.nameMandatory", exception.getMessage());
-    verify(campaignStorage, never()).saveCampaign(any());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
   }
 
   @Test
@@ -438,39 +433,43 @@ class CleanupCampaignServiceTest {
                                                       () -> campaignService.updateCampaign(CAMPAIGN_ID, tooLongName(), null));
 
     assertEquals("cleanup.nameTooLong", exception.getMessage());
-    verify(campaignStorage, never()).saveCampaign(any());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
   }
 
   /**
-   * The name is trimmed BEFORE being persisted, and a name-only update touches
-   * nothing else: every other field of the campaign row is carried over
-   * untouched — the grace period and the grace DEADLINE included.
+   * The name is trimmed BEFORE being persisted, and a rename writes the NAME
+   * column and NOTHING ELSE: the grace period, the deadline and every progress
+   * column are not even MENTIONED to the Storage. This is the whole point of the
+   * targeted write — the name is editable in every state, so a rename races the
+   * workers' progress updates and the grace-deadline cron on this very row, and
+   * a whole-row save would push the snapshot read above back over theirs.
    */
   @Test
-  void shouldTrimTheNameAndKeepEveryOtherFieldWhenUpdatingTheNameOnly() throws ObjectNotFoundException {
+  void shouldTrimTheNameAndWriteNothingButTheNameWhenUpdatingTheNameOnly() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
     campaign.setPublishedDate(1234L);
     campaign.setLockDate(5678L);
     campaign.setTotalCount(42);
     campaign.setProcessedCount(7);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    campaignService.updateCampaign(CAMPAIGN_ID, "  Q4 cleanup  ", null);
+    CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "  Q4 cleanup  ", null);
 
-    ArgumentCaptor<CleanupCampaign> captor = ArgumentCaptor.forClass(CleanupCampaign.class);
-    verify(campaignStorage).saveCampaign(captor.capture());
-    CleanupCampaign saved = captor.getValue();
-    assertEquals("Q4 cleanup", saved.getName());
-    assertEquals(CAMPAIGN_ID, saved.getId());
-    assertEquals(CleanupCampaignState.PUBLISHED, saved.getState());
-    assertEquals(1234L, saved.getPublishedDate());
+    // The trimmed NAME alone: null grace period, null deadline
+    verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, "Q4 cleanup", null, null);
+    // The whole-row write is what this finding is about: it must be GONE
+    verify(campaignStorage, never()).saveCampaign(any());
+    // ... and the returned DTO still carries every other field, untouched
+    assertEquals("Q4 cleanup", updated.getName());
+    assertEquals(CAMPAIGN_ID, updated.getId());
+    assertEquals(CleanupCampaignState.PUBLISHED, updated.getState());
+    assertEquals(1234L, updated.getPublishedDate());
     // A name-only patch must move NEITHER the grace period nor the deadline
-    assertEquals(5678L, saved.getLockDate());
-    assertEquals(42, saved.getTotalCount());
-    assertEquals(7, saved.getProcessedCount());
-    assertNotNull(saved.getParams());
-    assertEquals(7, saved.getParams().getGraceDays());
+    assertEquals(5678L, updated.getLockDate());
+    assertEquals(42, updated.getTotalCount());
+    assertEquals(7, updated.getProcessedCount());
+    assertNotNull(updated.getParams());
+    assertEquals(7, updated.getParams().getGraceDays());
   }
 
   /**
@@ -481,26 +480,27 @@ class CleanupCampaignServiceTest {
   void shouldKeepTheNameWhenUpdatingTheGracePeriodOnly() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.SIMULATED);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 21);
 
     assertEquals("Q3 cleanup", updated.getName());
     assertEquals(21, updated.getParams().getGraceDays());
+    // Symmetrically targeted: the NAME column is not written at all, and the
+    // campaign not being PUBLISHED, neither is the deadline
+    verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 21, null);
   }
 
   @Test
   void shouldUpdateTheNameAndTheGracePeriodAtOnce() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.DRAFT);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, "  Q4 cleanup  ", 3);
 
     assertEquals("Q4 cleanup", updated.getName());
     assertEquals(3, updated.getParams().getGraceDays());
-    // ONE save for the whole patch, not one per field
-    verify(campaignStorage, times(1)).saveCampaign(any());
+    // ONE write for the whole patch, not one per field
+    verify(campaignStorage, times(1)).updateEditableAttributes(CAMPAIGN_ID, "Q4 cleanup", 3, null);
   }
 
   /**
@@ -530,9 +530,6 @@ class CleanupCampaignServiceTest {
       reset(campaignStorage);
       CleanupCampaign campaign = campaign(state);
       when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-      // Stubbed BEFORE the refusal, so a lost guard fails on the missing refusal
-      // rather than on a downstream NPE; used by the rename half below anyway
-      when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
       IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                                                         () -> campaignService.updateCampaign(CAMPAIGN_ID, null, 14),
@@ -540,7 +537,8 @@ class CleanupCampaignServiceTest {
 
       assertEquals(CLEANUP_INVALID_STATE_ERROR, exception.getMessage());
       assertEquals(7, campaign.getParams().getGraceDays(), "The refused grace edit must not have been applied in " + state);
-      verify(campaignStorage, never()).saveCampaign(any());
+      // A refusal writes NOTHING: not the grace period, and not the name either
+      verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
 
       // Same state, same campaign: the NAME is pure metadata, so it is editable
       // there anyway
@@ -555,7 +553,6 @@ class CleanupCampaignServiceTest {
       reset(campaignStorage);
       CleanupCampaign campaign = campaign(state);
       when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-      when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
       CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 14);
 
@@ -567,14 +564,13 @@ class CleanupCampaignServiceTest {
   @Test
   void shouldRejectNegativeGracePeriod() {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
-    lenient().when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                                                       () -> campaignService.updateCampaign(CAMPAIGN_ID, null, -1));
 
     // The SAME message code the creation path already uses for that bound
     assertEquals("cleanup.invalidGraceDays", exception.getMessage());
-    verify(campaignStorage, never()).saveCampaign(any());
+    verify(campaignStorage, never()).updateEditableAttributes(anyLong(), any(), any(), any());
   }
 
   /**
@@ -585,7 +581,6 @@ class CleanupCampaignServiceTest {
   void shouldAcceptZeroGracePeriod() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.SIMULATED);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 0);
 
@@ -606,18 +601,21 @@ class CleanupCampaignServiceTest {
     campaign.setPublishedDate(publishedDate);
     campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(7));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 40);
 
     assertEquals(publishedDate + TimeUnit.DAYS.toMillis(40), updated.getLockDate());
     assertTrue(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(40) - updated.getLockDate() > TimeUnit.DAYS.toMillis(29),
                "The grace deadline must be anchored on the publication date, NEVER on now");
+    // The rederived deadline is WRITTEN, and it is the only column a grace edit
+    // adds to the grace period itself
+    verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 40, publishedDate + TimeUnit.DAYS.toMillis(40));
 
     // Idempotent: saving the same value again must not slide the deadline
     CleanupCampaign resaved = campaignService.updateCampaign(CAMPAIGN_ID, null, 40);
 
     assertEquals(publishedDate + TimeUnit.DAYS.toMillis(40), resaved.getLockDate());
+    verify(campaignStorage, times(2)).updateEditableAttributes(CAMPAIGN_ID, null, 40, publishedDate + TimeUnit.DAYS.toMillis(40));
   }
 
   /**
@@ -634,7 +632,6 @@ class CleanupCampaignServiceTest {
     campaign.setPublishedDate(publishedDate);
     campaign.setLockDate(publishedDate + TimeUnit.DAYS.toMillis(60));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 1);
 
@@ -658,12 +655,15 @@ class CleanupCampaignServiceTest {
       campaign.setPublishedDate(0);
       campaign.setLockDate(4242L);
       when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-      when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
       CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 14);
 
       assertEquals(14, updated.getParams().getGraceDays());
       assertEquals(4242L, updated.getLockDate(), "The lock date must not be recomputed in " + state);
+      // Not published yet: the LOCK_DATE column is not written AT ALL, so the
+      // sentinel cannot be zeroed by a deadline this state has no business
+      // deriving
+      verify(campaignStorage).updateEditableAttributes(CAMPAIGN_ID, null, 14, null);
     }
   }
 
@@ -676,7 +676,6 @@ class CleanupCampaignServiceTest {
     CleanupCampaign campaign = campaign(CleanupCampaignState.DRAFT);
     campaign.setParams(null);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     CleanupCampaign updated = campaignService.updateCampaign(CAMPAIGN_ID, null, 5);
 

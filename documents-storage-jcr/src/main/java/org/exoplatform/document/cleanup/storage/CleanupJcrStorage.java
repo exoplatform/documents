@@ -331,15 +331,6 @@ public class CleanupJcrStorage {
   }
 
   /**
-   * Node lookup distinguishing a MISSING node (null) from a repository failure
-   * (propagated {@link RepositoryException}), unlike
-   * {@link JCRDocumentsUtil#getNodeByIdentifier(Session, String)} which
-   * swallows both into null. EVERY cleanup primitive goes through this lookup:
-   * reporting an item NOT_FOUND / GONE on a transient repository failure would
-   * durably discard the user's keep decision, or record a file as vanished
-   * while it is still there.
-   */
-  /**
    * Node lookup BY PATH tolerating a missing node (null), used only by the unit
    * enumeration: a scan root absent from the workspace must skip its units, not
    * fail the whole scan.
@@ -352,6 +343,15 @@ public class CleanupJcrStorage {
     }
   }
 
+  /**
+   * Node lookup distinguishing a MISSING node (null) from a repository failure
+   * (propagated {@link RepositoryException}), unlike
+   * {@link JCRDocumentsUtil#getNodeByIdentifier(Session, String)} which
+   * swallows both into null. EVERY cleanup primitive goes through this lookup:
+   * reporting an item NOT_FOUND / GONE on a transient repository failure would
+   * durably discard the user's keep decision, or record a file as vanished
+   * while it is still there.
+   */
   private Node getNodeByIdentifierOrNull(Session session, String nodeUuid) throws RepositoryException {
     try {
       return ((ExtendedSession) session).getNodeByIdentifier(nodeUuid);
@@ -766,6 +766,14 @@ public class CleanupJcrStorage {
    * for it: the criterion asks only for the size its decision turns on, the
    * candidate build then asks for both, and the one already measured is
    * answered from the memo instead of being read from JCR a second time.
+   * <p>
+   * THREAD CONFINEMENT, stated because the plain (non-volatile, unsynchronized)
+   * fields are only safe under it: an instance is created inside
+   * {@link #toCandidate} and dies with that call, on the one reader thread that
+   * made it — like the JCR {@link Node} it reads, which is itself
+   * session-confined. The scan now runs SEVERAL readers in parallel, so hoisting
+   * an instance out of the method or caching one per scan unit would turn these
+   * fields into a data race. Do not share one; make a new one.
    */
   private static final class LazySize implements LongSupplier {
 

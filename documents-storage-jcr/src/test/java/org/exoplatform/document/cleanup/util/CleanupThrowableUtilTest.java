@@ -21,6 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,9 +32,17 @@ import org.junit.jupiter.api.Test;
  */
 class CleanupThrowableUtilTest {
 
-  private static final String ROOT_MESSAGE = "ORA-01461: value too large for column";
+  /**
+   * Bound on the cause reads the cycle fixture answers before it ENDS the chain.
+   * A cycle-safe walk visits each link once, so a handful of reads is plenty; the
+   * slack turns a spinning walk into a failed assertion in milliseconds instead
+   * of a hung build — the same discipline as the execution worker's keyset bound.
+   */
+  private static final int    CAUSE_QUERY_BOUND = 12;
 
-  private static final String HEAD_MESSAGE = "Error while saving the node";
+  private static final String ROOT_MESSAGE      = "ORA-01461: value too large for column";
+
+  private static final String HEAD_MESSAGE      = "Error while saving the node";
 
   @Test
   void formatFailureDetailIsNullSafe() {
@@ -155,6 +165,55 @@ class CleanupThrowableUtilTest {
 
     assertTrue(detail.contains(HEAD_MESSAGE), detail);
     assertFalse(detail.contains("Caused by"), "A self-referencing cause is not a second link: " + detail);
+  }
+
+  /**
+   * The cycle the self-cause guard never covered: A caused by B caused by A,
+   * which a re-wrapping layer genuinely builds. The hand-rolled walk compared
+   * each link to its OWN cause only, so it stepped straight past this one and
+   * spun forever — inside the purge worker, on a thread nothing interrupts. The
+   * walk is delegated to commons-lang3, whose visited-set guard cuts the cycle
+   * after visiting each link ONCE.
+   * <p>
+   * The fixture is BOUNDED (see {@link #CAUSE_QUERY_BOUND}) so a regression is
+   * CAUGHT by the assertions below rather than hanging: past the bound the chain
+   * simply ends, and a walk that needed that many reads has already failed the
+   * count assertion.
+   */
+  @Test
+  void formatFailureDetailSurvivesATwoLinkCauseCycle() {
+    AtomicInteger causeQueries = new AtomicInteger();
+    Throwable[] cycle = new Throwable[2];
+    Throwable head = new IllegalStateException(HEAD_MESSAGE) {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public synchronized Throwable getCause() {
+        return causeQueries.incrementAndGet() > CAUSE_QUERY_BOUND ? null : cycle[1];
+      }
+    };
+    Throwable tail = new IllegalStateException(ROOT_MESSAGE) {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public synchronized Throwable getCause() {
+        return causeQueries.incrementAndGet() > CAUSE_QUERY_BOUND ? null : cycle[0];
+      }
+    };
+    cycle[0] = head;
+    cycle[1] = tail;
+    head.setStackTrace(frames(1));
+    tail.setStackTrace(frames(1));
+
+    String detail = CleanupThrowableUtil.formatFailureDetail(head);
+
+    assertTrue(detail.contains(HEAD_MESSAGE), detail);
+    assertTrue(detail.contains("Caused by (root cause): "), "The other link of the cycle IS the deepest one reachable: " + detail);
+    assertTrue(detail.contains(ROOT_MESSAGE), detail);
+    assertFalse(detail.contains("intermediate cause(s) omitted"),
+                "A two-link cycle holds no intermediate link to report on: " + detail);
+    assertTrue(causeQueries.get() <= CAUSE_QUERY_BOUND,
+               "The walk must visit each link of the cycle once, never spin on it: " + causeQueries.get() + " cause reads");
   }
 
   /**

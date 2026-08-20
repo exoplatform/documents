@@ -146,10 +146,21 @@ public class CleanupCampaignService {
                                                                                        CleanupCampaignState.PUBLISHED);
 
   /**
-   * Attempts an item may spend, retries included. Bounds the whole retry
-   * mechanism: past it, a failure has proved itself deterministic whatever its
-   * code says, and an administrator re-clicking Retry must not be able to loop on
-   * it forever.
+   * RETRIES an item may spend AFTER its initial purge attempt — three of them,
+   * so a doomed item is purge-attempted four times in all. The initial attempt
+   * spends no attempt: only the requeue increments the counter, and the requeue
+   * filter is {@code attemptCount < 3}.
+   * <p>
+   * Deliberately NOT the same arithmetic as
+   * {@code CleanupScanService#MAX_SCAN_UNIT_ATTEMPTS}, which bounds THREE walks
+   * in total: a scan unit spends an attempt on its very first walk, because the
+   * coordinator claiming a unit is what increments it. Same value, same purpose
+   * — bounding a retry so it cannot loop forever — counted from a different
+   * origin, and neither is a typo of the other.
+   * <p>
+   * Bounds the whole item retry mechanism: past it, a failure has proved itself
+   * deterministic whatever its code says, and an administrator re-clicking Retry
+   * must not be able to loop on it forever.
    */
   public static final long                        MAX_RETRY_ATTEMPTS          = 3;
 
@@ -380,6 +391,13 @@ public class CleanupCampaignService {
    * deliberately performs NO transition of its own: the single PUBLISHED to
    * LOCKED authority stays {@link #lockExpiredPublishedCampaign()} and the
    * manual execution trigger.
+   * <p>
+   * Persisted as a TARGETED write of the two or three columns this operation
+   * owns ({@link CleanupCampaignStorage#updateEditableAttributes}), never as a
+   * whole-row save of the snapshot read above: the name is editable in EVERY
+   * state, so this write races the two schedule-driven writers of the same row
+   * — the workers' progress updates and the grace-deadline cron — and a
+   * read-modify-write would silently undo theirs.
    *
    * @param campaignId campaign identifier
    * @param name new campaign name, null to leave it unchanged — trimmed before
@@ -405,13 +423,16 @@ public class CleanupCampaignService {
       // happened
       throw new IllegalArgumentException("cleanup.nothingToUpdate");
     }
-    if (name != null) {
-      campaign.setName(validateName(name));
+    String validatedName = name == null ? null : validateName(name);
+    if (validatedName != null) {
+      campaign.setName(validatedName);
     }
-    if (graceDays != null) {
-      applyGraceDays(campaign, graceDays);
-    }
-    return withAggregates(campaignStorage.saveCampaign(campaign));
+    Long rederivedLockDate = graceDays == null ? null : applyGraceDays(campaign, graceDays);
+    // TARGETED write, never a whole-row save of the snapshot read above: the
+    // progress updates of the workers and the grace-deadline cron write this
+    // very row on a schedule (see the Storage method's javadoc)
+    campaignStorage.updateEditableAttributes(campaignId, validatedName, graceDays, rederivedLockDate);
+    return withAggregates(campaign);
   }
 
   /**
@@ -422,8 +443,13 @@ public class CleanupCampaignService {
    * the value was set at publication or edited afterwards. Before publication
    * there is no deadline to recompute yet: the lock date is left ALONE, and
    * publication will derive it from the edited value on its own.
+   *
+   * @return the rederived grace deadline to persist, or NULL when there is none
+   *         to rederive — which the targeted write reads as 'do not touch the
+   *         LOCK_DATE column', so a pre-publication edit cannot zero a deadline
+   *         it has no business setting
    */
-  private void applyGraceDays(CleanupCampaign campaign, Integer graceDays) {
+  private Long applyGraceDays(CleanupCampaign campaign, Integer graceDays) {
     if (!GRACE_EDITABLE_STATES.contains(campaign.getState())) {
       throw new IllegalArgumentException("cleanup.invalidState");
     }
@@ -438,9 +464,12 @@ public class CleanupCampaignService {
       campaign.setParams(params);
     }
     params.setGraceDays(graceDays);
-    if (campaign.getState() == CleanupCampaignState.PUBLISHED) {
-      campaign.setLockDate(campaign.getPublishedDate() + TimeUnit.DAYS.toMillis(graceDays));
+    if (campaign.getState() != CleanupCampaignState.PUBLISHED) {
+      return null;
     }
+    long lockDate = campaign.getPublishedDate() + TimeUnit.DAYS.toMillis(graceDays);
+    campaign.setLockDate(lockDate);
+    return lockDate;
   }
 
   /**

@@ -92,8 +92,11 @@ public class CleanupExecutionService {
   }
 
   /**
-   * Switches a LOCKED campaign to EXECUTING and launches the asynchronous
-   * purge.
+   * Switches a campaign to EXECUTING and launches the asynchronous purge. TWO
+   * states may enter it, and the retry is the reason there are two: LOCKED (the
+   * normal run, once the grace deadline elapsed) and COMPLETED (the retry of
+   * {@code CleanupCampaignService#retryCampaign}, which requeues the retryable
+   * failures and then reuses this very method verbatim).
    *
    * @param campaignId campaign identifier
    * @return the updated campaign
@@ -108,7 +111,8 @@ public class CleanupExecutionService {
     campaign.setTotalCount(campaignStorage.countItemsByState(campaignId, CleanupItemState.CANDIDATE));
     campaign.setProcessedCount(0);
     campaign.setEtaSeconds(0);
-    // Guarded by the lifecycle: only LOCKED may enter EXECUTING
+    // Guarded by the lifecycle: LOCKED and COMPLETED are the only states from
+    // which EXECUTING is reachable — a normal run and a retry, nothing else
     campaign = campaignLifecycle.transition(campaign, CleanupCampaignState.EXECUTING);
     executorService.execute(() -> executeCampaignTransactional(campaignId));
     return campaign;

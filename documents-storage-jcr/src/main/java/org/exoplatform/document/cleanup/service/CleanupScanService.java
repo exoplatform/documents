@@ -120,8 +120,12 @@ public class CleanupScanService {
    * THREE walks, not one walk plus three retries. Bounds the whole unit retry:
    * past the third failure the subtree has proved unreadable whatever the cause
    * was, and the watchdog must not re-walk it on every tick until the end of
-   * time. Mirrors {@code CleanupCampaignService#MAX_RETRY_ATTEMPTS}, which bounds
-   * the item-level retry the same way.
+   * time. Bounds the unit retry exactly as
+   * {@code CleanupCampaignService#MAX_RETRY_ATTEMPTS} bounds the item retry, but
+   * counted from a DIFFERENT origin, deliberately: an attempt is spent here by
+   * the coordinator CLAIMING the unit, first walk included, whereas an item
+   * spends one only on a requeue — so the same value means three walks here and
+   * three retries after the initial attempt there.
    */
   public static final long             MAX_SCAN_UNIT_ATTEMPTS     = 3;
 

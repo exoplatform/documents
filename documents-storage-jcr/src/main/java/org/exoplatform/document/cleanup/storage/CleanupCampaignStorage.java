@@ -124,6 +124,45 @@ public class CleanupCampaignStorage {
   }
 
   /**
+   * TARGETED write of the attributes an administrator PATCH owns: the NAME, and
+   * the grace period together with the grace DEADLINE derived from it. The row
+   * is re-read inside the transaction and ONLY those columns are set — the very
+   * same idiom as {@link #updateProgress}, for the very same reason.
+   * <p>
+   * Deliberately NOT a whole-row {@link #saveCampaign(CleanupCampaign)}: this
+   * row is written on a SCHEDULE by two other writers — the progress updates of
+   * the scan and purge workers, and the grace-deadline cron — and the campaign
+   * table carries no {@code @Version}. A read-modify-write of every column would
+   * push the snapshot read before the edit back over whatever they wrote in
+   * between: a rewound scan checkpoint (hours of re-walking), a {@code state}
+   * undoing the lifecycle's PUBLISHED to LOCKED transition, or a nulled
+   * ARCHIVE_FILE_ID orphaning the CSV report in the file service for good.
+   * <p>
+   * Every argument is nullable and means 'leave that column ALONE'. Which of
+   * them an edit actually changed is the Service's business, not this layer's.
+   *
+   * @param campaignId campaign identifier
+   * @param name new campaign name, null to leave the NAME column untouched
+   * @param graceDays new grace period, null to leave GRACE_DAYS untouched
+   * @param lockDate new grace deadline (epoch millis), null to leave LOCK_DATE
+   *          untouched — only a grace edit on a PUBLISHED campaign rederives it
+   */
+  public void updateEditableAttributes(long campaignId, String name, Integer graceDays, Long lockDate) {
+    campaignDAO.findById(campaignId).ifPresent(entity -> {
+      if (name != null) {
+        entity.setName(name);
+      }
+      if (graceDays != null) {
+        entity.setGraceDays(graceDays);
+      }
+      if (lockDate != null) {
+        entity.setLockDate(toDate(lockDate));
+      }
+      campaignDAO.save(entity);
+    });
+  }
+
+  /**
    * Saves scan candidates as campaign items, ignoring node uuids already
    * recorded for the campaign (scan resume may replay a batch): one bulk
    * existence query plus one saveAll per batch, backed by the
