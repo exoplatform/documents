@@ -33,6 +33,8 @@ import org.exoplatform.document.cleanup.rest.model.KeepItemsRestEntity;
 import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,6 +45,8 @@ import jakarta.servlet.http.HttpServletRequest;
 @RestController
 @RequestMapping("/cleanup/items")
 public class CleanupItemRest {
+
+  private static final Log       LOG = ExoLogger.getLogger(CleanupItemRest.class);
 
   @Autowired
   private CleanupCampaignService campaignService;
@@ -70,6 +74,7 @@ public class CleanupItemRest {
       // English sentence naming the user and the owning space — internal detail
       // that must not reach the client and that no bundle key can localize. The
       // bulk path already maps this exact refusal to the same code
+      LOG.debug("User {} isn't allowed to decide cleanup campaign item {}", request.getRemoteUser(), id, e);
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, CleanupCampaignService.NOT_OWNER_FAILURE_CODE);
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -120,6 +125,7 @@ public class CleanupItemRest {
     } catch (IllegalAccessException e) {
       // Same contract as keepItem above: the localizable code, not the raw
       // English sentence naming the user and the owning space
+      LOG.debug("User {} isn't allowed to decide cleanup campaign item {}", request.getRemoteUser(), id, e);
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, CleanupCampaignService.NOT_OWNER_FAILURE_CODE);
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());

@@ -171,16 +171,15 @@ function toQueryParams(filters) {
 function errorMessage(text, status) {
   if (text) {
     try {
-      const body = JSON.parse(text);
-      if (body?.message) {
-        return body.message;
-      }
+      // A parsed envelope without a message carries no code: fall back to the
+      // status rather than handing the whole envelope over as one
+      return JSON.parse(text)?.message || `${status}`;
     } catch (e) {
       // Not a JSON envelope: the raw body IS the message code
       return text;
     }
   }
-  return text || `${status}`;
+  return `${status}`;
 }
 
 function rejectResponse(resp) {

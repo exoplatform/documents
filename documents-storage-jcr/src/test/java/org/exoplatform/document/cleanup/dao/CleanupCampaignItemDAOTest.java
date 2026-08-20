@@ -22,11 +22,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -39,13 +41,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.repository.query.parser.PartTree;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignEntity;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
+import org.exoplatform.document.cleanup.rest.CleanupCampaignRest;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Parameter;
+import jakarta.persistence.metamodel.EntityType;
 
 /**
  * Guards the hand-written {@code @Query} JPQL of the cleanup DAOs, which nothing
@@ -75,6 +80,13 @@ class CleanupCampaignItemDAOTest {
    * to {@link CleanupCampaignDAO} later without anybody remembering this test.
    */
   private static final List<Class<?>> CLEANUP_DAOS = List.of(CleanupCampaignItemDAO.class, CleanupCampaignDAO.class);
+
+  /** Each cleanup repository with the entity its derived names must resolve against. */
+  private static final Map<Class<?>, Class<?>> CLEANUP_DAO_ENTITIES =
+                                                                    Map.of(CleanupCampaignItemDAO.class,
+                                                                           CleanupCampaignItemEntity.class,
+                                                                           CleanupCampaignDAO.class,
+                                                                           CleanupCampaignEntity.class);
 
   private static SessionFactory       sessionFactory;
 
@@ -208,10 +220,95 @@ class CleanupCampaignItemDAOTest {
   }
 
   /**
+   * The other half of these interfaces: the DERIVED-name methods carry no
+   * {@code @Query}, so their property expressions are resolved for the first
+   * time at Spring Data repository bootstrap — the very failure mode the parse
+   * above front-runs. Spring Data's own {@link PartTree} resolves them here
+   * against the entity, so a method named after a property that does not exist
+   * (or a typo in one) fails at test time instead of breaking the deployment.
+   */
+  @Test
+  void shouldResolveEveryDerivedQueryMethodAgainstItsEntity() {
+    for (Map.Entry<Class<?>, Class<?>> dao : CLEANUP_DAO_ENTITIES.entrySet()) {
+      List<Method> derivedMethods = derivedQueryMethods(dao.getKey());
+      assertFalse(derivedMethods.isEmpty(),
+                  "No derived-name method found on " + dao.getKey().getSimpleName() + ": the guard would be vacuous");
+      for (Method method : derivedMethods) {
+        try {
+          new PartTree(method.getName(), dao.getValue());
+        } catch (RuntimeException e) {
+          fail(dao.getKey().getSimpleName() + "." + method.getName() + " does not resolve against "
+              + dao.getValue().getSimpleName() + ": " + e.getMessage());
+        }
+      }
+    }
+  }
+
+  /**
+   * The sortable-field allowlist the REST layer accepts is a set of STRINGS
+   * compared against nothing: a typo there passes every test and answers a
+   * runtime 500 when a client sorts by that column. Resolved here against the
+   * entity metamodel, together with the tiebreaker the whole pagination
+   * stability rests on.
+   */
+  @Test
+  void shouldKeepTheRestSortableFieldsResolvableOnTheItemEntity() throws ReflectiveOperationException {
+    EntityType<CleanupCampaignItemEntity> itemEntity = sessionFactory.getMetamodel().entity(CleanupCampaignItemEntity.class);
+    for (String field : restSortableItemFields()) {
+      try {
+        itemEntity.getAttribute(field);
+      } catch (IllegalArgumentException e) {
+        fail("CleanupCampaignRest.SORTABLE_ITEM_FIELDS accepts '" + field + "', which is not an attribute of "
+            + CleanupCampaignItemEntity.class.getSimpleName());
+      }
+    }
+    String tiebreaker = restConstant("TIEBREAKER_FIELD", String.class);
+    assertNotNull(itemEntity.getAttribute(tiebreaker), "The pagination tiebreaker must be an attribute of the item entity");
+    assertTrue(itemEntity.getId(Long.class).getName().equals(tiebreaker),
+               "The tiebreaker must stay the primary key: it is the only column the schema guarantees unique per campaign");
+  }
+
+  /**
    * Every {@code @Query}-annotated method of both cleanup repositories, inherited
    * {@link org.springframework.data.jpa.repository.JpaRepository} methods
    * included (they carry none, so they simply drop out).
    */
+  /**
+   * Methods DECLARED by the repository (inherited {@code JpaRepository} ones
+   * drop out — Spring Data resolves those itself) that carry no
+   * {@code @Query}, i.e. the derived-name ones.
+   */
+  private List<Method> derivedQueryMethods(Class<?> dao) {
+    List<Method> methods = new ArrayList<>();
+    for (Method method : dao.getDeclaredMethods()) {
+      if (method.getAnnotation(Query.class) == null) {
+        methods.add(method);
+      }
+    }
+    return methods;
+  }
+
+  /**
+   * The REST layer's sortable-field allowlist, read reflectively: the allowlist
+   * lives there (it is a REST contract), while the metamodel able to validate
+   * it lives here.
+   */
+  @SuppressWarnings("unchecked")
+  private Set<String> restSortableItemFields() throws ReflectiveOperationException {
+    Field field = CleanupCampaignRest.class.getDeclaredField("SORTABLE_ITEM_FIELDS");
+    field.setAccessible(true); // NOSONAR test-only read of a REST contract constant
+    return (Set<String>) field.get(null);
+  }
+
+  /**
+   * Reads a private constant of the REST layer, same rationale as above.
+   */
+  private <T> T restConstant(String name, Class<T> type) throws ReflectiveOperationException {
+    Field field = CleanupCampaignRest.class.getDeclaredField(name);
+    field.setAccessible(true); // NOSONAR test-only read of a REST contract constant
+    return type.cast(field.get(null));
+  }
+
   private List<Method> queryMethods() {
     List<Method> methods = new ArrayList<>();
     for (Class<?> dao : CLEANUP_DAOS) {
