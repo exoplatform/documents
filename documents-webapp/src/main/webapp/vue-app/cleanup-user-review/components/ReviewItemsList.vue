@@ -81,7 +81,11 @@
         {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize) }}
       </template>
       <template slot="item.state" slot-scope="{item}">
-        <v-chip small outlined>
+        <v-chip
+          :color="$cleanupUtils.itemStateColor(item.state)"
+          :outlined="!$cleanupUtils.isLoudState(item.state)"
+          :dark="$cleanupUtils.isLoudState(item.state)"
+          small>
           {{ $t(`cleanup.item.state.${item.state}`) }}
         </v-chip>
       </template>

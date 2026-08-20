@@ -60,6 +60,67 @@ export const RETRYABLE_FAILURE_REASONS = ['cleanup.keepFailed', 'cleanup.unkeepF
  * @param {Number} millis duration in milliseconds
  * @returns {Array} [{unit, value}] with unit in 'day'|'hour'|'minute'|'second'
  */
+/**
+ * State -> Vuetify colour, defined ONCE for the three tables and the campaign
+ * header that render these chips: a per-template ternary would drift the day a
+ * state is added, and the same state must not read differently depending on
+ * where it is shown.
+ *
+ * The scale carries meaning rather than decoration: what still needs a decision
+ * is amber, what refused needs attention and is red, what is settled fades to
+ * grey, and what is safe is green.
+ */
+const ITEM_STATE_COLORS = {
+  CANDIDATE: 'warning',              // slated for deletion: the rows to look at
+  EXEMPTED: 'success',               // kept by its owner
+  SPARED_BY_MODIFICATION: 'info',    // spared, but by a side effect, not a decision
+  GONE: 'grey lighten-1',            // vanished on its own, nothing was done
+  PURGED: 'grey',                    // done, unremarkable
+  SKIPPED: 'error',                  // something refused: needs attention
+};
+
+const CAMPAIGN_STATE_COLORS = {
+  DRAFT: 'grey',
+  DRY_RUN_RUNNING: 'info',           // working, and harmless
+  SIMULATED: 'indigo',               // a decision point: publish or not
+  PUBLISHED: 'warning',              // the users' clock is running
+  LOCKED: 'deep-orange',             // review closed, purge imminent
+  EXECUTING: 'error',                // deleting right now
+  COMPLETED: 'success',
+  CANCELLED: 'grey darken-1',
+};
+
+/**
+ * The two states worth shouting: a purge in flight and a refusal. They render
+ * as filled chips, everything else stays outlined so a table of thirty rows
+ * does not turn into thirty coloured blocks.
+ */
+const LOUD_STATES = ['EXECUTING', 'SKIPPED'];
+
+/**
+ * @param {String} state item state
+ * @returns {String} Vuetify colour for that state, grey when unknown
+ */
+export function itemStateColor(state) {
+  return ITEM_STATE_COLORS[state] || 'grey';
+}
+
+/**
+ * @param {String} state campaign state
+ * @returns {String} Vuetify colour for that state, grey when unknown
+ */
+export function campaignStateColor(state) {
+  return CAMPAIGN_STATE_COLORS[state] || 'grey';
+}
+
+/**
+ * @param {String} state item or campaign state
+ * @returns {Boolean} true when the chip must be filled rather than outlined
+ */
+export function isLoudState(state) {
+  return LOUD_STATES.includes(state);
+}
+
 export function durationParts(millis) {
   if (!millis || millis <= 0) {
     return [];

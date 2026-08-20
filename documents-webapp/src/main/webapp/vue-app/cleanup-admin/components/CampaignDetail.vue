@@ -20,9 +20,11 @@
     <div class="d-flex align-center flex-wrap">
       <h5 class="my-0 text-color font-weight-bold">{{ campaign.name }}</h5>
       <v-chip
+        :color="$cleanupUtils.campaignStateColor(campaign.state)"
+        :outlined="!$cleanupUtils.isLoudState(campaign.state)"
+        :dark="$cleanupUtils.isLoudState(campaign.state)"
         class="ms-3"
-        small
-        outlined>
+        small>
         {{ $t(`cleanup.campaign.state.${campaign.state}`) }}
       </v-chip>
       <v-spacer />

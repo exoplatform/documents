@@ -27,7 +27,11 @@
     sort-desc
     @click:row="$emit('open', $event)">
     <template slot="item.state" slot-scope="{item}">
-      <v-chip small outlined>
+      <v-chip
+        :color="$cleanupUtils.campaignStateColor(item.state)"
+        :outlined="!$cleanupUtils.isLoudState(item.state)"
+        :dark="$cleanupUtils.isLoudState(item.state)"
+        small>
         {{ $t(`cleanup.campaign.state.${item.state}`) }}
       </v-chip>
     </template>
