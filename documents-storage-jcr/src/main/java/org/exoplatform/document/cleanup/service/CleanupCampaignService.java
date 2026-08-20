@@ -94,6 +94,14 @@ public class CleanupCampaignService {
    */
   public static final String                      NOT_OWNER_FAILURE_CODE      = "cleanup.notOwner";
 
+  /**
+   * Maximum campaign name length, mirroring the NAME column of
+   * DOCUMENTS_CLEANUP_CAMPAIGN — {@code NVARCHAR(250) NOT NULL}. Nothing used to
+   * check it, so a longer name reached the INSERT and failed with a raw database
+   * error instead of a 400 carrying a message code the console can localize.
+   */
+  public static final int                         MAX_NAME_LENGTH             = 250;
+
   private static final Log                        LOG                         = ExoLogger.getLogger(CleanupCampaignService.class);
 
   private static final List<CleanupCampaignState> ACTIVE_STATES               = List.of(CleanupCampaignState.PUBLISHED,
@@ -254,6 +262,7 @@ public class CleanupCampaignService {
    * @param overrides partial parameter overrides, null fields defaulted
    * @return the created campaign
    * @throws IllegalArgumentException "cleanup.nameMandatory",
+   *           "cleanup.nameTooLong" (past {@link #MAX_NAME_LENGTH} characters),
    *           "cleanup.invalidPeriodMonths" (must be &gt;= 1),
    *           "cleanup.invalidMinFileSize" (must be &gt;= 0),
    *           "cleanup.invalidGraceDays" (must be &gt;= 0 — ZERO IS a valid
@@ -261,13 +270,11 @@ public class CleanupCampaignService {
    *           "cleanup.invalidMaxVersionsPerFile" (must be &gt;= 1)
    */
   public CleanupCampaign createCampaign(String name, CleanupParams overrides) {
-    if (StringUtils.isBlank(name)) {
-      throw new IllegalArgumentException("cleanup.nameMandatory");
-    }
+    String validatedName = validateName(name);
     CleanupParams params = settingService.getEffectiveParams(overrides);
     validateParams(params);
     CleanupCampaign campaign = new CleanupCampaign();
-    campaign.setName(name);
+    campaign.setName(validatedName);
     campaign.setState(CleanupCampaignState.DRAFT);
     campaign.setParams(params);
     campaign.setStartedDate(System.currentTimeMillis());
@@ -278,6 +285,33 @@ public class CleanupCampaignService {
       throw new IllegalStateException("Freshly created cleanup campaign not found", e);
     }
     return withAggregates(campaignStorage.getCampaign(campaign.getId()));
+  }
+
+  /**
+   * Renames a campaign, in ANY state — terminal ones included. The name is pure
+   * METADATA: nothing keys off it and no lifecycle transition is involved, so
+   * correcting the label of an already-completed report is a legitimate need and
+   * there is no state guard here. Names are not unique (creation doesn't check
+   * either), so no uniqueness constraint is enforced.
+   * <p>
+   * The name goes through the very SAME validation as the creation path
+   * ({@link #validateName(String)}): the two cannot diverge, and neither can let
+   * a name longer than the NAME column reach the database.
+   *
+   * @param campaignId campaign identifier
+   * @param name new campaign name, mandatory — trimmed before being persisted
+   * @return the renamed campaign, with its item aggregates
+   * @throws ObjectNotFoundException "cleanup.campaignNotFound" when the campaign
+   *           doesn't exist
+   * @throws IllegalArgumentException "cleanup.nameMandatory" when blank,
+   *           "cleanup.nameTooLong" past {@link #MAX_NAME_LENGTH} characters
+   */
+  public CleanupCampaign renameCampaign(long campaignId, String name) throws ObjectNotFoundException {
+    // Existence first, validation second: the REST contract answers 404 before
+    // 400, exactly like every sibling method here
+    CleanupCampaign campaign = getCampaign(campaignId);
+    campaign.setName(validateName(name));
+    return withAggregates(campaignStorage.saveCampaign(campaign));
   }
 
   /**
@@ -905,6 +939,29 @@ public class CleanupCampaignService {
       return "\"" + value.replace("\"", "\"\"") + "\"";
     }
     return value;
+  }
+
+  /**
+   * The ONE campaign-name validation, shared by the creation and the rename
+   * paths so they can never diverge: mandatory, and no longer than the NAME
+   * column (see {@link #MAX_NAME_LENGTH}). The trimmed name is RETURNED rather
+   * than validated in place — surrounding whitespace must not be persisted, and
+   * a name that only fits once trimmed must not be refused.
+   *
+   * @param name raw campaign name
+   * @return the trimmed name to persist
+   * @throws IllegalArgumentException "cleanup.nameMandatory" when blank,
+   *           "cleanup.nameTooLong" past {@link #MAX_NAME_LENGTH} characters
+   */
+  private String validateName(String name) {
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("cleanup.nameMandatory");
+    }
+    String trimmedName = name.trim();
+    if (trimmedName.length() > MAX_NAME_LENGTH) {
+      throw new IllegalArgumentException("cleanup.nameTooLong");
+    }
+    return trimmedName;
   }
 
   /**

@@ -49,6 +49,20 @@ export function createCampaign(campaign) {
   }).then(handleJsonResponse);
 }
 
+// PATCH on the campaign resource, not a /rename sub-resource: it updates an
+// ATTRIBUTE, it triggers no action. Answers the updated campaign, which the
+// caller applies instead of refetching.
+export function renameCampaign(campaignId, name) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({name}),
+  }).then(handleJsonResponse);
+}
+
 export function cancelCampaign(campaignId) {
   return fetch(`${BASE_URL}/campaigns/${campaignId}`, {
     method: 'DELETE',

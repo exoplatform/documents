@@ -31,6 +31,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.annotation.Secured;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -50,6 +51,7 @@ import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
+import org.exoplatform.document.cleanup.rest.model.RenameCampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -158,6 +160,40 @@ public class CleanupCampaignRest {
       return CleanupEntityBuilder.build(campaignService.getCampaign(id));
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
+  /**
+   * PATCH on the campaign resource rather than a {@code {id}/rename}
+   * sub-resource: this updates an ATTRIBUTE of the campaign, it triggers no
+   * action and no lifecycle transition — unlike the {@code publish} /
+   * {@code execute} sub-resources next to it, which do. Answers the updated
+   * campaign so the console re-renders its list and its header from the
+   * response instead of refetching.
+   */
+  @Secured("administrators")
+  @PatchMapping(path = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "PATCH", summary = "Rename a cleanup campaign", description = "Rename a cleanup campaign, in any state — the name is pure metadata, so a completed or cancelled campaign can be relabelled too")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public CampaignRestEntity renameCampaign(
+                                           @Parameter(description = "Campaign identifier", required = true)
+                                           @PathVariable("id")
+                                           long id,
+                                           @io.swagger.v3.oas.annotations.parameters.RequestBody
+                                           @RequestBody
+                                           RenameCampaignRestEntity renameEntity) {
+    try {
+      // The name is passed through verbatim: trimming and validating it is the
+      // Service's business, this layer holds none
+      return CleanupEntityBuilder.build(campaignService.renameCampaign(id, renameEntity.getName()));
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     }
   }
 

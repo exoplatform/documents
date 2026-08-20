@@ -62,6 +62,7 @@ import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
+import org.exoplatform.document.cleanup.rest.model.RenameCampaignRestEntity;
 import org.exoplatform.document.cleanup.service.CleanupCampaignService;
 import org.exoplatform.social.core.manager.IdentityManager;
 
@@ -155,6 +156,45 @@ class CleanupCampaignRestTest {
                                                      () -> campaignRest.createCampaign(new CampaignRestEntity()));
     assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
     assertEquals("cleanup.nameRequired", exception.getReason());
+  }
+
+  @Test
+  void renameCampaignDelegatesTheBodyNameAndAnswersTheUpdatedDto() throws ObjectNotFoundException {
+    RenameCampaignRestEntity body = new RenameCampaignRestEntity();
+    body.setName("  Renamed campaign  ");
+    when(campaignService.renameCampaign(eq(CAMPAIGN_ID), any())).thenReturn(campaign(CAMPAIGN_ID, "Renamed campaign"));
+
+    CampaignRestEntity renamed = campaignRest.renameCampaign(CAMPAIGN_ID, body);
+
+    // The DTO the list and the header re-render from
+    assertEquals(CAMPAIGN_ID, renamed.getId());
+    assertEquals("Renamed campaign", renamed.getName());
+    // Passed through VERBATIM: trimming (and validating) the name is the
+    // Service's business, this layer carries none — see the service test pinning
+    // the trim before persisting
+    verify(campaignService).renameCampaign(CAMPAIGN_ID, "  Renamed campaign  ");
+  }
+
+  @Test
+  void renameCampaignMapsNotFoundTo404() throws ObjectNotFoundException {
+    when(campaignService.renameCampaign(anyLong(), any())).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                     () -> campaignRest.renameCampaign(CAMPAIGN_ID,
+                                                                                       new RenameCampaignRestEntity()));
+    assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    assertEquals(NOT_FOUND_CODE, exception.getReason());
+  }
+
+  @Test
+  void renameCampaignMapsIllegalArgumentTo400WithTheMessageCode() throws ObjectNotFoundException {
+    when(campaignService.renameCampaign(anyLong(), any())).thenThrow(new IllegalArgumentException("cleanup.nameTooLong"));
+
+    ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                     () -> campaignRest.renameCampaign(CAMPAIGN_ID,
+                                                                                       new RenameCampaignRestEntity()));
+    assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    assertEquals("cleanup.nameTooLong", exception.getReason());
   }
 
   @Test

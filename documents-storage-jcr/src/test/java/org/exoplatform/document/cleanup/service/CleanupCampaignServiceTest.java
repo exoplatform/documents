@@ -337,6 +337,123 @@ class CleanupCampaignServiceTest {
     assertEquals("cleanup.nameMandatory", exception.getMessage());
   }
 
+  /**
+   * The NAME column is NVARCHAR(250): before the shared validation, a longer
+   * name reached the INSERT and failed with a raw database error. Creation and
+   * rename go through the SAME check, so neither path can regress alone.
+   */
+  @Test
+  void shouldRejectCampaignCreationWithNameLongerThanColumn() {
+    IllegalArgumentException exception =
+                                       assertThrows(IllegalArgumentException.class,
+                                                    () -> campaignService.createCampaign(tooLongName(), new CleanupParams()));
+
+    assertEquals("cleanup.nameTooLong", exception.getMessage());
+    verify(campaignStorage, never()).createCampaign(any());
+  }
+
+  @Test
+  void shouldRenameCampaignInARunningState() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    CleanupCampaign renamed = campaignService.renameCampaign(CAMPAIGN_ID, "Q4 cleanup");
+
+    assertEquals("Q4 cleanup", renamed.getName());
+    // Pure metadata: no lifecycle transition, so no state change and no
+    // stateChanged WebSocket event
+    assertEquals(CleanupCampaignState.PUBLISHED, renamed.getState());
+    verify(campaignLifecycle, never()).transition(any(), any());
+    verify(campaignLifecycle, never()).transition(any(), any(), any());
+  }
+
+  /**
+   * A rename is allowed in a TERMINAL state too: correcting the label of an
+   * already-completed report is a legitimate need, and the name keys nothing.
+   */
+  @Test
+  void shouldRenameCompletedCampaign() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    CleanupCampaign renamed = campaignService.renameCampaign(CAMPAIGN_ID, "Q3 cleanup (final)");
+
+    assertEquals("Q3 cleanup (final)", renamed.getName());
+    assertEquals(CleanupCampaignState.COMPLETED, renamed.getState());
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenRenamingUnknownCampaign() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(null);
+
+    ObjectNotFoundException exception = assertThrows(ObjectNotFoundException.class,
+                                                      () -> campaignService.renameCampaign(CAMPAIGN_ID, "Whatever"));
+
+    assertEquals("cleanup.campaignNotFound", exception.getMessage());
+    verify(campaignStorage, never()).saveCampaign(any());
+  }
+
+  @Test
+  void shouldRejectRenameWithoutName() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.renameCampaign(CAMPAIGN_ID, " "));
+
+    assertEquals("cleanup.nameMandatory", exception.getMessage());
+    verify(campaignStorage, never()).saveCampaign(any());
+  }
+
+  @Test
+  void shouldRejectRenameWithNameLongerThanColumn() {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                                      () -> campaignService.renameCampaign(CAMPAIGN_ID, tooLongName()));
+
+    assertEquals("cleanup.nameTooLong", exception.getMessage());
+    verify(campaignStorage, never()).saveCampaign(any());
+  }
+
+  /**
+   * The name is trimmed BEFORE being persisted, and the rename touches nothing
+   * else: every other field of the campaign row is carried over untouched.
+   */
+  @Test
+  void shouldTrimTheNameAndKeepEveryOtherFieldWhenRenaming() throws ObjectNotFoundException {
+    CleanupCampaign campaign = campaign(CleanupCampaignState.PUBLISHED);
+    campaign.setPublishedDate(1234L);
+    campaign.setLockDate(5678L);
+    campaign.setTotalCount(42);
+    campaign.setProcessedCount(7);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    campaignService.renameCampaign(CAMPAIGN_ID, "  Q4 cleanup  ");
+
+    ArgumentCaptor<CleanupCampaign> captor = ArgumentCaptor.forClass(CleanupCampaign.class);
+    verify(campaignStorage).saveCampaign(captor.capture());
+    CleanupCampaign saved = captor.getValue();
+    assertEquals("Q4 cleanup", saved.getName());
+    assertEquals(CAMPAIGN_ID, saved.getId());
+    assertEquals(CleanupCampaignState.PUBLISHED, saved.getState());
+    assertEquals(1234L, saved.getPublishedDate());
+    assertEquals(5678L, saved.getLockDate());
+    assertEquals(42, saved.getTotalCount());
+    assertEquals(7, saved.getProcessedCount());
+    assertNotNull(saved.getParams());
+  }
+
+  /**
+   * One character past the NAME column width — the boundary the check has to
+   * refuse, whatever the exact limit is written as.
+   */
+  private String tooLongName() {
+    return "n".repeat(CleanupCampaignService.MAX_NAME_LENGTH + 1);
+  }
+
   @Test
   void shouldKeepOwnItem() throws ObjectNotFoundException, IllegalAccessException {
     mockPublishedCampaignWithItem(CleanupItemState.CANDIDATE);

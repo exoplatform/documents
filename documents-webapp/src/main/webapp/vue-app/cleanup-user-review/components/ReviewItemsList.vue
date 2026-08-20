@@ -74,6 +74,18 @@
           {{ item.path }}
         </div>
       </template>
+      <!-- Rendered by the platform's shared <date-format>, never a locally
+           formatted string, exactly like the admin report table; a row scanned
+           before the column existed carries no date at all, hence the dash.
+           text-no-wrap so a wrapped date cannot grow the row height -->
+      <template slot="item.lastModifiedDate" slot-scope="{item}">
+        <date-format
+          v-if="item.lastModifiedDate"
+          :value="item.lastModifiedDate"
+          :format="$cleanupUtils.DATE_TIME_FORMAT"
+          class="text-no-wrap" />
+        <span v-else>-</span>
+      </template>
       <template slot="item.action" slot-scope="{item}">
         {{ $t(`cleanup.item.action.${item.action}`) }}
       </template>
@@ -187,11 +199,14 @@ export default {
     // Server-sorted columns only (SORT_FIELDS maps 'name' onto the path). The
     // planned-action and the row-actions columns stay unsortable. The size column
     // orders on 'fileSize' — the reclaimable size shown for a PURGE_VERSIONS row
-    // is the versions size, but fileSize remains the meaningful ranking here
+    // is the versions size, but fileSize remains the meaningful ranking here.
+    // 'lastModifiedDate' needs no SORT_FIELDS entry: it IS the server-side field
+    // name, and it is already in the endpoint's sortable allowlist
     headers() {
       return [
         {text: this.$t('cleanup.review.items.name'), value: 'name', align: 'left'},
         {text: this.$t('cleanup.review.items.path'), value: 'path', align: 'left'},
+        {text: this.$t('cleanup.review.items.lastModifiedDate'), value: 'lastModifiedDate', align: 'center'},
         {text: this.$t('cleanup.review.items.action'), value: 'action', align: 'center', sortable: false},
         {text: this.$t('cleanup.review.items.size'), value: 'fileSize', align: 'center'},
         {text: this.$t('cleanup.review.items.state'), value: 'state', align: 'center'},
