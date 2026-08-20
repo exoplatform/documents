@@ -228,7 +228,7 @@ class CleanupExecutionServiceTest {
                                                                                                                   CleanupAction.PURGE_VERSIONS)));
     when(cleanupJcrStorage.deleteNode(NODE_UUID_SKIPPED)).thenReturn(CleanupPurgeResult.skipped("cleanup.referentialIntegrity", "javax.jcr.ReferentialIntegrityException: referenced"));
     when(cleanupJcrStorage.deleteNode(NODE_UUID_DELETED)).thenReturn(CleanupPurgeResult.purged(100L));
-    when(cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONS, 5)).thenReturn(CleanupPurgeResult.purged(50L));
+    when(cleanupJcrStorage.purgeVersions(eq(NODE_UUID_VERSIONS), any())).thenReturn(CleanupPurgeResult.purged(50L));
 
     when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -319,7 +319,7 @@ class CleanupExecutionServiceTest {
     assertEquals(CleanupItemState.SKIPPED, unknownItem.getState());
     assertEquals("cleanup.revalidationFailed", unknownItem.getFailureReason());
     verify(cleanupJcrStorage, org.mockito.Mockito.never()).deleteNode(any());
-    verify(cleanupJcrStorage, org.mockito.Mockito.never()).purgeVersions(any(), org.mockito.ArgumentMatchers.anyInt());
+    verify(cleanupJcrStorage, org.mockito.Mockito.never()).purgeVersions(any(), any());
   }
 
   @Test
@@ -338,7 +338,7 @@ class CleanupExecutionServiceTest {
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
                                                                      .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_VERSIONS,
                                                                                                                   CleanupAction.PURGE_VERSIONS)));
-    when(cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONS, 5))
+    when(cleanupJcrStorage.purgeVersions(eq(NODE_UUID_VERSIONS), any()))
                                                                 .thenReturn(CleanupPurgeResult.skipped("cleanup.purgeVersionsError",
                                                                                                        "javax.jcr.RepositoryException: version in use",
                                                                                                        300L));
@@ -357,6 +357,32 @@ class CleanupExecutionServiceTest {
                  "The exception text belongs to the detail, never to the reason");
     assertEquals(300L, saved.getReclaimedBytes(), "The bytes reclaimed before the failure must be persisted");
     assertEquals(0L, saved.getPurgedAt(), "A partial purge is not a purge: no purge date");
+  }
+
+  @Test
+  void shouldHandTheWholeCampaignParamsSnapshotToThePurge() {
+    // The purge policy unions an AGE rule and a COUNT rule, so the period is as
+    // load-bearing as the version cap: handing the purge the cap alone would
+    // make the execution remove a DIFFERENT set from the one the revalidation
+    // just counted, right under the administrator's eyes
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getBatchSize()).thenReturn(200);
+    CleanupCampaignItem versionsItem = item(19L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                .thenReturn(List.of(versionsItem))
+                                                .thenReturn(List.of());
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
+                                                                     .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_VERSIONS,
+                                                                                                                  CleanupAction.PURGE_VERSIONS)));
+    when(cleanupJcrStorage.purgeVersions(eq(NODE_UUID_VERSIONS), any())).thenReturn(CleanupPurgeResult.purged(50L));
+    when(campaignStorage.saveItem(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    verify(cleanupJcrStorage).revalidate(NODE_UUID_VERSIONS, campaign.getParams());
+    verify(cleanupJcrStorage).purgeVersions(NODE_UUID_VERSIONS, campaign.getParams());
   }
 
   @Test

@@ -643,28 +643,124 @@ class CleanupJcrStorageTest {
     Version baseVersion = mock(Version.class);
     when(baseVersion.getName()).thenReturn("4");
     when(node.getBaseVersion()).thenReturn(baseVersion);
-    Version rootVersion = version(JCR_ROOT_VERSION, 0L);
-    Version firstVersion = version("1", 100L);
-    Version secondVersion = version("2", 200L);
-    Version thirdVersion = version("3", 300L);
-    Version fourthVersion = version("4", 400L);
-    // getAllVersions is read twice: once to count, once to walk oldest-first
-    VersionIterator countIterator = mock(VersionIterator.class);
-    when(countIterator.getSize()).thenReturn(5L); // root + 4 versions
+    // ALL RECENT, so only the count rule can bite: 3 versions past the base one,
+    // cap 1
+    Version rootVersion = version(JCR_ROOT_VERSION, 0L, monthsAgo(120));
+    Version firstVersion = version("1", 100L, monthsAgo(3));
+    Version secondVersion = version("2", 200L, monthsAgo(2));
+    Version thirdVersion = version("3", 300L, monthsAgo(1));
+    Version fourthVersion = version("4", 400L, monthsAgo(1));
+    // ONE walk: names and OWN creation dates, no frozen node. Built BEFORE the
+    // getAllVersions() stubbing: the helpers stub their own mocks, and nesting
+    // that inside an in-progress when() is unfinished stubbing
     VersionIterator walkIterator = versionIterator(rootVersion, firstVersion, secondVersion, thirdVersion, fourthVersion);
-    when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
+    when(versionHistory.getAllVersions()).thenReturn(walkIterator);
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 2);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, purgeParams(1));
 
     assertEquals(CleanupItemState.PURGED, result.getState());
     assertEquals(300L, result.getReclaimedBytes(), "Reclaimed bytes must sum the removed version sizes");
-    // 4 versions, max 2: the two OLDEST are removed, never the root version
-    // (skipped by name) nor the base (current) version
+    // 3 removable versions, cap 1: the two OLDEST are removed, never the root
+    // version (skipped by name) nor the base (current) version
     verify(versionHistory).removeVersion("1");
     verify(versionHistory).removeVersion("2");
     verify(versionHistory, never()).removeVersion(JCR_ROOT_VERSION);
     verify(versionHistory, never()).removeVersion("3");
     verify(versionHistory, never()).removeVersion("4");
+    // The frozen-node hop is charged to the REMOVED versions only: the survivor,
+    // the base and the root version are never measured
+    verify(thirdVersion, never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    verify(fourthVersion, never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    verify(rootVersion, never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+  }
+
+  @Test
+  void purgeVersionsRemovesEveryVersionOlderThanThePeriodEvenWhenTheCountIsWithinTheCap() throws RepositoryException {
+    // THE PO's ask, and the case the OLD count-only algorithm skipped ENTIRELY:
+    // 3 versions, cap 5, nothing over budget — but two of them predate the
+    // 6-month period, and those go
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_VERSIONED)).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    Version baseVersion = mock(Version.class);
+    when(baseVersion.getName()).thenReturn("3");
+    when(node.getBaseVersion()).thenReturn(baseVersion);
+    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L, monthsAgo(120)),
+                                                   version("1", 100L, monthsAgo(24)),
+                                                   version("2", 200L, monthsAgo(12)),
+                                                   version("3", 300L, monthsAgo(1)));
+    when(versionHistory.getAllVersions()).thenReturn(walkIterator);
+
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, purgeParams(5));
+
+    assertEquals(CleanupItemState.PURGED, result.getState());
+    assertEquals(300L, result.getReclaimedBytes());
+    verify(versionHistory).removeVersion("1");
+    verify(versionHistory).removeVersion("2");
+    verify(versionHistory, never()).removeVersion("3");
+    verify(versionHistory, never()).removeVersion(JCR_ROOT_VERSION);
+  }
+
+  @Test
+  void purgeVersionsKeepsTheBaseVersionEvenWhenItIsOlderThanThePeriod() throws RepositoryException {
+    // The base version is the file's CURRENT content: it survives the age rule
+    // regardless — reclaiming it would destroy the file, which is DELETE's job
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_VERSIONED)).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    Version baseVersion = mock(Version.class);
+    when(baseVersion.getName()).thenReturn("2");
+    when(node.getBaseVersion()).thenReturn(baseVersion);
+    Version agedBaseVersion = version("2", 200L, monthsAgo(36));
+    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L, monthsAgo(120)),
+                                                   version("1", 100L, monthsAgo(24)),
+                                                   agedBaseVersion);
+    when(versionHistory.getAllVersions()).thenReturn(walkIterator);
+
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, purgeParams(5));
+
+    assertEquals(CleanupItemState.PURGED, result.getState());
+    assertEquals(100L, result.getReclaimedBytes(), "Only the non-base aged version was reclaimable");
+    verify(versionHistory).removeVersion("1");
+    verify(versionHistory, never()).removeVersion("2");
+    verify(agedBaseVersion, never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+  }
+
+  @Test
+  void purgeVersionsTrimsFortyRecentVersionsDownToTheCap() throws RepositoryException {
+    // THE OnlyOffice case: not one version is past the period, so the age rule
+    // alone would leave this file alone. It is also why the scan query is not
+    // narrowed on jcr:created — see CleanupJcrStorage#buildScanQuery
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_VERSIONED)).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    Version baseVersion = mock(Version.class);
+    when(baseVersion.getName()).thenReturn("40");
+    when(node.getBaseVersion()).thenReturn(baseVersion);
+    List<Version> versions = new ArrayList<>();
+    versions.add(version(JCR_ROOT_VERSION, 0L, monthsAgo(1)));
+    for (int i = 1; i <= 40; i++) {
+      versions.add(version(String.valueOf(i), 10L, System.currentTimeMillis() - (41L - i) * 3600000L));
+    }
+    VersionIterator walkIterator = versionIterator(versions.toArray(new Version[0]));
+    when(versionHistory.getAllVersions()).thenReturn(walkIterator);
+
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, purgeParams(5));
+
+    assertEquals(CleanupItemState.PURGED, result.getState());
+    // 39 versions past the base one, cap 5: 34 go, 5 survive alongside the base
+    assertEquals(340L, result.getReclaimedBytes());
+    verify(versionHistory).removeVersion("1");
+    verify(versionHistory).removeVersion("34");
+    verify(versionHistory, never()).removeVersion("35");
+    verify(versionHistory, never()).removeVersion("40");
+    verify(versionHistory, never()).removeVersion(JCR_ROOT_VERSION);
   }
 
   @Test
@@ -677,16 +773,14 @@ class CleanupJcrStorageTest {
     Version baseVersion = mock(Version.class);
     when(baseVersion.getName()).thenReturn("3");
     when(node.getBaseVersion()).thenReturn(baseVersion);
-    VersionIterator countIterator = mock(VersionIterator.class);
-    when(countIterator.getSize()).thenReturn(4L); // root + 3 versions
-    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L),
-                                                   version("1", 100L),
-                                                   version("2", 200L),
-                                                   version("3", 300L));
-    when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
+    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L, monthsAgo(120)),
+                                                   version("1", 100L, monthsAgo(3)),
+                                                   version("2", 200L, monthsAgo(2)),
+                                                   version("3", 300L, monthsAgo(1)));
+    when(versionHistory.getAllVersions()).thenReturn(walkIterator);
     doThrow(new RepositoryException("version in use")).when(versionHistory).removeVersion("1");
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 1);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, purgeParams(1));
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertEquals("cleanup.purgeVersionsError", result.getFailureReason(), "The reason must stay a BARE message code");
@@ -709,15 +803,13 @@ class CleanupJcrStorageTest {
     Version baseVersion = mock(Version.class);
     when(baseVersion.getName()).thenReturn("5");
     when(node.getBaseVersion()).thenReturn(baseVersion);
-    VersionIterator countIterator = mock(VersionIterator.class);
-    when(countIterator.getSize()).thenReturn(6L); // root + 5 versions
-    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L),
-                                                   version("1", 100L),
-                                                   version("2", 200L),
-                                                   version("3", 300L),
-                                                   version("4", 400L),
-                                                   version("5", 500L));
-    when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
+    VersionIterator walkIterator = versionIterator(version(JCR_ROOT_VERSION, 0L, monthsAgo(120)),
+                                                   version("1", 100L, monthsAgo(5)),
+                                                   version("2", 200L, monthsAgo(4)),
+                                                   version("3", 300L, monthsAgo(3)),
+                                                   version("4", 400L, monthsAgo(2)),
+                                                   version("5", 500L, monthsAgo(1)));
+    when(versionHistory.getAllVersions()).thenReturn(walkIterator);
     // The removals BEFORE the failing one must really succeed: without this
     // catch-all the strict-stubs runner would raise a PotentialStubbingProblem on
     // removeVersion("1"), i.e. the very first removal, and the test would no
@@ -725,7 +817,7 @@ class CleanupJcrStorageTest {
     org.mockito.Mockito.lenient().doNothing().when(versionHistory).removeVersion(anyString());
     doThrow(new RepositoryException("version in use")).when(versionHistory).removeVersion("3");
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, 2);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, purgeParams(1));
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertEquals("cleanup.purgeVersionsError", result.getFailureReason(), "The reason must stay a BARE message code");
@@ -742,7 +834,7 @@ class CleanupJcrStorageTest {
     when(session.getNodeByIdentifier(NODE_UUID_PLAIN)).thenReturn(node);
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(false);
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_PLAIN, 2);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_PLAIN, params);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertEquals("cleanup.notVersionable", result.getFailureReason());
@@ -898,22 +990,25 @@ class CleanupJcrStorageTest {
    * 'system' for the version histories) and taking the JVM heap from ~5 GB to
    * ~20 GB on a single sequential dry-run. They pin WHICH JCR reads the
    * evaluation is allowed to perform, per outcome: a NON-candidate measures
-   * neither size, while an emitted candidate carries both figures — the
+   * neither size, an emitted candidate carries both figures, and the
+   * per-version frozen-node hop is charged ONLY to the versions the purge would
+   * really remove — never to a survivor, never to the base or root version. The
    * laziness buys the scan of the millions of files that qualify for nothing,
    * never a hole in a reported row.
    */
   @Test
   void nonCandidateIsDecidedWithoutReadingContentNorAnyFrozenVersion() throws RepositoryException {
-    // Recent AND within the version budget (3 <= 5): neither criterion can
-    // qualify it, so the decision must be reached on the dates and the version
-    // count alone
+    // Recent file, recent versions, and 2 of them past the base one against a
+    // cap of 5: neither purge rule bites and the file itself is not aged, so the
+    // decision must be reached on the dates and the name-and-date history walk
+    // alone
     ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 1, 4096L, 3, 1024L);
     when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
 
     CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
 
     assertFalse(revalidation.isUnknown(), "The node was readable: the outcome is definitive");
-    assertNull(revalidation.getCandidate(), "A recent file within its version budget is not a candidate");
+    assertNull(revalidation.getCandidate(), "A recent file with nothing purgeable is not a candidate");
     // NOT ONE size read: no jcr:content child materialized...
     verify(file.node(), never()).hasNode(NodeTypeConstants.JCR_CONTENT);
     verify(file.node(), never()).getNode(NodeTypeConstants.JCR_CONTENT);
@@ -922,9 +1017,10 @@ class CleanupJcrStorageTest {
     for (Version version : file.versions()) {
       verify(version, never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
     }
-    // Cost that REMAINS, pinned on purpose: PURGE_VERSIONS is age-independent,
-    // so the version HISTORY is still read for every versionable file to get
-    // its version count. Removing THAT is the age-gating question, still open
+    // Cost that REMAINS, pinned on purpose: the count rule is age-independent, so
+    // the version HISTORY is still read for every versionable file — names and
+    // OWN creation dates only. Removing THAT waits on EXO-81951, see
+    // CleanupJcrStorage#buildScanQuery
     verify(file.node()).getVersionHistory();
   }
 
@@ -940,33 +1036,96 @@ class CleanupJcrStorageTest {
     assertNotNull(revalidation.getCandidate());
     assertEquals(CleanupAction.DELETE, revalidation.getCandidate().getAction());
     assertEquals(4096L, revalidation.getCandidate().getFileSize(), "The content size the DELETE reclaims");
-    assertEquals(3072L,
+    assertEquals(2048L,
                  revalidation.getCandidate().getVersionsSize(),
                  "The versions size the DECISION didn't need is still measured for the emitted row: the admin table renders"
-                     + " and sorts it, and reporting 0 B there is the very defect the lazy ordering exists to avoid");
+                     + " and sorts it, and reporting 0 B there is the very defect the lazy ordering exists to avoid. TWO"
+                     + " versions of 1024 B, not three: the base version is not reclaimable");
     verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
     verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    verify(file.versions().get(2)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    // The frozen-node hop is charged to the REMOVAL SET alone
+    verify(file.versions().get(0), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    verify(file.versions().get(3), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
   }
 
   @Test
   void recentButOverVersionedFileIsAPurgeVersionsCandidateCarryingBothFigures() throws RepositoryException {
-    // RECENT (one month) but over-versioned (6 > 5). This row is THE reason the
-    // scan query must not be narrowed with a jcr:created predicate and the
-    // criterion must not be age-gated: either would silently drop it
-    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 1, 4096L, 6, 1024L);
+    // RECENT file, RECENT versions, and 7 of them past the base one against a
+    // cap of 5. This row is THE reason the scan query must not be narrowed with a
+    // jcr:created predicate: it would silently drop it
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 1, 4096L, 8, 1024L);
     when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
 
     CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
 
     assertNotNull(revalidation.getCandidate(), "A recent but heavily-versioned file IS a candidate");
     assertEquals(CleanupAction.PURGE_VERSIONS, revalidation.getCandidate().getAction());
-    assertEquals(6144L, revalidation.getCandidate().getVersionsSize(), "The versions size the purge reclaims");
+    assertEquals(2048L,
+                 revalidation.getCandidate().getVersionsSize(),
+                 "The bytes the purge really reclaims: the 2 oldest of the 7 removable versions, the 5 newest staying"
+                     + " under the cap");
     assertEquals(4096L,
                  revalidation.getCandidate().getFileSize(),
                  "The content size the DECISION didn't need is still measured for the emitted row: the min-size item filter"
                      + " of CleanupCampaignItemDAO reads it, and a 0 would drop this row out of a filtered listing");
     verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
     verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    verify(file.versions().get(2)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    // NOT the 5 survivors, NOT the base version, NOT the root version: the
+    // frozen-node hop is ~3 nodes per version and only the removal set pays it
+    for (int index : new int[] { 0, 3, 4, 5, 6, 7, 8 }) {
+      verify(file.versions().get(index), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    }
+  }
+
+  @Test
+  void agedVersionsOfARecentFileAreAPurgeVersionsCandidateWithinTheCap() throws RepositoryException {
+    // A file touched recently — so NOT a DELETE candidate — whose history dates
+    // back three years, and only 3 versions in it: the OLD count-only rule saw
+    // nothing here. THE PO's actual ask
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 1, 4096L, 3, 1024L, 36);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+
+    CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
+
+    assertNotNull(revalidation.getCandidate(), "Aged versions make a candidate of a file the cap would never flag");
+    assertEquals(CleanupAction.PURGE_VERSIONS, revalidation.getCandidate().getAction());
+    assertEquals(2048L, revalidation.getCandidate().getVersionsSize(), "The 2 aged non-base versions");
+    verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    verify(file.versions().get(2)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    // The base version is aged too — it is 36 months old — and it is STILL not
+    // measured, because it is never removable
+    verify(file.versions().get(3), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+  }
+
+  @Test
+  void scanAndRevalidationAgreeOnTheSameFile() throws RepositoryException {
+    // The purge policy is applied at scan time AND at revalidation time, through
+    // the SAME evaluation on purpose: an administrator must never be shown a
+    // purgeable set the execution then disagrees with
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 1, 4096L, 8, 1024L);
+    when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
+    NodeIterator nodes = nodeIterator(file.node());
+    when(queryResult.getNodes()).thenReturn(nodes);
+    List<CleanupCandidate> emitted = new ArrayList<>();
+
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
+      emitted.addAll(candidates);
+      return true;
+    });
+    CleanupCandidate revalidated = cleanupJcrStorage.revalidate(NODE_UUID_A, params).getCandidate();
+
+    assertEquals(1, emitted.size());
+    CleanupCandidate scanned = emitted.get(0);
+    assertNotNull(revalidated);
+    assertEquals(CleanupAction.PURGE_VERSIONS, scanned.getAction());
+    assertEquals(scanned.getAction(), revalidated.getAction(), "Scan and revalidation must agree on the ACTION");
+    assertEquals(2048L, scanned.getVersionsSize());
+    assertEquals(scanned.getVersionsSize(),
+                 revalidated.getVersionsSize(),
+                 "... and on the purgeable versions size, which is what the purge will really reclaim");
+    assertEquals(scanned.getFileSize(), revalidated.getFileSize());
   }
 
   @Test
@@ -990,8 +1149,9 @@ class CleanupJcrStorageTest {
   @Test
   void sizeFloorStillRejectsTheCandidateAfterTheMeasurement() throws RepositoryException {
     // Aged, so the cheap gate lets it through and the content IS measured — and
-    // then rejected, one byte under the 1024-byte floor
-    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 1023L, 3, 1024L);
+    // then rejected, one byte under the 1024-byte floor. Its versions are RECENT
+    // and within the cap, so the fall-through has nothing to fall through TO
+    ScannedFile file = scannedFile(PATH_A, NODE_UUID_A, 12, 1023L, 3, 1024L, 1);
     when(session.getNodeByIdentifier(NODE_UUID_A)).thenReturn(file.node());
 
     CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(NODE_UUID_A, params);
@@ -1017,9 +1177,12 @@ class CleanupJcrStorageTest {
     assertNotNull(revalidation.getCandidate());
     assertEquals(CleanupAction.PURGE_VERSIONS, revalidation.getCandidate().getAction());
     assertEquals(512L, revalidation.getCandidate().getFileSize(), "Measured while testing the DELETE branch");
-    assertEquals(6144L, revalidation.getCandidate().getVersionsSize(), "Measured while testing the PURGE_VERSIONS branch");
+    assertEquals(5120L,
+                 revalidation.getCandidate().getVersionsSize(),
+                 "Measured while testing the PURGE_VERSIONS branch: the 5 aged non-base versions");
     verify(file.node()).getNode(NodeTypeConstants.JCR_CONTENT);
     verify(file.versions().get(1)).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+    verify(file.versions().get(6), never()).getNode(NodeTypeConstants.JCR_FROZEN_NODE);
   }
 
   @Test
@@ -1041,7 +1204,7 @@ class CleanupJcrStorageTest {
   void purgeVersionsReportsFailedReadAsSkippedNeverAsGone() throws RepositoryException {
     when(session.getNodeByIdentifier(NODE_UUID_FLAKY)).thenThrow(new RepositoryException(JCR_DOWN_ERROR_MSG));
 
-    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_FLAKY, 2);
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_FLAKY, params);
 
     assertEquals(CleanupItemState.SKIPPED, result.getState());
     assertEquals("cleanup.purgeVersionsError", result.getFailureReason(), "The reason must stay a BARE message code");
@@ -1053,7 +1216,7 @@ class CleanupJcrStorageTest {
   void purgeVersionsReturnsGoneOnlyWhenNodeReallyMissing() throws RepositoryException {
     when(session.getNodeByIdentifier(NODE_UUID_GONE)).thenThrow(new PathNotFoundException("gone"));
 
-    assertEquals(CleanupItemState.GONE, cleanupJcrStorage.purgeVersions(NODE_UUID_GONE, 2).getState());
+    assertEquals(CleanupItemState.GONE, cleanupJcrStorage.purgeVersions(NODE_UUID_GONE, params).getState());
   }
 
   @Test
@@ -1158,7 +1321,7 @@ class CleanupJcrStorageTest {
                                                                                          .getState(),
                                   CleanupItemState.PURGED),
                      Arguments.of("purgeVersions",
-                                  (Function<CleanupJcrStorage, Object>) storage -> storage.purgeVersions(NODE_UUID_DOOMED, 2)
+                                  (Function<CleanupJcrStorage, Object>) storage -> storage.purgeVersions(NODE_UUID_DOOMED, purgeParams(1))
                                                                                           .getState(),
                                   CleanupItemState.PURGED),
                      Arguments.of("revalidate",
@@ -1189,16 +1352,14 @@ class CleanupJcrStorageTest {
     Version baseVersion = mock(Version.class);
     org.mockito.Mockito.lenient().when(baseVersion.getName()).thenReturn("4");
     org.mockito.Mockito.lenient().when(node.getBaseVersion()).thenReturn(baseVersion);
-    VersionIterator countIterator = mock(VersionIterator.class);
-    org.mockito.Mockito.lenient().when(countIterator.getSize()).thenReturn(5L); // root + 4 versions
     // Built BEFORE the getAllVersions() stubbing: the helpers stub their own
     // mocks, and nesting that inside an in-progress when() is unfinished stubbing
-    VersionIterator walkIterator = lenientVersionIterator(version(JCR_ROOT_VERSION, 0L),
-                                                         version("1", 100L),
-                                                         version("2", 200L),
-                                                         version("3", 300L),
-                                                         version("4", 400L));
-    org.mockito.Mockito.lenient().when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
+    VersionIterator walkIterator = lenientVersionIterator(version(JCR_ROOT_VERSION, 0L, monthsAgo(120)),
+                                                          version("1", 100L, monthsAgo(3)),
+                                                          version("2", 200L, monthsAgo(2)),
+                                                          version("3", 300L, monthsAgo(2)),
+                                                          version("4", 400L, monthsAgo(1)));
+    org.mockito.Mockito.lenient().when(versionHistory.getAllVersions()).thenReturn(walkIterator);
     Node parentFolder = mock(Node.class);
     org.mockito.Mockito.lenient().when(node.getParent()).thenReturn(parentFolder);
     org.mockito.Mockito.lenient().when(parentFolder.getDepth()).thenReturn(5);
@@ -1206,8 +1367,9 @@ class CleanupJcrStorageTest {
 
     Object outcome = primitive.apply(cleanupJcrStorage);
 
-    // The primitive really went through its working branch — 4 versions down to
-    // 2, a mixin removed, a node deleted — not through an early return
+    // The primitive really went through its working branch — 3 removable versions
+    // trimmed to the cap of 1, a mixin removed, a node deleted — not through an
+    // early return
     assertEquals(expectedOutcome, outcome, name + " must report its happy-path outcome");
     // getSystemSession opens a BRAND-NEW session per call and these primitives
     // run once per campaign item: dropping the finally would leak tens of
@@ -1250,7 +1412,7 @@ class CleanupJcrStorageTest {
     assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.addExemptionMixin(NODE_UUID_GONE, "john"));
     assertEquals(CleanupExemptionResult.NOT_FOUND, cleanupJcrStorage.removeExemptionMixin(NODE_UUID_GONE));
     assertEquals(CleanupItemState.GONE, cleanupJcrStorage.deleteNode(NODE_UUID_GONE).getState());
-    assertEquals(CleanupItemState.GONE, cleanupJcrStorage.purgeVersions(NODE_UUID_GONE, 2).getState());
+    assertEquals(CleanupItemState.GONE, cleanupJcrStorage.purgeVersions(NODE_UUID_GONE, params).getState());
     verify(session, never()).save();
   }
 
@@ -1326,7 +1488,9 @@ class CleanupJcrStorageTest {
    *          never modified since its upload)
    * @param contentSize jcr:content/jcr:data length
    * @param versionCount number of versions past jcr:rootVersion; 0 leaves the
-   *          node NON-versionable, with no version history at all
+   *          node NON-versionable, with no version history at all. The LAST of
+   *          them is the base (current) version, as it is on a file nobody
+   *          restored
    * @param versionSize frozen content length of each of those versions
    */
   private ScannedFile scannedFile(String path, // NOSONAR
@@ -1335,6 +1499,27 @@ class CleanupJcrStorageTest {
                                   long contentSize,
                                   int versionCount,
                                   long versionSize) throws RepositoryException {
+    // Versions as old as the file: the realistic default, an old file's history
+    // being old too. A test needing an aged file carrying RECENT versions (or
+    // the reverse) states the two ages apart through the overload below
+    return scannedFile(path, uuid, createdMonthsAgo, contentSize, versionCount, versionSize, createdMonthsAgo);
+  }
+
+  /**
+   * Same as above with the age of the VERSIONS stated apart from the age of the
+   * file: the purge policy reads each version's OWN creation date, so the two
+   * are independent and the tests that matter are precisely the ones where they
+   * disagree.
+   *
+   * @param versionsCreatedMonthsAgo age of every version's jcr:created
+   */
+  private ScannedFile scannedFile(String path, // NOSONAR
+                                  String uuid,
+                                  int createdMonthsAgo,
+                                  long contentSize,
+                                  int versionCount,
+                                  long versionSize,
+                                  int versionsCreatedMonthsAgo) throws RepositoryException {
     ExtendedNode node = mock(ExtendedNode.class);
     org.mockito.Mockito.lenient().when(node.getPath()).thenReturn(path);
     org.mockito.Mockito.lenient().when(node.getIdentifier()).thenReturn(uuid);
@@ -1354,25 +1539,46 @@ class CleanupJcrStorageTest {
     List<Version> versions = new ArrayList<>();
     if (versionCount > 0) {
       org.mockito.Mockito.lenient().when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
-      versions.add(version(JCR_ROOT_VERSION, 0L));
+      versions.add(version(JCR_ROOT_VERSION, 0L, monthsAgo(120)));
       for (int i = 1; i <= versionCount; i++) {
-        versions.add(version(String.valueOf(i), versionSize));
+        versions.add(version(String.valueOf(i), versionSize, monthsAgo(versionsCreatedMonthsAgo)));
       }
       // Built BEFORE the getAllVersions() stubbing: the helpers stub their own
       // mocks, and nesting that inside an in-progress when() is unfinished
-      // stubbing. First iterator = the version COUNT (getSize), second = the
-      // versions-size WALK, which only a purge-reclaiming outcome ever asks for
-      VersionIterator countIterator = mock(VersionIterator.class);
-      org.mockito.Mockito.lenient().when(countIterator.getSize()).thenReturn((long) versions.size());
-      VersionIterator walkIterator = lenientVersionIterator(versions.toArray(new Version[0]));
+      // stubbing. ONE iterator is enough now: the history is walked exactly
+      // once, for the names and OWN creation dates the purge policy reads
+      Version[] allVersions = versions.toArray(new Version[0]);
       VersionHistory versionHistory = mock(VersionHistory.class);
-      org.mockito.Mockito.lenient().when(versionHistory.getAllVersions()).thenReturn(countIterator, walkIterator);
+      // A FRESH iterator per call: a JCR VersionIterator is single-pass, and a
+      // test comparing the scan verdict with the revalidation one walks the
+      // history twice
+      org.mockito.Mockito.lenient()
+                         .when(versionHistory.getAllVersions())
+                         .thenAnswer(invocation -> lenientVersionIterator(allVersions));
       org.mockito.Mockito.lenient().when(node.getVersionHistory()).thenReturn(versionHistory);
+      // The LAST version is the base (current) one: never removed, never
+      // measured
+      org.mockito.Mockito.lenient().when(node.getBaseVersion()).thenReturn(versions.get(versions.size() - 1));
     }
     Identity ownerIdentity = new Identity("organization", "john");
     ownerIdentity.setId("7");
     org.mockito.Mockito.lenient().when(identityManager.getOrCreateUserIdentity("john")).thenReturn(ownerIdentity);
     return new ScannedFile(node, content, versions);
+  }
+
+  /**
+   * A params snapshot for the purge tests: the 6-month period every {@code
+   * monthsAgo} above is stated against, and the per-file version cap the test
+   * is about.
+   */
+  private static CleanupParams purgeParams(int maxVersionsPerFile) {
+    return new CleanupParams(6, 1024L, 7, maxVersionsPerFile, List.of(), 100);
+  }
+
+  private long monthsAgo(int months) {
+    Calendar calendar = Calendar.getInstance();
+    calendar.add(Calendar.MONTH, -months);
+    return calendar.getTimeInMillis();
   }
 
   private void setField(String name, Object value) throws ReflectiveOperationException {
@@ -1382,12 +1588,27 @@ class CleanupJcrStorageTest {
   }
 
   /**
-   * A version mock carrying a frozen content of the given size. Lenient
-   * stubbing: versions past the removal budget are never visited.
+   * A version mock carrying a frozen content of the given size and a RECENT
+   * creation date (inside any campaign period), i.e. one the age rule of the
+   * purge policy leaves alone.
    */
   private Version version(String name, long size) throws RepositoryException {
+    return version(name, size, monthsAgo(1));
+  }
+
+  /**
+   * A version mock carrying a frozen content of the given size and its OWN
+   * creation date — the date the purge policy reads, never the file's. Lenient
+   * stubbing: versions outside the removal set are never measured, and the
+   * frozen-node chain of the ones that are is exactly what the laziness tests
+   * verify.
+   */
+  private Version version(String name, long size, long createdMillis) throws RepositoryException {
     Version version = mock(Version.class);
     org.mockito.Mockito.lenient().when(version.getName()).thenReturn(name);
+    Calendar created = Calendar.getInstance();
+    created.setTimeInMillis(createdMillis);
+    org.mockito.Mockito.lenient().when(version.getCreated()).thenReturn(created);
     Node frozen = mock(Node.class);
     Node frozenContent = mock(Node.class);
     Property frozenData = mock(Property.class);

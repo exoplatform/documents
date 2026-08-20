@@ -18,7 +18,9 @@ package org.exoplatform.document.cleanup.storage;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.LongSupplier;
 
@@ -547,11 +549,20 @@ public class CleanupJcrStorage {
   }
 
   /**
-   * Purges oldest versions of a file down to the given maximum, always keeping
-   * the current (base) version.
+   * Purges the versions of a file selected by
+   * {@link CleanupCriterionEvaluator#selectVersionsToRemove}: those older than
+   * the campaign period by their OWN creation date, plus — of the versions
+   * remaining inside the period — the oldest ones still exceeding
+   * {@code maxVersionsPerFile}. The root and base (current) versions are never
+   * touched, so the file itself always keeps its content.
+   * <p>
+   * The removal set is computed by the SAME pure policy the scan and the
+   * revalidation apply, so what an administrator was shown as purgeable is
+   * exactly what is removed here.
    *
    * @param nodeUuid JCR node identifier
-   * @param maxVersionsPerFile number of versions to keep
+   * @param params campaign parameters snapshot, carrying the period and the
+   *          per-file version cap the policy unions
    * @return purge outcome with reclaimed bytes, GONE only when the node really
    *         disappeared, or SKIPPED with a reason (a JCR read failure is
    *         SKIPPED, never GONE). A version removal failing PARTWAY leaves the
@@ -561,7 +572,7 @@ public class CleanupJcrStorage {
    *         immediate, so those bytes are really gone and dropping them would
    *         under-report the campaign's reclaimed total.
    */
-  public CleanupPurgeResult purgeVersions(String nodeUuid, int maxVersionsPerFile) {
+  public CleanupPurgeResult purgeVersions(String nodeUuid, CleanupParams params) {
     Session session = null;
     long reclaimedBytes = 0;
     try {
@@ -573,23 +584,16 @@ public class CleanupJcrStorage {
         return CleanupPurgeResult.skipped("cleanup.notVersionable");
       }
       VersionHistory versionHistory = node.getVersionHistory();
-      String baseVersionName = node.getBaseVersion().getName();
-      int versionCount = countVersions(versionHistory);
-      int toRemove = versionCount - maxVersionsPerFile;
-      if (toRemove > 0) {
-        // VersionIterator is ordered by creation date: oldest versions first
-        VersionIterator versions = versionHistory.getAllVersions();
-        while (versions.hasNext() && toRemove > 0) {
-          Version version = versions.nextVersion();
-          String versionName = version.getName();
-          if (JCR_ROOT_VERSION.equals(versionName) || baseVersionName.equals(versionName)) {
-            continue;
-          }
-          long versionSize = getVersionSize(version);
-          versionHistory.removeVersion(versionName);
-          reclaimedBytes += versionSize;
-          toRemove--;
-        }
+      // ONE walk of the history reading names and OWN creation dates only — no
+      // frozen node — then the frozen-node hop for the removal set alone, each
+      // version measured immediately before its own removal
+      for (Version version : selectVersionsToRemove(versionHistory,
+                                                    node.getBaseVersion().getName(),
+                                                    params,
+                                                    System.currentTimeMillis())) {
+        long versionSize = getVersionSize(version);
+        versionHistory.removeVersion(version.getName());
+        reclaimedBytes += versionSize;
       }
       return CleanupPurgeResult.purged(reclaimedBytes);
     } catch (Exception e) {
@@ -679,15 +683,19 @@ public class CleanupJcrStorage {
    * 'system' (the version histories) — with the JVM heap climbing from ~5 GB to
    * ~20 GB on a single sequential dry-run. So:
    * <ol>
-   * <li>the CHEAP reads first: path, the two dates, and the version count (for
-   * a mix:versionable node only, as the version count of a non-versionable node
-   * is 0 by definition)</li>
+   * <li>the CHEAP reads first: path, the two dates, and — for a mix:versionable
+   * node only — ONE walk of the version history reading each version's NAME and
+   * OWN creation date, which is what the purge policy of
+   * {@link CleanupCriterionEvaluator#selectVersionsToRemove} needs and all it
+   * needs. That walk touches NO frozen node. A non-versionable node has nothing
+   * purgeable by definition, and is never even asked for a history</li>
    * <li>the criterion decides on those alone and a non-candidate returns here,
    * having touched neither jcr:content nor a single frozen node</li>
    * <li>a size is measured only when the DECISION turns on it: the content size
-   * for the DELETE test, the versions size for the PURGE_VERSIONS one — the
-   * latter being the expensive one, about three nodes per version
-   * (jcr:frozenNode -> jcr:content -> jcr:data)</li>
+   * for the DELETE test, the purgeable-versions size for the PURGE_VERSIONS one
+   * — the latter being the expensive one, about three nodes per version
+   * (jcr:frozenNode -> jcr:content -> jcr:data), and now charged ONLY to the
+   * versions the purge would actually remove, never to the survivors</li>
    * <li>and once an action IS chosen, BOTH figures are measured for the emitted
    * candidate, whichever one the decision happened to need</li>
    * </ol>
@@ -701,39 +709,46 @@ public class CleanupJcrStorage {
    * the NON-candidates, which step 2 already excludes, and candidates are a
    * minority of a scan.
    * <p>
-   * Cost that REMAINS: PURGE_VERSIONS is age-independent, so the version
-   * HISTORY is still read for every versionable file to get its version count —
-   * that is what keeps pressuring the 'system' workspace cache, and this method
-   * does not remove it. Age-gating PURGE_VERSIONS (or narrowing the scan query
-   * on jcr:created) is what would; both would silently drop the
-   * recent-but-heavily-versioned candidates and are an OPEN policy question,
-   * deliberately not pre-empted here.
+   * NOTE on what {@code versionsSize} now reports: the size of the REMOVAL SET,
+   * i.e. the bytes the purge would really reclaim — not the whole history's
+   * weight. That is both the figure {@code CleanupCampaignItemDAO}'s reclaimable
+   * expression wants for a PURGE_VERSIONS row and the only one compatible with
+   * never measuring a surviving version.
+   * <p>
+   * Cost that REMAINS: the version HISTORY is still read for every versionable
+   * file, because the count rule of the purge policy is age-independent — see
+   * {@link #buildScanQuery} on why the scan query cannot be narrowed on
+   * jcr:created while that is true. What that walk no longer does is the
+   * per-version frozen-node hop.
    */
   private CleanupCandidate toCandidate(Node node, CleanupParams params) throws RepositoryException {
+    long nowMillis = System.currentTimeMillis();
     String path = node.getPath();
     long createdTime = node.hasProperty(NodeTypeConstants.JCR_CREATED_DATE) ? node.getProperty(NodeTypeConstants.JCR_CREATED_DATE)
                                                                                   .getDate()
                                                                                   .getTimeInMillis() :
                                                                             0;
     long lastModifiedTime = JCRDocumentsUtil.getLastModifiedDate(node);
-    boolean versionable = node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE);
-    int versionCount = versionable ? countVersions(node.getVersionHistory()) : 0;
-    // Guarded on mix:versionable: computeVersionsSize walks a version history a
+    // Guarded on mix:versionable: the selection walks a version history a
     // non-versionable node simply doesn't have
+    List<Version> versionsToRemove = node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) ? selectVersionsToRemove(node,
+                                                                                                                params,
+                                                                                                                nowMillis) :
+                                                                                        List.of();
     LazySize fileSize = new LazySize(() -> getContentSize(node));
-    LazySize versionsSize = new LazySize(() -> versionable ? JCRDocumentsUtil.computeVersionsSize(node) : 0);
+    LazySize purgeableVersionsSize = new LazySize(() -> sumVersionSizes(versionsToRemove));
     // Candidacy policy defined in the api module, applied here at scan time to
     // avoid shipping every node upward. The exemption mixin doesn't disqualify
     // a node anymore: a still-qualifying exempted file is emitted flagged
     // exempted, so it stays visible as 'Kept' in every campaign
     var action = CleanupCriterionEvaluator.evaluateLazily(createdTime,
                                                           lastModifiedTime,
-                                                          versionCount,
+                                                          versionsToRemove.size(),
                                                           path,
                                                           params,
-                                                          System.currentTimeMillis(),
+                                                          nowMillis,
                                                           fileSize,
-                                                          versionsSize);
+                                                          purgeableVersionsSize);
     if (action == null) {
       // Before ANY size read: this early return is the whole point of the
       // ordering above
@@ -741,15 +756,15 @@ public class CleanupJcrStorage {
     }
     Identity ownerIdentity = JCRDocumentsUtil.getOwnerIdentityFromNodePath(path, identityManager, spaceService);
     long ownerIdentityId = ownerIdentity == null ? 0 : Long.parseLong(ownerIdentity.getId());
-    // A candidate carries BOTH figures, so the reported sizes stay exactly what
-    // they were before this ordering existed: the one the decision already
-    // measured comes back from the LazySize without a second JCR read, the
-    // other is measured here
+    // A candidate carries BOTH figures, so no reported size is ever left at 0
+    // for want of a measurement: the one the decision already measured comes
+    // back from the LazySize without a second JCR read, the other is measured
+    // here
     CleanupCandidate candidate = new CleanupCandidate(((ExtendedNode) node).getIdentifier(),
                                                       path,
                                                       ownerIdentityId,
                                                       fileSize.getAsLong(),
-                                                      versionsSize.getAsLong(),
+                                                      purgeableVersionsSize.getAsLong(),
                                                       action,
                                                       createdTime,
                                                       lastModifiedTime);
@@ -859,9 +874,58 @@ public class CleanupJcrStorage {
     return 0;
   }
 
-  private int countVersions(VersionHistory versionHistory) throws RepositoryException {
-    // getAllVersions includes the root version, excluded from the count
-    return (int) versionHistory.getAllVersions().getSize() - 1;
+  /**
+   * Convenience overload reading the base version name off the node itself.
+   */
+  private List<Version> selectVersionsToRemove(Node node, CleanupParams params, long nowMillis) throws RepositoryException {
+    return selectVersionsToRemove(node.getVersionHistory(), node.getBaseVersion().getName(), params, nowMillis);
+  }
+
+  /**
+   * Resolves the purge policy of
+   * {@link CleanupCriterionEvaluator#selectVersionsToRemove} against a real
+   * version history, in ONE walk that reads each version's NAME and OWN
+   * creation date and NOTHING else — no jcr:frozenNode, hence none of the ~3
+   * nodes per version the size measurement costs. Those are paid later, by
+   * {@link #sumVersionSizes} / {@link #getVersionSize(Version)}, and only for
+   * the versions this returns.
+   * <p>
+   * The root and base versions are walked too and handed to the policy, which
+   * skips them BY NAME: that exclusion stays defined in one place, next to the
+   * rules it protects.
+   *
+   * @return the versions to remove, OLDEST FIRST
+   */
+  private List<Version> selectVersionsToRemove(VersionHistory versionHistory,
+                                               String baseVersionName,
+                                               CleanupParams params,
+                                               long nowMillis) throws RepositoryException {
+    Map<String, Version> versionsByName = new LinkedHashMap<>();
+    Map<String, Long> versionCreationDates = new LinkedHashMap<>();
+    VersionIterator versions = versionHistory.getAllVersions();
+    while (versions.hasNext()) {
+      Version version = versions.nextVersion();
+      String versionName = version.getName();
+      versionsByName.put(versionName, version);
+      Calendar created = version.getCreated();
+      versionCreationDates.put(versionName, created == null ? 0 : created.getTimeInMillis());
+    }
+    return CleanupCriterionEvaluator.selectVersionsToRemove(versionCreationDates,
+                                                            JCR_ROOT_VERSION,
+                                                            baseVersionName,
+                                                            params,
+                                                            nowMillis)
+                                    .stream()
+                                    .map(versionsByName::get)
+                                    .toList();
+  }
+
+  private long sumVersionSizes(List<Version> versions) {
+    long size = 0;
+    for (Version version : versions) {
+      size += getVersionSize(version);
+    }
+    return size;
   }
 
   private long getVersionSize(Version version) {
@@ -879,6 +943,23 @@ public class CleanupJcrStorage {
     return 0;
   }
 
+  /**
+   * DEFERRED OPTIMISATION, and its precondition — do NOT narrow this query with
+   * a {@code jcr:created < threshold} predicate today. It would be UNSOUND while
+   * the count rule of {@link CleanupCriterionEvaluator#selectVersionsToRemove}
+   * exists: a file created LAST WEEK can already exceed
+   * {@code maxVersionsPerFile} through OnlyOffice, which the product's own
+   * creation-time cap ({@code jcr.documents.versions.max}, task EXO-81797) does
+   * not cover. Narrowing on the file's creation date would silently drop exactly
+   * those recent-but-heavily-versioned files, which are the ones the count rule
+   * is FOR.
+   * <p>
+   * The precondition is task EXO-81951: once OnlyOffice versions are capped at
+   * creation too, a file newer than the period can no longer exceed the cap, so
+   * {@code jcr:created < threshold} becomes a sound predicate for BOTH actions —
+   * and then this query should be narrowed, which is what finally takes the
+   * version-history read off the overwhelming majority of scanned files.
+   */
   private String buildScanQuery(String rootPath) {
     return "SELECT * FROM " + NodeTypeConstants.NT_FILE + " WHERE jcr:path LIKE '" + rootPath + "/%' ORDER BY jcr:path";
   }

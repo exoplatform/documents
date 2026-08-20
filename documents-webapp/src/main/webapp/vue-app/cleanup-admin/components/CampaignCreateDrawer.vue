@@ -55,9 +55,17 @@
           :aria-label="$t('cleanup.admin.createDrawer.periodMonths')"
           type="number"
           min="1"
-          class="pt-2 pb-4"
+          class="pt-2"
           outlined
           dense />
+        <!-- This field governs TWO destructive rules, not one: which files become
+             candidates, and which versions get deleted. Lowering it to catch more
+             stale files also deletes more version history, which no label on a
+             number input conveys — so it is spelled out here, before Launch -->
+        <div class="d-flex align-start text-light-color caption pb-4">
+          <v-icon size="14" class="me-2 mt-1">fas fa-info-circle</v-icon>
+          <span>{{ $t('cleanup.admin.createDrawer.periodMonthsHint') }}</span>
+        </div>
         <v-label for="cleanupMinFileSize" class="mt-2">{{ $t('cleanup.admin.createDrawer.minFileSizeMb') }}</v-label>
         <v-text-field
           id="cleanupMinFileSize"

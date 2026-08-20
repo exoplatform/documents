@@ -220,8 +220,7 @@ public class CleanupExecutionService {
         CleanupAction action = item.getAction();
         CleanupPurgeResult result = action == CleanupAction.DELETE ?
                                                                    cleanupJcrStorage.deleteNode(item.getNodeUuid()) :
-                                                                   cleanupJcrStorage.purgeVersions(item.getNodeUuid(),
-                                                                                                   params.getMaxVersionsPerFile());
+                                                                   cleanupJcrStorage.purgeVersions(item.getNodeUuid(), params);
         item.setState(result.getState());
         item.setReclaimedBytes(result.getReclaimedBytes());
         item.setFailureReason(result.getFailureReason());
