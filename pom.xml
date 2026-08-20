@@ -28,10 +28,10 @@
   </scm>
   <properties>
     <!-- 3rd party libraries versions -->
-    <addon.exo.jcr.version>7.3.x-SNAPSHOT</addon.exo.jcr.version>
-    <addon.meeds.mcp-server.version>7.3.x-SNAPSHOT</addon.meeds.mcp-server.version>
+    <addon.exo.jcr.version>7.3.0-20260820</addon.exo.jcr.version>
+    <addon.meeds.mcp-server.version>7.3.0-20260820</addon.meeds.mcp-server.version>
     <!-- ecms provides AttachmentService/DocumentService used by the document MCP tools -->
-    <addon.exo.ecms.version>7.3.x-SNAPSHOT</addon.exo.ecms.version>
+    <addon.exo.ecms.version>7.3.0-20260820</addon.exo.ecms.version>
     <net.lingala.zip4j.version>2.11.5</net.lingala.zip4j.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
