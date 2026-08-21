@@ -290,13 +290,31 @@
          square of the item count. That is the very shape keyset paging replaced
          offset paging to avoid, reintroduced through the ORDER BY.
 
-         Three steps, in this order and all reversible: add the column with a 0
-         default, BACKFILL it from the columns it derives from (without which every
-         pre-existing campaign would sort and sum as zero), then swap the
-         (CAMPAIGN_ID, STATE) index for one that also carries the figure and the id.
-         The new index is a strict superset by leftmost prefix, so every query the
-         dropped one served is still served — one wider index instead of two, which
-         keeps the candidate-insert cost of a scan where it was.
+         Three steps: add the column with a 0 default, BACKFILL it from the columns it
+         derives from (without which every pre-existing campaign would sort and sum as
+         zero), then swap the (CAMPAIGN_ID, STATE) index for one that also carries the
+         figure and the id. The new index is a strict superset by leftmost prefix, so
+         every query the dropped one served is still served — one wider index instead
+         of two, which keeps the candidate-insert cost of a scan where it was.
+
+         THE INDEX DECLARES ITS DIRECTIONS, and that is not cosmetic: the walk reads
+         RECLAIMABLE_BYTES DESC with ID ASC, and an all-ascending composite index
+         serves ASC,ASC (forward scan) or DESC,DESC (backward scan) — never a MIXED
+         direction. Declared ascending, MySQL 8 read the index and STILL sorted, so
+         the column bought nothing: measured on mysql:8 with 256k CANDIDATE rows in
+         one campaign, 20 batches of the worker's own query took 11.1 s all-ascending
+         (~555 ms per batch, 'Using filesort', the optimizer not even choosing this
+         index) against 0.07 s with the directions below (~3.5 ms, 'range' + 'Using
+         index condition', chosen with no hint). ID stays ascending: that is the
+         direction the tie branch walks.
+
+         THE ROLLBACK IS WRITTEN OUT, because two of these steps have no automatic
+         inverse: Liquibase cannot invert an UPDATE, and it cannot invert a dropIndex
+         either (nothing tells it what the dropped index held). An empty <rollback/>
+         would not do — it is CHANGESET-level, so it would also suppress the automatic
+         rollback of the addColumn and the createIndex and leave both in place. Spelled
+         out, undoing this changeset restores the index it swapped and drops the column,
+         which makes the backfill moot on the way back as well.
 
          No second source of truth: the definition stays in CleanupSizeUtil, applied
          by CleanupCampaignStorage#toEntity on EVERY save, and this column becomes the
@@ -313,9 +331,17 @@
         <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_RECLAIMABLE">
             <column name="CAMPAIGN_ID"/>
             <column name="STATE"/>
-            <column name="RECLAIMABLE_BYTES"/>
+            <column name="RECLAIMABLE_BYTES" descending="true"/>
             <column name="ID"/>
         </createIndex>
+        <rollback>
+            <dropIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_RECLAIMABLE"/>
+            <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_STATE">
+                <column name="CAMPAIGN_ID"/>
+                <column name="STATE"/>
+            </createIndex>
+            <dropColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" columnName="RECLAIMABLE_BYTES"/>
+        </rollback>
     </changeSet>
 
 </databaseChangeLog>

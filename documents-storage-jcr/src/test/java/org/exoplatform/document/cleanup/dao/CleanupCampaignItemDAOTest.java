@@ -211,6 +211,62 @@ class CleanupCampaignItemDAOTest {
   }
 
   @Test
+  void theReclaimableIndexDeclaresTheDIRECTIONSTheWalkReadsThemIn() throws Exception {
+    // The one part of this a unit test can hold. An all-ASCENDING composite index
+    // serves ASC,ASC (forward scan) or DESC,DESC (backward) — never a MIXED
+    // direction, and the walk reads RECLAIMABLE_BYTES DESC with ID ASC. Declared
+    // ascending, MySQL 8 read the index and STILL sorted, so the column bought
+    // nothing: measured on mysql:8 over 256k CANDIDATE rows, 20 batches of the
+    // worker's own query took 11.1 s against 0.07 s once the direction was
+    // declared.
+    //
+    // NO TEST HERE CAN SEE THAT — this suite has no dialect, no plan and no rows,
+    // and it was green at 696 with the index that filesorted. What this pins is
+    // narrower and still worth pinning: the attribute cannot be dropped from the
+    // changeset by a later edit without failing here
+    NodeList indexes = changelog().getElementsByTagName("createIndex");
+    Element reclaimableIndex = null;
+    for (int index = 0; index < indexes.getLength(); index++) {
+      Element candidate = (Element) indexes.item(index);
+      if ("IDX_DOC_CLEANUP_ITEM_RECLAIMABLE".equals(candidate.getAttribute("indexName"))
+          && ITEM_TABLE.equals(candidate.getAttribute("tableName"))) {
+        reclaimableIndex = candidate;
+      }
+    }
+    assertNotNull(reclaimableIndex, "The reclaimable ordering has no index to serve it");
+
+    NodeList columns = reclaimableIndex.getElementsByTagName("column");
+    assertEquals(List.of("CAMPAIGN_ID", "STATE", "RECLAIMABLE_BYTES", "ID"),
+                 columnNames(columns),
+                 "The index must cover the filter (campaign, state) and then the ORDER BY keys, in that order");
+    assertEquals("true",
+                 columnOf(columns, "RECLAIMABLE_BYTES").getAttribute("descending"),
+                 "RECLAIMABLE_BYTES must be declared DESCENDING: the walk reads it that way, and an ascending"
+                     + " declaration makes every batch a filesort");
+    assertEquals("",
+                 columnOf(columns, "ID").getAttribute("descending"),
+                 "ID must stay ASCENDING: that is the direction the tie branch of the cursor walks");
+  }
+
+  private List<String> columnNames(NodeList columns) {
+    List<String> names = new ArrayList<>();
+    for (int index = 0; index < columns.getLength(); index++) {
+      names.add(((Element) columns.item(index)).getAttribute("name"));
+    }
+    return names;
+  }
+
+  private Element columnOf(NodeList columns, String name) {
+    for (int index = 0; index < columns.getLength(); index++) {
+      Element column = (Element) columns.item(index);
+      if (name.equals(column.getAttribute("name"))) {
+        return column;
+      }
+    }
+    return null;
+  }
+
+  @Test
   void theBackfillOfTheReclaimableColumnMatchesTheDeleteActionName() throws Exception {
     // The literal moved rather than disappeared: no JPQL embeds 'DELETE' any
     // more, but the one-time backfill of the new column does, and a
