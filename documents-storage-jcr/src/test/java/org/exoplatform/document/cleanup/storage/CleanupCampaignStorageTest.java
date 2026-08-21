@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -899,27 +900,46 @@ class CleanupCampaignStorageTest {
   }
 
   @Test
-  void getItemsByStateAfterIdAsksTheKeysetQueryForTheIdsPastTheLastOneSeen() {
-    when(itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
-                                                                     eq(CANDIDATE_STATE),
-                                                                     anyLong(),
-                                                                     any())).thenReturn(List.of(itemEntity(USERS_ROOT_PATH,
-                                                                                                           2048,
-                                                                                                           42L)));
+  void getItemsByStateBiggestFirstPassesTheWHOLEKeysetPositionNotJustTheId() {
+    when(itemDAO.findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID),
+                                                     eq(CANDIDATE_STATE),
+                                                     any(),
+                                                     anyLong(),
+                                                     any())).thenReturn(List.of(itemEntity(USERS_ROOT_PATH, 2048, 42L)));
 
-    List<CleanupCampaignItem> items = storage.getItemsByStateAfterId(CAMPAIGN_ID, CleanupItemState.CANDIDATE, 41L, 200);
+    List<CleanupCampaignItem> items = storage.getItemsByStateBiggestFirst(CAMPAIGN_ID,
+                                                                         CleanupItemState.CANDIDATE,
+                                                                         5_000L,
+                                                                         41L,
+                                                                         200);
 
     assertEquals(1, items.size());
     assertEquals(42L, items.get(0).getId());
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    verify(itemDAO).findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
-                                                                        eq(CANDIDATE_STATE),
-                                                                        eq(41L),
-                                                                        pageableCaptor.capture());
+    // BOTH halves of the position reach the query: ordering by a computed value
+    // means the id alone no longer identifies where the previous batch stopped,
+    // and dropping the size half would restart every batch from the biggest row
+    verify(itemDAO).findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID),
+                                                        eq(CANDIDATE_STATE),
+                                                        eq(5_000L),
+                                                        eq(41L),
+                                                        pageableCaptor.capture());
     // The batch size is the page SIZE, and the page index is always 0: the
-    // position comes from the id, never from an offset
+    // position comes from the keyset, never from an offset
     assertEquals(0, pageableCaptor.getValue().getPageNumber());
     assertEquals(200, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void getItemsByStateBiggestFirstStartsWithANullSizeCursor() {
+    when(itemDAO.findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID), eq(CANDIDATE_STATE), any(), anyLong(), any()))
+                                                                                                                    .thenReturn(List.of());
+
+    storage.getItemsByStateBiggestFirst(CAMPAIGN_ID, CleanupItemState.CANDIDATE, null, 0L, 200);
+
+    // NULL and not Long.MAX_VALUE: the first batch must be 'no lower bound at
+    // all', so the biggest row in the table is included whatever its size
+    verify(itemDAO).findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID), eq(CANDIDATE_STATE), isNull(), eq(0L), any());
   }
 
   @Test

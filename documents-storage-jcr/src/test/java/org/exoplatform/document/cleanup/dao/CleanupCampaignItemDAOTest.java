@@ -61,6 +61,7 @@ import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 import org.exoplatform.document.cleanup.rest.CleanupCampaignRest;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -398,6 +399,80 @@ class CleanupCampaignItemDAOTest {
    * cleanup DAOs fails here, at test time, instead of failing the Spring Data
    * repository bootstrap of a deployed platform.
    */
+  @Test
+  void shouldHandThePurgeItsCandidatesBiggestFirst() {
+    // The purge consumes the report in this order so the space comes back
+    // front-loaded: on a run measured in hours, an administrator watching 4 GB of
+    // a promised 234 GB could not tell whether the big wins were still ahead.
+    // Same fixture as the ordering finding, because it is the same rule: a 1 MB
+    // file carrying 500 MB of history outranks a 100 MB file carrying none, and a
+    // 900 MB file whose versions alone are purged ranks last
+    long campaignId = 9501L;
+    try (Session session = executionSessionFactory.openSession()) {
+      long smallFileHugeHistory = persist(session, campaignId, "/a-small-huge-history", CleanupAction.DELETE, MB, 500 * MB);
+      long bigFileNoHistory = persist(session, campaignId, "/b-big-no-history", CleanupAction.DELETE, 100 * MB, 0);
+      long hugeFilePurgedVersions = persist(session, campaignId, "/c-purge", CleanupAction.PURGE_VERSIONS, 900 * MB, 2 * MB);
+      CleanupCampaignItemDAO dao = new JpaRepositoryFactory(session).getRepository(CleanupCampaignItemDAO.class);
+
+      List<Long> ids = dao.findByStateOrderedByReclaimableBytes(campaignId,
+                                                               CleanupItemState.CANDIDATE.name(),
+                                                               null,
+                                                               0L,
+                                                               PageRequest.of(0, 10))
+                          .stream()
+                          .map(CleanupCampaignItemEntity::getId)
+                          .toList();
+
+      assertEquals(List.of(smallFileHugeHistory, bigFileNoHistory, hugeFilePurgedVersions),
+                   ids,
+                   "The purge must meet its candidates by what each one's own action frees, biggest first");
+    }
+  }
+
+  @Test
+  void shouldPageTheBiggestFirstOrderWithoutREPEATINGOrDROPPINGATiedRow() {
+    // THE property the composite cursor exists for, and the one a parse cannot
+    // vouch for. Ordering by a computed value means the id alone no longer
+    // identifies a position: over a block of EQUAL-SIZED rows spanning a batch
+    // boundary, a size-only cursor repeats rows forever (or, with a strict
+    // comparison, drops the rest of the block). Four rows, two of them tied
+    // exactly, read two at a time through the cursor the worker really uses
+    long campaignId = 9601L;
+    try (Session session = executionSessionFactory.openSession()) {
+      long biggest = persist(session, campaignId, "/a-biggest", CleanupAction.DELETE, 500 * MB, 0);
+      long tiedFirst = persist(session, campaignId, "/b-tied", CleanupAction.DELETE, 100 * MB, 0);
+      long tiedSecond = persist(session, campaignId, "/c-tied", CleanupAction.DELETE, 50 * MB, 50 * MB);
+      long smallest = persist(session, campaignId, "/d-smallest", CleanupAction.PURGE_VERSIONS, 900 * MB, MB);
+      CleanupCampaignItemDAO dao = new JpaRepositoryFactory(session).getRepository(CleanupCampaignItemDAO.class);
+
+      List<Long> walked = new ArrayList<>();
+      Long lastReclaimableBytes = null;
+      long lastId = 0;
+      List<CleanupCampaignItemEntity> page;
+      do {
+        page = dao.findByStateOrderedByReclaimableBytes(campaignId,
+                                                       CleanupItemState.CANDIDATE.name(),
+                                                       lastReclaimableBytes,
+                                                       lastId,
+                                                       PageRequest.of(0, 2));
+        for (CleanupCampaignItemEntity entity : page) {
+          walked.add(entity.getId());
+        }
+        if (!page.isEmpty()) {
+          CleanupCampaignItemEntity last = page.get(page.size() - 1);
+          lastReclaimableBytes = CleanupSizeUtil.reclaimableBytes(last.getAction(), last.getFileSize(), last.getVersionsSize());
+          lastId = last.getId();
+        }
+      } while (!page.isEmpty());
+
+      // Every row exactly once, in size order, with the two tied rows separated by
+      // their ids — which is what makes the walk terminate at all
+      assertEquals(List.of(biggest, tiedFirst, tiedSecond, smallest),
+                   walked,
+                   "The keyset walk must cover every row exactly once, tie block included");
+    }
+  }
+
   @Test
   void shouldDropEveryItemRowOfACampaignInOneStatement() throws ReflectiveOperationException {
     // The finding: a DERIVED deleteBy... selects the matching entities and removes

@@ -245,26 +245,28 @@ public class CleanupCampaignStorage {
   }
 
   /**
-   * KEYSET page of the items of a campaign in a given state: the ones past
-   * {@code lastId}, oldest id first. The execution worker drives its batch loop
-   * from the last id it saw instead of re-reading page 0 — see the DAO javadoc:
-   * that is what makes its forward progress structural instead of depending on
-   * every item leaving the state.
+   * KEYSET page of the items of a campaign in a given state, BIGGEST FIRST — see
+   * the DAO javadoc for why the cursor is a {@code (reclaimableBytes, id)} pair
+   * rather than an id, and why that still cannot revisit a row.
    *
-   * @param campaignId campaign identifier
-   * @param state item state
-   * @param lastId last id already seen (0 to start from the beginning)
-   * @param batchSize maximum number of items to read
-   * @return the next items, id ascending, empty when the state is exhausted
+   * @param campaignId           campaign identifier
+   * @param state                item state
+   * @param lastReclaimableBytes reclaimable bytes of the last row seen, null to
+   *                             start from the biggest
+   * @param lastId               id of the last row seen, breaking size ties
+   * @param batchSize            maximum number of items to read
+   * @return the next items, biggest first, empty when the state is exhausted
    */
-  public List<CleanupCampaignItem> getItemsByStateAfterId(long campaignId,
-                                                         CleanupItemState state,
-                                                         long lastId,
-                                                         int batchSize) {
-    return itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(campaignId,
-                                                                        state.name(),
-                                                                        lastId,
-                                                                        PageRequest.of(0, batchSize))
+  public List<CleanupCampaignItem> getItemsByStateBiggestFirst(long campaignId,
+                                                              CleanupItemState state,
+                                                              Long lastReclaimableBytes,
+                                                              long lastId,
+                                                              int batchSize) {
+    return itemDAO.findByStateOrderedByReclaimableBytes(campaignId,
+                                                        state.name(),
+                                                        lastReclaimableBytes,
+                                                        lastId,
+                                                        PageRequest.of(0, batchSize))
                   .stream()
                   .map(this::toModel)
                   .toList();

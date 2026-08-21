@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -151,6 +152,10 @@ class CleanupExecutionServiceTest {
     // tests that never reach a batch boundary never call it
     executionService = spy(executionService);
     lenient().doNothing().when(executionService).restartTransaction();
+    // Push EVERY batch by default, so the assertions on the event stream stay
+    // about the loop and not about how fast the test machine ran. The throttle
+    // itself is pinned by its own test, which raises this floor deliberately
+    progressPushInterval(0);
   }
 
   @Test
@@ -212,7 +217,7 @@ class CleanupExecutionServiceTest {
                                                   skippedItem,
                                                   deletedItem,
                                                   purgedVersionsItem);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(batch)
                                                 .thenReturn(List.of());
 
@@ -283,7 +288,7 @@ class CleanupExecutionServiceTest {
     campaign.setSummaryJson(JsonUtils.toJsonString(scanSummary));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(200);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of());
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -306,7 +311,7 @@ class CleanupExecutionServiceTest {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem unknownItem = item(17L, "uuid-unknown", CleanupAction.DELETE);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(unknownItem))
                                                 .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq("uuid-unknown"), any())).thenReturn(CleanupRevalidation.unknown());
@@ -334,7 +339,7 @@ class CleanupExecutionServiceTest {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem partialItem = item(18L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(partialItem))
                                                 .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
@@ -371,7 +376,7 @@ class CleanupExecutionServiceTest {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem versionsItem = item(19L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(versionsItem))
                                                 .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_VERSIONS), any()))
@@ -396,7 +401,7 @@ class CleanupExecutionServiceTest {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem explodingItem = item(19L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(explodingItem))
                                                 .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_SKIPPED), any())).thenThrow(new IllegalStateException(JCR_ERROR_MESSAGE));
@@ -420,7 +425,7 @@ class CleanupExecutionServiceTest {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem failedItem = item(20L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(failedItem))
                                                 .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_SKIPPED), any())).thenThrow(new IllegalStateException(JCR_ERROR_MESSAGE));
@@ -449,7 +454,7 @@ class CleanupExecutionServiceTest {
     when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem unsavableItem = item(21L, NODE_UUID_DELETED, CleanupAction.DELETE);
     CleanupCampaignItem nextItem = purgeableItem(22L, "uuid-next");
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(unsavableItem, nextItem))
                                                 .thenReturn(List.of());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
@@ -505,12 +510,16 @@ class CleanupExecutionServiceTest {
     // and @Timeout does not interrupt a spinning loop, it only reports once the
     // loop returns, so the run filled the disk with the failure logging first
     AtomicInteger queryCount = new AtomicInteger();
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenAnswer(invocation -> queryCount.incrementAndGet() > QUERY_COUNT_BOUND ?
                                                                                                        List.of() :
                                                                                                        Stream.of(unsavableItem, savableItem)
                                                                                                              .filter(item -> item.getState() == CleanupItemState.CANDIDATE)
-                                                                                                             .filter(item -> item.getId() > (long) invocation.getArgument(2))
+                                                                                                             // The id half of the cursor (argument 3):
+                                                                                                             // every fixture item is the same
+                                                                                                             // size, so the tie branch is the
+                                                                                                             // only one that can advance here
+                                                                                                             .filter(item -> item.getId() > (long) invocation.getArgument(3))
                                                                                                              .toList());
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
                                                                     .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_DELETED,
@@ -550,7 +559,7 @@ class CleanupExecutionServiceTest {
     when(settingService.getPurgeBatchSize()).thenReturn(1);
     CleanupCampaignItem firstItem = purgeableItem(41L, "uuid-41");
     CleanupCampaignItem secondItem = purgeableItem(42L, "uuid-42");
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(firstItem))
                                                 .thenReturn(List.of(secondItem))
                                                 .thenReturn(List.of());
@@ -595,7 +604,7 @@ class CleanupExecutionServiceTest {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(200);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenThrow(new IllegalStateException("Database gone"));
 
     executionService.executeCampaign(CAMPAIGN_ID);
@@ -620,7 +629,7 @@ class CleanupExecutionServiceTest {
     when(settingService.getPurgeBatchSize()).thenReturn(1);
     CleanupCampaignItem firstItem = item(11L, NODE_UUID_DELETED, CleanupAction.DELETE);
     CleanupCampaignItem secondItem = item(12L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(firstItem))
                                                 .thenReturn(List.of(secondItem));
     when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
@@ -653,7 +662,7 @@ class CleanupExecutionServiceTest {
     CleanupCampaignItem thirdItem = purgeableItem(13L, "uuid-3");
     CleanupCampaignItem fourthItem = purgeableItem(14L, "uuid-4");
     // Two full pages of candidates, then the empty page ending the run
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                 .thenReturn(List.of(firstItem, secondItem))
                                                 .thenReturn(List.of(thirdItem, fourthItem))
                                                 .thenReturn(List.of());
@@ -667,15 +676,27 @@ class CleanupExecutionServiceTest {
     // The keyset cursor is asserted EXACTLY, not with anyLong(): a cursor left at
     // its initial value re-reads the same window, which is precisely the poison
     // pill keyset paging is here to defuse. The stubbed pages above would keep
-    // this test green either way — only pinning the argument catches it
+    // this test green either way — only pinning the argument catches it.
+    //
+    // BOTH halves, since the order is by a computed size: the first batch starts
+    // with no size bound at all (null, not 0 — a 0 lower bound would exclude
+    // every row) and the following ones carry the size of the last row seen with
+    // its id, which is what makes the position total over a block of equal sizes
+    ArgumentCaptor<Long> lastSizeCaptor = ArgumentCaptor.forClass(Long.class);
     ArgumentCaptor<Long> lastIdCaptor = ArgumentCaptor.forClass(Long.class);
-    verify(campaignStorage, org.mockito.Mockito.times(3)).getItemsByStateAfterId(eq(CAMPAIGN_ID),
-                                                                                eq(CleanupItemState.CANDIDATE),
-                                                                                lastIdCaptor.capture(),
-                                                                                anyInt());
+    verify(campaignStorage, org.mockito.Mockito.times(3)).getItemsByStateBiggestFirst(eq(CAMPAIGN_ID),
+                                                                                     eq(CleanupItemState.CANDIDATE),
+                                                                                     lastSizeCaptor.capture(),
+                                                                                     lastIdCaptor.capture(),
+                                                                                     anyInt());
     assertEquals(List.of(0L, 12L, 14L),
                  lastIdCaptor.getAllValues(),
-                 "Each batch must resume PAST the highest id of the previous one");
+                 "Each batch must resume PAST the last row of the previous one");
+    // Every fixture item is a 1 MB DELETE, so the size half repeats and the id
+    // half is what advances — exactly the tie case the composite cursor exists for
+    assertEquals(Arrays.asList(null, 1048576L, 1048576L),
+                 lastSizeCaptor.getAllValues(),
+                 "The size half of the cursor must travel with the id half");
     assertEquals(CleanupItemState.PURGED, firstItem.getState());
     assertEquals(CleanupItemState.PURGED, secondItem.getState());
     assertEquals(CleanupItemState.PURGED, thirdItem.getState());
@@ -770,6 +791,52 @@ class CleanupExecutionServiceTest {
   }
 
   @Test
+  void progressIsCHECKPOINTEDEveryBatchButPUSHEDNoFasterThanTheFloor() throws ReflectiveOperationException {
+    // The two cadences are decoupled because they do not cost the same thing. A
+    // checkpoint is one row update, invisible next to the deletion it records; a
+    // push enumerates every CONNECTED user and resolves each identity to test
+    // administrator membership, so its cost scales with the audience and not with
+    // the batch. Dropping the purge batch from 200 to 5 multiplied the event rate
+    // by forty while the checkpoint cost per item stayed flat — which is the
+    // asymmetry this test exists to hold apart
+    progressPushInterval(600_000);
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getPurgeBatchSize()).thenReturn(1);
+    CleanupCampaignItem firstItem = item(11L, NODE_UUID_DELETED, CleanupAction.DELETE);
+    CleanupCampaignItem secondItem = item(12L, NODE_UUID_DELETED, CleanupAction.DELETE);
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
+                                                                                                                    .thenReturn(List.of(firstItem))
+                                                                                                                    .thenReturn(List.of(secondItem))
+                                                                                                                    .thenReturn(List.of());
+    when(cleanupJcrStorage.revalidate(eq(NODE_UUID_DELETED), any()))
+                                                                    .thenReturn(CleanupRevalidation.of(candidate(NODE_UUID_DELETED,
+                                                                                                                CleanupAction.DELETE)));
+    when(cleanupJcrStorage.deleteNode(NODE_UUID_DELETED)).thenReturn(CleanupPurgeResult.purged(100L));
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    // Durability is untouched: every batch still checkpoints, so a JVM death
+    // loses one batch and no more
+    verify(campaignStorage, org.mockito.Mockito.times(2)).updateProgress(eq(CAMPAIGN_ID),
+                                                                         anyLong(),
+                                                                         anyLong(),
+                                                                         anyLong(),
+                                                                         isNull(),
+                                                                         anyLong());
+    ArgumentCaptor<CleanupWsMessage> messageCaptor = ArgumentCaptor.forClass(CleanupWsMessage.class);
+    verify(webSocketService, org.mockito.Mockito.atLeastOnce()).sendToAdministrators(messageCaptor.capture());
+    List<CleanupWsMessage> pushes = messageCaptor.getAllValues()
+                                                .stream()
+                                                .filter(message -> CleanupWsMessage.PROGRESS_EVENT.equals(message.getWsEventName()))
+                                                .toList();
+    assertEquals(1, pushes.size(), "The second batch must NOT push within the floor: " + pushes.size() + " pushes");
+    // The FIRST batch always pushes, whatever the floor: the bar has to move as
+    // soon as something has been purged
+    assertEquals(1L, pushes.get(0).getProcessed(), "The first batch must push immediately");
+  }
+
+  @Test
   void theRemainingTimeIsMeasuredInBytesAndNotInItems() throws ReflectiveOperationException {
     // A purge's items differ in cost by orders of magnitude — a 5 GB file
     // carrying five hundred versions against a 5 MB one — and the cost is driven
@@ -808,12 +875,12 @@ class CleanupExecutionServiceTest {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getPurgeBatchSize()).thenReturn(5);
-    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+    when(campaignStorage.getItemsByStateBiggestFirst(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), any(), anyLong(), anyInt()))
                                                                                                                      .thenReturn(List.of());
 
     executionService.executeCampaign(CAMPAIGN_ID);
 
-    verify(campaignStorage).getItemsByStateAfterId(CAMPAIGN_ID, CleanupItemState.CANDIDATE, 0L, 5);
+    verify(campaignStorage).getItemsByStateBiggestFirst(CAMPAIGN_ID, CleanupItemState.CANDIDATE, null, 0L, 5);
     verify(settingService, never()).getBatchSize();
   }
 
@@ -838,6 +905,13 @@ class CleanupExecutionServiceTest {
                                 total,
                                 remainingBytesAtStart,
                                 reclaimableBytesDone);
+  }
+
+  /** Injects the progress-push floor, in millis. */
+  private void progressPushInterval(long intervalMillis) throws ReflectiveOperationException {
+    Field field = CleanupExecutionService.class.getDeclaredField("progressPushIntervalMillis");
+    field.setAccessible(true); // NOSONAR test wiring
+    field.set(executionService, intervalMillis); // NOSONAR
   }
 
   private CleanupCampaignItem item(long id, String nodeUuid, CleanupAction action) {

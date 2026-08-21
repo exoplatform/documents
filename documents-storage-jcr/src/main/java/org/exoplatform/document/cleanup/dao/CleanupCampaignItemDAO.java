@@ -82,18 +82,55 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
   Page<CleanupCampaignItemEntity> findByCampaignIdAndState(long campaignId, String state, Pageable pageable);
 
   /**
-   * KEYSET page of the items of a campaign in a given state: the ones whose id
-   * is strictly greater than the last one seen, oldest id first. This is what
-   * makes the execution worker's forward progress STRUCTURAL — an offset page 0
-   * re-read relies on every processed item leaving the state, so a single item
-   * that can never be persisted feeds it back forever (a poison pill). Returns a
-   * plain List: the worker drives its loop from the last id it saw, it has no
-   * use for a total count, and skipping it spares one count query per batch.
+   * KEYSET page of the items of a campaign in a given state, BIGGEST FIRST — the
+   * order the purge worker consumes them in.
+   * <p>
+   * Ordered by what each row actually frees ({@link #RECLAIMABLE_BYTES}, the one
+   * definition, so this can never disagree with the report the administrator
+   * published on) and NOT by id. A purge of a 14-year corpus runs for hours, and
+   * the id order is the order the scan happened to walk the tree in — so the
+   * space came back in no particular order and an administrator watching 4 GB of
+   * a promised 234 GB could not tell whether the big wins were still ahead. This
+   * front-loads them: the first batches free the most, which is also what makes
+   * stopping early a decision rather than a gamble.
+   * <p>
+   * THE CURSOR IS COMPOSITE and it has to be: ordering by a computed value means
+   * the id alone no longer identifies a position. It is
+   * {@code (reclaimableBytes DESC, id ASC)} — strictly monotonic over a total
+   * order, so the worker cannot revisit a row within a run, which is the property
+   * the id-ascending keyset was there for (an offset page-0 re-read relies on
+   * every processed item leaving the state, so one item that can never be
+   * persisted feeds it back forever). The tie branch on {@code id} is what makes
+   * the order total: without it a block of equal-sized rows spanning a batch
+   * boundary would repeat some rows and drop others.
+   * <p>
+   * SAFE because the key cannot move under the cursor mid-run: the values it is
+   * computed from ({@code action}, {@code fileSize}, {@code versionsSize}) are
+   * only ever refreshed on the item being processed, which then leaves the
+   * CANDIDATE state; and the freshness listener that could refresh a pending one
+   * is unregistered before the campaign reaches EXECUTING. A row whose save
+   * FAILED keeps its stored key, and the cursor is already past it.
+   *
+   * @param campaignId           campaign identifier
+   * @param state                item state
+   * @param lastReclaimableBytes reclaimable bytes of the last row seen, NULL to
+   *                             start from the biggest
+   * @param lastId               id of the last row seen, breaking ties on equal
+   *                             sizes
+   * @param pageable             page size
+   * @return the next items, biggest first, empty when the state is exhausted
    */
-  List<CleanupCampaignItemEntity> findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(long campaignId,
-                                                                                       String state,
-                                                                                       long lastId,
-                                                                                       Pageable pageable);
+  @Query("SELECT i FROM CleanupCampaignItem i"
+      + " WHERE i.campaignId = :campaignId AND i.state = :state"
+      + " AND (:lastReclaimableBytes IS NULL"
+      + " OR " + RECLAIMABLE_BYTES + " < :lastReclaimableBytes"
+      + " OR (" + RECLAIMABLE_BYTES + " = :lastReclaimableBytes AND i.id > :lastId))"
+      + " ORDER BY " + RECLAIMABLE_BYTES + " DESC, i.id ASC")
+  List<CleanupCampaignItemEntity> findByStateOrderedByReclaimableBytes(@Param("campaignId")
+  long campaignId, @Param("state")
+  String state, @Param("lastReclaimableBytes")
+  Long lastReclaimableBytes, @Param("lastId")
+  long lastId, Pageable pageable);
 
   /**
    * KEYSET page of the RETRYABLE failures of a campaign: SKIPPED items whose
@@ -334,9 +371,15 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
    * on), and they would otherwise sit there forever: invisible, and holding the
    * very space this feature exists to reclaim. Swept at startup.
    * <p>
-   * Cheap despite the shape: the subquery reads a table capped at
-   * {@code CleanupCampaignService#MAX_CAMPAIGNS} rows, and the outer DISTINCT is
-   * served by IDX_DOC_CLEANUP_ITEM_CAMPAIGN.
+   * Cheap despite the shape, for two reasons and NOT for the one first written
+   * here: the subquery reads the campaign table, which holds one row per campaign
+   * ever created — nothing trims it, {@code MAX_CAMPAIGNS} being the list
+   * endpoint's page size and not a constraint — but a campaign is a deliberate
+   * administrative act on a grace cycle measured in weeks, so it stays in the
+   * hundreds for years; and the outer DISTINCT is served by
+   * IDX_DOC_CLEANUP_ITEM_CAMPAIGN, which is a real index. If that table ever does
+   * grow, this query is worth re-examining — a comment claiming an enforced bound
+   * is what would stop someone doing so.
    */
   @Query("SELECT DISTINCT i.campaignId FROM CleanupCampaignItem i"
       + " WHERE i.campaignId NOT IN (SELECT c.id FROM CleanupCampaign c)")
