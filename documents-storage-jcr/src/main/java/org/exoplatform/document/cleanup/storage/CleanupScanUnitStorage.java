@@ -193,6 +193,17 @@ public class CleanupScanUnitStorage {
                                                   .toList());
   }
 
+  /**
+   * Drops the unit rows of a campaign being deleted. NOT a reset: a campaign whose
+   * units are gone re-plans from scratch, so this is never called on one that can
+   * still be resumed.
+   *
+   * @param campaignId campaign identifier
+   */
+  public void deleteUnits(long campaignId) {
+    scanUnitDAO.deleteByCampaignId(campaignId);
+  }
+
   public void updateUnitState(long unitId, CleanupScanUnitState state) {
     scanUnitDAO.findById(unitId).ifPresent(entity -> {
       entity.setState(state.name());

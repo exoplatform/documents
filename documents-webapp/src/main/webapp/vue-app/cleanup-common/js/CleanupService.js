@@ -74,7 +74,21 @@ export function updateCampaign(campaignId, updates) {
   }).then(handleJsonResponse);
 }
 
+// CANCEL keeps the campaign, with everything its run had already found; DELETE
+// removes it. They shared the DELETE verb until a real delete existed, which made
+// one of them a trap.
 export function cancelCampaign(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/cancel`, {
+    method: 'POST',
+    credentials: 'include',
+  }).then(handleVoidResponse);
+}
+
+// Drops a DRAFT, SIMULATED or CANCELLED campaign with its report, its scan units
+// and its archive. Anything else answers 400: a COMPLETED campaign records an
+// irreversible purge, and a running or published one must be cancelled first. The
+// users' keep decisions live in JCR and are NOT removed with it.
+export function deleteCampaign(campaignId) {
   return fetch(`${BASE_URL}/campaigns/${campaignId}`, {
     method: 'DELETE',
     credentials: 'include',

@@ -66,6 +66,7 @@ import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
+import org.exoplatform.document.cleanup.storage.CleanupScanUnitStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.util.CleanupIdentityUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
@@ -171,6 +172,35 @@ public class CleanupCampaignService {
                                                                                         CleanupCampaignState.LOCKED,
                                                                                         CleanupCampaignState.EXECUTING);
 
+  /**
+   * At most ONE of these platform-wide: the states in which a campaign owns a
+   * JCR-heavy worker. Distinct from {@link #ACTIVE_STATES}, which guards the
+   * single-PUBLISHED invariant — a published campaign in its grace period runs
+   * nothing, and blocking simulations for the two weeks it lasts would break the
+   * repeat-and-compare workflow the feature is specified around.
+   * <p>
+   * Two scans at once is ten more reader threads on the same repository, on a
+   * corpus where ONE sequential walk already saturated both JCR caches at their
+   * million-entry cap. A scan next to a purge is worse than slow: the scan reads a
+   * tree the purge is deleting under it, and reports a simulation nobody can act
+   * on.
+   */
+  private static final List<CleanupCampaignState> WORKER_STATES               = List.of(CleanupCampaignState.DRY_RUN_RUNNING,
+                                                                                        CleanupCampaignState.EXECUTING);
+
+  /**
+   * The states a campaign may be DELETED from: nothing was promised to a user and
+   * nothing was destroyed, so the row is a draft or a discarded simulation.
+   * <p>
+   * COMPLETED is deliberately absent. It is the only record that an irreversible
+   * mass deletion happened, and the answer to "where did my file go?" months
+   * later. Ageing those out is the retention job's business — it archives the CSV
+   * before dropping the detail rows — not a delete button's.
+   */
+  private static final List<CleanupCampaignState> DELETABLE_STATES            = List.of(CleanupCampaignState.DRAFT,
+                                                                                        CleanupCampaignState.SIMULATED,
+                                                                                        CleanupCampaignState.CANCELLED);
+
   private static final List<CleanupCampaignState> TERMINAL_STATES             = List.of(CleanupCampaignState.COMPLETED,
                                                                                         CleanupCampaignState.CANCELLED);
 
@@ -208,6 +238,14 @@ public class CleanupCampaignService {
 
   @Autowired
   private CleanupCampaignStorage                  campaignStorage;
+
+  /**
+   * Same domain's storage, injected directly rather than reached through
+   * {@code CleanupScanService}: the only thing this Service asks of it is dropping
+   * the unit rows of a campaign it is deleting.
+   */
+  @Autowired
+  private CleanupScanUnitStorage                  scanUnitStorage;
 
   @Autowired
   private CleanupSettingService                   settingService;
@@ -342,18 +380,96 @@ public class CleanupCampaignService {
     String validatedName = validateName(name);
     CleanupParams params = settingService.getEffectiveParams(overrides);
     validateParams(params);
-    CleanupCampaign campaign = new CleanupCampaign();
-    campaign.setName(validatedName);
-    campaign.setState(CleanupCampaignState.DRAFT);
-    campaign.setParams(params);
-    campaign.setStartedDate(System.currentTimeMillis());
-    campaign = campaignStorage.createCampaign(campaign);
-    try {
-      scanService.startScan(campaign.getId());
-    } catch (ObjectNotFoundException e) {
-      throw new IllegalStateException("Freshly created cleanup campaign not found", e);
+    // Validated BEFORE the lock — nothing below it may block on user input — and
+    // the row is created INSIDE it: creating outside would leave a DRAFT campaign
+    // behind on every refusal, which is a row an administrator can neither run nor
+    // understand
+    synchronized (publishLock) {
+      // The SAME lock as publishCampaign and retryCampaign, so every decision to
+      // start work is serialized against every other: two administrators clicking
+      // at once used to both pass a check neither had transitioned yet (TOCTOU)
+      checkNoWorkerRunning();
+      CleanupCampaign campaign = new CleanupCampaign();
+      campaign.setName(validatedName);
+      campaign.setState(CleanupCampaignState.DRAFT);
+      campaign.setParams(params);
+      campaign.setStartedDate(System.currentTimeMillis());
+      campaign = campaignStorage.createCampaign(campaign);
+      try {
+        scanService.startScan(campaign.getId());
+      } catch (ObjectNotFoundException e) {
+        throw new IllegalStateException("Freshly created cleanup campaign not found", e);
+      }
+      return withAggregates(campaignStorage.getCampaign(campaign.getId()));
     }
-    return withAggregates(campaignStorage.getCampaign(campaign.getId()));
+  }
+
+  /**
+   * Deletes a campaign and everything hanging off it: its item rows, its scan unit
+   * rows and its archived CSV.
+   * <p>
+   * Allowed from {@link #DELETABLE_STATES} only — a draft or a discarded
+   * simulation, where nothing was promised to a user and nothing was destroyed.
+   * Anything else answers {@code cleanup.invalidState}: a running campaign has a
+   * worker writing the very rows this would drop, a PUBLISHED or LOCKED one has
+   * told its users a date and collected their decisions, and a COMPLETED one is
+   * the record of an irreversible deletion (see {@link #DELETABLE_STATES}). Cancel
+   * first, then delete, is the path for the non-terminal ones.
+   * <p>
+   * The JCR exemption mixins are NOT touched, and that is the important half: a
+   * user's "keep" is a standing decision on their own file, deliberately durable
+   * in JCR and deliberately outliving the campaign that collected it. Deleting a
+   * campaign must never silently un-keep a file — the next campaign has to see
+   * those decisions again.
+   *
+   * @param campaignId campaign identifier
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public void deleteCampaign(long campaignId) throws ObjectNotFoundException {
+    CleanupCampaign campaign = getCampaign(campaignId);
+    if (!DELETABLE_STATES.contains(campaign.getState())) {
+      throw new IllegalArgumentException("cleanup.invalidState");
+    }
+    // The archive FIRST: a failure here must not leave a campaign row pointing at
+    // a file that is gone, and a binary orphaned in the file store is invisible
+    // once the row naming it is deleted
+    deleteArchive(campaign);
+    campaignStorage.deleteItems(campaignId);
+    scanUnitStorage.deleteUnits(campaignId);
+    campaignStorage.deleteCampaign(campaignId);
+    LOG.info("Cleanup campaign {} ({}) deleted from state {}: its report, its scan units and its archive are gone,"
+        + " the exemption mixins its users had set are NOT.", campaignId, campaign.getName(), campaign.getState());
+  }
+
+  /**
+   * Drops the archived CSV of a campaign being deleted, if it has one. A failure is
+   * logged and swallowed: an orphaned binary in the file store is a wasted block,
+   * while a half-deleted campaign is a row nobody can act on.
+   */
+  private void deleteArchive(CleanupCampaign campaign) {
+    if (campaign.getArchiveFileId() == null) {
+      return;
+    }
+    try {
+      fileService.deleteFile(campaign.getArchiveFileId());
+    } catch (Exception e) {
+      LOG.warn("Error deleting the archived report {} of cleanup campaign {}: the campaign is deleted anyway",
+               campaign.getArchiveFileId(),
+               campaign.getId(),
+               e);
+    }
+  }
+
+  /**
+   * Refuses to start work while another campaign owns a worker.
+   *
+   * @throws IllegalArgumentException {@code cleanup.workerAlreadyRunning} when a
+   *           scan or a purge is already in flight
+   */
+  private void checkNoWorkerRunning() {
+    if (!campaignStorage.getCampaignsByStates(WORKER_STATES).isEmpty()) {
+      throw new IllegalArgumentException("cleanup.workerAlreadyRunning");
+    }
   }
 
   /**
@@ -539,6 +655,12 @@ public class CleanupCampaignService {
    */
   public CleanupCampaign executeCampaign(long campaignId) throws ObjectNotFoundException {
     CleanupCampaign campaign = getCampaign(campaignId);
+    // No purge while a scan is walking: the purge would delete nodes the scan is
+    // still reading, and the simulation it produces would describe a tree that no
+    // longer exists. Serialized on the same lock as every other start decision
+    synchronized (publishLock) {
+      checkNoWorkerRunning();
+    }
     if (campaign.getState() == CleanupCampaignState.PUBLISHED) {
       if (!isGraceDeadlineElapsed(campaign, System.currentTimeMillis())) {
         throw new IllegalArgumentException("cleanup.graceNotElapsed");
@@ -592,6 +714,9 @@ public class CleanupCampaignService {
       if (!campaignStorage.getCampaignsByStates(ACTIVE_STATES).isEmpty()) {
         throw new IllegalArgumentException("cleanup.campaignAlreadyActive");
       }
+      // ACTIVE_STATES does not hold DRY_RUN_RUNNING, so it alone would let a purge
+      // start next to a running scan
+      checkNoWorkerRunning();
       long requeuedCount = requeueRetryableFailures(campaignId);
       if (requeuedCount == 0) {
         // Never silently start a no-op run: the console must be able to say WHY

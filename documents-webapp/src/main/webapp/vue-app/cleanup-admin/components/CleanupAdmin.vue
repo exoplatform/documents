@@ -29,12 +29,26 @@
         </v-btn>
         <h4 class="my-0 text-header">{{ $t('cleanup.admin.title') }}</h4>
         <v-spacer />
-        <v-btn
+        <!-- Disabled, with the reason in a tooltip, while another campaign owns a
+             worker: only one scan or purge runs platform-wide. The server refuses
+             it either way (cleanup.workerAlreadyRunning) — this only spares an
+             administrator a filled-in drawer and a 400 -->
+        <v-tooltip
           v-if="!selectedCampaignId"
-          class="btn btn-primary"
-          @click="$refs.createDrawer.open()">
-          {{ $t('cleanup.admin.newCampaign') }}
-        </v-btn>
+          bottom
+          :disabled="!workerRunning">
+          <template #activator="{on, attrs}">
+            <div v-bind="attrs" v-on="on">
+              <v-btn
+                :disabled="workerRunning"
+                class="btn btn-primary"
+                @click="$refs.createDrawer.open()">
+                {{ $t('cleanup.admin.newCampaign') }}
+              </v-btn>
+            </div>
+          </template>
+          <span>{{ $t('cleanup.admin.newCampaignDisabled') }}</span>
+        </v-tooltip>
       </div>
       <document-cleanup-campaign-detail
         v-if="selectedCampaignId"
@@ -48,7 +62,8 @@
         v-else
         :campaigns="campaigns"
         :loading="loading"
-        @open="selectedCampaignId = $event.id" />
+        @open="selectedCampaignId = $event.id"
+        @delete="deleteCampaign" />
       <!-- ONE drawer instance for both modes: the New campaign button opens it
            empty, the campaign detail's Edit button opens it on a campaign
            (open(campaign)). Hosted here rather than duplicated in the detail
@@ -58,10 +73,22 @@
         ref="createDrawer"
         @created="campaignCreated"
         @updated="campaignUpdated" />
+      <!-- The confirmation says what SURVIVES the delete, not just what goes:
+           removing a campaign that collected keep decisions must never read as
+           un-keeping the files behind them -->
+      <exo-confirm-dialog
+        ref="deleteConfirmDialog"
+        :title="$t('cleanup.admin.campaign.delete')"
+        :message="deleteConfirmMessage"
+        :ok-label="$t('cleanup.admin.campaign.delete')"
+        :cancel-label="$t('cleanup.admin.campaign.cancelAction')"
+        @ok="confirmDelete" />
     </v-card>
   </v-app>
 </template>
 <script>
+const UNEXPECTED_ERROR_KEY = 'cleanup.admin.campaign.unexpectedError';
+
 export default {
   data() {
     return {
@@ -72,7 +99,20 @@ export default {
       // the detail's refresh event reload the list, so a slow response must not
       // overwrite a newer one (see loadCampaigns)
       loadToken: 0,
+      // The campaign the confirm dialog is open on, so 'ok' cannot act on a row
+      // other than the one that was clicked
+      campaignToDelete: null,
     };
+  },
+  computed: {
+    // Read off the list already loaded, and kept live by the CometD state events:
+    // the server's WORKER_STATES, mirrored
+    workerRunning() {
+      return this.campaigns.some(campaign => ['DRY_RUN_RUNNING', 'EXECUTING'].includes(campaign.state));
+    },
+    deleteConfirmMessage() {
+      return this.$t('cleanup.admin.campaign.deleteConfirm', {0: this.campaignToDelete?.name || ''});
+    },
   },
   created() {
     this.loadCampaigns();
@@ -85,6 +125,37 @@ export default {
     document.removeEventListener('campaign.stateChanged', this.applyStateChangedEvent);
   },
   methods: {
+    // Confirmed before it runs, and the confirmation says what SURVIVES: the
+    // report goes, the users' keep decisions do not. Deleting a campaign that
+    // collected them must never read as un-keeping their files
+    deleteCampaign(campaign) {
+      this.campaignToDelete = campaign;
+      this.$refs.deleteConfirmDialog.open();
+    },
+    confirmDelete() {
+      const campaign = this.campaignToDelete;
+      if (!campaign) {
+        return;
+      }
+      this.$cleanupService.deleteCampaign(campaign.id)
+        .then(() => {
+          if (this.selectedCampaignId === campaign.id) {
+            this.selectedCampaignId = null;
+          }
+          this.displayAlert(this.$t('cleanup.admin.campaign.deleteSuccess'));
+          return this.loadCampaigns();
+        })
+        // The REST layer answers a MESSAGE CODE as the error body
+        // (cleanup.invalidState when the state moved under the button), localized
+        // by the shared $cleanupErrorLabel like every other action's failure
+        .catch(error => {
+          const reason = this.$cleanupErrorLabel(error, UNEXPECTED_ERROR_KEY);
+          this.displayAlert(this.$t('cleanup.admin.campaign.deleteError', {0: reason}), 'error');
+        })
+        // Released on BOTH paths: a failed delete that left the row selected would
+        // make the next confirmation act on a campaign nobody clicked
+        .finally(() => this.campaignToDelete = null);
+    },
     loadCampaigns() {
       this.loading = true;
       this.loadToken = this.loadToken + 1;

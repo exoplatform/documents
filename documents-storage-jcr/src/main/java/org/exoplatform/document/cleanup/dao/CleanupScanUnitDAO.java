@@ -21,6 +21,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
 
@@ -92,6 +93,13 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
   List<Object[]> countFailuresByReason(@Param("campaignId")
   long campaignId, @Param("state")
   String state);
+
+  /**
+   * Drops every unit row of a campaign. Only ever called when the campaign itself
+   * is being deleted, and only from a state no worker can be walking in.
+   */
+  @Transactional
+  void deleteByCampaignId(long campaignId);
 
   /**
    * Per-STATE unit counts of a campaign, in ONE grouped query (rows: state, unit

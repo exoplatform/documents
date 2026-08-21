@@ -226,10 +226,13 @@ public class CleanupCampaignRest {
     }
   }
 
+  // CANCEL is a POST on its own path and DELETE really deletes. They were the same
+  // verb until a delete existed, and "DELETE cancels" is the kind of shape that
+  // reads fine to whoever wrote it and destroys a campaign for whoever did not.
   @Secured("administrators")
-  @DeleteMapping("{id}")
+  @PostMapping("{id}/cancel")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  @Operation(method = "DELETE", summary = "Cancel a cleanup campaign", description = "Cancel a cleanup campaign from any non-terminal state")
+  @Operation(method = "POST", summary = "Cancel a cleanup campaign", description = "Cancel a cleanup campaign from any non-terminal state. The campaign is kept, with everything it had already found")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "204", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
@@ -241,6 +244,28 @@ public class CleanupCampaignRest {
                              long id) {
     try {
       campaignService.cancelCampaign(id);
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+  }
+
+  @Secured("administrators")
+  @DeleteMapping("{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(method = "DELETE", summary = "Delete a cleanup campaign", description = "Delete a DRAFT, SIMULATED or CANCELLED campaign with its report, its scan units and its archive. A COMPLETED campaign is never deletable — it records an irreversible purge — and a running or published one must be cancelled first. The users' keep decisions are NOT removed")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public void deleteCampaign(
+                             @Parameter(description = "Campaign identifier", required = true)
+                             @PathVariable("id")
+                             long id) {
+    try {
+      campaignService.deleteCampaign(id);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalArgumentException e) {

@@ -47,6 +47,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
@@ -719,6 +721,46 @@ class CleanupCampaignRestTest {
 
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> campaignRest.getCampaignFailures(404L)).getStatusCode());
+  }
+
+  @Test
+  void deleteCampaignDeletesAndCancelDoesNotShareItsVerb() throws NoSuchMethodException {
+    // Pinned by reflection because nothing else would notice them being swapped
+    // back: DELETE cancelling a campaign reads fine to whoever wrote it and
+    // destroys a run for whoever did not
+    assertNotNull(CleanupCampaignRest.class.getMethod("deleteCampaign", long.class).getAnnotation(DeleteMapping.class),
+                  "DELETE {id} must really delete");
+    assertNull(CleanupCampaignRest.class.getMethod("cancelCampaign", long.class).getAnnotation(DeleteMapping.class),
+               "cancel must NOT be mapped on DELETE any more");
+    assertNotNull(CleanupCampaignRest.class.getMethod("cancelCampaign", long.class).getAnnotation(PostMapping.class),
+                  "cancel must be a POST on its own path");
+  }
+
+  @Test
+  void deleteCampaignDelegatesToTheService() throws ObjectNotFoundException {
+    campaignRest.deleteCampaign(CAMPAIGN_ID);
+
+    verify(campaignService).deleteCampaign(CAMPAIGN_ID);
+  }
+
+  @Test
+  void deleteCampaignMapsARefusedStateToBadRequest() throws ObjectNotFoundException {
+    doThrow(new IllegalArgumentException("cleanup.invalidState")).when(campaignService).deleteCampaign(CAMPAIGN_ID);
+
+    // What a COMPLETED campaign answers, and what the console must show as a
+    // reason rather than swallow
+    ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                    () -> campaignRest.deleteCampaign(CAMPAIGN_ID));
+    assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    assertTrue(exception.getMessage().contains("cleanup.invalidState"));
+  }
+
+  @Test
+  void deleteCampaignMapsNotFound() throws ObjectNotFoundException {
+    doThrow(new ObjectNotFoundException(NOT_FOUND_CODE)).when(campaignService).deleteCampaign(404L);
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class, () -> campaignRest.deleteCampaign(404L)).getStatusCode());
   }
 
   @Test

@@ -509,6 +509,18 @@ public class CleanupCampaignStorage {
   }
 
   /**
+   * Drops the campaign row itself. Its item rows and unit rows are deleted by the
+   * Service BEFORE this call — there is no cascade, by design: a cascade would
+   * make a campaign row deletable without anyone deciding what happens to the
+   * report and the archived CSV hanging off it.
+   *
+   * @param campaignId campaign identifier
+   */
+  public void deleteCampaign(long campaignId) {
+    campaignDAO.deleteById(campaignId);
+  }
+
+  /**
    * Ancestor chain of an event path within the scan roots: every prefix of the
    * path ending at a '/' boundary strictly below the containing scan root, plus
    * the path itself. Computed in Java so the DAO can match paths EXACTLY

@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,6 +36,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -81,6 +83,7 @@ import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
+import org.exoplatform.document.cleanup.storage.CleanupScanUnitStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -159,6 +162,9 @@ class CleanupCampaignServiceTest {
 
   @Mock
   private FileService              fileService;
+
+  @Mock
+  private CleanupScanUnitStorage   scanUnitStorage;
 
   @Mock
   private CleanupWebSocketService  webSocketService;
@@ -329,6 +335,101 @@ class CleanupCampaignServiceTest {
 
     assertNotNull(campaign);
     verify(scanService).startScan(CAMPAIGN_ID);
+  }
+
+  @Test
+  void aSecondRunIsRefusedWhileAnotherCampaignOwnsAWorker() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaignsByStates(argThat(states -> states.contains(CleanupCampaignState.DRY_RUN_RUNNING)
+        && states.contains(CleanupCampaignState.EXECUTING)))).thenReturn(List.of(campaign(CleanupCampaignState.DRY_RUN_RUNNING)));
+    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200));
+
+    // Two scans at once is ten more reader threads on a repository where ONE
+    // sequential walk already saturated both JCR caches
+    assertEquals("cleanup.workerAlreadyRunning",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> campaignService.createCampaign("Q3 cleanup", new CleanupParams())).getMessage());
+    // No DRAFT row left behind: the guard runs before the insert, so a refused
+    // creation cannot leave a campaign an administrator can neither run nor read
+    verify(campaignStorage, never()).createCampaign(any());
+    verify(scanService, never()).startScan(anyLong());
+  }
+
+  @Test
+  void aPurgeIsRefusedWhileAScanIsStillWalking() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.LOCKED));
+    when(campaignStorage.getCampaignsByStates(argThat(states -> states.contains(CleanupCampaignState.DRY_RUN_RUNNING)))).thenReturn(List.of(campaign(CleanupCampaignState.DRY_RUN_RUNNING)));
+
+    // ACTIVE_STATES alone would allow this: it holds PUBLISHED/LOCKED/EXECUTING
+    // and not DRY_RUN_RUNNING, so a purge could start deleting the very nodes a
+    // scan was reading — and the simulation would describe a tree that no longer
+    // exists
+    assertEquals("cleanup.workerAlreadyRunning",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> campaignService.executeCampaign(CAMPAIGN_ID)).getMessage());
+    verify(executionService, never()).startExecution(anyLong());
+  }
+
+  @Test
+  void deletingACampaignDropsItsReportItsUnitsAndItsArchive() throws ObjectNotFoundException {
+    CleanupCampaign cancelled = campaign(CleanupCampaignState.CANCELLED);
+    cancelled.setArchiveFileId(77L);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(cancelled);
+
+    campaignService.deleteCampaign(CAMPAIGN_ID);
+
+    // The archive FIRST: deleting the row that names it would orphan the binary
+    InOrder inOrder = inOrder(fileService, campaignStorage, scanUnitStorage);
+    inOrder.verify(fileService).deleteFile(77L);
+    inOrder.verify(campaignStorage).deleteItems(CAMPAIGN_ID);
+    inOrder.verify(scanUnitStorage).deleteUnits(CAMPAIGN_ID);
+    inOrder.verify(campaignStorage).deleteCampaign(CAMPAIGN_ID);
+    // THE point of this test: a user's "keep" is a standing decision on their own
+    // file, durable in JCR and outliving the campaign that collected it. Deleting
+    // a campaign must never silently un-keep a file — the next campaign has to
+    // show those decisions again
+    verifyNoInteractions(cleanupJcrStorage);
+  }
+
+  @Test
+  void deletingACampaignWithoutAnArchiveTouchesNoFile() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+
+    campaignService.deleteCampaign(CAMPAIGN_ID);
+
+    verify(campaignStorage).deleteCampaign(CAMPAIGN_ID);
+    verifyNoInteractions(fileService);
+  }
+
+  @Test
+  void aCompletedCampaignIsNeverDeletable() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+
+    // It is the only record that an irreversible mass deletion happened, and the
+    // answer to "where did my file go?" months later. Ageing it out is the
+    // retention job's business, which archives the CSV first
+    assertEquals("cleanup.invalidState",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> campaignService.deleteCampaign(CAMPAIGN_ID)).getMessage());
+    verify(campaignStorage, never()).deleteCampaign(anyLong());
+    verify(campaignStorage, never()).deleteItems(anyLong());
+  }
+
+  @Test
+  void aRunningOrPublishedCampaignMustBeCancelledBeforeItCanBeDeleted() throws ObjectNotFoundException {
+    for (CleanupCampaignState state : List.of(CleanupCampaignState.DRY_RUN_RUNNING,
+                                              CleanupCampaignState.PUBLISHED,
+                                              CleanupCampaignState.LOCKED,
+                                              CleanupCampaignState.EXECUTING)) {
+      when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(state));
+
+      // A running campaign has a worker writing the very rows this would drop; a
+      // published one has told its users a date and collected their decisions
+      assertEquals("cleanup.invalidState",
+                   assertThrows(IllegalArgumentException.class,
+                                () -> campaignService.deleteCampaign(CAMPAIGN_ID)).getMessage(),
+                   state + " must not be deletable");
+    }
+    verify(campaignStorage, never()).deleteCampaign(anyLong());
   }
 
   @Test
