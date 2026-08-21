@@ -169,6 +169,9 @@
       <template slot="item.reclaimedBytes" slot-scope="{item}">
         {{ $cleanupSize(item.reclaimedBytes) }}
       </template>
+      <template slot="item.reclaimableBytes" slot-scope="{item}">
+        {{ $cleanupSize(item.reclaimableBytes) }}
+      </template>
     </v-data-table>
   </div>
 </template>
@@ -184,12 +187,27 @@ const UNKNOWN_FAILURE_KEY = 'cleanup.admin.campaign.unexpectedError';
 // The item table has NO name column: the DTO's 'name' is the last segment of the
 // path, so the Name column is sorted (server-side) on the path.
 const SORT_FIELDS = {name: 'path'};
+// Before a purge, every Reclaimed cell reads 0 B: the column answers a question
+// nobody can ask yet, while the figure that matters for the decision — what this
+// report WOULD free — was not on screen at all. So the last column is Reclaimable
+// until the campaign executes, and the default ordering follows it: a list ranks
+// by the figure it displays (W24), which is the same rule the user review list
+// already obeys.
+const EXECUTED_STATES = ['EXECUTING', 'COMPLETED'];
+const RECLAIMABLE_SORT_FIELD = 'reclaimableBytes';
 const DEFAULT_SORT_FIELD = 'fileSize';
 
 export default {
   props: {
     campaignId: {
       type: Number,
+      default: null,
+    },
+    // Decides which of the two size outcomes the last column shows. Not derived
+    // from the rows: an empty page would make the table guess, and a filtered one
+    // would make it guess differently
+    campaignState: {
+      type: String,
       default: null,
     },
   },
@@ -209,13 +227,16 @@ export default {
       options: {
         page: 1,
         itemsPerPage: 20,
-        sortBy: [DEFAULT_SORT_FIELD],
+        sortBy: [EXECUTED_STATES.includes(this.campaignState) ? DEFAULT_SORT_FIELD : RECLAIMABLE_SORT_FIELD],
         sortDesc: [true],
       },
       itemsPerPageOptions: [20, 50, 100],
     };
   },
   computed: {
+    executed() {
+      return EXECUTED_STATES.includes(this.campaignState);
+    },
     headers() {
       // Only the columns the server can order on are sortable (SORT_FIELDS maps
       // 'name' onto the path); 'ownerFullName' is resolved after the query, so it
@@ -229,7 +250,13 @@ export default {
         {text: this.$t('cleanup.admin.items.state'), value: 'state', align: 'center'},
         {text: this.$t('cleanup.admin.items.fileSize'), value: 'fileSize', align: 'center'},
         {text: this.$t('cleanup.admin.items.versionsSize'), value: 'versionsSize', align: 'center'},
-        {text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center'},
+        // File size STAYS on screen whichever of the two is shown, and not for
+        // symmetry: the Min size filter narrows on that column, and a table
+        // filtering on a figure it does not display is the same quiet mismatch
+        // W24 removed from the ordering
+        this.executed
+          ? {text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center'}
+          : {text: this.$t('cleanup.admin.items.reclaimableBytes'), value: RECLAIMABLE_SORT_FIELD, align: 'center'},
       ];
     },
     stateFilterItems() {
@@ -248,6 +275,19 @@ export default {
   watch: {
     campaignId() {
       this.reload();
+    },
+    // A campaign executes WHILE this table is open, and the last column swaps with
+    // it. Ordering on a column that just disappeared would leave the table ranked
+    // by a figure nobody can see, so the sort moves to the surviving default —
+    // and ONLY when it was on the column being taken away, never overriding an
+    // ordering the administrator chose themselves
+    executed(isExecuted) {
+      const sortedOn = this.options.sortBy[0];
+      if (isExecuted && sortedOn === RECLAIMABLE_SORT_FIELD) {
+        this.options = {...this.options, sortBy: [DEFAULT_SORT_FIELD], page: 1};
+      } else if (!isExecuted && sortedOn === 'reclaimedBytes') {
+        this.options = {...this.options, sortBy: [RECLAIMABLE_SORT_FIELD], page: 1};
+      }
     },
   },
   created() {

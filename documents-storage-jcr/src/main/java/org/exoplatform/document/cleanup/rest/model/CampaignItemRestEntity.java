@@ -52,6 +52,18 @@ public class CampaignItemRestEntity {
    */
   private long   versionsSize;
 
+  /**
+   * What this item's action actually FREES, computed SERVER-side from the one rule
+   * every aggregate and every ordering uses ({@code CleanupSizeUtil}): content plus
+   * the whole history for a DELETE, the removal set alone for a PURGE_VERSIONS.
+   * <p>
+   * Carried on the row rather than derived by each console, because it was being
+   * derived by each console: the review list had its own copy of the CASE in
+   * JavaScript, and a second copy in the admin table would have made three
+   * definitions of one number.
+   */
+  private long   reclaimableBytes;
+
   private Long   lastModifiedDate;
 
   private Long   createdDate;

@@ -34,6 +34,7 @@ import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
 import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitProgressRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
@@ -144,6 +145,7 @@ public class CleanupEntityBuilder {
     fillOwner(entity, item.getOwnerIdentityId(), identityManager);
     entity.setFileSize(item.getFileSize());
     entity.setVersionsSize(item.getVersionsSize());
+    entity.setReclaimableBytes(CleanupSizeUtil.reclaimableBytes(item.getAction(), item.getFileSize(), item.getVersionsSize()));
     entity.setLastModifiedDate(toNullable(item.getLastModifiedDate()));
     entity.setCreatedDate(toNullable(item.getCreatedDate()));
     entity.setAction(item.getAction().name());

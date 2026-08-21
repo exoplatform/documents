@@ -211,7 +211,25 @@ class CleanupEntityBuilderTest {
     assertEquals(6000L, entity.getDecidedAt());
     assertNull(entity.getPurgedAt(), "A zero purge date must map to null");
     assertEquals(128, entity.getReclaimedBytes());
+    // Computed SERVER-side, from the one rule the aggregates sum and the orderings
+    // rank by: a DELETE frees its content AND the whole history it destroys. The
+    // console used to derive this itself, in JavaScript, per screen
+    assertEquals(2048 + 4096, entity.getReclaimableBytes());
     assertEquals("some.failure", entity.getFailureReason());
+  }
+
+  @Test
+  void buildItemReclaimableCountsTheVersionsAloneForAPurge() {
+    when(identityManager.getIdentity(OWNER_IDENTITY_ID)).thenReturn(identity);
+    CleanupCampaignItem item = item();
+    item.setAction(CleanupAction.PURGE_VERSIONS);
+
+    CampaignItemRestEntity entity = CleanupEntityBuilder.build(item, identityManager);
+
+    // The CONTENT survives a purge, so the row must not promise it: this is the
+    // figure both item lists display AND order by, and the banner above them sums
+    assertEquals(4096, entity.getReclaimableBytes());
+    assertEquals(2048, entity.getFileSize(), "The content size is still reported, it is just not reclaimable here");
   }
 
   @Test

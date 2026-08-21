@@ -51,6 +51,7 @@ import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 
 import io.meeds.social.util.JsonUtils;
@@ -636,8 +637,7 @@ public class CleanupCampaignStorage {
    * from one managing few.
    */
   static long reclaimableBytes(CleanupCampaignItemEntity item) {
-    return CleanupAction.DELETE.name().equals(item.getAction()) ? item.getFileSize() + item.getVersionsSize()
-                                                                : item.getVersionsSize();
+    return CleanupSizeUtil.reclaimableBytes(item.getAction(), item.getFileSize(), item.getVersionsSize());
   }
 
   /**

@@ -226,6 +226,7 @@
     <document-cleanup-campaign-items-table
       ref="itemsTable"
       :campaign-id="campaign.id"
+      :campaign-state="campaign.state"
       class="mt-4" />
   </div>
 </template>
