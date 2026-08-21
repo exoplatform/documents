@@ -31,6 +31,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -46,9 +49,14 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.security.access.annotation.Secured;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
@@ -722,6 +730,45 @@ class CleanupCampaignRestTest {
 
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> campaignRest.getCampaignFailures(404L)).getStatusCode());
+  }
+
+  @Test
+  void everyMappingOnTheControllerCarriesARoleCheck() {
+    // The invariant, pinned by reflection because a MISSING annotation is
+    // invisible in a diff: this webapp declares no security-constraint, so
+    // @Secured is the WHOLE control on a method here, and campaign management is
+    // /platform/administrators only. {id}/scan-failures shipped without it and
+    // survived eleven review rounds precisely because nothing failed when it was
+    // absent — reading the diff hunks can never catch that, only enumerating the
+    // class can
+    List<String> unsecured = Arrays.stream(CleanupCampaignRest.class.getDeclaredMethods())
+                                   .filter(method -> Modifier.isPublic(method.getModifiers()))
+                                   .filter(CleanupCampaignRestTest::isRequestMapping)
+                                   .filter(method -> method.getAnnotation(Secured.class) == null)
+                                   .map(Method::getName)
+                                   .sorted()
+                                   .toList();
+
+    assertEquals(List.of(), unsecured, "Every request mapping must carry a @Secured role check");
+  }
+
+  @Test
+  void theRoleCheckInvariantActuallySeesTheMappings() {
+    // Guards the test above against passing vacuously: were the annotation scan
+    // ever to stop matching (a mapping annotation swapped, the reflection
+    // broken), an EMPTY list of unsecured methods would look like success
+    long mappings = Arrays.stream(CleanupCampaignRest.class.getDeclaredMethods())
+                          .filter(method -> Modifier.isPublic(method.getModifiers()))
+                          .filter(CleanupCampaignRestTest::isRequestMapping)
+                          .count();
+
+    assertTrue(mappings >= 18, "The mapping scan found only " + mappings + " endpoints: it is no longer seeing the class");
+  }
+
+  private static boolean isRequestMapping(Method method) {
+    return method.getAnnotation(GetMapping.class) != null || method.getAnnotation(PostMapping.class) != null
+        || method.getAnnotation(PutMapping.class) != null || method.getAnnotation(PatchMapping.class) != null
+        || method.getAnnotation(DeleteMapping.class) != null || method.getAnnotation(RequestMapping.class) != null;
   }
 
   @Test

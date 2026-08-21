@@ -412,6 +412,7 @@ public class CleanupCampaignRest {
     }
   }
 
+  @Secured("administrators")
   @GetMapping(path = "{id}/scan-failures", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(method = "GET", summary = "Retrieve the grouped scan failures of a cleanup campaign", description = "Per-reason counts of the subtrees a campaign's dry run could not walk. Empty unless the scan was recorded incomplete")
   @ApiResponses(value = {
