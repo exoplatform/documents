@@ -137,8 +137,11 @@
       </div>
     </v-alert>
     <document-cleanup-campaign-scan-failures-drawer ref="scanFailuresDrawer" :scan-units="scanUnits" />
-    <document-cleanup-campaign-stats :campaign="campaign" :scan-units="scanUnits" />
-    <document-cleanup-campaign-scan-units :scan-units="scanUnits" />
+    <document-cleanup-campaign-scan-units-drawer ref="scanUnitsDrawer" :scan-units="scanUnits" />
+    <document-cleanup-campaign-stats
+      :campaign="campaign"
+      :scan-units="scanUnits"
+      @open-subtrees="$refs.scanUnitsDrawer.open()" />
     <!-- COMPLETENESS of the report, ABOVE the report itself and above the skip
          reasons below: a dry run that could not walk a subtree produces a report
          missing it entirely, and this used to read as a clean 100% run. Shown from

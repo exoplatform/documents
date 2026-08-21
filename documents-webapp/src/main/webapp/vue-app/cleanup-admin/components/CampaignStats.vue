@@ -40,8 +40,26 @@
          100% of its nodes with one subtree still to finish -->
     <div v-if="showSubtrees" class="d-flex align-center mt-2 text-light-color caption">
       <span>{{ $t('cleanup.admin.campaign.subtreesSettled', {0: scanUnits.settledCount, 1: scanUnits.unitCount}) }}</span>
-      <span v-if="scanUnits.runningCount" class="ms-3">
+      <span v-if="scanUnits.runningCount" class="ms-3 d-flex align-center">
         {{ $t('cleanup.admin.campaign.subtreesWalking', {0: scanUnits.runningCount}) }}
+        <!-- The COUNT stays on the page and the per-subtree detail moves behind
+             this: at sixteen readers the inline list was fifty lines of wrapping
+             paths, and it pushed the report below the fold -->
+        <v-tooltip bottom>
+          <template #activator="{on, attrs}">
+            <v-btn
+              v-bind="attrs"
+              :aria-label="$t('cleanup.admin.campaign.subtreesInFlight')"
+              icon
+              x-small
+              class="ms-1"
+              v-on="on"
+              @click="$emit('open-subtrees')">
+              <v-icon size="14">fas fa-info-circle</v-icon>
+            </v-btn>
+          </template>
+          <span>{{ $t('cleanup.admin.campaign.subtreesInFlightTooltip') }}</span>
+        </v-tooltip>
       </span>
       <span v-if="scanUnits.maxAttemptCount > 1" class="ms-3">
         {{ $t('cleanup.admin.campaign.subtreeAttempts', {0: scanUnits.maxAttemptCount}) }}
