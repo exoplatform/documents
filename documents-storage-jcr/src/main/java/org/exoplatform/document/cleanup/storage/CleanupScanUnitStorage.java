@@ -215,6 +215,16 @@ public class CleanupScanUnitStorage {
     scanUnitDAO.deleteByCampaignId(campaignId);
   }
 
+  /**
+   * Campaign ids whose unit rows outlived their campaign row — see
+   * {@code CleanupScanUnitDAO#findOrphanCampaignIds}.
+   *
+   * @return the orphaned campaign ids, empty when there is nothing to sweep
+   */
+  public List<Long> getOrphanUnitCampaignIds() {
+    return scanUnitDAO.findOrphanCampaignIds();
+  }
+
   public void updateUnitState(long unitId, CleanupScanUnitState state) {
     scanUnitDAO.findById(unitId).ifPresent(entity -> {
       entity.setState(state.name());

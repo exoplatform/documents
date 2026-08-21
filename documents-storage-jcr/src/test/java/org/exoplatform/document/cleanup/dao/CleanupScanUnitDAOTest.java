@@ -17,6 +17,7 @@
 package org.exoplatform.document.cleanup.dao;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.repository.Query;
 
 import org.exoplatform.document.cleanup.constant.CleanupScanUnitState;
+import org.exoplatform.document.cleanup.entity.CleanupCampaignEntity;
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
 
 import jakarta.persistence.EntityManager;
@@ -95,6 +97,10 @@ class CleanupScanUnitDAOTest {
   static void bootMinimalHibernate() {
     Configuration configuration = new Configuration();
     configuration.addAnnotatedClass(CleanupScanUnitEntity.class);
+    // The campaign entity too, for the orphan query alone: it is the one query
+    // here that spans both tables, and a sweep that deleted a LIVE campaign's
+    // units would be far worse than the leftovers it exists to collect
+    configuration.addAnnotatedClass(CleanupCampaignEntity.class);
     configuration.setProperty("hibernate.connection.driver_class", "org.hsqldb.jdbc.JDBCDriver");
     configuration.setProperty("hibernate.connection.url", "jdbc:hsqldb:mem:cleanupScanUnitDaoRows");
     configuration.setProperty("hibernate.connection.username", "sa");
@@ -326,6 +332,63 @@ class CleanupScanUnitDAOTest {
     String jpql = queries.get(0).value();
     assertNotNull(jpql);
     return jpql;
+  }
+
+  @Test
+  void shouldDropEveryUnitRowOfACampaignInOneStatement() throws NoSuchMethodException {
+    long deletedCampaignId = 9301L;
+    try (EntityManager entityManager = sessionFactory.createEntityManager()) {
+      entityManager.getTransaction().begin();
+      entityManager.persist(unit(deletedCampaignId, "/Users/z___", CleanupScanUnitState.DONE, 1));
+      entityManager.persist(unit(deletedCampaignId, "/Trash", CleanupScanUnitState.PENDING, 0));
+      entityManager.getTransaction().commit();
+
+      entityManager.getTransaction().begin();
+      int deleted = entityManager.createQuery(queryOf("deleteByCampaignId", long.class))
+                                 .setParameter("campaignId", deletedCampaignId)
+                                 .executeUpdate();
+      entityManager.getTransaction().commit();
+
+      assertEquals(2, deleted, "The bulk statement must drop every unit row of the campaign, in one go");
+      // The fixture campaigns are untouched: a delete scoped to one campaign that
+      // reached another would drop the checkpoints of a scan still walking
+      assertEquals(9L,
+                   entityManager.createQuery("SELECT COUNT(u) FROM CleanupScanUnit u WHERE u.campaignId IN (:a, :b)", Long.class)
+                                .setParameter("a", CAMPAIGN_ID)
+                                .setParameter("b", OTHER_CAMPAIGN_ID)
+                                .getSingleResult(),
+                   "Another campaign's unit rows must be untouched");
+    }
+  }
+
+  @Test
+  void shouldReportTheUnitRowsWhoseCampaignRowIsGone() throws NoSuchMethodException {
+    // The scan-unit half of the orphan sweep: rows a delete interrupted by a JVM
+    // death left behind, reachable by no query and holding space forever
+    try (EntityManager entityManager = sessionFactory.createEntityManager()) {
+      entityManager.getTransaction().begin();
+      CleanupCampaignEntity liveCampaign = new CleanupCampaignEntity();
+      liveCampaign.setName("Still there");
+      liveCampaign.setState("SIMULATED");
+      entityManager.persist(liveCampaign);
+      entityManager.persist(unit(liveCampaign.getId(), "/Users/kept", CleanupScanUnitState.RUNNING, 1));
+      long orphanedCampaignId = 9401L;
+      entityManager.persist(unit(orphanedCampaignId, "/Users/orphaned", CleanupScanUnitState.DONE, 1));
+      entityManager.getTransaction().commit();
+
+      List<Long> orphans = entityManager.createQuery(queryOf("findOrphanCampaignIds"), Long.class).getResultList();
+
+      assertTrue(orphans.contains(orphanedCampaignId),
+                 "A unit row whose campaign row is gone must be reported as sweepable: " + orphans);
+      assertFalse(orphans.contains(liveCampaign.getId()),
+                  "A LIVE campaign's units must never be swept — they are the checkpoints its scan resumes from: " + orphans);
+    }
+  }
+
+  private String queryOf(String methodName, Class<?>... parameterTypes) throws NoSuchMethodException {
+    Query query = CleanupScanUnitDAO.class.getMethod(methodName, parameterTypes).getAnnotation(Query.class);
+    assertNotNull(query, methodName + " must stay annotated @Query");
+    return query.value();
   }
 
   private static CleanupScanUnitEntity unit(long campaignId, String unitPath, CleanupScanUnitState state, long attemptCount) {

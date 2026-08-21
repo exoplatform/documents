@@ -20,6 +20,7 @@ import java.util.List;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
@@ -96,11 +97,25 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
   String state);
 
   /**
-   * Drops every unit row of a campaign. Only ever called when the campaign itself
-   * is being deleted, and only from a state no worker can be walking in.
+   * Drops every unit row of a campaign, in ONE statement (declared, not derived —
+   * see {@code CleanupCampaignItemDAO#deleteByCampaignId} for why that matters).
+   * Only ever called when the campaign itself is being deleted, and only from a
+   * state no worker can be walking in.
    */
+  @Modifying
   @Transactional
-  void deleteByCampaignId(long campaignId);
+  @Query("DELETE FROM CleanupScanUnit u WHERE u.campaignId = :campaignId")
+  void deleteByCampaignId(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * Campaign ids that have unit rows but NO campaign row: the scan-unit half of
+   * {@code CleanupCampaignItemDAO#findOrphanCampaignIds}, swept at startup for
+   * the same reason.
+   */
+  @Query("SELECT DISTINCT u.campaignId FROM CleanupScanUnit u"
+      + " WHERE u.campaignId NOT IN (SELECT c.id FROM CleanupCampaign c)")
+  List<Long> findOrphanCampaignIds();
 
   /**
    * Nodes the scan of a campaign walked but could not EVALUATE, summed over its

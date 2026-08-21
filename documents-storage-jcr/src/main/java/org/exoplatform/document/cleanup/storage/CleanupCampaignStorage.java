@@ -510,10 +510,26 @@ public class CleanupCampaignStorage {
   }
 
   /**
-   * Drops the campaign row itself. Its item rows and unit rows are deleted by the
-   * Service BEFORE this call — there is no cascade, by design: a cascade would
-   * make a campaign row deletable without anyone deciding what happens to the
-   * report and the archived CSV hanging off it.
+   * Campaign ids whose item rows outlived their campaign row — see
+   * {@code CleanupCampaignItemDAO#findOrphanCampaignIds}.
+   *
+   * @return the orphaned campaign ids, empty when there is nothing to sweep
+   */
+  public List<Long> getOrphanItemCampaignIds() {
+    return itemDAO.findOrphanCampaignIds();
+  }
+
+  /**
+   * Drops the campaign row itself — there is no cascade, by design: a cascade
+   * would make a campaign row deletable without anyone deciding what happens to
+   * the report and the archived CSV hanging off it.
+   * <p>
+   * On the DELETE path this row goes FIRST and its item/unit rows follow
+   * asynchronously (see {@code CleanupCampaignService#deleteCampaign}): dropping
+   * the row is what makes the campaign instantly unreachable, and no query can
+   * reach an item row whose campaign is gone. The retention path is the other way
+   * round — it drops items and KEEPS the row, the archived CSV being the report
+   * from then on.
    *
    * @param campaignId campaign identifier
    */

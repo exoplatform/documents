@@ -22,6 +22,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
@@ -303,7 +304,42 @@ public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignIte
 
   boolean existsByCampaignId(long campaignId);
 
+  /**
+   * Drops every item row of a campaign in ONE statement.
+   *
+   * DECLARED rather than derived, and that is the point: a derived
+   * {@code deleteBy...} SELECTs the matching entities and removes them one at a
+   * time, so dropping the report of a simulated campaign loaded every one of its
+   * rows into a persistence context and issued one DELETE per row — hundreds of
+   * thousands of both, on the corpus this feature exists for. One bulk statement
+   * is one round trip and no persistence context at all.
+   * <p>
+   * Bulk JPQL bypasses the persistence context by design, so entities already
+   * loaded in the calling transaction are NOT evicted. Harmless at both call
+   * sites: the campaign is being deleted outright, or its report has just been
+   * archived and nothing reads those rows again.
+   */
+  @Modifying
   @Transactional
-  void deleteByCampaignId(long campaignId);
+  @Query("DELETE FROM CleanupCampaignItem i WHERE i.campaignId = :campaignId")
+  void deleteByCampaignId(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * Campaign ids that have item rows but NO campaign row — rows nothing can ever
+   * read again, every item query being scoped by campaign id.
+   * <p>
+   * They are what a JVM death in the middle of a delete leaves behind (the
+   * campaign row goes first, so that a half-deleted campaign can never be acted
+   * on), and they would otherwise sit there forever: invisible, and holding the
+   * very space this feature exists to reclaim. Swept at startup.
+   * <p>
+   * Cheap despite the shape: the subquery reads a table capped at
+   * {@code CleanupCampaignService#MAX_CAMPAIGNS} rows, and the outer DISTINCT is
+   * served by IDX_DOC_CLEANUP_ITEM_CAMPAIGN.
+   */
+  @Query("SELECT DISTINCT i.campaignId FROM CleanupCampaignItem i"
+      + " WHERE i.campaignId NOT IN (SELECT c.id FROM CleanupCampaign c)")
+  List<Long> findOrphanCampaignIds();
 
 }

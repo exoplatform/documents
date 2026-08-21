@@ -55,6 +55,7 @@ import org.springframework.data.repository.query.parser.PartTree;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupItemState;
+import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignEntity;
 import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 import org.exoplatform.document.cleanup.rest.CleanupCampaignRest;
@@ -397,6 +398,65 @@ class CleanupCampaignItemDAOTest {
    * cleanup DAOs fails here, at test time, instead of failing the Spring Data
    * repository bootstrap of a deployed platform.
    */
+  @Test
+  void shouldDropEveryItemRowOfACampaignInOneStatement() throws ReflectiveOperationException {
+    // The finding: a DERIVED deleteBy... selects the matching entities and removes
+    // them one at a time, so dropping the report of a simulated campaign loaded
+    // every one of its rows into a persistence context and issued one DELETE per
+    // row — hundreds of thousands of both, on the target corpus. Executed here,
+    // not asserted on the query text, because a bulk statement that does not run
+    // is worse than the derived one it replaced
+    long campaignId = 9101L;
+    long otherCampaignId = 9102L;
+    try (EntityManager entityManager = executionSessionFactory.createEntityManager()) {
+      persist(entityManager, campaignId, "/x-1", CleanupAction.DELETE, MB, 0);
+      persist(entityManager, campaignId, "/x-2", CleanupAction.PURGE_VERSIONS, MB, MB);
+      long survivor = persist(entityManager, otherCampaignId, "/y-1", CleanupAction.DELETE, MB, 0);
+
+      entityManager.getTransaction().begin();
+      int deleted = entityManager.createQuery(queryOf("deleteByCampaignId", long.class))
+                                 .setParameter("campaignId", campaignId)
+                                 .executeUpdate();
+      entityManager.getTransaction().commit();
+
+      assertEquals(2, deleted, "The bulk statement must drop every item row of the campaign, in one go");
+      assertEquals(List.of(survivor),
+                   entityManager.createQuery("SELECT i.id FROM CleanupCampaignItem i WHERE i.campaignId IN (:a, :b)", Long.class)
+                                .setParameter("a", campaignId)
+                                .setParameter("b", otherCampaignId)
+                                .getResultList(),
+                   "Another campaign's rows must be untouched");
+    }
+  }
+
+  @Test
+  void shouldReportTheItemRowsWhoseCampaignRowIsGone() throws ReflectiveOperationException {
+    // What a JVM death in the middle of a delete leaves behind. No item query can
+    // reach these rows — every one of them is scoped by campaign id — so nothing
+    // would ever notice them, in a feature whose whole purpose is reclaiming
+    // space. Executed against real rows: the NOT IN subquery is the one piece a
+    // parse cannot vouch for
+    try (EntityManager entityManager = executionSessionFactory.createEntityManager()) {
+      entityManager.getTransaction().begin();
+      CleanupCampaignEntity liveCampaign = new CleanupCampaignEntity();
+      liveCampaign.setName("Still there");
+      liveCampaign.setState(CleanupCampaignState.SIMULATED.name());
+      entityManager.persist(liveCampaign);
+      entityManager.getTransaction().commit();
+      long orphanedCampaignId = 9201L;
+      persist(entityManager, liveCampaign.getId(), "/kept", CleanupAction.DELETE, MB, 0);
+      persist(entityManager, orphanedCampaignId, "/orphaned", CleanupAction.DELETE, MB, 0);
+
+      List<Long> orphans = entityManager.createQuery(queryOf("findOrphanCampaignIds"), Long.class).getResultList();
+
+      assertTrue(orphans.contains(orphanedCampaignId),
+                 "An item row whose campaign row is gone must be reported as sweepable: " + orphans);
+      assertFalse(orphans.contains(liveCampaign.getId()),
+                  "A LIVE campaign's rows must never be swept — that would delete a report an administrator is reading: "
+                      + orphans);
+    }
+  }
+
   @Test
   void shouldParseEveryQueryOfTheCleanupDaos() {
     List<Method> queryMethods = queryMethods();

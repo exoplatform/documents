@@ -251,10 +251,20 @@ public class CleanupCampaignRest {
     }
   }
 
+  /**
+   * 204 and not 202, deliberately, although the report rows are dropped
+   * asynchronously (see {@code CleanupCampaignService#deleteCampaign}): the
+   * campaign row is gone before this answers, so the resource really IS deleted
+   * and nothing about it is still pending. What continues in the background is
+   * the collection of rows no query can reach any more — the reason it is not
+   * done here being that a simulated campaign's report holds hundreds of
+   * thousands of them, and no REST call may depend on work whose duration grows
+   * with the corpus.
+   */
   @Secured("administrators")
   @DeleteMapping("{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  @Operation(method = "DELETE", summary = "Delete a cleanup campaign", description = "Delete a DRAFT, SIMULATED or CANCELLED campaign with its report, its scan units and its archive. A COMPLETED campaign is never deletable — it records an irreversible purge — and a running or published one must be cancelled first. The users' keep decisions are NOT removed")
+  @Operation(method = "DELETE", summary = "Delete a cleanup campaign", description = "Delete a DRAFT, SIMULATED or CANCELLED campaign with its report, its scan units and its archive. Answers as soon as the campaign is unreachable, its report rows being dropped in the background. A COMPLETED campaign is never deletable — it records an irreversible purge — and a running or published one must be cancelled first. The users' keep decisions are NOT removed")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "204", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
