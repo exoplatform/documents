@@ -108,7 +108,7 @@ public class CleanupCampaignService {
    * writing file cleanup-campaign-N.csv', once per retention tick, forever. Every
    * archive attempt failed that way, which also meant the retention job never
    * dropped a single item row: it archives BEFORE purging, deliberately, and the
-   * archive never succeeded. See {@link #registerFileNamespace()}.
+   * archive never succeeded. See {@link #ensureFileNamespace()}.
    */
   public static final String                      FILE_NAMESPACE              = "documentsCleanup";
 
@@ -333,7 +333,6 @@ public class CleanupCampaignService {
    */
   void recoverAfterRestart() {
     try {
-      registerFileNamespace();
       if (!campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED)).isEmpty()) {
         registerObservationListenerWithRetry();
       }
@@ -565,7 +564,9 @@ public class CleanupCampaignService {
   }
 
   /**
-   * Registers {@link #FILE_NAMESPACE} with the file store, idempotently.
+   * Registers {@link #FILE_NAMESPACE} with the file store, idempotently
+   * ({@code createNameSpace} looks the name up first and only inserts when
+   * absent), immediately before the write that needs it.
    * <p>
    * Without it every {@code writeFile} under that namespace fails on a
    * NullPointerException raised inside {@code DataStorage#create}, which looks the
@@ -574,20 +575,28 @@ public class CleanupCampaignService {
    * the retention tick simply retried it every five minutes, and no report was
    * ever archived while the console showed nothing wrong.
    * <p>
-   * Called from the restart recovery rather than from a {@code @PostConstruct}
-   * for the same reason the observation listener is: the file store's own tables
-   * may not be ready at bean-creation time, and this must not be able to fail a
-   * WAR's startup. A failure here is logged and swallowed — the archive is a
-   * retention concern, and the next restart tries again.
+   * AT THE POINT OF USE, and no longer at startup — that first attempt was the
+   * same mistake this module has now made twice. Registration is a transactional
+   * write ({@code NameSpaceServiceImpl#createNameSpace} is woven by
+   * {@code ExoTransactionalAspect}), and the startup recovery runs on a
+   * {@code CompletableFuture} thread with no container established, exactly where
+   * the parallel scan's readers failed for want of a transaction. Its own failure
+   * was swallowed as a WARN, so a registration that never worked looked identical
+   * to one that did — and the archive kept failing with the very NPE this was
+   * added to prevent.
+   * <p>
+   * Here it runs on the retention tick, the thread that is already writing
+   * successfully (it reaches {@code DataStorage} to fail inside it), so the
+   * transaction it needs is the one the write itself uses. The cost is one indexed
+   * lookup per archived campaign, which is nothing next to writing the CSV.
+   * <p>
+   * NOT caught here, deliberately: the caller already treats any archiving failure
+   * as 'keep the item detail and retry next tick', which is the correct handling
+   * for this one too — and swallowing it separately is what hid the problem the
+   * first time.
    */
-  private void registerFileNamespace() {
-    try {
-      nameSpaceService.createNameSpace(FILE_NAMESPACE, "Documents cleanup campaign CSV reports");
-    } catch (Exception e) {
-      LOG.warn("Error registering the {} file namespace: archiving a cleanup campaign report will fail until it exists",
-               FILE_NAMESPACE,
-               e);
-    }
+  private void ensureFileNamespace() {
+    nameSpaceService.createNameSpace(FILE_NAMESPACE, "Documents cleanup campaign CSV reports");
   }
 
   /**
@@ -1420,6 +1429,7 @@ public class CleanupCampaignService {
   private void archiveAndPurgeItems(CleanupCampaign campaign) {
     Path csvFile = null;
     try {
+      ensureFileNamespace();
       csvFile = Files.createTempFile("cleanup-campaign-" + campaign.getId() + "-", ".csv");
       try (OutputStream csvOutput = new BufferedOutputStream(Files.newOutputStream(csvFile))) {
         writeCsv(campaign.getId(), csvOutput);

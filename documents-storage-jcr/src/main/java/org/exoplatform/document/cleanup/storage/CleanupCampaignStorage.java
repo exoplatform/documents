@@ -34,7 +34,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -604,14 +603,17 @@ public class CleanupCampaignStorage {
   /**
    * Translates a REQUESTED ordering into the one the DATABASE can apply, which
    * today means exactly one key: the logical
-   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY} becomes an
-   * {@code ORDER BY} over {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES_ORDER_BY}
-   * — the very expression every reclaimable aggregate sums, so the list is
-   * ranked by the same definition of 'reclaimable' the campaign totals add up.
-   * A plain {@code Sort.by(field)} cannot express it: it is a computed CASE, not
-   * a column, hence {@link JpaSort#unsafe(Sort.Direction, String...)} (legal
-   * here, and only here, because both item queries are declared {@code @Query}
-   * ones).
+   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY} becomes an {@code ORDER BY} on
+   * {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES}, the very column every
+   * reclaimable aggregate sums, so the list is ranked by the same definition of
+   * 'reclaimable' the campaign totals add up.
+   * <p>
+   * IT USED TO NEED {@code JpaSort.unsafe}, and no longer does. The key was a
+   * computed CASE that no plain {@code Sort.by(field)} could express, which
+   * forced an unsafe sort and the parenthesization workaround around it (Spring
+   * Data prefixes an unsafe property with the query alias unless it holds a
+   * '('). Now that the figure is a persisted, indexed column, this is an ordinary
+   * property sort — one less workaround, and an ORDER BY an index can serve.
    * <p>
    * Every other key is passed through untouched, direction and POSITION
    * included: the id tiebreaker the REST layer appends must stay the LAST key,
@@ -627,7 +629,7 @@ public class CleanupCampaignStorage {
     List<Sort.Order> orders = new ArrayList<>();
     for (Sort.Order order : sort) {
       if (CleanupConstants.RECLAIMABLE_SORT_KEY.equals(order.getProperty())) {
-        JpaSort.unsafe(order.getDirection(), CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY).forEach(orders::add);
+        orders.add(new Sort.Order(order.getDirection(), CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY));
       } else {
         orders.add(order);
       }
@@ -656,6 +658,17 @@ public class CleanupCampaignStorage {
    */
   static long reclaimableBytes(CleanupCampaignItemEntity item) {
     return CleanupSizeUtil.reclaimableBytes(item.getAction(), item.getFileSize(), item.getVersionsSize());
+  }
+
+  /**
+   * The stored figure of a row, which is what the database orders and sums on.
+   * Read rather than recomputed on purpose: the in-memory comparator and the SQL
+   * ORDER BY must rank a page identically, and reading the very column the query
+   * sorted by is the only way that holds by construction rather than by
+   * agreement between two expressions.
+   */
+  static long storedReclaimableBytes(CleanupCampaignItemEntity item) {
+    return item.getReclaimableBytes();
   }
 
   /**
@@ -706,11 +719,12 @@ public class CleanupCampaignStorage {
       case "state" -> Comparator.comparing(CleanupCampaignItemEntity::getState, Comparator.nullsLast(String::compareTo));
       case "action" -> Comparator.comparing(CleanupCampaignItemEntity::getAction, Comparator.nullsLast(String::compareTo));
       case "reclaimedBytes" -> Comparator.comparingLong(CleanupCampaignItemEntity::getReclaimedBytes);
-      // Both spellings of the SAME key: the logical one the caller requests, and
-      // the JPQL expression querySort() turns it into — so the merge keeps
-      // mirroring the database whichever of the two orderings reaches it
-      case CleanupConstants.RECLAIMABLE_SORT_KEY, CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY ->
-        Comparator.comparingLong(CleanupCampaignStorage::reclaimableBytes);
+      // ONE label, where there used to be two: the logical key the caller requests
+      // and the property querySort() turns it into are now the same string, the
+      // figure having become an entity attribute. Both spellings were needed while
+      // it was a JPQL CASE expression. The equality is pinned by a test rather
+      // than left to look like a coincidence
+      case CleanupConstants.RECLAIMABLE_SORT_KEY -> Comparator.comparingLong(CleanupCampaignStorage::storedReclaimableBytes);
       default -> null;
     };
   }
@@ -728,6 +742,10 @@ public class CleanupCampaignStorage {
     entity.setLastModifiedDate(toDate(candidate.getLastModifiedTime()));
     entity.setCreatedDate(toDate(candidate.getCreatedTime()));
     entity.setAction(candidate.getAction().name());
+    // The ONE write point of the derived column, with its sibling below: recomputed
+    // from CleanupSizeUtil on every save, so no path can persist a row whose stored
+    // figure disagrees with the action and sizes beside it
+    entity.setReclaimableBytes(reclaimableBytes(entity));
     if (candidate.isExempted()) {
       // A previously-exempted file stays visible as 'Kept' in every campaign,
       // carrying the mixin's decision metadata when readable
@@ -834,6 +852,10 @@ public class CleanupCampaignStorage {
     entity.setLastModifiedDate(toDate(item.getLastModifiedDate()));
     entity.setCreatedDate(toDate(item.getCreatedDate()));
     entity.setAction(item.getAction().name());
+    // Recomputed here and not carried from the model: a revalidation refreshes an
+    // item's action and sizes right before the purge saves it, and the stored
+    // figure has to follow them or the ordering and the totals drift apart
+    entity.setReclaimableBytes(reclaimableBytes(entity));
     entity.setState(item.getState().name());
     entity.setComputedAt(toDate(item.getComputedAt()));
     entity.setDecidedBy(item.getDecidedBy());

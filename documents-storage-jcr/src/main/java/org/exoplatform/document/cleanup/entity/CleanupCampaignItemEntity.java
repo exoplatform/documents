@@ -84,6 +84,27 @@ public class CleanupCampaignItemEntity implements Serializable {
   @Column(name = "ACTION", nullable = false)
   private String            action;
 
+  /**
+   * What this item's OWN action frees: {@code fileSize + versionsSize} for a
+   * DELETE, {@code versionsSize} alone for a PURGE_VERSIONS.
+   * <p>
+   * DERIVED, and persisted anyway — the one deliberate denormalization of this
+   * schema. It was a JPQL {@code CASE} expression, which no index can serve: the
+   * purge consumes its candidates biggest first, and sorting on an expression
+   * made every batch a filesort over the campaign's remaining rows (measured at
+   * 318 ms against 4 ms per batch on 200k rows, and the batch count is in the
+   * tens of thousands). Stored, it lets ONE index serve both the keyset predicate
+   * and its order.
+   * <p>
+   * It cannot drift: every entity reaching the database is built by
+   * {@code CleanupCampaignStorage#toEntity}, which recomputes this from
+   * {@code CleanupSizeUtil} — still the single DEFINITION — on every save. This
+   * column is the single READ, replacing the CASE that the Java comparator used
+   * to mirror.
+   */
+  @Column(name = "RECLAIMABLE_BYTES")
+  private long              reclaimableBytes;
+
   @Column(name = "STATE", nullable = false)
   private String            state;
 

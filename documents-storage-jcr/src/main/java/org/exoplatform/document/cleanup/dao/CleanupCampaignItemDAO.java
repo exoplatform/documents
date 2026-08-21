@@ -32,50 +32,58 @@ import org.exoplatform.document.cleanup.entity.CleanupCampaignItemEntity;
 public interface CleanupCampaignItemDAO extends JpaRepository<CleanupCampaignItemEntity, Long> {
 
   /**
-   * Reclaimable bytes of an item — the bytes the item's OWN action frees:
+   * The persisted reclaimable figure of an item — the bytes the item's OWN action
+   * frees:
    * <ul>
    * <li>DELETE: the content size PLUS {@code versionsSize}. A hard delete
    * destroys the file's whole version history along with its content, and
    * {@code CleanupJcrStorage#deleteNode} reports exactly that sum back as
-   * {@code reclaimedBytes} — summing content alone here under-reported every
-   * DELETE candidate by the entire weight of its versions, on the very number
-   * an administrator publishes a campaign on</li>
+   * {@code reclaimedBytes} — summing content alone under-reported every DELETE
+   * candidate by the entire weight of its versions, on the very number an
+   * administrator publishes a campaign on</li>
    * <li>PURGE_VERSIONS: {@code versionsSize} alone, the content being
    * untouched</li>
    * </ul>
    * This works as a plain sum because {@code versionsSize} means 'the version
    * bytes THIS action reclaims', not 'the whole history' nor 'the purgeable
    * subset': the scan writes the whole history on a DELETE row and the removal
-   * set on a PURGE_VERSIONS one (see
-   * {@code CleanupJcrStorage#toCandidate}), so prediction and execution report
-   * the same figure.
+   * set on a PURGE_VERSIONS one (see {@code CleanupJcrStorage#toCandidate}), so
+   * prediction and execution report the same figure.
    * <p>
-   * The 'DELETE' literal must stay equal to {@code CleanupAction.DELETE.name()}
-   * (the entity stores the action as a plain string) — guarded by
-   * CleanupCampaignItemDAOTest. Defined once and concatenated (compile-time
-   * constant) into the queries below.
+   * IT WAS A JPQL {@code CASE} EXPRESSION AND IS NOW A COLUMN, because no index
+   * can serve an ORDER BY over an expression: the purge consumes its candidates
+   * biggest first, which turned every batch into a filesort over the campaign's
+   * remaining rows — 318 ms against 4 ms per batch on 200k rows, tens of
+   * thousands of batches per run, and the cost growing with the square of the
+   * item count. Exactly the shape keyset paging replaced offset paging to avoid,
+   * reintroduced through the ordering. Stored, ONE index
+   * (IDX_DOC_CLEANUP_ITEM_RECLAIMABLE) serves the keyset predicate and its order
+   * together.
+   * <p>
+   * The denormalization removes a duplicate rather than adding one: the
+   * definition lives in {@code CleanupSizeUtil}, applied by
+   * {@code CleanupCampaignStorage#toEntity} on every save, and this column is now
+   * the single thing SQL and the in-memory comparator both read — where the CASE
+   * expression and the Java method used to mirror each other and could drift.
+   * <p>
+   * Named as the ENTITY ATTRIBUTE here (no query alias), which is also the
+   * logical sort key the REST layer accepts
+   * ({@code CleanupConstants#RECLAIMABLE_SORT_KEY}) — an equality pinned by a
+   * test, since it is what lets the review list be ordered by an ordinary
+   * property sort instead of an unsafe one.
    */
-  String RECLAIMABLE_BYTES = "CASE WHEN i.action = 'DELETE' THEN i.fileSize + i.versionsSize ELSE i.versionsSize END";
+  String RECLAIMABLE_BYTES_PROPERTY = "reclaimableBytes";
 
   /**
-   * {@link #RECLAIMABLE_BYTES} as an {@code ORDER BY} key, which is how the
-   * review list — asked for it under the logical key
-   * {@code CleanupConstants#RECLAIMABLE_BYTES_SORT_KEY} — gets ordered by what
-   * each row actually FREES instead of by its
-   * content size alone — a 1 MB file carrying 500 MB of history displayed 501 MB
-   * and sorted as 1 MB, which defeats the very triage the ordering exists for.
-   * <p>
-   * Concatenated from the constant above rather than restated: an ORDER BY
-   * drifting from the SUM the campaign totals would rank rows by one definition
-   * of 'reclaimable' and add them up by another.
-   * <p>
-   * The PARENTHESES are load-bearing, not cosmetic: the Storage hands this
-   * expression over as a {@code JpaSort.unsafe} order, and Spring Data prefixes
-   * a sort property with the query alias UNLESS it holds a '(' (see
-   * {@code JpaQueryTransformerSupport#shouldPrefixWithAlias}) — bare, the CASE
-   * would be rendered as {@code i.CASE WHEN ...} and the query would not parse.
+   * The same column spliced into JPQL text, i.e. WITH the query alias — and the
+   * alias is why these are two constants rather than one. Spring Data appends the
+   * alias itself to a safe {@code Sort} property, so handing it
+   * {@code i.reclaimableBytes} renders {@code i.i.reclaimableBytes} and the query
+   * does not parse; JPQL text, conversely, needs the alias. Derived by
+   * concatenation so the column can only be renamed in one place (and so both
+   * stay compile-time constants, which the switch over sort keys requires).
    */
-  String RECLAIMABLE_BYTES_ORDER_BY = "(" + RECLAIMABLE_BYTES + ")";
+  String RECLAIMABLE_BYTES = "i." + RECLAIMABLE_BYTES_PROPERTY;
 
   Page<CleanupCampaignItemEntity> findByCampaignId(long campaignId, Pageable pageable);
 

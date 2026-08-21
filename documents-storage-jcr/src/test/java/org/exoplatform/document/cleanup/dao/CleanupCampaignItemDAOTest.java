@@ -16,6 +16,7 @@
  */
 package org.exoplatform.document.cleanup.dao;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -116,6 +117,13 @@ class CleanupCampaignItemDAOTest {
 
   private static final String        CHANGELOG_RESOURCE = "db/changelog/documents-cleanup-rdbms.db.changelog-1.1.0.xml";
 
+  /**
+   * Rows of the keyset-walk fixture, and therefore the bound the walk may not
+   * exceed: a cursor that stops advancing hands the same rows out forever, and a
+   * guard against an infinite loop must not itself loop forever.
+   */
+  private static final int           EXPECTED_WALK_ROWS = 4;
+
   /** One megabyte, so the fixtures below read as the sizes the finding described. */
   private static final long          MB                 = 1024L * 1024L;
 
@@ -179,57 +187,52 @@ class CleanupCampaignItemDAOTest {
   }
 
   @Test
-  void shouldKeepReclaimableBytesFragmentAlignedWithDeleteActionName() {
-    // The JPQL fragment must embed the enum name as a string literal (the
-    // entity stores the action as a plain string): a CleanupAction.DELETE
-    // rename must break this test, never silently break the queries
-    assertTrue(normalize(CleanupCampaignItemDAO.RECLAIMABLE_BYTES).contains("i.action = '" + CleanupAction.DELETE.name() + "'"),
-               "RECLAIMABLE_BYTES JPQL fragment no longer matches CleanupAction.DELETE.name()");
+  void theReclaimableColumnIsNamedAsAnEntityAttributeAndAsTheSortKey() {
+    // Three names that MUST agree now that the figure is a column: the JPQL text
+    // form carries the query alias, the Sort form must NOT (Spring Data appends
+    // the alias itself, so 'i.reclaimableBytes' renders as
+    // 'i.i.reclaimableBytes'), and the logical key the REST layer accepts has to
+    // be the entity attribute for the translation to be an ordinary property sort
+    // at all. This replaces the parenthesization guard the CASE expression needed:
+    // that whole workaround is gone with the expression
+    assertEquals("i." + CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY,
+                 CleanupCampaignItemDAO.RECLAIMABLE_BYTES,
+                 "The JPQL form must be the property form with the query alias, never a restatement");
+    assertEquals(CleanupConstants.RECLAIMABLE_SORT_KEY,
+                 CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY,
+                 "The REST sort key and the entity attribute must be the same name");
+    assertDoesNotThrow(() -> CleanupCampaignItemEntity.class.getDeclaredField(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY),
+                       "The sort property must name a REAL attribute of the item entity: Spring Data appends the query"
+                           + " alias to it, so anything else renders into a query that does not parse");
+    // The two BRANCHES of the rule (a DELETE frees content plus its whole history,
+    // a PURGE_VERSIONS the versions alone) are no longer JPQL text to assert on:
+    // they live in CleanupSizeUtil, tested there, and are applied on every save by
+    // CleanupCampaignStorage#toEntity
   }
 
-  /**
-   * The two branches of the reclaimable expression, asserted on the JPQL text
-   * because nothing in this plain-JUnit suite executes it against rows: a DELETE
-   * frees its content AND the whole version history it destroys, a
-   * PURGE_VERSIONS frees the versions alone. Dropping the {@code + i.versionsSize}
-   * addend parses perfectly and silently under-reports every DELETE candidate by
-   * the entire weight of its versions — on the one figure an administrator
-   * publishes a campaign on, and the reason the completion summary's reclaimed
-   * total exceeded the reclaimable it had announced.
-   */
   @Test
-  void shouldSumTheContentAndTheWholeVersionHistoryForADeleteAction() {
-    String fragment = normalize(CleanupCampaignItemDAO.RECLAIMABLE_BYTES);
-
-    assertTrue(fragment.contains("THEN i.fileSize + i.versionsSize"),
-               "A DELETE destroys the content AND the whole version history: both terms must be summed — " + fragment);
-    assertTrue(fragment.contains("ELSE i.versionsSize END"),
-               "A PURGE_VERSIONS leaves the content in place: the versions size alone — " + fragment);
-  }
-
-  /**
-   * DOCUMENTATION of intent, not the guard: the ORDER BY form of the reclaimable
-   * expression must BE the expression the aggregates sum, not a second copy of
-   * it — the review list is ranked by one definition of 'reclaimable' and the
-   * campaign banner totals another the moment the two texts drift, and a restated
-   * CASE drifts silently (it parses, it sums, it just ranks by something else).
-   * <p>
-   * It also states WHY the parentheses are there. It does NOT prove they work:
-   * this is a comparison of the constant against its own shape, so it would keep
-   * passing if the Spring Data internal it works around
-   * ({@code JpaQueryTransformerSupport#shouldPrefixWithAlias}) ever changed. The
-   * guard that would fail is
-   * {@link #shouldRankARealRepositoryPageByReclaimableBytesThroughTheProductionSortTranslation()},
-   * which EXECUTES the whole translation — delete this test if the shape ever
-   * stops being the intent, never that one.
-   */
-  @Test
-  void shouldOrderByTheVeryExpressionTheReclaimableAggregatesSum() {
-    assertEquals("(" + CleanupCampaignItemDAO.RECLAIMABLE_BYTES + ")",
-                 CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY,
-                 "The ORDER BY key must be the aggregated expression itself, parenthesized — never a restatement of it");
-    assertTrue(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY.startsWith("("),
-               "Spring Data would prefix an unparenthesized sort expression with the query alias");
+  void theBackfillOfTheReclaimableColumnMatchesTheDeleteActionName() throws Exception {
+    // The literal moved rather than disappeared: no JPQL embeds 'DELETE' any
+    // more, but the one-time backfill of the new column does, and a
+    // CleanupAction.DELETE rename would leave it computing every DELETE row as a
+    // version purge — silently, and only for the rows that existed at migration
+    // time
+    NodeList updates = changelog().getElementsByTagName("update");
+    String backfill = null;
+    for (int index = 0; index < updates.getLength(); index++) {
+      Element update = (Element) updates.item(index);
+      if (ITEM_TABLE.equals(update.getAttribute("tableName"))) {
+        Element column = (Element) update.getElementsByTagName("column").item(0);
+        if ("RECLAIMABLE_BYTES".equals(column.getAttribute("name"))) {
+          backfill = column.getAttribute("valueComputed");
+        }
+      }
+    }
+    assertNotNull(backfill, "The RECLAIMABLE_BYTES column must be BACKFILLED: a 0 there sorts and sums as 'frees nothing'");
+    assertTrue(backfill.contains("ACTION = '" + CleanupAction.DELETE.name() + "'"),
+               "The backfill no longer matches CleanupAction.DELETE.name(): " + backfill);
+    assertTrue(backfill.contains("FILE_SIZE + VERSIONS_SIZE"),
+               "A DELETE frees its content AND the whole history it destroys: " + backfill);
   }
 
   /**
@@ -290,10 +293,9 @@ class CleanupCampaignItemDAOTest {
       } catch (RuntimeException e) {
         throw new AssertionError("The default ordering of GET published/my-items no longer renders into an executable"
             + " query. Either CleanupCampaignStorage#querySort stopped translating the reclaimable key into the JPQL"
-            + " expression, or CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY lost its PARENTHESES — Spring Data"
-            + " prefixes an unsafe sort property with the query alias unless it holds a '(', so the CASE would render as"
-            + " 'i.CASE WHEN ...'. If spring-data-jpa itself changed, replace the workaround by whatever it now needs;"
-            + " do NOT relax this test: " + e.getMessage(), e);
+            + " column, or CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY stopped naming an attribute of the item"
+            + " entity — Spring Data appends the query alias to a safe sort property, so a property that is not one"
+            + " renders into a query that does not parse: " + e.getMessage(), e);
       }
 
       assertEquals(List.of(smallFileHugeHistory, bigFileNoHistory, emptyFileTiedHistory, hugeFilePurgedVersions),
@@ -301,11 +303,15 @@ class CleanupCampaignItemDAOTest {
                    "The repository page must rank rows by what each action frees, ties broken on the id");
 
       String renderedOrderBy = renderedOrderBy(executedStatements);
-      assertTrue(renderedOrderBy.contains("case when"),
-                 "The computed reclaimable key must reach the database's ORDER BY, not be dropped or replaced by a column: "
-                     + renderedOrderBy);
-      assertFalse(renderedOrderBy.matches(".*\\w+\\.case\\b.*"),
-                  "An alias prefix leaked into the rendered ORDER BY — the parenthesization no longer holds it back: "
+      // The COLUMN reaches the ORDER BY, and no expression does. This assertion was
+      // the exact opposite one commit ago — it required 'case when' — and that is
+      // the point: sorting on an expression is unindexable, so every purge batch
+      // became a filesort over the campaign's remaining rows. A 'case when'
+      // reappearing here means somebody put the computation back
+      assertTrue(renderedOrderBy.contains("reclaimable_bytes"),
+                 "The reclaimable ORDER BY must be the stored column, which an index can serve: " + renderedOrderBy);
+      assertFalse(renderedOrderBy.contains("case when"),
+                  "An expression is back in the ORDER BY: no index can serve it, and every purge batch becomes a filesort — "
                       + renderedOrderBy);
       assertTrue(renderedOrderBy.matches(".*\\.id( asc)?$"),
                  "The id tiebreaker must stay the LAST rendered order key: without it the ordering is not total, and offset"
@@ -458,6 +464,15 @@ class CleanupCampaignItemDAOTest {
         for (CleanupCampaignItemEntity entity : page) {
           walked.add(entity.getId());
         }
+        // BOUNDED, and the bound is the point: NON-PROGRESS is the other half of
+        // what this cursor protects. A '<=' instead of '<' makes the walk stop
+        // advancing past a tie block, and an unbounded loop then does not fail —
+        // it never returns, growing `walked` until the build is killed, which
+        // tells CI nothing. Four rows in the fixture, so anything past a handful
+        // of pages is already a stalled cursor
+        assertTrue(walked.size() <= EXPECTED_WALK_ROWS,
+                   "The cursor stopped advancing: it re-read rows it had already handed out (" + walked.size()
+                       + " rows walked over " + EXPECTED_WALK_ROWS + " in the fixture)");
         if (!page.isEmpty()) {
           CleanupCampaignItemEntity last = page.get(page.size() - 1);
           lastReclaimableBytes = CleanupSizeUtil.reclaimableBytes(last.getAction(), last.getFileSize(), last.getVersionsSize());
@@ -828,6 +843,10 @@ class CleanupCampaignItemDAOTest {
     item.setFileSize(fileSize);
     item.setVersionsSize(versionsSize);
     item.setAction(action.name());
+    // Written like production writes it: CleanupCampaignStorage#toEntity recomputes
+    // this from CleanupSizeUtil on every save, so a fixture that skipped it would
+    // leave every row at 0 and make the ordering assertions below vacuous
+    item.setReclaimableBytes(CleanupSizeUtil.reclaimableBytes(action.name(), fileSize, versionsSize));
     item.setState(CleanupItemState.CANDIDATE.name());
     entityManager.getTransaction().begin();
     entityManager.persist(item);
@@ -842,7 +861,7 @@ class CleanupCampaignItemDAOTest {
    */
   private List<Long> reclaimableOrderedIds(EntityManager entityManager, long campaignId) {
     return entityManager.createQuery("SELECT i FROM CleanupCampaignItem i WHERE i.campaignId = :campaignId ORDER BY "
-        + CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY + " DESC, i.id ASC", CleanupCampaignItemEntity.class)
+        + CleanupCampaignItemDAO.RECLAIMABLE_BYTES + " DESC, i.id ASC", CleanupCampaignItemEntity.class)
                         .setParameter("campaignId", campaignId)
                         .getResultList()
                         .stream()

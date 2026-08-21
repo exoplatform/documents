@@ -27,15 +27,17 @@ public class CleanupConstants {
   /**
    * Logical sort key naming the RECLAIMABLE ordering of campaign items — the one
    * and only name for it, shared by the REST sortable-field allowlist and by the
-   * Storage translating it into an ORDER BY over
-   * {@code CleanupCampaignItemDAO#RECLAIMABLE_BYTES_ORDER_BY} (the very
-   * expression every reclaimable aggregate sums).
+   * Storage translating it into an ORDER BY on
+   * {@code CleanupCampaignItemDAO#RECLAIMABLE_BYTES} (the very column every
+   * reclaimable aggregate sums).
    * <p>
    * Lives HERE, and not with the JPQL it ends up as, because it crosses layers:
    * the REST layer must accept it without importing a DAO, the Storage must
    * recognize it, and a second literal in either place would let the two drift
-   * apart silently. Deliberately NOT an attribute of the item entity — it names
-   * a computed expression, not a column.
+   * apart silently. It happens to equal the entity's attribute name now that the
+   * figure is a persisted column — pinned by a test, since that equality is what
+   * lets the Storage translate this into an ordinary property sort instead of an
+   * unsafe one.
    */
   public static final String       RECLAIMABLE_SORT_KEY  = "reclaimableBytes";
 

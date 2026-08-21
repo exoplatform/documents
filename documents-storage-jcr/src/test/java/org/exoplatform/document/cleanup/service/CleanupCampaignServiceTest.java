@@ -440,16 +440,54 @@ class CleanupCampaignServiceTest {
   }
 
   @Test
-  void theArchiveNamespaceIsRegisteredAtStartup() {
+  void theArchiveNamespaceIsRegisteredBEFOREEveryArchiveWrite() throws Exception {
     // Without it every writeFile under it fails on a NullPointerException raised
     // inside DataStorage#create, which looks the namespace up by name and never
     // guards the miss. It failed in the worst way: our own caller logs a WARN and
     // keeps the item detail, so the retention tick retried every five minutes and
     // NO report was ever archived — hence no item row was ever dropped either,
-    // the archive being deliberately written before the purge
-    campaignService.recoverAfterRestart();
+    // the archive being deliberately written before the purge.
+    //
+    // AT THE POINT OF USE and not at startup, which was the first attempt and did
+    // not work: registration is a transactional write, the startup recovery runs
+    // on a CompletableFuture thread with no container established, and its own
+    // failure was swallowed as a WARN — so a registration that never worked looked
+    // exactly like one that did. Pinned as an ORDER here, because that is the
+    // whole property: registered, THEN written
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                       .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                            1000L)));
+    when(campaignStorage.hasItems(101L)).thenReturn(true);
+    when(campaignStorage.getItemsPage(eq(101L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+    when(fileService.writeFile(any())).thenReturn(archiveFileItem());
 
-    verify(nameSpaceService).createNameSpace(eq(CleanupCampaignService.FILE_NAMESPACE), anyString());
+    campaignService.applyRetention();
+
+    InOrder inOrder = inOrder(nameSpaceService, fileService);
+    inOrder.verify(nameSpaceService).createNameSpace(eq(CleanupCampaignService.FILE_NAMESPACE), anyString());
+    inOrder.verify(fileService).writeFile(any());
+  }
+
+  @Test
+  void aFailingNamespaceRegistrationKeepsTheItemDetail() throws Exception {
+    // NOT swallowed separately: any archiving failure means 'keep the item detail
+    // and retry next tick', and a registration failure is one of them. Swallowing
+    // it on its own is precisely what hid the original bug
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                       .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                            1000L)));
+    when(campaignStorage.hasItems(101L)).thenReturn(true);
+    doThrow(new IllegalStateException("No container here")).when(nameSpaceService)
+                                                          .createNameSpace(eq(CleanupCampaignService.FILE_NAMESPACE),
+                                                                           anyString());
+
+    campaignService.applyRetention();
+
+    verify(fileService, never()).writeFile(any());
+    verify(campaignStorage, never()).deleteItems(anyLong());
+    verify(campaignStorage, never()).saveCampaign(any());
   }
 
   @Test
