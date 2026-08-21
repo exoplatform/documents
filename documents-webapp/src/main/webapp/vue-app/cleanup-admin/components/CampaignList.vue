@@ -39,7 +39,10 @@
       <v-tooltip v-if="item.startedDate" bottom>
         <template #activator="{on, attrs}">
           <span v-bind="attrs" v-on="on">
-            <relative-date-format :value="new Date(item.startedDate)" />
+            <!-- Keyed on the minute tick so the text is RE-COMPUTED: the component
+                 renders 'about 32 minutes ago' from its value once, and a row that
+                 nothing pushes an event for is never re-rendered otherwise -->
+            <relative-date-format :key="minuteTick" :value="new Date(item.startedDate)" />
           </span>
         </template>
         <date-format :value="item.startedDate" :format="$cleanupUtils.DATE_TIME_FORMAT" />
@@ -87,6 +90,11 @@
 <script>
 export default {
   props: {
+    // Bumped once a minute by the parent; the relative dates are keyed on it
+    minuteTick: {
+      type: Number,
+      default: 0,
+    },
     campaigns: {
       type: Array,
       default: () => [],

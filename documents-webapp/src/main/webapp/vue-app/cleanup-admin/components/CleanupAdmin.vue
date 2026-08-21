@@ -62,6 +62,7 @@
         v-else
         :campaigns="campaigns"
         :loading="loading"
+        :minute-tick="minuteTick"
         @open="selectedCampaignId = $event.id"
         @delete="deleteCampaign" />
       <!-- ONE drawer instance for both modes: the New campaign button opens it
@@ -88,6 +89,13 @@
 </template>
 <script>
 const UNEXPECTED_ERROR_KEY = 'cleanup.admin.campaign.unexpectedError';
+// Deliberately the SAME two values the campaign detail uses, and for the same two
+// reasons: the fallback poll exists so a socket that never connected cannot leave
+// the view permanently stale, and the throttle exists because a dry run pushes one
+// progress event PER BATCH — an unthrottled reload would be thousands of requests
+// for a table that changes by a few rows.
+const REFRESH_PERIOD_MS = 30000;
+const REFRESH_THROTTLE_MS = 5000;
 
 export default {
   data() {
@@ -102,6 +110,13 @@ export default {
       // The campaign the confirm dialog is open on, so 'ok' cannot act on a row
       // other than the one that was clicked
       campaignToDelete: null,
+      // Ticked by the timer below so the RELATIVE dates in the table re-render:
+      // 'about 32 minutes ago' is computed at render time, so without this it is
+      // frozen at whatever it said when the row was last touched — and a row
+      // nothing pushes events for is never touched again
+      now: Date.now(),
+      refreshTimerId: null,
+      lastEventRefresh: 0,
     };
   },
   computed: {
@@ -109,6 +124,12 @@ export default {
     // the server's WORKER_STATES, mirrored
     workerRunning() {
       return this.campaigns.some(campaign => ['DRY_RUN_RUNNING', 'EXECUTING'].includes(campaign.state));
+    },
+    // Minute granularity on purpose: the relative dates only ever change by the
+    // minute, so re-creating those cells on every 30 s tick would be twice the
+    // renders for the same text
+    minuteTick() {
+      return Math.floor(this.now / 60000);
     },
     deleteConfirmMessage() {
       return this.$t('cleanup.admin.campaign.deleteConfirm', {0: this.campaignToDelete?.name || ''});
@@ -119,10 +140,14 @@ export default {
     this.$cleanupWebSocket.init();
     document.addEventListener('campaign.progress', this.applyProgressEvent);
     document.addEventListener('campaign.stateChanged', this.applyStateChangedEvent);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.refreshTimer();
   },
   beforeDestroy() {
+    this.stopTimer();
     document.removeEventListener('campaign.progress', this.applyProgressEvent);
     document.removeEventListener('campaign.stateChanged', this.applyStateChangedEvent);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
   methods: {
     // Confirmed before it runs, and the confirmation says what SURVIVES: the
@@ -187,6 +212,53 @@ export default {
           totalCount: message.total,
           etaSeconds: message.etaSeconds,
         });
+        this.refreshWhatTheEventDoesNotCarry();
+      }
+    },
+    // The push payload carries COUNTERS only — by design, it must never carry a
+    // path, a name or an owner (§2.2). So Candidates and Reclaimable are REST-only
+    // aggregates, and until now they were refreshed exactly once per campaign, at
+    // its state change: a dry run climbing from 698 to 1,834 candidates showed
+    // none of it on this table. Throttled, because the events come per batch.
+    refreshWhatTheEventDoesNotCarry() {
+      const now = Date.now();
+      if (now - this.lastEventRefresh < REFRESH_THROTTLE_MS) {
+        return;
+      }
+      this.lastEventRefresh = now;
+      this.loadCampaigns();
+    },
+    tick() {
+      // Always, even with nothing running: this is what un-freezes the relative
+      // dates
+      this.now = Date.now();
+      if (this.workerRunning) {
+        // CometD stays the PRIMARY path; this poll only prevents a permanently
+        // stale table when the socket never connected or dropped — the campaign
+        // detail has had this safety net from the start and the list had none,
+        // which made the two views disagree about how live they were
+        this.loadCampaigns();
+      }
+    },
+    refreshTimer() {
+      this.stopTimer();
+      if (!document.hidden) {
+        this.refreshTimerId = window.setInterval(this.tick, REFRESH_PERIOD_MS);
+      }
+    },
+    stopTimer() {
+      if (this.refreshTimerId) {
+        window.clearInterval(this.refreshTimerId);
+        this.refreshTimerId = null;
+      }
+    },
+    // A hidden tab ticks nothing: on return the dates are stale and a run may have
+    // finished, so the timer is re-armed AND ticked once immediately rather than
+    // waiting out a period
+    onVisibilityChange() {
+      this.refreshTimer();
+      if (!document.hidden) {
+        this.tick();
       }
     },
     applyStateChangedEvent(event) {
