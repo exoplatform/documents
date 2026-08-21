@@ -49,6 +49,7 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitProgressRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
@@ -369,6 +370,23 @@ public class CleanupCampaignRest {
    * campaign is still DRY_RUN_RUNNING and the watchdog is re-walking it.
    */
   @Secured("administrators")
+  @GetMapping(path = "{id}/scan-units", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "GET", summary = "Retrieve the per-unit progress of a cleanup campaign dry run", description = "Subtree state counts, deepest walk attempt spent, and the subtrees in flight. Readable WHILE the scan runs: it is what tells a resuming scan from a stuck one, which the node percentage cannot")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public CampaignScanUnitProgressRestEntity getCampaignScanUnits(
+                                                                 @Parameter(description = "Campaign identifier", required = true)
+                                                                 @PathVariable("id")
+                                                                 long id) {
+    try {
+      return CleanupEntityBuilder.build(campaignService.getCampaignScanUnitProgress(id));
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
   @GetMapping(path = "{id}/scan-failures", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(method = "GET", summary = "Retrieve the grouped scan failures of a cleanup campaign", description = "Per-reason counts of the subtrees a campaign's dry run could not walk. Empty unless the scan was recorded incomplete")
   @ApiResponses(value = {

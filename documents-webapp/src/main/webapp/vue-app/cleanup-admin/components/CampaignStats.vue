@@ -34,6 +34,19 @@
         {{ $t('cleanup.admin.campaign.eta', {0: eta}) }}
       </span>
     </div>
+    <!-- SUBTREE progress, next to the node percentage and not instead of it: the
+         two answer different questions, and only this one answers "is it done".
+         A dry run holds open until every subtree SETTLED, so a scan can sit at
+         100% of its nodes with one subtree still to finish -->
+    <div v-if="showSubtrees" class="d-flex align-center mt-2 text-light-color caption">
+      <span>{{ $t('cleanup.admin.campaign.subtreesSettled', {0: scanUnits.settledCount, 1: scanUnits.unitCount}) }}</span>
+      <span v-if="scanUnits.runningCount" class="ms-3">
+        {{ $t('cleanup.admin.campaign.subtreesWalking', {0: scanUnits.runningCount}) }}
+      </span>
+      <span v-if="scanUnits.maxAttemptCount > 1" class="ms-3">
+        {{ $t('cleanup.admin.campaign.subtreeAttempts', {0: scanUnits.maxAttemptCount}) }}
+      </span>
+    </div>
     <div class="d-flex flex-wrap mt-4">
       <div class="me-8">
         <div class="text-light-color caption">{{ $t('cleanup.admin.campaign.candidates') }}</div>
@@ -57,13 +70,27 @@ export default {
       type: Object,
       default: null,
     },
+    // Per-unit breakdown, null until loaded (and for campaigns that never ran a
+    // parallel scan). The percentage below reads its scanComplete flag: without
+    // it, the bar is not allowed to claim 100%
+    scanUnits: {
+      type: Object,
+      default: null,
+    },
   },
   computed: {
     running() {
       return this.campaign && ['DRY_RUN_RUNNING', 'EXECUTING'].includes(this.campaign.state);
     },
+    showSubtrees() {
+      return this.running && this.scanUnits?.unitCount > 0;
+    },
     progress() {
-      return this.$cleanupUtils.progressPercentage(this.campaign?.processedCount, this.campaign?.totalCount);
+      // The completeness claim is only made when the SUBTREE counts back it, and
+      // only for a dry run — an EXECUTING campaign has no scan units to consult,
+      // and its own numerator is the item count it is really working through
+      const complete = this.campaign?.state !== 'DRY_RUN_RUNNING' || !this.scanUnits || this.scanUnits.scanComplete;
+      return this.$cleanupUtils.progressPercentage(this.campaign?.processedCount, this.campaign?.totalCount, complete);
     },
     eta() {
       return this.$cleanupDuration(this.campaign?.etaSeconds * 1000);

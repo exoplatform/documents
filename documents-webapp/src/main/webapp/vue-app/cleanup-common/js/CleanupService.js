@@ -206,6 +206,19 @@ export function getCampaignScanFailures(campaignId) {
   }).then(handleJsonResponse);
 }
 
+// Answers the PER-UNIT progress of a campaign's dry run: the subtree state counts,
+// the deepest walk attempt spent, and the subtrees in flight. Unlike the scan
+// FAILURES above this is readable WHILE the scan runs, and that is the point — the
+// node percentage comes from per-unit counts already persisted, so an interrupted
+// run whose nodes were all counted reads 100% while a unit is still being
+// re-walked from its checkpoint. 'scanComplete' is the honest completion signal.
+export function getCampaignScanUnits(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/scan-units`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(handleJsonResponse);
+}
+
 // Null, undefined and empty values are DROPPED rather than sent empty: every
 // filter of both items endpoints is optional server-side, and a blank 'search'
 // or 'state' must mean 'no filter', not 'match nothing'.

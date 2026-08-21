@@ -44,6 +44,7 @@ import org.exoplatform.document.cleanup.dao.CleanupScanUnitDAO;
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 
 /**
  * Scan-unit storage tests pinning what the parallel scan's resumability rests
@@ -330,6 +331,62 @@ class CleanupScanUnitStorageTest {
 
     assertNotNull(unit.getTotalCount(), "An empty bucket was COUNTED: it must never look uncounted again");
     assertEquals(0L, unit.getTotalCount().longValue());
+  }
+
+  @Test
+  void unitProgressFoldsTheStateCountsAndAgreesWithTheTerminalTransitionOnSettled() {
+    when(scanUnitDAO.countByState(CAMPAIGN_ID)).thenReturn(List.of(new Object[] { "DONE", 537L },
+                                                                  new Object[] { "RUNNING", 1L },
+                                                                  new Object[] { "FAILED", 2L }));
+    // Of the two FAILED units, ONE spent its attempts: the other is still being
+    // re-walked by the watchdog and must NOT count as settled
+    when(scanUnitDAO.countSettledFailures(CAMPAIGN_ID, CleanupScanUnitState.FAILED.name(), MAX_ATTEMPTS)).thenReturn(1L);
+    when(scanUnitDAO.maxAttemptCount(CAMPAIGN_ID)).thenReturn(3L);
+    when(scanUnitDAO.findByState(CAMPAIGN_ID,
+                                CleanupScanUnitState.RUNNING.name())).thenReturn(List.of(entity(CleanupScanUnitState.RUNNING)));
+
+    CleanupScanUnitProgress progress = storage.getUnitProgress(CAMPAIGN_ID, MAX_ATTEMPTS);
+
+    // The unit total is the SUM of the grouped counts, never a separate count
+    // query that could disagree with them
+    assertEquals(540L, progress.getUnitCount());
+    assertEquals(537L, progress.getDoneCount());
+    assertEquals(1L, progress.getRunningCount());
+    assertEquals(2L, progress.getFailedCount());
+    assertEquals(0L, progress.getPendingCount(), "A state absent from the grouped rows counts 0, not null");
+    assertEquals(538L, progress.getSettledCount(), "Settled is DONE plus the failures that spent their attempts");
+    assertEquals(3L, progress.getMaxAttemptCount());
+    // 538 of 540: the report is NOT complete, and this is the flag the console
+    // trusts instead of the node percentage — which would read 100% here
+    assertFalse(progress.isScanComplete());
+    assertEquals(1, progress.getInFlightUnits().size());
+    assertEquals(USERS_UNIT, progress.getInFlightUnits().get(0).getUnitPath());
+    assertEquals(SCANNED_PATH, progress.getInFlightUnits().get(0).getLastScannedPath(),
+                 "The in-flight unit carries its own checkpoint: it is what shows a re-walk standing still");
+  }
+
+  @Test
+  void unitProgressIsCompleteOnlyWhenEveryUnitSettled() {
+    when(scanUnitDAO.countByState(CAMPAIGN_ID)).thenReturn(List.of(new Object[] { "DONE", 39L },
+                                                                  new Object[] { "FAILED", 1L }));
+    when(scanUnitDAO.countSettledFailures(CAMPAIGN_ID, CleanupScanUnitState.FAILED.name(), MAX_ATTEMPTS)).thenReturn(1L);
+
+    assertTrue(storage.getUnitProgress(CAMPAIGN_ID, MAX_ATTEMPTS).isScanComplete(),
+               "A settled FAILED unit completes the scan as surely as a DONE one — incompletely, but terminally");
+  }
+
+  @Test
+  void unitProgressOfACampaignWithoutUnitsIsNotComplete() {
+    when(scanUnitDAO.countByState(CAMPAIGN_ID)).thenReturn(List.of());
+
+    CleanupScanUnitProgress progress = storage.getUnitProgress(CAMPAIGN_ID, MAX_ATTEMPTS);
+
+    assertEquals(0L, progress.getUnitCount());
+    // 0 settled of 0 planned is arithmetically 'all of them' and semantically
+    // nothing walked. Reporting it complete would put back the very false 100%
+    // this breakdown exists to remove
+    assertFalse(progress.isScanComplete(), "A campaign with no planned unit has scanned NOTHING");
+    assertTrue(progress.getInFlightUnits().isEmpty());
   }
 
   private CleanupScanUnitEntity entity(CleanupScanUnitState state) {

@@ -136,11 +136,19 @@ export function durationParts(millis) {
   return parts.slice(firstIndex, firstIndex + 2).filter(part => part.value > 0);
 }
 
-export function progressPercentage(processed, total) {
+export function progressPercentage(processed, total, complete = true) {
   if (!total) {
     return 0;
   }
-  return Math.min(100, Math.round(processed * 100 / total));
+  // 100 is a CLAIM of completeness and is capped at 99 without one. The numerator
+  // is the sum of the per-unit scanned counts already persisted, so a run
+  // interrupted once every node had been counted reads a full 100% while a unit is
+  // still being re-walked — a resumed reader fast-forwards to its checkpoint
+  // before it emits anything, and emits nothing meanwhile. A full bar next to an
+  // 'in progress' chip is exactly the contradiction an administrator cannot
+  // resolve, so the bar is not allowed to make that claim unless the caller can
+  // back it (see getCampaignScanUnits / scanComplete)
+  return Math.min(complete ? 100 : 99, Math.round(processed * 100 / total));
 }
 
 /**

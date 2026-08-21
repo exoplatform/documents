@@ -62,6 +62,7 @@ import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
@@ -643,6 +644,18 @@ public class CleanupCampaignService {
    */
   public List<CleanupFailureGroup> getCampaignScanFailures(long campaignId) throws ObjectNotFoundException {
     return scanService.getScanFailures(getCampaign(campaignId));
+  }
+
+  /**
+   * Per-unit breakdown of a campaign's dry run, resolving the campaign here so an
+   * unknown id answers 404 like every other campaign endpoint.
+   *
+   * @param campaignId campaign identifier
+   * @return the state counts, the deepest attempt spent, and the units in flight
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public CleanupScanUnitProgress getCampaignScanUnitProgress(long campaignId) throws ObjectNotFoundException {
+    return scanService.getScanUnitProgress(getCampaign(campaignId));
   }
 
   /**

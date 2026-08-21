@@ -94,6 +94,34 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
   String state);
 
   /**
+   * Per-STATE unit counts of a campaign, in ONE grouped query (rows: state, unit
+   * count) — never by loading the unit rows, whose number is one per space plus
+   * one per {@code /Users} bucket.
+   */
+  @Query("SELECT u.state, COUNT(u) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId GROUP BY u.state")
+  List<Object[]> countByState(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * Deepest walk attempt any unit of a campaign has spent — how many times the
+   * most-retried subtree was re-walked, which is what tells an administrator that
+   * a scan is going round in circles rather than progressing.
+   */
+  @Query("SELECT COALESCE(MAX(u.attemptCount), 0) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId")
+  long maxAttemptCount(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * The units of a campaign in one given state, oldest id first. Used for the
+   * RUNNING ones only, so the result is bounded by the reader count — do NOT
+   * reach for it with DONE on a large campaign.
+   */
+  @Query("SELECT u FROM CleanupScanUnit u WHERE u.campaignId = :campaignId AND u.state = :state ORDER BY u.id ASC")
+  List<CleanupScanUnitEntity> findByState(@Param("campaignId")
+  long campaignId, @Param("state")
+  String state);
+
+  /**
    * Scanned-nodes sum over the units of a campaign — the progress numerator,
    * computed by the database. NEVER by loading the unit rows: the numerator is
    * re-read on every resume, and a run only ever needs the total.

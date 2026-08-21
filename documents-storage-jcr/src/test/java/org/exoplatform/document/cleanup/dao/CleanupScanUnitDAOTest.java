@@ -22,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
@@ -206,6 +208,75 @@ class CleanupScanUnitDAOTest {
                "A DONE unit is finished: it must never be handed back");
     assertTrue(units.stream().allMatch(unit -> unit.getCampaignId() == CAMPAIGN_ID),
                "The work list of a campaign must never leak another campaign's unit");
+  }
+
+  @Test
+  void theStateBreakdownCountsEveryStateOfTHISCampaignInOneGroupedQuery() {
+    Map<String, Long> counts = new HashMap<>();
+    for (Object[] row : groupedStateCounts()) {
+      counts.put((String) row[0], ((Number) row[1]).longValue());
+    }
+
+    // The dataset above, folded: the grouped query is what the console reads
+    // instead of one count query per state, and its SUM is the unit total — so a
+    // state the query forgot would silently shrink the denominator too
+    assertEquals(Map.of(CleanupScanUnitState.PENDING.name(), 1L,
+                        CleanupScanUnitState.RUNNING.name(), 2L,
+                        CleanupScanUnitState.FAILED.name(), 3L,
+                        CleanupScanUnitState.DONE.name(), 2L),
+                 counts,
+                 "Every state of this campaign must come back grouped, and no other campaign's unit with it");
+    assertEquals(8L, counts.values().stream().mapToLong(Long::longValue).sum());
+  }
+
+  @Test
+  void theDeepestAttemptIsTheONEFigureThatShowsAScanGoingRoundInCircles() {
+    // /Users/e___ was walked 7 times. A checkpoint standing still while THIS
+    // climbs is the difference between a scan progressing and one re-walking, and
+    // it is the only number on the console that can say so
+    assertEquals(7L, maxAttemptCount(CAMPAIGN_ID));
+    // COALESCE, not a null: a campaign whose units were never planned must read 0
+    // rather than blow up the panel that asks
+    assertEquals(0L, maxAttemptCount(4242L), "MAX over no row must answer 0, not null");
+  }
+
+  @Test
+  void theInFlightFetchReturnsTheRunningUnitsOldestFirst() {
+    List<CleanupScanUnitEntity> running = unitsInState(CleanupScanUnitState.RUNNING);
+
+    // RUNNING does NOT mean a reader is alive: both of these were left behind by
+    // an interrupted run, which is precisely what the console must be able to show
+    assertEquals(List.of("/Users/a___", "/Users/b___"),
+                 running.stream().map(CleanupScanUnitEntity::getUnitPath).toList());
+    assertTrue(running.stream().allMatch(unit -> unit.getCampaignId() == CAMPAIGN_ID));
+  }
+
+  /** Executes the repository's own grouped state-count JPQL, likewise. */
+  private List<Object[]> groupedStateCounts() {
+    try (EntityManager entityManager = sessionFactory.createEntityManager()) {
+      return entityManager.createQuery(jpqlOf("countByState"), Object[].class)
+                          .setParameter("campaignId", CAMPAIGN_ID)
+                          .getResultList();
+    }
+  }
+
+  /** Executes the repository's own deepest-attempt JPQL, likewise. */
+  private long maxAttemptCount(long campaignId) {
+    try (EntityManager entityManager = sessionFactory.createEntityManager()) {
+      return entityManager.createQuery(jpqlOf("maxAttemptCount"), Long.class)
+                          .setParameter("campaignId", campaignId)
+                          .getSingleResult();
+    }
+  }
+
+  /** Executes the repository's own by-state JPQL, likewise. */
+  private List<CleanupScanUnitEntity> unitsInState(CleanupScanUnitState state) {
+    try (EntityManager entityManager = sessionFactory.createEntityManager()) {
+      return entityManager.createQuery(jpqlOf("findByState"), CleanupScanUnitEntity.class)
+                          .setParameter("campaignId", CAMPAIGN_ID)
+                          .setParameter("state", state.name())
+                          .getResultList();
+    }
   }
 
   /** Executes the repository's own work-list JPQL, read from its annotation. */

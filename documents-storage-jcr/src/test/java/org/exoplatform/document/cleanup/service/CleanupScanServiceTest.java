@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -75,6 +76,7 @@ import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.service.CleanupScanService.ScanBatch;
 import org.exoplatform.document.cleanup.service.CleanupScanService.ScanRun;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
@@ -1224,6 +1226,25 @@ class CleanupScanServiceTest {
     assertNotNull(CleanupScanService.class.getMethod("readUnitTransactional", ScanRun.class, CleanupScanUnit.class)
                                          .getAnnotation(ContainerTransactional.class),
                   "readUnitTransactional must stay annotated @ContainerTransactional");
+  }
+
+  @Test
+  void theUnitBreakdownIsServedForARunningScanAndZeroedForAnUnknownCampaign() {
+    CleanupScanUnitProgress served = new CleanupScanUnitProgress(40, 0, 1, 39, 0, 39, 2, false, List.of());
+    when(scanUnitStorage.getUnitProgress(CAMPAIGN_ID, CleanupScanService.MAX_SCAN_UNIT_ATTEMPTS)).thenReturn(served);
+
+    // The bound is passed from the service, so the console's notion of "settled"
+    // is the SAME one completeCampaign refuses to transition without
+    assertSame(served, scanService.getScanUnitProgress(campaign));
+    // ... and unlike getScanFailures this is NOT gated on the incomplete verdict:
+    // it exists to be read WHILE the scan runs, which is when nothing else can
+    // tell a resuming scan from a stuck one
+    verify(scanUnitStorage).getUnitProgress(CAMPAIGN_ID, CleanupScanService.MAX_SCAN_UNIT_ATTEMPTS);
+
+    CleanupScanUnitProgress unknown = scanService.getScanUnitProgress(null);
+    assertEquals(0L, unknown.getUnitCount());
+    assertFalse(unknown.isScanComplete(), "Nothing known about a campaign is not a complete scan");
+    assertNotNull(unknown.getInFlightUnits(), "The in-flight list must never be null: the console iterates it");
   }
 
   @Test

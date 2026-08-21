@@ -58,10 +58,13 @@ import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
+import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitProgressRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
@@ -716,6 +719,48 @@ class CleanupCampaignRestTest {
 
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> campaignRest.getCampaignFailures(404L)).getStatusCode());
+  }
+
+  @Test
+  void getCampaignScanUnitsMapsTheBreakdownAndItsInFlightSubtrees() throws ObjectNotFoundException {
+    CleanupScanUnit inFlight = new CleanupScanUnit();
+    inFlight.setId(17L);
+    inFlight.setUnitPath("/Users/j___");
+    inFlight.setLastScannedPath("/Users/j___/john/a.pdf");
+    inFlight.setScannedCount(12);
+    inFlight.setTotalCount(40L);
+    inFlight.setAttemptCount(2);
+    when(campaignService.getCampaignScanUnitProgress(CAMPAIGN_ID)).thenReturn(new CleanupScanUnitProgress(540,
+                                                                                                         0,
+                                                                                                         1,
+                                                                                                         537,
+                                                                                                         2,
+                                                                                                         538,
+                                                                                                         3,
+                                                                                                         false,
+                                                                                                         List.of(inFlight)));
+
+    CampaignScanUnitProgressRestEntity progress = campaignRest.getCampaignScanUnits(CAMPAIGN_ID);
+
+    assertEquals(540L, progress.getUnitCount());
+    assertEquals(538L, progress.getSettledCount());
+    assertEquals(3L, progress.getMaxAttemptCount());
+    // The flag the console shows completion from, INSTEAD of the node percentage
+    // that would read 100% on this very campaign
+    assertFalse(progress.isScanComplete());
+    assertEquals(1, progress.getInFlightUnits().size());
+    assertEquals("/Users/j___", progress.getInFlightUnits().get(0).getUnitPath());
+    assertEquals("/Users/j___/john/a.pdf", progress.getInFlightUnits().get(0).getLastScannedPath());
+    assertEquals(2L, progress.getInFlightUnits().get(0).getAttemptCount());
+  }
+
+  @Test
+  void getCampaignScanUnitsMapsNotFound() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanUnitProgress(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class,
+                              () -> campaignRest.getCampaignScanUnits(404L)).getStatusCode());
   }
 
   @Test

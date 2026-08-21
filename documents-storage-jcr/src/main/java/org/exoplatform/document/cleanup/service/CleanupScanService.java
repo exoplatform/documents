@@ -47,6 +47,7 @@ import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.storage.CleanupScanUnitStorage;
@@ -858,6 +859,26 @@ public class CleanupScanService {
       return List.of();
     }
     return scanUnitStorage.countFailuresByReason(campaign.getId());
+  }
+
+  /**
+   * Per-unit breakdown of a campaign's dry run.
+   * <p>
+   * Deliberately NOT gated on anything, unlike {@link #getScanFailures}: that one
+   * reports subtrees definitively missing from a finished report, so it must wait
+   * for the verdict; this one exists to be read WHILE the scan runs, and gating it
+   * would remove it exactly when it is needed. A scan whose node percentage sits
+   * at 100% with the campaign still DRY_RUN_RUNNING is either re-walking a unit or
+   * held open by one, and only these counts tell an administrator which.
+   *
+   * @param campaign campaign whose unit breakdown is wanted
+   * @return the breakdown, zeroed for a campaign whose units were never planned
+   */
+  public CleanupScanUnitProgress getScanUnitProgress(CleanupCampaign campaign) {
+    if (campaign == null) {
+      return new CleanupScanUnitProgress(0, 0, 0, 0, 0, 0, 0, false, List.of());
+    }
+    return scanUnitStorage.getUnitProgress(campaign.getId(), MAX_SCAN_UNIT_ATTEMPTS);
   }
 
   /**
