@@ -152,6 +152,55 @@ export function progressPercentage(processed, total, complete = true) {
 }
 
 /**
+ * Copies text to the clipboard, resolving to whether it worked.
+ *
+ * Extracted so the items table and the scan-failure drawer share ONE
+ * implementation: a stack trace an administrator silently did not get is worse
+ * than an error message, so every path here resolves — never rejects — and the
+ * caller always has something to say. The Clipboard API is refused on an insecure
+ * origin and when the permission is denied, hence the legacy fallback, which uses
+ * a TEXTAREA and not an input: an input flattens a multi-line trace into one line.
+ *
+ * @param {string} text text to put on the clipboard
+ * @returns {Promise<boolean>} whether the copy succeeded, never rejecting
+ */
+export function copyToClipboard(text) {
+  if (!text) {
+    return Promise.resolve(false);
+  }
+  if (navigator?.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text)
+      .then(() => true)
+      .catch(() => copyThroughTextarea(text));
+  }
+  return Promise.resolve(copyThroughTextarea(text));
+}
+
+/**
+ * @param {string} text text to put on the clipboard
+ * @returns {boolean} whether the legacy copy succeeded
+ */
+function copyThroughTextarea(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'readonly');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (e) {
+    // Deprecated API: a browser that removed it throws instead of answering false
+    copied = false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+  return copied;
+}
+
+/**
  * Folds the per-item failures of a bulk keep/un-keep outcome into an ordered
  * [{reason, count}] list. The backend reports a localizable MESSAGE CODE per
  * item (cleanup.notOwner, cleanup.reviewClosed, cleanup.keepFailed...); grouping

@@ -48,7 +48,17 @@ public class CampaignScanUnitProgressRestEntity {
 
   private boolean                           scanComplete;
 
+  /**
+   * Nodes walked but not evaluable, summed over every unit: files missing from the
+   * report although their subtree finished. Non-zero means this report does not
+   * cover every file it visited, whatever the percentage reads.
+   */
+  private long                              skippedNodeCount;
+
   /** RUNNING units only — bounded by the reader count, never by the unit count. */
   private List<CampaignScanUnitRestEntity>  inFlightUnits;
+
+  /** The units that lost nodes, worst first and bounded, each with its trace. */
+  private List<CampaignScanUnitRestEntity>  evaluationFailures;
 
 }

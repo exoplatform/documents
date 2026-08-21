@@ -18,6 +18,7 @@ package org.exoplatform.document.cleanup.dao;
 
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -100,6 +101,24 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
    */
   @Transactional
   void deleteByCampaignId(long campaignId);
+
+  /**
+   * Nodes the scan of a campaign walked but could not EVALUATE, summed over its
+   * units — the count of files silently missing from its report.
+   */
+  @Query("SELECT COALESCE(SUM(u.evalFailureCount), 0) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId")
+  long sumEvalFailureCount(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * The units of a campaign that lost at least one node, worst first. Bounded by
+   * the caller: a campaign can plan one unit per space, and a repository-wide
+   * problem makes every one of them fail.
+   */
+  @Query("SELECT u FROM CleanupScanUnit u WHERE u.campaignId = :campaignId AND u.evalFailureCount > 0"
+      + " ORDER BY u.evalFailureCount DESC, u.id ASC")
+  List<CleanupScanUnitEntity> findUnitsWithEvalFailures(@Param("campaignId")
+  long campaignId, Pageable pageable);
 
   /**
    * Per-STATE unit counts of a campaign, in ONE grouped query (rows: state, unit

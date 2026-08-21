@@ -114,6 +114,29 @@
         <span v-else class="ms-1">-</span>
       </div>
     </div>
+    <!-- FILES the scan could not judge, at the top and not buried in a table:
+         each one was a WARN in the server log and nothing else, while the campaign
+         reported a complete run at 100%. Shown DURING the run too, so the problem
+         is visible while it is still worth acting on -->
+    <v-alert
+      v-if="skippedNodeCount"
+      type="warning"
+      dense
+      text
+      class="mt-4 mb-0">
+      <div class="d-flex align-center flex-wrap">
+        <span>{{ $t('cleanup.admin.campaign.skippedNodes', {0: skippedNodeCount}) }}</span>
+        <v-spacer />
+        <v-btn
+          small
+          text
+          class="ms-2"
+          @click="$refs.scanFailuresDrawer.open()">
+          {{ $t('cleanup.admin.campaign.skippedDetails') }}
+        </v-btn>
+      </div>
+    </v-alert>
+    <document-cleanup-campaign-scan-failures-drawer ref="scanFailuresDrawer" :scan-units="scanUnits" />
     <document-cleanup-campaign-stats :campaign="campaign" :scan-units="scanUnits" />
     <document-cleanup-campaign-scan-units :scan-units="scanUnits" />
     <!-- COMPLETENESS of the report, ABOVE the report itself and above the skip
@@ -268,6 +291,12 @@ export default {
     };
   },
   computed: {
+    // From the per-unit breakdown, which is loaded for EVERY state and not only
+    // while the scan runs: the unit rows outlive the run, so the number stays
+    // readable on the simulation an administrator is about to publish
+    skippedNodeCount() {
+      return this.scanUnits?.skippedNodeCount || 0;
+    },
     dateFields() {
       return DATE_FIELDS;
     },
@@ -361,7 +390,7 @@ export default {
     // campaign's panel; a failure leaves the previous value rather than blanking
     // the panel, since the bar's 100% claim depends on it
     loadScanUnits(campaign) {
-      if (campaign?.state !== 'DRY_RUN_RUNNING') {
+      if (!campaign) {
         this.scanUnits = null;
         return;
       }

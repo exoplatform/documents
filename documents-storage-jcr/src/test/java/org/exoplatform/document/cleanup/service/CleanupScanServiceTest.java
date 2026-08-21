@@ -75,6 +75,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.model.CleanupNodeFailures;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
 import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.service.CleanupScanService.ScanBatch;
@@ -304,8 +305,8 @@ class CleanupScanServiceTest {
                                                                 && "uuid-0".equals(candidates.get(0).getNodeUuid())));
     verify(campaignStorage).saveCandidates(eq(CAMPAIGN_ID),
                                           argThat(candidates -> "uuid-2".equals(candidates.get(0).getNodeUuid())));
-    verify(scanUnitStorage).updateUnitProgress(2L, PATH_B, 2L);
-    verify(scanUnitStorage).updateUnitProgress(2L, PATH_C, 3L);
+    verify(scanUnitStorage).updateUnitProgress(eq(2L), eq(PATH_B), eq(2L), any());
+    verify(scanUnitStorage).updateUnitProgress(eq(2L), eq(PATH_C), eq(3L), any());
     // The writer records the outcome of the unit each reader finished
     verify(scanUnitStorage).updateUnitState(1L, CleanupScanUnitState.DONE);
     verify(scanUnitStorage).updateUnitState(2L, CleanupScanUnitState.DONE);
@@ -434,7 +435,7 @@ class CleanupScanServiceTest {
     verify(cleanupJcrStorage).scanRoot(eq(USERS_UNIT), eq(PATH_A), eq(BATCH_SIZE), any(), any());
     // The persisted scanned count is ABSOLUTE: it continues from 4, it does not
     // restart at the batch size
-    verify(scanUnitStorage).updateUnitProgress(1L, PATH_C, 6L);
+    verify(scanUnitStorage).updateUnitProgress(eq(1L), eq(PATH_C), eq(6L), any());
     // The numerator this run starts from is the persisted sum, so the aggregate
     // progress stays continuous across the interruption
     verify(campaignStorage).updateProgress(CAMPAIGN_ID, 6L, 6L, 0L, null, 0L);
@@ -454,10 +455,10 @@ class CleanupScanServiceTest {
 
     // The envelope carries its unit id precisely so the writer cannot checkpoint
     // 'the current unit' — with several readers there is no such thing
-    verify(scanUnitStorage).updateUnitProgress(1L, SPACES_PATH, 1L);
-    verify(scanUnitStorage).updateUnitProgress(2L, PATH_A, 1L);
-    verify(scanUnitStorage, never()).updateUnitProgress(1L, PATH_A, 1L);
-    verify(scanUnitStorage, never()).updateUnitProgress(2L, SPACES_PATH, 1L);
+    verify(scanUnitStorage).updateUnitProgress(eq(1L), eq(SPACES_PATH), eq(1L), any());
+    verify(scanUnitStorage).updateUnitProgress(eq(2L), eq(PATH_A), eq(1L), any());
+    verify(scanUnitStorage, never()).updateUnitProgress(eq(1L), eq(PATH_A), eq(1L), any());
+    verify(scanUnitStorage, never()).updateUnitProgress(eq(2L), eq(SPACES_PATH), eq(1L), any());
   }
 
   @Test
@@ -481,7 +482,7 @@ class CleanupScanServiceTest {
     doAnswer(invocation -> {
       ScanBatchConsumer batchConsumer = invocation.getArgument(4);
       for (int i = 0; i < 6; i++) {
-        if (!batchConsumer.onBatch(List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 2)) {
+        if (!batchConsumer.onBatch(List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 2, new CleanupNodeFailures())) {
           break;
         }
         sixthEmitted.countDown();
@@ -823,7 +824,7 @@ class CleanupScanServiceTest {
   @Test
   void anErrorInsideTheWriterBodyIsCaughtByTheDrainLoopItself() {
     ScanRun run = new ScanRun(CAMPAIGN_ID, campaign.getParams(), BATCH_SIZE, 10L, 0L, 1, List.of(unit(1L, USERS_UNIT)));
-    assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-0", PATH_A)), PATH_A, 1)));
+    assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-0", PATH_A)), PATH_A, 1, null)));
     doThrow(new OutOfMemoryError("Scan heap")).when(campaignStorage).saveCandidates(anyLong(), anyList());
 
     // Driven DIRECTLY, so the writer RUNNABLE's catch-all cannot rescue it: this
@@ -920,7 +921,7 @@ class CleanupScanServiceTest {
       // emits NOTHING for that whole stretch, then produces its only batch
       assertFalse(neverOpened.await(INACTIVITY_MS * 2, TimeUnit.MILLISECONDS), "This gate is never opened");
       ScanBatchConsumer batchConsumer = invocation.getArgument(4);
-      batchConsumer.onBatch(List.of(candidate("uuid-slow", PATH_A)), PATH_A, 1);
+      batchConsumer.onBatch(List.of(candidate("uuid-slow", PATH_A)), PATH_A, 1, new CleanupNodeFailures());
       return null;
     }).when(cleanupJcrStorage).scanRoot(eq(USERS_UNIT), isNull(), anyInt(), any(), any());
 
@@ -1016,7 +1017,7 @@ class CleanupScanServiceTest {
     // still legitimately DRY_RUN_RUNNING (it MUST stay resumable) and looped for
     // good, leaking the thread and its open container transaction
     ScanRun run = new ScanRun(CAMPAIGN_ID, campaign.getParams(), BATCH_SIZE, 10L, 0L, 1, List.of(unit(1L, USERS_UNIT)));
-    assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-0", PATH_A)), PATH_A, 1)));
+    assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-0", PATH_A)), PATH_A, 1, null)));
     run.writerFailed = true;
 
     Thread writer = new Thread(() -> scanService.drainQueue(run), "test-scan-writer");
@@ -1037,9 +1038,9 @@ class CleanupScanServiceTest {
     // ONE reader, so a queue capacity of max(1 * 2, 4) = 4
     ScanRun run = new ScanRun(CAMPAIGN_ID, campaign.getParams(), BATCH_SIZE, 10L, 0L, 1, List.of(unit(1L, USERS_UNIT)));
     for (int i = 0; i < 4; i++) {
-      assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 1)));
+      assertTrue(run.queue.offer(ScanBatch.progress(1L, List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 1, null)));
     }
-    assertFalse(run.queue.offer(ScanBatch.progress(1L, List.of(), PATH_A, 1)), "The queue must be FULL");
+    assertFalse(run.queue.offer(ScanBatch.progress(1L, List.of(), PATH_A, 1, null)), "The queue must be FULL");
     // The flag raised to unblock the readers is the very flag post() gives up on:
     // it answered false, the pill was NEVER enqueued, and the writer it was meant
     // to stop went on spinning
@@ -1073,7 +1074,7 @@ class CleanupScanServiceTest {
     AtomicInteger sliceCount = new AtomicInteger();
     doAnswer(invocation -> {
       ScanBatchConsumer batchConsumer = invocation.getArgument(4);
-      batchConsumer.onBatch(List.of(candidate("uuid-uncooperative", PATH_A)), PATH_A, 1);
+      batchConsumer.onBatch(List.of(candidate("uuid-uncooperative", PATH_A)), PATH_A, 1, new CleanupNodeFailures());
       // Uncooperative ON PURPOSE: it swallows the interrupt instead of honouring
       // it, exactly as a JCR call in flight does. BOUNDED all the same, so a
       // regression fails on the join below rather than hanging the build
@@ -1229,8 +1230,52 @@ class CleanupScanServiceTest {
   }
 
   @Test
+  void aScanThatCouldNotEVALUATEnodesIsReportedIncompleteEvenWithEveryUnitDone() {
+    planned(USERS_UNIT);
+    unitsToProcess(unit(2L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(2L);
+    unitAggregates(2L, 0L, 2L);
+    // Every unit DONE, NO settled failure: by unit accounting this scan is clean
+    unitOutcomes(1L, 1L, 0L);
+    when(scanUnitStorage.countSettledFailedUnits(CAMPAIGN_ID, CleanupScanService.MAX_SCAN_UNIT_ATTEMPTS)).thenReturn(0L);
+    // ... and 37 files could not be evaluated inside it
+    when(scanUnitStorage.sumEvalFailureCount(CAMPAIGN_ID)).thenReturn(37L);
+    emitBatches(USERS_UNIT, batch(PATH_B, 2, candidate("uuid-0", PATH_A)));
+
+    scanService.scan(CAMPAIGN_ID);
+
+    // It still SIMULATES — a report covering most of the tree is worth having —
+    // but it is recorded INCOMPLETE, which is the whole point: those 37 files were
+    // a WARN per node in the log and nothing anywhere else, while the campaign
+    // claimed a complete scan at 100%
+    verify(campaignLifecycle).transition(campaign, CleanupCampaignState.SIMULATED);
+    CleanupCampaignSummary summary = scanSummary();
+    assertNotNull(summary, "A scan that lost files must record a verdict");
+    assertTrue(summary.isScanIncomplete());
+    assertEquals(37L, summary.getSkippedNodeCount());
+    assertEquals(0L, summary.getFailedScanUnitCount(), "No SUBTREE failed: these are individual files lost inside one");
+  }
+
+  @Test
+  void aScanThatLostNothingRecordsNoVerdictAtAll() {
+    planned(USERS_UNIT);
+    unitsToProcess(unit(2L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(2L);
+    unitAggregates(2L, 0L, 2L);
+    unitOutcomes(1L, 1L, 0L);
+    when(scanUnitStorage.sumEvalFailureCount(CAMPAIGN_ID)).thenReturn(0L);
+    emitBatches(USERS_UNIT, batch(PATH_B, 2, candidate("uuid-0", PATH_A)));
+
+    scanService.scan(CAMPAIGN_ID);
+
+    // No verdict column written on a clean scan: 'incomplete' must stay a signal,
+    // not a field every campaign carries
+    assertNull(scanSummary(), "A complete scan must record no incompleteness verdict");
+  }
+
+  @Test
   void theUnitBreakdownIsServedForARunningScanAndZeroedForAnUnknownCampaign() {
-    CleanupScanUnitProgress served = new CleanupScanUnitProgress(40, 0, 1, 39, 0, 39, 2, false, List.of());
+    CleanupScanUnitProgress served = new CleanupScanUnitProgress(40, 0, 1, 39, 0, 39, 2, false, 0, List.of(), List.of());
     when(scanUnitStorage.getUnitProgress(CAMPAIGN_ID, CleanupScanService.MAX_SCAN_UNIT_ATTEMPTS)).thenReturn(served);
 
     // The bound is passed from the service, so the console's notion of "settled"
@@ -1284,7 +1329,7 @@ class CleanupScanServiceTest {
     doAnswer(invocation -> {
       ScanBatchConsumer batchConsumer = invocation.getArgument(4);
       while (emitted.get() < READER_MAX_LOOPS
-             && batchConsumer.onBatch(List.of(candidate("uuid-" + emitted.get(), PATH_A)), PATH_A, 1)) {
+             && batchConsumer.onBatch(List.of(candidate("uuid-" + emitted.get(), PATH_A)), PATH_A, 1, new CleanupNodeFailures())) {
         emitted.incrementAndGet();
       }
       return null;
@@ -1300,7 +1345,7 @@ class CleanupScanServiceTest {
     doAnswer(invocation -> {
       ScanBatchConsumer batchConsumer = invocation.getArgument(4);
       for (int i = 0; i < batchCount; i++) {
-        if (!batchConsumer.onBatch(List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 1)) {
+        if (!batchConsumer.onBatch(List.of(candidate("uuid-" + i, PATH_A)), PATH_A, 1, new CleanupNodeFailures())) {
           break;
         }
       }
@@ -1345,7 +1390,7 @@ class CleanupScanServiceTest {
     doAnswer(this::recordWritingThread).when(campaignStorage)
                                        .updateProgress(anyLong(), anyLong(), anyLong(), anyLong(), any(), anyLong());
     doAnswer(this::recordWritingThread).when(scanUnitStorage).planUnits(anyLong(), anyList());
-    doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitProgress(anyLong(), any(), anyLong());
+    doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitProgress(anyLong(), any(), anyLong(), any());
     doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitTotal(anyLong(), anyLong());
     doAnswer(this::recordWritingThread).when(scanUnitStorage).updateUnitState(anyLong(), any());
     doAnswer(this::recordWritingThread).when(scanUnitStorage).claimUnit(anyLong());
@@ -1416,7 +1461,7 @@ class CleanupScanServiceTest {
       readingThread.set(Thread.currentThread().getName());
       ScanBatchConsumer batchConsumer = invocation.getArgument(4);
       for (EmittedBatch emitted : batches) {
-        if (!batchConsumer.onBatch(emitted.candidates, emitted.lastScannedPath, emitted.scannedCount)) {
+        if (!batchConsumer.onBatch(emitted.candidates, emitted.lastScannedPath, emitted.scannedCount, new CleanupNodeFailures())) {
           break;
         }
       }

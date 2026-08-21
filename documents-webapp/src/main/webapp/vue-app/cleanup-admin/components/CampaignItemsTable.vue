@@ -334,40 +334,10 @@ export default {
       if (!detail) {
         return;
       }
-      if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(detail)
-          .then(() => this.displayAlert(this.$t('cleanup.admin.items.stackTraceCopied')))
-          .catch(() => this.copyThroughTextarea(detail));
-      } else {
-        this.copyThroughTextarea(detail);
-      }
-    },
-    // Legacy fallback for the deployments the Clipboard API refuses to serve. A
-    // TEXTAREA, not the input the rest of the app copies single-line paths with:
-    // an input would flatten the multi-line trace into one line.
-    copyThroughTextarea(text) {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.setAttribute('readonly', 'readonly');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      let copied = false;
-      try {
-        copied = document.execCommand('copy');
-      } catch (e) {
-        // Deprecated API: a browser that removed it throws instead of answering
-        // false, and the toast below is the only acceptable outcome either way
-        copied = false;
-      } finally {
-        document.body.removeChild(textarea);
-      }
-      if (copied) {
-        this.displayAlert(this.$t('cleanup.admin.items.stackTraceCopied'));
-      } else {
-        this.displayAlert(this.$t('cleanup.admin.items.copyFailed'), 'error');
-      }
+      this.$cleanupUtils.copyToClipboard(detail)
+        .then(copied => this.displayAlert(copied ? this.$t('cleanup.admin.items.stackTraceCopied')
+          : this.$t('cleanup.admin.items.copyFailed'),
+        copied ? 'success' : 'error'));
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {

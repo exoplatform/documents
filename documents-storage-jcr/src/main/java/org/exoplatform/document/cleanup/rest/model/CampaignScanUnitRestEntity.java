@@ -41,4 +41,16 @@ public class CampaignScanUnitRestEntity {
 
   private long   attemptCount;
 
+  /** Nodes of this subtree the scan walked but could not evaluate. */
+  private long   evalFailureCount;
+
+  /** Short label of the FIRST such failure — its class and message. */
+  private String evalFailureReason;
+
+  /**
+   * Trimmed stack trace of that same failure, for the console to show and let an
+   * administrator copy. Present only when something actually failed.
+   */
+  private String evalFailureDetail;
+
 }

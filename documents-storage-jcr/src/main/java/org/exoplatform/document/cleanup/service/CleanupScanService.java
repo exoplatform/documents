@@ -46,6 +46,7 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.model.CleanupNodeFailures;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
 import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
@@ -528,11 +529,12 @@ public class CleanupScanService {
                                  unit.getLastScannedPath(),
                                  run.batchSize,
                                  run.params,
-                                 (candidates, lastScannedPath, scannedCount) -> commitThenPost(run,
-                                                                                              ScanBatch.progress(unitId,
-                                                                                                                 candidates,
-                                                                                                                 lastScannedPath,
-                                                                                                                 scannedCount)));
+                                 (candidates, lastScannedPath, scannedCount, nodeFailures) -> commitThenPost(run,
+                                                                                                            ScanBatch.progress(unitId,
+                                                                                                                               candidates,
+                                                                                                                               lastScannedPath,
+                                                                                                                               scannedCount,
+                                                                                                                               nodeFailures)));
       if (!run.isStopped()) {
         commitThenPost(run, ScanBatch.terminal(unitId, CleanupScanUnitState.DONE, null));
       }
@@ -693,7 +695,7 @@ public class CleanupScanService {
           continue;
         }
         campaignStorage.saveCandidates(run.campaignId, batch.candidates);
-        scanUnitStorage.updateUnitProgress(batch.unitId, batch.lastScannedPath, run.addScanned(batch));
+        scanUnitStorage.updateUnitProgress(batch.unitId, batch.lastScannedPath, run.addScanned(batch), batch.nodeFailures);
         processed += batch.scannedCount;
         long reported = Math.min(processed, run.total);
         long etaSeconds = CleanupEtaUtil.computeEtaSeconds(run.startTime, run.processedAtStart, reported, run.total);
@@ -801,7 +803,13 @@ public class CleanupScanService {
       campaign.setTotalCount(total);
       campaign.setProcessedCount(walked);
       campaign.setEtaSeconds(0);
-      if (settledFailedCount > 0) {
+      long skippedNodeCount = scanUnitStorage.sumEvalFailureCount(campaignId);
+      if (skippedNodeCount > 0) {
+        LOG.error("The dry-run of cleanup campaign {} could not EVALUATE {} node(s) it walked: those files are missing from the"
+            + " report even though their subtrees finished. The report is flagged INCOMPLETE and the per-unit failures name the"
+            + " cause. Whoever publishes it must know it does not cover every file it visited.", campaignId, skippedNodeCount);
+      }
+      if (settledFailedCount > 0 || skippedNodeCount > 0) {
         LOG.error("The dry-run of cleanup campaign {} is reported as simulated but INCOMPLETE: {} of its {} scan units could"
             + " not be walked in {} attempts, so {} of the {} counted nodes are MISSING from the report. Whoever publishes it"
             + " must know the report does not cover the whole tree.",
@@ -811,7 +819,7 @@ public class CleanupScanService {
                   MAX_SCAN_UNIT_ATTEMPTS,
                   total - walked,
                   total);
-        campaign.setSummaryJson(buildScanSummaryJson(settledFailedCount));
+        campaign.setSummaryJson(buildScanSummaryJson(settledFailedCount, skippedNodeCount));
       }
       campaignLifecycle.transition(campaign, CleanupCampaignState.SIMULATED);
     }
@@ -826,10 +834,11 @@ public class CleanupScanService {
    * two fields FORWARD when it overwrites the column at COMPLETED — so the
    * verdict outlives the purge instead of being erased by it.
    */
-  private String buildScanSummaryJson(long settledFailedCount) {
+  private String buildScanSummaryJson(long settledFailedCount, long skippedNodeCount) {
     CleanupCampaignSummary summary = new CleanupCampaignSummary();
     summary.setScanIncomplete(true);
     summary.setFailedScanUnitCount(settledFailedCount);
+    summary.setSkippedNodeCount(skippedNodeCount);
     return JsonUtils.toJsonString(summary);
   }
 
@@ -876,7 +885,7 @@ public class CleanupScanService {
    */
   public CleanupScanUnitProgress getScanUnitProgress(CleanupCampaign campaign) {
     if (campaign == null) {
-      return new CleanupScanUnitProgress(0, 0, 0, 0, 0, 0, 0, false, List.of());
+      return new CleanupScanUnitProgress(0, 0, 0, 0, 0, 0, 0, false, 0, List.of(), List.of());
     }
     return scanUnitStorage.getUnitProgress(campaign.getId(), MAX_SCAN_UNIT_ATTEMPTS);
   }
@@ -1144,7 +1153,7 @@ public class CleanupScanService {
      * Sentinel closing the queue, posted by the coordinator once every reader
      * finished. Compared by IDENTITY, never by value.
      */
-    static final ScanBatch         POISON_PILL        = new ScanBatch(0, null, null, 0, null, null);
+    static final ScanBatch         POISON_PILL        = new ScanBatch(0, null, null, 0, null, null, null);
 
     final long                     campaignId;
 
@@ -1260,26 +1269,35 @@ public class CleanupScanService {
 
     final String                 failureReason;
 
+    /** Nodes this batch could not evaluate — persisted with its checkpoint. */
+    final CleanupNodeFailures    nodeFailures;
+
     ScanBatch(long unitId,
               List<CleanupCandidate> candidates,
               String lastScannedPath,
               long scannedCount,
               CleanupScanUnitState terminalState,
-              String failureReason) {
+              String failureReason,
+              CleanupNodeFailures nodeFailures) {
       this.unitId = unitId;
       this.candidates = candidates;
       this.lastScannedPath = lastScannedPath;
       this.scannedCount = scannedCount;
       this.terminalState = terminalState;
       this.failureReason = failureReason;
+      this.nodeFailures = nodeFailures;
     }
 
-    static ScanBatch progress(long unitId, List<CleanupCandidate> candidates, String lastScannedPath, long scannedCount) {
-      return new ScanBatch(unitId, new ArrayList<>(candidates), lastScannedPath, scannedCount, null, null);
+    static ScanBatch progress(long unitId,
+                              List<CleanupCandidate> candidates,
+                              String lastScannedPath,
+                              long scannedCount,
+                              CleanupNodeFailures nodeFailures) {
+      return new ScanBatch(unitId, new ArrayList<>(candidates), lastScannedPath, scannedCount, null, null, nodeFailures);
     }
 
     static ScanBatch terminal(long unitId, CleanupScanUnitState terminalState, String failureReason) {
-      return new ScanBatch(unitId, null, null, 0, terminalState, failureReason);
+      return new ScanBatch(unitId, null, null, 0, terminalState, failureReason, null);
     }
 
   }

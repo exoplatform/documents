@@ -214,11 +214,9 @@ public class CleanupEntityBuilder {
     entity.setSettledCount(progress.getSettledCount());
     entity.setMaxAttemptCount(progress.getMaxAttemptCount());
     entity.setScanComplete(progress.isScanComplete());
-    entity.setInFlightUnits(progress.getInFlightUnits() == null ? List.of()
-                                                               : progress.getInFlightUnits()
-                                                                         .stream()
-                                                                         .map(CleanupEntityBuilder::build)
-                                                                         .toList());
+    entity.setSkippedNodeCount(progress.getSkippedNodeCount());
+    entity.setInFlightUnits(buildUnits(progress.getInFlightUnits()));
+    entity.setEvaluationFailures(buildUnits(progress.getEvaluationFailures()));
     return entity;
   }
 
@@ -228,6 +226,10 @@ public class CleanupEntityBuilder {
    *         console has no endpoint taking one, and a subtree path is what an
    *         administrator can act on
    */
+  private static List<CampaignScanUnitRestEntity> buildUnits(List<CleanupScanUnit> units) {
+    return units == null ? List.of() : units.stream().map(CleanupEntityBuilder::build).toList();
+  }
+
   public static CampaignScanUnitRestEntity build(CleanupScanUnit unit) {
     CampaignScanUnitRestEntity entity = new CampaignScanUnitRestEntity();
     entity.setUnitPath(unit.getUnitPath());
@@ -235,6 +237,9 @@ public class CleanupEntityBuilder {
     entity.setScannedCount(unit.getScannedCount());
     entity.setTotalCount(unit.getTotalCount());
     entity.setAttemptCount(unit.getAttemptCount());
+    entity.setEvalFailureCount(unit.getEvalFailureCount());
+    entity.setEvalFailureReason(unit.getEvalFailureReason());
+    entity.setEvalFailureDetail(unit.getEvalFailureDetail());
     return entity;
   }
 

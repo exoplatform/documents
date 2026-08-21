@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +30,7 @@ import org.exoplatform.document.cleanup.constant.CleanupScanUnitState;
 import org.exoplatform.document.cleanup.dao.CleanupScanUnitDAO;
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
+import org.exoplatform.document.cleanup.model.CleanupNodeFailures;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
 import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 
@@ -40,6 +42,13 @@ import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
  */
 @Component
 public class CleanupScanUnitStorage {
+
+  /**
+   * Units carrying evaluation failures reported at once. A repository-wide problem
+   * makes EVERY unit fail, and a campaign plans one per space — the total is
+   * carried separately, so this bound truncates the detail and never the count.
+   */
+  public static final int MAX_REPORTED_EVAL_FAILURES = 100;
 
   /**
    * Width of the FAILURE_REASON column. A reason longer than that is a message
@@ -187,10 +196,12 @@ public class CleanupScanUnitStorage {
                                        // be the same false 100% this model exists
                                        // to remove
                                        unitCount > 0 && settledCount >= unitCount,
+                                       sumEvalFailureCount(campaignId),
                                        scanUnitDAO.findByState(campaignId, CleanupScanUnitState.RUNNING.name())
                                                   .stream()
                                                   .map(this::toModel)
-                                                  .toList());
+                                                  .toList(),
+                                       getUnitsWithEvalFailures(campaignId, MAX_REPORTED_EVAL_FAILURES));
   }
 
   /**
@@ -257,12 +268,56 @@ public class CleanupScanUnitStorage {
    * @param lastScannedPath path of the last node scanned in the unit
    * @param scannedCount nodes scanned in the unit so far
    */
-  public void updateUnitProgress(long unitId, String lastScannedPath, long scannedCount) {
+  /**
+   * Checkpoints a unit and folds in the nodes the batch could not evaluate, in the
+   * SAME entity write: one load and one save per batch, exactly as before the
+   * failures existed.
+   *
+   * @param unitId          unit identifier
+   * @param lastScannedPath resume checkpoint of the unit
+   * @param scannedCount    absolute scanned count of the unit
+   * @param failures        nodes this batch could not evaluate, null or empty when
+   *                          it lost none
+   */
+  public void updateUnitProgress(long unitId, String lastScannedPath, long scannedCount, CleanupNodeFailures failures) {
     scanUnitDAO.findById(unitId).ifPresent(entity -> {
       entity.setLastScannedPath(lastScannedPath);
       entity.setScannedCount(scannedCount);
+      if (failures != null && !failures.isEmpty()) {
+        // ADDED, never replaced: a resume starts its own batch counters at zero, so
+        // assigning would forget every node the earlier passes lost
+        entity.setEvalFailureCount(entity.getEvalFailureCount() + failures.getCount());
+        // FIRST failure wins, across passes too. It is the one that diagnoses the
+        // cause; overwriting on every batch would leave whichever node happened to
+        // fail last, which is noise
+        if (entity.getEvalFailureReason() == null) {
+          entity.setEvalFailureReason(failures.getReason());
+          entity.setEvalFailureDetail(failures.getDetail());
+        }
+      }
       scanUnitDAO.save(entity);
     });
+  }
+
+  /**
+   * @param campaignId campaign identifier
+   * @return nodes the campaign's scan walked but could not evaluate, summed over
+   *         its units
+   */
+  public long sumEvalFailureCount(long campaignId) {
+    return scanUnitDAO.sumEvalFailureCount(campaignId);
+  }
+
+  /**
+   * @param campaignId campaign identifier
+   * @param limit      most units to return
+   * @return the units that lost at least one node, worst first
+   */
+  public List<CleanupScanUnit> getUnitsWithEvalFailures(long campaignId, int limit) {
+    return scanUnitDAO.findUnitsWithEvalFailures(campaignId, PageRequest.of(0, limit))
+                      .stream()
+                      .map(this::toModel)
+                      .toList();
   }
 
   public void updateUnitTotal(long unitId, long totalCount) {
@@ -300,6 +355,9 @@ public class CleanupScanUnitStorage {
     unit.setTotalCount(entity.getTotalCount());
     unit.setAttemptCount(entity.getAttemptCount());
     unit.setFailureReason(entity.getFailureReason());
+    unit.setEvalFailureCount(entity.getEvalFailureCount());
+    unit.setEvalFailureReason(entity.getEvalFailureReason());
+    unit.setEvalFailureDetail(entity.getEvalFailureDetail());
     return unit;
   }
 

@@ -67,6 +67,7 @@ import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitProgressRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
@@ -764,6 +765,40 @@ class CleanupCampaignRestTest {
   }
 
   @Test
+  void getCampaignScanUnitsCarriesTheLostFilesAndTheirStackTrace() throws ObjectNotFoundException {
+    CleanupScanUnit lossy = new CleanupScanUnit();
+    lossy.setUnitPath("/Users/j___");
+    lossy.setEvalFailureCount(37);
+    lossy.setEvalFailureReason("NullPointerException: Cannot invoke Version.getName()");
+    lossy.setEvalFailureDetail("java.lang.NullPointerException\n\tat CleanupJcrStorage.selectVersionsToRemove");
+    when(campaignService.getCampaignScanUnitProgress(CAMPAIGN_ID)).thenReturn(new CleanupScanUnitProgress(40,
+                                                                                                         0,
+                                                                                                         0,
+                                                                                                         40,
+                                                                                                         0,
+                                                                                                         40,
+                                                                                                         1,
+                                                                                                         true,
+                                                                                                         37,
+                                                                                                         List.of(),
+                                                                                                         List.of(lossy)));
+
+    CampaignScanUnitProgressRestEntity progress = campaignRest.getCampaignScanUnits(CAMPAIGN_ID);
+
+    // Every subtree settled AND 37 files lost inside them: the two accountings are
+    // independent, and the console needs both to stop reading 100% as "complete"
+    assertTrue(progress.isScanComplete());
+    assertEquals(37L, progress.getSkippedNodeCount());
+    assertEquals(1, progress.getEvaluationFailures().size());
+    CampaignScanUnitRestEntity failing = progress.getEvaluationFailures().get(0);
+    assertEquals("/Users/j___", failing.getUnitPath());
+    assertEquals(37L, failing.getEvalFailureCount());
+    // The trace travels to the console: diagnosing this must not require the
+    // server log, which is what made the NullPointerException behind it invisible
+    assertTrue(failing.getEvalFailureDetail().contains("NullPointerException"));
+  }
+
+  @Test
   void getCampaignScanUnitsMapsTheBreakdownAndItsInFlightSubtrees() throws ObjectNotFoundException {
     CleanupScanUnit inFlight = new CleanupScanUnit();
     inFlight.setId(17L);
@@ -780,7 +815,9 @@ class CleanupCampaignRestTest {
                                                                                                          538,
                                                                                                          3,
                                                                                                          false,
-                                                                                                         List.of(inFlight)));
+                                                                                                         0,
+                                                                                                         List.of(inFlight),
+                                                                                                         List.of()));
 
     CampaignScanUnitProgressRestEntity progress = campaignRest.getCampaignScanUnits(CAMPAIGN_ID);
 

@@ -82,6 +82,20 @@ public class CleanupScanUnitProgress {
    */
   private boolean              scanComplete;
 
+  /**
+   * Nodes the scan walked but could not EVALUATE, summed over every unit: files
+   * missing from the report although their subtree finished cleanly. A scan with
+   * any of these is NOT a complete report, whatever the percentage says.
+   */
+  private long                 skippedNodeCount;
+
   /** The RUNNING units, with their own checkpoint and counts. */
   private List<CleanupScanUnit> inFlightUnits;
+
+  /**
+   * The units that lost at least one node, worst first and bounded — each with the
+   * FIRST failure it met and that failure's stack trace, so the cause is
+   * diagnosable from the console instead of the server log.
+   */
+  private List<CleanupScanUnit> evaluationFailures;
 }

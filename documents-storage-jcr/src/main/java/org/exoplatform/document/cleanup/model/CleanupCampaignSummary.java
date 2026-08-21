@@ -63,4 +63,12 @@ public class CleanupCampaignSummary {
   /** Scan units that settled failed, and are missing from the report. */
   private long    failedScanUnitCount;
 
+  /**
+   * Nodes the dry run walked but could not EVALUATE, so they are missing from the
+   * report without their subtree having failed. Distinct from
+   * {@link #failedScanUnitCount}, which counts whole subtrees never walked: this
+   * counts individual files lost inside subtrees that finished cleanly.
+   */
+  private long    skippedNodeCount;
+
 }

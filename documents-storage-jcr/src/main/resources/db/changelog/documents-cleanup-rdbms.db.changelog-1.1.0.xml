@@ -252,4 +252,21 @@
                          defaultValueNumeric="0"/>
     </changeSet>
 
+    <!-- Per-node evaluation failures of a scan unit. A node whose candidacy could
+         not be evaluated (a NullPointerException on a mix:versionable node with no
+         base version, a transient repository error) was logged as a WARN, skipped,
+         and the unit still finished DONE — so the file vanished from the report
+         while the campaign claimed a complete scan. These three columns are what
+         make that visible: how many nodes THIS subtree lost, and the first failure
+         with its stack trace so the cause is diagnosable without the server log.
+         Strictly additive, and the count defaults to 0 so every unit written before
+         them reads "nothing lost" rather than "unknown" -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-12">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT">
+            <column name="EVAL_FAILURE_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="EVAL_FAILURE_REASON" type="NVARCHAR(255)"/>
+            <column name="EVAL_FAILURE_DETAIL" type="CLOB"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>
