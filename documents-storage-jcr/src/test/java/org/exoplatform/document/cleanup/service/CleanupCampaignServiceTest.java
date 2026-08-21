@@ -300,7 +300,7 @@ class CleanupCampaignServiceTest {
   @Test
   void shouldPublishGraceZeroCampaignWithImmediateDeadlineThenLockIt() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.SIMULATED);
-    campaign.setParams(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200));
+    campaign.setParams(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200, null));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(campaignStorage.getCampaignsByStates(anyList())).thenReturn(List.of());
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -343,7 +343,7 @@ class CleanupCampaignServiceTest {
 
   @Test
   void shouldCreateCampaignSnapshottingParamsAndLaunchScan() throws ObjectNotFoundException {
-    CleanupParams effectiveParams = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200);
+    CleanupParams effectiveParams = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, null);
     when(settingService.getEffectiveParams(any())).thenReturn(effectiveParams);
     CleanupCampaign createdCampaign = campaign(CleanupCampaignState.DRAFT);
     when(campaignStorage.createCampaign(any())).thenReturn(createdCampaign);
@@ -359,7 +359,7 @@ class CleanupCampaignServiceTest {
   void aSecondRunIsRefusedWhileAnotherCampaignOwnsAWorker() throws ObjectNotFoundException {
     when(campaignStorage.getCampaignsByStates(argThat(states -> states.contains(CleanupCampaignState.DRY_RUN_RUNNING)
         && states.contains(CleanupCampaignState.EXECUTING)))).thenReturn(List.of(campaign(CleanupCampaignState.DRY_RUN_RUNNING)));
-    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200));
+    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, null));
 
     // Two scans at once is ten more reader threads on a repository where ONE
     // sequential walk already saturated both JCR caches
@@ -1887,18 +1887,32 @@ class CleanupCampaignServiceTest {
 
   @Test
   void shouldRejectCampaignCreationOnOutOfBoundsParams() {
-    assertCreateRejected(new CleanupParams(0, 1048576L, 7, 5, List.of(), 200), "cleanup.invalidPeriodMonths");
-    assertCreateRejected(new CleanupParams(6, -1L, 7, 5, List.of(), 200), "cleanup.invalidMinFileSize");
-    assertCreateRejected(new CleanupParams(6, 1048576L, -1, 5, List.of(), 200), "cleanup.invalidGraceDays");
-    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 0, List.of(), 200), "cleanup.invalidMaxVersionsPerFile");
+    assertCreateRejected(new CleanupParams(0, 1048576L, 7, 5, List.of(), 200, null), "cleanup.invalidPeriodMonths");
+    assertCreateRejected(new CleanupParams(6, -1L, 7, 5, List.of(), 200, null), "cleanup.invalidMinFileSize");
+    assertCreateRejected(new CleanupParams(6, 1048576L, -1, 5, List.of(), 200, null), "cleanup.invalidGraceDays");
+    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 0, List.of(), 200, null), "cleanup.invalidMaxVersionsPerFile");
     verify(campaignStorage, never()).createCampaign(any());
   }
+
+  @Test
+  void aRequestedFanOutBeyondTheCeilingIsREFUSEDAndNotQuietlyClamped() {
+    // Refused rather than clamped, unlike the deployment property: a property is a
+    // typo somebody has to be told about in a log, a form field is a request from
+    // a person who is owed an answer. Silently running four readers when they
+    // asked for four hundred is how they conclude the setting does nothing
+    when(settingService.getMaxScanThreads()).thenReturn(20);
+
+    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, 400), "cleanup.invalidScanThreads");
+    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, 0), "cleanup.invalidScanThreads");
+    verify(campaignStorage, never()).createCampaign(any());
+  }
+
 
   @Test
   void shouldAcceptCampaignCreationWithZeroGraceDays() throws ObjectNotFoundException {
     // Architect decision: a zero grace period IS valid (deadline elapses at
     // publication), the bounds validation must never forbid it
-    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200));
+    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200, null));
     CleanupCampaign createdCampaign = campaign(CleanupCampaignState.DRAFT);
     when(campaignStorage.createCampaign(any())).thenReturn(createdCampaign);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(createdCampaign);
@@ -2877,7 +2891,7 @@ class CleanupCampaignServiceTest {
     campaign.setId(CAMPAIGN_ID);
     campaign.setName("Q3 cleanup");
     campaign.setState(state);
-    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200));
+    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, null));
     return campaign;
   }
 

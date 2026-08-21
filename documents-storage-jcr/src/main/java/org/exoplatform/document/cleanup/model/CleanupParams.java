@@ -44,4 +44,15 @@ public class CleanupParams {
 
   private Integer      batchSize;
 
+  /**
+   * Reader threads THIS campaign's dry-run scan may use, null meaning 'the
+   * platform default'. Per campaign because the right value is a property of the
+   * corpus being walked and of what else the repository is serving at the time,
+   * not of the deployment — and because an administrator tuning a run should not
+   * need a restart to try a different fan-out. Bounded by
+   * {@code CleanupSettingService#MAX_SCAN_THREADS}, and never client-trusted:
+   * see {@code CleanupCampaignService#validateParams}.
+   */
+  private Integer      scanThreads;
+
 }

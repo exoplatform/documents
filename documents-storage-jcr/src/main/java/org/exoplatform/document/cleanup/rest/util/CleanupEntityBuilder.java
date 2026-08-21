@@ -66,6 +66,7 @@ public class CleanupEntityBuilder {
       entity.setGraceDays(params.getGraceDays());
       entity.setMaxVersionsPerFile(params.getMaxVersionsPerFile());
       entity.setExcludedPaths(params.getExcludedPaths());
+      entity.setScanThreads(params.getScanThreads());
     }
     entity.setStartedDate(toNullable(campaign.getStartedDate()));
     entity.setPublishedDate(toNullable(campaign.getPublishedDate()));
@@ -303,6 +304,27 @@ public class CleanupEntityBuilder {
   }
 
   /**
+   * The platform DEFAULTS as the creation form consumes them: the same field names
+   * a campaign carries, so the form fills from either shape, plus the ceiling the
+   * scan-thread input must not exceed.
+   *
+   * @param params        platform default parameters
+   * @param maxScanThreads highest reader-thread count the server accepts
+   * @return the defaults, as a campaign-shaped payload
+   */
+  public static CampaignRestEntity buildDefaults(CleanupParams params, int maxScanThreads) {
+    CampaignRestEntity entity = new CampaignRestEntity();
+    entity.setPeriodMonths(params.getPeriodMonths());
+    entity.setMinFileSizeBytes(params.getMinFileSizeBytes());
+    entity.setGraceDays(params.getGraceDays());
+    entity.setMaxVersionsPerFile(params.getMaxVersionsPerFile());
+    entity.setExcludedPaths(params.getExcludedPaths());
+    entity.setScanThreads(params.getScanThreads());
+    entity.setMaxScanThreads(maxScanThreads);
+    return entity;
+  }
+
+  /**
    * @param entity creation request body
    * @return partial parameter overrides (null fields defaulted downstream)
    */
@@ -312,7 +334,9 @@ public class CleanupEntityBuilder {
                              entity.getGraceDays(),
                              entity.getMaxVersionsPerFile(),
                              entity.getExcludedPaths(),
-                             null);
+                             // Batch size is never client-settable
+                             null,
+                             entity.getScanThreads());
   }
 
   private static Long toNullable(long millis) {

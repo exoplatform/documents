@@ -128,6 +128,25 @@
           class="pt-2 pb-4"
           outlined
           dense />
+        <v-label for="cleanupScanThreads" class="mt-2">{{ $t('cleanup.admin.createDrawer.scanThreads') }}</v-label>
+        <v-text-field
+          id="cleanupScanThreads"
+          v-model.number="scanThreads"
+          :disabled="criteriaFrozen"
+          :aria-label="$t('cleanup.admin.createDrawer.scanThreads')"
+          :max="maxScanThreads"
+          type="number"
+          min="1"
+          class="pt-2"
+          outlined
+          dense />
+        <!-- The bound is the repository's, not the connection pool's: the readers
+             hold no pooled connection across a walk, and what a scan saturates is
+             the JCR workspace caches. The server refuses anything above it -->
+        <div class="d-flex align-start text-light-color caption mb-4">
+          <v-icon size="14" class="me-2 mt-1">fas fa-info-circle</v-icon>
+          <span>{{ $t('cleanup.admin.createDrawer.scanThreadsHint', {0: maxScanThreads}) }}</span>
+        </div>
         <v-label for="cleanupExcludedPaths" class="mt-2">{{ $t('cleanup.admin.createDrawer.excludedPaths') }}</v-label>
         <v-textarea
           id="cleanupExcludedPaths"
@@ -210,6 +229,10 @@ export default {
       minFileSizeMb: null,
       graceDays: null,
       maxVersionsPerFile: null,
+      scanThreads: null,
+      // Served WITH the defaults so the input and its hint carry the very bound
+      // the server validates against, instead of a number the form invented
+      maxScanThreads: null,
       excludedPathsText: '',
       // Local clock read taken when the drawer opened, against which the
       // resulting deadline is told past or future. DISPLAY ONLY — the Execute
@@ -317,6 +340,7 @@ export default {
         this.minFileSizeMb = this.toMegaBytes(campaign.minFileSizeBytes);
         this.graceDays = campaign.graceDays;
         this.maxVersionsPerFile = campaign.maxVersionsPerFile;
+        this.scanThreads = campaign.scanThreads;
         this.excludedPathsText = (campaign.excludedPaths || []).join('\n');
         this.loading = false;
         this.$refs.drawer.open();
@@ -331,6 +355,8 @@ export default {
           this.minFileSizeMb = this.toMegaBytes(defaults?.minFileSizeBytes);
           this.graceDays = defaults?.graceDays;
           this.maxVersionsPerFile = defaults?.maxVersionsPerFile;
+          this.scanThreads = defaults?.scanThreads;
+          this.maxScanThreads = defaults?.maxScanThreads;
           this.excludedPathsText = (defaults?.excludedPaths || []).join('\n');
         })
         .catch(() => this.displayAlert(this.$t('cleanup.admin.createDrawer.defaultsError'), 'error'))
@@ -395,6 +421,7 @@ export default {
         minFileSizeBytes: minFileSizeMb === null ? null : Math.round(minFileSizeMb * MEGA_BYTE),
         graceDays: this.numberOrNull(this.graceDays),
         maxVersionsPerFile: this.numberOrNull(this.maxVersionsPerFile),
+        scanThreads: this.numberOrNull(this.scanThreads),
         excludedPaths,
       };
     },

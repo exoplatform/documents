@@ -765,7 +765,7 @@ class CleanupExecutionServiceTest {
     campaign.setName("Q3 cleanup");
     campaign.setState(state);
     campaign.setTotalCount(6);
-    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200));
+    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, null));
     return campaign;
   }
 

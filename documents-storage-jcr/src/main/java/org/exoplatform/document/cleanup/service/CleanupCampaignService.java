@@ -1671,6 +1671,42 @@ public class CleanupCampaignService {
     if (params.getMaxVersionsPerFile() == null || params.getMaxVersionsPerFile() < 1) {
       throw new IllegalArgumentException("cleanup.invalidMaxVersionsPerFile");
     }
+    validateScanThreads(params.getScanThreads());
+  }
+
+  /**
+   * @return the highest reader-thread count a campaign may request, so the
+   *         creation form can bound its input on the SAME number the server
+   *         validates against — a form inventing its own bound is a form that
+   *         disagrees with the server the day one of them changes
+   */
+  public int getMaxScanThreads() {
+    return settingService.getMaxScanThreads();
+  }
+
+  /**
+   * Bound check on a campaign's requested reader-thread count.
+   * <p>
+   * REFUSED rather than clamped, unlike the deployment property: a property is a
+   * typo somebody has to be told about in a log, whereas a form field is a
+   * request from a person who is owed an answer — silently running four readers
+   * when they asked for forty is how they conclude the setting does nothing.
+   * <p>
+   * The ceiling is the platform's ({@code CleanupSettingService#getMaxScanThreads}),
+   * derived from what the repository survives and NOT from a connection pool —
+   * see that method for why the pool is the wrong bound here.
+   *
+   * @param scanThreads requested reader threads, null meaning 'platform default'
+   * @throws IllegalArgumentException "cleanup.invalidScanThreads" when outside
+   *           the supported range
+   */
+  private void validateScanThreads(Integer scanThreads) {
+    if (scanThreads == null) {
+      return;
+    }
+    if (scanThreads < CleanupSettingService.MIN_SCAN_THREADS || scanThreads > settingService.getMaxScanThreads()) {
+      throw new IllegalArgumentException("cleanup.invalidScanThreads");
+    }
   }
 
   /**

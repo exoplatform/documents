@@ -146,11 +146,21 @@ class CleanupCampaignRestTest {
   }
 
   @Test
-  void getDefaultsDelegatesToService() {
-    CleanupParams defaults = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200);
+  void getDefaultsCarriesThePlatformValuesAndTheCeilingTheFormMustRespect() {
+    CleanupParams defaults = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, 4);
     when(campaignService.getDefaultParams()).thenReturn(defaults);
+    when(campaignService.getMaxScanThreads()).thenReturn(20);
 
-    assertEquals(defaults, campaignRest.getDefaults());
+    CampaignRestEntity served = campaignRest.getDefaults();
+
+    assertEquals(6, served.getPeriodMonths());
+    assertEquals(1048576L, served.getMinFileSizeBytes());
+    assertEquals(7, served.getGraceDays());
+    assertEquals(5, served.getMaxVersionsPerFile());
+    assertEquals(4, served.getScanThreads(), "The platform default fan-out pre-fills the form");
+    // The form must bound its input on the number the SERVER validates against: a
+    // form inventing its own bound is a form that disagrees the day one changes
+    assertEquals(20, served.getMaxScanThreads(), "The ceiling must travel with the defaults");
   }
 
   @Test

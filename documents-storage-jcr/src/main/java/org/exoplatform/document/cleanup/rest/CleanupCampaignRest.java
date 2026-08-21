@@ -140,8 +140,8 @@ public class CleanupCampaignRest {
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
   })
-  public CleanupParams getDefaults() {
-    return campaignService.getDefaultParams();
+  public CampaignRestEntity getDefaults() {
+    return CleanupEntityBuilder.buildDefaults(campaignService.getDefaultParams(), campaignService.getMaxScanThreads());
   }
 
   /**

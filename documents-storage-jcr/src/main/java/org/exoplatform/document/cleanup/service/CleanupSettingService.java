@@ -139,7 +139,8 @@ public class CleanupSettingService {
                              getInt(GRACE_DAYS_KEY, defaultGraceDays),
                              getInt(MAX_VERSIONS_KEY, defaultMaxVersionsPerFile),
                              getExcludedPaths(),
-                             batchSize);
+                             batchSize,
+                             getScanThreads());
   }
 
   /**
@@ -158,7 +159,8 @@ public class CleanupSettingService {
                              overrides.getMaxVersionsPerFile() == null ? defaults.getMaxVersionsPerFile() :
                                                                        overrides.getMaxVersionsPerFile(),
                              overrides.getExcludedPaths() == null ? defaults.getExcludedPaths() : overrides.getExcludedPaths(),
-                             overrides.getBatchSize() == null ? defaults.getBatchSize() : overrides.getBatchSize());
+                             overrides.getBatchSize() == null ? defaults.getBatchSize() : overrides.getBatchSize(),
+                             overrides.getScanThreads() == null ? defaults.getScanThreads() : overrides.getScanThreads());
   }
 
   /**
@@ -197,6 +199,28 @@ public class CleanupSettingService {
 
   public int getReportRetentionCampaigns() {
     return reportRetentionCampaigns;
+  }
+
+  /**
+   * Upper bound a campaign may ask for, which is the platform ceiling and NOT the
+   * configured default: an administrator tuning one run may go above what
+   * exo.properties sets, and no further.
+   * <p>
+   * WHY IT IS NOT DERIVED FROM THE CONNECTION POOLS, which was the first proposal:
+   * half of {@code min(JCR pool, JPA pool)} lands near 150 readers on this
+   * deployment (the {@code exo-jcr_portal} pool is provisioned at 300), an order
+   * of magnitude above what the repository survives. The binding constraint is
+   * JCR workspace-cache eviction at the million-entry cap and raw repository
+   * load, not connection exhaustion — and readers deliberately hold NO pooled
+   * connection across a walk, {@code CleanupScanService#commitThenPost}
+   * committing before every blocking post precisely so that ten readers cannot
+   * pin ten connections. A pool-derived cap would license the load it looks like
+   * it is protecting.
+   *
+   * @return the highest reader-thread count a campaign may request
+   */
+  public int getMaxScanThreads() {
+    return MAX_SCAN_THREADS;
   }
 
   /**

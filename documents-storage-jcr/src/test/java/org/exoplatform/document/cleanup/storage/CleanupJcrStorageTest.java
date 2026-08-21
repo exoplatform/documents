@@ -188,7 +188,7 @@ class CleanupJcrStorageTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    params = new CleanupParams(6, 1024L, 7, 5, List.of(), 100);
+    params = new CleanupParams(6, 1024L, 7, 5, List.of(), 100, null);
     // Property value normally injected by Spring through the @Value fallback
     setField("jcrSessionTimeout", SESSION_TIMEOUT);
     when(repositoryService.getDefaultRepository()).thenReturn(repository);
@@ -1401,7 +1401,7 @@ class CleanupJcrStorageTest {
    * early-returns or fails'.
    */
   static Stream<Arguments> perItemPrimitives() {
-    CleanupParams primitiveParams = new CleanupParams(6, 1024L, 7, 5, List.of(), 100);
+    CleanupParams primitiveParams = new CleanupParams(6, 1024L, 7, 5, List.of(), 100, null);
     return Stream.of(Arguments.of("addExemptionMixin",
                                   (Function<CleanupJcrStorage, Object>) storage -> storage.addExemptionMixin(NODE_UUID_DOOMED,
                                                                                                              "john"),
@@ -1665,7 +1665,7 @@ class CleanupJcrStorageTest {
    * is about.
    */
   private static CleanupParams purgeParams(int maxVersionsPerFile) {
-    return new CleanupParams(6, 1024L, 7, maxVersionsPerFile, List.of(), 100);
+    return new CleanupParams(6, 1024L, 7, maxVersionsPerFile, List.of(), 100, null);
   }
 
   private long monthsAgo(int months) {

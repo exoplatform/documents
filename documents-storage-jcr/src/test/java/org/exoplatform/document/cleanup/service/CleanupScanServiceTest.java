@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.doNothing;
@@ -232,13 +233,16 @@ class CleanupScanServiceTest {
     campaign.setId(CAMPAIGN_ID);
     campaign.setName("Scan me");
     campaign.setState(CleanupCampaignState.DRY_RUN_RUNNING);
-    campaign.setParams(new CleanupParams(6, 1024L, 7, 5, List.of(), BATCH_SIZE));
+    campaign.setParams(new CleanupParams(6, 1024L, 7, 5, List.of(), BATCH_SIZE, null));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(settingService.getBatchSize()).thenReturn(BATCH_SIZE);
     // ONE reader by default: a deterministic pool size keeps the assertions on
     // call ORDER meaningful; the parallelism itself is pinned by the tests that
     // ask for 2 readers explicitly
     when(settingService.getScanThreads()).thenReturn(1);
+    // The platform CEILING, distinct from the configured default: a campaign may
+    // ask for more than the default and no more than this
+    lenient().when(settingService.getMaxScanThreads()).thenReturn(CleanupSettingService.MAX_SCAN_THREADS);
     // The lifecycle bean owns the state machine: emulate the state change so
     // the worker's re-reads observe it
     when(campaignLifecycle.transition(any(CleanupCampaign.class), any(CleanupCampaignState.class))).thenAnswer(invocation -> {
@@ -1134,6 +1138,40 @@ class CleanupScanServiceTest {
   }
 
   @Test
+  void aCampaignGetsTheFanOutItAskedForWithinThePlatformCeiling() throws ReflectiveOperationException {
+    // Per campaign because the right fan-out is a property of the corpus being
+    // walked and of what else the repository is serving, not of the deployment —
+    // and an administrator tuning a run should not need a restart to try another
+    // value. The platform default here is 1, so these also prove the request is
+    // not silently capped by it
+    when(settingService.getScanThreads()).thenReturn(1);
+    activeReaders().set(0);
+
+    assertEquals(1, readerCountFor(40, null), "No request: the platform default stands");
+    assertEquals(8, readerCountFor(40, 8), "A campaign's own request must be honoured above the platform default");
+    assertEquals(CleanupSettingService.MAX_SCAN_THREADS,
+                 readerCountFor(40, 500),
+                 "A request beyond the platform ceiling must be capped at it, never applied");
+    assertEquals(1, readerCountFor(40, 0), "A nonsensical request still leaves one reader, never zero");
+    assertEquals(3, readerCountFor(3, 8), "The unit count still caps the fan-out");
+  }
+
+  @Test
+  void anAbandonedReaderIsSubtractedFromThePLATFORMCeilingNotFromTheRequest() throws ReflectiveOperationException {
+    // The bound being protected is the load the repository takes from every
+    // campaign at once. So the leftovers are measured against the platform
+    // ceiling: a campaign asking for two readers must not be told it may add them
+    // on top of twenty already walking
+    when(settingService.getScanThreads()).thenReturn(4);
+    activeReaders().set(3);
+
+    assertEquals(1, readerCountFor(40, 4), "3 of the 4 permits are in flight: this run gets the one left");
+
+    activeReaders().set(20);
+    assertEquals(1, readerCountFor(40, 8), "Every permit of the ceiling spoken for: the floor of one, never more");
+  }
+
+  @Test
   void aWalkingReaderIsCountedWHILEItWalksAndReleasedWhateverEnDSIt() throws ReflectiveOperationException {
     // The accounting the bound above reads. It has to be taken around the WALK
     // and released on EVERY exit: a reader that outlived its run is exactly the
@@ -1563,9 +1601,14 @@ class CleanupScanServiceTest {
   }
 
   private int readerCountFor(int unitCount) throws ReflectiveOperationException {
-    Method readerCountForMethod = CleanupScanService.class.getDeclaredMethod("readerCountFor", int.class);
+    return readerCountFor(unitCount, null);
+  }
+
+  private int readerCountFor(int unitCount, Integer requestedThreads) throws ReflectiveOperationException {
+    Method readerCountForMethod = CleanupScanService.class.getDeclaredMethod("readerCountFor", int.class, CleanupParams.class);
     readerCountForMethod.setAccessible(true); // NOSONAR test wiring
-    return (int) readerCountForMethod.invoke(scanService, unitCount);
+    CleanupParams params = new CleanupParams(6, 1024L, 7, 5, List.of(), BATCH_SIZE, requestedThreads);
+    return (int) readerCountForMethod.invoke(scanService, unitCount, params);
   }
 
   @SuppressWarnings("unchecked")

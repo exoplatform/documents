@@ -395,7 +395,7 @@ class CleanupEntityBuilderTest {
     campaign.setId(3L);
     campaign.setName("Spring cleanup");
     campaign.setState(CleanupCampaignState.SIMULATED);
-    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of("/Users/root"), 200));
+    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of("/Users/root"), 200, null));
     campaign.setStartedDate(1000L);
     campaign.setPublishedDate(0);
     campaign.setLockDate(0);

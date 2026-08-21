@@ -385,7 +385,7 @@ public class CleanupScanService {
       List<CleanupScanUnit> units = scanUnitStorage.getUnitsToProcess(campaignId, MAX_SCAN_UNIT_ATTEMPTS);
 
       // (b) ESTIMATE — in parallel, on the very pool the readers will use
-      int readerCount = readerCountFor(units.size());
+      int readerCount = readerCountFor(units.size(), campaign.getParams());
       readerPool = Executors.newFixedThreadPool(readerCount, threadFactory("cleanup-scan-reader-" + campaignId));
       long total = estimateUnits(campaignId, units, readerPool);
       long processedAtStart = scanUnitStorage.sumScannedCount(campaignId);
@@ -497,20 +497,31 @@ public class CleanupScanService {
    * shrinks this run: a reader outliving its run is invisible otherwise, and the
    * scan that pays for it is the one that has to be able to say so.
    *
+   * The fan-out THIS campaign asked for is honoured where it is set (a form
+   * field, validated against the platform ceiling when the campaign was created),
+   * and the platform default stands where it is not. The in-flight arithmetic
+   * below deliberately keeps measuring against the PLATFORM ceiling and not
+   * against this campaign's request: the bound being protected is the load the
+   * repository takes from every campaign at once, so a campaign asking for two
+   * readers must not be told it may add them on top of twenty already walking.
+   *
    * @param unitCount number of units this run has to walk
+   * @param params    this campaign's parameters, whose scanThreads is its request
    * @return reader count for this run, at least 1
    */
-  private int readerCountFor(int unitCount) {
-    int configured = settingService.getScanThreads();
+  private int readerCountFor(int unitCount, CleanupParams params) {
+    int ceiling = settingService.getScanThreads();
+    int requested = params == null || params.getScanThreads() == null ? ceiling : params.getScanThreads();
+    int configured = Math.max(1, Math.min(settingService.getMaxScanThreads(), requested));
     int wanted = Math.max(1, Math.min(configured, unitCount));
     int inFlight = activeReaders.get();
     if (inFlight <= 0) {
       return wanted;
     }
-    int granted = Math.max(1, Math.min(wanted, configured - inFlight));
+    int granted = Math.max(1, Math.min(wanted, Math.max(ceiling, configured) - inFlight));
     LOG.warn("{} cleanup scan reader(s) of a previous run are still walking the repository (they outlived their run, having"
         + " not answered its interrupt): this scan starts with {} reader(s) instead of {}, so the configured fan-out of {}"
-        + " is not multiplied.", inFlight, granted, wanted, configured);
+        + " is not multiplied.", inFlight, granted, wanted, Math.max(ceiling, configured));
     return granted;
   }
 

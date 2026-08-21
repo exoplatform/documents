@@ -1202,7 +1202,7 @@ class CleanupCampaignStorageTest {
     campaign.setId(CAMPAIGN_ID);
     campaign.setName("Spring cleanup");
     campaign.setState(CleanupCampaignState.SIMULATED);
-    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(USERS_ROOT_PATH), null));
+    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(USERS_ROOT_PATH), null, null));
     campaign.setStartedDate(1000L);
     campaign.setPublishedDate(0);
     campaign.setTotalCount(100);

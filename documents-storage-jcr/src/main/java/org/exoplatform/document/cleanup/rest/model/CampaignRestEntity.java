@@ -41,6 +41,22 @@ public class CampaignRestEntity {
 
   private Integer      maxVersionsPerFile;
 
+  /**
+   * Reader threads the dry-run scan may use, null meaning 'the platform default'.
+   * Client-settable and therefore BOUNDED server-side
+   * ({@code CleanupCampaignService#validateParams}): the fan-out is load on a
+   * shared repository, so it is not a number a form gets to choose freely.
+   */
+  private Integer      scanThreads;
+
+  /**
+   * Highest {@link #scanThreads} the server will accept, served with the platform
+   * DEFAULTS so the creation form can bound its own input and say what the bound
+   * is. Read-only: it is ignored on the way in, the server validating against its
+   * own ceiling whatever a client claims.
+   */
+  private Integer      maxScanThreads;
+
   private List<String> excludedPaths;
 
   private Long         startedDate;

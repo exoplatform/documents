@@ -269,4 +269,17 @@
         </addColumn>
     </changeSet>
 
+    <!-- Reader threads of a campaign's dry-run scan, chosen per campaign. The right
+         fan-out depends on the corpus being walked and on what else the repository
+         is serving at that moment, neither of which a deployment property can know,
+         and an administrator tuning a run should not need a restart to try another
+         value. Strictly additive with a 0 default, and 0 means 'never set': every
+         campaign written before this column keeps running on the platform default,
+         which is exactly what it ran with -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-13">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN">
+            <column name="SCAN_THREADS" type="INT" defaultValueNumeric="0"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

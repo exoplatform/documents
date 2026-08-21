@@ -749,7 +749,11 @@ public class CleanupCampaignStorage {
                                          entity.getGraceDays(),
                                          entity.getMaxVersionsPerFile(),
                                          fromJsonArray(entity.getExcludedPaths()),
-                                         null));
+                                         null,
+                                         // 0 is 'never set': the campaign runs on
+                                         // the platform default, as it did before
+                                         // the column existed
+                                         entity.getScanThreads() == 0 ? null : entity.getScanThreads()));
     campaign.setStartedDate(toMillis(entity.getStartedDate()));
     campaign.setPublishedDate(toMillis(entity.getPublishedDate()));
     campaign.setLockDate(toMillis(entity.getLockDate()));
@@ -776,6 +780,7 @@ public class CleanupCampaignStorage {
       entity.setGraceDays(params.getGraceDays() == null ? 0 : params.getGraceDays());
       entity.setMaxVersionsPerFile(params.getMaxVersionsPerFile() == null ? 0 : params.getMaxVersionsPerFile());
       entity.setExcludedPaths(toJsonArray(params.getExcludedPaths()));
+      entity.setScanThreads(params.getScanThreads() == null ? 0 : params.getScanThreads());
     }
     entity.setStartedDate(toDate(campaign.getStartedDate()));
     entity.setPublishedDate(toDate(campaign.getPublishedDate()));

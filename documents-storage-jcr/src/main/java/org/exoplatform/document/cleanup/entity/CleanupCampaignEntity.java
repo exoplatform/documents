@@ -62,6 +62,14 @@ public class CleanupCampaignEntity implements Serializable {
   @Column(name = "EXCLUDED_PATHS")
   private String            excludedPaths;
 
+  /**
+   * Reader threads this campaign's scan may use. 0 means 'never set', i.e. use
+   * the platform default — the column is added with that default, so every
+   * campaign predating it keeps the behaviour it ran with.
+   */
+  @Column(name = "SCAN_THREADS")
+  private int               scanThreads;
+
   @Column(name = "STARTED_DATE")
   private Date              startedDate;
 
