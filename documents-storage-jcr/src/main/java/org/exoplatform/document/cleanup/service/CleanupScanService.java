@@ -480,48 +480,57 @@ public class CleanupScanService {
   /**
    * Fan-out of THIS run, reduced by the readers still walking for an earlier one.
    * <p>
-   * The platform-wide bound is {@code documents.cleanup.scan.threads} concurrent
-   * readers, and {@link #activeReaders} is what makes it real rather than
-   * inferred from a campaign state that a cancel clears instantly. Abandoned
-   * readers count against the new run's share, so the repository sees the
-   * configured fan-out and not a multiple of it.
+   * THREE distinct quantities, which an earlier version of this method conflated
+   * under one name:
+   * <ul>
+   * <li>{@code documents.cleanup.scan.threads} is a DEFAULT — what a campaign
+   * that expressed no preference gets, and what pre-fills the creation form. It
+   * is not a cap, and calling it one is what produced the bug this rewrites: the
+   * budget was {@code max(default, request)}, so a campaign asking above the
+   * default silently raised the very number the leftovers were deducted from</li>
+   * <li>{@code CleanupSettingService#MAX_SCAN_THREADS} is the CAP, enforced when
+   * the campaign is created ({@code CleanupCampaignService#validateScanThreads})
+   * and again here</li>
+   * <li>{@code budget} is what THIS run may put on the repository: its own
+   * request, capped. Leftover readers are subtracted from that — the load being
+   * bounded is what the repository takes at any instant, and the administrator
+   * who asked for eight readers asked for eight, not for eight plus whatever a
+   * cancelled run left behind.</li>
+   * </ul>
+   * So the total concurrent walk never exceeds what this campaign asked for
+   * (worst case its request plus the floor below), and never twice the intended
+   * load — which is the whole point of counting threads at all.
+   * <p>
+   * {@link #activeReaders} is what makes the bound real rather than inferred from
+   * a campaign state that a cancel clears instantly.
    * <p>
    * The floor of ONE is deliberate: even with every permit spoken for, the new
    * scan starts and walks, one subtree at a time, rather than blocking on threads
-   * that already proved they do not stop. So the bound is 'configured + 1 in the
-   * worst case', against 'configured x number of cancelled runs' before —
-   * knowingly imperfect, and imperfect in the direction that cannot wedge a
-   * campaign.
+   * that already proved they do not stop. So the worst case is 'budget + 1',
+   * against 'budget x number of cancelled runs' before — knowingly imperfect,
+   * and imperfect in the direction that cannot wedge a campaign.
    * <p>
    * Logged at WARN whenever anything is still in flight, whether or not it
    * shrinks this run: a reader outliving its run is invisible otherwise, and the
    * scan that pays for it is the one that has to be able to say so.
-   *
-   * The fan-out THIS campaign asked for is honoured where it is set (a form
-   * field, validated against the platform ceiling when the campaign was created),
-   * and the platform default stands where it is not. The in-flight arithmetic
-   * below deliberately keeps measuring against the PLATFORM ceiling and not
-   * against this campaign's request: the bound being protected is the load the
-   * repository takes from every campaign at once, so a campaign asking for two
-   * readers must not be told it may add them on top of twenty already walking.
    *
    * @param unitCount number of units this run has to walk
    * @param params    this campaign's parameters, whose scanThreads is its request
    * @return reader count for this run, at least 1
    */
   private int readerCountFor(int unitCount, CleanupParams params) {
-    int ceiling = settingService.getScanThreads();
-    int requested = params == null || params.getScanThreads() == null ? ceiling : params.getScanThreads();
-    int configured = Math.max(1, Math.min(settingService.getMaxScanThreads(), requested));
-    int wanted = Math.max(1, Math.min(configured, unitCount));
+    int defaultThreads = settingService.getScanThreads();
+    int requested = params == null || params.getScanThreads() == null ? defaultThreads : params.getScanThreads();
+    int budget = Math.max(1, Math.min(settingService.getMaxScanThreads(), requested));
+    int wanted = Math.max(1, Math.min(budget, unitCount));
     int inFlight = activeReaders.get();
     if (inFlight <= 0) {
       return wanted;
     }
-    int granted = Math.max(1, Math.min(wanted, Math.max(ceiling, configured) - inFlight));
+    int granted = Math.max(1, Math.min(wanted, budget - inFlight));
     LOG.warn("{} cleanup scan reader(s) of a previous run are still walking the repository (they outlived their run, having"
-        + " not answered its interrupt): this scan starts with {} reader(s) instead of {}, so the configured fan-out of {}"
-        + " is not multiplied.", inFlight, granted, wanted, Math.max(ceiling, configured));
+        + " not answered its interrupt): this scan starts with {} reader(s) instead of {}, so the {} reader(s) it asked for"
+        + " are not exceeded.", inFlight, granted, wanted, budget);
     return granted;
   }
 

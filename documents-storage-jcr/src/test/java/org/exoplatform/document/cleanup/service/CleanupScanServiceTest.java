@@ -1157,18 +1157,33 @@ class CleanupScanServiceTest {
   }
 
   @Test
-  void anAbandonedReaderIsSubtractedFromThePLATFORMCeilingNotFromTheRequest() throws ReflectiveOperationException {
-    // The bound being protected is the load the repository takes from every
-    // campaign at once. So the leftovers are measured against the platform
-    // ceiling: a campaign asking for two readers must not be told it may add them
-    // on top of twenty already walking
+  void anAbandonedReaderIsSubtractedFromTHISRunsOwnBudget() throws ReflectiveOperationException {
+    // The budget is what THIS run may put on the repository — its own request,
+    // capped — and NOT the platform property, which is a default (it pre-fills
+    // the form) and not a cap. Deducting from max(default, request) let a
+    // campaign asking above the default raise the very number the leftovers were
+    // deducted from, so the intended load could be walked twice over
     when(settingService.getScanThreads()).thenReturn(4);
-    activeReaders().set(3);
 
-    assertEquals(1, readerCountFor(40, 4), "3 of the 4 permits are in flight: this run gets the one left");
+    activeReaders().set(3);
+    assertEquals(1, readerCountFor(40, 4), "3 of the 4 it asked for are in flight: this run gets the one left");
+
+    // The SEMANTICS, above the default: what is granted brings the concurrent
+    // walk to exactly what was asked for, never past it
+    assertEquals(5, readerCountFor(40, 8), "The run asked for 8 and 3 are still walking: 5 more reach 8, never 11");
 
     activeReaders().set(20);
-    assertEquals(1, readerCountFor(40, 8), "Every permit of the ceiling spoken for: the floor of one, never more");
+    assertEquals(1, readerCountFor(40, 8), "Its whole budget spoken for: the floor of one, never more");
+
+    // THE distinguishing row, and the only one of the four that separates the two
+    // readings — verified by mutation: deducting from max(default, request), as
+    // this did, answers 2 here and puts 3 concurrent readers on the repository for
+    // a campaign that asked for 2. Above the default the two expressions coincide,
+    // which is why the previous test could not see the difference at all
+    activeReaders().set(1);
+    assertEquals(1,
+                 readerCountFor(40, 2),
+                 "A campaign asking for LESS than the default is measured against its own request too");
   }
 
   @Test

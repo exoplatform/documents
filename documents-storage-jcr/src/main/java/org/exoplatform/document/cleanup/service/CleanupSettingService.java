@@ -54,6 +54,17 @@ public class CleanupSettingService {
    */
   public static final int      MAX_SCAN_THREADS   = 20;
 
+  /** Lower bound of the purge checkpoint batch: never a batch of zero item. */
+  public static final int      MIN_PURGE_BATCH_SIZE = 1;
+
+  /**
+   * Upper bound of the purge checkpoint batch. Generous — the value only decides
+   * how much progress a JVM death loses and how coarsely the bar advances, never
+   * correctness — but bounded all the same, so a typo cannot turn the progress
+   * report off for a run measured in hours.
+   */
+  public static final int      MAX_PURGE_BATCH_SIZE = 1000;
+
   private static final Log     LOG                = ExoLogger.getLogger(CleanupSettingService.class);
 
   private static final Context CLEANUP_CONTEXT    = Context.GLOBAL.id("DocumentsCleanup");
@@ -191,10 +202,25 @@ public class CleanupSettingService {
   }
 
   /**
-   * @return items a purge processes between two progress checkpoints, at least 1
+   * @return items a purge processes between two progress checkpoints, CLAMPED to
+   *         [{@link #MIN_PURGE_BATCH_SIZE}, {@link #MAX_PURGE_BATCH_SIZE}] — both
+   *         ends, and logged when corrected, like {@link #getScanThreads()}. It
+   *         floored only at 1 before, which left the two adjacent settings
+   *         asymmetric for no reason: an oversized purge batch is harmless today
+   *         (it merely coarsens checkpointing) and that is exactly the asymmetry
+   *         somebody copies into a setting where it is not
    */
   public int getPurgeBatchSize() {
-    return Math.max(1, purgeBatchSize);
+    if (purgeBatchSize < MIN_PURGE_BATCH_SIZE || purgeBatchSize > MAX_PURGE_BATCH_SIZE) {
+      int clamped = Math.min(Math.max(purgeBatchSize, MIN_PURGE_BATCH_SIZE), MAX_PURGE_BATCH_SIZE);
+      LOG.warn("documents.cleanup.purge.batch.size is configured to {}, outside the supported [{}, {}] range: using {} instead",
+               purgeBatchSize,
+               MIN_PURGE_BATCH_SIZE,
+               MAX_PURGE_BATCH_SIZE,
+               clamped);
+      return clamped;
+    }
+    return purgeBatchSize;
   }
 
   public int getReportRetentionCampaigns() {
