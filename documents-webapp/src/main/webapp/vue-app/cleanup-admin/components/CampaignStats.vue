@@ -85,7 +85,12 @@ export default {
       return this.campaign && ['DRY_RUN_RUNNING', 'EXECUTING'].includes(this.campaign.state);
     },
     showSubtrees() {
-      return this.running && this.scanUnits?.unitCount > 0;
+      // DRY RUN only, and not `running`: the subtree breakdown belongs to the
+      // WALK. Left on during EXECUTING it reported '845 of 845 subtrees
+      // finished' under a bar measuring the purge, which reads as if the purge
+      // had subtrees — and as if something were still being walked while the
+      // scan had long finished
+      return this.campaign?.state === 'DRY_RUN_RUNNING' && this.scanUnits?.unitCount > 0;
     },
     progress() {
       // The completeness claim is only made when the SUBTREE counts back it, and

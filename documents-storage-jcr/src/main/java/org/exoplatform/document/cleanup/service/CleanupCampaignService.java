@@ -53,6 +53,7 @@ import org.springframework.stereotype.Service;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.file.services.FileService;
+import org.exoplatform.commons.file.services.NameSpaceService;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -97,6 +98,18 @@ import jakarta.annotation.PreDestroy;
 @Service
 public class CleanupCampaignService {
 
+  /**
+   * File-store namespace the archived CSV reports live in.
+   * <p>
+   * It MUST be registered with {@code NameSpaceService} before a file is written
+   * under it: {@code DataStorage#create} looks the namespace up by name and
+   * dereferences the result without a guard, so an unregistered name fails with a
+   * raw NullPointerException wrapped in a FileStorageException — 'Error while
+   * writing file cleanup-campaign-N.csv', once per retention tick, forever. Every
+   * archive attempt failed that way, which also meant the retention job never
+   * dropped a single item row: it archives BEFORE purging, deliberately, and the
+   * archive never succeeded. See {@link #registerFileNamespace()}.
+   */
   public static final String                      FILE_NAMESPACE              = "documentsCleanup";
 
   /**
@@ -288,6 +301,9 @@ public class CleanupCampaignService {
   @Autowired
   private FileService                             fileService;
 
+  @Autowired
+  private NameSpaceService                        nameSpaceService;
+
   /**
    * Off-request worker for the row collection that follows a campaign delete. Its
    * OWN executor and not the purge one: a delete must not queue behind a purge
@@ -317,6 +333,7 @@ public class CleanupCampaignService {
    */
   void recoverAfterRestart() {
     try {
+      registerFileNamespace();
       if (!campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED)).isEmpty()) {
         registerObservationListenerWithRetry();
       }
@@ -544,6 +561,32 @@ public class CleanupCampaignService {
       } catch (Exception e) {
         LOG.warn("Error sweeping the leftover rows of the deleted cleanup campaign {}", campaignId, e);
       }
+    }
+  }
+
+  /**
+   * Registers {@link #FILE_NAMESPACE} with the file store, idempotently.
+   * <p>
+   * Without it every {@code writeFile} under that namespace fails on a
+   * NullPointerException raised inside {@code DataStorage#create}, which looks the
+   * namespace up by name and never guards the miss. The failure was invisible in
+   * the worst way: our own caller logs it as a WARN and keeps the item detail, so
+   * the retention tick simply retried it every five minutes, and no report was
+   * ever archived while the console showed nothing wrong.
+   * <p>
+   * Called from the restart recovery rather than from a {@code @PostConstruct}
+   * for the same reason the observation listener is: the file store's own tables
+   * may not be ready at bean-creation time, and this must not be able to fail a
+   * WAR's startup. A failure here is logged and swallowed — the archive is a
+   * retention concern, and the next restart tries again.
+   */
+  private void registerFileNamespace() {
+    try {
+      nameSpaceService.createNameSpace(FILE_NAMESPACE, "Documents cleanup campaign CSV reports");
+    } catch (Exception e) {
+      LOG.warn("Error registering the {} file namespace: archiving a cleanup campaign report will fail until it exists",
+               FILE_NAMESPACE,
+               e);
     }
   }
 
@@ -1786,7 +1829,7 @@ public class CleanupCampaignService {
       campaign.setReclaimableBytes(campaignStorage.sumReclaimableBytesByState(campaignId, CleanupItemState.CANDIDATE));
       campaign.setReclaimedBytes(campaignStorage.sumReclaimedBytes(campaignId));
     }
-    return campaign;
+    return withLiveExecutionProgress(campaign);
   }
 
   /**
@@ -1802,6 +1845,42 @@ public class CleanupCampaignService {
       campaign.setReclaimableBytes(aggregates.getReclaimableBytes());
       campaign.setReclaimedBytes(aggregates.getReclaimedBytes());
     }
+    return withLiveExecutionProgress(campaign);
+  }
+
+  /**
+   * Reconciles the purge numerator with the aggregates served beside it.
+   * <p>
+   * THE CONTRADICTION IT REMOVES: {@code PROCESSED_COUNT} is checkpointed once
+   * per BATCH by the purge worker, while the candidate count and the reclaimed
+   * total are aggregate queries recomputed on every read. So a console showing
+   * all three at once showed a purge that had freed gigabytes, and had 105 fewer
+   * candidates than it started with, above a bar reading '0% (0 / 5,083)' —
+   * every number correct, and the three of them together impossible. The batch
+   * size being 200 by default, that state is not a flicker: it lasts as long as
+   * the first two hundred deletions take, on files large enough for the freed
+   * total to be the first thing an administrator looks at.
+   * <p>
+   * The derived numerator is exact rather than an estimate: a purge's
+   * denominator IS the CANDIDATE count taken when it started (see
+   * {@code CleanupExecutionService#startExecution}), and an item leaves CANDIDATE
+   * exactly once, whether it was purged, failed or skipped. So total minus the
+   * live candidate count is precisely what the worker has settled.
+   * <p>
+   * Never LOWER than the checkpoint, which is what keeps the bar monotonic: the
+   * observation listener may add candidates to a campaign mid-purge, and a bar
+   * walking backwards while files are being deleted would be worse than one
+   * lagging behind.
+   * <p>
+   * EXECUTING only. Anywhere else the persisted counter is the truth — a dry run
+   * counts NODES walked, which no item aggregate can express.
+   */
+  private CleanupCampaign withLiveExecutionProgress(CleanupCampaign campaign) {
+    if (campaign.getState() != CleanupCampaignState.EXECUTING || campaign.getTotalCount() <= 0) {
+      return campaign;
+    }
+    long settled = campaign.getTotalCount() - campaign.getCandidateCount();
+    campaign.setProcessedCount(Math.min(campaign.getTotalCount(), Math.max(campaign.getProcessedCount(), settled)));
     return campaign;
   }
 

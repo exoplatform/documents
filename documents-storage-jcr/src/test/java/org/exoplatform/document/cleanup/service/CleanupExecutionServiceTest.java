@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -137,7 +139,7 @@ class CleanupExecutionServiceTest {
     lifecycleField.set(executionService, campaignLifecycle); // NOSONAR
     // Replace the service's REAL single-thread executor with a mock: a live
     // background worker would race the test with unstubbed collaborators
-    // (e.g. getBatchSize() = 0 -> PageRequest.of(0, 0) errors in every CI
+    // (e.g. getPurgeBatchSize() = 0 -> PageRequest.of(0, 0) errors in every CI
     // run); worker-body tests invoke executeCampaign() directly instead
     Field executorField = CleanupExecutionService.class.getDeclaredField("executorService");
     executorField.setAccessible(true); // NOSONAR test wiring
@@ -195,7 +197,7 @@ class CleanupExecutionServiceTest {
   void shouldRevalidateEveryItemAtDeleteTimeAndContinueOnFailure() {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
 
     CleanupCampaignItem goneItem = item(11L, NODE_UUID_GONE, CleanupAction.DELETE);
     CleanupCampaignItem exemptedItem = item(12L, NODE_UUID_EXEMPTED, CleanupAction.DELETE);
@@ -280,7 +282,7 @@ class CleanupExecutionServiceTest {
     scanSummary.setFailedScanUnitCount(2);
     campaign.setSummaryJson(JsonUtils.toJsonString(scanSummary));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
                                                 .thenReturn(List.of());
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -302,7 +304,7 @@ class CleanupExecutionServiceTest {
   void shouldSkipItemWhenRevalidationOutcomeIsUnknown() {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem unknownItem = item(17L, "uuid-unknown", CleanupAction.DELETE);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
                                                 .thenReturn(List.of(unknownItem))
@@ -330,7 +332,7 @@ class CleanupExecutionServiceTest {
     // (summed over the item rows), under-reporting the work really done
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem partialItem = item(18L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
                                                 .thenReturn(List.of(partialItem))
@@ -367,7 +369,7 @@ class CleanupExecutionServiceTest {
     // just counted, right under the administrator's eyes
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem versionsItem = item(19L, NODE_UUID_VERSIONS, CleanupAction.PURGE_VERSIONS);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
                                                 .thenReturn(List.of(versionsItem))
@@ -392,7 +394,7 @@ class CleanupExecutionServiceTest {
     // to leave the UI displaying a raw untranslated key
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem explodingItem = item(19L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
                                                 .thenReturn(List.of(explodingItem))
@@ -416,7 +418,7 @@ class CleanupExecutionServiceTest {
     // state and the bare code — which is what the console and the retry need
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem failedItem = item(20L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
                                                 .thenReturn(List.of(failedItem))
@@ -444,7 +446,7 @@ class CleanupExecutionServiceTest {
   void shouldMoveOnWhenEvenTheDetaillessFallbackSaveFails() {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     CleanupCampaignItem unsavableItem = item(21L, NODE_UUID_DELETED, CleanupAction.DELETE);
     CleanupCampaignItem nextItem = purgeableItem(22L, "uuid-next");
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
@@ -492,7 +494,7 @@ class CleanupExecutionServiceTest {
     // one it saw, so it cannot revisit an item within a run whatever happens to it
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(2);
+    when(settingService.getPurgeBatchSize()).thenReturn(2);
     CleanupCampaignItem unsavableItem = item(30L, NODE_UUID_DELETED, CleanupAction.DELETE);
     CleanupCampaignItem savableItem = purgeableItem(31L, "uuid-31");
     // The storage is stubbed as a REAL keyset store: it answers the ids strictly
@@ -545,7 +547,7 @@ class CleanupExecutionServiceTest {
     // outcomes lost for one late failure
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(1);
+    when(settingService.getPurgeBatchSize()).thenReturn(1);
     CleanupCampaignItem firstItem = purgeableItem(41L, "uuid-41");
     CleanupCampaignItem secondItem = purgeableItem(42L, "uuid-42");
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
@@ -592,7 +594,7 @@ class CleanupExecutionServiceTest {
   void shouldRemoveRunningIdAndStayResumableOnFatalError() throws ReflectiveOperationException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(200);
+    when(settingService.getPurgeBatchSize()).thenReturn(200);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
                                                 .thenThrow(new IllegalStateException("Database gone"));
 
@@ -615,7 +617,7 @@ class CleanupExecutionServiceTest {
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(executingCampaign,
                                                               executingCampaign,
                                                               campaign(CleanupCampaignState.CANCELLED));
-    when(settingService.getBatchSize()).thenReturn(1);
+    when(settingService.getPurgeBatchSize()).thenReturn(1);
     CleanupCampaignItem firstItem = item(11L, NODE_UUID_DELETED, CleanupAction.DELETE);
     CleanupCampaignItem secondItem = item(12L, NODE_UUID_SKIPPED, CleanupAction.DELETE);
     when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
@@ -645,7 +647,7 @@ class CleanupExecutionServiceTest {
     CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
     campaign.setTotalCount(4);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
-    when(settingService.getBatchSize()).thenReturn(2);
+    when(settingService.getPurgeBatchSize()).thenReturn(2);
     CleanupCampaignItem firstItem = purgeableItem(11L, "uuid-1");
     CleanupCampaignItem secondItem = purgeableItem(12L, "uuid-2");
     CleanupCampaignItem thirdItem = purgeableItem(13L, "uuid-3");
@@ -765,6 +767,77 @@ class CleanupExecutionServiceTest {
     campaign.setTotalCount(6);
     campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200));
     return campaign;
+  }
+
+  @Test
+  void theRemainingTimeIsMeasuredInBytesAndNotInItems() throws ReflectiveOperationException {
+    // A purge's items differ in cost by orders of magnitude — a 5 GB file
+    // carrying five hundred versions against a 5 MB one — and the cost is driven
+    // by the bytes destroyed in JCR and in the file store. The case below is the
+    // one the count-based average got wrong: 90% of the WORK is done while only
+    // 10% of the ITEMS are, so the two answers must diverge by an order of
+    // magnitude, and the byte one must be the small number
+    long tenSecondsAgo = System.currentTimeMillis() - 10_000;
+
+    long byteEta = purgeEtaSeconds(tenSecondsAgo, 0, 1, 10, 1000L, 900L);
+    long countEta = purgeEtaSeconds(tenSecondsAgo, 0, 1, 10, 0L, 0L);
+
+    assertTrue(byteEta < countEta / 10,
+               "Weighting by bytes must not predict the rate of the items already met: bytes said " + byteEta
+                   + "s, counting items said " + countEta + "s");
+    assertTrue(byteEta > 0, "A measurable byte throughput must still produce an estimate");
+  }
+
+  @Test
+  void theRemainingTimeFallsBackToItemsWhenThereAreNoBytesToWeighWith() throws ReflectiveOperationException {
+    // A campaign whose candidates free nothing measurable would otherwise get NO
+    // estimate at all, where counting items is exactly as good as anything else
+    long tenSecondsAgo = System.currentTimeMillis() - 10_000;
+
+    long eta = purgeEtaSeconds(tenSecondsAgo, 0, 5, 10, 0L, 0L);
+
+    assertTrue(eta > 0, "With a zero byte denominator the estimate must fall back to the item count, not vanish");
+  }
+
+  @Test
+  void theCheckpointCadenceIsThePurgeBatchAndNotTheScanOne() {
+    // The scan's batch is a QUEUE ENVELOPE sized for throughput; the purge's is a
+    // CHECKPOINT boundary. Reading the scan's here is what made the bar advance
+    // in 200-item jumps, so a purge that was merely SLOW could not be told from
+    // one that was STUCK
+    CleanupCampaign campaign = campaign(CleanupCampaignState.EXECUTING);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
+    when(settingService.getPurgeBatchSize()).thenReturn(5);
+    when(campaignStorage.getItemsByStateAfterId(eq(CAMPAIGN_ID), eq(CleanupItemState.CANDIDATE), anyLong(), anyInt()))
+                                                                                                                     .thenReturn(List.of());
+
+    executionService.executeCampaign(CAMPAIGN_ID);
+
+    verify(campaignStorage).getItemsByStateAfterId(CAMPAIGN_ID, CleanupItemState.CANDIDATE, 0L, 5);
+    verify(settingService, never()).getBatchSize();
+  }
+
+  private long purgeEtaSeconds(long startTime,
+                               long processedAtStart,
+                               long processed,
+                               long total,
+                               long remainingBytesAtStart,
+                               long reclaimableBytesDone) throws ReflectiveOperationException {
+    Method method = CleanupExecutionService.class.getDeclaredMethod("purgeEtaSeconds",
+                                                                   long.class,
+                                                                   long.class,
+                                                                   long.class,
+                                                                   long.class,
+                                                                   long.class,
+                                                                   long.class);
+    method.setAccessible(true); // NOSONAR test wiring
+    return (long) method.invoke(executionService,
+                                startTime,
+                                processedAtStart,
+                                processed,
+                                total,
+                                remainingBytesAtStart,
+                                reclaimableBytesDone);
   }
 
   private CleanupCampaignItem item(long id, String nodeUuid, CleanupAction action) {

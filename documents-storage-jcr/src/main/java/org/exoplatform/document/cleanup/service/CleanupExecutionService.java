@@ -40,6 +40,7 @@ import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.util.CleanupEtaUtil;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
 import org.exoplatform.document.cleanup.util.CleanupThrowableUtil;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
@@ -149,8 +150,15 @@ public class CleanupExecutionService {
         return;
       }
       CleanupParams params = campaign.getParams();
-      int batchSize = settingService.getBatchSize();
+      // The PURGE batch, not the scan's: a checkpoint boundary rather than a
+      // queue envelope (see CleanupSettingService#getPurgeBatchSize)
+      int batchSize = settingService.getPurgeBatchSize();
       long total = campaign.getTotalCount();
+      // ETA DENOMINATOR IN BYTES, read once for this run: what is left to
+      // reclaim when it starts, so a resumed worker measures its own remaining
+      // work and not the interrupted run's
+      long remainingBytesAtStart = campaignStorage.sumReclaimableBytesByState(campaignId, CleanupItemState.CANDIDATE);
+      long reclaimableBytesDone = 0;
       // Resume-aware: after a restart, already processed items are counted in
       long processed = campaign.getProcessedCount();
       long processedAtStart = processed;
@@ -173,6 +181,14 @@ public class CleanupExecutionService {
           return;
         }
         for (CleanupCampaignItem item : batch) {
+          // PREDICTED bytes, not reclaimed: the denominator above is built from
+          // what the report says each item frees, so the numerator has to speak
+          // the same unit — an item skipped or failed still consumed its share
+          // of the work and must leave the remaining estimate
+          reclaimableBytesDone += CleanupSizeUtil.reclaimableBytes(item.getAction() == null ? null
+                                                                                           : item.getAction().name(),
+                                                                   item.getFileSize(),
+                                                                   item.getVersionsSize());
           processItem(item, params);
         }
         // The cursor MUST advance here, and from the batch itself: the query
@@ -181,7 +197,12 @@ public class CleanupExecutionService {
         // hand back the poison pill the keyset paging exists to defuse
         lastId = batch.get(batch.size() - 1).getId();
         processed += batch.size();
-        long etaSeconds = CleanupEtaUtil.computeEtaSeconds(startTime, processedAtStart, processed, total);
+        long etaSeconds = purgeEtaSeconds(startTime,
+                                          processedAtStart,
+                                          processed,
+                                          total,
+                                          remainingBytesAtStart,
+                                          reclaimableBytesDone);
         campaignStorage.updateProgress(campaignId, total, processed, etaSeconds, null, 0);
         webSocketService.sendToAdministrators(new CleanupWsMessage(CleanupWsMessage.PROGRESS_EVENT,
                                                                    campaignId,
@@ -210,6 +231,48 @@ public class CleanupExecutionService {
    * (transient JCR read failure) skips the item too — never spared, never
    * deleted on doubt — with a distinct failure reason.
    */
+  /**
+   * Remaining time of a purge, measured in BYTES rather than in items.
+   * <p>
+   * WHY THE ITEM COUNT LIES HERE. A purge's items differ in cost by orders of
+   * magnitude — a 5 GB file carrying five hundred versions against a 5 MB one —
+   * and what a deletion actually costs is dominated by the bytes it destroys in
+   * JCR and in the file store. So a count-based average predicted the remaining
+   * time of the items it had already met, not of the ones left: a run that
+   * started on small files kept promising their rate for hours. Weighting by the
+   * bytes each item is expected to free is the same arithmetic against the unit
+   * that drives the cost.
+   * <p>
+   * Falls back to the item count when the byte denominator is 0 — a campaign
+   * whose candidates free nothing measurable (versions-only rows with tiny
+   * histories) would otherwise get NO estimate at all, where counting items is
+   * exactly as good as anything else.
+   * <p>
+   * The estimate stays CUMULATIVE over the run rather than windowed, on purpose:
+   * a rolling window over five-item checkpoints oscillates with every large file
+   * met, and an estimate that jumps is read as broken faster than one that is
+   * merely smooth and late.
+   *
+   * @param startTime              epoch millis at which this run started
+   * @param processedAtStart       items already processed when this run started
+   * @param processed              items processed so far
+   * @param total                  item denominator of the run
+   * @param remainingBytesAtStart  bytes left to reclaim when this run started
+   * @param reclaimableBytesDone   bytes this run has worked through
+   * @return estimated remaining seconds, 0 when it cannot be estimated yet
+   */
+  private long purgeEtaSeconds(long startTime,
+                               long processedAtStart,
+                               long processed,
+                               long total,
+                               long remainingBytesAtStart,
+                               long reclaimableBytesDone) {
+    if (remainingBytesAtStart <= 0) {
+      return CleanupEtaUtil.computeEtaSeconds(startTime, processedAtStart, processed, total);
+    }
+    return CleanupEtaUtil.computeEtaSeconds(startTime, 0, reclaimableBytesDone, remainingBytesAtStart);
+  }
+
   private void processItem(CleanupCampaignItem item, CleanupParams params) {
     try {
       CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(item.getNodeUuid(), params);

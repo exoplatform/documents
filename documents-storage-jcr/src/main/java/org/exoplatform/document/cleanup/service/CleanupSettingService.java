@@ -91,6 +91,27 @@ public class CleanupSettingService {
   @Value("${documents.cleanup.batch.size:200}")
   private int                  batchSize;
 
+  /**
+   * Items a PURGE processes between two progress checkpoints, and deliberately
+   * an order of magnitude below {@link #batchSize}.
+   * <p>
+   * The two batches are not the same kind of thing. The scan's is a QUEUE
+   * ENVELOPE, sized for throughput: it decides how many nodes a reader walks
+   * before paying for a hand-off, and cutting it costs real time. The purge's is
+   * a CHECKPOINT boundary whose cost — one indexed keyset query, one row update,
+   * one commit — is invisible next to what dominates a purge item: deleting a
+   * multi-gigabyte node and its version history from JCR, measured in seconds.
+   * <p>
+   * At 200 the bar advanced in 200-item jumps, so a purge that was merely SLOW
+   * was indistinguishable from one that was STUCK — it reported '0% (0 / 5,083)'
+   * for as long as the first two hundred deletions took, while the reclaimed
+   * total beside it climbed into the gigabytes. Small also means a JVM death
+   * loses less: an item's outcome is saved per item, but only a checkpoint makes
+   * the progress it belongs to durable.
+   */
+  @Value("${documents.cleanup.purge.batch.size:5}")
+  private int                  purgeBatchSize;
+
   @Value("${documents.cleanup.report.retention.campaigns:3}")
   private int                  reportRetentionCampaigns;
 
@@ -165,6 +186,13 @@ public class CleanupSettingService {
 
   public int getBatchSize() {
     return batchSize;
+  }
+
+  /**
+   * @return items a purge processes between two progress checkpoints, at least 1
+   */
+  public int getPurgeBatchSize() {
+    return Math.max(1, purgeBatchSize);
   }
 
   public int getReportRetentionCampaigns() {

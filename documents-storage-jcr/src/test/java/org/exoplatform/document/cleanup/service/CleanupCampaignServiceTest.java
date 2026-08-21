@@ -75,6 +75,7 @@ import org.springframework.data.domain.Sort;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
+import org.exoplatform.commons.file.services.NameSpaceService;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -173,6 +174,9 @@ class CleanupCampaignServiceTest {
 
   @Mock
   private FileService              fileService;
+
+  @Mock
+  private NameSpaceService         nameSpaceService;
 
   @Mock
   private CleanupScanUnitStorage   scanUnitStorage;
@@ -381,6 +385,71 @@ class CleanupCampaignServiceTest {
                  assertThrows(IllegalArgumentException.class,
                               () -> campaignService.executeCampaign(CAMPAIGN_ID)).getMessage());
     verify(executionService, never()).startExecution(anyLong());
+  }
+
+  @Test
+  void anExecutingCampaignReportsTheProgressItsOWNAggregatesImply() throws ObjectNotFoundException {
+    // THE CONTRADICTION: PROCESSED_COUNT is checkpointed per batch, while the
+    // candidate count and the reclaimed total are recomputed on every read. So
+    // the console showed a purge that had freed gigabytes, with 105 fewer
+    // candidates than it started with, above a bar reading '0% (0 / 5,083)' —
+    // every number correct, the three of them together impossible
+    CleanupCampaign executing = campaign(CleanupCampaignState.EXECUTING);
+    executing.setTotalCount(5083);
+    executing.setProcessedCount(0);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(executing);
+    when(campaignStorage.countItemsByState(CAMPAIGN_ID, CleanupItemState.CANDIDATE)).thenReturn(4978L);
+
+    CleanupCampaign served = campaignService.getCampaign(CAMPAIGN_ID);
+
+    assertEquals(105,
+                 served.getProcessedCount(),
+                 "The numerator must agree with the aggregates served beside it: 5083 - 4978 items have settled");
+  }
+
+  @Test
+  void theExecutionProgressNeverWalksBackwards() throws ObjectNotFoundException {
+    // The observation listener may ADD candidates to a campaign mid-purge, which
+    // would drag the derived numerator down. A bar walking backwards while files
+    // are being deleted is worse than one lagging behind
+    CleanupCampaign executing = campaign(CleanupCampaignState.EXECUTING);
+    executing.setTotalCount(5083);
+    executing.setProcessedCount(1000);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(executing);
+    when(campaignStorage.countItemsByState(CAMPAIGN_ID, CleanupItemState.CANDIDATE)).thenReturn(4978L);
+
+    CleanupCampaign served = campaignService.getCampaign(CAMPAIGN_ID);
+
+    assertEquals(1000, served.getProcessedCount(), "The checkpoint stands when it is ahead of the derived value");
+  }
+
+  @Test
+  void aDryRunKeepsItsOwnPersistedProgress() throws ObjectNotFoundException {
+    // EXECUTING only: a dry run counts NODES walked, which no item aggregate can
+    // express — deriving it from candidates would report a scan's progress as the
+    // number of candidates it happened to have found
+    CleanupCampaign scanning = campaign(CleanupCampaignState.DRY_RUN_RUNNING);
+    scanning.setTotalCount(624395);
+    scanning.setProcessedCount(451585);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(scanning);
+    when(campaignStorage.countItemsByState(CAMPAIGN_ID, CleanupItemState.CANDIDATE)).thenReturn(4900L);
+
+    CleanupCampaign served = campaignService.getCampaign(CAMPAIGN_ID);
+
+    assertEquals(451585, served.getProcessedCount(), "A dry run's node progress must be left alone");
+  }
+
+  @Test
+  void theArchiveNamespaceIsRegisteredAtStartup() {
+    // Without it every writeFile under it fails on a NullPointerException raised
+    // inside DataStorage#create, which looks the namespace up by name and never
+    // guards the miss. It failed in the worst way: our own caller logs a WARN and
+    // keeps the item detail, so the retention tick retried every five minutes and
+    // NO report was ever archived — hence no item row was ever dropped either,
+    // the archive being deliberately written before the purge
+    campaignService.recoverAfterRestart();
+
+    verify(nameSpaceService).createNameSpace(eq(CleanupCampaignService.FILE_NAMESPACE), anyString());
   }
 
   @Test
