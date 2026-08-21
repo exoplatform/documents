@@ -160,17 +160,28 @@
           </v-tooltip>
         </div>
       </template>
-      <template slot="item.fileSize" slot-scope="{item}">
-        {{ $cleanupSize(item.fileSize) }}
-      </template>
-      <template slot="item.versionsSize" slot-scope="{item}">
-        {{ $cleanupSize(item.versionsSize) }}
-      </template>
       <template slot="item.reclaimedBytes" slot-scope="{item}">
         {{ $cleanupSize(item.reclaimedBytes) }}
       </template>
+      <!-- The breakdown moved into this cell's tooltip rather than being deleted
+           with the two columns it used to fill. It is what tells a 501 MB row that
+           is 1 MB of content and 500 MB of history apart from one that is 501 MB of
+           content — the difference between tuning maxVersionsPerFile and tuning the
+           period, which is a campaign-policy decision an administrator makes from
+           THIS table. It also keeps the figure the Min file size filter narrows on
+           visible on the row, which a bare Reclaimable column would not -->
       <template slot="item.reclaimableBytes" slot-scope="{item}">
-        {{ $cleanupSize(item.reclaimableBytes) }}
+        <v-tooltip bottom>
+          <template #activator="{on, attrs}">
+            <span v-bind="attrs" v-on="on">{{ $cleanupSize(item.reclaimableBytes) }}</span>
+          </template>
+          <span>
+            {{ $t('cleanup.admin.items.sizeBreakdown', {
+              0: $cleanupSize(item.fileSize),
+              1: $cleanupSize(item.versionsSize),
+            }) }}
+          </span>
+        </v-tooltip>
       </template>
     </v-data-table>
   </div>
@@ -195,7 +206,11 @@ const SORT_FIELDS = {name: 'path'};
 // already obeys.
 const EXECUTED_STATES = ['EXECUTING', 'COMPLETED'];
 const RECLAIMABLE_SORT_FIELD = 'reclaimableBytes';
-const DEFAULT_SORT_FIELD = 'fileSize';
+// The ordering is the reclaimable expression in EVERY state now: it is the one size
+// column the table always shows, and fileSize stopped being a column at all. The
+// REST allowlist still accepts fileSize and versionsSize — they are simply no
+// longer offered here.
+const DEFAULT_SORT_FIELD = RECLAIMABLE_SORT_FIELD;
 
 export default {
   props: {
@@ -227,7 +242,7 @@ export default {
       options: {
         page: 1,
         itemsPerPage: 20,
-        sortBy: [EXECUTED_STATES.includes(this.campaignState) ? DEFAULT_SORT_FIELD : RECLAIMABLE_SORT_FIELD],
+        sortBy: [DEFAULT_SORT_FIELD],
         sortDesc: [true],
       },
       itemsPerPageOptions: [20, 50, 100],
@@ -248,15 +263,17 @@ export default {
         {text: this.$t('cleanup.admin.items.lastModifiedDate'), value: 'lastModifiedDate', align: 'center'},
         {text: this.$t('cleanup.admin.items.action'), value: 'action', align: 'center'},
         {text: this.$t('cleanup.admin.items.state'), value: 'state', align: 'center'},
-        {text: this.$t('cleanup.admin.items.fileSize'), value: 'fileSize', align: 'center'},
-        {text: this.$t('cleanup.admin.items.versionsSize'), value: 'versionsSize', align: 'center'},
-        // File size STAYS on screen whichever of the two is shown, and not for
-        // symmetry: the Min size filter narrows on that column, and a table
-        // filtering on a figure it does not display is the same quiet mismatch
-        // W24 removed from the ordering
-        this.executed
-          ? {text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center'}
-          : {text: this.$t('cleanup.admin.items.reclaimableBytes'), value: RECLAIMABLE_SORT_FIELD, align: 'center'},
+        // ONE size column, because four were answering one question. Content and
+        // version size are not gone, they moved into the cell's tooltip: as columns
+        // they cost a quarter of the table's width to show two numbers whose SUM is
+        // the only one a decision turns on
+        {text: this.$t('cleanup.admin.items.reclaimableBytes'), value: RECLAIMABLE_SORT_FIELD, align: 'center'},
+        // Reclaimed is ADDED once there is something to put in it, never shown as a
+        // column of zeros beforehand. Nothing is ever taken away, so a campaign
+        // that executes while this table is open only gains a column
+        ...(this.executed
+          ? [{text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center'}]
+          : []),
       ];
     },
     stateFilterItems() {
@@ -275,19 +292,6 @@ export default {
   watch: {
     campaignId() {
       this.reload();
-    },
-    // A campaign executes WHILE this table is open, and the last column swaps with
-    // it. Ordering on a column that just disappeared would leave the table ranked
-    // by a figure nobody can see, so the sort moves to the surviving default —
-    // and ONLY when it was on the column being taken away, never overriding an
-    // ordering the administrator chose themselves
-    executed(isExecuted) {
-      const sortedOn = this.options.sortBy[0];
-      if (isExecuted && sortedOn === RECLAIMABLE_SORT_FIELD) {
-        this.options = {...this.options, sortBy: [DEFAULT_SORT_FIELD], page: 1};
-      } else if (!isExecuted && sortedOn === 'reclaimedBytes') {
-        this.options = {...this.options, sortBy: [RECLAIMABLE_SORT_FIELD], page: 1};
-      }
     },
   },
   created() {
