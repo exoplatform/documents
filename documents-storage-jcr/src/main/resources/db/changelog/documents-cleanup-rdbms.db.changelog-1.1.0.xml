@@ -252,4 +252,96 @@
                          defaultValueNumeric="0"/>
     </changeSet>
 
+    <!-- Per-node evaluation failures of a scan unit. A node whose candidacy could
+         not be evaluated (a NullPointerException on a mix:versionable node with no
+         base version, a transient repository error) was logged as a WARN, skipped,
+         and the unit still finished DONE — so the file vanished from the report
+         while the campaign claimed a complete scan. These three columns are what
+         make that visible: how many nodes THIS subtree lost, and the first failure
+         with its stack trace so the cause is diagnosable without the server log.
+         Strictly additive, and the count defaults to 0 so every unit written before
+         them reads "nothing lost" rather than "unknown" -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-12">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_SCAN_UNIT">
+            <column name="EVAL_FAILURE_COUNT" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="EVAL_FAILURE_REASON" type="NVARCHAR(255)"/>
+            <column name="EVAL_FAILURE_DETAIL" type="CLOB"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Reader threads of a campaign's dry-run scan, chosen per campaign. The right
+         fan-out depends on the corpus being walked and on what else the repository
+         is serving at that moment, neither of which a deployment property can know,
+         and an administrator tuning a run should not need a restart to try another
+         value. Strictly additive with a 0 default, and 0 means 'never set': every
+         campaign written before this column keeps running on the platform default,
+         which is exactly what it ran with -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-13">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN">
+            <column name="SCAN_THREADS" type="INT" defaultValueNumeric="0"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- The reclaimable figure, DENORMALIZED into a column and indexed. It was a JPQL
+         CASE expression, which no index can serve: the purge consumes its candidates
+         biggest first, so ordering on it made every batch a filesort over the
+         campaign's remaining rows — measured at 318 ms against 4 ms per batch on
+         200k rows, tens of thousands of batches per run, cost growing with the
+         square of the item count. That is the very shape keyset paging replaced
+         offset paging to avoid, reintroduced through the ORDER BY.
+
+         Three steps: add the column with a 0 default, BACKFILL it from the columns it
+         derives from (without which every pre-existing campaign would sort and sum as
+         zero), then swap the (CAMPAIGN_ID, STATE) index for one that also carries the
+         figure and the id. The new index is a strict superset by leftmost prefix, so
+         every query the dropped one served is still served — one wider index instead
+         of two, which keeps the candidate-insert cost of a scan where it was.
+
+         THE INDEX DECLARES ITS DIRECTIONS, and that is not cosmetic: the walk reads
+         RECLAIMABLE_BYTES DESC with ID ASC, and an all-ascending composite index
+         serves ASC,ASC (forward scan) or DESC,DESC (backward scan) — never a MIXED
+         direction. Declared ascending, MySQL 8 read the index and STILL sorted, so
+         the column bought nothing: measured on mysql:8 with 256k CANDIDATE rows in
+         one campaign, 20 batches of the worker's own query took 11.1 s all-ascending
+         (~555 ms per batch, 'Using filesort', the optimizer not even choosing this
+         index) against 0.07 s with the directions below (~3.5 ms, 'range' + 'Using
+         index condition', chosen with no hint). ID stays ascending: that is the
+         direction the tie branch walks.
+
+         THE ROLLBACK IS WRITTEN OUT, because two of these steps have no automatic
+         inverse: Liquibase cannot invert an UPDATE, and it cannot invert a dropIndex
+         either (nothing tells it what the dropped index held). An empty <rollback/>
+         would not do — it is CHANGESET-level, so it would also suppress the automatic
+         rollback of the addColumn and the createIndex and leave both in place. Spelled
+         out, undoing this changeset restores the index it swapped and drops the column,
+         which makes the backfill moot on the way back as well.
+
+         No second source of truth: the definition stays in CleanupSizeUtil, applied
+         by CleanupCampaignStorage#toEntity on EVERY save, and this column becomes the
+         one thing the SQL and the in-memory comparator both read -->
+    <changeSet author="documents" id="documents-cleanup-1.1.0-14">
+        <addColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM">
+            <column name="RECLAIMABLE_BYTES" type="BIGINT" defaultValueNumeric="0"/>
+        </addColumn>
+        <update tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM">
+            <column name="RECLAIMABLE_BYTES"
+                    valueComputed="CASE WHEN ACTION = 'DELETE' THEN FILE_SIZE + VERSIONS_SIZE ELSE VERSIONS_SIZE END"/>
+        </update>
+        <dropIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_STATE"/>
+        <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_RECLAIMABLE">
+            <column name="CAMPAIGN_ID"/>
+            <column name="STATE"/>
+            <column name="RECLAIMABLE_BYTES" descending="true"/>
+            <column name="ID"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_RECLAIMABLE"/>
+            <createIndex tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" indexName="IDX_DOC_CLEANUP_ITEM_STATE">
+                <column name="CAMPAIGN_ID"/>
+                <column name="STATE"/>
+            </createIndex>
+            <dropColumn tableName="DOCUMENTS_CLEANUP_CAMPAIGN_ITEM" columnName="RECLAIMABLE_BYTES"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

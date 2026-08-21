@@ -24,6 +24,7 @@ import java.util.concurrent.Executors;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -40,6 +41,7 @@ import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.util.CleanupEtaUtil;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
 import org.exoplatform.document.cleanup.util.CleanupThrowableUtil;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
@@ -62,6 +64,25 @@ import jakarta.annotation.PreDestroy;
 public class CleanupExecutionService {
 
   private static final Log         LOG              = ExoLogger.getLogger(CleanupExecutionService.class);
+
+  /**
+   * Floor on the interval between two progress PUSHES, independent of the
+   * checkpoint cadence beside it.
+   * <p>
+   * Two seconds keeps the freshness the console needs — a bar that moves while an
+   * administrator watches it — while bounding the event rate whatever the batch
+   * size becomes. It has to be bounded separately because a push does not cost
+   * what a checkpoint costs: {@code sendToAdministrators} enumerates every
+   * CONNECTED user and resolves each identity to test administrator membership,
+   * so its cost scales with the audience and is the one per-batch cost that does
+   * NOT shrink when the batch does.
+   * <p>
+   * A property rather than a constant for the same reason the scan's inactivity
+   * bound is one: it makes the two cadences independently testable, so the
+   * throttle can be pinned without a test depending on wall-clock timing.
+   */
+  @Value("${documents.cleanup.purge.progress.push.interval:2000}")
+  private long                     progressPushIntervalMillis;
 
   @Autowired
   private CleanupCampaignStorage   campaignStorage;
@@ -149,8 +170,18 @@ public class CleanupExecutionService {
         return;
       }
       CleanupParams params = campaign.getParams();
-      int batchSize = settingService.getBatchSize();
+      // The PURGE batch, not the scan's: a checkpoint boundary rather than a
+      // queue envelope (see CleanupSettingService#getPurgeBatchSize)
+      int batchSize = settingService.getPurgeBatchSize();
       long total = campaign.getTotalCount();
+      // ETA DENOMINATOR IN BYTES, read once for this run: what is left to
+      // reclaim when it starts, so a resumed worker measures its own remaining
+      // work and not the interrupted run's
+      long remainingBytesAtStart = campaignStorage.sumReclaimableBytesByState(campaignId, CleanupItemState.CANDIDATE);
+      long reclaimableBytesDone = 0;
+      // ZERO so the FIRST batch always pushes: the bar has to move as soon as
+      // something has been purged, whatever the throttle below
+      long lastPushedAt = 0;
       // Resume-aware: after a restart, already processed items are counted in
       long processed = campaign.getProcessedCount();
       long processedAtStart = processed;
@@ -164,36 +195,78 @@ public class CleanupExecutionService {
       // Resumability is untouched: a fresh run restarts from id 0 and the
       // already-processed items are simply no longer CANDIDATE
       long lastId = 0;
-      List<CleanupCampaignItem> batch = campaignStorage.getItemsByStateAfterId(campaignId,
-                                                                              CleanupItemState.CANDIDATE,
-                                                                              lastId,
-                                                                              batchSize);
+      Long lastReclaimableBytes = null;
+      List<CleanupCampaignItem> batch = campaignStorage.getItemsByStateBiggestFirst(campaignId,
+                                                                                    CleanupItemState.CANDIDATE,
+                                                                                    lastReclaimableBytes,
+                                                                                    lastId,
+                                                                                    batchSize);
       while (!batch.isEmpty()) {
         if (isAborted(campaignId)) {
           return;
         }
+        CleanupCampaignItem lastOfBatch = batch.get(batch.size() - 1);
+        long batchLastReclaimableBytes = reclaimableBytesOf(lastOfBatch);
+        long batchLastId = lastOfBatch.getId();
         for (CleanupCampaignItem item : batch) {
+          // PREDICTED bytes, not reclaimed: the denominator above is built from
+          // what the report says each item frees, so the numerator has to speak
+          // the same unit — an item skipped or failed still consumed its share
+          // of the work and must leave the remaining estimate
+          reclaimableBytesDone += reclaimableBytesOf(item);
           processItem(item, params);
         }
         // The cursor MUST advance here, and from the batch itself: the query
-        // answers ids ascending, so the last element carries the highest id met.
+        // answers biggest first, so the last element carries the position reached.
         // Leaving it at its previous value would re-read the very same window and
-        // hand back the poison pill the keyset paging exists to defuse
-        lastId = batch.get(batch.size() - 1).getId();
+        // hand back the poison pill the keyset paging exists to defuse.
+        //
+        // Read from the row as the QUERY returned it — which is why the pair is
+        // captured before the loop above mutated anything: a revalidation
+        // refreshes an item's action and sizes, i.e. the very key this cursor is
+        // computed from, so taking it afterwards would move the cursor to a
+        // position the database never held
+        lastReclaimableBytes = batchLastReclaimableBytes;
+        lastId = batchLastId;
         processed += batch.size();
-        long etaSeconds = CleanupEtaUtil.computeEtaSeconds(startTime, processedAtStart, processed, total);
+        long etaSeconds = purgeEtaSeconds(startTime,
+                                          processedAtStart,
+                                          processed,
+                                          total,
+                                          remainingBytesAtStart,
+                                          reclaimableBytesDone);
         campaignStorage.updateProgress(campaignId, total, processed, etaSeconds, null, 0);
-        webSocketService.sendToAdministrators(new CleanupWsMessage(CleanupWsMessage.PROGRESS_EVENT,
-                                                                   campaignId,
-                                                                   CleanupCampaignState.EXECUTING.name(),
-                                                                   processed,
-                                                                   total,
-                                                                   etaSeconds));
+        // CHECKPOINT EVERY BATCH, PUSH AT MOST EVERY PUSH_INTERVAL: the two
+        // cadences are decoupled because they do not cost the same thing. A
+        // checkpoint is one row update, invisible next to the deletion it
+        // records. A push is not: sendToAdministrators enumerates every CONNECTED
+        // user and resolves each identity to test administrator membership, so
+        // its cost scales with the audience and NOT with the batch — the one
+        // per-batch cost that does not shrink when the batch does. Tying it to a
+        // checkpointing decision multiplied the event rate by forty the day the
+        // purge batch went from 200 to 5, and a campaign of small version purges
+        // can settle five items several times a second. The console loses
+        // nothing: it also derives the numerator from the campaign's own
+        // aggregates on every load
+        long nowMillis = System.currentTimeMillis();
+        if (nowMillis - lastPushedAt >= progressPushIntervalMillis) {
+          lastPushedAt = nowMillis;
+          webSocketService.sendToAdministrators(new CleanupWsMessage(CleanupWsMessage.PROGRESS_EVENT,
+                                                                     campaignId,
+                                                                     CleanupCampaignState.EXECUTING.name(),
+                                                                     processed,
+                                                                     total,
+                                                                     etaSeconds));
+        }
         // Per-batch transaction boundary: commits this batch and opens a fresh
         // one, so a database failure inside a later batch can no longer roll
         // back the batches that already completed
         restartTransaction();
-        batch = campaignStorage.getItemsByStateAfterId(campaignId, CleanupItemState.CANDIDATE, lastId, batchSize);
+        batch = campaignStorage.getItemsByStateBiggestFirst(campaignId,
+                                                            CleanupItemState.CANDIDATE,
+                                                            lastReclaimableBytes,
+                                                            lastId,
+                                                            batchSize);
       }
 
       completeCampaign(campaignId, total, processed);
@@ -210,6 +283,62 @@ public class CleanupExecutionService {
    * (transient JCR read failure) skips the item too — never spared, never
    * deleted on doubt — with a distinct failure reason.
    */
+  /**
+   * What a row frees, through the ONE definition the report, the ordering and the
+   * ETA all share — so the cursor this drives can never disagree with the SQL
+   * expression the query ordered by.
+   *
+   * @param item campaign item, as the query returned it
+   * @return bytes this item's own action reclaims
+   */
+  private long reclaimableBytesOf(CleanupCampaignItem item) {
+    return CleanupSizeUtil.reclaimableBytes(item.getAction() == null ? null : item.getAction().name(),
+                                            item.getFileSize(),
+                                            item.getVersionsSize());
+  }
+
+  /**
+   * Remaining time of a purge, measured in BYTES rather than in items.
+   * <p>
+   * WHY THE ITEM COUNT LIES HERE. A purge's items differ in cost by orders of
+   * magnitude — a 5 GB file carrying five hundred versions against a 5 MB one —
+   * and what a deletion actually costs is dominated by the bytes it destroys in
+   * JCR and in the file store. So a count-based average predicted the remaining
+   * time of the items it had already met, not of the ones left: a run that
+   * started on small files kept promising their rate for hours. Weighting by the
+   * bytes each item is expected to free is the same arithmetic against the unit
+   * that drives the cost.
+   * <p>
+   * Falls back to the item count when the byte denominator is 0 — a campaign
+   * whose candidates free nothing measurable (versions-only rows with tiny
+   * histories) would otherwise get NO estimate at all, where counting items is
+   * exactly as good as anything else.
+   * <p>
+   * The estimate stays CUMULATIVE over the run rather than windowed, on purpose:
+   * a rolling window over five-item checkpoints oscillates with every large file
+   * met, and an estimate that jumps is read as broken faster than one that is
+   * merely smooth and late.
+   *
+   * @param startTime              epoch millis at which this run started
+   * @param processedAtStart       items already processed when this run started
+   * @param processed              items processed so far
+   * @param total                  item denominator of the run
+   * @param remainingBytesAtStart  bytes left to reclaim when this run started
+   * @param reclaimableBytesDone   bytes this run has worked through
+   * @return estimated remaining seconds, 0 when it cannot be estimated yet
+   */
+  private long purgeEtaSeconds(long startTime,
+                               long processedAtStart,
+                               long processed,
+                               long total,
+                               long remainingBytesAtStart,
+                               long reclaimableBytesDone) {
+    if (remainingBytesAtStart <= 0) {
+      return CleanupEtaUtil.computeEtaSeconds(startTime, processedAtStart, processed, total);
+    }
+    return CleanupEtaUtil.computeEtaSeconds(startTime, 0, reclaimableBytesDone, remainingBytesAtStart);
+  }
+
   private void processItem(CleanupCampaignItem item, CleanupParams params) {
     try {
       CleanupRevalidation revalidation = cleanupJcrStorage.revalidate(item.getNodeUuid(), params);

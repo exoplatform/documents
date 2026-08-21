@@ -114,7 +114,34 @@
         <span v-else class="ms-1">-</span>
       </div>
     </div>
-    <document-cleanup-campaign-stats :campaign="campaign" />
+    <!-- FILES the scan could not judge, at the top and not buried in a table:
+         each one was a WARN in the server log and nothing else, while the campaign
+         reported a complete run at 100%. Shown DURING the run too, so the problem
+         is visible while it is still worth acting on -->
+    <v-alert
+      v-if="skippedNodeCount"
+      type="warning"
+      dense
+      text
+      class="mt-4 mb-0">
+      <div class="d-flex align-center flex-wrap">
+        <span>{{ $t('cleanup.admin.campaign.skippedNodes', {0: skippedNodeCount}) }}</span>
+        <v-spacer />
+        <v-btn
+          small
+          text
+          class="ms-2"
+          @click="$refs.scanFailuresDrawer.open()">
+          {{ $t('cleanup.admin.campaign.skippedDetails') }}
+        </v-btn>
+      </div>
+    </v-alert>
+    <document-cleanup-campaign-scan-failures-drawer ref="scanFailuresDrawer" :scan-units="scanUnits" />
+    <document-cleanup-campaign-scan-units-drawer ref="scanUnitsDrawer" :scan-units="scanUnits" />
+    <document-cleanup-campaign-stats
+      :campaign="campaign"
+      :scan-units="scanUnits"
+      @open-subtrees="$refs.scanUnitsDrawer.open()" />
     <!-- COMPLETENESS of the report, ABOVE the report itself and above the skip
          reasons below: a dry run that could not walk a subtree produces a report
          missing it entirely, and this used to read as a clean 100% run. Shown from
@@ -202,6 +229,7 @@
     <document-cleanup-campaign-items-table
       ref="itemsTable"
       :campaign-id="campaign.id"
+      :campaign-state="campaign.state"
       class="mt-4" />
   </div>
 </template>
@@ -248,6 +276,11 @@ export default {
       // not overwrite a newer campaign (see loadCampaign)
       loadToken: 0,
       lastEventRefresh: 0,
+      // Per-unit breakdown of a RUNNING dry run, refreshed with the campaign on
+      // every load: it is what tells a scan resuming a subtree from one held open
+      // by it, which the node percentage cannot. Nulled as soon as the campaign
+      // leaves DRY_RUN_RUNNING so a finished campaign shows no stale in-flight row
+      scanUnits: null,
       // Execution failures grouped BY THE SERVER ([{reason, count, retryable}]),
       // plus the id of the campaign they were requested for: applyCampaign runs
       // on every load, and this must stay ONE request per completion
@@ -262,6 +295,12 @@ export default {
     };
   },
   computed: {
+    // From the per-unit breakdown, which is loaded for EVERY state and not only
+    // while the scan runs: the unit rows outlive the run, so the number stays
+    // readable on the simulation an administrator is about to publish
+    skippedNodeCount() {
+      return this.scanUnits?.skippedNodeCount || 0;
+    },
     dateFields() {
       return DATE_FIELDS;
     },
@@ -348,6 +387,26 @@ export default {
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
   methods: {
+    // Loaded on EVERY campaign load, whatever the state: the breakdown is what
+    // reports the nodes a settled scan could not evaluate, so a SIMULATED
+    // campaign needs it as much as a running one. Guarded by the SAME load token as
+    // the campaign it belongs to, so a slow answer cannot repaint a newer
+    // campaign's panel; a failure leaves the previous value rather than blanking
+    // the panel, since the bar's 100% claim depends on it
+    loadScanUnits(campaign) {
+      if (!campaign) {
+        this.scanUnits = null;
+        return;
+      }
+      const token = this.loadToken;
+      this.$cleanupService.getCampaignScanUnits(campaign.id)
+        .then(scanUnits => {
+          if (token === this.loadToken) {
+            this.scanUnits = scanUnits;
+          }
+        })
+        .catch(() => {/* diagnostic only: the panel keeps what it had */});
+    },
     loadCampaign() {
       this.loadToken = this.loadToken + 1;
       const token = this.loadToken;
@@ -372,6 +431,7 @@ export default {
     // the previous one is discarded instead of compounding
     applyCampaign(campaign) {
       this.campaign = campaign;
+      this.loadScanUnits(campaign);
       this.remainingMillis = campaign?.remainingMillis || 0;
       this.syncedAt = Date.now();
       this.now = this.syncedAt;

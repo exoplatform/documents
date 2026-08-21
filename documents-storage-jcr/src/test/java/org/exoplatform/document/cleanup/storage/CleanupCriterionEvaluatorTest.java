@@ -296,7 +296,7 @@ class CleanupCriterionEvaluatorTest {
   }
 
   private CleanupParams params(List<String> excludedPaths) {
-    return new CleanupParams(6, MIN_FILE_SIZE, 7, 5, excludedPaths, 200);
+    return new CleanupParams(6, MIN_FILE_SIZE, 7, 5, excludedPaths, 200, null);
   }
 
   private long monthsAgo(int months) {

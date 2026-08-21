@@ -74,7 +74,21 @@ export function updateCampaign(campaignId, updates) {
   }).then(handleJsonResponse);
 }
 
+// CANCEL keeps the campaign, with everything its run had already found; DELETE
+// removes it. They shared the DELETE verb until a real delete existed, which made
+// one of them a trap.
 export function cancelCampaign(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/cancel`, {
+    method: 'POST',
+    credentials: 'include',
+  }).then(handleVoidResponse);
+}
+
+// Drops a DRAFT, SIMULATED or CANCELLED campaign with its report, its scan units
+// and its archive. Anything else answers 400: a COMPLETED campaign records an
+// irreversible purge, and a running or published one must be cancelled first. The
+// users' keep decisions live in JCR and are NOT removed with it.
+export function deleteCampaign(campaignId) {
   return fetch(`${BASE_URL}/campaigns/${campaignId}`, {
     method: 'DELETE',
     credentials: 'include',
@@ -201,6 +215,19 @@ export function getCampaignFailures(campaignId) {
 // attempts remained, and a settled subtree would fail identically).
 export function getCampaignScanFailures(campaignId) {
   return fetch(`${BASE_URL}/campaigns/${campaignId}/scan-failures`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(handleJsonResponse);
+}
+
+// Answers the PER-UNIT progress of a campaign's dry run: the subtree state counts,
+// the deepest walk attempt spent, and the subtrees in flight. Unlike the scan
+// FAILURES above this is readable WHILE the scan runs, and that is the point — the
+// node percentage comes from per-unit counts already persisted, so an interrupted
+// run whose nodes were all counted reads 100% while a unit is still being
+// re-walked from its checkpoint. 'scanComplete' is the honest completion signal.
+export function getCampaignScanUnits(campaignId) {
+  return fetch(`${BASE_URL}/campaigns/${campaignId}/scan-units`, {
     method: 'GET',
     credentials: 'include',
   }).then(handleJsonResponse);

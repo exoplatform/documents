@@ -17,15 +17,22 @@
 package org.exoplatform.document.cleanup.util;
 
 /**
- * Single definition of the rolling-throughput ETA of a cleanup worker, shared by
- * the dry-run scan and the execution purge — the two workers used to carry the
- * very same arithmetic verbatim, so a change (or a regression) in one of them
- * silently diverged from the other.
+ * Single definition of the throughput ETA of a cleanup worker, shared by the
+ * dry-run scan and the execution purge — the two workers used to carry the very
+ * same arithmetic verbatim, so a change (or a regression) in one of them silently
+ * diverged from the other.
  * <p>
  * The estimate is deliberately based on the throughput observed SINCE THIS RUN
  * STARTED, not since the campaign started: a resumed worker must not inherit the
  * throughput of the run that was interrupted (a machine that was slow yesterday
- * says nothing about today's remaining time).
+ * says nothing about today's remaining time). It is CUMULATIVE over that run and
+ * not windowed — it was once described here as 'rolling', which it never was.
+ * <p>
+ * UNIT-AGNOSTIC on purpose: the arithmetic is 'work done over time elapsed', and
+ * the caller chooses what a unit of work is. The scan counts NODES, whose cost is
+ * near-uniform. The purge counts BYTES ({@code CleanupExecutionService#purgeEtaSeconds}),
+ * because its items differ in cost by orders of magnitude and a count-based
+ * average predicts the items already met rather than the ones left.
  */
 public class CleanupEtaUtil {
 
@@ -39,10 +46,10 @@ public class CleanupEtaUtil {
    * the current server clock.
    *
    * @param startTime epoch millis at which THIS run started
-   * @param processedAtStart items already processed when this run started (a
-   *          resumed worker starts above zero)
-   * @param processed items processed so far, including {@code processedAtStart}
-   * @param total denominator of the run
+   * @param processedAtStart work already done when this run started (a resumed
+   *          worker starts above zero)
+   * @param processed work done so far, including {@code processedAtStart}
+   * @param total denominator of the run, in the SAME unit
    * @return estimated remaining seconds, 0 when it cannot be estimated yet
    */
   public static long computeEtaSeconds(long startTime, long processedAtStart, long processed, long total) {

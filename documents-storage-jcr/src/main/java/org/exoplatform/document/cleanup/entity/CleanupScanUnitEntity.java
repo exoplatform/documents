@@ -26,6 +26,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import org.apache.commons.lang3.StringUtils;
@@ -112,6 +113,22 @@ public class CleanupScanUnitEntity implements Serializable {
    */
   @Column(name = "FAILURE_REASON")
   private String            failureReason;
+
+  /**
+   * Nodes of this subtree the scan walked but could not EVALUATE. Distinct from
+   * {@link #failureReason}, which is about the subtree itself failing: this counts
+   * files silently missing from the report of a unit that finished DONE.
+   */
+  @Column(name = "EVAL_FAILURE_COUNT")
+  private long              evalFailureCount;
+
+  /** Short label of the FIRST such failure — kept, later ones only counted. */
+  @Column(name = "EVAL_FAILURE_REASON")
+  private String            evalFailureReason;
+
+  @Lob
+  @Column(name = "EVAL_FAILURE_DETAIL")
+  private String            evalFailureDetail;
 
   /**
    * Hashes a unit path into the value of {@link #unitPathHash}. Same idiom as

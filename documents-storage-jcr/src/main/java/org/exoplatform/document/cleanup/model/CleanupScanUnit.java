@@ -56,4 +56,13 @@ public class CleanupScanUnit {
   /** Localizable message code of the unit failure, never an exception message. */
   private String               failureReason;
 
+  /** Nodes of this subtree the scan walked but could not EVALUATE. */
+  private long                 evalFailureCount;
+
+  /** Short label of the FIRST such failure. */
+  private String               evalFailureReason;
+
+  /** Trimmed stack trace of that same first failure. */
+  private String               evalFailureDetail;
+
 }

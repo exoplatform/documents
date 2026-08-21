@@ -39,7 +39,10 @@
       <v-tooltip v-if="item.startedDate" bottom>
         <template #activator="{on, attrs}">
           <span v-bind="attrs" v-on="on">
-            <relative-date-format :value="new Date(item.startedDate)" />
+            <!-- Keyed on the minute tick so the text is RE-COMPUTED: the component
+                 renders 'about 32 minutes ago' from its value once, and a row that
+                 nothing pushes an event for is never re-rendered otherwise -->
+            <relative-date-format :key="minuteTick" :value="new Date(item.startedDate)" />
           </span>
         </template>
         <date-format :value="item.startedDate" :format="$cleanupUtils.DATE_TIME_FORMAT" />
@@ -70,12 +73,28 @@
         @click.stop="$emit('open', item)">
         <v-icon size="14">fas fa-eye</v-icon>
       </v-btn>
+      <!-- Shown only where the SERVER allows it, so the console never offers an
+           action it would answer 400 to. A COMPLETED campaign is deliberately
+           absent: it is the record of an irreversible purge -->
+      <v-btn
+        v-if="deletable(item)"
+        :aria-label="$t('cleanup.admin.campaign.delete')"
+        icon
+        small
+        @click.stop="$emit('delete', item)">
+        <v-icon size="14">fas fa-trash</v-icon>
+      </v-btn>
     </template>
   </v-data-table>
 </template>
 <script>
 export default {
   props: {
+    // Bumped once a minute by the parent; the relative dates are keyed on it
+    minuteTick: {
+      type: Number,
+      default: 0,
+    },
     campaigns: {
       type: Array,
       default: () => [],
@@ -129,6 +148,10 @@ export default {
     },
   },
   methods: {
+    // The server's DELETABLE_STATES, mirrored: DRAFT, SIMULATED, CANCELLED
+    deletable(campaign) {
+      return ['DRAFT', 'SIMULATED', 'CANCELLED'].includes(campaign?.state);
+    },
     progressOf(campaign) {
       return this.$cleanupUtils.progressPercentage(campaign.processedCount, campaign.totalCount);
     },

@@ -153,7 +153,7 @@ class CleanupSettingServiceTest {
 
   @Test
   void getEffectiveParamsMergesPartialOverridesOverDefaults() {
-    CleanupParams overrides = new CleanupParams(12, null, null, 2, List.of(TRASH_PATH), null);
+    CleanupParams overrides = new CleanupParams(12, null, null, 2, List.of(TRASH_PATH), null, null);
 
     CleanupParams effective = cleanupSettingService.getEffectiveParams(overrides);
 
@@ -167,7 +167,7 @@ class CleanupSettingServiceTest {
 
   @Test
   void updateDefaultParamsPersistsOnlyProvidedFields() {
-    cleanupSettingService.updateDefaultParams(new CleanupParams(12, null, 10, null, List.of(TRASH_PATH), null));
+    cleanupSettingService.updateDefaultParams(new CleanupParams(12, null, 10, null, List.of(TRASH_PATH), null, null));
 
     ArgumentCaptor<SettingValue<?>> valueCaptor = ArgumentCaptor.forClass(SettingValue.class);
     verify(settingService).set(any(Context.class), any(Scope.class), eq(PERIOD_MONTHS_KEY), valueCaptor.capture());
@@ -186,7 +186,7 @@ class CleanupSettingServiceTest {
     lenient().when(settingService.get(any(Context.class), any(Scope.class), eq(GRACE_DAYS_KEY)))
              .thenReturn((SettingValue) SettingValue.create("15"));
 
-    CleanupParams effective = cleanupSettingService.getEffectiveParams(new CleanupParams(null, null, null, null, null, null));
+    CleanupParams effective = cleanupSettingService.getEffectiveParams(new CleanupParams(null, null, null, null, null, null, null));
 
     assertEquals(15, effective.getGraceDays(), "An all-null override object must still pick up persisted defaults");
   }

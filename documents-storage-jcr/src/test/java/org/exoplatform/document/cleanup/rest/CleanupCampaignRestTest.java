@@ -31,6 +31,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -46,6 +49,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.annotation.Secured;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -58,10 +68,14 @@ import org.exoplatform.document.cleanup.model.CleanupCampaign;
 import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
+import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitProgressRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
@@ -132,11 +146,21 @@ class CleanupCampaignRestTest {
   }
 
   @Test
-  void getDefaultsDelegatesToService() {
-    CleanupParams defaults = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200);
+  void getDefaultsCarriesThePlatformValuesAndTheCeilingTheFormMustRespect() {
+    CleanupParams defaults = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, 4);
     when(campaignService.getDefaultParams()).thenReturn(defaults);
+    when(campaignService.getMaxScanThreads()).thenReturn(20);
 
-    assertEquals(defaults, campaignRest.getDefaults());
+    CampaignRestEntity served = campaignRest.getDefaults();
+
+    assertEquals(6, served.getPeriodMonths());
+    assertEquals(1048576L, served.getMinFileSizeBytes());
+    assertEquals(7, served.getGraceDays());
+    assertEquals(5, served.getMaxVersionsPerFile());
+    assertEquals(4, served.getScanThreads(), "The platform default fan-out pre-fills the form");
+    // The form must bound its input on the number the SERVER validates against: a
+    // form inventing its own bound is a form that disagrees the day one changes
+    assertEquals(20, served.getMaxScanThreads(), "The ceiling must travel with the defaults");
   }
 
   @Test
@@ -716,6 +740,163 @@ class CleanupCampaignRestTest {
 
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> campaignRest.getCampaignFailures(404L)).getStatusCode());
+  }
+
+  @Test
+  void everyMappingOnTheControllerCarriesARoleCheck() {
+    // The invariant, pinned by reflection because a MISSING annotation is
+    // invisible in a diff: this webapp declares no security-constraint, so
+    // @Secured is the WHOLE control on a method here, and campaign management is
+    // /platform/administrators only. {id}/scan-failures shipped without it and
+    // survived eleven review rounds precisely because nothing failed when it was
+    // absent — reading the diff hunks can never catch that, only enumerating the
+    // class can
+    List<String> unsecured = Arrays.stream(CleanupCampaignRest.class.getDeclaredMethods())
+                                   .filter(method -> Modifier.isPublic(method.getModifiers()))
+                                   .filter(CleanupCampaignRestTest::isRequestMapping)
+                                   .filter(method -> method.getAnnotation(Secured.class) == null)
+                                   .map(Method::getName)
+                                   .sorted()
+                                   .toList();
+
+    assertEquals(List.of(), unsecured, "Every request mapping must carry a @Secured role check");
+  }
+
+  @Test
+  void theRoleCheckInvariantActuallySeesTheMappings() {
+    // Guards the test above against passing vacuously: were the annotation scan
+    // ever to stop matching (a mapping annotation swapped, the reflection
+    // broken), an EMPTY list of unsecured methods would look like success
+    long mappings = Arrays.stream(CleanupCampaignRest.class.getDeclaredMethods())
+                          .filter(method -> Modifier.isPublic(method.getModifiers()))
+                          .filter(CleanupCampaignRestTest::isRequestMapping)
+                          .count();
+
+    assertTrue(mappings >= 18, "The mapping scan found only " + mappings + " endpoints: it is no longer seeing the class");
+  }
+
+  private static boolean isRequestMapping(Method method) {
+    return method.getAnnotation(GetMapping.class) != null || method.getAnnotation(PostMapping.class) != null
+        || method.getAnnotation(PutMapping.class) != null || method.getAnnotation(PatchMapping.class) != null
+        || method.getAnnotation(DeleteMapping.class) != null || method.getAnnotation(RequestMapping.class) != null;
+  }
+
+  @Test
+  void deleteCampaignDeletesAndCancelDoesNotShareItsVerb() throws NoSuchMethodException {
+    // Pinned by reflection because nothing else would notice them being swapped
+    // back: DELETE cancelling a campaign reads fine to whoever wrote it and
+    // destroys a run for whoever did not
+    assertNotNull(CleanupCampaignRest.class.getMethod("deleteCampaign", long.class).getAnnotation(DeleteMapping.class),
+                  "DELETE {id} must really delete");
+    assertNull(CleanupCampaignRest.class.getMethod("cancelCampaign", long.class).getAnnotation(DeleteMapping.class),
+               "cancel must NOT be mapped on DELETE any more");
+    assertNotNull(CleanupCampaignRest.class.getMethod("cancelCampaign", long.class).getAnnotation(PostMapping.class),
+                  "cancel must be a POST on its own path");
+  }
+
+  @Test
+  void deleteCampaignDelegatesToTheService() throws ObjectNotFoundException {
+    campaignRest.deleteCampaign(CAMPAIGN_ID);
+
+    verify(campaignService).deleteCampaign(CAMPAIGN_ID);
+  }
+
+  @Test
+  void deleteCampaignMapsARefusedStateToBadRequest() throws ObjectNotFoundException {
+    doThrow(new IllegalArgumentException("cleanup.invalidState")).when(campaignService).deleteCampaign(CAMPAIGN_ID);
+
+    // What a COMPLETED campaign answers, and what the console must show as a
+    // reason rather than swallow
+    ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                                                    () -> campaignRest.deleteCampaign(CAMPAIGN_ID));
+    assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    assertTrue(exception.getMessage().contains("cleanup.invalidState"));
+  }
+
+  @Test
+  void deleteCampaignMapsNotFound() throws ObjectNotFoundException {
+    doThrow(new ObjectNotFoundException(NOT_FOUND_CODE)).when(campaignService).deleteCampaign(404L);
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class, () -> campaignRest.deleteCampaign(404L)).getStatusCode());
+  }
+
+  @Test
+  void getCampaignScanUnitsCarriesTheLostFilesAndTheirStackTrace() throws ObjectNotFoundException {
+    CleanupScanUnit lossy = new CleanupScanUnit();
+    lossy.setUnitPath("/Users/j___");
+    lossy.setEvalFailureCount(37);
+    lossy.setEvalFailureReason("NullPointerException: Cannot invoke Version.getName()");
+    lossy.setEvalFailureDetail("java.lang.NullPointerException\n\tat CleanupJcrStorage.selectVersionsToRemove");
+    when(campaignService.getCampaignScanUnitProgress(CAMPAIGN_ID)).thenReturn(new CleanupScanUnitProgress(40,
+                                                                                                         0,
+                                                                                                         0,
+                                                                                                         40,
+                                                                                                         0,
+                                                                                                         40,
+                                                                                                         1,
+                                                                                                         true,
+                                                                                                         37,
+                                                                                                         List.of(),
+                                                                                                         List.of(lossy)));
+
+    CampaignScanUnitProgressRestEntity progress = campaignRest.getCampaignScanUnits(CAMPAIGN_ID);
+
+    // Every subtree settled AND 37 files lost inside them: the two accountings are
+    // independent, and the console needs both to stop reading 100% as "complete"
+    assertTrue(progress.isScanComplete());
+    assertEquals(37L, progress.getSkippedNodeCount());
+    assertEquals(1, progress.getEvaluationFailures().size());
+    CampaignScanUnitRestEntity failing = progress.getEvaluationFailures().get(0);
+    assertEquals("/Users/j___", failing.getUnitPath());
+    assertEquals(37L, failing.getEvalFailureCount());
+    // The trace travels to the console: diagnosing this must not require the
+    // server log, which is what made the NullPointerException behind it invisible
+    assertTrue(failing.getEvalFailureDetail().contains("NullPointerException"));
+  }
+
+  @Test
+  void getCampaignScanUnitsMapsTheBreakdownAndItsInFlightSubtrees() throws ObjectNotFoundException {
+    CleanupScanUnit inFlight = new CleanupScanUnit();
+    inFlight.setId(17L);
+    inFlight.setUnitPath("/Users/j___");
+    inFlight.setLastScannedPath("/Users/j___/john/a.pdf");
+    inFlight.setScannedCount(12);
+    inFlight.setTotalCount(40L);
+    inFlight.setAttemptCount(2);
+    when(campaignService.getCampaignScanUnitProgress(CAMPAIGN_ID)).thenReturn(new CleanupScanUnitProgress(540,
+                                                                                                         0,
+                                                                                                         1,
+                                                                                                         537,
+                                                                                                         2,
+                                                                                                         538,
+                                                                                                         3,
+                                                                                                         false,
+                                                                                                         0,
+                                                                                                         List.of(inFlight),
+                                                                                                         List.of()));
+
+    CampaignScanUnitProgressRestEntity progress = campaignRest.getCampaignScanUnits(CAMPAIGN_ID);
+
+    assertEquals(540L, progress.getUnitCount());
+    assertEquals(538L, progress.getSettledCount());
+    assertEquals(3L, progress.getMaxAttemptCount());
+    // The flag the console shows completion from, INSTEAD of the node percentage
+    // that would read 100% on this very campaign
+    assertFalse(progress.isScanComplete());
+    assertEquals(1, progress.getInFlightUnits().size());
+    assertEquals("/Users/j___", progress.getInFlightUnits().get(0).getUnitPath());
+    assertEquals("/Users/j___/john/a.pdf", progress.getInFlightUnits().get(0).getLastScannedPath());
+    assertEquals(2L, progress.getInFlightUnits().get(0).getAttemptCount());
+  }
+
+  @Test
+  void getCampaignScanUnitsMapsNotFound() throws ObjectNotFoundException {
+    when(campaignService.getCampaignScanUnitProgress(404L)).thenThrow(new ObjectNotFoundException(NOT_FOUND_CODE));
+
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class,
+                              () -> campaignRest.getCampaignScanUnits(404L)).getStatusCode());
   }
 
   @Test

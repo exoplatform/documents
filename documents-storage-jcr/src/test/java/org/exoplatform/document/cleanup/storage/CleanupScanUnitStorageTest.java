@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,7 +44,9 @@ import org.exoplatform.document.cleanup.constant.CleanupScanUnitState;
 import org.exoplatform.document.cleanup.dao.CleanupScanUnitDAO;
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
+import org.exoplatform.document.cleanup.model.CleanupNodeFailures;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 
 /**
  * Scan-unit storage tests pinning what the parallel scan's resumability rests
@@ -173,7 +176,7 @@ class CleanupScanUnitStorageTest {
     CleanupScanUnitEntity entity = entity(CleanupScanUnitState.RUNNING);
     when(scanUnitDAO.findById(UNIT_ID)).thenReturn(Optional.of(entity));
 
-    storage.updateUnitProgress(UNIT_ID, "/Users/j___/john/z.pdf", 44);
+    storage.updateUnitProgress(UNIT_ID, "/Users/j___/john/z.pdf", 44, null);
 
     verify(scanUnitDAO).save(entity);
     // Never truncated: a truncated resume path would silently re-walk or skip a
@@ -267,7 +270,7 @@ class CleanupScanUnitStorageTest {
     storage.updateUnitState(UNIT_ID, CleanupScanUnitState.DONE);
     storage.updateUnitTotal(UNIT_ID, 5);
     storage.claimUnit(UNIT_ID);
-    storage.updateUnitProgress(UNIT_ID, SCANNED_PATH, 5);
+    storage.updateUnitProgress(UNIT_ID, SCANNED_PATH, 5, null);
     storage.updateUnitFailure(UNIT_ID, "cleanup.scanUnitFailed");
 
     verify(scanUnitDAO, never()).save(any());
@@ -330,6 +333,124 @@ class CleanupScanUnitStorageTest {
 
     assertNotNull(unit.getTotalCount(), "An empty bucket was COUNTED: it must never look uncounted again");
     assertEquals(0L, unit.getTotalCount().longValue());
+  }
+
+  @Test
+  void evaluationFailuresAccumulateAcrossBatchesAndKeepTheFirstDiagnosis() {
+    CleanupScanUnitEntity entity = entity(CleanupScanUnitState.RUNNING);
+    entity.setEvalFailureCount(0);
+    when(scanUnitDAO.findById(UNIT_ID)).thenReturn(Optional.of(entity));
+
+    CleanupNodeFailures firstBatch = new CleanupNodeFailures();
+    firstBatch.record(new NullPointerException("Cannot invoke Version.getName()"));
+    firstBatch.record(new IllegalStateException("a later, less interesting one"));
+    storage.updateUnitProgress(UNIT_ID, SCANNED_PATH, 5, firstBatch);
+
+    CleanupNodeFailures secondBatch = new CleanupNodeFailures();
+    secondBatch.record(new IllegalStateException("second batch"));
+    storage.updateUnitProgress(UNIT_ID, "/Users/j___/john/z.pdf", 10, secondBatch);
+
+    // ADDED, never assigned: a resume starts its batch counters at zero, so
+    // assigning would forget every node the earlier passes lost
+    assertEquals(3L, entity.getEvalFailureCount());
+    // FIRST failure wins, across batches too — it is the one that diagnoses the
+    // cause, and the last one to fail is noise
+    assertTrue(entity.getEvalFailureReason().startsWith("NullPointerException"),
+               "The FIRST failure must survive, got " + entity.getEvalFailureReason());
+    assertNotNull(entity.getEvalFailureDetail(), "The first failure's stack trace is what makes it diagnosable");
+  }
+
+  @Test
+  void aBatchThatLostNothingLeavesTheFailureColumnsAlone() {
+    CleanupScanUnitEntity entity = entity(CleanupScanUnitState.RUNNING);
+    entity.setEvalFailureCount(4);
+    entity.setEvalFailureReason("NullPointerException");
+    when(scanUnitDAO.findById(UNIT_ID)).thenReturn(Optional.of(entity));
+
+    storage.updateUnitProgress(UNIT_ID, SCANNED_PATH, 9, new CleanupNodeFailures());
+    storage.updateUnitProgress(UNIT_ID, SCANNED_PATH, 12, null);
+
+    assertEquals(4L, entity.getEvalFailureCount(), "A healthy batch must not touch the count");
+    assertEquals("NullPointerException", entity.getEvalFailureReason());
+  }
+
+  @Test
+  void unitProgressReportsTheNodesLostAndTheUnitsThatLostThem() {
+    when(scanUnitDAO.countByState(CAMPAIGN_ID)).thenReturn(List.<Object[]> of(new Object[] { "DONE", 40L }));
+    when(scanUnitDAO.countSettledFailures(CAMPAIGN_ID, CleanupScanUnitState.FAILED.name(), MAX_ATTEMPTS)).thenReturn(0L);
+    when(scanUnitDAO.sumEvalFailureCount(CAMPAIGN_ID)).thenReturn(37L);
+    CleanupScanUnitEntity lossy = entity(CleanupScanUnitState.DONE);
+    lossy.setEvalFailureCount(37);
+    lossy.setEvalFailureReason("NullPointerException");
+    lossy.setEvalFailureDetail("java.lang.NullPointerException\n\tat ...");
+    when(scanUnitDAO.findUnitsWithEvalFailures(eq(CAMPAIGN_ID), any())).thenReturn(List.of(lossy));
+
+    CleanupScanUnitProgress progress = storage.getUnitProgress(CAMPAIGN_ID, MAX_ATTEMPTS);
+
+    // EVERY unit is DONE, so the unit accounting says complete — and 37 files are
+    // missing from the report all the same. That gap is exactly what used to be
+    // invisible: a WARN per node in the log and nothing anywhere else
+    assertTrue(progress.isScanComplete(), "Every unit settled: the UNIT accounting is complete");
+    assertEquals(37L, progress.getSkippedNodeCount(), "... and the report is still missing 37 files");
+    assertEquals(1, progress.getEvaluationFailures().size());
+    assertEquals("NullPointerException", progress.getEvaluationFailures().get(0).getEvalFailureReason());
+    assertNotNull(progress.getEvaluationFailures().get(0).getEvalFailureDetail());
+  }
+
+  @Test
+  void unitProgressFoldsTheStateCountsAndAgreesWithTheTerminalTransitionOnSettled() {
+    when(scanUnitDAO.countByState(CAMPAIGN_ID)).thenReturn(List.of(new Object[] { "DONE", 537L },
+                                                                  new Object[] { "RUNNING", 1L },
+                                                                  new Object[] { "FAILED", 2L }));
+    // Of the two FAILED units, ONE spent its attempts: the other is still being
+    // re-walked by the watchdog and must NOT count as settled
+    when(scanUnitDAO.countSettledFailures(CAMPAIGN_ID, CleanupScanUnitState.FAILED.name(), MAX_ATTEMPTS)).thenReturn(1L);
+    when(scanUnitDAO.maxAttemptCount(CAMPAIGN_ID)).thenReturn(3L);
+    when(scanUnitDAO.findByState(CAMPAIGN_ID,
+                                CleanupScanUnitState.RUNNING.name())).thenReturn(List.of(entity(CleanupScanUnitState.RUNNING)));
+
+    CleanupScanUnitProgress progress = storage.getUnitProgress(CAMPAIGN_ID, MAX_ATTEMPTS);
+
+    // The unit total is the SUM of the grouped counts, never a separate count
+    // query that could disagree with them
+    assertEquals(540L, progress.getUnitCount());
+    assertEquals(537L, progress.getDoneCount());
+    assertEquals(1L, progress.getRunningCount());
+    assertEquals(2L, progress.getFailedCount());
+    assertEquals(0L, progress.getPendingCount(), "A state absent from the grouped rows counts 0, not null");
+    assertEquals(538L, progress.getSettledCount(), "Settled is DONE plus the failures that spent their attempts");
+    assertEquals(3L, progress.getMaxAttemptCount());
+    // 538 of 540: the report is NOT complete, and this is the flag the console
+    // trusts instead of the node percentage — which would read 100% here
+    assertFalse(progress.isScanComplete());
+    assertEquals(1, progress.getInFlightUnits().size());
+    assertEquals(USERS_UNIT, progress.getInFlightUnits().get(0).getUnitPath());
+    assertEquals(SCANNED_PATH, progress.getInFlightUnits().get(0).getLastScannedPath(),
+                 "The in-flight unit carries its own checkpoint: it is what shows a re-walk standing still");
+  }
+
+  @Test
+  void unitProgressIsCompleteOnlyWhenEveryUnitSettled() {
+    when(scanUnitDAO.countByState(CAMPAIGN_ID)).thenReturn(List.of(new Object[] { "DONE", 39L },
+                                                                  new Object[] { "FAILED", 1L }));
+    when(scanUnitDAO.countSettledFailures(CAMPAIGN_ID, CleanupScanUnitState.FAILED.name(), MAX_ATTEMPTS)).thenReturn(1L);
+
+    assertTrue(storage.getUnitProgress(CAMPAIGN_ID, MAX_ATTEMPTS).isScanComplete(),
+               "A settled FAILED unit completes the scan as surely as a DONE one — incompletely, but terminally");
+  }
+
+  @Test
+  void unitProgressOfACampaignWithoutUnitsIsNotComplete() {
+    when(scanUnitDAO.countByState(CAMPAIGN_ID)).thenReturn(List.of());
+
+    CleanupScanUnitProgress progress = storage.getUnitProgress(CAMPAIGN_ID, MAX_ATTEMPTS);
+
+    assertEquals(0L, progress.getUnitCount());
+    // 0 settled of 0 planned is arithmetically 'all of them' and semantically
+    // nothing walked. Reporting it complete would put back the very false 100%
+    // this breakdown exists to remove
+    assertFalse(progress.isScanComplete(), "A campaign with no planned unit has scanned NOTHING");
+    assertTrue(progress.getInFlightUnits().isEmpty());
   }
 
   private CleanupScanUnitEntity entity(CleanupScanUnitState state) {

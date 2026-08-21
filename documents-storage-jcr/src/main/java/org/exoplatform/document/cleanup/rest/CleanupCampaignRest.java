@@ -49,6 +49,7 @@ import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitProgressRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
 import org.exoplatform.document.cleanup.rest.model.PagedResult;
@@ -139,8 +140,8 @@ public class CleanupCampaignRest {
   @ApiResponses(value = {
     @ApiResponse(responseCode = "200", description = "Request fulfilled"),
   })
-  public CleanupParams getDefaults() {
-    return campaignService.getDefaultParams();
+  public CampaignRestEntity getDefaults() {
+    return CleanupEntityBuilder.buildDefaults(campaignService.getDefaultParams(), campaignService.getMaxScanThreads());
   }
 
   /**
@@ -225,10 +226,13 @@ public class CleanupCampaignRest {
     }
   }
 
+  // CANCEL is a POST on its own path and DELETE really deletes. They were the same
+  // verb until a delete existed, and "DELETE cancels" is the kind of shape that
+  // reads fine to whoever wrote it and destroys a campaign for whoever did not.
   @Secured("administrators")
-  @DeleteMapping("{id}")
+  @PostMapping("{id}/cancel")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  @Operation(method = "DELETE", summary = "Cancel a cleanup campaign", description = "Cancel a cleanup campaign from any non-terminal state")
+  @Operation(method = "POST", summary = "Cancel a cleanup campaign", description = "Cancel a cleanup campaign from any non-terminal state. The campaign is kept, with everything it had already found")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "204", description = "Request fulfilled"),
     @ApiResponse(responseCode = "400", description = "Bad Request"),
@@ -240,6 +244,38 @@ public class CleanupCampaignRest {
                              long id) {
     try {
       campaignService.cancelCampaign(id);
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+  }
+
+  /**
+   * 204 and not 202, deliberately, although the report rows are dropped
+   * asynchronously (see {@code CleanupCampaignService#deleteCampaign}): the
+   * campaign row is gone before this answers, so the resource really IS deleted
+   * and nothing about it is still pending. What continues in the background is
+   * the collection of rows no query can reach any more — the reason it is not
+   * done here being that a simulated campaign's report holds hundreds of
+   * thousands of them, and no REST call may depend on work whose duration grows
+   * with the corpus.
+   */
+  @Secured("administrators")
+  @DeleteMapping("{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(method = "DELETE", summary = "Delete a cleanup campaign", description = "Delete a DRAFT, SIMULATED or CANCELLED campaign with its report, its scan units and its archive. Answers as soon as the campaign is unreachable, its report rows being dropped in the background. A COMPLETED campaign is never deletable — it records an irreversible purge — and a running or published one must be cancelled first. The users' keep decisions are NOT removed")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "400", description = "Bad Request"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public void deleteCampaign(
+                             @Parameter(description = "Campaign identifier", required = true)
+                             @PathVariable("id")
+                             long id) {
+    try {
+      campaignService.deleteCampaign(id);
     } catch (ObjectNotFoundException e) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
     } catch (IllegalArgumentException e) {
@@ -368,6 +404,24 @@ public class CleanupCampaignRest {
    * here. A subtree that failed while attempts remain is not one of them: the
    * campaign is still DRY_RUN_RUNNING and the watchdog is re-walking it.
    */
+  @Secured("administrators")
+  @GetMapping(path = "{id}/scan-units", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(method = "GET", summary = "Retrieve the per-unit progress of a cleanup campaign dry run", description = "Subtree state counts, deepest walk attempt spent, and the subtrees in flight. Readable WHILE the scan runs: it is what tells a resuming scan from a stuck one, which the node percentage cannot")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "404", description = "Not found"),
+  })
+  public CampaignScanUnitProgressRestEntity getCampaignScanUnits(
+                                                                 @Parameter(description = "Campaign identifier", required = true)
+                                                                 @PathVariable("id")
+                                                                 long id) {
+    try {
+      return CleanupEntityBuilder.build(campaignService.getCampaignScanUnitProgress(id));
+    } catch (ObjectNotFoundException e) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+  }
+
   @Secured("administrators")
   @GetMapping(path = "{id}/scan-failures", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(method = "GET", summary = "Retrieve the grouped scan failures of a cleanup campaign", description = "Per-reason counts of the subtrees a campaign's dry run could not walk. Empty unless the scan was recorded incomplete")

@@ -160,14 +160,27 @@
           </v-tooltip>
         </div>
       </template>
-      <template slot="item.fileSize" slot-scope="{item}">
-        {{ $cleanupSize(item.fileSize) }}
-      </template>
-      <template slot="item.versionsSize" slot-scope="{item}">
-        {{ $cleanupSize(item.versionsSize) }}
-      </template>
       <template slot="item.reclaimedBytes" slot-scope="{item}">
         {{ $cleanupSize(item.reclaimedBytes) }}
+      </template>
+      <!-- The breakdown moved into this cell's tooltip rather than being deleted
+           with the two columns it used to fill. On a DELETE row it DECOMPOSES the
+           figure above it — content plus the whole history the delete destroys —
+           which is what tells a 501 MB row that is 1 MB of content and 500 MB of
+           history apart from one that is 501 MB of content, the difference between
+           tuning maxVersionsPerFile and tuning the period.
+           On a PURGE_VERSIONS row there is nothing to decompose: the reclaimable
+           figure IS the version bytes, and naming the content size next to it
+           invited exactly one arithmetic — 73 MB + 5 GB — for bytes the campaign
+           never frees, since a purge keeps the file. So that row states what it
+           does instead of listing a number it does not reclaim -->
+      <template slot="item.reclaimableBytes" slot-scope="{item}">
+        <v-tooltip bottom>
+          <template #activator="{on, attrs}">
+            <span v-bind="attrs" v-on="on">{{ $cleanupSize(item.reclaimableBytes) }}</span>
+          </template>
+          <span>{{ sizeTooltip(item) }}</span>
+        </v-tooltip>
       </template>
     </v-data-table>
   </div>
@@ -184,12 +197,31 @@ const UNKNOWN_FAILURE_KEY = 'cleanup.admin.campaign.unexpectedError';
 // The item table has NO name column: the DTO's 'name' is the last segment of the
 // path, so the Name column is sorted (server-side) on the path.
 const SORT_FIELDS = {name: 'path'};
-const DEFAULT_SORT_FIELD = 'fileSize';
+// Before a purge, every Reclaimed cell reads 0 B: the column answers a question
+// nobody can ask yet, while the figure that matters for the decision — what this
+// report WOULD free — was not on screen at all. So the last column is Reclaimable
+// until the campaign executes, and the default ordering follows it: a list ranks
+// by the figure it displays (W24), which is the same rule the user review list
+// already obeys.
+const EXECUTED_STATES = ['EXECUTING', 'COMPLETED'];
+const RECLAIMABLE_SORT_FIELD = 'reclaimableBytes';
+// The ordering is the reclaimable expression in EVERY state now: it is the one size
+// column the table always shows, and fileSize stopped being a column at all. The
+// REST allowlist still accepts fileSize and versionsSize — they are simply no
+// longer offered here.
+const DEFAULT_SORT_FIELD = RECLAIMABLE_SORT_FIELD;
 
 export default {
   props: {
     campaignId: {
       type: Number,
+      default: null,
+    },
+    // Decides which of the two size outcomes the last column shows. Not derived
+    // from the rows: an empty page would make the table guess, and a filtered one
+    // would make it guess differently
+    campaignState: {
+      type: String,
       default: null,
     },
   },
@@ -216,6 +248,9 @@ export default {
     };
   },
   computed: {
+    executed() {
+      return EXECUTED_STATES.includes(this.campaignState);
+    },
     headers() {
       // Only the columns the server can order on are sortable (SORT_FIELDS maps
       // 'name' onto the path); 'ownerFullName' is resolved after the query, so it
@@ -227,9 +262,17 @@ export default {
         {text: this.$t('cleanup.admin.items.lastModifiedDate'), value: 'lastModifiedDate', align: 'center'},
         {text: this.$t('cleanup.admin.items.action'), value: 'action', align: 'center'},
         {text: this.$t('cleanup.admin.items.state'), value: 'state', align: 'center'},
-        {text: this.$t('cleanup.admin.items.fileSize'), value: 'fileSize', align: 'center'},
-        {text: this.$t('cleanup.admin.items.versionsSize'), value: 'versionsSize', align: 'center'},
-        {text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center'},
+        // ONE size column, because four were answering one question. Content and
+        // version size are not gone, they moved into the cell's tooltip: as columns
+        // they cost a quarter of the table's width to show two numbers whose SUM is
+        // the only one a decision turns on
+        {text: this.$t('cleanup.admin.items.reclaimableBytes'), value: RECLAIMABLE_SORT_FIELD, align: 'center'},
+        // Reclaimed is ADDED once there is something to put in it, never shown as a
+        // column of zeros beforehand. Nothing is ever taken away, so a campaign
+        // that executes while this table is open only gains a column
+        ...(this.executed
+          ? [{text: this.$t('cleanup.admin.items.reclaimedBytes'), value: 'reclaimedBytes', align: 'center'}]
+          : []),
       ];
     },
     stateFilterItems() {
@@ -261,6 +304,17 @@ export default {
     document.removeEventListener('click', this.closeMenus);
   },
   methods: {
+    // A purge row gets no content figure at all: the ask was to stop showing a
+    // size the row does not reclaim, and the useful half of that tooltip was never
+    // the number — it was the answer to "does this delete my file?"
+    sizeTooltip(item) {
+      return item?.action === 'PURGE_VERSIONS'
+        ? this.$t('cleanup.admin.items.sizeVersionsOnly')
+        : this.$t('cleanup.admin.items.sizeBreakdown', {
+          0: this.$cleanupSize(item?.fileSize),
+          1: this.$cleanupSize(item?.versionsSize),
+        });
+    },
     reload() {
       this.options = {...this.options, page: 1};
       this.loadItems();
@@ -334,40 +388,10 @@ export default {
       if (!detail) {
         return;
       }
-      if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(detail)
-          .then(() => this.displayAlert(this.$t('cleanup.admin.items.stackTraceCopied')))
-          .catch(() => this.copyThroughTextarea(detail));
-      } else {
-        this.copyThroughTextarea(detail);
-      }
-    },
-    // Legacy fallback for the deployments the Clipboard API refuses to serve. A
-    // TEXTAREA, not the input the rest of the app copies single-line paths with:
-    // an input would flatten the multi-line trace into one line.
-    copyThroughTextarea(text) {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.setAttribute('readonly', 'readonly');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      let copied = false;
-      try {
-        copied = document.execCommand('copy');
-      } catch (e) {
-        // Deprecated API: a browser that removed it throws instead of answering
-        // false, and the toast below is the only acceptable outcome either way
-        copied = false;
-      } finally {
-        document.body.removeChild(textarea);
-      }
-      if (copied) {
-        this.displayAlert(this.$t('cleanup.admin.items.stackTraceCopied'));
-      } else {
-        this.displayAlert(this.$t('cleanup.admin.items.copyFailed'), 'error');
-      }
+      this.$cleanupUtils.copyToClipboard(detail)
+        .then(copied => this.displayAlert(copied ? this.$t('cleanup.admin.items.stackTraceCopied')
+          : this.$t('cleanup.admin.items.copyFailed'),
+        copied ? 'success' : 'error'));
     },
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('notification-alert', {detail: {

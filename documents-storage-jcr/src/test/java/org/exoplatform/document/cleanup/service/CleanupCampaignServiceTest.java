@@ -21,30 +21,43 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +75,7 @@ import org.springframework.data.domain.Sort;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
+import org.exoplatform.commons.file.services.NameSpaceService;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -81,6 +95,7 @@ import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.util.CleanupEntityBuilder;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
+import org.exoplatform.document.cleanup.storage.CleanupScanUnitStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.websocket.CleanupWebSocketService;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -161,7 +176,16 @@ class CleanupCampaignServiceTest {
   private FileService              fileService;
 
   @Mock
+  private NameSpaceService         nameSpaceService;
+
+  @Mock
+  private CleanupScanUnitStorage   scanUnitStorage;
+
+  @Mock
   private CleanupWebSocketService  webSocketService;
+
+  /** Bound for the row collection the delete hands to its worker. */
+  private static final long ASYNC_TIMEOUT_MS = 5000;
 
   @Spy
   @InjectMocks
@@ -276,7 +300,7 @@ class CleanupCampaignServiceTest {
   @Test
   void shouldPublishGraceZeroCampaignWithImmediateDeadlineThenLockIt() throws ObjectNotFoundException {
     CleanupCampaign campaign = campaign(CleanupCampaignState.SIMULATED);
-    campaign.setParams(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200));
+    campaign.setParams(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200, null));
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign);
     when(campaignStorage.getCampaignsByStates(anyList())).thenReturn(List.of());
     when(campaignStorage.saveCampaign(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -319,7 +343,7 @@ class CleanupCampaignServiceTest {
 
   @Test
   void shouldCreateCampaignSnapshottingParamsAndLaunchScan() throws ObjectNotFoundException {
-    CleanupParams effectiveParams = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200);
+    CleanupParams effectiveParams = new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, null);
     when(settingService.getEffectiveParams(any())).thenReturn(effectiveParams);
     CleanupCampaign createdCampaign = campaign(CleanupCampaignState.DRAFT);
     when(campaignStorage.createCampaign(any())).thenReturn(createdCampaign);
@@ -329,6 +353,262 @@ class CleanupCampaignServiceTest {
 
     assertNotNull(campaign);
     verify(scanService).startScan(CAMPAIGN_ID);
+  }
+
+  @Test
+  void aSecondRunIsRefusedWhileAnotherCampaignOwnsAWorker() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaignsByStates(argThat(states -> states.contains(CleanupCampaignState.DRY_RUN_RUNNING)
+        && states.contains(CleanupCampaignState.EXECUTING)))).thenReturn(List.of(campaign(CleanupCampaignState.DRY_RUN_RUNNING)));
+    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, null));
+
+    // Two scans at once is ten more reader threads on a repository where ONE
+    // sequential walk already saturated both JCR caches
+    assertEquals("cleanup.workerAlreadyRunning",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> campaignService.createCampaign("Q3 cleanup", new CleanupParams())).getMessage());
+    // No DRAFT row left behind: the guard runs before the insert, so a refused
+    // creation cannot leave a campaign an administrator can neither run nor read
+    verify(campaignStorage, never()).createCampaign(any());
+    verify(scanService, never()).startScan(anyLong());
+  }
+
+  @Test
+  void aPurgeIsRefusedWhileAScanIsStillWalking() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.LOCKED));
+    when(campaignStorage.getCampaignsByStates(argThat(states -> states.contains(CleanupCampaignState.DRY_RUN_RUNNING)))).thenReturn(List.of(campaign(CleanupCampaignState.DRY_RUN_RUNNING)));
+
+    // ACTIVE_STATES alone would allow this: it holds PUBLISHED/LOCKED/EXECUTING
+    // and not DRY_RUN_RUNNING, so a purge could start deleting the very nodes a
+    // scan was reading — and the simulation would describe a tree that no longer
+    // exists
+    assertEquals("cleanup.workerAlreadyRunning",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> campaignService.executeCampaign(CAMPAIGN_ID)).getMessage());
+    verify(executionService, never()).startExecution(anyLong());
+  }
+
+  @Test
+  void anExecutingCampaignReportsTheProgressItsOWNAggregatesImply() throws ObjectNotFoundException {
+    // THE CONTRADICTION: PROCESSED_COUNT is checkpointed per batch, while the
+    // candidate count and the reclaimed total are recomputed on every read. So
+    // the console showed a purge that had freed gigabytes, with 105 fewer
+    // candidates than it started with, above a bar reading '0% (0 / 5,083)' —
+    // every number correct, the three of them together impossible
+    CleanupCampaign executing = campaign(CleanupCampaignState.EXECUTING);
+    executing.setTotalCount(5083);
+    executing.setProcessedCount(0);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(executing);
+    when(campaignStorage.countItemsByState(CAMPAIGN_ID, CleanupItemState.CANDIDATE)).thenReturn(4978L);
+
+    CleanupCampaign served = campaignService.getCampaign(CAMPAIGN_ID);
+
+    assertEquals(105,
+                 served.getProcessedCount(),
+                 "The numerator must agree with the aggregates served beside it: 5083 - 4978 items have settled");
+  }
+
+  @Test
+  void theExecutionProgressNeverWalksBackwards() throws ObjectNotFoundException {
+    // The observation listener may ADD candidates to a campaign mid-purge, which
+    // would drag the derived numerator down. A bar walking backwards while files
+    // are being deleted is worse than one lagging behind
+    CleanupCampaign executing = campaign(CleanupCampaignState.EXECUTING);
+    executing.setTotalCount(5083);
+    executing.setProcessedCount(1000);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(executing);
+    when(campaignStorage.countItemsByState(CAMPAIGN_ID, CleanupItemState.CANDIDATE)).thenReturn(4978L);
+
+    CleanupCampaign served = campaignService.getCampaign(CAMPAIGN_ID);
+
+    assertEquals(1000, served.getProcessedCount(), "The checkpoint stands when it is ahead of the derived value");
+  }
+
+  @Test
+  void aDryRunKeepsItsOwnPersistedProgress() throws ObjectNotFoundException {
+    // EXECUTING only: a dry run counts NODES walked, which no item aggregate can
+    // express — deriving it from candidates would report a scan's progress as the
+    // number of candidates it happened to have found
+    CleanupCampaign scanning = campaign(CleanupCampaignState.DRY_RUN_RUNNING);
+    scanning.setTotalCount(624395);
+    scanning.setProcessedCount(451585);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(scanning);
+    when(campaignStorage.countItemsByState(CAMPAIGN_ID, CleanupItemState.CANDIDATE)).thenReturn(4900L);
+
+    CleanupCampaign served = campaignService.getCampaign(CAMPAIGN_ID);
+
+    assertEquals(451585, served.getProcessedCount(), "A dry run's node progress must be left alone");
+  }
+
+  @Test
+  void theArchiveNamespaceIsRegisteredBEFOREEveryArchiveWrite() throws Exception {
+    // Without it every writeFile under it fails on a NullPointerException raised
+    // inside DataStorage#create, which looks the namespace up by name and never
+    // guards the miss. It failed in the worst way: our own caller logs a WARN and
+    // keeps the item detail, so the retention tick retried every five minutes and
+    // NO report was ever archived — hence no item row was ever dropped either,
+    // the archive being deliberately written before the purge.
+    //
+    // AT THE POINT OF USE and not at startup, which was the first attempt and did
+    // not work: registration is a transactional write, the startup recovery runs
+    // on a CompletableFuture thread with no container established, and its own
+    // failure was swallowed as a WARN — so a registration that never worked looked
+    // exactly like one that did. Pinned as an ORDER here, because that is the
+    // whole property: registered, THEN written
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                       .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                            1000L)));
+    when(campaignStorage.hasItems(101L)).thenReturn(true);
+    when(campaignStorage.getItemsPage(eq(101L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+    when(fileService.writeFile(any())).thenReturn(archiveFileItem());
+
+    campaignService.applyRetention();
+
+    InOrder inOrder = inOrder(nameSpaceService, fileService);
+    inOrder.verify(nameSpaceService).createNameSpace(eq(CleanupCampaignService.FILE_NAMESPACE), anyString());
+    inOrder.verify(fileService).writeFile(any());
+  }
+
+  @Test
+  void aFailingNamespaceRegistrationKeepsTheItemDetail() throws Exception {
+    // NOT swallowed separately: any archiving failure means 'keep the item detail
+    // and retry next tick', and a registration failure is one of them. Swallowing
+    // it on its own is precisely what hid the original bug
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                       .thenReturn(List.of(terminalCampaign(101L,
+                                                                                                                                                            1000L)));
+    when(campaignStorage.hasItems(101L)).thenReturn(true);
+    doThrow(new IllegalStateException("No container here")).when(nameSpaceService)
+                                                          .createNameSpace(eq(CleanupCampaignService.FILE_NAMESPACE),
+                                                                           anyString());
+
+    campaignService.applyRetention();
+
+    verify(fileService, never()).writeFile(any());
+    verify(campaignStorage, never()).deleteItems(anyLong());
+    verify(campaignStorage, never()).saveCampaign(any());
+  }
+
+  @Test
+  void deletingACampaignDropsItsReportItsUnitsAndItsArchive() throws ObjectNotFoundException {
+    CleanupCampaign cancelled = campaign(CleanupCampaignState.CANCELLED);
+    cancelled.setArchiveFileId(77L);
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(cancelled);
+
+    campaignService.deleteCampaign(CAMPAIGN_ID);
+
+    // The archive FIRST, then the campaign row: both O(1), and the row is what
+    // makes the campaign unreachable — every item and unit query being scoped by
+    // campaign id. Deleting the row that names the archive before the archive
+    // itself would orphan the binary invisibly
+    InOrder inOrder = inOrder(fileService, campaignStorage);
+    inOrder.verify(fileService).deleteFile(77L);
+    inOrder.verify(campaignStorage).deleteCampaign(CAMPAIGN_ID);
+    // The report and the units follow, off the request thread
+    verify(campaignStorage, timeout(ASYNC_TIMEOUT_MS)).deleteItems(CAMPAIGN_ID);
+    verify(scanUnitStorage, timeout(ASYNC_TIMEOUT_MS)).deleteUnits(CAMPAIGN_ID);
+    // THE point of this test: a user's "keep" is a standing decision on their own
+    // file, durable in JCR and outliving the campaign that collected it. Deleting
+    // a campaign must never silently un-keep a file — the next campaign has to
+    // show those decisions again
+    verifyNoInteractions(cleanupJcrStorage);
+  }
+
+  @Test
+  void deletingACampaignNeverDropsItsReportONTheRequestThread() throws ObjectNotFoundException, InterruptedException {
+    // A SIMULATED campaign is the one carrying a FULL report — nothing purged
+    // yet, so its item table is at its maximum: hundreds of thousands of rows on
+    // the target corpus. No REST call may depend on work whose duration grows
+    // with the corpus, a reverse proxy cutting it long before it ends, which is
+    // why creation and execution hand their work to a worker too
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+    CountDownLatch dropped = new CountDownLatch(1);
+    AtomicReference<Thread> droppingThread = new AtomicReference<>();
+    doAnswer(invocation -> {
+      droppingThread.set(Thread.currentThread());
+      dropped.countDown();
+      return null;
+    }).when(campaignStorage).deleteItems(CAMPAIGN_ID);
+
+    campaignService.deleteCampaign(CAMPAIGN_ID);
+
+    assertTrue(dropped.await(ASYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS), "The report rows must still be dropped");
+    assertNotEquals(Thread.currentThread(),
+                    droppingThread.get(),
+                    "The report must be dropped OFF the calling thread, whatever its size");
+  }
+
+  @Test
+  void aDeleteInterruptedByAJvmDeathIsSweptAtTheNextStartup() {
+    // The one thing an asynchronous delete can leave behind: rows whose campaign
+    // row is already gone. No query can reach them (they are all scoped by
+    // campaign id), so nothing would ever notice them — in a feature whose whole
+    // purpose is reclaiming space
+    when(campaignStorage.getOrphanItemCampaignIds()).thenReturn(List.of(41L));
+    when(scanUnitStorage.getOrphanUnitCampaignIds()).thenReturn(List.of(41L, 42L));
+
+    campaignService.sweepOrphanRows();
+
+    // De-duplicated across the two tables: 41 is orphaned in both
+    verify(campaignStorage, times(1)).deleteItems(41L);
+    verify(scanUnitStorage, times(1)).deleteUnits(41L);
+    verify(campaignStorage, times(1)).deleteItems(42L);
+    verify(scanUnitStorage, times(1)).deleteUnits(42L);
+    verify(campaignStorage, never()).deleteCampaign(anyLong());
+  }
+
+  @Test
+  void nothingIsSweptWhenNoDeleteWasInterrupted() {
+    when(campaignStorage.getOrphanItemCampaignIds()).thenReturn(List.of());
+    when(scanUnitStorage.getOrphanUnitCampaignIds()).thenReturn(List.of());
+
+    campaignService.sweepOrphanRows();
+
+    verify(campaignStorage, never()).deleteItems(anyLong());
+    verify(scanUnitStorage, never()).deleteUnits(anyLong());
+  }
+
+  @Test
+  void deletingACampaignWithoutAnArchiveTouchesNoFile() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.SIMULATED));
+
+    campaignService.deleteCampaign(CAMPAIGN_ID);
+
+    verify(campaignStorage).deleteCampaign(CAMPAIGN_ID);
+    verifyNoInteractions(fileService);
+  }
+
+  @Test
+  void aCompletedCampaignIsNeverDeletable() throws ObjectNotFoundException {
+    when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(CleanupCampaignState.COMPLETED));
+
+    // It is the only record that an irreversible mass deletion happened, and the
+    // answer to "where did my file go?" months later. Ageing it out is the
+    // retention job's business, which archives the CSV first
+    assertEquals("cleanup.invalidState",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> campaignService.deleteCampaign(CAMPAIGN_ID)).getMessage());
+    verify(campaignStorage, never()).deleteCampaign(anyLong());
+    verify(campaignStorage, never()).deleteItems(anyLong());
+  }
+
+  @Test
+  void aRunningOrPublishedCampaignMustBeCancelledBeforeItCanBeDeleted() throws ObjectNotFoundException {
+    for (CleanupCampaignState state : List.of(CleanupCampaignState.DRY_RUN_RUNNING,
+                                              CleanupCampaignState.PUBLISHED,
+                                              CleanupCampaignState.LOCKED,
+                                              CleanupCampaignState.EXECUTING)) {
+      when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(campaign(state));
+
+      // A running campaign has a worker writing the very rows this would drop; a
+      // published one has told its users a date and collected their decisions
+      assertEquals("cleanup.invalidState",
+                   assertThrows(IllegalArgumentException.class,
+                                () -> campaignService.deleteCampaign(CAMPAIGN_ID)).getMessage(),
+                   state + " must not be deletable");
+    }
+    verify(campaignStorage, never()).deleteCampaign(anyLong());
   }
 
   @Test
@@ -1645,18 +1925,32 @@ class CleanupCampaignServiceTest {
 
   @Test
   void shouldRejectCampaignCreationOnOutOfBoundsParams() {
-    assertCreateRejected(new CleanupParams(0, 1048576L, 7, 5, List.of(), 200), "cleanup.invalidPeriodMonths");
-    assertCreateRejected(new CleanupParams(6, -1L, 7, 5, List.of(), 200), "cleanup.invalidMinFileSize");
-    assertCreateRejected(new CleanupParams(6, 1048576L, -1, 5, List.of(), 200), "cleanup.invalidGraceDays");
-    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 0, List.of(), 200), "cleanup.invalidMaxVersionsPerFile");
+    assertCreateRejected(new CleanupParams(0, 1048576L, 7, 5, List.of(), 200, null), "cleanup.invalidPeriodMonths");
+    assertCreateRejected(new CleanupParams(6, -1L, 7, 5, List.of(), 200, null), "cleanup.invalidMinFileSize");
+    assertCreateRejected(new CleanupParams(6, 1048576L, -1, 5, List.of(), 200, null), "cleanup.invalidGraceDays");
+    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 0, List.of(), 200, null), "cleanup.invalidMaxVersionsPerFile");
     verify(campaignStorage, never()).createCampaign(any());
   }
+
+  @Test
+  void aRequestedFanOutBeyondTheCeilingIsREFUSEDAndNotQuietlyClamped() {
+    // Refused rather than clamped, unlike the deployment property: a property is a
+    // typo somebody has to be told about in a log, a form field is a request from
+    // a person who is owed an answer. Silently running four readers when they
+    // asked for four hundred is how they conclude the setting does nothing
+    when(settingService.getMaxScanThreads()).thenReturn(20);
+
+    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, 400), "cleanup.invalidScanThreads");
+    assertCreateRejected(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, 0), "cleanup.invalidScanThreads");
+    verify(campaignStorage, never()).createCampaign(any());
+  }
+
 
   @Test
   void shouldAcceptCampaignCreationWithZeroGraceDays() throws ObjectNotFoundException {
     // Architect decision: a zero grace period IS valid (deadline elapses at
     // publication), the bounds validation must never forbid it
-    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200));
+    when(settingService.getEffectiveParams(any())).thenReturn(new CleanupParams(6, 1048576L, 0, 5, List.of(), 200, null));
     CleanupCampaign createdCampaign = campaign(CleanupCampaignState.DRAFT);
     when(campaignStorage.createCampaign(any())).thenReturn(createdCampaign);
     when(campaignStorage.getCampaign(CAMPAIGN_ID)).thenReturn(createdCampaign);
@@ -1788,6 +2082,70 @@ class CleanupCampaignServiceTest {
     inOrder.verify(campaignStorage).saveCampaign(campaign);
     inOrder.verify(campaignStorage).deleteItems(101L);
     assertEquals(77L, campaign.getArchiveFileId());
+  }
+
+  @Test
+  void archivingAReportStreamsItThroughAScratchFileAndLeavesNoneBehind() throws Exception {
+    // The report is streamed into a scratch file instead of being built in memory
+    // (a growing buffer, plus the array copied out of it, on a whole campaign's
+    // item detail). Two halves are asserted, since neither is visible from the
+    // outside otherwise: the file store gets a stream carrying the WHOLE report
+    // and a size that matches it, and the scratch file is gone afterwards — a
+    // retention tick that kept them would grow a second copy of every archived
+    // report on the disk.
+    //
+    // What this test does NOT claim is a bounded path: FileItem runs
+    // IOUtils.toByteArray over whatever it is handed, so the file store holds the
+    // whole CSV once whatever we do — visible right here, getAsStream() answering
+    // a ByteArrayInputStream and not the file stream that was passed in
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    CleanupCampaign campaign = terminalCampaign(101L, 1000L);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                       .thenReturn(List.of(campaign));
+    when(campaignStorage.hasItems(101L)).thenReturn(true);
+    CleanupCampaignItem item = item(CleanupItemState.PURGED);
+    item.setPath("/Users/j___/john/Private/archived.pdf");
+    when(campaignStorage.getItemsPage(eq(101L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+    AtomicReference<String> archived = new AtomicReference<>();
+    AtomicLong declaredSize = new AtomicLong(-1);
+    when(fileService.writeFile(any())).thenAnswer(invocation -> {
+      org.exoplatform.commons.file.model.FileItem written = invocation.getArgument(0);
+      // Read HERE, inside writeFile: the stream must still be open when the file
+      // store consumes it, which a try-with-resources closed too early would break
+      archived.set(new String(written.getAsStream().readAllBytes(), StandardCharsets.UTF_8));
+      declaredSize.set(written.getFileInfo().getSize());
+      return archiveFileItem();
+    });
+
+    campaignService.applyRetention();
+
+    assertTrue(archived.get().startsWith("nodeUuid,path,"),
+               "The file store must receive the real report, header first: " + archived.get());
+    assertTrue(archived.get().contains("/Users/j___/john/Private/archived.pdf"),
+               "The archived CSV must carry the campaign's item rows");
+    assertEquals(archived.get().getBytes(StandardCharsets.UTF_8).length,
+                 declaredSize.get(),
+                 "The declared size must be the scratch file's real length, the file store trusting it to read the stream");
+    assertEquals(List.of(),
+                 leftoverScratchFiles(101L),
+                 "The scratch CSV must be deleted on every path, archived or not");
+  }
+
+  @Test
+  void aFAILEDArchiveLeavesNoScratchFileBehindEither() throws Exception {
+    // The finally, pinned on the path that would leak: the archive throws AFTER
+    // the scratch file was written
+    when(settingService.getReportRetentionCampaigns()).thenReturn(0);
+    when(campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.COMPLETED, CleanupCampaignState.CANCELLED)))
+                                                                                                                       .thenReturn(List.of(terminalCampaign(102L,
+                                                                                                                                                            1000L)));
+    when(campaignStorage.hasItems(102L)).thenReturn(true);
+    when(campaignStorage.getItemsPage(eq(102L), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+    when(fileService.writeFile(any())).thenThrow(new IllegalStateException("Binary storage down"));
+
+    campaignService.applyRetention();
+
+    assertEquals(List.of(), leftoverScratchFiles(102L), "A failed archive must not leave its scratch CSV behind");
   }
 
   @Test
@@ -2244,6 +2602,15 @@ class CleanupCampaignServiceTest {
     return ownersCaptor.getValue();
   }
 
+  /** Scratch CSVs of a campaign still sitting in the temp directory. */
+  private List<String> leftoverScratchFiles(long campaignId) throws IOException {
+    try (Stream<Path> files = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+      return files.map(file -> file.getFileName().toString())
+                  .filter(name -> name.startsWith("cleanup-campaign-" + campaignId + "-") && name.endsWith(".csv"))
+                  .toList();
+    }
+  }
+
   private CleanupCampaign terminalCampaign(long id, long completedDate) {
     CleanupCampaign campaign = campaign(CleanupCampaignState.COMPLETED);
     campaign.setId(id);
@@ -2562,7 +2929,7 @@ class CleanupCampaignServiceTest {
     campaign.setId(CAMPAIGN_ID);
     campaign.setName("Q3 cleanup");
     campaign.setState(state);
-    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200));
+    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(), 200, null));
     return campaign;
   }
 

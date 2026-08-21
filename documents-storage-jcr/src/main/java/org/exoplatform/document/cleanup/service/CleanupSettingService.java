@@ -54,6 +54,17 @@ public class CleanupSettingService {
    */
   public static final int      MAX_SCAN_THREADS   = 20;
 
+  /** Lower bound of the purge checkpoint batch: never a batch of zero item. */
+  public static final int      MIN_PURGE_BATCH_SIZE = 1;
+
+  /**
+   * Upper bound of the purge checkpoint batch. Generous — the value only decides
+   * how much progress a JVM death loses and how coarsely the bar advances, never
+   * correctness — but bounded all the same, so a typo cannot turn the progress
+   * report off for a run measured in hours.
+   */
+  public static final int      MAX_PURGE_BATCH_SIZE = 1000;
+
   private static final Log     LOG                = ExoLogger.getLogger(CleanupSettingService.class);
 
   private static final Context CLEANUP_CONTEXT    = Context.GLOBAL.id("DocumentsCleanup");
@@ -91,6 +102,27 @@ public class CleanupSettingService {
   @Value("${documents.cleanup.batch.size:200}")
   private int                  batchSize;
 
+  /**
+   * Items a PURGE processes between two progress checkpoints, and deliberately
+   * an order of magnitude below {@link #batchSize}.
+   * <p>
+   * The two batches are not the same kind of thing. The scan's is a QUEUE
+   * ENVELOPE, sized for throughput: it decides how many nodes a reader walks
+   * before paying for a hand-off, and cutting it costs real time. The purge's is
+   * a CHECKPOINT boundary whose cost — one indexed keyset query, one row update,
+   * one commit — is invisible next to what dominates a purge item: deleting a
+   * multi-gigabyte node and its version history from JCR, measured in seconds.
+   * <p>
+   * At 200 the bar advanced in 200-item jumps, so a purge that was merely SLOW
+   * was indistinguishable from one that was STUCK — it reported '0% (0 / 5,083)'
+   * for as long as the first two hundred deletions took, while the reclaimed
+   * total beside it climbed into the gigabytes. Small also means a JVM death
+   * loses less: an item's outcome is saved per item, but only a checkpoint makes
+   * the progress it belongs to durable.
+   */
+  @Value("${documents.cleanup.purge.batch.size:5}")
+  private int                  purgeBatchSize;
+
   @Value("${documents.cleanup.report.retention.campaigns:3}")
   private int                  reportRetentionCampaigns;
 
@@ -118,7 +150,8 @@ public class CleanupSettingService {
                              getInt(GRACE_DAYS_KEY, defaultGraceDays),
                              getInt(MAX_VERSIONS_KEY, defaultMaxVersionsPerFile),
                              getExcludedPaths(),
-                             batchSize);
+                             batchSize,
+                             getScanThreads());
   }
 
   /**
@@ -137,7 +170,8 @@ public class CleanupSettingService {
                              overrides.getMaxVersionsPerFile() == null ? defaults.getMaxVersionsPerFile() :
                                                                        overrides.getMaxVersionsPerFile(),
                              overrides.getExcludedPaths() == null ? defaults.getExcludedPaths() : overrides.getExcludedPaths(),
-                             overrides.getBatchSize() == null ? defaults.getBatchSize() : overrides.getBatchSize());
+                             overrides.getBatchSize() == null ? defaults.getBatchSize() : overrides.getBatchSize(),
+                             overrides.getScanThreads() == null ? defaults.getScanThreads() : overrides.getScanThreads());
   }
 
   /**
@@ -167,8 +201,52 @@ public class CleanupSettingService {
     return batchSize;
   }
 
+  /**
+   * @return items a purge processes between two progress checkpoints, CLAMPED to
+   *         [{@link #MIN_PURGE_BATCH_SIZE}, {@link #MAX_PURGE_BATCH_SIZE}] — both
+   *         ends, and logged when corrected, like {@link #getScanThreads()}. It
+   *         floored only at 1 before, which left the two adjacent settings
+   *         asymmetric for no reason: an oversized purge batch is harmless today
+   *         (it merely coarsens checkpointing) and that is exactly the asymmetry
+   *         somebody copies into a setting where it is not
+   */
+  public int getPurgeBatchSize() {
+    if (purgeBatchSize < MIN_PURGE_BATCH_SIZE || purgeBatchSize > MAX_PURGE_BATCH_SIZE) {
+      int clamped = Math.min(Math.max(purgeBatchSize, MIN_PURGE_BATCH_SIZE), MAX_PURGE_BATCH_SIZE);
+      LOG.warn("documents.cleanup.purge.batch.size is configured to {}, outside the supported [{}, {}] range: using {} instead",
+               purgeBatchSize,
+               MIN_PURGE_BATCH_SIZE,
+               MAX_PURGE_BATCH_SIZE,
+               clamped);
+      return clamped;
+    }
+    return purgeBatchSize;
+  }
+
   public int getReportRetentionCampaigns() {
     return reportRetentionCampaigns;
+  }
+
+  /**
+   * Upper bound a campaign may ask for, which is the platform ceiling and NOT the
+   * configured default: an administrator tuning one run may go above what
+   * exo.properties sets, and no further.
+   * <p>
+   * WHY IT IS NOT DERIVED FROM THE CONNECTION POOLS, which was the first proposal:
+   * half of {@code min(JCR pool, JPA pool)} lands near 150 readers on this
+   * deployment (the {@code exo-jcr_portal} pool is provisioned at 300), an order
+   * of magnitude above what the repository survives. The binding constraint is
+   * JCR workspace-cache eviction at the million-entry cap and raw repository
+   * load, not connection exhaustion — and readers deliberately hold NO pooled
+   * connection across a walk, {@code CleanupScanService#commitThenPost}
+   * committing before every blocking post precisely so that ten readers cannot
+   * pin ten connections. A pool-derived cap would license the load it looks like
+   * it is protecting.
+   *
+   * @return the highest reader-thread count a campaign may request
+   */
+  public int getMaxScanThreads() {
+    return MAX_SCAN_THREADS;
   }
 
   /**

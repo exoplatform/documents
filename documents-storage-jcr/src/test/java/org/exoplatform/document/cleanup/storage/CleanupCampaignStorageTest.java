@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -66,6 +67,7 @@ import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 
 /**
@@ -899,27 +901,46 @@ class CleanupCampaignStorageTest {
   }
 
   @Test
-  void getItemsByStateAfterIdAsksTheKeysetQueryForTheIdsPastTheLastOneSeen() {
-    when(itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
-                                                                     eq(CANDIDATE_STATE),
-                                                                     anyLong(),
-                                                                     any())).thenReturn(List.of(itemEntity(USERS_ROOT_PATH,
-                                                                                                           2048,
-                                                                                                           42L)));
+  void getItemsByStateBiggestFirstPassesTheWHOLEKeysetPositionNotJustTheId() {
+    when(itemDAO.findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID),
+                                                     eq(CANDIDATE_STATE),
+                                                     any(),
+                                                     anyLong(),
+                                                     any())).thenReturn(List.of(itemEntity(USERS_ROOT_PATH, 2048, 42L)));
 
-    List<CleanupCampaignItem> items = storage.getItemsByStateAfterId(CAMPAIGN_ID, CleanupItemState.CANDIDATE, 41L, 200);
+    List<CleanupCampaignItem> items = storage.getItemsByStateBiggestFirst(CAMPAIGN_ID,
+                                                                         CleanupItemState.CANDIDATE,
+                                                                         5_000L,
+                                                                         41L,
+                                                                         200);
 
     assertEquals(1, items.size());
     assertEquals(42L, items.get(0).getId());
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    verify(itemDAO).findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(eq(CAMPAIGN_ID),
-                                                                        eq(CANDIDATE_STATE),
-                                                                        eq(41L),
-                                                                        pageableCaptor.capture());
+    // BOTH halves of the position reach the query: ordering by a computed value
+    // means the id alone no longer identifies where the previous batch stopped,
+    // and dropping the size half would restart every batch from the biggest row
+    verify(itemDAO).findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID),
+                                                        eq(CANDIDATE_STATE),
+                                                        eq(5_000L),
+                                                        eq(41L),
+                                                        pageableCaptor.capture());
     // The batch size is the page SIZE, and the page index is always 0: the
-    // position comes from the id, never from an offset
+    // position comes from the keyset, never from an offset
     assertEquals(0, pageableCaptor.getValue().getPageNumber());
     assertEquals(200, pageableCaptor.getValue().getPageSize());
+  }
+
+  @Test
+  void getItemsByStateBiggestFirstStartsWithANullSizeCursor() {
+    when(itemDAO.findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID), eq(CANDIDATE_STATE), any(), anyLong(), any()))
+                                                                                                                    .thenReturn(List.of());
+
+    storage.getItemsByStateBiggestFirst(CAMPAIGN_ID, CleanupItemState.CANDIDATE, null, 0L, 200);
+
+    // NULL and not Long.MAX_VALUE: the first batch must be 'no lower bound at
+    // all', so the biggest row in the table is included whatever its size
+    verify(itemDAO).findByStateOrderedByReclaimableBytes(eq(CAMPAIGN_ID), eq(CANDIDATE_STATE), isNull(), eq(0L), any());
   }
 
   @Test
@@ -1008,10 +1029,13 @@ class CleanupCampaignStorageTest {
   private void assertQuerySort(Sort sort) {
     List<Sort.Order> orders = sort.toList();
     assertEquals(2, orders.size());
-    assertEquals(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY, orders.get(0).getProperty());
+    assertEquals(CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY, orders.get(0).getProperty());
     assertEquals(Sort.Direction.DESC, orders.get(0).getDirection());
-    assertTrue(orders.get(0) instanceof JpaSort.JpaOrder jpaOrder && jpaOrder.isUnsafe(),
-               "A computed expression must travel as an unsafe JpaSort order, or Spring Data treats it as a property path");
+    // An ORDINARY property order now, and it must stay one: the figure is a
+    // persisted column, so the unsafe-JpaSort workaround the computed CASE needed
+    // is gone. An unsafe order here would mean somebody reintroduced an expression
+    assertFalse(orders.get(0) instanceof JpaSort.JpaOrder jpaOrder && jpaOrder.isUnsafe(),
+                "The reclaimable order must travel as a plain property, no longer as an unsafe expression");
     assertEquals("id", orders.get(1).getProperty());
     assertEquals(Sort.Direction.ASC, orders.get(1).getDirection());
   }
@@ -1040,6 +1064,10 @@ class CleanupCampaignStorageTest {
     entity.setOwnerIdentityId(ownerIdentityId);
     entity.setVersionsSize(versionsSize);
     entity.setAction(action.name());
+    // Set LAST, and set at all, because it is what both the database and the merge
+    // now rank on: production recomputes it in toEntity on every save, so a fixture
+    // leaving it at 0 would rank every row equal and make this assertion vacuous
+    entity.setReclaimableBytes(CleanupSizeUtil.reclaimableBytes(action.name(), fileSize, versionsSize));
     return entity;
   }
 
@@ -1084,9 +1112,10 @@ class CleanupCampaignStorageTest {
   }
 
   private Comparator<CleanupCampaignItemEntity> databaseKeyComparator(String property) {
-    if (CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY.equals(property)) {
-      return Comparator.comparingLong(row -> CleanupAction.DELETE.name().equals(row.getAction()) ? row.getFileSize()
-          + row.getVersionsSize() : row.getVersionsSize());
+    if (CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY.equals(property)) {
+      // Restated from the STORED column rather than recomputed: this stands in for
+      // what the database would order by, and the database orders by the column
+      return Comparator.comparingLong(CleanupCampaignItemEntity::getReclaimableBytes);
     }
     if ("id".equals(property)) {
       return Comparator.comparingLong(CleanupCampaignItemEntity::getId);
@@ -1115,6 +1144,7 @@ class CleanupCampaignStorageTest {
     entity.setFileSize(fileSize);
     entity.setVersionsSize(0);
     entity.setAction(CleanupAction.DELETE.name());
+    entity.setReclaimableBytes(CleanupSizeUtil.reclaimableBytes(CleanupAction.DELETE.name(), fileSize, 0));
     entity.setState(CANDIDATE_STATE);
     return entity;
   }
@@ -1202,7 +1232,7 @@ class CleanupCampaignStorageTest {
     campaign.setId(CAMPAIGN_ID);
     campaign.setName("Spring cleanup");
     campaign.setState(CleanupCampaignState.SIMULATED);
-    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(USERS_ROOT_PATH), null));
+    campaign.setParams(new CleanupParams(6, 1048576L, 7, 5, List.of(USERS_ROOT_PATH), null, null));
     campaign.setStartedDate(1000L);
     campaign.setPublishedDate(0);
     campaign.setTotalCount(100);

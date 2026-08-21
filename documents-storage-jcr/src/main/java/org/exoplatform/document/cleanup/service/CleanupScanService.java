@@ -46,7 +46,9 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignSummary;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.model.CleanupNodeFailures;
 import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.storage.CleanupScanUnitStorage;
@@ -288,6 +290,34 @@ public class CleanupScanService {
    */
   private final Set<Long>              runningCampaigns           = ConcurrentHashMap.newKeySet();
 
+  /**
+   * Reader threads currently WALKING the repository, counted across campaigns and
+   * across runs — incremented by the walk itself, not by the pool that submitted
+   * it.
+   * <p>
+   * It exists because a campaign STATE cannot bound a thread. Cancel a running
+   * dry run and the campaign leaves {@code DRY_RUN_RUNNING} at once, so every
+   * state-based guard (see {@code CleanupCampaignService#checkNoWorkerRunning})
+   * opens immediately — while the readers of that run may still be walking:
+   * {@link #awaitReaders} deliberately ABANDONS readers that do not answer their
+   * interrupt, because an interrupt does nothing to a {@code query.execute()} in
+   * flight or to a long resume fast-forward. The administrator's natural
+   * sequence — the scan looks stuck, cancel it, start a corrected one — would
+   * otherwise land a second full fan-out next to a first one that never stopped,
+   * on a corpus where ONE sequential walk already saturated both JCR caches at
+   * their million-entry cap.
+   * <p>
+   * Counted here rather than acquired as a permit ON PURPOSE. A permit taken in
+   * the reader would make the new scan WAIT for threads that are, by definition,
+   * the ones that ignored their interrupt — a wait with no bound, holding the
+   * single-thread coordinator, blocking every other campaign's scan behind a
+   * cancelled one's stuck query. Reading the count instead lets the new scan
+   * start immediately with a SMALLER fan-out (see {@link #readerCountFor}), which
+   * bounds the load without ever making progress depend on a thread nobody can
+   * stop.
+   */
+  private final AtomicInteger          activeReaders              = new AtomicInteger();
+
   @PreDestroy
   public void shutdown() {
     executorService.shutdownNow();
@@ -355,7 +385,7 @@ public class CleanupScanService {
       List<CleanupScanUnit> units = scanUnitStorage.getUnitsToProcess(campaignId, MAX_SCAN_UNIT_ATTEMPTS);
 
       // (b) ESTIMATE — in parallel, on the very pool the readers will use
-      int readerCount = Math.max(1, Math.min(settingService.getScanThreads(), units.size()));
+      int readerCount = readerCountFor(units.size(), campaign.getParams());
       readerPool = Executors.newFixedThreadPool(readerCount, threadFactory("cleanup-scan-reader-" + campaignId));
       long total = estimateUnits(campaignId, units, readerPool);
       long processedAtStart = scanUnitStorage.sumScannedCount(campaignId);
@@ -423,7 +453,17 @@ public class CleanupScanService {
       // re-counted every genuinely empty bucket — a first-letter bucket of /Users
       // holding no file — on EVERY resume, for a count already known to be 0
       if (unit.getTotalCount() == null) {
-        countings.put(unit, readerPool.submit(() -> cleanupJcrStorage.countFiles(unit.getUnitPath())));
+        // Counted like a walk: these tasks run on the very same pool, hit the very
+        // same repository, and are abandoned by the same shutdownNow when the
+        // coordinator unwinds during the estimate phase
+        countings.put(unit, readerPool.submit(() -> {
+          activeReaders.incrementAndGet();
+          try {
+            return cleanupJcrStorage.countFiles(unit.getUnitPath());
+          } finally {
+            activeReaders.decrementAndGet();
+          }
+        }));
       }
     }
     for (Map.Entry<CleanupScanUnit, Future<Long>> counting : countings.entrySet()) {
@@ -435,6 +475,63 @@ public class CleanupScanService {
     // Summed by the database over EVERY unit, the ones already DONE included:
     // the denominator is the whole tree, not what is left to walk
     return scanUnitStorage.sumTotalCount(campaignId);
+  }
+
+  /**
+   * Fan-out of THIS run, reduced by the readers still walking for an earlier one.
+   * <p>
+   * THREE distinct quantities, which an earlier version of this method conflated
+   * under one name:
+   * <ul>
+   * <li>{@code documents.cleanup.scan.threads} is a DEFAULT — what a campaign
+   * that expressed no preference gets, and what pre-fills the creation form. It
+   * is not a cap, and calling it one is what produced the bug this rewrites: the
+   * budget was {@code max(default, request)}, so a campaign asking above the
+   * default silently raised the very number the leftovers were deducted from</li>
+   * <li>{@code CleanupSettingService#MAX_SCAN_THREADS} is the CAP, enforced when
+   * the campaign is created ({@code CleanupCampaignService#validateScanThreads})
+   * and again here</li>
+   * <li>{@code budget} is what THIS run may put on the repository: its own
+   * request, capped. Leftover readers are subtracted from that — the load being
+   * bounded is what the repository takes at any instant, and the administrator
+   * who asked for eight readers asked for eight, not for eight plus whatever a
+   * cancelled run left behind.</li>
+   * </ul>
+   * So the total concurrent walk never exceeds what this campaign asked for
+   * (worst case its request plus the floor below), and never twice the intended
+   * load — which is the whole point of counting threads at all.
+   * <p>
+   * {@link #activeReaders} is what makes the bound real rather than inferred from
+   * a campaign state that a cancel clears instantly.
+   * <p>
+   * The floor of ONE is deliberate: even with every permit spoken for, the new
+   * scan starts and walks, one subtree at a time, rather than blocking on threads
+   * that already proved they do not stop. So the worst case is 'budget + 1',
+   * against 'budget x number of cancelled runs' before — knowingly imperfect,
+   * and imperfect in the direction that cannot wedge a campaign.
+   * <p>
+   * Logged at WARN whenever anything is still in flight, whether or not it
+   * shrinks this run: a reader outliving its run is invisible otherwise, and the
+   * scan that pays for it is the one that has to be able to say so.
+   *
+   * @param unitCount number of units this run has to walk
+   * @param params    this campaign's parameters, whose scanThreads is its request
+   * @return reader count for this run, at least 1
+   */
+  private int readerCountFor(int unitCount, CleanupParams params) {
+    int defaultThreads = settingService.getScanThreads();
+    int requested = params == null || params.getScanThreads() == null ? defaultThreads : params.getScanThreads();
+    int budget = Math.max(1, Math.min(settingService.getMaxScanThreads(), requested));
+    int wanted = Math.max(1, Math.min(budget, unitCount));
+    int inFlight = activeReaders.get();
+    if (inFlight <= 0) {
+      return wanted;
+    }
+    int granted = Math.max(1, Math.min(wanted, budget - inFlight));
+    LOG.warn("{} cleanup scan reader(s) of a previous run are still walking the repository (they outlived their run, having"
+        + " not answered its interrupt): this scan starts with {} reader(s) instead of {}, so the {} reader(s) it asked for"
+        + " are not exceeded.", inFlight, granted, wanted, budget);
+    return granted;
   }
 
   /**
@@ -522,16 +619,20 @@ public class CleanupScanService {
    */
   protected void readUnit(ScanRun run, CleanupScanUnit unit) {
     long unitId = unit.getId();
+    // Counted around the WALK itself, so a reader that outlived its run — the
+    // whole reason this count exists — keeps counting until it really stops
+    activeReaders.incrementAndGet();
     try {
       cleanupJcrStorage.scanRoot(unit.getUnitPath(),
                                  unit.getLastScannedPath(),
                                  run.batchSize,
                                  run.params,
-                                 (candidates, lastScannedPath, scannedCount) -> commitThenPost(run,
-                                                                                              ScanBatch.progress(unitId,
-                                                                                                                 candidates,
-                                                                                                                 lastScannedPath,
-                                                                                                                 scannedCount)));
+                                 (candidates, lastScannedPath, scannedCount, nodeFailures) -> commitThenPost(run,
+                                                                                                            ScanBatch.progress(unitId,
+                                                                                                                               candidates,
+                                                                                                                               lastScannedPath,
+                                                                                                                               scannedCount,
+                                                                                                                               nodeFailures)));
       if (!run.isStopped()) {
         commitThenPost(run, ScanBatch.terminal(unitId, CleanupScanUnitState.DONE, null));
       }
@@ -541,6 +642,8 @@ public class CleanupScanService {
                run.campaignId,
                e);
       commitThenPost(run, ScanBatch.terminal(unitId, CleanupScanUnitState.FAILED, SCAN_UNIT_FAILED_REASON));
+    } finally {
+      activeReaders.decrementAndGet();
     }
   }
 
@@ -692,7 +795,7 @@ public class CleanupScanService {
           continue;
         }
         campaignStorage.saveCandidates(run.campaignId, batch.candidates);
-        scanUnitStorage.updateUnitProgress(batch.unitId, batch.lastScannedPath, run.addScanned(batch));
+        scanUnitStorage.updateUnitProgress(batch.unitId, batch.lastScannedPath, run.addScanned(batch), batch.nodeFailures);
         processed += batch.scannedCount;
         long reported = Math.min(processed, run.total);
         long etaSeconds = CleanupEtaUtil.computeEtaSeconds(run.startTime, run.processedAtStart, reported, run.total);
@@ -800,7 +903,13 @@ public class CleanupScanService {
       campaign.setTotalCount(total);
       campaign.setProcessedCount(walked);
       campaign.setEtaSeconds(0);
-      if (settledFailedCount > 0) {
+      long skippedNodeCount = scanUnitStorage.sumEvalFailureCount(campaignId);
+      if (skippedNodeCount > 0) {
+        LOG.error("The dry-run of cleanup campaign {} could not EVALUATE {} node(s) it walked: those files are missing from the"
+            + " report even though their subtrees finished. The report is flagged INCOMPLETE and the per-unit failures name the"
+            + " cause. Whoever publishes it must know it does not cover every file it visited.", campaignId, skippedNodeCount);
+      }
+      if (settledFailedCount > 0 || skippedNodeCount > 0) {
         LOG.error("The dry-run of cleanup campaign {} is reported as simulated but INCOMPLETE: {} of its {} scan units could"
             + " not be walked in {} attempts, so {} of the {} counted nodes are MISSING from the report. Whoever publishes it"
             + " must know the report does not cover the whole tree.",
@@ -810,7 +919,7 @@ public class CleanupScanService {
                   MAX_SCAN_UNIT_ATTEMPTS,
                   total - walked,
                   total);
-        campaign.setSummaryJson(buildScanSummaryJson(settledFailedCount));
+        campaign.setSummaryJson(buildScanSummaryJson(settledFailedCount, skippedNodeCount));
       }
       campaignLifecycle.transition(campaign, CleanupCampaignState.SIMULATED);
     }
@@ -825,10 +934,11 @@ public class CleanupScanService {
    * two fields FORWARD when it overwrites the column at COMPLETED — so the
    * verdict outlives the purge instead of being erased by it.
    */
-  private String buildScanSummaryJson(long settledFailedCount) {
+  private String buildScanSummaryJson(long settledFailedCount, long skippedNodeCount) {
     CleanupCampaignSummary summary = new CleanupCampaignSummary();
     summary.setScanIncomplete(true);
     summary.setFailedScanUnitCount(settledFailedCount);
+    summary.setSkippedNodeCount(skippedNodeCount);
     return JsonUtils.toJsonString(summary);
   }
 
@@ -858,6 +968,26 @@ public class CleanupScanService {
       return List.of();
     }
     return scanUnitStorage.countFailuresByReason(campaign.getId());
+  }
+
+  /**
+   * Per-unit breakdown of a campaign's dry run.
+   * <p>
+   * Deliberately NOT gated on anything, unlike {@link #getScanFailures}: that one
+   * reports subtrees definitively missing from a finished report, so it must wait
+   * for the verdict; this one exists to be read WHILE the scan runs, and gating it
+   * would remove it exactly when it is needed. A scan whose node percentage sits
+   * at 100% with the campaign still DRY_RUN_RUNNING is either re-walking a unit or
+   * held open by one, and only these counts tell an administrator which.
+   *
+   * @param campaign campaign whose unit breakdown is wanted
+   * @return the breakdown, zeroed for a campaign whose units were never planned
+   */
+  public CleanupScanUnitProgress getScanUnitProgress(CleanupCampaign campaign) {
+    if (campaign == null) {
+      return new CleanupScanUnitProgress(0, 0, 0, 0, 0, 0, 0, false, 0, List.of(), List.of());
+    }
+    return scanUnitStorage.getUnitProgress(campaign.getId(), MAX_SCAN_UNIT_ATTEMPTS);
   }
 
   /**
@@ -1123,7 +1253,7 @@ public class CleanupScanService {
      * Sentinel closing the queue, posted by the coordinator once every reader
      * finished. Compared by IDENTITY, never by value.
      */
-    static final ScanBatch         POISON_PILL        = new ScanBatch(0, null, null, 0, null, null);
+    static final ScanBatch         POISON_PILL        = new ScanBatch(0, null, null, 0, null, null, null);
 
     final long                     campaignId;
 
@@ -1239,26 +1369,35 @@ public class CleanupScanService {
 
     final String                 failureReason;
 
+    /** Nodes this batch could not evaluate — persisted with its checkpoint. */
+    final CleanupNodeFailures    nodeFailures;
+
     ScanBatch(long unitId,
               List<CleanupCandidate> candidates,
               String lastScannedPath,
               long scannedCount,
               CleanupScanUnitState terminalState,
-              String failureReason) {
+              String failureReason,
+              CleanupNodeFailures nodeFailures) {
       this.unitId = unitId;
       this.candidates = candidates;
       this.lastScannedPath = lastScannedPath;
       this.scannedCount = scannedCount;
       this.terminalState = terminalState;
       this.failureReason = failureReason;
+      this.nodeFailures = nodeFailures;
     }
 
-    static ScanBatch progress(long unitId, List<CleanupCandidate> candidates, String lastScannedPath, long scannedCount) {
-      return new ScanBatch(unitId, new ArrayList<>(candidates), lastScannedPath, scannedCount, null, null);
+    static ScanBatch progress(long unitId,
+                              List<CleanupCandidate> candidates,
+                              String lastScannedPath,
+                              long scannedCount,
+                              CleanupNodeFailures nodeFailures) {
+      return new ScanBatch(unitId, new ArrayList<>(candidates), lastScannedPath, scannedCount, null, null, nodeFailures);
     }
 
     static ScanBatch terminal(long unitId, CleanupScanUnitState terminalState, String failureReason) {
-      return new ScanBatch(unitId, null, null, 0, terminalState, failureReason);
+      return new ScanBatch(unitId, null, null, 0, terminalState, failureReason, null);
     }
 
   }

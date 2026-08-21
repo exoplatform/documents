@@ -16,6 +16,8 @@
  */
 package org.exoplatform.document.cleanup.rest.util;
 
+import java.util.List;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 
@@ -26,10 +28,15 @@ import org.exoplatform.document.cleanup.model.CleanupCampaignItem;
 import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.model.CleanupScanUnit;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.rest.model.CampaignComparisonRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignFailureGroupRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignItemRestEntity;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitProgressRestEntity;
+import org.exoplatform.document.cleanup.rest.model.CampaignScanUnitRestEntity;
 import org.exoplatform.document.cleanup.rest.model.CampaignRestEntity;
 import org.exoplatform.document.cleanup.rest.model.KeepItemsResultRestEntity;
 import org.exoplatform.document.cleanup.rest.model.MyItemsSummaryRestEntity;
@@ -59,6 +66,7 @@ public class CleanupEntityBuilder {
       entity.setGraceDays(params.getGraceDays());
       entity.setMaxVersionsPerFile(params.getMaxVersionsPerFile());
       entity.setExcludedPaths(params.getExcludedPaths());
+      entity.setScanThreads(params.getScanThreads());
     }
     entity.setStartedDate(toNullable(campaign.getStartedDate()));
     entity.setPublishedDate(toNullable(campaign.getPublishedDate()));
@@ -138,6 +146,7 @@ public class CleanupEntityBuilder {
     fillOwner(entity, item.getOwnerIdentityId(), identityManager);
     entity.setFileSize(item.getFileSize());
     entity.setVersionsSize(item.getVersionsSize());
+    entity.setReclaimableBytes(CleanupSizeUtil.reclaimableBytes(item.getAction(), item.getFileSize(), item.getVersionsSize()));
     entity.setLastModifiedDate(toNullable(item.getLastModifiedDate()));
     entity.setCreatedDate(toNullable(item.getCreatedDate()));
     entity.setAction(item.getAction().name());
@@ -194,6 +203,49 @@ public class CleanupEntityBuilder {
    * @param failureGroup grouped failure to map
    * @return the grouped-failure DTO
    */
+  /**
+   * @param progress per-unit breakdown of a dry run
+   * @return its REST representation, with the in-flight units mapped along
+   */
+  public static CampaignScanUnitProgressRestEntity build(CleanupScanUnitProgress progress) {
+    CampaignScanUnitProgressRestEntity entity = new CampaignScanUnitProgressRestEntity();
+    entity.setUnitCount(progress.getUnitCount());
+    entity.setPendingCount(progress.getPendingCount());
+    entity.setRunningCount(progress.getRunningCount());
+    entity.setDoneCount(progress.getDoneCount());
+    entity.setFailedCount(progress.getFailedCount());
+    entity.setSettledCount(progress.getSettledCount());
+    entity.setMaxAttemptCount(progress.getMaxAttemptCount());
+    entity.setScanComplete(progress.isScanComplete());
+    entity.setSkippedNodeCount(progress.getSkippedNodeCount());
+    entity.setInFlightUnits(buildUnits(progress.getInFlightUnits()));
+    entity.setEvaluationFailures(buildUnits(progress.getEvaluationFailures()));
+    return entity;
+  }
+
+  /**
+   * @param unit one scan unit
+   * @return its REST representation. The unit id is deliberately NOT carried: the
+   *         console has no endpoint taking one, and a subtree path is what an
+   *         administrator can act on
+   */
+  private static List<CampaignScanUnitRestEntity> buildUnits(List<CleanupScanUnit> units) {
+    return units == null ? List.of() : units.stream().map(CleanupEntityBuilder::build).toList();
+  }
+
+  public static CampaignScanUnitRestEntity build(CleanupScanUnit unit) {
+    CampaignScanUnitRestEntity entity = new CampaignScanUnitRestEntity();
+    entity.setUnitPath(unit.getUnitPath());
+    entity.setLastScannedPath(unit.getLastScannedPath());
+    entity.setScannedCount(unit.getScannedCount());
+    entity.setTotalCount(unit.getTotalCount());
+    entity.setAttemptCount(unit.getAttemptCount());
+    entity.setEvalFailureCount(unit.getEvalFailureCount());
+    entity.setEvalFailureReason(unit.getEvalFailureReason());
+    entity.setEvalFailureDetail(unit.getEvalFailureDetail());
+    return entity;
+  }
+
   public static CampaignFailureGroupRestEntity build(CleanupFailureGroup failureGroup) {
     CampaignFailureGroupRestEntity entity = new CampaignFailureGroupRestEntity();
     entity.setReason(failureGroup.getReason());
@@ -252,6 +304,27 @@ public class CleanupEntityBuilder {
   }
 
   /**
+   * The platform DEFAULTS as the creation form consumes them: the same field names
+   * a campaign carries, so the form fills from either shape, plus the ceiling the
+   * scan-thread input must not exceed.
+   *
+   * @param params        platform default parameters
+   * @param maxScanThreads highest reader-thread count the server accepts
+   * @return the defaults, as a campaign-shaped payload
+   */
+  public static CampaignRestEntity buildDefaults(CleanupParams params, int maxScanThreads) {
+    CampaignRestEntity entity = new CampaignRestEntity();
+    entity.setPeriodMonths(params.getPeriodMonths());
+    entity.setMinFileSizeBytes(params.getMinFileSizeBytes());
+    entity.setGraceDays(params.getGraceDays());
+    entity.setMaxVersionsPerFile(params.getMaxVersionsPerFile());
+    entity.setExcludedPaths(params.getExcludedPaths());
+    entity.setScanThreads(params.getScanThreads());
+    entity.setMaxScanThreads(maxScanThreads);
+    return entity;
+  }
+
+  /**
    * @param entity creation request body
    * @return partial parameter overrides (null fields defaulted downstream)
    */
@@ -261,7 +334,9 @@ public class CleanupEntityBuilder {
                              entity.getGraceDays(),
                              entity.getMaxVersionsPerFile(),
                              entity.getExcludedPaths(),
-                             null);
+                             // Batch size is never client-settable
+                             null,
+                             entity.getScanThreads());
   }
 
   private static Long toNullable(long millis) {

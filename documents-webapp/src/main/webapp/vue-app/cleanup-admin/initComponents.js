@@ -19,6 +19,8 @@ import CleanupAdmin from './components/CleanupAdmin.vue';
 import CampaignList from './components/CampaignList.vue';
 import CampaignCreateDrawer from './components/CampaignCreateDrawer.vue';
 import CampaignDetail from './components/CampaignDetail.vue';
+import CampaignScanFailuresDrawer from './components/CampaignScanFailuresDrawer.vue';
+import CampaignScanUnitsDrawer from './components/CampaignScanUnitsDrawer.vue';
 import CampaignStats from './components/CampaignStats.vue';
 import CampaignItemsTable from './components/CampaignItemsTable.vue';
 import CampaignCompareView from './components/CampaignCompareView.vue';
@@ -29,6 +31,8 @@ const components = {
   'document-cleanup-campaign-create-drawer': CampaignCreateDrawer,
   'document-cleanup-campaign-detail': CampaignDetail,
   'document-cleanup-campaign-stats': CampaignStats,
+  'document-cleanup-campaign-scan-units-drawer': CampaignScanUnitsDrawer,
+  'document-cleanup-campaign-scan-failures-drawer': CampaignScanFailuresDrawer,
   'document-cleanup-campaign-items-table': CampaignItemsTable,
   'document-cleanup-campaign-compare-view': CampaignCompareView,
 };

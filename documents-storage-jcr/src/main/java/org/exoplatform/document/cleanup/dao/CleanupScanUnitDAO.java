@@ -18,9 +18,12 @@ package org.exoplatform.document.cleanup.dao;
 
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import org.exoplatform.document.cleanup.entity.CleanupScanUnitEntity;
 
@@ -90,6 +93,73 @@ public interface CleanupScanUnitDAO extends JpaRepository<CleanupScanUnitEntity,
   @Query("SELECT u.failureReason, COUNT(u) FROM CleanupScanUnit u" +
       " WHERE u.campaignId = :campaignId AND u.state = :state GROUP BY u.failureReason")
   List<Object[]> countFailuresByReason(@Param("campaignId")
+  long campaignId, @Param("state")
+  String state);
+
+  /**
+   * Drops every unit row of a campaign, in ONE statement (declared, not derived —
+   * see {@code CleanupCampaignItemDAO#deleteByCampaignId} for why that matters).
+   * Only ever called when the campaign itself is being deleted, and only from a
+   * state no worker can be walking in.
+   */
+  @Modifying
+  @Transactional
+  @Query("DELETE FROM CleanupScanUnit u WHERE u.campaignId = :campaignId")
+  void deleteByCampaignId(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * Campaign ids that have unit rows but NO campaign row: the scan-unit half of
+   * {@code CleanupCampaignItemDAO#findOrphanCampaignIds}, swept at startup for
+   * the same reason.
+   */
+  @Query("SELECT DISTINCT u.campaignId FROM CleanupScanUnit u"
+      + " WHERE u.campaignId NOT IN (SELECT c.id FROM CleanupCampaign c)")
+  List<Long> findOrphanCampaignIds();
+
+  /**
+   * Nodes the scan of a campaign walked but could not EVALUATE, summed over its
+   * units — the count of files silently missing from its report.
+   */
+  @Query("SELECT COALESCE(SUM(u.evalFailureCount), 0) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId")
+  long sumEvalFailureCount(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * The units of a campaign that lost at least one node, worst first. Bounded by
+   * the caller: a campaign can plan one unit per space, and a repository-wide
+   * problem makes every one of them fail.
+   */
+  @Query("SELECT u FROM CleanupScanUnit u WHERE u.campaignId = :campaignId AND u.evalFailureCount > 0"
+      + " ORDER BY u.evalFailureCount DESC, u.id ASC")
+  List<CleanupScanUnitEntity> findUnitsWithEvalFailures(@Param("campaignId")
+  long campaignId, Pageable pageable);
+
+  /**
+   * Per-STATE unit counts of a campaign, in ONE grouped query (rows: state, unit
+   * count) — never by loading the unit rows, whose number is one per space plus
+   * one per {@code /Users} bucket.
+   */
+  @Query("SELECT u.state, COUNT(u) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId GROUP BY u.state")
+  List<Object[]> countByState(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * Deepest walk attempt any unit of a campaign has spent — how many times the
+   * most-retried subtree was re-walked, which is what tells an administrator that
+   * a scan is going round in circles rather than progressing.
+   */
+  @Query("SELECT COALESCE(MAX(u.attemptCount), 0) FROM CleanupScanUnit u WHERE u.campaignId = :campaignId")
+  long maxAttemptCount(@Param("campaignId")
+  long campaignId);
+
+  /**
+   * The units of a campaign in one given state, oldest id first. Used for the
+   * RUNNING ones only, so the result is bounded by the reader count — do NOT
+   * reach for it with DONE on a large campaign.
+   */
+  @Query("SELECT u FROM CleanupScanUnit u WHERE u.campaignId = :campaignId AND u.state = :state ORDER BY u.id ASC")
+  List<CleanupScanUnitEntity> findByState(@Param("campaignId")
   long campaignId, @Param("state")
   String state);
 

@@ -34,7 +34,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.document.cleanup.constant.CleanupAction;
@@ -51,6 +50,7 @@ import org.exoplatform.document.cleanup.model.CleanupCandidate;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.util.CleanupSizeUtil;
 import org.exoplatform.document.cleanup.util.CleanupConstants;
 
 import io.meeds.social.util.JsonUtils;
@@ -244,26 +244,28 @@ public class CleanupCampaignStorage {
   }
 
   /**
-   * KEYSET page of the items of a campaign in a given state: the ones past
-   * {@code lastId}, oldest id first. The execution worker drives its batch loop
-   * from the last id it saw instead of re-reading page 0 — see the DAO javadoc:
-   * that is what makes its forward progress structural instead of depending on
-   * every item leaving the state.
+   * KEYSET page of the items of a campaign in a given state, BIGGEST FIRST — see
+   * the DAO javadoc for why the cursor is a {@code (reclaimableBytes, id)} pair
+   * rather than an id, and why that still cannot revisit a row.
    *
-   * @param campaignId campaign identifier
-   * @param state item state
-   * @param lastId last id already seen (0 to start from the beginning)
-   * @param batchSize maximum number of items to read
-   * @return the next items, id ascending, empty when the state is exhausted
+   * @param campaignId           campaign identifier
+   * @param state                item state
+   * @param lastReclaimableBytes reclaimable bytes of the last row seen, null to
+   *                             start from the biggest
+   * @param lastId               id of the last row seen, breaking size ties
+   * @param batchSize            maximum number of items to read
+   * @return the next items, biggest first, empty when the state is exhausted
    */
-  public List<CleanupCampaignItem> getItemsByStateAfterId(long campaignId,
-                                                         CleanupItemState state,
-                                                         long lastId,
-                                                         int batchSize) {
-    return itemDAO.findByCampaignIdAndStateAndIdGreaterThanOrderByIdAsc(campaignId,
-                                                                        state.name(),
-                                                                        lastId,
-                                                                        PageRequest.of(0, batchSize))
+  public List<CleanupCampaignItem> getItemsByStateBiggestFirst(long campaignId,
+                                                              CleanupItemState state,
+                                                              Long lastReclaimableBytes,
+                                                              long lastId,
+                                                              int batchSize) {
+    return itemDAO.findByStateOrderedByReclaimableBytes(campaignId,
+                                                        state.name(),
+                                                        lastReclaimableBytes,
+                                                        lastId,
+                                                        PageRequest.of(0, batchSize))
                   .stream()
                   .map(this::toModel)
                   .toList();
@@ -509,6 +511,34 @@ public class CleanupCampaignStorage {
   }
 
   /**
+   * Campaign ids whose item rows outlived their campaign row — see
+   * {@code CleanupCampaignItemDAO#findOrphanCampaignIds}.
+   *
+   * @return the orphaned campaign ids, empty when there is nothing to sweep
+   */
+  public List<Long> getOrphanItemCampaignIds() {
+    return itemDAO.findOrphanCampaignIds();
+  }
+
+  /**
+   * Drops the campaign row itself — there is no cascade, by design: a cascade
+   * would make a campaign row deletable without anyone deciding what happens to
+   * the report and the archived CSV hanging off it.
+   * <p>
+   * On the DELETE path this row goes FIRST and its item/unit rows follow
+   * asynchronously (see {@code CleanupCampaignService#deleteCampaign}): dropping
+   * the row is what makes the campaign instantly unreachable, and no query can
+   * reach an item row whose campaign is gone. The retention path is the other way
+   * round — it drops items and KEEPS the row, the archived CSV being the report
+   * from then on.
+   *
+   * @param campaignId campaign identifier
+   */
+  public void deleteCampaign(long campaignId) {
+    campaignDAO.deleteById(campaignId);
+  }
+
+  /**
    * Ancestor chain of an event path within the scan roots: every prefix of the
    * path ending at a '/' boundary strictly below the containing scan root, plus
    * the path itself. Computed in Java so the DAO can match paths EXACTLY
@@ -573,14 +603,17 @@ public class CleanupCampaignStorage {
   /**
    * Translates a REQUESTED ordering into the one the DATABASE can apply, which
    * today means exactly one key: the logical
-   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY} becomes an
-   * {@code ORDER BY} over {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES_ORDER_BY}
-   * — the very expression every reclaimable aggregate sums, so the list is
-   * ranked by the same definition of 'reclaimable' the campaign totals add up.
-   * A plain {@code Sort.by(field)} cannot express it: it is a computed CASE, not
-   * a column, hence {@link JpaSort#unsafe(Sort.Direction, String...)} (legal
-   * here, and only here, because both item queries are declared {@code @Query}
-   * ones).
+   * {@link CleanupConstants#RECLAIMABLE_SORT_KEY} becomes an {@code ORDER BY} on
+   * {@link CleanupCampaignItemDAO#RECLAIMABLE_BYTES}, the very column every
+   * reclaimable aggregate sums, so the list is ranked by the same definition of
+   * 'reclaimable' the campaign totals add up.
+   * <p>
+   * IT USED TO NEED {@code JpaSort.unsafe}, and no longer does. The key was a
+   * computed CASE that no plain {@code Sort.by(field)} could express, which
+   * forced an unsafe sort and the parenthesization workaround around it (Spring
+   * Data prefixes an unsafe property with the query alias unless it holds a
+   * '('). Now that the figure is a persisted, indexed column, this is an ordinary
+   * property sort — one less workaround, and an ORDER BY an index can serve.
    * <p>
    * Every other key is passed through untouched, direction and POSITION
    * included: the id tiebreaker the REST layer appends must stay the LAST key,
@@ -596,7 +629,7 @@ public class CleanupCampaignStorage {
     List<Sort.Order> orders = new ArrayList<>();
     for (Sort.Order order : sort) {
       if (CleanupConstants.RECLAIMABLE_SORT_KEY.equals(order.getProperty())) {
-        JpaSort.unsafe(order.getDirection(), CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY).forEach(orders::add);
+        orders.add(new Sort.Order(order.getDirection(), CleanupCampaignItemDAO.RECLAIMABLE_BYTES_PROPERTY));
       } else {
         orders.add(order);
       }
@@ -624,8 +657,18 @@ public class CleanupCampaignStorage {
    * from one managing few.
    */
   static long reclaimableBytes(CleanupCampaignItemEntity item) {
-    return CleanupAction.DELETE.name().equals(item.getAction()) ? item.getFileSize() + item.getVersionsSize()
-                                                                : item.getVersionsSize();
+    return CleanupSizeUtil.reclaimableBytes(item.getAction(), item.getFileSize(), item.getVersionsSize());
+  }
+
+  /**
+   * The stored figure of a row, which is what the database orders and sums on.
+   * Read rather than recomputed on purpose: the in-memory comparator and the SQL
+   * ORDER BY must rank a page identically, and reading the very column the query
+   * sorted by is the only way that holds by construction rather than by
+   * agreement between two expressions.
+   */
+  static long storedReclaimableBytes(CleanupCampaignItemEntity item) {
+    return item.getReclaimableBytes();
   }
 
   /**
@@ -676,11 +719,12 @@ public class CleanupCampaignStorage {
       case "state" -> Comparator.comparing(CleanupCampaignItemEntity::getState, Comparator.nullsLast(String::compareTo));
       case "action" -> Comparator.comparing(CleanupCampaignItemEntity::getAction, Comparator.nullsLast(String::compareTo));
       case "reclaimedBytes" -> Comparator.comparingLong(CleanupCampaignItemEntity::getReclaimedBytes);
-      // Both spellings of the SAME key: the logical one the caller requests, and
-      // the JPQL expression querySort() turns it into — so the merge keeps
-      // mirroring the database whichever of the two orderings reaches it
-      case CleanupConstants.RECLAIMABLE_SORT_KEY, CleanupCampaignItemDAO.RECLAIMABLE_BYTES_ORDER_BY ->
-        Comparator.comparingLong(CleanupCampaignStorage::reclaimableBytes);
+      // ONE label, where there used to be two: the logical key the caller requests
+      // and the property querySort() turns it into are now the same string, the
+      // figure having become an entity attribute. Both spellings were needed while
+      // it was a JPQL CASE expression. The equality is pinned by a test rather
+      // than left to look like a coincidence
+      case CleanupConstants.RECLAIMABLE_SORT_KEY -> Comparator.comparingLong(CleanupCampaignStorage::storedReclaimableBytes);
       default -> null;
     };
   }
@@ -698,6 +742,10 @@ public class CleanupCampaignStorage {
     entity.setLastModifiedDate(toDate(candidate.getLastModifiedTime()));
     entity.setCreatedDate(toDate(candidate.getCreatedTime()));
     entity.setAction(candidate.getAction().name());
+    // The ONE write point of the derived column, with its sibling below: recomputed
+    // from CleanupSizeUtil on every save, so no path can persist a row whose stored
+    // figure disagrees with the action and sizes beside it
+    entity.setReclaimableBytes(reclaimableBytes(entity));
     if (candidate.isExempted()) {
       // A previously-exempted file stays visible as 'Kept' in every campaign,
       // carrying the mixin's decision metadata when readable
@@ -721,7 +769,11 @@ public class CleanupCampaignStorage {
                                          entity.getGraceDays(),
                                          entity.getMaxVersionsPerFile(),
                                          fromJsonArray(entity.getExcludedPaths()),
-                                         null));
+                                         null,
+                                         // 0 is 'never set': the campaign runs on
+                                         // the platform default, as it did before
+                                         // the column existed
+                                         entity.getScanThreads() == 0 ? null : entity.getScanThreads()));
     campaign.setStartedDate(toMillis(entity.getStartedDate()));
     campaign.setPublishedDate(toMillis(entity.getPublishedDate()));
     campaign.setLockDate(toMillis(entity.getLockDate()));
@@ -748,6 +800,7 @@ public class CleanupCampaignStorage {
       entity.setGraceDays(params.getGraceDays() == null ? 0 : params.getGraceDays());
       entity.setMaxVersionsPerFile(params.getMaxVersionsPerFile() == null ? 0 : params.getMaxVersionsPerFile());
       entity.setExcludedPaths(toJsonArray(params.getExcludedPaths()));
+      entity.setScanThreads(params.getScanThreads() == null ? 0 : params.getScanThreads());
     }
     entity.setStartedDate(toDate(campaign.getStartedDate()));
     entity.setPublishedDate(toDate(campaign.getPublishedDate()));
@@ -799,6 +852,10 @@ public class CleanupCampaignStorage {
     entity.setLastModifiedDate(toDate(item.getLastModifiedDate()));
     entity.setCreatedDate(toDate(item.getCreatedDate()));
     entity.setAction(item.getAction().name());
+    // Recomputed here and not carried from the model: a revalidation refreshes an
+    // item's action and sizes right before the purge saves it, and the stored
+    // figure has to follow them or the ordering and the totals drift apart
+    entity.setReclaimableBytes(reclaimableBytes(entity));
     entity.setState(item.getState().name());
     entity.setComputedAt(toDate(item.getComputedAt()));
     entity.setDecidedBy(item.getDecidedBy());

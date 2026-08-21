@@ -48,6 +48,7 @@ import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupExemptionResult;
 import org.exoplatform.document.cleanup.listener.CleanupJcrObservationListener;
 import org.exoplatform.document.cleanup.model.CleanupCandidate;
+import org.exoplatform.document.cleanup.model.CleanupNodeFailures;
 import org.exoplatform.document.cleanup.model.CleanupParams;
 import org.exoplatform.document.cleanup.model.CleanupPurgeResult;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
@@ -231,6 +232,7 @@ public class CleanupJcrStorage {
       NodeIterator nodes = query.execute().getNodes();
       boolean fastForwarding = StringUtils.isNotBlank(resumeAfterPath);
       List<CleanupCandidate> candidates = new ArrayList<>();
+      CleanupNodeFailures nodeFailures = new CleanupNodeFailures();
       int scannedInBatch = 0;
       String lastScannedPath = null;
       while (nodes.hasNext()) { // NOSONAR
@@ -258,18 +260,23 @@ public class CleanupJcrStorage {
             candidates.add(candidate);
           }
         } catch (Exception e) {
-          LOG.warn("Error evaluating cleanup candidate node, skipping it", e);
+          // COUNTED, not just logged. This used to be a WARN and nothing else, so
+          // the file disappeared from the report while its unit finished DONE and
+          // the campaign claimed a complete scan
+          nodeFailures.record(e);
+          LOG.warn("Error evaluating cleanup candidate node {}, skipping it", path, e);
         }
         if (++scannedInBatch == batchSize) {
-          if (!batchConsumer.onBatch(candidates, lastScannedPath, scannedInBatch)) {
+          if (!batchConsumer.onBatch(candidates, lastScannedPath, scannedInBatch, nodeFailures)) {
             return;
           }
           candidates = new ArrayList<>();
+          nodeFailures = new CleanupNodeFailures();
           scannedInBatch = 0;
         }
       }
       if (scannedInBatch > 0) {
-        batchConsumer.onBatch(candidates, lastScannedPath, scannedInBatch);
+        batchConsumer.onBatch(candidates, lastScannedPath, scannedInBatch, nodeFailures);
       }
     } catch (Exception e) {
       // Propagate so the scan worker leaves the campaign resumable from its
@@ -294,9 +301,16 @@ public class CleanupJcrStorage {
      *          resume checkpoint), never null since a batch scans at least one
      *          node
      * @param scannedCount number of nodes scanned by the batch
+     * @param nodeFailures nodes of the batch whose candidacy could NOT be
+     *          evaluated, with the first failure that did it. Empty on a healthy
+     *          batch, and reported per batch rather than per unit so the count
+     *          survives an interruption like the checkpoint next to it does
      * @return true to continue the scan, false to abort the scan of this root
      */
-    boolean onBatch(List<CleanupCandidate> candidates, String lastScannedPath, int scannedCount);
+    boolean onBatch(List<CleanupCandidate> candidates,
+                    String lastScannedPath,
+                    int scannedCount,
+                    CleanupNodeFailures nodeFailures);
 
   }
 
@@ -585,11 +599,19 @@ public class CleanupJcrStorage {
         return CleanupPurgeResult.skipped("cleanup.notVersionable");
       }
       VersionHistory versionHistory = node.getVersionHistory();
+      Version baseVersion = node.getBaseVersion();
+      if (versionHistory == null || baseVersion == null) {
+        // Same guard as the scan side, for the same reason: mix:versionable can be
+        // carried by a node that was never checked in, and dereferencing a null
+        // base version here threw at PURGE time — where the item would be recorded
+        // SKIPPED with a stack trace instead of "nothing to trim"
+        return CleanupPurgeResult.skipped("cleanup.noVersionHistory");
+      }
       // ONE walk of the history reading names and OWN creation dates only — no
       // frozen node — then the frozen-node hop for the removal set alone, each
       // version measured immediately before its own removal
       for (Version version : selectVersionsToRemove(versionHistory,
-                                                    node.getBaseVersion().getName(),
+                                                    baseVersion.getName(),
                                                     params,
                                                     System.currentTimeMillis())) {
         long versionSize = getVersionSize(version);
@@ -898,10 +920,31 @@ public class CleanupJcrStorage {
   }
 
   /**
-   * Convenience overload reading the base version name off the node itself.
+   * Convenience overload reading the version history and the base version name
+   * off the node itself.
+   * <p>
+   * BOTH are null-guarded, and neither guard is defensive padding. Production
+   * showed {@code getBaseVersion()} answering null on nodes that carry
+   * {@code mix:versionable} — a mixin added without the node ever being checked
+   * in, which JCR allows and this corpus has fourteen years of. The NPE that
+   * followed was caught by the per-node handler in {@link #scanRoot}, logged as a
+   * WARN and the file DROPPED from the report: a silent under-count, on exactly
+   * the population this feature exists to reclaim.
+   * <p>
+   * A node with no history or no base version has no version to remove, which is
+   * the honest answer and not a failure — so it returns empty rather than
+   * throwing, and the file stays a candidate on its own content dates.
    */
   private List<Version> selectVersionsToRemove(Node node, CleanupParams params, long nowMillis) throws RepositoryException {
-    return selectVersionsToRemove(node.getVersionHistory(), node.getBaseVersion().getName(), params, nowMillis);
+    VersionHistory versionHistory = node.getVersionHistory();
+    Version baseVersion = node.getBaseVersion();
+    if (versionHistory == null || baseVersion == null) {
+      LOG.debug("Node {} carries mix:versionable with no {}: no version to trim",
+                node.getPath(),
+                versionHistory == null ? "version history" : "base version");
+      return List.of();
+    }
+    return selectVersionsToRemove(versionHistory, baseVersion.getName(), params, nowMillis);
   }
 
   /**

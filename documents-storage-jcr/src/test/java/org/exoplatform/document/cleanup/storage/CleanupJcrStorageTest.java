@@ -188,7 +188,7 @@ class CleanupJcrStorageTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    params = new CleanupParams(6, 1024L, 7, 5, List.of(), 100);
+    params = new CleanupParams(6, 1024L, 7, 5, List.of(), 100, null);
     // Property value normally injected by Spring through the @Value fallback
     setField("jcrSessionTimeout", SESSION_TIMEOUT);
     when(repositoryService.getDefaultRepository()).thenReturn(repository);
@@ -222,7 +222,7 @@ class CleanupJcrStorageTest {
     List<String> batchCheckpoints = new ArrayList<>();
     List<Integer> batchScannedCounts = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot(USERS_PATH, PATH_B, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, PATH_B, 2, params, (candidates, lastScannedPath, scannedCount, nodeFailures) -> {
       batchCheckpoints.add(lastScannedPath);
       batchScannedCounts.add(scannedCount);
       return true;
@@ -248,7 +248,7 @@ class CleanupJcrStorageTest {
     when(queryResult.getNodes()).thenReturn(nodes);
     List<String> batchCheckpoints = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot(USERS_PATH, PATH_B, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, PATH_B, 2, params, (candidates, lastScannedPath, scannedCount, nodeFailures) -> {
       batchCheckpoints.add(lastScannedPath);
       return true;
     });
@@ -265,7 +265,7 @@ class CleanupJcrStorageTest {
     List<String> batchCheckpoints = new ArrayList<>();
     List<Integer> batchScannedCounts = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot(USERS_PATH, null, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 2, params, (candidates, lastScannedPath, scannedCount, nodeFailures) -> {
       batchCheckpoints.add(lastScannedPath);
       batchScannedCounts.add(scannedCount);
       return true;
@@ -286,7 +286,7 @@ class CleanupJcrStorageTest {
     when(queryResult.getNodes()).thenReturn(nodes);
     List<String> batchCheckpoints = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot(USERS_PATH, null, 2, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 2, params, (candidates, lastScannedPath, scannedCount, nodeFailures) -> {
       batchCheckpoints.add(lastScannedPath);
       return false;
     });
@@ -304,9 +304,7 @@ class CleanupJcrStorageTest {
                                                   PATH_B,
                                                   2,
                                                   params,
-                                                  (candidates,
-                                                   lastScannedPath,
-                                                   scannedCount) -> true));
+                                                  (candidates, lastScannedPath, scannedCount, nodeFailures) -> true));
   }
 
   @Test
@@ -317,7 +315,7 @@ class CleanupJcrStorageTest {
     when(queryResult.getNodes()).thenReturn(nodes);
     List<CleanupCandidate> emitted = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount, nodeFailures) -> {
       emitted.addAll(candidates);
       return true;
     });
@@ -339,7 +337,7 @@ class CleanupJcrStorageTest {
     when(queryResult.getNodes()).thenReturn(nodes);
     List<CleanupCandidate> emitted = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount, nodeFailures) -> {
       emitted.addAll(candidates);
       return true;
     });
@@ -630,6 +628,27 @@ class CleanupJcrStorageTest {
     CleanupPurgeResult result = cleanupJcrStorage.deleteNode(NODE_UUID_GONE);
 
     assertEquals(CleanupItemState.GONE, result.getState());
+    verify(session, never()).save();
+  }
+
+  @Test
+  void purgeVersionsSkipsAVersionableNodeThatWasNeverCheckedIn() throws RepositoryException {
+    Node node = mock(Node.class);
+    when(session.getNodeByIdentifier(NODE_UUID_VERSIONED)).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
+    VersionHistory versionHistory = mock(VersionHistory.class);
+    when(node.getVersionHistory()).thenReturn(versionHistory);
+    // JCR allows mix:versionable on a node that was never checked in, and this
+    // corpus has fourteen years of them. Dereferencing this null threw a
+    // NullPointerException that the caller recorded as a stack trace instead of
+    // "nothing to trim"
+    when(node.getBaseVersion()).thenReturn(null);
+
+    CleanupPurgeResult result = cleanupJcrStorage.purgeVersions(NODE_UUID_VERSIONED, purgeParams(1));
+
+    assertEquals(CleanupItemState.SKIPPED, result.getState());
+    assertEquals("cleanup.noVersionHistory", result.getFailureReason());
+    verify(versionHistory, never()).removeVersion(anyString());
     verify(session, never()).save();
   }
 
@@ -1184,7 +1203,7 @@ class CleanupJcrStorageTest {
     when(queryResult.getNodes()).thenReturn(nodes);
     List<CleanupCandidate> emitted = new ArrayList<>();
 
-    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount) -> {
+    cleanupJcrStorage.scanRoot(USERS_PATH, null, 10, params, (candidates, lastScannedPath, scannedCount, nodeFailures) -> {
       emitted.addAll(candidates);
       return true;
     });
@@ -1382,7 +1401,7 @@ class CleanupJcrStorageTest {
    * early-returns or fails'.
    */
   static Stream<Arguments> perItemPrimitives() {
-    CleanupParams primitiveParams = new CleanupParams(6, 1024L, 7, 5, List.of(), 100);
+    CleanupParams primitiveParams = new CleanupParams(6, 1024L, 7, 5, List.of(), 100, null);
     return Stream.of(Arguments.of("addExemptionMixin",
                                   (Function<CleanupJcrStorage, Object>) storage -> storage.addExemptionMixin(NODE_UUID_DOOMED,
                                                                                                              "john"),
@@ -1646,7 +1665,7 @@ class CleanupJcrStorageTest {
    * is about.
    */
   private static CleanupParams purgeParams(int maxVersionsPerFile) {
-    return new CleanupParams(6, 1024L, 7, maxVersionsPerFile, List.of(), 100);
+    return new CleanupParams(6, 1024L, 7, maxVersionsPerFile, List.of(), 100, null);
   }
 
   private long monthsAgo(int months) {

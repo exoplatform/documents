@@ -89,13 +89,15 @@
       <template slot="item.action" slot-scope="{item}">
         {{ $t(`cleanup.item.action.${item.action}`) }}
       </template>
-      <!-- Mirrors the server's RECLAIMABLE_BYTES exactly: a PURGE_VERSIONS row
-           reclaims its versions, a DELETE row reclaims its content AND its whole
-           version history, which the delete destroys too. Getting this wrong is
+      <!-- The SERVER's figure, no longer a copy of its CASE in JavaScript: a
+           PURGE_VERSIONS row reclaims its versions, a DELETE row reclaims its
+           content AND the whole history the delete destroys. Getting it wrong is
            visible on this very screen — the banner totals the same expression, so
-           a row showing less than it contributes makes the list stop adding up -->
+           a row showing less than it contributes makes the list stop adding up —
+           and the way to not get it wrong is to have ONE definition, computed
+           where the aggregates and the ordering are (CleanupSizeUtil) -->
       <template slot="item.reclaimableBytes" slot-scope="{item}">
-        {{ $cleanupSize(item.action === 'PURGE_VERSIONS' ? item.versionsSize : item.fileSize + item.versionsSize) }}
+        {{ $cleanupSize(item.reclaimableBytes) }}
       </template>
       <template slot="item.state" slot-scope="{item}">
         <v-chip

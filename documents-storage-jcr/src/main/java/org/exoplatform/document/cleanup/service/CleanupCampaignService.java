@@ -16,25 +16,30 @@
  */
 package org.exoplatform.document.cleanup.service;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.StringUtils;
@@ -48,6 +53,7 @@ import org.springframework.stereotype.Service;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.file.services.FileService;
+import org.exoplatform.commons.file.services.NameSpaceService;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.document.cleanup.constant.CleanupAction;
 import org.exoplatform.document.cleanup.constant.CleanupCampaignState;
@@ -62,9 +68,11 @@ import org.exoplatform.document.cleanup.model.CleanupComparison;
 import org.exoplatform.document.cleanup.model.CleanupComparisonBucket;
 import org.exoplatform.document.cleanup.model.CleanupFailureGroup;
 import org.exoplatform.document.cleanup.model.CleanupParams;
+import org.exoplatform.document.cleanup.model.CleanupScanUnitProgress;
 import org.exoplatform.document.cleanup.model.CleanupRevalidation;
 import org.exoplatform.document.cleanup.model.CleanupUserSummary;
 import org.exoplatform.document.cleanup.storage.CleanupCampaignStorage;
+import org.exoplatform.document.cleanup.storage.CleanupScanUnitStorage;
 import org.exoplatform.document.cleanup.storage.CleanupJcrStorage;
 import org.exoplatform.document.cleanup.util.CleanupIdentityUtil;
 import org.exoplatform.document.cleanup.util.CleanupRevalidationUtil;
@@ -75,9 +83,11 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
+import io.meeds.common.ContainerTransactional;
 import io.meeds.social.util.JsonUtils;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 /**
  * Cleanup campaigns lifecycle: dry-run launch, publication (single active
@@ -88,6 +98,18 @@ import jakarta.annotation.PostConstruct;
 @Service
 public class CleanupCampaignService {
 
+  /**
+   * File-store namespace the archived CSV reports live in.
+   * <p>
+   * It MUST be registered with {@code NameSpaceService} before a file is written
+   * under it: {@code DataStorage#create} looks the namespace up by name and
+   * dereferences the result without a guard, so an unregistered name fails with a
+   * raw NullPointerException wrapped in a FileStorageException — 'Error while
+   * writing file cleanup-campaign-N.csv', once per retention tick, forever. Every
+   * archive attempt failed that way, which also meant the retention job never
+   * dropped a single item row: it archives BEFORE purging, deliberately, and the
+   * archive never succeeded. See {@link #ensureFileNamespace()}.
+   */
   public static final String                      FILE_NAMESPACE              = "documentsCleanup";
 
   /**
@@ -170,6 +192,45 @@ public class CleanupCampaignService {
                                                                                         CleanupCampaignState.LOCKED,
                                                                                         CleanupCampaignState.EXECUTING);
 
+  /**
+   * At most ONE of these platform-wide: the states in which a campaign owns a
+   * JCR-heavy worker. Distinct from {@link #ACTIVE_STATES}, which guards the
+   * single-PUBLISHED invariant — a published campaign in its grace period runs
+   * nothing, and blocking simulations for the two weeks it lasts would break the
+   * repeat-and-compare workflow the feature is specified around.
+   * <p>
+   * Two scans at once is ten more reader threads on the same repository, on a
+   * corpus where ONE sequential walk already saturated both JCR caches at their
+   * million-entry cap. A scan next to a purge is worse than slow: the scan reads a
+   * tree the purge is deleting under it, and reports a simulation nobody can act
+   * on.
+   * <p>
+   * WHAT THIS GUARD CANNOT SEE IS THREADS, and that gap is closed elsewhere. A
+   * cancel takes the campaign out of {@code DRY_RUN_RUNNING} at once, so this
+   * check opens while that run's readers may still be walking — the scan
+   * coordinator deliberately abandons readers that do not answer their interrupt.
+   * The fan-out is therefore bounded by counting the walking threads themselves
+   * ({@code CleanupScanService#activeReaders}, read by
+   * {@code CleanupScanService#readerCountFor}), and this state guard remains what
+   * it is good at: keeping a scan and a purge apart, and refusing a second run to
+   * the administrator up front instead of letting them queue.
+   */
+  private static final List<CleanupCampaignState> WORKER_STATES               = List.of(CleanupCampaignState.DRY_RUN_RUNNING,
+                                                                                        CleanupCampaignState.EXECUTING);
+
+  /**
+   * The states a campaign may be DELETED from: nothing was promised to a user and
+   * nothing was destroyed, so the row is a draft or a discarded simulation.
+   * <p>
+   * COMPLETED is deliberately absent. It is the only record that an irreversible
+   * mass deletion happened, and the answer to "where did my file go?" months
+   * later. Ageing those out is the retention job's business — it archives the CSV
+   * before dropping the detail rows — not a delete button's.
+   */
+  private static final List<CleanupCampaignState> DELETABLE_STATES            = List.of(CleanupCampaignState.DRAFT,
+                                                                                        CleanupCampaignState.SIMULATED,
+                                                                                        CleanupCampaignState.CANCELLED);
+
   private static final List<CleanupCampaignState> TERMINAL_STATES             = List.of(CleanupCampaignState.COMPLETED,
                                                                                         CleanupCampaignState.CANCELLED);
 
@@ -208,6 +269,14 @@ public class CleanupCampaignService {
   @Autowired
   private CleanupCampaignStorage                  campaignStorage;
 
+  /**
+   * Same domain's storage, injected directly rather than reached through
+   * {@code CleanupScanService}: the only thing this Service asks of it is dropping
+   * the unit rows of a campaign it is deleting.
+   */
+  @Autowired
+  private CleanupScanUnitStorage                  scanUnitStorage;
+
   @Autowired
   private CleanupSettingService                   settingService;
 
@@ -232,6 +301,24 @@ public class CleanupCampaignService {
   @Autowired
   private FileService                             fileService;
 
+  @Autowired
+  private NameSpaceService                        nameSpaceService;
+
+  /**
+   * Off-request worker for the row collection that follows a campaign delete. Its
+   * OWN executor and not the purge one: a delete must not queue behind a purge
+   * that runs for hours, and two deletes are better serialized than concurrent —
+   * one bulk DELETE at a time on a shared database.
+   */
+  private final ExecutorService                   deleteExecutor              = Executors.newSingleThreadExecutor();
+
+  @PreDestroy
+  public void shutdown() {
+    // In-flight row collection is dropped rather than waited for; the startup
+    // sweep is what finishes it (see sweepOrphanRows)
+    deleteExecutor.shutdownNow();
+  }
+
   @PostConstruct
   public void init() {
     // Asynchronously: JCR may not be ready yet at Spring context startup
@@ -249,6 +336,7 @@ public class CleanupCampaignService {
       if (!campaignStorage.getCampaignsByStates(List.of(CleanupCampaignState.PUBLISHED)).isEmpty()) {
         registerObservationListenerWithRetry();
       }
+      sweepOrphanRows();
       resumeStalledWorkers();
     } catch (Exception e) {
       LOG.warn("Error recovering cleanup campaigns after restart", e);
@@ -341,18 +429,205 @@ public class CleanupCampaignService {
     String validatedName = validateName(name);
     CleanupParams params = settingService.getEffectiveParams(overrides);
     validateParams(params);
-    CleanupCampaign campaign = new CleanupCampaign();
-    campaign.setName(validatedName);
-    campaign.setState(CleanupCampaignState.DRAFT);
-    campaign.setParams(params);
-    campaign.setStartedDate(System.currentTimeMillis());
-    campaign = campaignStorage.createCampaign(campaign);
-    try {
-      scanService.startScan(campaign.getId());
-    } catch (ObjectNotFoundException e) {
-      throw new IllegalStateException("Freshly created cleanup campaign not found", e);
+    // Validated BEFORE the lock — nothing below it may block on user input — and
+    // the row is created INSIDE it: creating outside would leave a DRAFT campaign
+    // behind on every refusal, which is a row an administrator can neither run nor
+    // understand
+    synchronized (publishLock) {
+      // The SAME lock as publishCampaign and retryCampaign, so every decision to
+      // start work is serialized against every other: two administrators clicking
+      // at once used to both pass a check neither had transitioned yet (TOCTOU)
+      checkNoWorkerRunning();
+      CleanupCampaign campaign = new CleanupCampaign();
+      campaign.setName(validatedName);
+      campaign.setState(CleanupCampaignState.DRAFT);
+      campaign.setParams(params);
+      campaign.setStartedDate(System.currentTimeMillis());
+      campaign = campaignStorage.createCampaign(campaign);
+      try {
+        scanService.startScan(campaign.getId());
+      } catch (ObjectNotFoundException e) {
+        throw new IllegalStateException("Freshly created cleanup campaign not found", e);
+      }
+      return withAggregates(campaignStorage.getCampaign(campaign.getId()));
     }
-    return withAggregates(campaignStorage.getCampaign(campaign.getId()));
+  }
+
+  /**
+   * Deletes a campaign and everything hanging off it: its item rows, its scan unit
+   * rows and its archived CSV.
+   * <p>
+   * Allowed from {@link #DELETABLE_STATES} only — a draft or a discarded
+   * simulation, where nothing was promised to a user and nothing was destroyed.
+   * Anything else answers {@code cleanup.invalidState}: a running campaign has a
+   * worker writing the very rows this would drop, a PUBLISHED or LOCKED one has
+   * told its users a date and collected their decisions, and a COMPLETED one is
+   * the record of an irreversible deletion (see {@link #DELETABLE_STATES}). Cancel
+   * first, then delete, is the path for the non-terminal ones.
+   * <p>
+   * The JCR exemption mixins are NOT touched, and that is the important half: a
+   * user's "keep" is a standing decision on their own file, deliberately durable
+   * in JCR and deliberately outliving the campaign that collected it. Deleting a
+   * campaign must never silently un-keep a file — the next campaign has to see
+   * those decisions again.
+   *
+   * @param campaignId campaign identifier
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public void deleteCampaign(long campaignId) throws ObjectNotFoundException {
+    CleanupCampaign campaign = getCampaign(campaignId);
+    if (!DELETABLE_STATES.contains(campaign.getState())) {
+      throw new IllegalArgumentException("cleanup.invalidState");
+    }
+    // The archive FIRST: a failure here must not leave a campaign row pointing at
+    // a file that is gone, and a binary orphaned in the file store is invisible
+    // once the row naming it is deleted. O(1), like the row delete below — and a
+    // delete that died in between is simply re-clicked: deleting an already-gone
+    // archive is logged and swallowed
+    deleteArchive(campaign);
+    // Then the row, which is what makes the campaign GONE: every item and unit
+    // query is scoped by campaign id, so nothing can reach — or act on — what is
+    // left behind, and the caller is answered a truthful 204 rather than being
+    // held for the report
+    campaignStorage.deleteCampaign(campaignId);
+    LOG.info("Cleanup campaign {} ({}) deleted from state {}: its archive is gone and the campaign is unreachable, its"
+        + " report and scan unit rows are being dropped in the background."
+        + " The exemption mixins its users had set are NOT removed.", campaignId, campaign.getName(), campaign.getState());
+    deleteExecutor.execute(() -> deleteCampaignRowsTransactional(campaignId));
+  }
+
+  /**
+   * Drops the report and scan unit rows of an already-deleted campaign, off the
+   * request thread.
+   * <p>
+   * WHY IT IS NOT ON THE REQUEST THREAD: a SIMULATED campaign is the one carrying
+   * a FULL report — nothing has been purged yet, so its item table is at its
+   * maximum, hundreds of thousands of rows on the corpus this feature exists for.
+   * No REST call may depend on work whose duration grows with the corpus (a
+   * reverse proxy will cut it), which is why creation and execution answer 202 and
+   * hand their progress to CometD. Deleting is the third such operation, and the
+   * only one that used to answer synchronously.
+   * <p>
+   * The DELETE still answers 204 and not 202, because unlike those two nothing
+   * about the campaign is still pending: the campaign row is gone before the
+   * answer, so the resource really is deleted. What runs here is the collection of
+   * rows nothing can reach any more.
+   * <p>
+   * A JVM death in this window leaves those rows behind — visible to nobody, and
+   * holding the very space this feature reclaims — so they are swept at startup
+   * ({@link #sweepOrphanRows()}) rather than left to accumulate. That is also why
+   * the campaign row is deleted BEFORE these and not after: an orphaned item row
+   * is recoverable garbage, whereas a campaign whose report is half gone is a row
+   * an administrator can still publish.
+   *
+   * @param campaignId campaign identifier
+   */
+  @ContainerTransactional
+  public void deleteCampaignRowsTransactional(long campaignId) {
+    try {
+      campaignStorage.deleteItems(campaignId);
+      scanUnitStorage.deleteUnits(campaignId);
+    } catch (Exception e) {
+      LOG.warn("Error dropping the report and scan unit rows of the deleted cleanup campaign {}:"
+          + " the campaign itself is gone, and those rows are swept at the next restart", campaignId, e);
+    }
+  }
+
+  /**
+   * Drops the item and scan unit rows whose campaign row no longer exists.
+   * <p>
+   * Their only source is a JVM death in the middle of a delete (see
+   * {@link #deleteCampaignRowsTransactional(long)}), which is rare — and exactly
+   * why it must be swept rather than watched for: nothing else would ever notice
+   * rows that no query can reach, in a feature whose entire purpose is reclaiming
+   * space. Logged at WARN naming the campaigns, never silently.
+   */
+  @ContainerTransactional
+  public void sweepOrphanRows() {
+    Set<Long> orphans = new HashSet<>(campaignStorage.getOrphanItemCampaignIds());
+    orphans.addAll(scanUnitStorage.getOrphanUnitCampaignIds());
+    if (orphans.isEmpty()) {
+      return;
+    }
+    LOG.warn("Sweeping the rows of {} deleted cleanup campaign(s) whose deletion did not finish: {}."
+        + " They were unreachable, a delete having been interrupted after the campaign row was dropped.",
+             orphans.size(),
+             orphans);
+    for (Long campaignId : orphans) {
+      try {
+        campaignStorage.deleteItems(campaignId);
+        scanUnitStorage.deleteUnits(campaignId);
+      } catch (Exception e) {
+        LOG.warn("Error sweeping the leftover rows of the deleted cleanup campaign {}", campaignId, e);
+      }
+    }
+  }
+
+  /**
+   * Registers {@link #FILE_NAMESPACE} with the file store, idempotently
+   * ({@code createNameSpace} looks the name up first and only inserts when
+   * absent), immediately before the write that needs it.
+   * <p>
+   * Without it every {@code writeFile} under that namespace fails on a
+   * NullPointerException raised inside {@code DataStorage#create}, which looks the
+   * namespace up by name and never guards the miss. The failure was invisible in
+   * the worst way: our own caller logs it as a WARN and keeps the item detail, so
+   * the retention tick simply retried it every five minutes, and no report was
+   * ever archived while the console showed nothing wrong.
+   * <p>
+   * AT THE POINT OF USE, and no longer at startup — that first attempt was the
+   * same mistake this module has now made twice. Registration is a transactional
+   * write ({@code NameSpaceServiceImpl#createNameSpace} is woven by
+   * {@code ExoTransactionalAspect}), and the startup recovery runs on a
+   * {@code CompletableFuture} thread with no container established, exactly where
+   * the parallel scan's readers failed for want of a transaction. Its own failure
+   * was swallowed as a WARN, so a registration that never worked looked identical
+   * to one that did — and the archive kept failing with the very NPE this was
+   * added to prevent.
+   * <p>
+   * Here it runs on the retention tick, the thread that is already writing
+   * successfully (it reaches {@code DataStorage} to fail inside it), so the
+   * transaction it needs is the one the write itself uses. The cost is one indexed
+   * lookup per archived campaign, which is nothing next to writing the CSV.
+   * <p>
+   * NOT caught here, deliberately: the caller already treats any archiving failure
+   * as 'keep the item detail and retry next tick', which is the correct handling
+   * for this one too — and swallowing it separately is what hid the problem the
+   * first time.
+   */
+  private void ensureFileNamespace() {
+    nameSpaceService.createNameSpace(FILE_NAMESPACE, "Documents cleanup campaign CSV reports");
+  }
+
+  /**
+   * Drops the archived CSV of a campaign being deleted, if it has one. A failure is
+   * logged and swallowed: an orphaned binary in the file store is a wasted block,
+   * while a half-deleted campaign is a row nobody can act on.
+   */
+  private void deleteArchive(CleanupCampaign campaign) {
+    if (campaign.getArchiveFileId() == null) {
+      return;
+    }
+    try {
+      fileService.deleteFile(campaign.getArchiveFileId());
+    } catch (Exception e) {
+      LOG.warn("Error deleting the archived report {} of cleanup campaign {}: the campaign is deleted anyway",
+               campaign.getArchiveFileId(),
+               campaign.getId(),
+               e);
+    }
+  }
+
+  /**
+   * Refuses to start work while another campaign owns a worker.
+   *
+   * @throws IllegalArgumentException {@code cleanup.workerAlreadyRunning} when a
+   *           scan or a purge is already in flight
+   */
+  private void checkNoWorkerRunning() {
+    if (!campaignStorage.getCampaignsByStates(WORKER_STATES).isEmpty()) {
+      throw new IllegalArgumentException("cleanup.workerAlreadyRunning");
+    }
   }
 
   /**
@@ -538,6 +813,12 @@ public class CleanupCampaignService {
    */
   public CleanupCampaign executeCampaign(long campaignId) throws ObjectNotFoundException {
     CleanupCampaign campaign = getCampaign(campaignId);
+    // No purge while a scan is walking: the purge would delete nodes the scan is
+    // still reading, and the simulation it produces would describe a tree that no
+    // longer exists. Serialized on the same lock as every other start decision
+    synchronized (publishLock) {
+      checkNoWorkerRunning();
+    }
     if (campaign.getState() == CleanupCampaignState.PUBLISHED) {
       if (!isGraceDeadlineElapsed(campaign, System.currentTimeMillis())) {
         throw new IllegalArgumentException("cleanup.graceNotElapsed");
@@ -591,6 +872,9 @@ public class CleanupCampaignService {
       if (!campaignStorage.getCampaignsByStates(ACTIVE_STATES).isEmpty()) {
         throw new IllegalArgumentException("cleanup.campaignAlreadyActive");
       }
+      // ACTIVE_STATES does not hold DRY_RUN_RUNNING, so it alone would let a purge
+      // start next to a running scan
+      checkNoWorkerRunning();
       long requeuedCount = requeueRetryableFailures(campaignId);
       if (requeuedCount == 0) {
         // Never silently start a no-op run: the console must be able to say WHY
@@ -643,6 +927,18 @@ public class CleanupCampaignService {
    */
   public List<CleanupFailureGroup> getCampaignScanFailures(long campaignId) throws ObjectNotFoundException {
     return scanService.getScanFailures(getCampaign(campaignId));
+  }
+
+  /**
+   * Per-unit breakdown of a campaign's dry run, resolving the campaign here so an
+   * unknown id answers 404 like every other campaign endpoint.
+   *
+   * @param campaignId campaign identifier
+   * @return the state counts, the deepest attempt spent, and the units in flight
+   * @throws ObjectNotFoundException when the campaign doesn't exist
+   */
+  public CleanupScanUnitProgress getCampaignScanUnitProgress(long campaignId) throws ObjectNotFoundException {
+    return scanService.getScanUnitProgress(getCampaign(campaignId));
   }
 
   /**
@@ -1109,24 +1405,72 @@ public class CleanupCampaignService {
     }
   }
 
+  /**
+   * Archives a campaign's report and drops its item rows.
+   * <p>
+   * The CSV goes through a TEMPORARY FILE rather than a {@code ByteArrayOutputStream}:
+   * the report being archived is a whole campaign's item detail — hundreds of
+   * thousands of rows on the target corpus — and building it in memory held it
+   * SEVERAL times over (the growing buffer, then the array copied out of it, then
+   * the file store's own copy). {@link #writeCsv} streams page by page into the
+   * scratch file, so nothing this class holds grows with the report.
+   * <p>
+   * NOT a bounded path yet, and the remainder is not ours to fix here:
+   * {@code FileItem}'s constructor runs {@code IOUtils.toByteArray} over whatever
+   * stream it is handed, so the file store still materializes the whole CSV once,
+   * however it is fed. Removing that needs a {@code FileService} able to take a
+   * file or a stream without buffering it (portal-side). What this method can do
+   * is not add its own copies on top, which is what it now does — from roughly
+   * three resident copies of the report down to the one the file store imposes.
+   * <p>
+   * The temp file is removed on EVERY path: a retention tick that keeps its
+   * scratch files would grow a second copy of every archived report on the disk.
+   */
   private void archiveAndPurgeItems(CleanupCampaign campaign) {
+    Path csvFile = null;
     try {
-      byte[] csv = buildCsv(campaign.getId());
-      FileItem fileItem = new FileItem(null,
-                                       "cleanup-campaign-" + campaign.getId() + ".csv",
-                                       "text/csv",
-                                       FILE_NAMESPACE,
-                                       csv.length,
-                                       new Date(),
-                                       "system",
-                                       false,
-                                       new ByteArrayInputStream(csv));
-      fileItem = fileService.writeFile(fileItem);
-      campaign.setArchiveFileId(fileItem.getFileInfo().getId());
+      ensureFileNamespace();
+      csvFile = Files.createTempFile("cleanup-campaign-" + campaign.getId() + "-", ".csv");
+      try (OutputStream csvOutput = new BufferedOutputStream(Files.newOutputStream(csvFile))) {
+        writeCsv(campaign.getId(), csvOutput);
+      }
+      // Opened around writeFile and closed after it: the file store READS this
+      // stream, so it must still be open when it does
+      try (InputStream csvInput = new BufferedInputStream(Files.newInputStream(csvFile))) {
+        FileItem fileItem = new FileItem(null,
+                                         "cleanup-campaign-" + campaign.getId() + ".csv",
+                                         "text/csv",
+                                         FILE_NAMESPACE,
+                                         Files.size(csvFile),
+                                         new Date(),
+                                         "system",
+                                         false,
+                                         csvInput);
+        fileItem = fileService.writeFile(fileItem);
+        campaign.setArchiveFileId(fileItem.getFileInfo().getId());
+      }
       campaignStorage.saveCampaign(campaign);
       campaignStorage.deleteItems(campaign.getId());
     } catch (Exception e) {
       LOG.warn("Error archiving cleanup campaign {} report, keeping its item detail", campaign.getId(), e);
+    } finally {
+      deleteTempFile(csvFile);
+    }
+  }
+
+  /**
+   * Drops the scratch CSV of an archive, whether it was archived or not. Logged
+   * and swallowed: a leftover temp file is a wasted block, while raising here
+   * would hide the archiving failure that led to it.
+   */
+  private void deleteTempFile(Path csvFile) {
+    if (csvFile == null) {
+      return;
+    }
+    try {
+      Files.deleteIfExists(csvFile);
+    } catch (IOException e) {
+      LOG.warn("Error deleting the temporary CSV {} of an archived cleanup campaign report", csvFile, e);
     }
   }
 
@@ -1256,12 +1600,6 @@ public class CleanupCampaignService {
    * {@link FileService} needs the content length up front. The download path
    * never goes through here — see {@link #writeCsv(long, OutputStream)}.
    */
-  private byte[] buildCsv(long campaignId) throws IOException {
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    writeCsv(campaignId, outputStream);
-    return outputStream.toByteArray();
-  }
-
   /**
    * The ONE CSV field escaping, used by every column that can carry a comma, a
    * quote or a line break — a carriage return counting as one too.
@@ -1342,6 +1680,42 @@ public class CleanupCampaignService {
     validateGraceDays(params.getGraceDays());
     if (params.getMaxVersionsPerFile() == null || params.getMaxVersionsPerFile() < 1) {
       throw new IllegalArgumentException("cleanup.invalidMaxVersionsPerFile");
+    }
+    validateScanThreads(params.getScanThreads());
+  }
+
+  /**
+   * @return the highest reader-thread count a campaign may request, so the
+   *         creation form can bound its input on the SAME number the server
+   *         validates against — a form inventing its own bound is a form that
+   *         disagrees with the server the day one of them changes
+   */
+  public int getMaxScanThreads() {
+    return settingService.getMaxScanThreads();
+  }
+
+  /**
+   * Bound check on a campaign's requested reader-thread count.
+   * <p>
+   * REFUSED rather than clamped, unlike the deployment property: a property is a
+   * typo somebody has to be told about in a log, whereas a form field is a
+   * request from a person who is owed an answer — silently running four readers
+   * when they asked for forty is how they conclude the setting does nothing.
+   * <p>
+   * The ceiling is the platform's ({@code CleanupSettingService#getMaxScanThreads}),
+   * derived from what the repository survives and NOT from a connection pool —
+   * see that method for why the pool is the wrong bound here.
+   *
+   * @param scanThreads requested reader threads, null meaning 'platform default'
+   * @throws IllegalArgumentException "cleanup.invalidScanThreads" when outside
+   *           the supported range
+   */
+  private void validateScanThreads(Integer scanThreads) {
+    if (scanThreads == null) {
+      return;
+    }
+    if (scanThreads < CleanupSettingService.MIN_SCAN_THREADS || scanThreads > settingService.getMaxScanThreads()) {
+      throw new IllegalArgumentException("cleanup.invalidScanThreads");
     }
   }
 
@@ -1501,7 +1875,7 @@ public class CleanupCampaignService {
       campaign.setReclaimableBytes(campaignStorage.sumReclaimableBytesByState(campaignId, CleanupItemState.CANDIDATE));
       campaign.setReclaimedBytes(campaignStorage.sumReclaimedBytes(campaignId));
     }
-    return campaign;
+    return withLiveExecutionProgress(campaign);
   }
 
   /**
@@ -1517,6 +1891,42 @@ public class CleanupCampaignService {
       campaign.setReclaimableBytes(aggregates.getReclaimableBytes());
       campaign.setReclaimedBytes(aggregates.getReclaimedBytes());
     }
+    return withLiveExecutionProgress(campaign);
+  }
+
+  /**
+   * Reconciles the purge numerator with the aggregates served beside it.
+   * <p>
+   * THE CONTRADICTION IT REMOVES: {@code PROCESSED_COUNT} is checkpointed once
+   * per BATCH by the purge worker, while the candidate count and the reclaimed
+   * total are aggregate queries recomputed on every read. So a console showing
+   * all three at once showed a purge that had freed gigabytes, and had 105 fewer
+   * candidates than it started with, above a bar reading '0% (0 / 5,083)' —
+   * every number correct, and the three of them together impossible. The batch
+   * size being 200 by default, that state is not a flicker: it lasts as long as
+   * the first two hundred deletions take, on files large enough for the freed
+   * total to be the first thing an administrator looks at.
+   * <p>
+   * The derived numerator is exact rather than an estimate: a purge's
+   * denominator IS the CANDIDATE count taken when it started (see
+   * {@code CleanupExecutionService#startExecution}), and an item leaves CANDIDATE
+   * exactly once, whether it was purged, failed or skipped. So total minus the
+   * live candidate count is precisely what the worker has settled.
+   * <p>
+   * Never LOWER than the checkpoint, which is what keeps the bar monotonic: the
+   * observation listener may add candidates to a campaign mid-purge, and a bar
+   * walking backwards while files are being deleted would be worse than one
+   * lagging behind.
+   * <p>
+   * EXECUTING only. Anywhere else the persisted counter is the truth — a dry run
+   * counts NODES walked, which no item aggregate can express.
+   */
+  private CleanupCampaign withLiveExecutionProgress(CleanupCampaign campaign) {
+    if (campaign.getState() != CleanupCampaignState.EXECUTING || campaign.getTotalCount() <= 0) {
+      return campaign;
+    }
+    long settled = campaign.getTotalCount() - campaign.getCandidateCount();
+    campaign.setProcessedCount(Math.min(campaign.getTotalCount(), Math.max(campaign.getProcessedCount(), settled)));
     return campaign;
   }
 
