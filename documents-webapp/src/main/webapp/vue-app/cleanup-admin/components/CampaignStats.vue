@@ -70,9 +70,11 @@ export default {
       type: Object,
       default: null,
     },
-    // Per-unit breakdown, null until loaded (and for campaigns that never ran a
-    // parallel scan). The percentage below reads its scanComplete flag: without
-    // it, the bar is not allowed to claim 100%
+    // Per-unit breakdown, null until loaded (and null again whenever its request
+    // fails). The percentage below reads its scanComplete flag: without the
+    // breakdown, the bar is not allowed to claim 100%. Campaigns that never ran a
+    // parallel scan are NOT null here — they get a zeroed breakdown whose
+    // unitCount is 0
     scanUnits: {
       type: Object,
       default: null,
@@ -88,8 +90,20 @@ export default {
     progress() {
       // The completeness claim is only made when the SUBTREE counts back it, and
       // only for a dry run — an EXECUTING campaign has no scan units to consult,
-      // and its own numerator is the item count it is really working through
-      const complete = this.campaign?.state !== 'DRY_RUN_RUNNING' || !this.scanUnits || this.scanUnits.scanComplete;
+      // and its own numerator is the item count it is really working through.
+      //
+      // An ABSENT breakdown falls to NOT complete, which is the whole point: null
+      // is 'we cannot back the claim' (the first load has not resolved yet, or it
+      // keeps failing — the loader deliberately keeps what it had), never 'the
+      // scan is done'. Granting 100% there rendered a full bar next to an 'in
+      // progress' chip, verbatim the contradiction this cap exists to remove.
+      // A campaign that never ran a parallel scan is the OTHER case and reads as
+      // unitCount === 0, not as a null breakdown: the server answers a zeroed
+      // breakdown for it, so it still reaches 100% instead of being pinned at 99
+      // forever
+      const complete = this.campaign?.state !== 'DRY_RUN_RUNNING'
+                    || this.scanUnits?.unitCount === 0
+                    || this.scanUnits?.scanComplete === true;
       return this.$cleanupUtils.progressPercentage(this.campaign?.processedCount, this.campaign?.totalCount, complete);
     },
     eta() {

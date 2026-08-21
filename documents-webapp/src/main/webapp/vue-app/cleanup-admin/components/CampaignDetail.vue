@@ -384,9 +384,9 @@ export default {
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
   methods: {
-    // Loaded on every campaign load while the dry run is RUNNING, and only then:
-    // the breakdown is a live diagnostic, worthless once the campaign settled and
-    // one extra request per refresh otherwise. Guarded by the SAME load token as
+    // Loaded on EVERY campaign load, whatever the state: the breakdown is what
+    // reports the nodes a settled scan could not evaluate, so a SIMULATED
+    // campaign needs it as much as a running one. Guarded by the SAME load token as
     // the campaign it belongs to, so a slow answer cannot repaint a newer
     // campaign's panel; a failure leaves the previous value rather than blanking
     // the panel, since the bar's 100% claim depends on it
