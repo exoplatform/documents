@@ -290,6 +290,34 @@ public class CleanupScanService {
    */
   private final Set<Long>              runningCampaigns           = ConcurrentHashMap.newKeySet();
 
+  /**
+   * Reader threads currently WALKING the repository, counted across campaigns and
+   * across runs — incremented by the walk itself, not by the pool that submitted
+   * it.
+   * <p>
+   * It exists because a campaign STATE cannot bound a thread. Cancel a running
+   * dry run and the campaign leaves {@code DRY_RUN_RUNNING} at once, so every
+   * state-based guard (see {@code CleanupCampaignService#checkNoWorkerRunning})
+   * opens immediately — while the readers of that run may still be walking:
+   * {@link #awaitReaders} deliberately ABANDONS readers that do not answer their
+   * interrupt, because an interrupt does nothing to a {@code query.execute()} in
+   * flight or to a long resume fast-forward. The administrator's natural
+   * sequence — the scan looks stuck, cancel it, start a corrected one — would
+   * otherwise land a second full fan-out next to a first one that never stopped,
+   * on a corpus where ONE sequential walk already saturated both JCR caches at
+   * their million-entry cap.
+   * <p>
+   * Counted here rather than acquired as a permit ON PURPOSE. A permit taken in
+   * the reader would make the new scan WAIT for threads that are, by definition,
+   * the ones that ignored their interrupt — a wait with no bound, holding the
+   * single-thread coordinator, blocking every other campaign's scan behind a
+   * cancelled one's stuck query. Reading the count instead lets the new scan
+   * start immediately with a SMALLER fan-out (see {@link #readerCountFor}), which
+   * bounds the load without ever making progress depend on a thread nobody can
+   * stop.
+   */
+  private final AtomicInteger          activeReaders              = new AtomicInteger();
+
   @PreDestroy
   public void shutdown() {
     executorService.shutdownNow();
@@ -357,7 +385,7 @@ public class CleanupScanService {
       List<CleanupScanUnit> units = scanUnitStorage.getUnitsToProcess(campaignId, MAX_SCAN_UNIT_ATTEMPTS);
 
       // (b) ESTIMATE — in parallel, on the very pool the readers will use
-      int readerCount = Math.max(1, Math.min(settingService.getScanThreads(), units.size()));
+      int readerCount = readerCountFor(units.size());
       readerPool = Executors.newFixedThreadPool(readerCount, threadFactory("cleanup-scan-reader-" + campaignId));
       long total = estimateUnits(campaignId, units, readerPool);
       long processedAtStart = scanUnitStorage.sumScannedCount(campaignId);
@@ -425,7 +453,17 @@ public class CleanupScanService {
       // re-counted every genuinely empty bucket — a first-letter bucket of /Users
       // holding no file — on EVERY resume, for a count already known to be 0
       if (unit.getTotalCount() == null) {
-        countings.put(unit, readerPool.submit(() -> cleanupJcrStorage.countFiles(unit.getUnitPath())));
+        // Counted like a walk: these tasks run on the very same pool, hit the very
+        // same repository, and are abandoned by the same shutdownNow when the
+        // coordinator unwinds during the estimate phase
+        countings.put(unit, readerPool.submit(() -> {
+          activeReaders.incrementAndGet();
+          try {
+            return cleanupJcrStorage.countFiles(unit.getUnitPath());
+          } finally {
+            activeReaders.decrementAndGet();
+          }
+        }));
       }
     }
     for (Map.Entry<CleanupScanUnit, Future<Long>> counting : countings.entrySet()) {
@@ -437,6 +475,43 @@ public class CleanupScanService {
     // Summed by the database over EVERY unit, the ones already DONE included:
     // the denominator is the whole tree, not what is left to walk
     return scanUnitStorage.sumTotalCount(campaignId);
+  }
+
+  /**
+   * Fan-out of THIS run, reduced by the readers still walking for an earlier one.
+   * <p>
+   * The platform-wide bound is {@code documents.cleanup.scan.threads} concurrent
+   * readers, and {@link #activeReaders} is what makes it real rather than
+   * inferred from a campaign state that a cancel clears instantly. Abandoned
+   * readers count against the new run's share, so the repository sees the
+   * configured fan-out and not a multiple of it.
+   * <p>
+   * The floor of ONE is deliberate: even with every permit spoken for, the new
+   * scan starts and walks, one subtree at a time, rather than blocking on threads
+   * that already proved they do not stop. So the bound is 'configured + 1 in the
+   * worst case', against 'configured x number of cancelled runs' before —
+   * knowingly imperfect, and imperfect in the direction that cannot wedge a
+   * campaign.
+   * <p>
+   * Logged at WARN whenever anything is still in flight, whether or not it
+   * shrinks this run: a reader outliving its run is invisible otherwise, and the
+   * scan that pays for it is the one that has to be able to say so.
+   *
+   * @param unitCount number of units this run has to walk
+   * @return reader count for this run, at least 1
+   */
+  private int readerCountFor(int unitCount) {
+    int configured = settingService.getScanThreads();
+    int wanted = Math.max(1, Math.min(configured, unitCount));
+    int inFlight = activeReaders.get();
+    if (inFlight <= 0) {
+      return wanted;
+    }
+    int granted = Math.max(1, Math.min(wanted, configured - inFlight));
+    LOG.warn("{} cleanup scan reader(s) of a previous run are still walking the repository (they outlived their run, having"
+        + " not answered its interrupt): this scan starts with {} reader(s) instead of {}, so the configured fan-out of {}"
+        + " is not multiplied.", inFlight, granted, wanted, configured);
+    return granted;
   }
 
   /**
@@ -524,6 +599,9 @@ public class CleanupScanService {
    */
   protected void readUnit(ScanRun run, CleanupScanUnit unit) {
     long unitId = unit.getId();
+    // Counted around the WALK itself, so a reader that outlived its run — the
+    // whole reason this count exists — keeps counting until it really stops
+    activeReaders.incrementAndGet();
     try {
       cleanupJcrStorage.scanRoot(unit.getUnitPath(),
                                  unit.getLastScannedPath(),
@@ -544,6 +622,8 @@ public class CleanupScanService {
                run.campaignId,
                e);
       commitThenPost(run, ScanBatch.terminal(unitId, CleanupScanUnitState.FAILED, SCAN_UNIT_FAILED_REASON));
+    } finally {
+      activeReaders.decrementAndGet();
     }
   }
 

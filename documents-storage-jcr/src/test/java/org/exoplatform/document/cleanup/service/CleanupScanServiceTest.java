@@ -44,6 +44,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -1106,6 +1107,73 @@ class CleanupScanServiceTest {
   }
 
   @Test
+  void anAbandonedReaderSHRINKSTheNextScanFanOutInsteadOfBeingAddedTo() throws ReflectiveOperationException {
+    // The sequence an administrator really performs: the scan looks stuck, they
+    // cancel it, they start a corrected one. Cancelling clears DRY_RUN_RUNNING at
+    // once, so the campaign-state guard opens immediately — while the readers of
+    // that run may still be walking, the coordinator having abandoned the ones
+    // that ignored their interrupt. The fan-out must therefore be computed from
+    // the THREADS still walking, never from a state
+    when(settingService.getScanThreads()).thenReturn(4);
+
+    activeReaders().set(0);
+    assertEquals(4, readerCountFor(4), "Nothing in flight: the configured fan-out is granted in full");
+    assertEquals(2, readerCountFor(2), "The unit count still caps the fan-out, as it always did");
+
+    activeReaders().set(3);
+    assertEquals(1, readerCountFor(4), "3 readers of a previous run still walking: this run gets the 1 permit left");
+
+    activeReaders().set(4);
+    assertEquals(1, readerCountFor(4), "Every permit spoken for: the floor of ONE, never a scan that cannot start");
+
+    activeReaders().set(9);
+    assertEquals(1,
+                 readerCountFor(4),
+                 "More in flight than configured (the setting was lowered under a running scan): still 1, never 0 nor"
+                     + " negative");
+  }
+
+  @Test
+  void aWalkingReaderIsCountedWHILEItWalksAndReleasedWhateverEnDSIt() throws ReflectiveOperationException {
+    // The accounting the bound above reads. It has to be taken around the WALK
+    // and released on EVERY exit: a reader that outlived its run is exactly the
+    // one that must keep counting, and a count that leaked would shrink every
+    // later scan of the platform down to its floor forever
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
+    unitAggregates(100L, 0L, 0L);
+    unitOutcomes(1L, 0L, 0L);
+    AtomicInteger countedDuringTheWalk = new AtomicInteger(-1);
+    doAnswer(invocation -> {
+      countedDuringTheWalk.set(activeReaders().get());
+      return null;
+    }).when(cleanupJcrStorage).scanRoot(eq(USERS_UNIT), isNull(), anyInt(), any(), any());
+
+    scanService.scan(CAMPAIGN_ID);
+
+    assertEquals(1, countedDuringTheWalk.get(), "A reader inside its walk must be counted");
+    assertEquals(0, activeReaders().get(), "A finished reader must release its count");
+  }
+
+  @Test
+  void aFAILINGWalkReleasesItsReaderCountToo() throws ReflectiveOperationException {
+    // The finally, pinned: the failure path is the one that would leak, and a
+    // subtree that throws is the ordinary case on a 14-year corpus
+    planned(USERS_UNIT);
+    unitsToProcess(unit(1L, USERS_UNIT));
+    when(cleanupJcrStorage.countFiles(USERS_UNIT)).thenReturn(100L);
+    unitAggregates(100L, 0L, 0L);
+    unitOutcomes(0L, 1L, 0L);
+    doThrow(new RuntimeException("unreadable subtree")).when(cleanupJcrStorage)
+                                                       .scanRoot(eq(USERS_UNIT), isNull(), anyInt(), any(), any());
+
+    scanService.scan(CAMPAIGN_ID);
+
+    assertEquals(0, activeReaders().get(), "A reader whose walk THREW must release its count");
+  }
+
+  @Test
   void abortMidRunStopsEveryReaderAndSkipsTheSimulation() {
     planned(USERS_UNIT);
     unitsToProcess(unit(1L, USERS_UNIT));
@@ -1486,6 +1554,18 @@ class CleanupScanServiceTest {
 
   private CleanupCandidate candidate(String nodeUuid, String path) {
     return new CleanupCandidate(nodeUuid, path, 7L, 2048, 0, CleanupAction.DELETE, 100, 200);
+  }
+
+  private AtomicInteger activeReaders() throws ReflectiveOperationException {
+    Field activeReadersField = CleanupScanService.class.getDeclaredField("activeReaders");
+    activeReadersField.setAccessible(true); // NOSONAR test wiring
+    return (AtomicInteger) activeReadersField.get(scanService);
+  }
+
+  private int readerCountFor(int unitCount) throws ReflectiveOperationException {
+    Method readerCountForMethod = CleanupScanService.class.getDeclaredMethod("readerCountFor", int.class);
+    readerCountForMethod.setAccessible(true); // NOSONAR test wiring
+    return (int) readerCountForMethod.invoke(scanService, unitCount);
   }
 
   @SuppressWarnings("unchecked")
