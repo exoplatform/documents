@@ -164,23 +164,22 @@
         {{ $cleanupSize(item.reclaimedBytes) }}
       </template>
       <!-- The breakdown moved into this cell's tooltip rather than being deleted
-           with the two columns it used to fill. It is what tells a 501 MB row that
-           is 1 MB of content and 500 MB of history apart from one that is 501 MB of
-           content — the difference between tuning maxVersionsPerFile and tuning the
-           period, which is a campaign-policy decision an administrator makes from
-           THIS table. It also keeps the figure the Min file size filter narrows on
-           visible on the row, which a bare Reclaimable column would not -->
+           with the two columns it used to fill. On a DELETE row it DECOMPOSES the
+           figure above it — content plus the whole history the delete destroys —
+           which is what tells a 501 MB row that is 1 MB of content and 500 MB of
+           history apart from one that is 501 MB of content, the difference between
+           tuning maxVersionsPerFile and tuning the period.
+           On a PURGE_VERSIONS row there is nothing to decompose: the reclaimable
+           figure IS the version bytes, and naming the content size next to it
+           invited exactly one arithmetic — 73 MB + 5 GB — for bytes the campaign
+           never frees, since a purge keeps the file. So that row states what it
+           does instead of listing a number it does not reclaim -->
       <template slot="item.reclaimableBytes" slot-scope="{item}">
         <v-tooltip bottom>
           <template #activator="{on, attrs}">
             <span v-bind="attrs" v-on="on">{{ $cleanupSize(item.reclaimableBytes) }}</span>
           </template>
-          <span>
-            {{ $t('cleanup.admin.items.sizeBreakdown', {
-              0: $cleanupSize(item.fileSize),
-              1: $cleanupSize(item.versionsSize),
-            }) }}
-          </span>
+          <span>{{ sizeTooltip(item) }}</span>
         </v-tooltip>
       </template>
     </v-data-table>
@@ -305,6 +304,17 @@ export default {
     document.removeEventListener('click', this.closeMenus);
   },
   methods: {
+    // A purge row gets no content figure at all: the ask was to stop showing a
+    // size the row does not reclaim, and the useful half of that tooltip was never
+    // the number — it was the answer to "does this delete my file?"
+    sizeTooltip(item) {
+      return item?.action === 'PURGE_VERSIONS'
+        ? this.$t('cleanup.admin.items.sizeVersionsOnly')
+        : this.$t('cleanup.admin.items.sizeBreakdown', {
+          0: this.$cleanupSize(item?.fileSize),
+          1: this.$cleanupSize(item?.versionsSize),
+        });
+    },
     reload() {
       this.options = {...this.options, page: 1};
       this.loadItems();
