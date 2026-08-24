@@ -105,6 +105,7 @@ public class JCRDocumentsUtilTest {
     when(((NodeImpl) parentNode).getIdentifier()).thenReturn("identifierOfParentNode");
     when(node.getParent()).thenReturn(parentNode);
     when(node.getName()).thenReturn("NodeName.pdf");
+    when(node.getPath()).thenReturn("/Users/root/Private/NodeName.pdf");
     Property property = mock(Property.class);
     when(((ExtendedNode) node).getACL()).thenReturn(new AccessControlList());
     when(node.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)).thenReturn(true);
@@ -476,6 +477,45 @@ public class JCRDocumentsUtilTest {
     assertTrue(result.isFolder()); // Assuming isFolder returns true
     assertEquals("text/plain", result.getMimeType());
     assertEquals(1234L, result.getSize());
+  }
+
+  @Test
+  public void testIsInUserPrivateSpace() throws RepositoryException {
+    Node node = mock(NodeImpl.class);
+
+    // The user's own personal drive.
+    when(node.getPath()).thenReturn("/Users/r___/ro__/root/Private/file.pdf");
+    assertTrue(JCRDocumentsUtil.isInUserPrivateSpace(node, "root"));
+
+    // The Private root itself.
+    when(node.getPath()).thenReturn("/Users/r___/ro__/root/Private");
+    assertTrue(JCRDocumentsUtil.isInUserPrivateSpace(node, "root"));
+
+    // Somebody else's personal drive.
+    assertFalse(JCRDocumentsUtil.isInUserPrivateSpace(node, "bob"));
+
+    // The user's Public drive is not their Private one.
+    when(node.getPath()).thenReturn("/Users/r___/ro__/root/Public/file.pdf");
+    assertFalse(JCRDocumentsUtil.isInUserPrivateSpace(node, "root"));
+
+    assertFalse(JCRDocumentsUtil.isInUserPrivateSpace(null, "root"));
+    when(node.getPath()).thenReturn("/Users/r___/ro__/root/Private/file.pdf");
+    assertFalse(JCRDocumentsUtil.isInUserPrivateSpace(node, ""));
+  }
+
+  @Test
+  public void testIsInUserPrivateSpaceIsNotAPathSubstringMatch() throws RepositoryException {
+    Node node = mock(NodeImpl.class);
+
+    // A folder named after another user, holding a "Private" folder, inside root's drive:
+    // the drive belongs to root, not to bob.
+    when(node.getPath()).thenReturn("/Users/r___/ro__/root/Private/bob/Private/file.pdf");
+    assertTrue(JCRDocumentsUtil.isInUserPrivateSpace(node, "root"));
+    assertFalse(JCRDocumentsUtil.isInUserPrivateSpace(node, "bob"));
+
+    // The same folder shape in a space drive is not a personal drive at all.
+    when(node.getPath()).thenReturn("/Groups/spaces/myspace/Documents/bob/Private/file.pdf");
+    assertFalse(JCRDocumentsUtil.isInUserPrivateSpace(node, "bob"));
   }
 
 }

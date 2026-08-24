@@ -891,7 +891,7 @@ public class DocumentFileRestTest {
   }
 
   @Test
-  public void testDeleteDocument() {
+  public void testDeleteDocument() throws IllegalAccessException {
     String username = "testuser";
     org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);
     ConversationState.setCurrent(new ConversationState(root));
