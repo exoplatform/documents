@@ -19,7 +19,7 @@
   <v-app class="border-box-sizing" flat>
     <v-main class="pa-5 application-body">
       <div class="d-flex align-center mb-5">
-        <a :href="documentsBaseLink" class="widget-text-header text-capitalize-first-letter">
+        <a :href="documentsBaseLink" class="text-header text-capitalize-first-letter">
           {{ $t('document.size.header.label') }}
         </a>
         <div v-if="inProgress">
