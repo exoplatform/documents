@@ -16,16 +16,21 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.security.AccessControlException;
 import java.util.Collections;
 
 import javax.jcr.Node;
@@ -33,15 +38,18 @@ import javax.jcr.Property;
 import javax.jcr.lock.Lock;
 import javax.jcr.version.Version;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -55,6 +63,8 @@ import lombok.SneakyThrows;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class WebdavWriteCommandHandlerTest {
+
+  private static final MockedStatic<JCRDocumentsUtil> JCR_DOCUMENTS_UTIL = mockStatic(JCRDocumentsUtil.class);
 
   private static final String       JCR_CONTENT        = "jcr:content";
 
@@ -111,6 +121,11 @@ public class WebdavWriteCommandHandlerTest {
 
   @InjectMocks
   private WebdavWriteCommandHandler handler;
+
+  @AfterClass
+  public static void afterRunBare() throws Exception { // NOSONAR
+    JCR_DOCUMENTS_UTIL.close();
+  }
 
   @Before
   @SneakyThrows
@@ -188,6 +203,36 @@ public class WebdavWriteCommandHandlerTest {
     verify(trashStorage).moveToTrash(eq(node), any(SessionProvider.class));
     verify(pathCommandHandler).deleteMapping(JCR_PATH);
     verify(session).save();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testDeleteAllowedInsideOwnPrivateSpaceDespiteMissingAcl() {
+    when(session.getUserState()).thenReturn(conversationState);
+    when(node.getPath()).thenReturn(JCR_PATH);
+    when(session.getUserID()).thenReturn("testuser");
+    // The node's own ACL does not grant REMOVE, but it lives inside the acting user's
+    // own Private space, which must be enough to move it to trash.
+    doThrow(new AccessControlException("denied")).when(node).checkPermission(PermissionType.REMOVE);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isInUserPrivateSpace(node, "testuser")).thenReturn(true);
+
+    handler.delete(session, JCR_PATH);
+
+    verify(trashStorage).moveToTrash(eq(node), any(SessionProvider.class));
+    verify(pathCommandHandler).deleteMapping(JCR_PATH);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testDeleteDeniedOutsideOwnPrivateSpace() {
+    when(node.getPath()).thenReturn(JCR_PATH);
+    when(session.getUserID()).thenReturn("testuser");
+    doThrow(new AccessControlException("denied")).when(node).checkPermission(PermissionType.REMOVE);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isInUserPrivateSpace(node, "testuser")).thenReturn(false);
+
+    assertThrows(WebDavException.class, () -> handler.delete(session, JCR_PATH));
+
+    verify(trashStorage, never()).moveToTrash(eq(node), any(SessionProvider.class));
   }
 
   @Test
