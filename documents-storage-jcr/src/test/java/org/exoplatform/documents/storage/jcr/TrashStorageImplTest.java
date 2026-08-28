@@ -19,14 +19,19 @@ package org.exoplatform.documents.storage.jcr;
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.RESTORE_PATH;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.security.AccessControlException;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -42,17 +47,21 @@ import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.gatein.pc.api.PortletInvokerException;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.container.xml.PropertiesParam;
 import org.exoplatform.container.xml.ValueParam;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
@@ -71,6 +80,13 @@ import java.util.List;
 
 @RunWith(MockitoJUnitRunner.class)
 public class TrashStorageImplTest {
+
+  private static final MockedStatic<JCRDocumentsUtil> JCR_DOCUMENTS_UTIL = mockStatic(JCRDocumentsUtil.class);
+
+  @AfterClass
+  public static void afterRunBare() throws Exception { // NOSONAR
+    JCR_DOCUMENTS_UTIL.close();
+  }
 
   private IdentityManager     identityManager;
 
@@ -156,6 +172,80 @@ public class TrashStorageImplTest {
     String trashId = trashStorage.moveToTrash(node, sessionProvider,0);
 
     assertNotNull(trashId);
+  }
+
+  @Test
+  public void testMoveToTrashAllowedInsideOwnPrivateSpaceDespiteMissingAcl() throws Exception {
+    String username = "testuser";
+    String currentRepository = "Collaboration";
+    String path = "/Users/testuser/Private/name123";
+
+    Node node = Mockito.mock(NodeImpl.class);
+    Workspace workspace = Mockito.mock(WorkspaceImpl.class);
+    NodeIterator nodeIterator = Mockito.mock(NodeIterator.class);
+    Session session1 = Mockito.mock(SessionImpl.class);
+    NodeType nodeType = Mockito.mock(NodeType.class);
+    SessionActionInterceptor sessionActionInterceptor = Mockito.mock(SessionActionInterceptor.class);
+
+    lenient().when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+    lenient().when(sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository)).thenReturn(session);
+    lenient().when(sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getWorkspace()).thenReturn(workspace);
+    lenient().when(sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).thenReturn(node);
+    lenient().when(((Node) sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getItem(anyString())).getNodes(anyString())).thenReturn(nodeIterator);
+    lenient().when(sessionProviderService.getSystemSessionProvider(any()).getSession("trashWorkspace", repository).getWorkspace().getName()).thenReturn(currentRepository);
+    lenient().when(sessionProviderService.getSessionProvider(any())).thenReturn(sessionProvider);
+    lenient().when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    lenient().when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    lenient().when(repositoryEntry.getDefaultWorkspaceName()).thenReturn(currentRepository);
+    lenient().when(sessionProvider.getSession(any(), any())).thenReturn(session);
+
+    lenient().when(node.getUUID()).thenReturn("id123");
+    lenient().when(node.getName()).thenReturn("name123");
+    lenient().when(node.getPath()).thenReturn(path);
+    lenient().when(node.getSession()).thenReturn(session1);
+    lenient().when(node.getSession().getWorkspace()).thenReturn(workspace);
+    lenient().when(session1.getWorkspace().getName()).thenReturn(currentRepository);
+    lenient().when(node.getParent()).thenReturn(node);
+    lenient().when(((SessionImpl) node.getSession()).getActionHandler()).thenReturn(sessionActionInterceptor);
+    lenient().when(session.getNodeByUUID(eq("id123"))).thenReturn(node);
+    lenient().when(session.itemExists(anyString())).thenReturn(true);
+    lenient().when(session.getItem(anyString())).thenReturn(node);
+    lenient().when(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(false);
+    lenient().when(node.getNodes()).thenReturn(nodeIterator);
+    lenient().when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    lenient().when(node.getPrimaryNodeType().getName()).thenReturn(NodeTypeConstants.NT_FILE);
+
+    // The node's own ACL does not grant REMOVE (e.g. it was created there on this user's
+    // behalf without one), but the node lives inside the acting user's own Private space.
+    lenient().when(session1.getUserID()).thenReturn(username);
+    doThrow(new AccessControlException("Permission denied " + path + " : remove")).when(session1)
+                                                                                   .checkPermission(path, PermissionType.REMOVE);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isInUserPrivateSpace(node, username)).thenReturn(true);
+
+    String trashId = trashStorage.moveToTrash(node, sessionProvider, 0);
+
+    assertNotNull(trashId);
+  }
+
+  @Test
+  public void testMoveToTrashDeniedOutsideOwnPrivateSpace() throws Exception {
+    String username = "testuser";
+    String path = "/Users/otheruser/Private/name123";
+
+    Node node = Mockito.mock(NodeImpl.class);
+    Session session1 = Mockito.mock(SessionImpl.class);
+    SessionActionInterceptor sessionActionInterceptor = Mockito.mock(SessionActionInterceptor.class);
+
+    lenient().when(node.getPath()).thenReturn(path);
+    lenient().when(node.getSession()).thenReturn(session1);
+    lenient().when(((SessionImpl) node.getSession()).getActionHandler()).thenReturn(sessionActionInterceptor);
+
+    lenient().when(session1.getUserID()).thenReturn(username);
+    doThrow(new AccessControlException("Permission denied " + path + " : remove")).when(session1)
+                                                                                   .checkPermission(path, PermissionType.REMOVE);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isInUserPrivateSpace(node, username)).thenReturn(false);
+
+    assertThrows(AccessControlException.class, () -> trashStorage.moveToTrash(node, sessionProvider, 0));
   }
 
   @Test

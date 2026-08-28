@@ -21,6 +21,7 @@ import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -40,6 +41,8 @@ import org.gatein.pc.api.PortletInvoker;
 import org.gatein.pc.api.PortletInvokerException;
 import org.gatein.pc.api.info.PortletInfo;
 import org.gatein.pc.api.info.PreferencesInfo;
+
+import java.security.AccessControlException;
 
 import javax.jcr.*;
 import javax.jcr.query.Query;
@@ -121,7 +124,18 @@ public class TrashStorageImpl implements TrashStorage {
     String trashId = null;
     String nodeName = node.getName();
     Session nodeSession = node.getSession();
-    nodeSession.checkPermission(node.getPath(), PermissionType.REMOVE);
+    try {
+      nodeSession.checkPermission(node.getPath(), PermissionType.REMOVE);
+    } catch (AccessControlException e) {
+      // A user must always be able to clear their own Personal Documents space, even when
+      // a node inside it carries an ACL that does not grant them REMOVE (e.g. a node
+      // created there on somebody else's behalf) — see JCRDocumentsUtil#isInUserPrivateSpace.
+      // The caller's own canRemoveNode already allows for this; this is the same rule
+      // applied at the actual mutation, which checks the node's real ACL independently.
+      if (!JCRDocumentsUtil.isInUserPrivateSpace(node, nodeSession.getUserID())) {
+        throw e;
+      }
+    }
     if (deep == 0 && !node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
       try {
         removeDeadSymlinks(node);

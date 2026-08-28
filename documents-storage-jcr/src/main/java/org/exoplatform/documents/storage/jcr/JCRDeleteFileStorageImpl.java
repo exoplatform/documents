@@ -131,7 +131,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     return documentsToDeleteQueue;
   }
   @Override
-  public void deleteDocument(String folderPath, String documentId, boolean favorite, boolean checkToMoveToTrash, long delay, Identity identity, long userIdentityId) {
+  public void deleteDocument(String folderPath, String documentId, boolean favorite, boolean checkToMoveToTrash, long delay, Identity identity, long userIdentityId) throws IllegalAccessException {
     SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
@@ -140,6 +140,11 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       deleteDocument(session, folderPath, documentId, favorite, checkToMoveToTrash, delay, identity, userIdentityId);
     } catch (PathNotFoundException path) {
       LOG.error("The document with this path is not found" + folderPath, path);
+    } catch (AccessDeniedException accessDenied) {
+      // Surfaced rather than logged-and-ignored: a permission refusal must reach the REST
+      // layer as a real 401, not as a silent no-op "success".
+      throw new IllegalAccessException("User " + identity.getUserId() + " is not allowed to delete document "
+          + documentId);
     } catch (Exception e) {
       LOG.error("Error when deleting the document" + folderPath, e);
     }
@@ -394,6 +399,22 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       }
       node.remove();
       parentNode.save();
+    } catch (AccessDeniedException e) {
+      // Not swallowed like the other failure modes here: this method returning normally
+      // is what makes the caller report "0" (node removed), so a permission refusal has
+      // to surface as a real error instead of a silent false success.
+      if (LOG.isErrorEnabled()) {
+        LOG.error("access denied, can't remove node:" + node.getPath());
+      }
+      throw e;
+    } catch (AccessControlException e) {
+      // The same refusal, raised by the session's permission check rather than by the
+      // removal itself. Normalized so that it reaches the caller as the one exception
+      // type the delete flow maps to a failure response.
+      if (LOG.isErrorEnabled()) {
+        LOG.error("access denied, can't remove node:" + node.getPath());
+      }
+      throw new AccessDeniedException("access denied, can't remove node:" + node.getPath(), e);
     } catch (Exception e) {
       if (LOG.isErrorEnabled()) {
         LOG.error("an unexpected error occurs while removing the node", e);
@@ -438,10 +459,13 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       removeMixinRestoreLocation(node);
       ret = false;
     } catch (AccessDeniedException e) {
+      // Not swallowed like the other failure modes here: a permission refusal must reach
+      // the caller as an actual error rather than a logged-and-ignored "-1", so that it
+      // surfaces as a real failure response instead of a false "moved to trash".
       if (LOG.isErrorEnabled()) {
         LOG.error("access denied, can't move to trash node:" + node.getPath());
       }
-      ret = false;
+      throw e;
     } catch (Exception e) {
       if (LOG.isErrorEnabled()) {
         LOG.error("an unexpected error occurs", e);
@@ -452,7 +476,11 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   }
 
   public static boolean canRemoveNode(Node node) throws RepositoryException {
-    return checkPermission(node, PermissionType.REMOVE);
+    // A user must always be able to clear their own Personal Documents space, even when
+    // a node inside it carries an ACL that does not grant them REMOVE (e.g. a node
+    // created there on somebody else's behalf) — see JCRDocumentsUtil#isInUserPrivateSpace.
+    return checkPermission(node, PermissionType.REMOVE)
+        || JCRDocumentsUtil.isInUserPrivateSpace(node, node.getSession().getUserID());
   }
 
   private static boolean checkPermission(Node node,String permissionType) throws RepositoryException {
