@@ -36,6 +36,7 @@ import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
@@ -52,6 +53,8 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.security.AccessControlException;
+import javax.jcr.AccessDeniedException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -197,6 +200,129 @@ public class JCRDeleteFileStorageTest {
 
     verify(node, times(1)).remove();
     verify(node, times(2)).removeMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
+  }
+
+  @Test
+  public void testDeleteDocumentDeniedOutsideOwnPrivateSpace() throws Exception {
+    String username = "testuser";
+    String currentRepository = "collaboration";
+    String path = "/Users/otheruser/Private/file1";
+    long currentOwnerId = 2;
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn(currentRepository);
+
+    ExtendedSession session1 = mock(ExtendedSession.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession(Mockito.any(), Mockito.any())).thenReturn(session1);
+
+    NodeImpl node = Mockito.mock(NodeImpl.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session1, path)).thenReturn(node);
+    when(node.getPath()).thenReturn(path);
+    when(node.isCheckedOut()).thenReturn(true);
+    SessionImpl nodeSession = mock(SessionImpl.class);
+    when(node.getSession()).thenReturn(nodeSession);
+    when(nodeSession.getUserID()).thenReturn(username);
+    // Neither the node's own ACL nor the private-space override grant this user REMOVE here.
+    doThrow(new AccessControlException("denied")).when((ExtendedNode) node).checkPermission(anyString());
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isInUserPrivateSpace(node, username)).thenReturn(false);
+
+    // The refusal must reach the caller as a real failure, not a logged-and-ignored "success".
+    assertThrows(IllegalAccessException.class,
+                 () -> jcrDeleteFileStorage.deleteDocument(path, "1", false, true, 0, userID, currentOwnerId));
+  }
+
+  @Test
+  public void testDeleteDocumentAllowedInsideOwnPrivateSpaceDespiteMissingAcl() throws Exception {
+    String username = "testuser";
+    String currentRepository = "collaboration";
+    String trashId = "999";
+    String path = "/Users/testuser/Private/file1";
+    long currentOwnerId = 2;
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn(currentRepository);
+
+    ExtendedSession session1 = mock(ExtendedSession.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession(Mockito.any(), Mockito.any())).thenReturn(session1);
+
+    NodeImpl node = Mockito.mock(NodeImpl.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session1, path)).thenReturn(node);
+    when(node.getPath()).thenReturn(path);
+    when(node.isCheckedOut()).thenReturn(true);
+    SessionImpl nodeSession = mock(SessionImpl.class);
+    when(node.getSession()).thenReturn(nodeSession);
+    when(nodeSession.getUserID()).thenReturn(username);
+    // The node's own ACL does not grant REMOVE (e.g. it was created there on this user's
+    // behalf without one), but the node lives inside the acting user's own Private space.
+    doThrow(new AccessControlException("denied")).when((ExtendedNode) node).checkPermission(anyString());
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isInUserPrivateSpace(node, username)).thenReturn(true);
+    when(trashStorage.moveToTrash(node, sessionProvider)).thenReturn(trashId);
+    when(trashStorage.getNodeByTrashId(trashId)).thenReturn(node);
+    NodeType nodeType = mock(NodeType.class);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
+
+    jcrDeleteFileStorage.deleteDocument(path, "1", false, true, 0, userID, currentOwnerId);
+
+    verify(trashStorage, times(1)).moveToTrash(node, sessionProvider);
+  }
+
+  @Test
+  public void testDeleteDocumentSurfacesRemovalRefusal() throws Exception {
+    String username = "testuser";
+    String path = "/document/file1";
+    NodeImpl node = prepareNodeToRemove(username, path);
+    // The node is removed outright rather than moved to trash, and the user's own session
+    // refuses the removal.
+    doThrow(new AccessDeniedException("denied")).when(node).remove();
+
+    // The refusal must reach the caller: returning normally here is reported as "removed".
+    assertThrows(IllegalAccessException.class,
+                 () -> jcrDeleteFileStorage.deleteDocument(path, "1", false, true, 0,
+                                                           new org.exoplatform.services.security.Identity(username), 2));
+  }
+
+  @Test
+  public void testDeleteDocumentSurfacesRemovalRefusalRaisedByTheSession() throws Exception {
+    String username = "testuser";
+    String path = "/document/file1";
+    NodeImpl node = prepareNodeToRemove(username, path);
+    // Same refusal, raised by the session's permission check rather than by the removal.
+    doThrow(new AccessControlException("denied")).when(node).remove();
+
+    assertThrows(IllegalAccessException.class,
+                 () -> jcrDeleteFileStorage.deleteDocument(path, "1", false, true, 0,
+                                                           new org.exoplatform.services.security.Identity(username), 2));
+  }
+
+  private NodeImpl prepareNodeToRemove(String username, String path) throws Exception {
+    String currentRepository = "collaboration";
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn(currentRepository);
+
+    ExtendedSession session1 = mock(ExtendedSession.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession(Mockito.any(), Mockito.any())).thenReturn(session1);
+
+    NodeImpl node = Mockito.mock(NodeImpl.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session1, path)).thenReturn(node);
+    when(node.getPath()).thenReturn(path);
+    when(node.getParent()).thenReturn(node);
+    // Already in trash: the delete removes the node outright instead of moving it there.
+    when(trashStorage.isInTrash(node)).thenReturn(true);
+    return node;
   }
 
   @Test
