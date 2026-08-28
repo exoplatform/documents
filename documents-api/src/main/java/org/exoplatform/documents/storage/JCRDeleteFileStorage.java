@@ -42,8 +42,9 @@ public interface JCRDeleteFileStorage {
    * @param delay
    * @param acIdentity
    * @param userIdentityId
+   * @throws IllegalAccessException if the acting user may not move this document to trash
    */
-  void deleteDocument(String documentPath, String documentId, boolean favorite, boolean checkToMoveToTrash, long delay, Identity acIdentity, long userIdentityId);
+  void deleteDocument(String documentPath, String documentId, boolean favorite, boolean checkToMoveToTrash, long delay, Identity acIdentity, long userIdentityId) throws IllegalAccessException;
 
   /**
    * Undo delete document
