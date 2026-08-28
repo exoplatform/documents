@@ -32,8 +32,9 @@
               <v-btn
                 height="20px"
                 min-width="20px"
-                class="pa-0"
-                icon
+                :class="isFolderName(folder, index) ? 'pa-0 text-truncate flex-shrink-1 clickable' : 'pa-0'"
+                :icon="!isFolderName(folder, index)"
+                :text="isFolderName(folder, index)"
                 v-bind="attrs"
                 v-on="on"
                 @click="openFolder(folder)">
@@ -115,6 +116,9 @@ export default {
     this.getBreadCrumbs(this.folderId);
   },
   methods: {
+    isFolderName(folder, index) {
+      return index > 0 && !folder.ellipsis;
+    },
     openFolder(folder) {
       if (folder.ellipsis) {
         return;
