@@ -5,6 +5,10 @@
       href: url,
       target: '_blank',
     }"
+    @mouseenter="hover = true"
+    @mouseleave="hover = false"
+    @focusin="focusWithin = true"
+    @focusout="focusWithin = false"
     @keydown.enter="openPreview"
     @auxclick="setAsViewed"
     @click="openPreview">
@@ -56,7 +60,17 @@
           class="flex-grow-1 flex-shrink-1 text-truncate" />
       </v-list-item-subtitle>
     </v-list-item-content>
-    <v-list-item-action>
+    <v-list-item-action class="d-flex flex-row align-center my-auto">
+      <v-btn
+        v-show="hover || focusWithin || $vuetify.breakpoint.mobile"
+        :title="$t('documents.label.show.details')"
+        :aria-label="$t('documents.label.show.details')"
+        icon
+        small
+        @keydown.enter.stop
+        @click.stop.prevent="openInfoDrawer">
+        <v-icon size="16" class="text-sub-title">fa-info-circle</v-icon>
+      </v-btn>
       <documents-favorite-button
         :id="id"
         :file="file"
@@ -87,6 +101,8 @@ export default {
   data: () => ({
     file: null,
     isFavorite: true,
+    hover: false,
+    focusWithin: false,
   }),
   computed: {
     iconWidth() {
@@ -170,6 +186,9 @@ export default {
     }
   },
   methods: {
+    openInfoDrawer() {
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.id}));
+    },
     openPreview(event) {
       this.setAsViewed(event);
       if (!this.url) {
