@@ -14,6 +14,7 @@ import java.util.*;
 
 import javax.jcr.*;
 import javax.jcr.nodetype.NodeType;
+import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
@@ -1775,5 +1776,74 @@ public class JCRDocumentFileStorageTest {
 
     verify(linkNode, times(1)).remove();
     verify(sessionProvider, atLeast(1)).close();
+  }
+
+  @Test
+  public void getDocumentCategoryIdsReturnsEmptyListWhenIdentityNotFound() {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityManager.getIdentity(99L)).thenReturn(null);
+
+    assertEquals(Collections.emptyList(), jcrDocumentFileStorage.getDocumentCategoryIds(99L, aclIdentity));
+  }
+
+  @Test
+  public void getDocumentCategoryIdsCollectsDistinctIdsFromSpaceScopedQuery() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    Identity ownerIdentity = mock(Identity.class);
+    when(identityManager.getIdentity(2L)).thenReturn(ownerIdentity);
+    when(ownerIdentity.getRemoteId()).thenReturn("test_space");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    Node identityRootNode = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       "test_space",
+                                                                       ownerIdentity,
+                                                                       sessionProvider))
+                      .thenReturn(identityRootNode);
+    Session session = mock(Session.class);
+    when(identityRootNode.getSession()).thenReturn(session);
+    when(identityRootNode.getPath()).thenReturn("/Groups/spaces/test_space/Documents");
+    Workspace workspace = mock(Workspace.class);
+    when(session.getWorkspace()).thenReturn(workspace);
+    QueryManager queryManager = mock(QueryManager.class);
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+    Query jcrQuery = mock(Query.class);
+    when(queryManager.createQuery("SELECT exo:categoryIds FROM nt:base " +
+        "WHERE 'mix:documentsCategory' IN jcr:mixinTypes " +
+        "AND jcr:path LIKE '/Groups/spaces/test_space/Documents/%' " +
+        "AND (jcr:primaryType = 'nt:file' OR jcr:primaryType = 'exo:symlink')",
+                                  Query.SQL)).thenReturn(jcrQuery);
+    QueryResult queryResult = mock(QueryResult.class);
+    when(jcrQuery.execute()).thenReturn(queryResult);
+    NodeIterator nodeIterator = mock(NodeIterator.class);
+    when(queryResult.getNodes()).thenReturn(nodeIterator);
+    when(nodeIterator.hasNext()).thenReturn(true, true, false);
+    Node firstDocument = mock(Node.class);
+    Node secondDocument = mock(Node.class);
+    when(nodeIterator.nextNode()).thenReturn(firstDocument, secondDocument);
+    when(firstDocument.hasProperty(NodeTypeConstants.DOCUMENT_CATEGORY_IDS)).thenReturn(true);
+    when(secondDocument.hasProperty(NodeTypeConstants.DOCUMENT_CATEGORY_IDS)).thenReturn(true);
+    Property firstProperty = mock(Property.class);
+    Property secondProperty = mock(Property.class);
+    when(firstDocument.getProperty(NodeTypeConstants.DOCUMENT_CATEGORY_IDS)).thenReturn(firstProperty);
+    when(secondDocument.getProperty(NodeTypeConstants.DOCUMENT_CATEGORY_IDS)).thenReturn(secondProperty);
+    Value[] firstValues = { categoryValue("3"), categoryValue("5"), categoryValue("not-a-number") };
+    Value[] secondValues = { categoryValue("5") };
+    when(firstProperty.getValues()).thenReturn(firstValues);
+    when(secondProperty.getValues()).thenReturn(secondValues);
+
+    List<Long> categoryIds = jcrDocumentFileStorage.getDocumentCategoryIds(2L, aclIdentity);
+
+    assertEquals(2, categoryIds.size());
+    assertTrue(categoryIds.containsAll(List.of(3L, 5L)));
+    verify(sessionProvider, times(1)).close();
+  }
+
+  private Value categoryValue(String value) throws Exception {
+    Value jcrValue = mock(Value.class);
+    when(jcrValue.getString()).thenReturn(value);
+    return jcrValue;
   }
 }
