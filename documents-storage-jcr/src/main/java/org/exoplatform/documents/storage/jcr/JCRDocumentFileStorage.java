@@ -184,6 +184,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       ZIP_EXTENSION               = ".zip";
 
+  static final String                               DOCUMENT_CATEGORY_IDS_QUERY = "SELECT exo:categoryIds FROM nt:base " +
+      "WHERE 'mix:documentsCategory' IN jcr:mixinTypes " +
+      "AND jcr:path LIKE '%s/%%' " +
+      "AND (jcr:primaryType = 'nt:file' OR jcr:primaryType = 'exo:symlink')";
+
   private static final String                       TEMP_DIRECTORY_PATH         = "java.io.tmpdir";
 
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory          = new HashMap<>();
@@ -1492,6 +1497,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public List<Long> getDocumentCategoryIds(long ownerId, Identity aclIdentity) {
     org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
+    if (ownerIdentity == null) {
+      return Collections.emptyList();
+    }
     SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
     try {
       Node identityRootNode = getIdentityRootNode(spaceService,
@@ -1504,10 +1512,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       Session session = identityRootNode.getSession();
       String rootPath = identityRootNode.getPath();
-      String query = "SELECT exo:categoryIds FROM nt:base " +
-          "WHERE 'mix:documentsCategory' IN jcr:mixinTypes " +
-          "AND jcr:path LIKE '" + rootPath + "/%' " +
-          "AND (jcr:primaryType = 'nt:file' OR jcr:primaryType = 'exo:symlink')";
+      String query = String.format(DOCUMENT_CATEGORY_IDS_QUERY, rootPath);
 
       Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(query, Query.SQL);
       QueryResult result = jcrQuery.execute();
