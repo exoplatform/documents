@@ -18,6 +18,7 @@ package org.exoplatform.documents.plugin;
 
 import java.util.List;
 
+import org.exoplatform.container.PortalContainer;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.portal.config.UserACL;
@@ -25,6 +26,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import io.meeds.social.category.plugin.CategoryPlugin;
+import io.meeds.social.category.service.CategoryLinkService;
+import io.meeds.social.category.service.CategoryPluginService;
+
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class DocumentCategoryPlugin implements CategoryPlugin {
@@ -36,6 +41,16 @@ public class DocumentCategoryPlugin implements CategoryPlugin {
 
   @Autowired
   private DocumentFileService documentFileService;
+
+  @Autowired
+  private PortalContainer     container;
+
+  private CategoryLinkService categoryLinkService;
+
+  @PostConstruct
+  public void init() {
+    container.getComponentInstanceOfType(CategoryPluginService.class).addPlugin(this);
+  }
 
   @Override
   public String getType() {
@@ -55,8 +70,18 @@ public class DocumentCategoryPlugin implements CategoryPlugin {
   }
 
   @Override
-  public List<Long> getCategoryIds(long spaceId, String username) {
-    return documentFileService.getDocumentCategoryIds(spaceId, username);
+  public List<Long> getCategoryIds(long spaceIdentityId, String username) {
+    if (spaceIdentityId <= 0) {
+      return getCategoryLinkService().getLinkedIds(OBJECT_TYPE);
+    }
+    return documentFileService.getDocumentCategoryIds(spaceIdentityId, username);
+  }
+
+  private CategoryLinkService getCategoryLinkService() {
+    if (categoryLinkService == null) {
+      categoryLinkService = container.getComponentInstanceOfType(CategoryLinkService.class);
+    }
+    return categoryLinkService;
   }
 
 }
