@@ -84,7 +84,11 @@ public class JCRDocumentsUtil {
 
   private static final String                           DEFAULT_GROUPS_HOME_PATH      = "/Groups";                             // NOSONAR
 
+  private static final String                           DEFAULT_USERS_HOME_PATH       = "/Users";                              // NOSONAR
+
   public static final String                            GROUPS_PATH_ALIAS             = "groupsPath";
+
+  public static final String                            USERS_PATH_ALIAS              = "usersPath";
 
   public static final String                            DOCUMENTS_NODE                = "Documents";
 
@@ -114,6 +118,8 @@ public class JCRDocumentsUtil {
 
   private static String groupsPath = null;
 
+  private static String usersPath = null;
+
   private JCRDocumentsUtil() {
     // Utils class, no constructor will be needed
   }
@@ -138,6 +144,21 @@ public class JCRDocumentsUtil {
       groupsPath = DEFAULT_GROUPS_HOME_PATH;
     }
     return groupsPath;
+  }
+
+  /**
+   * @return the JCR path holding every user's home node, e.g. {@code /Users}.
+   */
+  public static String getUsersPath() {
+    if (usersPath != null) {
+      return usersPath;
+    }
+    NodeHierarchyCreator nodeHierarchyCreator = CommonsUtils.getService(NodeHierarchyCreator.class);
+    usersPath = nodeHierarchyCreator == null ? null : nodeHierarchyCreator.getJcrPath(USERS_PATH_ALIAS);
+    if (StringUtils.isBlank(usersPath)) {
+      usersPath = DEFAULT_USERS_HOME_PATH;
+    }
+    return usersPath;
   }
 
   public static List<FileNode> toFileNodes(IdentityManager identityManager,
@@ -633,6 +654,9 @@ public class JCRDocumentsUtil {
       }
 
     }
+    // Owning the containing space outranks a node's own ACL for delete purposes — see
+    // isInUserPrivateSpace.
+    canDelete = canDelete || isInUserPrivateSpace(node, userId);
     documentNode.setAcl(new NodePermission(true, canEdit, canDelete, isPublic, permissions,null, null,null));
   }
 
@@ -669,6 +693,56 @@ public class JCRDocumentsUtil {
       LOG.debug("Error retrieving node with path {}", nodePath, e);
     }
     return null;
+  }
+
+  /**
+   * Whether the node sits inside {@code username}'s own Personal Documents ("Private")
+   * space.
+   * <p>
+   * Whoever owns the containing space must always be able to manage what is inside it,
+   * even a node whose own explicit ACL does not grant them {@code REMOVE}/
+   * {@code SET_PROPERTY} — an ACE that never named the space's owner (e.g. a node
+   * created there on somebody else's behalf) must not outrank ownership of the space
+   * itself.
+   *
+   * @param node the node to check
+   * @param username the user whose private space to check against
+   * @return true when the node's path sits under that user's own Private root
+   * @throws RepositoryException if the node's path cannot be read
+   */
+  public static boolean isInUserPrivateSpace(Node node, String username) throws RepositoryException {
+    if (node == null || StringUtils.isBlank(username)) {
+      return false;
+    }
+    return StringUtils.equals(username, getPrivateDriveOwner(node.getPath()));
+  }
+
+  /**
+   * The user whose personal drive holds the given path.
+   * <p>
+   * Resolved by anchoring on the users home ({@link #getUsersPath()}) and on the
+   * <em>first</em> {@code Private} segment of the path, so that the owner is the user
+   * whose home node the drive belongs to — never a folder further down that happens to
+   * be named after a user, wherever it sits.
+   *
+   * @param path the JCR path to resolve
+   * @return the owning username, or null when the path is not inside a personal drive
+   */
+  private static String getPrivateDriveOwner(String path) {
+    String usersHomePath = getUsersPath();
+    if (StringUtils.isBlank(path) || !path.startsWith(usersHomePath + "/")) {
+      return null;
+    }
+    String privateRootSuffix = "/" + USER_PRIVATE_ROOT_NODE;
+    int index = path.indexOf(privateRootSuffix + "/");
+    if (index < 0 && path.endsWith(privateRootSuffix)) {
+      index = path.length() - privateRootSuffix.length();
+    }
+    if (index <= usersHomePath.length()) {
+      return null;
+    }
+    String userHomePath = path.substring(0, index);
+    return userHomePath.substring(userHomePath.lastIndexOf('/') + 1);
   }
 
   public static Node getIdentityRootNode(SpaceService spaceService,
