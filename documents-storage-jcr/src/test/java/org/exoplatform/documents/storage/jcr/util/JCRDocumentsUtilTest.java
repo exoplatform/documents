@@ -478,4 +478,22 @@ public class JCRDocumentsUtilTest {
     assertEquals(1234L, result.getSize());
   }
 
+  /**
+   * The copy counter belongs before the extension. A name ending in the counter -
+   * "report.docx (1)" - is no longer recognised as a .docx and does not open,
+   * which is what EXO-89931 was reported for.
+   */
+  @Test
+  public void getNewIndexedNameKeepsTheExtensionLast() {
+    assertEquals("report (1).docx", JCRDocumentsUtil.getNewIndexedName("report.docx", " (1)"));
+    // The LAST dot is the extension separator, so a dotted base name is preserved.
+    assertEquals("my.report (2).docx", JCRDocumentsUtil.getNewIndexedName("my.report.docx", " (2)"));
+    // No extension: the counter is simply appended, with no stray dot introduced.
+    assertEquals("report (1)", JCRDocumentsUtil.getNewIndexedName("report", " (1)"));
+    // A hidden file's leading dot is not an extension separator: splitting there
+    // would open the name with the counter, which is why duplicateItem guards on
+    // "dot > 0" before calling this rather than the helper doing it itself.
+    assertEquals(" (1).gitignore", JCRDocumentsUtil.getNewIndexedName(".gitignore", " (1)"));
+  }
+
 }
