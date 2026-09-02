@@ -331,6 +331,61 @@ public class JCRDocumentFileStorageTest {
     verify(sessionProvider, times(2)).close();
   }
 
+  /**
+   * EXO-89931: duplicating "report.docx" into its own folder used to create
+   * "report.docx (1)", a name no longer recognised as a .docx, so the copy would
+   * not open. The counter must land before the extension.
+   * <p>
+   * {@code getNewIndexedName} and {@code isFolder} are stubbed to call the real
+   * methods: this class mocks {@code JCRDocumentsUtil} statically, so leaving them
+   * mocked would make the assertion pass against any implementation.
+   */
+  @Test
+  public void duplicateDocumentPutsTheCopyCounterBeforeTheExtension() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl currentNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(currentNode);
+    // The naming helpers must be real here, or this test cannot fail.
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(currentNode.getName()).thenReturn("report.docx");
+    when(currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(currentNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("report.docx");
+    when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(currentNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(false);
+    when(currentNode.getParent()).thenReturn(parentNode);
+    when(currentNode.getIdentifier()).thenReturn("1");
+    when(parentNode.getIdentifier()).thenReturn("1");
+    when(currentNode.getPath()).thenReturn("/Documents/Private");
+    when(parentNode.getPath()).thenReturn("/Documents/Private/user/report.docx");
+    // The source itself occupies the name, so the counter loop runs exactly once.
+    when(parentNode.hasNode("report.docx")).thenReturn(true);
+    when(parentNode.hasNode("report (1).docx")).thenReturn(false);
+    when(parentNode.addNode(anyString(), anyString())).thenReturn(currentNode);
+
+    jcrDocumentFileStorage.duplicateDocument(1L, "1", "", userID);
+
+    // Before the fix this was addNode("report.docx (1)", ...), which Mockito reports
+    // verbatim as the actual invocation when this verification fails.
+    verify(parentNode).addNode("report (1).docx", NodeTypeConstants.NT_FILE);
+  }
+
   @Test
   public void copyDocument() throws Exception {
     Session systemSession = mock(Session.class);
