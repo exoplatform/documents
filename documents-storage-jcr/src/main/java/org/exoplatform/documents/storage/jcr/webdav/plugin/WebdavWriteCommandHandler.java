@@ -22,6 +22,7 @@ import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.security.AccessControlException;
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -45,6 +46,7 @@ import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.utils.MimeTypeResolver;
 import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemOrder;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
@@ -751,15 +753,23 @@ public class WebdavWriteCommandHandler {
     return index <= 0 ? "/" : normalizedPath.substring(0, index);
   }
 
+  @SneakyThrows
   private boolean canRemoveNode(Node node) {
-    return checkPermission(node, PermissionType.REMOVE);
+    // A user must always be able to clear their own Personal Documents space, even when
+    // a node inside it carries an ACL that does not grant them REMOVE (e.g. a node
+    // created there on somebody else's behalf) — see JCRDocumentsUtil#isInUserPrivateSpace.
+    return checkPermission(node, PermissionType.REMOVE)
+        || JCRDocumentsUtil.isInUserPrivateSpace(node, node.getSession().getUserID());
   }
 
   private boolean checkPermission(Node node, String permissionType) {
     try {
       ((ExtendedNode) node).checkPermission(permissionType);
       return true;
-    } catch (RepositoryException e) {
+    } catch (AccessControlException | RepositoryException e) {
+      // ExtendedNode#checkPermission declares both: a denial normally surfaces as the
+      // former, not the latter, and only catching RepositoryException let it escape
+      // uncaught instead of being reported as a plain "can't remove".
       return false;
     }
   }
