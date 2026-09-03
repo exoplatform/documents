@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -187,6 +188,60 @@ public class WebdavReadCommandHandlerTest {
     assertFalse(webDavItem.isFile());
     assertNotNull(webDavItem.getIdentifier());
     assertNotNull(webDavItem.getProperties());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testGetRootPathAddressesSpaceByPrettyNameAndPersonalDriveByFullName() {
+    String spaceBaseJcrPath = "/groups/spaces/rd-ops/Documents"; // NOSONAR
+    Space space = mock(Space.class);
+    Identity spaceIdentity = mock(Identity.class);
+    Profile spaceProfile = mock(Profile.class);
+
+    when(memberSpacesListAccess.getSize()).thenReturn(1);
+    when(spaceService.getMemberSpacesIds(USERNAME, 0, 1)).thenReturn(List.of("s1"));
+    when(spaceService.getSpaceById("s1")).thenReturn(space);
+    when(space.getPrettyName()).thenReturn("rd-ops");
+    when(space.getDisplayName()).thenReturn("R&D / Ops");
+    when(identityManager.getOrCreateSpaceIdentity("rd-ops")).thenReturn(spaceIdentity);
+    when(identityManager.getIdentity(42L)).thenReturn(spaceIdentity);
+    when(spaceIdentity.getProfile()).thenReturn(spaceProfile);
+    when(spaceProfile.getFullName()).thenReturn("R&D / Ops");
+    when(spaceIdentity.getIdentityId()).thenReturn(42L);
+    when(spaceIdentity.isSpace()).thenReturn(true);
+    when(spaceIdentity.getRemoteId()).thenReturn("rd-ops");
+    when(pathCommandHandler.getIdentityBaseJcrPath(42L)).thenReturn(spaceBaseJcrPath);
+    when(session.getItem(spaceBaseJcrPath)).thenReturn(node);
+
+    WebDavItem webDavItem = handler.get(session,
+                                        "/",
+                                        REQUESTED_PROPERTY_NAMES,
+                                        false,
+                                        1,
+                                        BASE_URI,
+                                        USERNAME);
+
+    assertNotNull(webDavItem.getChildren());
+    WebDavItem spaceItem = webDavItem.getChildren()
+                                     .stream()
+                                     .filter(child -> child.getIdentifier().toString().contains("%2842%29"))
+                                     .findFirst()
+                                     .orElse(null);
+    assertNotNull(spaceItem);
+    // the drive is addressed by the Space pretty name, so the '/' of the
+    // display name never reaches the href
+    assertEquals(BASE_URI + "/rd-ops%20%2842%29", spaceItem.getIdentifier().toString());
+    // while it stays presented under its real display name
+    assertEquals("R&D / Ops", spaceItem.getProperty(DISPLAYNAME).getValue());
+
+    // the personal drive keeps the user full name, it is not slugified
+    WebDavItem userItem = webDavItem.getChildren()
+                                    .stream()
+                                    .filter(child -> child.getIdentifier().toString().contains("%281%29"))
+                                    .findFirst()
+                                    .orElse(null);
+    assertNotNull(userItem);
+    assertEquals(BASE_URI + "/John%20Doe%20%281%29", userItem.getIdentifier().toString());
   }
 
   @Test
