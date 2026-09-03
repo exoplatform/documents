@@ -38,6 +38,8 @@ import static org.exoplatform.documents.storage.jcr.util.Utils.getStringProperty
 import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.IDENTITY_PATHS_FORMAT;
 import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.LOG;
 import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.PROPERTY_NAMES;
+import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.getIdentitySegmentName;
+import static org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler.toWebDavSegment;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDOUT;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHILDCOUNT;
@@ -190,7 +192,7 @@ public class WebdavReadCommandHandler {
         return get(getNode(session, pathCommandHandler.resolveToJcrPath(session, webDavPath)),
                    pathCommandHandler.getIdentityBaseJcrPath(webDavPath),
                    identity.getIdentityId(),
-                   identity.getProfile().getFullName(),
+                   getIdentitySegmentName(identity),
                    requestedPropertyNames,
                    requestPropertyNamesOnly,
                    depth,
@@ -261,7 +263,7 @@ public class WebdavReadCommandHandler {
                           .map(version -> get(getVersionNode(version),
                                               identityBaseJcrPath,
                                               identity.getIdentityId(),
-                                              identity.getProfile().getFullName(),
+                                              getIdentitySegmentName(identity),
                                               requestedPropertyNames,
                                               false,
                                               0,
@@ -365,7 +367,7 @@ public class WebdavReadCommandHandler {
       return get(node,
                  pathCommandHandler.getIdentityBaseJcrPath(identityId),
                  identity.getIdentityId(),
-                 identity.getProfile().getFullName(),
+                 getIdentitySegmentName(identity),
                  requestedPropertyNames,
                  false,
                  0,
@@ -377,7 +379,7 @@ public class WebdavReadCommandHandler {
   private WebDavItem get(Node node, // NOSONAR
                          String identityBaseJcrPath,
                          long identityId,
-                         String displayName,
+                         String segmentName,
                          Set<QName> requestedPropertyNames,
                          boolean requestPropertyNamesOnly,
                          int depth,
@@ -387,8 +389,8 @@ public class WebdavReadCommandHandler {
     }
     WebDavItem result = new WebDavItem();
     result.setFile(isFile(node));
-    String webDavPath = getMappedWebDavPath(node, identityBaseJcrPath, identityId, displayName);
-    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, displayName);
+    String webDavPath = getMappedWebDavPath(node, identityBaseJcrPath, identityId, segmentName);
+    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, segmentName);
     String identifier = identityBaseUri;
     if (!StringUtils.equals(webDavPath, identityRootWebDavPath)) {
       identifier = identityBaseUri + webDavPath.substring(identityRootWebDavPath.length());
@@ -400,7 +402,7 @@ public class WebdavReadCommandHandler {
                 node,
                 identityBaseJcrPath,
                 identityId,
-                displayName,
+                segmentName,
                 requestedPropertyNames,
                 requestPropertyNamesOnly,
                 depth,
@@ -418,7 +420,7 @@ public class WebdavReadCommandHandler {
                            Node node,
                            String identityBaseJcrPath,
                            long identityId,
-                           String displayName,
+                           String segmentName,
                            Set<QName> requestedPropertyNames,
                            boolean requestPropertyNamesOnly,
                            int depth,
@@ -431,7 +433,7 @@ public class WebdavReadCommandHandler {
                    .map(childNode -> get(childNode,
                                          identityBaseJcrPath,
                                          identityId,
-                                         displayName,
+                                         segmentName,
                                          requestedPropertyNames,
                                          requestPropertyNamesOnly,
                                          depth - 1,
@@ -706,9 +708,12 @@ public class WebdavReadCommandHandler {
       displayName = getDisplayName(identityId);
     }
     WebDavItem identityWebDavItem = new WebDavItem();
+    // The drive is addressed by its segment name (Space pretty name / username)
+    // and only presented under its display name
+    String segmentName = getIdentitySegmentName(identityManager.getIdentity(identityId));
     String identityBaseUri = String.format(IDENTITY_PATHS_FORMAT,
                                            baseUri,
-                                           encodeUrlString(displayName),
+                                           encodeUrlString(toWebDavSegment(segmentName)),
                                            IDENTITY_ID_PREFIX,
                                            identityId,
                                            IDENTITY_ID_SUFFIX);
@@ -723,7 +728,7 @@ public class WebdavReadCommandHandler {
       identityWebDavItem.setWebDavPath(getMappedWebDavPath(identityParentNode,
                                                            identityBaseJcrPath,
                                                            identityId,
-                                                           displayName));
+                                                           segmentName));
       addProperties(identityWebDavItem,
                     identityParentNode,
                     requestedPropertyNames,
@@ -733,7 +738,7 @@ public class WebdavReadCommandHandler {
                   identityParentNode,
                   identityBaseJcrPath,
                   identityId,
-                  displayName,
+                  segmentName,
                   requestedPropertyNames,
                   requestPropertyNamesOnly,
                   depth,
@@ -765,9 +770,9 @@ public class WebdavReadCommandHandler {
     }
   }
 
-  private String getIdentityRootWebDavPath(long identityId, String displayName) {
+  private String getIdentityRootWebDavPath(long identityId, String segmentName) {
     return String.format("/%s%s%s%s",
-                         encodeUrlString(displayName),
+                         encodeUrlString(toWebDavSegment(segmentName)),
                          IDENTITY_ID_PREFIX,
                          identityId,
                          IDENTITY_ID_SUFFIX);
@@ -777,8 +782,8 @@ public class WebdavReadCommandHandler {
   private String getMappedWebDavPath(Node node,
                                      String identityBaseJcrPath,
                                      long identityId,
-                                     String displayName) {
-    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, displayName);
+                                     String segmentName) {
+    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, segmentName);
     if (StringUtils.equals(node.getPath(), identityBaseJcrPath)) {
       return identityRootWebDavPath;
     } else {
@@ -804,7 +809,7 @@ public class WebdavReadCommandHandler {
   private String getIdentityBaseUri(String baseUri, Identity identity) {
     return String.format(IDENTITY_PATHS_FORMAT,
                          baseUri,
-                         encodeUrlString(identity.getProfile().getFullName()),
+                         encodeUrlString(toWebDavSegment(getIdentitySegmentName(identity))),
                          IDENTITY_ID_PREFIX,
                          identity.getId(),
                          IDENTITY_ID_SUFFIX);
