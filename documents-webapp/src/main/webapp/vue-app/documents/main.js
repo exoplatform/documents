@@ -173,11 +173,11 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       },
       openInEditMode(file) {
         const fileId = file.sourceID ? file.sourceID : file.id;
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&backTo=${window.location.pathname}`, '_blank');
+        this.$documentsUtils.openLink(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&backTo=${window.location.pathname}`, '_blank');
       },
       openInReadOnlyMode(file) {
         const fileId = file.sourceID ? file.sourceID : file.id;
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
+        this.$documentsUtils.openLink(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
       },
     },
     template: `<documents-main id="${appId}" />`,

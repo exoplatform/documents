@@ -122,7 +122,7 @@ export default {
     openFileInEditor(mode) {
       if (this.attachment && this.attachmentId) {
         const url = this.$documentsUtils.getEditorUrl(this.attachment,mode);
-        window.open(url,'_blank');
+        this.$documentsUtils.openLink(url,'_blank');
       }
     },
   }
