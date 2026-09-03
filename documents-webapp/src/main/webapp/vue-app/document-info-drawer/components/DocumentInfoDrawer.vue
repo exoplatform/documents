@@ -570,7 +570,7 @@ export default {
           folderPath = `${eXo.env.portal.defaultPath}/dashboard/drive/${folderPath}`;   
         }
       }
-      window.open(folderPath,'_self');
+      this.$documentsUtils.openLink(folderPath,'_self');
     },
     openPreview() {
       if (this.file.folder) {
@@ -609,7 +609,7 @@ export default {
     openFileInEditor(mode) {
       if (this.file && this.fileId) {
         const url = this.$documentsUtils.getEditorUrl(this.file,mode);
-        window.open(url,'_blank');
+        this.$documentsUtils.openLink(url,'_blank');
       }
     },
     favoriteRemoved() {

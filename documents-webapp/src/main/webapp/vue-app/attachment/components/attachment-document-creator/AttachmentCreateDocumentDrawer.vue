@@ -521,7 +521,7 @@ export default {
         this.$root.$emit('alert-message', this.$t('attachments.upload.success'), 'success');
         this.resetNewDocInput();
         if (openInEditor) {
-          window.open(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${doc.id}&backTo=${window.location.pathname}`, '_blank');
+          this.$documentsUtils.openLink(`${eXo.env.portal.context}/${eXo.env.portal.portalName}/oeditor?docId=${doc.id}&backTo=${window.location.pathname}`, '_blank');
         }
         // Return to the level-1 attachments drawer (attachment host) or simply
         // close the standalone drawer (drive host).

@@ -101,6 +101,20 @@ export function getEditorUrl(file, mode) {
   return url;
 }
 
+export function openLink(url, target = '_blank') {
+  if (target === '_self') {
+    window.location.href = url;
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = target;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export function getViewType(appId) {
     return localStorage.getItem(`documents-stored-view-type-${appId}`) || 'listView';
 }
