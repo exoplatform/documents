@@ -188,6 +188,7 @@ export default {
     userIdentity: null,
     spaceIdentity: null,
     spaceIdentityId: null,
+    spaceIdentityRemoteId: null,
     hrefCopied: false,
     canCopy: false,
     tipsByOs: {
@@ -269,12 +270,15 @@ export default {
       };
     },
     href() {
+      // The personal drive is addressed by the user full name, a Space by its
+      // pretty name — never by the Space display name, which may hold a '/'
+      // and would split the drive into two path segments
       if (this.driveType === 'ALL') {
         return `${window.location.origin}/webdav/drives`;
       } else if (this.driveType === 'PERSONAL') {
         return `${window.location.origin}/webdav/drives/d/${this.userFullName} (${eXo.env.portal.userIdentityId})`;
       } else if (this.driveType === 'SPACE' && this.spaceIdentityId) {
-        return `${window.location.origin}/webdav/drives/d/${this.spaceIdentity.displayName} (${this.spaceIdentityId})`;
+        return `${window.location.origin}/webdav/drives/d/${this.spaceIdentityRemoteId} (${this.spaceIdentityId})`;
       } else {
         return null;
       }
@@ -289,9 +293,11 @@ export default {
     },
     async spaceIdentity() {
       this.spaceIdentityId = null;
+      this.spaceIdentityRemoteId = null;
       if (this.spaceIdentity) {
         const identity = await this.$identityService.getIdentityByProviderIdAndRemoteId(this.spaceIdentity.providerId, this.spaceIdentity.remoteId);
         this.spaceIdentityId = identity?.id;
+        this.spaceIdentityRemoteId = identity?.remoteId || this.spaceIdentity.remoteId;
       }
     },
   },

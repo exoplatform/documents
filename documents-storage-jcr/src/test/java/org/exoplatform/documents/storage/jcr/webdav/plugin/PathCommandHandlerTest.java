@@ -493,7 +493,7 @@ public class PathCommandHandlerTest {
     String newIdentityBaseJcrPath = "/groups/spaces/marketing/Documents"; // NOSONAR
     String newParentJcrPath = newIdentityBaseJcrPath + "/Folder";
     String newJcrPath = newParentJcrPath + "/rapport_equipe.docx";
-    String newIdentityRootWebDavPath = "/Marketing%20Space%20%2842%29"; // NOSONAR
+    String newIdentityRootWebDavPath = "/marketing%20%2842%29"; // NOSONAR
 
     NodeImpl movedNode = mock(NodeImpl.class);
     NodeImpl movedParent = mock(NodeImpl.class);
@@ -567,6 +567,66 @@ public class PathCommandHandlerTest {
     assertEquals(newParentJcrPath, refreshed.getParentJcrPath());
     assertEquals(NODE_TITLE_WITH_ACCENT, refreshed.getVisibleName());
     assertEquals(newIdentityRootWebDavPath + "/Folder/Rapport%20%C3%89quipe.docx", refreshed.getWebDavPath());
+  }
+
+  @Test
+  public void testToWebDavSegmentReplacesCharactersUnusableInAPathSegment() {
+    assertEquals("R&D _ Ops", PathCommandHandler.toWebDavSegment("R&D / Ops"));
+    assertEquals("a_b", PathCommandHandler.toWebDavSegment("a\\b"));
+    assertEquals("50_ Club", PathCommandHandler.toWebDavSegment("50% Club"));
+    assertEquals("a_b", PathCommandHandler.toWebDavSegment("a;b"));
+    assertEquals("a_b", PathCommandHandler.toWebDavSegment("a\nb"));
+    assertEquals("Marketing Équipe", PathCommandHandler.toWebDavSegment("Marketing Équipe"));
+    assertEquals("", PathCommandHandler.toWebDavSegment(null));
+  }
+
+  @Test
+  @SneakyThrows
+  public void testGetOrCreateWebDavPathAddressesSpaceDriveByPrettyNameWhenDisplayNameHasSlash() {
+    String spaceBaseJcrPath = "/groups/spaces/marketing/Documents"; // NOSONAR
+    String spaceFileJcrPath = spaceBaseJcrPath + "/rapport.docx";
+
+    NodeImpl spaceFileNode = mock(NodeImpl.class);
+    NodeImpl spaceRootNode = mock(NodeImpl.class);
+    SessionImpl spaceSession = mock(SessionImpl.class);
+    Identity spaceIdentity = mock(Identity.class);
+    Space marketingSpace = mock(Space.class);
+
+    when(spaceFileNode.getPath()).thenReturn(spaceFileJcrPath);
+    when(spaceFileNode.getName()).thenReturn("rapport.docx");
+    when(spaceFileNode.getIdentifier()).thenReturn("space-file-id");
+    when(spaceFileNode.getParent()).thenReturn(spaceRootNode);
+    when(spaceFileNode.getSession()).thenReturn(spaceSession);
+    when(spaceSession.getUserID()).thenReturn(USER1);
+    when(spaceRootNode.getPath()).thenReturn(spaceBaseJcrPath);
+
+    when(spaceService.getSpaceByGroupId("/spaces/marketing")).thenReturn(marketingSpace);
+    when(spaceService.getSpaceByPrettyName(SPACE_NAME)).thenReturn(marketingSpace);
+    when(marketingSpace.getPrettyName()).thenReturn(SPACE_NAME);
+    when(marketingSpace.getGroupId()).thenReturn("/spaces/marketing");
+    when(marketingSpace.getDisplayName()).thenReturn("R&D / Ops");
+    when(identityManager.getOrCreateSpaceIdentity(SPACE_NAME)).thenReturn(spaceIdentity);
+    when(identityManager.getIdentity(42L)).thenReturn(spaceIdentity);
+    when(spaceIdentity.getIdentityId()).thenReturn(42L);
+    when(spaceIdentity.isSpace()).thenReturn(true);
+    when(spaceIdentity.getRemoteId()).thenReturn(SPACE_NAME);
+
+    when(webDavPathMappingStorage.findByNodeIdentifier(anyString())).thenReturn(Optional.empty());
+    when(webDavPathMappingStorage.findByJcrPath(anyString())).thenReturn(Optional.empty());
+    when(webDavPathMappingStorage.findByParentJcrPathAndNormalizedVisibleName(anyString(),
+                                                                              anyString())).thenReturn(Optional.empty());
+
+    String result = handler.getOrCreateWebDavPath(spaceFileNode);
+
+    // the drive is addressed by the Space pretty name — the name its JCR drive
+    // is created under — so the '/' of the display name never reaches the path:
+    // %2F is rejected before any handler runs, and once decoded it would split
+    // the drive into two segments
+    assertEquals("/marketing%20%2842%29/rapport.docx", result);
+    assertFalse(result.contains("%2F"));
+
+    // the identity id is still readable back from the path the client sends
+    assertEquals(Long.valueOf(42L), handler.getIdentityIdFromWebDavPath(handler.decodeUrlString(result)));
   }
 
   @Test
