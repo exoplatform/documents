@@ -23,8 +23,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.jcr.*;
@@ -95,6 +95,15 @@ public class PathCommandHandler {
 
   public static final String         PATHS_CONCAT_FORMAT                 = "%s/%s";
 
+  public static final String         SEGMENT_CHAR_REPLACEMENT            = "_";
+
+  /**
+   * Characters a name cannot carry into a WebDAV path segment: the two path
+   * separators, and the characters whose percent-encoded form is in
+   * {@code StrictHttpFirewall}'s blocklist.
+   */
+  private static final Pattern       UNSAFE_SEGMENT_CHARS                = Pattern.compile("[/\\\\%;\\p{Cntrl}]");
+
   protected static final Log         LOG                                 = ExoLogger.getLogger(PathCommandHandler.class);
 
   private static final String        WEBDAV_IDENTITY_JCR_PATH_CACHE_NAME = "webdav.identityJcrBasePath";
@@ -144,6 +153,23 @@ public class PathCommandHandler {
   @PostConstruct
   public void init() {
     addMappingEventListener();
+  }
+
+  /**
+   * Last-resort guard keeping a drive name inside a single WebDAV path segment.
+   * The names fed to it — a Space pretty name, a username — are already URL-safe
+   * by construction (see {@link #getIdentitySegmentName(Identity)}); this only
+   * makes sure an identity store that yields something unexpected cannot emit a
+   * '%2F', which is rejected before the request reaches any handler and which,
+   * once decoded, would split the drive into two segments so that the identity
+   * id can no longer be read back from the path.
+   *
+   * @param segmentName drive name, may be null
+   * @return the name with every character unusable in a path segment replaced
+   *         by {@link #SEGMENT_CHAR_REPLACEMENT}
+   */
+  public static String toWebDavSegment(String segmentName) {
+    return UNSAFE_SEGMENT_CHARS.matcher(StringUtils.defaultString(segmentName)).replaceAll(SEGMENT_CHAR_REPLACEMENT);
   }
 
   @SneakyThrows
@@ -264,11 +290,13 @@ public class PathCommandHandler {
       if (session.itemExists(legacyChildJcrPath)) {
         Item existingItem = session.getItem(legacyChildJcrPath);
         if (existingItem instanceof Node existingNode) {
-          String existingWebDavPath = getOrCreateWebDavPath(existingNode);
-          String decodedExistingWebDavPath = decodeUrlString(existingWebDavPath);
-          String decodedExistingWebDavPathPrefix = StringUtils.removeEnd(decodedExistingWebDavPath, "/") + "/"; // NOSONAR
-          if (webDavPath.startsWith(decodedExistingWebDavPathPrefix)
-              || webDavPath.equals(decodedExistingWebDavPath)) {
+          // Compare the identity-relative parts only: the drive segment is
+          // addressed by its id, so a client may legitimately hold an older
+          // spelling of the drive name in the path it sends
+          String existingRelativePath = getIdentityRelativeDecodedWebDavPath(getOrCreateWebDavPath(existingNode));
+          if (StringUtils.isBlank(existingRelativePath)
+              || StringUtils.equals(identityRelativeWebDavPath, existingRelativePath)
+              || StringUtils.startsWith(identityRelativeWebDavPath, existingRelativePath + "/")) {
             currentParentJcrPath = legacyChildJcrPath;
             continue;
           }
@@ -307,7 +335,7 @@ public class PathCommandHandler {
       return null;
     }
     String identityBaseJcrPath = getIdentityBaseJcrPath(identityId);
-    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, getIdentityDisplayName(identity));
+    String identityRootWebDavPath = getIdentityRootWebDavPath(identityId, getIdentitySegmentName(identity));
     return getOrCreateWebDavPath(String.valueOf(identityId),
                                  identityBaseJcrPath,
                                  identityRootWebDavPath,
@@ -483,6 +511,19 @@ public class PathCommandHandler {
     return Arrays.stream(webDavPath.split("/"))
                  .filter(StringUtils::isNotBlank)
                  .skip(1)
+                 .collect(Collectors.joining("/"));
+  }
+
+  /**
+   * @param encodedWebDavPath a WebDAV path as stored/emitted, percent-encoded
+   * @return the same path without its drive segment, each remaining segment
+   *         decoded — comparable with the decoded path a client sends
+   */
+  private String getIdentityRelativeDecodedWebDavPath(String encodedWebDavPath) {
+    return Arrays.stream(StringUtils.defaultString(encodedWebDavPath).split("/"))
+                 .filter(StringUtils::isNotBlank)
+                 .skip(1)
+                 .map(this::decodeUrlString)
                  .collect(Collectors.joining("/"));
   }
 
@@ -734,30 +775,42 @@ public class PathCommandHandler {
   }
 
   private String getIdentityRootWebDavPath(long identityId) {
-    return getIdentityRootWebDavPath(identityId, getIdentityDisplayName(identityId));
+    return getIdentityRootWebDavPath(identityId, getIdentitySegmentName(identityManager.getIdentity(identityId)));
   }
 
-  private String getIdentityRootWebDavPath(long identityId, String displayName) {
+  private String getIdentityRootWebDavPath(long identityId, String segmentName) {
     return String.format("/%s%s%s%s",
-                         encodeUrlString(displayName),
+                         encodeUrlString(toWebDavSegment(segmentName)),
                          IDENTITY_ID_PREFIX,
                          identityId,
                          IDENTITY_ID_SUFFIX);
   }
 
-  private String getIdentityDisplayName(long identityId) {
-    Identity identity = identityManager.getIdentity(identityId);
-    return Objects.requireNonNullElseGet(getIdentityDisplayName(identity), () -> String.valueOf(identityId));
-  }
-
-  private String getIdentityDisplayName(Identity identity) {
-    if (identity != null && identity.isSpace()) {
-      Space space = spaceService.getSpaceByPrettyName(identity.getRemoteId());
-      if (space != null) {
-        return space.getDisplayName();
-      }
+  /**
+   * Returns the name an identity contributes to its WebDAV drive segment:
+   * <ul>
+   * <li>a Space is addressed by its <b>pretty name</b>, the very name its drive
+   * is created under in JCR
+   * (<code>/groups/spaces/&lt;prettyName&gt;/Documents</code>): URL-safe by
+   * construction and frozen at creation, unlike the Space display name, which a
+   * rename can change and which may carry a '/';</li>
+   * <li>a personal drive keeps the user <b>full name</b>, which reads far better
+   * than a username when the drive is mounted, and which
+   * {@link #toWebDavSegment(String)} keeps inside a single path segment.</li>
+   * </ul>
+   *
+   * @param identity {@link Identity} of the drive owner, may be null
+   * @return the name the drive is addressed by, never null
+   */
+  public static String getIdentitySegmentName(Identity identity) {
+    if (identity == null) {
+      return "";
     }
-    return identity == null ? null : identity.getProfile().getFullName();
+    if (identity.isSpace()) {
+      return StringUtils.defaultIfBlank(identity.getRemoteId(), identity.getId());
+    }
+    String fullName = identity.getProfile() == null ? null : identity.getProfile().getFullName();
+    return StringUtils.firstNonBlank(fullName, identity.getRemoteId(), identity.getId(), "");
   }
 
   @SneakyThrows
