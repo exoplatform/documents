@@ -16,10 +16,23 @@
  */
 package org.exoplatform.documents.storage.jcr.listener;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import io.meeds.social.category.model.CategoryObject;
-import lombok.SneakyThrows;
+import javax.jcr.Node;
+import javax.jcr.Session;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -29,31 +42,27 @@ import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.ListenerService;
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 
-import javax.jcr.Node;
-import javax.jcr.Session;
+import io.meeds.social.category.model.CategoryObject;
+
+import lombok.SneakyThrows;
 
 @SpringBootTest(classes = { CategoryLinkModifiedDocumentListener.class, })
 class CategoryLinkModifiedDocumentListenerTest {
 
-  @MockBean
+  @MockitoBean
   private DocumentFileService                  documentFileService;
 
-  @MockBean
+  @MockitoBean
   private RepositoryService                    repositoryService;
 
-  @MockBean
+  @MockitoBean
   private SessionProviderService               sessionProviderService;
 
-  @MockBean
+  @MockitoBean
   private ListenerService                      listenerService;
 
-  @MockBean
+  @MockitoBean
   private Event<Long, CategoryObject>          event;
 
   @Autowired

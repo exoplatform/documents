@@ -16,23 +16,28 @@
  */
 package org.exoplatform.documents.entity;
 
-import lombok.Data;
-import org.exoplatform.commons.api.persistence.ExoEntity;
-
-import jakarta.persistence.*;
 import java.io.Serializable;
 import java.util.Date;
 
+import io.meeds.common.persistence.PortableSequence;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.NamedQuery;
+import jakarta.persistence.Table;
+import lombok.Data;
+
 @Entity(name = "PublicDocumentAccess")
-@ExoEntity
 @Table(name = "DOCUMENTS_PUBLIC_ACCESS")
 @Data
 @NamedQuery(name = "PublicDocumentAccess.getPublicAccessByNodeId", query = "SELECT DISTINCT c FROM PublicDocumentAccess c where c.nodeId = :nodeId")
 public class PublicDocumentAccessEntity implements Serializable {
 
+  private static final long serialVersionUID = -7234365786103959973L;
+
   @Id
-  @SequenceGenerator(name = "SEQ_DOCUMENT_PUBLIC_ACCESS_ID", sequenceName = "SEQ_DOCUMENT_PUBLIC_ACCESS_ID", allocationSize = 1)
-  @GeneratedValue(strategy = GenerationType.AUTO, generator = "SEQ_DOCUMENT_PUBLIC_ACCESS_ID")
+  @PortableSequence(name = "SEQ_DOCUMENT_PUBLIC_ACCESS_ID")
   @Column(name = "ID", nullable = false)
   private Long    id;
 

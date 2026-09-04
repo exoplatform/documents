@@ -23,10 +23,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.security.Principal;
 import java.util.Collection;
 import java.util.Enumeration;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -44,6 +44,7 @@ import org.apache.catalina.mapper.MappingData;
 import org.apache.catalina.valves.ValveBase;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.apache.coyote.ContinueResponseTiming;
 import org.apache.tomcat.util.buf.MessageBytes;
 import org.apache.tomcat.util.http.ServerCookies;
@@ -80,7 +81,7 @@ public class WebdavLoggingValve extends ValveBase {
   private static final Log LOG = ExoLogger.getLogger(WebdavLoggingValve.class);
 
   @Override
-  public void invoke(Request request, Response response) throws IOException, ServletException {
+  public void invoke(Request request, Response response) throws IOException, ServletException { // NOSONAR
     if (LOG.isDebugEnabled()) {
       UUID reqUuid = UUID.randomUUID();
       try { // NOSONAR
@@ -103,9 +104,9 @@ public class WebdavLoggingValve extends ValveBase {
 
         if (arrayInputStream.available() > 0
             && (arrayInputStream.available() < 2048
-                || StringUtils.contains(request.getContentType(), "text/")
-                || StringUtils.equals(request.getContentType(), "application/xml")
-                || StringUtils.equals(request.getContentType(), "application.json/"))) {
+                || Strings.CS.contains(request.getContentType(), "text/")
+                || Strings.CS.equals(request.getContentType(), "application/xml")
+                || Strings.CS.equals(request.getContentType(), "application.json/"))) {
           byte[] bytes = arrayInputStream.readAllBytes();
           arrayInputStream.reset();
           LOG.debug("[{}] + Request Body: {}", reqUuid, new String(bytes));
@@ -121,7 +122,7 @@ public class WebdavLoggingValve extends ValveBase {
 
         byte[] responseBytes = wrappedResponse.getBufferedContent();
         if (LOG.isTraceEnabled()
-            && StringUtils.contains(response.getContentType(), "text/")
+            && Strings.CS.contains(response.getContentType(), "text/")
             && responseBytes.length > 0) {
           LOG.trace("[{}] + Response Body: {}", reqUuid, new String(responseBytes));
         }
@@ -151,14 +152,39 @@ public class WebdavLoggingValve extends ValveBase {
     private ByteArrayInputStream arrayInputStream;
 
     public RequestWrapper(Request request, ByteArrayInputStream arrayInputStream) {
-      super(request.getConnector());
+      super(request.getConnector(), request.getCoyoteRequest());
       this.request = request;
       this.arrayInputStream = arrayInputStream;
     }
 
     @Override
-    public void setCoyoteRequest(org.apache.coyote.Request coyoteRequest) {
-      request.setCoyoteRequest(coyoteRequest);
+    public String toString() {
+      return request.toString();
+    }
+
+    @Override
+    public void recycleSessionInfo() {
+      request.recycleSessionInfo();
+    }
+
+    @Override
+    public void setMaxParameterCount(int maxParameterCount) {
+      request.setMaxParameterCount(maxParameterCount);
+    }
+
+    @Override
+    public void setMaxPartCount(int maxPartCount) {
+      request.setMaxPartCount(maxPartCount);
+    }
+
+    @Override
+    public void setMaxPartHeaderSize(int maxPartHeaderSize) {
+      request.setMaxPartHeaderSize(maxPartHeaderSize);
+    }
+
+    @Override
+    public void setCharacterEncoding(Charset charset) {
+      request.setCharacterEncoding(charset);
     }
 
     @Override
@@ -602,13 +628,9 @@ public class WebdavLoggingValve extends ValveBase {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public PushBuilder newPushBuilder() {
       return request.newPushBuilder();
-    }
-
-    @Override
-    public PushBuilder newPushBuilder(HttpServletRequest httpServletRequest) {
-      return request.newPushBuilder(httpServletRequest);
     }
 
     @Override
@@ -811,6 +833,16 @@ public class WebdavLoggingValve extends ValveBase {
       return request.getPart(name);
     }
 
+    @Override
+    public int hashCode() {
+      return request.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return request.equals(obj);
+    }
+
     private HttpServletRequestWrapper newHttpServletRequestWrapper(HttpServletRequest httpRequest,
                                                                    ByteArrayInputStream arrayInputStream) {
       return new HttpServletRequestWrapper(httpRequest) {
@@ -866,7 +898,23 @@ public class WebdavLoggingValve extends ValveBase {
     private Response                    response;
 
     public ResponseWrapper(Response response) {
+      super(response.getCoyoteResponse());
       this.response = response;
+    }
+
+    @Override
+    public void sendRedirect(String location, boolean clearBuffer) throws IOException {
+      response.sendRedirect(location, clearBuffer);
+    }
+
+    @Override
+    public void setCharacterEncoding(Charset charset) {
+      response.setCharacterEncoding(charset);
+    }
+
+    @Override
+    public void sendRedirect(String location, int status, boolean clearBuffer) throws IOException {
+      response.sendRedirect(location, status, clearBuffer);
     }
 
     @Override
@@ -883,11 +931,6 @@ public class WebdavLoggingValve extends ValveBase {
     }
 
     @Override
-    public void setCoyoteResponse(org.apache.coyote.Response coyoteResponse) {
-      response.setCoyoteResponse(coyoteResponse);
-    }
-
-    @Override
     public org.apache.coyote.Response getCoyoteResponse() {
       return response.getCoyoteResponse();
     }
@@ -900,11 +943,6 @@ public class WebdavLoggingValve extends ValveBase {
     @Override
     public void recycle() {
       response.recycle();
-    }
-
-    @Override
-    public List<Cookie> getCookies() {
-      return response.getCookies();
     }
 
     @Override
@@ -966,9 +1004,8 @@ public class WebdavLoggingValve extends ValveBase {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
-    public boolean setError() {
-      return response.setError();
+    public void setError() {
+      response.setError();
     }
 
     @Override
@@ -1167,7 +1204,7 @@ public class WebdavLoggingValve extends ValveBase {
     }
 
     @Override
-    public void sendAcknowledgement(ContinueResponseTiming continueResponseTiming) throws IOException {
+    public void sendAcknowledgement(ContinueResponseTiming continueResponseTiming) {
       response.sendAcknowledgement(continueResponseTiming);
     }
 
@@ -1214,6 +1251,16 @@ public class WebdavLoggingValve extends ValveBase {
     @Override
     public void setStatus(int status) {
       response.setStatus(status);
+    }
+
+    @Override
+    public int hashCode() {
+      return response.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return response.equals(obj);
     }
 
     public byte[] getBufferedContent() {

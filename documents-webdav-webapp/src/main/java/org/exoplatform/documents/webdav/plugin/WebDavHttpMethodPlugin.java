@@ -38,6 +38,7 @@ import javax.xml.stream.events.StartElement;
 import javax.xml.stream.events.XMLEvent;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import org.exoplatform.common.http.HTTPStatus;
@@ -60,13 +61,13 @@ import lombok.ToString;
 @Getter
 public abstract class WebDavHttpMethodPlugin {
 
-  public static final String      CONTEXT_PATH                   = "/webdav/drives";
+  public static final String      CONTEXT_PATH                   = "/webdav/drives";                                 // NOSONAR
 
-  public static final String      CONTEXT_PATH_ROOT              = CONTEXT_PATH + "/";
+  public static final String      CONTEXT_PATH_ROOT              = CONTEXT_PATH + "/";                               // NOSONAR
 
   public static final String      CONTEXT_PATH_SINGLE_DRIVE      = CONTEXT_PATH + "/d";
 
-  public static final String      CONTEXT_PATH_SINGLE_DRIVE_ROOT = CONTEXT_PATH_SINGLE_DRIVE + "/";
+  public static final String      CONTEXT_PATH_SINGLE_DRIVE_ROOT = CONTEXT_PATH_SINGLE_DRIVE + "/";                  // NOSONAR
 
   public static final String      OPAQUE_LOCK_TOKEN              = "opaquelocktoken";
 
@@ -182,7 +183,7 @@ public abstract class WebDavHttpMethodPlugin {
 
   protected int getDepthInt(HttpServletRequest httpRequest) {
     String depth = getDepth(httpRequest);
-    return StringUtils.isBlank(depth) || StringUtils.equalsIgnoreCase(depth, INFINITY_DEPTH) ? -1 : Integer.parseInt(depth);
+    return StringUtils.isBlank(depth) || Strings.CI.equals(depth, INFINITY_DEPTH) ? -1 : Integer.parseInt(depth);
   }
 
   protected String getDestinationPath(HttpServletRequest httpRequest) {
@@ -196,11 +197,11 @@ public abstract class WebDavHttpMethodPlugin {
   }
 
   protected boolean getOverwriteParameter(HttpServletRequest httpRequest) {
-    return StringUtils.equalsIgnoreCase("f", httpRequest.getHeader(ExtHttpHeaders.OVERWRITE));
+    return Strings.CI.equals("f", httpRequest.getHeader(ExtHttpHeaders.OVERWRITE));
   }
 
   protected boolean getRemoveDestinationParameter(HttpServletRequest httpRequest) {
-    return StringUtils.equalsIgnoreCase("t", httpRequest.getHeader(ExtHttpHeaders.OVERWRITE));
+    return Strings.CI.equals("t", httpRequest.getHeader(ExtHttpHeaders.OVERWRITE));
   }
 
   @SneakyThrows
