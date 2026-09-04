@@ -1751,7 +1751,7 @@ export default {
     openFileInEditor(attachment,mode,tab) {
       if (attachment && attachment.id) {
         const url = this.$documentsUtils.getEditorUrl(attachment,mode);
-        window.open(url,tab ? tab:'_blank');
+        this.$documentsUtils.openLink(url,tab ? tab:'_blank');
       }
     },
     async dragFile(e){     

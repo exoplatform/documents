@@ -2,7 +2,8 @@
   <document-action-item
     icon="fas fa-edit"
     :label="$t('document.label.edit')"
-    @click="editFile" />
+    :href="editLink"
+    target="_blank" />
 </template>
 <script>
 export default {
@@ -20,12 +21,8 @@ export default {
     fileId() {
       return this.file && this.file.sourceID || this.file.id;
     },
-  },
-  methods: {
-    editFile() {
-      if (this.fileId) {
-        window.open(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.fileId}&backTo=${window.location.pathname}`, '_blank');
-      }
+    editLink() {
+      return this.fileId && `${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${this.fileId}&backTo=${window.location.pathname}` || null;
     },
   },
 };
