@@ -177,7 +177,7 @@ export default {
     openDrive() {
       const target = this.$root?.settings?.opensInSameTab ? '_self' : '_blank';
       const url = this.$root?.settings?.driveUrl;
-      window.open(url, target);
+      this.$documentsUtils.openLink(url, target);
     },
   },
 };
