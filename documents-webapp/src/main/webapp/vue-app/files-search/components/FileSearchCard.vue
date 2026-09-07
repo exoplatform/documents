@@ -194,9 +194,9 @@ export default {
     openFilePreview() {
       this.result.path = this.result.nodePath;
       if (this.isFileEditable)  {
-        window.open(this.$documentsUtils.getEditorUrl(this.result,''), '_blank');
+        this.$documentsUtils.openLink(this.$documentsUtils.getEditorUrl(this.result,''), '_blank');
       } else if (this.isFileReadable)  {
-        window.open(this.$documentsUtils.getEditorUrl(this.result,'view'), '_blank');
+        this.$documentsUtils.openLink(this.$documentsUtils.getEditorUrl(this.result,'view'), '_blank');
       } else {
         const file = {
           'id': this.fileId,
