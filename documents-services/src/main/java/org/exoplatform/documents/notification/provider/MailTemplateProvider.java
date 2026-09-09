@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.notification.provider;
 
-import java.io.Writer;
 import java.util.Calendar;
 import java.util.Locale;
 
@@ -118,11 +117,6 @@ public class MailTemplateProvider extends TemplateProvider {
       notificationContext.setException(templateContext.getException());
       MessageInfo messageInfo = new MessageInfo();
       return messageInfo.subject(subject).body(body).end();
-    }
-
-    @Override
-    protected boolean makeDigest(NotificationContext notificationContext, Writer writer) {
-      return false;
     }
   }
 }

@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.notification.provider;
 
-import java.io.Writer;
 
 import org.exoplatform.commons.api.notification.NotificationContext;
 import org.exoplatform.commons.api.notification.annotation.TemplateConfig;
@@ -70,11 +69,6 @@ public class PushTemplateProvider extends TemplateProvider {
       notificationContext.setException(templateContext.getException());
       MessageInfo messageInfo = new MessageInfo();
       return messageInfo.subject(subject).body(body).end();
-    }
-
-    @Override
-    protected boolean makeDigest(NotificationContext notificationContext, Writer writer) {
-      return false;
     }
   }
 }
