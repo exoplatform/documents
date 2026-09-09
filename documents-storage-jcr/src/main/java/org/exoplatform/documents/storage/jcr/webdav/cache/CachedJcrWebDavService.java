@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr.webdav.cache;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.*;
 
+import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -146,7 +147,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
       if (webDavItemEntity == null) {
         return null;
       } else {
-        WebDavItem webDavItem = webDavItemEntity.toWebDavItem();
+        WebDavItem webDavItem = resolveIdentifier(webDavItemEntity.toWebDavItem(), baseUri);
         if (depth > 0) {
           addChildren(webDavItem, depth, baseUri, username);
         }
@@ -214,7 +215,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
               if (!c.isModified()
                   && CollectionUtils.emptyIfNull(c.getUsernames()).contains(username)
                   && (c.isDeep() || childrenDepth == 0)) {
-                childWebDavItem = c.toWebDavItem();
+                childWebDavItem = resolveIdentifier(c.toWebDavItem(), baseUri);
               } else {
                 try {
                   childWebDavItem = get(c.getWebDavPath(),
@@ -280,6 +281,47 @@ public class CachedJcrWebDavService extends JcrWebDavService {
       LOG.warn("Error while parsing modified date value {}", modifiedDateString, e);
       return 0l;
     }
+  }
+
+  /**
+   * Rebuilds the absolute href of an item served from the cache, from the base
+   * URI of the <b>current</b> request.
+   * <p>
+   * The href is deliberately not persisted with the cached item: a cache row is
+   * keyed by the drive-relative WebDAV path alone
+   * ({@link #findCacheEntry(String)}), so the same row answers the drive-list
+   * mount (<code>/webdav/drives</code>) and the single-drive mount
+   * (<code>/webdav/drives/d</code>), whose base URIs differ. Persisting it let
+   * whichever request populated the row impose its base URI on the other one,
+   * and a WebDAV client that gets back an href it did not ask for discards the
+   * whole multistatus response, failing the mount (EXO-89613).
+   * <p>
+   * It is fully derivable instead: <code>identifier = baseUri + webDavPath</code>,
+   * the very composition
+   * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler}
+   * applies when it builds the item from JCR. <code>DAV:checked-in</code> carries
+   * the same href and is rebuilt with it.
+   *
+   * @param webDavItem item rebuilt from a cache row, may be null
+   * @param baseUri base URI of the current request, as computed by the WebDAV
+   *          handler
+   * @return the same item, with its identifier resolved against baseUri
+   */
+  @SneakyThrows
+  private WebDavItem resolveIdentifier(WebDavItem webDavItem, String baseUri) {
+    if (webDavItem == null || StringUtils.isBlank(webDavItem.getWebDavPath())) {
+      return webDavItem;
+    }
+    URI identifier = new URI(StringUtils.defaultString(baseUri) + webDavItem.getWebDavPath());
+    webDavItem.setIdentifier(identifier);
+    WebDavItemProperty checkedIn = webDavItem.getProperty(CHECKEDIN);
+    if (checkedIn != null) {
+      CollectionUtils.emptyIfNull(checkedIn.getChildren())
+                     .stream()
+                     .filter(child -> HREF.equals(child.getName()))
+                     .forEach(child -> child.setValue(identifier.toASCIIString()));
+    }
+    return webDavItem;
   }
 
   private WebDavItemEntity findCacheEntry(String webDavPath) {
