@@ -159,8 +159,26 @@ public abstract class WebDavHttpMethodPlugin {
     return CommonsUtils.getCurrentDomain() + getBaseUri(httpRequest);
   }
 
+  /**
+   * Tells the two mount modes apart: the drive list is served under
+   * {@link #CONTEXT_PATH}, a single drive under
+   * {@link #CONTEXT_PATH_SINGLE_DRIVE}.
+   * <p>
+   * The test is on the <b>path segment</b>, not on a substring: a drive-list
+   * request carries the drive name in the very position the single-drive marker
+   * occupies, and Space pretty names are lower-cased, so
+   * <code>/webdav/drives/dev_team%20%2831%29</code> merely <i>contains</i>
+   * <code>/webdav/drives/d</code>. Reading that as a single-drive request ate
+   * the first character of the drive name and dropped the leading '/' of the
+   * resource path, so every href emitted for such a drive was wrong.
+   *
+   * @param httpRequest {@link HttpServletRequest}
+   * @return the base URI the resource path and the emitted hrefs are relative to
+   */
   private String getBaseUri(HttpServletRequest httpRequest) {
-    if (httpRequest.getRequestURI().contains(CONTEXT_PATH_SINGLE_DRIVE)) {
+    String requestUri = httpRequest.getRequestURI();
+    if (StringUtils.equals(requestUri, CONTEXT_PATH_SINGLE_DRIVE)
+        || StringUtils.startsWith(requestUri, CONTEXT_PATH_SINGLE_DRIVE_ROOT)) {
       return CONTEXT_PATH_SINGLE_DRIVE;
     } else {
       return CONTEXT_PATH;
