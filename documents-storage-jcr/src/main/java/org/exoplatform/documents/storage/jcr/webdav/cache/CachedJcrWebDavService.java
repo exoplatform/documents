@@ -292,8 +292,8 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * <code>#getWebDavProperty</code>, which carries the reciprocal comment.
    * <p>
    * Only <code>DAV:checked-in</code> is emitted at all today: the two version
-   * sets are dead branches, since the single caller of
-   * <code>getWebDavProperty</code> — <code>addProperties</code> — always passes
+   * sets are dead branches, since <code>getWebDavProperty</code> is only ever
+   * reached from <code>addProperties</code>, which always passes
    * <code>version == null</code>, including on the version-listing path. They
    * are listed anyway because what is enforced here is the rule, not the
    * current output, so that reviving them, or adding the next property derived
