@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage.jcr.webdav.cache;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HREF;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PREDECESSORSET;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -335,6 +336,29 @@ public class CachedJcrWebDavServiceTest {
     assertEquals(1, result.getChildren().size());
     assertEquals(new URI(DRIVE_BASE_URI + childPath), result.getChildren().get(0).getIdentifier());
     verify(readCommandHandler, never()).get(any(), any(), any(), anyBoolean(), anyInt(), any(), any());
+  }
+
+  /**
+   * A property href that is not the bare item URI — the version sets append
+   * <code>/?version=&lt;name&gt;</code> to it. Re-basing must move the base and
+   * keep the suffix. Nothing caches a versioned read today, which is exactly why
+   * this is pinned: the next property derived from the item URI must not
+   * silently reintroduce EXO-89613.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetFromCacheShouldRebaseHrefAndKeepWhatIsAppendedToIt() {
+    WebDavItemProperty predecessors = new WebDavItemProperty(PREDECESSORSET);
+    predecessors.addChild(new WebDavItemProperty(HREF)).setValue(DRIVES_BASE_URI + DRIVE_PATH + "/?version=v1");
+
+    WebDavItemEntity entity = cachedDriveEntry();
+    entity.setProperties(List.of(new WebDavItemPropertyEntity(predecessors)));
+    when(webDavItemRepository.findById(DRIVE_PATH)).thenReturn(Optional.of(entity));
+
+    WebDavItem result = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
+
+    assertEquals(DRIVE_BASE_URI + DRIVE_PATH + "/?version=v1",
+                 result.getProperty(PREDECESSORSET).getChild(HREF).getValue());
   }
 
   private WebDavItemEntity cachedDriveEntry() {

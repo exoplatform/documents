@@ -258,7 +258,10 @@ public class WebdavReadCommandHandlerTest {
     assertEquals(JCR_PATH, webDavItem.getJcrPath());
     assertEquals(ENCODED_WEBDAV_PATH, webDavItem.getWebDavPath());
     assertFalse(webDavItem.isFile());
-    assertNotNull(webDavItem.getIdentifier());
+    // the invariant CachedJcrWebDavService#resolveIdentifier rebuilds a cached
+    // item's href from: pinned here, on the side that produces it by substring
+    // arithmetic over the drive root, so the two cannot drift apart silently
+    assertEquals(BASE_URI + ENCODED_WEBDAV_PATH, webDavItem.getIdentifier().toString());
   }
 
   @Test
