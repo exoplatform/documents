@@ -276,9 +276,9 @@ export default {
       if (this.driveType === 'ALL') {
         return `${window.location.origin}/webdav/drives`;
       } else if (this.driveType === 'PERSONAL') {
-        return `${window.location.origin}/webdav/drives/d/${this.userFullName} (${eXo.env.portal.userIdentityId})`;
+        return `${window.location.origin}/webdav/drives/d/${this.driveSegment(this.userFullName, eXo.env.portal.userIdentityId)}`;
       } else if (this.driveType === 'SPACE' && this.spaceIdentityId) {
-        return `${window.location.origin}/webdav/drives/d/${this.spaceIdentityRemoteId} (${this.spaceIdentityId})`;
+        return `${window.location.origin}/webdav/drives/d/${this.driveSegment(this.spaceIdentityRemoteId, this.spaceIdentityId)}`;
       } else {
         return null;
       }
@@ -302,6 +302,38 @@ export default {
     },
   },
   methods: {
+    /**
+     * Builds the drive path segment exactly as the server emits it in its
+     * PROPFIND hrefs, so the URL offered here and the one the server answers
+     * with are the same bytes: PathCommandHandler.toWebDavSegment, then the
+     * escaping of documents-storage-jcr's encodeUrlString.
+     *
+     * Interpolating the raw name produced a URL the server never emits: a Space
+     * pretty name happens to be URL-safe, but a personal drive is addressed by
+     * the user full name, which routinely carries spaces and non-ASCII.
+     * EXO-89613.
+     *
+     * @param {String} name Space pretty name, or user full name for the
+     *        personal drive
+     * @param {String} identityId identity id the drive is addressed by
+     * @returns {String} the drive path segment, percent-encoded
+     */
+    driveSegment(name, identityId) {
+      // eslint-disable-next-line no-control-regex
+      const segmentName = `${name || ''}`.replace(/[/\\%;\u0000-\u001F\u007F]/g, '_');
+      return this.encodeUrlString(`${segmentName} (${identityId})`);
+    },
+    /**
+     * encodeURIComponent leaves ! ~ ' ( ) unescaped where Java's URLEncoder,
+     * which the server uses, escapes them.
+     *
+     * @param {String} value raw path segment
+     * @returns {String} the segment escaped as the server escapes it
+     */
+    encodeUrlString(value) {
+      return encodeURIComponent(value)
+        .replace(/[!~'()]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+    },
     close() {
       this.$refs.drawer.close();
     },
