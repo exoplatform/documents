@@ -244,6 +244,43 @@ public class WebdavReadCommandHandlerTest {
     assertEquals(BASE_URI + "/John%20Doe%20%281%29", userItem.getIdentifier().toString());
   }
 
+  /**
+   * Pins the escaping of the drive segment on the characters where Java's
+   * URLEncoder and JavaScript's encodeURIComponent disagree.
+   * <p>
+   * <b>This rule is implemented twice</b>: here, by
+   * {@code WebdavReadCommandHandler#encodeUrlString} over
+   * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler#toWebDavSegment},
+   * and in the UI by
+   * {@code documents-webapp/.../DocumentsWebdavMapDrivesDrawer.vue#driveSegment},
+   * which builds the URL the user copies to mount the drive. The two must emit
+   * the same bytes — a URL the server never emits does not mount (EXO-89613) —
+   * so a change here is a change there.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetRootPathEscapesTheDriveSegmentAsTheMapDrivesDrawerDoes() {
+    when(profile.getFullName()).thenReturn("Zoe O'Brien!~*+ (A/B) 50%");
+
+    WebDavItem webDavItem = handler.get(session,
+                                        "/",
+                                        REQUESTED_PROPERTY_NAMES,
+                                        false,
+                                        1,
+                                        BASE_URI,
+                                        USERNAME);
+
+    WebDavItem userItem = webDavItem.getChildren()
+                                    .stream()
+                                    .filter(child -> child.getIdentifier().toString().contains("%281%29"))
+                                    .findFirst()
+                                    .orElse(null);
+    assertNotNull(userItem);
+    // '/' and '%' sanitised to '_'; ! ~ ' ( ) escaped, '*' left bare, '+' as %2B
+    assertEquals(BASE_URI + "/Zoe%20O%27Brien%21%7E*%2B%20%28A_B%29%2050_%20%281%29",
+                 userItem.getIdentifier().toString());
+  }
+
   @Test
   @SneakyThrows
   public void testGetWithNodePathUsesMappedWebDavPath() {

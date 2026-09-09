@@ -17,7 +17,7 @@
 package org.exoplatform.documents.webdav.plugin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,36 +44,49 @@ public class WebDavHttpMethodPluginTest {
    */
   @Test
   public void testGetResourcePathOfDriveListWhoseDriveNameStartsWithTheSingleDriveMarker() {
-    lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/dev_team%20%2831%29");
+    when(request.getRequestURI()).thenReturn("/webdav/drives/dev_team%20%2831%29");
 
     assertEquals("/dev_team (31)", plugin.resourcePath(request));
   }
 
   @Test
   public void testGetResourcePathOfDriveList() {
-    lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/one27_two27_three_1%20%2828%29");
+    when(request.getRequestURI()).thenReturn("/webdav/drives/one27_two27_three_1%20%2828%29");
 
     assertEquals("/one27_two27_three_1 (28)", plugin.resourcePath(request));
   }
 
   @Test
   public void testGetResourcePathOfSingleDrive() {
-    lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/dev_team%20%2831%29");
-    lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/d/dev_team%20%2831%29");
+    when(request.getRequestURI()).thenReturn("/webdav/drives/d/dev_team%20%2831%29");
 
     assertEquals("/dev_team (31)", plugin.resourcePath(request));
   }
 
   @Test
   public void testGetResourcePathOfSingleDriveChild() {
-    lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/d/dev_team%20%2831%29/folder%20one");
+    when(request.getRequestURI()).thenReturn("/webdav/drives/d/dev_team%20%2831%29/folder%20one");
 
     assertEquals("/dev_team (31)/folder one", plugin.resourcePath(request));
   }
 
+  /**
+   * The bare single-drive path, which a Windows map-drive dialog produces when
+   * the user types the location without a trailing separator. It is the only
+   * case the {@code equals} half of the mount-mode test answers: read as a
+   * drive-list path instead, it would resolve to the resource {@code /d}, whose
+   * segment carries no {@code (id)} and so 404s.
+   */
+  @Test
+  public void testGetResourcePathOfSingleDriveRoot() {
+    when(request.getRequestURI()).thenReturn("/webdav/drives/d");
+
+    assertEquals("/", plugin.resourcePath(request));
+  }
+
   @Test
   public void testGetResourcePathOfDriveListRoot() {
-    lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/");
+    when(request.getRequestURI()).thenReturn("/webdav/drives/");
 
     assertEquals("/", plugin.resourcePath(request));
   }
@@ -84,7 +97,7 @@ public class WebDavHttpMethodPluginTest {
    */
   @Test
   public void testGetResourcePathKeepsLiteralPlus() {
-    lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/d/c%2B%2B%20team%20%2812%29");
+    when(request.getRequestURI()).thenReturn("/webdav/drives/d/c%2B%2B%20team%20%2812%29");
 
     assertEquals("/c++ team (12)", plugin.resourcePath(request));
   }

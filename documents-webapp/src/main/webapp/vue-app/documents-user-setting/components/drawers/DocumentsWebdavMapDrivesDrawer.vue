@@ -236,7 +236,12 @@ export default {
       return this.$vuetify.breakpoint.mobile;
     },
     userFullName() {
-      return this.userIdentity?.profile?.fullname;
+      // PathCommandHandler.getIdentitySegmentName addresses the personal drive
+      // by firstNonBlank(fullName, remoteId, id): a blank full name is a case
+      // the server guards, so the URL offered here must fall back the same way
+      return this.userIdentity?.profile?.fullname
+          || this.userIdentity?.remoteId
+          || eXo.env.portal.userName;
     },
     tips() {
       if (this.$utils.isLinuxOs()) {
@@ -313,6 +318,12 @@ export default {
      * the user full name, which routinely carries spaces and non-ASCII.
      * EXO-89613.
      *
+     * The two implementations agree byte for byte on every well-formed string;
+     * they can only diverge on an unpaired surrogate, which the server replaces
+     * with '?' and encodeURIComponent rejects — hence the guard below, so a
+     * corrupt profile string renders a degraded URL instead of breaking the
+     * drawer.
+     *
      * @param {String} name Space pretty name, or user full name for the
      *        personal drive
      * @param {String} identityId identity id the drive is addressed by
@@ -331,8 +342,14 @@ export default {
      * @returns {String} the segment escaped as the server escapes it
      */
     encodeUrlString(value) {
-      return encodeURIComponent(value)
-        .replace(/[!~'()]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+      try {
+        return encodeURIComponent(value)
+          .replace(/[!~'()]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+      } catch (e) {
+        // URIError: an unpaired surrogate. Better a visibly wrong name than a
+        // drawer that fails to render
+        return value;
+      }
     },
     close() {
       this.$refs.drawer.close();
