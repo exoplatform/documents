@@ -171,6 +171,15 @@ public abstract class WebDavHttpMethodPlugin {
    * <code>/webdav/drives/d</code>. Reading that as a single-drive request ate
    * the first character of the drive name and dropped the leading '/' of the
    * resource path, so every href emitted for such a drive was wrong.
+   * <p>
+   * The <code>equals</code> half is <b>defence in depth, unreachable today</b>:
+   * {@code WebDavRest#handle} answers the bare <code>/webdav/drives/d</code> and
+   * <code>/webdav/drives/d/</code> with a 302 to <code>/webdav/drives/</code>
+   * before any plugin runs, so only the <code>startsWith</code> half fires in
+   * production. It is kept because that gate lives in another class: were it
+   * relaxed, the bare path must still resolve to the single-drive base rather
+   * than to the resource <code>/d</code>, whose segment carries no
+   * <code>(&lt;id&gt;)</code> and would 404.
    *
    * @param httpRequest {@link HttpServletRequest}
    * @return the base URI the resource path and the emitted hrefs are relative to

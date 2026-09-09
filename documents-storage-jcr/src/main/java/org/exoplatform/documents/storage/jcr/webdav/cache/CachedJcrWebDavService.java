@@ -291,11 +291,13 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler}
    * <code>#getWebDavProperty</code>, which carries the reciprocal comment.
    * <p>
-   * Only <code>DAV:checked-in</code> can actually reach a row today — the two
-   * version sets are emitted for a {@link javax.jcr.version.Version} only, and
-   * nothing caches those — but the rule is what is enforced here, not the
-   * current reachability, so that adding the next such property is not a silent
-   * regression.
+   * Only <code>DAV:checked-in</code> is emitted at all today: the two version
+   * sets are dead branches, since the single caller of
+   * <code>getWebDavProperty</code> — <code>addProperties</code> — always passes
+   * <code>version == null</code>, including on the version-listing path. They
+   * are listed anyway because what is enforced here is the rule, not the
+   * current output, so that reviving them, or adding the next property derived
+   * from the item URI, is not a silent regression.
    */
   private static final List<QName> IDENTIFIER_DERIVED_PROPERTIES = List.of(CHECKEDIN, PREDECESSORSET, SUCCESSORSET);
 

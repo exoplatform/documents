@@ -71,11 +71,15 @@ public class WebDavHttpMethodPluginTest {
   }
 
   /**
-   * The bare single-drive path, which a Windows map-drive dialog produces when
-   * the user types the location without a trailing separator. It is the only
-   * case the {@code equals} half of the mount-mode test answers: read as a
-   * drive-list path instead, it would resolve to the resource {@code /d}, whose
-   * segment carries no {@code (id)} and so 404s.
+   * The bare single-drive path, the only case the {@code equals} half of the
+   * mount-mode test answers: read as a drive-list path it would resolve to the
+   * resource {@code /d}, whose segment carries no {@code (id)} and so 404s.
+   * <p>
+   * This pins the helper in isolation, not an end-to-end behaviour:
+   * {@code WebDavRest#handle} currently 302s this URI to {@code /webdav/drives/}
+   * before any plugin runs, so the branch is unreachable through the WAR. It is
+   * pinned so that relaxing that gate — it lives in another class — does not
+   * silently turn the bare path into a 404.
    */
   @Test
   public void testGetResourcePathOfSingleDriveRoot() {

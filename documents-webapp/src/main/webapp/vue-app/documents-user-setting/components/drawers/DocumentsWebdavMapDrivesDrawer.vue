@@ -283,7 +283,9 @@ export default {
       } else if (this.driveType === 'PERSONAL') {
         return `${window.location.origin}/webdav/drives/d/${this.driveSegment(this.userFullName, eXo.env.portal.userIdentityId)}`;
       } else if (this.driveType === 'SPACE' && this.spaceIdentityId) {
-        return `${window.location.origin}/webdav/drives/d/${this.driveSegment(this.spaceIdentityRemoteId, this.spaceIdentityId)}`;
+        // getIdentitySegmentName addresses a Space by
+        // defaultIfBlank(remoteId, id) — same fallback as the personal drive
+        return `${window.location.origin}/webdav/drives/d/${this.driveSegment(this.spaceIdentityRemoteId || this.spaceIdentityId, this.spaceIdentityId)}`;
       } else {
         return null;
       }
