@@ -188,6 +188,7 @@ export default {
     userIdentity: null,
     spaceIdentity: null,
     spaceIdentityId: null,
+    spaceIdentityRemoteId: null,
     hrefCopied: false,
     canCopy: false,
     tipsByOs: {
@@ -235,7 +236,12 @@ export default {
       return this.$vuetify.breakpoint.mobile;
     },
     userFullName() {
-      return this.userIdentity?.profile?.fullname;
+      // PathCommandHandler.getIdentitySegmentName addresses the personal drive
+      // by firstNonBlank(fullName, remoteId, id): a blank full name is a case
+      // the server guards, so the URL offered here must fall back the same way
+      return this.userIdentity?.profile?.fullname
+          || this.userIdentity?.remoteId
+          || eXo.env.portal.userName;
     },
     tips() {
       if (this.$utils.isLinuxOs()) {
@@ -269,12 +275,17 @@ export default {
       };
     },
     href() {
+      // The personal drive is addressed by the user full name, a Space by its
+      // pretty name — never by the Space display name, which may hold a '/'
+      // and would split the drive into two path segments
       if (this.driveType === 'ALL') {
         return `${window.location.origin}/webdav/drives`;
       } else if (this.driveType === 'PERSONAL') {
-        return `${window.location.origin}/webdav/drives/d/${this.userFullName} (${eXo.env.portal.userIdentityId})`;
+        return `${window.location.origin}/webdav/drives/d/${this.driveSegment(this.userFullName, eXo.env.portal.userIdentityId)}`;
       } else if (this.driveType === 'SPACE' && this.spaceIdentityId) {
-        return `${window.location.origin}/webdav/drives/d/${this.spaceIdentity.displayName} (${this.spaceIdentityId})`;
+        // getIdentitySegmentName addresses a Space by
+        // defaultIfBlank(remoteId, id) — same fallback as the personal drive
+        return `${window.location.origin}/webdav/drives/d/${this.driveSegment(this.spaceIdentityRemoteId || this.spaceIdentityId, this.spaceIdentityId)}`;
       } else {
         return null;
       }
@@ -289,13 +300,59 @@ export default {
     },
     async spaceIdentity() {
       this.spaceIdentityId = null;
+      this.spaceIdentityRemoteId = null;
       if (this.spaceIdentity) {
         const identity = await this.$identityService.getIdentityByProviderIdAndRemoteId(this.spaceIdentity.providerId, this.spaceIdentity.remoteId);
         this.spaceIdentityId = identity?.id;
+        this.spaceIdentityRemoteId = identity?.remoteId || this.spaceIdentity.remoteId;
       }
     },
   },
   methods: {
+    /**
+     * Builds the drive path segment exactly as the server emits it in its
+     * PROPFIND hrefs, so the URL offered here and the one the server answers
+     * with are the same bytes: PathCommandHandler.toWebDavSegment, then the
+     * escaping of documents-storage-jcr's encodeUrlString.
+     *
+     * Interpolating the raw name produced a URL the server never emits: a Space
+     * pretty name happens to be URL-safe, but a personal drive is addressed by
+     * the user full name, which routinely carries spaces and non-ASCII.
+     * EXO-89613.
+     *
+     * The two implementations agree byte for byte on every well-formed string;
+     * they can only diverge on an unpaired surrogate, which the server replaces
+     * with '?' and encodeURIComponent rejects — hence the guard below, so a
+     * corrupt profile string renders a degraded URL instead of breaking the
+     * drawer.
+     *
+     * @param {String} name Space pretty name, or user full name for the
+     *        personal drive
+     * @param {String} identityId identity id the drive is addressed by
+     * @returns {String} the drive path segment, percent-encoded
+     */
+    driveSegment(name, identityId) {
+      // eslint-disable-next-line no-control-regex
+      const segmentName = `${name || ''}`.replace(/[/\\%;\u0000-\u001F\u007F]/g, '_');
+      return this.encodeUrlString(`${segmentName} (${identityId})`);
+    },
+    /**
+     * encodeURIComponent leaves ! ~ ' ( ) unescaped where Java's URLEncoder,
+     * which the server uses, escapes them.
+     *
+     * @param {String} value raw path segment
+     * @returns {String} the segment escaped as the server escapes it
+     */
+    encodeUrlString(value) {
+      try {
+        return encodeURIComponent(value)
+          .replace(/[!~'()]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+      } catch (e) {
+        // URIError: an unpaired surrogate. Better a visibly wrong name than a
+        // drawer that fails to render
+        return value;
+      }
+    },
     close() {
       this.$refs.drawer.close();
     },
