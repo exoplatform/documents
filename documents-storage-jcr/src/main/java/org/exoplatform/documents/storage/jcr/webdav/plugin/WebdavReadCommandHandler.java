@@ -463,6 +463,25 @@ public class WebdavReadCommandHandler {
     }
   }
 
+  /**
+   * Builds one WebDAV property of a node.
+   * <p>
+   * <b>Any branch below that derives its value from <code>nodeIdentifier</code>
+   * must be listed in</b>
+   * {@link org.exoplatform.documents.storage.jcr.webdav.cache.CachedJcrWebDavService}
+   * <code>#IDENTIFIER_DERIVED_PROPERTIES</code>: the item's absolute URI depends
+   * on the mount mode of the request, while the cache row holding the property
+   * does not, so such a value has to be re-based when it is served from the
+   * cache instead of recomputed here (EXO-89613). Today that is
+   * <code>DAV:checked-in</code>, <code>DAV:predecessor-set</code> and
+   * <code>DAV:successor-set</code>.
+   *
+   * @param node the JCR node
+   * @param nodeIdentifier the node's absolute WebDAV URI
+   * @param version the version being described, null for the node itself
+   * @param name the property to build
+   * @return the property, or null when the node does not carry it
+   */
   @SneakyThrows
   private WebDavItemProperty getWebDavProperty(Node node, URI nodeIdentifier, Version version, QName name) { // NOSONAR
     if (name.equals(DISPLAYNAME)) {

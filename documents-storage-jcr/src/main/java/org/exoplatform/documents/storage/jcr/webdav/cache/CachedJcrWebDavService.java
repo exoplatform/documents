@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr.webdav.cache;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.*;
 
+import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -146,7 +147,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
       if (webDavItemEntity == null) {
         return null;
       } else {
-        WebDavItem webDavItem = webDavItemEntity.toWebDavItem();
+        WebDavItem webDavItem = resolveIdentifier(webDavItemEntity.toWebDavItem(), baseUri);
         if (depth > 0) {
           addChildren(webDavItem, depth, baseUri, username);
         }
@@ -214,7 +215,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
               if (!c.isModified()
                   && CollectionUtils.emptyIfNull(c.getUsernames()).contains(username)
                   && (c.isDeep() || childrenDepth == 0)) {
-                childWebDavItem = c.toWebDavItem();
+                childWebDavItem = resolveIdentifier(c.toWebDavItem(), baseUri);
               } else {
                 try {
                   childWebDavItem = get(c.getWebDavPath(),
@@ -280,6 +281,87 @@ public class CachedJcrWebDavService extends JcrWebDavService {
       LOG.warn("Error while parsing modified date value {}", modifiedDateString, e);
       return 0l;
     }
+  }
+
+  /**
+   * Properties whose <code>DAV:href</code> is derived from the item's own
+   * absolute URI, and which therefore must never be <i>served</i> from a cache
+   * row as stored. Kept in step with the
+   * <code>nodeIdentifier</code>-derived branches of
+   * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler}
+   * <code>#getWebDavProperty</code>, which carries the reciprocal comment.
+   * <p>
+   * Only <code>DAV:checked-in</code> is emitted at all today: the two version
+   * sets are dead branches, since <code>getWebDavProperty</code> is only ever
+   * reached from <code>addProperties</code>, which always passes
+   * <code>version == null</code>, including on the version-listing path. They
+   * are listed anyway because what is enforced here is the rule, not the
+   * current output, so that reviving them, or adding the next property derived
+   * from the item URI, is not a silent regression.
+   */
+  private static final List<QName> IDENTIFIER_DERIVED_PROPERTIES = List.of(CHECKEDIN, PREDECESSORSET, SUCCESSORSET);
+
+  /**
+   * Resolves everything a cached item derives from the base URI of the request,
+   * against the base URI of the <b>current</b> request.
+   * <p>
+   * A cache row is keyed by the drive-relative WebDAV path alone
+   * ({@link #findCacheEntry(String)}), so the same row answers the drive-list
+   * mount (<code>/webdav/drives</code>) and the single-drive mount
+   * (<code>/webdav/drives/d</code>), whose base URIs differ. Nothing computed
+   * from the request may therefore be served from a row as stored: the absolute
+   * href used to be, so whichever request populated the row imposed its base URI
+   * on the other one, and a WebDAV client that gets back an href it did not ask
+   * for discards the whole multistatus response and fails the mount, on a 207
+   * with nothing in the log (EXO-89613).
+   * <p>
+   * The item's own href is not stored at all any more — it is fully derivable as
+   * <code>identifier = baseUri + webDavPath</code>, the very composition
+   * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler}
+   * applies when it builds the item from JCR. The hrefs nested in
+   * {@link #IDENTIFIER_DERIVED_PROPERTIES} <i>are</i> still stored, inside the
+   * row's properties, and are re-based here on every read.
+   *
+   * @param webDavItem item rebuilt from a cache row, may be null
+   * @param baseUri base URI of the current request, as computed by the WebDAV
+   *          handler
+   * @return the same item, with everything base-URI-dependent resolved against
+   *         baseUri
+   */
+  @SneakyThrows
+  private WebDavItem resolveIdentifier(WebDavItem webDavItem, String baseUri) {
+    if (webDavItem == null || StringUtils.isBlank(webDavItem.getWebDavPath())) {
+      return webDavItem;
+    }
+    String webDavPath = webDavItem.getWebDavPath();
+    URI identifier = new URI(StringUtils.defaultString(baseUri) + webDavPath);
+    webDavItem.setIdentifier(identifier);
+    IDENTIFIER_DERIVED_PROPERTIES.stream()
+                                 .map(webDavItem::getProperty)
+                                 .filter(Objects::nonNull)
+                                 .flatMap(property -> CollectionUtils.emptyIfNull(property.getChildren()).stream())
+                                 .filter(child -> HREF.equals(child.getName()))
+                                 .forEach(child -> child.setValue(rebaseHref(child.getValue(), webDavPath, baseUri)));
+    return webDavItem;
+  }
+
+  /**
+   * Re-bases one stored href on the current request's base URI, keeping whatever
+   * the emitting code appended to it (the version sets append
+   * <code>/?version=&lt;name&gt;</code>). The stored value is
+   * <code>&lt;some base&gt; + webDavPath + &lt;suffix&gt;</code> and the base it
+   * was stored with is unknown, so the split is made on the path — which is the
+   * row's own key and cannot have changed.
+   *
+   * @param storedHref href as read from the cache row, may be null
+   * @param webDavPath the item's WebDAV path
+   * @param baseUri base URI of the current request
+   * @return the href under baseUri, or the stored value untouched when it does
+   *         not carry the path
+   */
+  private String rebaseHref(String storedHref, String webDavPath, String baseUri) {
+    int pathIndex = StringUtils.defaultString(storedHref).lastIndexOf(webDavPath);
+    return pathIndex < 0 ? storedHref : StringUtils.defaultString(baseUri) + storedHref.substring(pathIndex);
   }
 
   private WebDavItemEntity findCacheEntry(String webDavPath) {

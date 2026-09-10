@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity;
 
-import java.net.URI;
 import java.util.List;
 import java.util.Set;
 
@@ -34,7 +33,6 @@ import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.ToString;
 
 @Data
@@ -53,8 +51,6 @@ public class WebDavItemEntity {
   @Field(type = FieldType.Keyword)
   private String                         parentWebDavPath;
 
-  private String                         identifier;
-
   private Set<String>                    usernames;
 
   private boolean                        file;
@@ -71,14 +67,12 @@ public class WebDavItemEntity {
   public WebDavItemEntity(WebDavItem webDavItem) {
     this(webDavItem.getWebDavPath(),
          webDavItem.getJcrPath(),
-         webDavItem.getIdentifier(),
          webDavItem.isFile(),
          webDavItem.getProperties());
   }
 
   public WebDavItemEntity(String webDavPath,
                           String jcrPath,
-                          URI identifier,
                           boolean file,
                           List<WebDavItemProperty> properties) {
     if (webDavPath.endsWith("/")) {
@@ -89,18 +83,24 @@ public class WebDavItemEntity {
     if (webDavPath.lastIndexOf("/") > 0) {
       this.parentWebDavPath = webDavPath.substring(0, webDavPath.lastIndexOf("/"));
     }
-    this.identifier = identifier == null ? null : identifier.toASCIIString();
     this.file = file;
     if (properties != null) {
       this.properties = properties.stream().map(WebDavItemPropertyEntity::new).toList();
     }
   }
 
-  @SneakyThrows
+  /**
+   * @return the cached item, with a <b>null</b> identifier: the absolute href
+   *         is not persisted here and is rebuilt by
+   *         {@code CachedJcrWebDavService} from the base URI of the current
+   *         request. This row is keyed by the drive-relative WebDAV path only,
+   *         so it is shared by the drive-list mount and the single-drive mount,
+   *         which do not have the same base URI.
+   */
   public WebDavItem toWebDavItem() {
     return new WebDavItem(webDavPath,
                           jcrPath,
-                          identifier == null ? null : new URI(identifier),
+                          null,
                           file,
                           properties == null ? null :
                                              properties.stream().map(WebDavItemPropertyEntity::toWebDavItemProperty).toList(),

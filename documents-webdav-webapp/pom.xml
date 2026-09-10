@@ -8,6 +8,11 @@
   <artifactId>documents-webdav-webapp</artifactId>
   <packaging>war</packaging>
   <name>eXo Documents - Webdav - Application</name>
+  <properties>
+    <!-- Coverage of this module's first test class; the parent's default is 1.0,
+         which no module meets. Raise it as tests are added, never lower it. -->
+    <exo.test.coverage.ratio>0.01</exo.test.coverage.ratio>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>io.meeds.social</groupId>
