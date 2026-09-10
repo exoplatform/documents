@@ -569,6 +569,12 @@ public class PathCommandHandlerTest {
     assertEquals(newIdentityRootWebDavPath + "/Folder/Rapport%20%C3%89quipe.docx", refreshed.getWebDavPath());
   }
 
+  /**
+   * Mirrored in the UI by
+   * {@code documents-webapp/.../DocumentsWebdavMapDrivesDrawer.vue#driveSegment}:
+   * the URL offered there to mount a drive must be the one the server emits, so
+   * a change to {@link PathCommandHandler#toWebDavSegment} is a change there.
+   */
   @Test
   public void testToWebDavSegmentReplacesCharactersUnusableInAPathSegment() {
     assertEquals("R&D _ Ops", PathCommandHandler.toWebDavSegment("R&D / Ops"));

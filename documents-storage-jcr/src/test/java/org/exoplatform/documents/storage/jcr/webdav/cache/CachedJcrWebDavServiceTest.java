@@ -16,7 +16,10 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.cache;
 
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HREF;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.PREDECESSORSET;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -28,12 +31,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.jcr.NamespaceRegistry;
 import javax.jcr.Session;
@@ -57,6 +63,7 @@ import org.exoplatform.documents.storage.jcr.webdav.cache.listener.WebDavCacheUp
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
 import org.exoplatform.documents.webdav.model.WebDavItem;
+import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.services.jcr.config.ContainerEntry;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
@@ -72,6 +79,18 @@ import lombok.SneakyThrows;
 public class CachedJcrWebDavServiceTest {
 
   private static final String       FILE_PATH       = "/test";                         // NOSONAR
+
+  /**
+   * A Space drive segment as emitted by the WebDAV handler: the Space pretty
+   * name, then the identity id between percent-encoded parentheses.
+   */
+  private static final String       DRIVE_PATH      = "/one27_two27_three_1%20%2828%29";
+
+  private static final String       DRIVES_BASE_URI = "https://exo.test/webdav/drives";
+
+  private static final String       DRIVE_BASE_URI  = "https://exo.test/webdav/drives/d";
+
+  private static final String       USERNAME        = "user";
 
   private static final String       WS_NAME         = "test";
 
@@ -253,6 +272,105 @@ public class CachedJcrWebDavServiceTest {
 
     assertNotNull(result);
     assertEquals(FILE_PATH, result.getWebDavPath());
+  }
+
+  /**
+   * EXO-89613 — a cache row is keyed by the drive-relative WebDAV path alone,
+   * so the same row answers the drive-list mount and the single-drive mount,
+   * whose base URIs differ. The href it returns must follow the base URI of the
+   * request being answered, never the one that happened to populate the row: a
+   * client that receives an href it did not ask for discards the whole
+   * multistatus response and the mount fails.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetFromCacheShouldBuildIdentifierFromRequestBaseUriInBothMountModes() {
+    WebDavItemEntity entity = cachedDriveEntry();
+    when(webDavItemRepository.findById(DRIVE_PATH)).thenReturn(Optional.of(entity));
+
+    WebDavItem fromDrivesList = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVES_BASE_URI, USERNAME);
+    WebDavItem fromSingleDrive = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
+
+    assertEquals(new URI(DRIVES_BASE_URI + DRIVE_PATH), fromDrivesList.getIdentifier());
+    assertEquals(new URI(DRIVE_BASE_URI + DRIVE_PATH), fromSingleDrive.getIdentifier());
+    // both answers came from the one cached row, not from a JCR read
+    verify(readCommandHandler, never()).get(any(), any(), any(), anyBoolean(), anyInt(), any(), any());
+  }
+
+  /**
+   * DAV:checked-in carries the same absolute href as the response's own
+   * D:href — it is rebuilt from the same base URI.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetFromCacheShouldRebuildCheckedInHrefFromRequestBaseUri() {
+    WebDavItemEntity entity = cachedDriveEntry();
+    when(webDavItemRepository.findById(DRIVE_PATH)).thenReturn(Optional.of(entity));
+
+    WebDavItem result = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
+
+    WebDavItemProperty checkedIn = result.getProperty(CHECKEDIN);
+    assertNotNull(checkedIn);
+    assertEquals(DRIVE_BASE_URI + DRIVE_PATH, checkedIn.getChild(HREF).getValue());
+  }
+
+  /**
+   * The children a Depth:1 PROPFIND returns are served from their own cache
+   * rows and get the same treatment.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetChildrenFromCacheShouldBuildIdentifierFromRequestBaseUri() {
+    String childPath = DRIVE_PATH + "/folder%20one";
+    WebDavItemEntity entity = cachedDriveEntry();
+    entity.setDeep(true);
+    WebDavItemEntity childEntity = new WebDavItemEntity();
+    childEntity.setWebDavPath(childPath);
+    childEntity.setUsernames(Set.of(USERNAME));
+
+    when(webDavItemRepository.findById(DRIVE_PATH)).thenReturn(Optional.of(entity));
+    when(webDavItemRepository.findByParentWebDavPath(DRIVE_PATH)).thenReturn(List.of(childEntity));
+
+    WebDavItem result = service.get(DRIVE_PATH, "allprop", null, false, 1, DRIVE_BASE_URI, USERNAME);
+
+    assertEquals(1, result.getChildren().size());
+    assertEquals(new URI(DRIVE_BASE_URI + childPath), result.getChildren().get(0).getIdentifier());
+    verify(readCommandHandler, never()).get(any(), any(), any(), anyBoolean(), anyInt(), any(), any());
+  }
+
+  /**
+   * A property href that is not the bare item URI — the version sets append
+   * <code>/?version=&lt;name&gt;</code> to it. Re-basing must move the base and
+   * keep the suffix. Nothing caches a versioned read today, which is exactly why
+   * this is pinned: the next property derived from the item URI must not
+   * silently reintroduce EXO-89613.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetFromCacheShouldRebaseHrefAndKeepWhatIsAppendedToIt() {
+    WebDavItemProperty predecessors = new WebDavItemProperty(PREDECESSORSET);
+    predecessors.addChild(new WebDavItemProperty(HREF)).setValue(DRIVES_BASE_URI + DRIVE_PATH + "/?version=v1");
+
+    WebDavItemEntity entity = cachedDriveEntry();
+    entity.setProperties(List.of(new WebDavItemPropertyEntity(predecessors)));
+    when(webDavItemRepository.findById(DRIVE_PATH)).thenReturn(Optional.of(entity));
+
+    WebDavItem result = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
+
+    assertEquals(DRIVE_BASE_URI + DRIVE_PATH + "/?version=v1",
+                 result.getProperty(PREDECESSORSET).getChild(HREF).getValue());
+  }
+
+  private WebDavItemEntity cachedDriveEntry() {
+    WebDavItemProperty checkedIn = new WebDavItemProperty(CHECKEDIN);
+    checkedIn.addChild(new WebDavItemProperty(HREF)).setValue(DRIVES_BASE_URI + DRIVE_PATH);
+
+    WebDavItemEntity entity = new WebDavItemEntity();
+    entity.setWebDavPath(DRIVE_PATH);
+    entity.setJcrPath("/Groups/spaces/one27_two27_three_1/Documents");
+    entity.setUsernames(Set.of(USERNAME));
+    entity.setProperties(List.of(new WebDavItemPropertyEntity(checkedIn)));
+    return entity;
   }
 
 }
