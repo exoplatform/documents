@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -191,6 +192,97 @@ public class WebdavReadCommandHandlerTest {
 
   @Test
   @SneakyThrows
+  public void testGetRootPathAddressesSpaceByPrettyNameAndPersonalDriveByFullName() {
+    String spaceBaseJcrPath = "/groups/spaces/rd-ops/Documents"; // NOSONAR
+    Space space = mock(Space.class);
+    Identity spaceIdentity = mock(Identity.class);
+    Profile spaceProfile = mock(Profile.class);
+
+    when(memberSpacesListAccess.getSize()).thenReturn(1);
+    when(spaceService.getMemberSpacesIds(USERNAME, 0, 1)).thenReturn(List.of("s1"));
+    when(spaceService.getSpaceById("s1")).thenReturn(space);
+    when(space.getPrettyName()).thenReturn("rd-ops");
+    when(space.getDisplayName()).thenReturn("R&D / Ops");
+    when(identityManager.getOrCreateSpaceIdentity("rd-ops")).thenReturn(spaceIdentity);
+    when(identityManager.getIdentity(42L)).thenReturn(spaceIdentity);
+    when(spaceIdentity.getProfile()).thenReturn(spaceProfile);
+    when(spaceProfile.getFullName()).thenReturn("R&D / Ops");
+    when(spaceIdentity.getIdentityId()).thenReturn(42L);
+    when(spaceIdentity.isSpace()).thenReturn(true);
+    when(spaceIdentity.getRemoteId()).thenReturn("rd-ops");
+    when(pathCommandHandler.getIdentityBaseJcrPath(42L)).thenReturn(spaceBaseJcrPath);
+    when(session.getItem(spaceBaseJcrPath)).thenReturn(node);
+
+    WebDavItem webDavItem = handler.get(session,
+                                        "/",
+                                        REQUESTED_PROPERTY_NAMES,
+                                        false,
+                                        1,
+                                        BASE_URI,
+                                        USERNAME);
+
+    assertNotNull(webDavItem.getChildren());
+    WebDavItem spaceItem = webDavItem.getChildren()
+                                     .stream()
+                                     .filter(child -> child.getIdentifier().toString().contains("%2842%29"))
+                                     .findFirst()
+                                     .orElse(null);
+    assertNotNull(spaceItem);
+    // the drive is addressed by the Space pretty name, so the '/' of the
+    // display name never reaches the href
+    assertEquals(BASE_URI + "/rd-ops%20%2842%29", spaceItem.getIdentifier().toString());
+    // while it stays presented under its real display name
+    assertEquals("R&D / Ops", spaceItem.getProperty(DISPLAYNAME).getValue());
+
+    // the personal drive keeps the user full name, it is not slugified
+    WebDavItem userItem = webDavItem.getChildren()
+                                    .stream()
+                                    .filter(child -> child.getIdentifier().toString().contains("%281%29"))
+                                    .findFirst()
+                                    .orElse(null);
+    assertNotNull(userItem);
+    assertEquals(BASE_URI + "/John%20Doe%20%281%29", userItem.getIdentifier().toString());
+  }
+
+  /**
+   * Pins the escaping of the drive segment on the characters where Java's
+   * URLEncoder and JavaScript's encodeURIComponent disagree.
+   * <p>
+   * <b>This rule is implemented twice</b>: here, by
+   * {@code WebdavReadCommandHandler#encodeUrlString} over
+   * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.PathCommandHandler#toWebDavSegment},
+   * and in the UI by
+   * {@code documents-webapp/.../DocumentsWebdavMapDrivesDrawer.vue#driveSegment},
+   * which builds the URL the user copies to mount the drive. The two must emit
+   * the same bytes — a URL the server never emits does not mount (EXO-89613) —
+   * so a change here is a change there.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetRootPathEscapesTheDriveSegmentAsTheMapDrivesDrawerDoes() {
+    when(profile.getFullName()).thenReturn("Zoe O'Brien!~*+ (A/B) 50%");
+
+    WebDavItem webDavItem = handler.get(session,
+                                        "/",
+                                        REQUESTED_PROPERTY_NAMES,
+                                        false,
+                                        1,
+                                        BASE_URI,
+                                        USERNAME);
+
+    WebDavItem userItem = webDavItem.getChildren()
+                                    .stream()
+                                    .filter(child -> child.getIdentifier().toString().contains("%281%29"))
+                                    .findFirst()
+                                    .orElse(null);
+    assertNotNull(userItem);
+    // '/' and '%' sanitised to '_'; ! ~ ' ( ) escaped, '*' left bare, '+' as %2B
+    assertEquals(BASE_URI + "/Zoe%20O%27Brien%21%7E*%2B%20%28A_B%29%2050_%20%281%29",
+                 userItem.getIdentifier().toString());
+  }
+
+  @Test
+  @SneakyThrows
   public void testGetWithNodePathUsesMappedWebDavPath() {
     WebDavItem webDavItem = handler.get(session,
                                         WEBDAV_PATH,
@@ -203,7 +295,10 @@ public class WebdavReadCommandHandlerTest {
     assertEquals(JCR_PATH, webDavItem.getJcrPath());
     assertEquals(ENCODED_WEBDAV_PATH, webDavItem.getWebDavPath());
     assertFalse(webDavItem.isFile());
-    assertNotNull(webDavItem.getIdentifier());
+    // the invariant CachedJcrWebDavService#resolveIdentifier rebuilds a cached
+    // item's href from: pinned here, on the side that produces it by substring
+    // arithmetic over the drive root, so the two cannot drift apart silently
+    assertEquals(BASE_URI + ENCODED_WEBDAV_PATH, webDavItem.getIdentifier().toString());
   }
 
   @Test
