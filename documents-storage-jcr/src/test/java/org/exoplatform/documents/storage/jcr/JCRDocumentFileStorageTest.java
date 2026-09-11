@@ -384,6 +384,9 @@ public class JCRDocumentFileStorageTest {
     // Before the fix this was addNode("report.docx (1)", ...), which Mockito reports
     // verbatim as the actual invocation when this verification fails.
     verify(parentNode).addNode("report (1).docx", NodeTypeConstants.NT_FILE);
+    // The listing and the MCP tools display exo:title, not the node name: the title
+    // must carry the same "counter before the extension" form (round 3 of #2081).
+    verify(currentNode).setProperty(NodeTypeConstants.EXO_TITLE, "report (1).docx");
   }
 
   @Test
