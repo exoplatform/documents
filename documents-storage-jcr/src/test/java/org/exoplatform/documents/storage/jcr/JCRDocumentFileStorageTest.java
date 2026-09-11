@@ -331,6 +331,116 @@ public class JCRDocumentFileStorageTest {
     verify(sessionProvider, times(2)).close();
   }
 
+  /**
+   * EXO-89931: duplicating "report.docx" into its own folder used to create
+   * "report.docx (1)", a name no longer recognised as a .docx, so the copy would
+   * not open. The counter must land before the extension.
+   * <p>
+   * {@code getNewIndexedName} and {@code isFolder} are stubbed to call the real
+   * methods: this class mocks {@code JCRDocumentsUtil} statically, so leaving them
+   * mocked would make the assertion pass against any implementation.
+   */
+  @Test
+  public void duplicateDocumentPutsTheCopyCounterBeforeTheExtension() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl currentNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(currentNode);
+    // The naming helpers must be real here, or this test cannot fail.
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(currentNode.getName()).thenReturn("report.docx");
+    when(currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(currentNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("report.docx");
+    when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(currentNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(false);
+    when(currentNode.getParent()).thenReturn(parentNode);
+    when(currentNode.getIdentifier()).thenReturn("1");
+    when(parentNode.getIdentifier()).thenReturn("1");
+    when(currentNode.getPath()).thenReturn("/Documents/Private");
+    when(parentNode.getPath()).thenReturn("/Documents/Private/user/report.docx");
+    // The source itself occupies the name, so the counter loop runs exactly once.
+    when(parentNode.hasNode("report.docx")).thenReturn(true);
+    when(parentNode.hasNode("report (1).docx")).thenReturn(false);
+    when(parentNode.addNode(anyString(), anyString())).thenReturn(currentNode);
+
+    jcrDocumentFileStorage.duplicateDocument(1L, "1", "", userID);
+
+    // Before the fix this was addNode("report.docx (1)", ...), which Mockito reports
+    // verbatim as the actual invocation when this verification fails.
+    verify(parentNode).addNode("report (1).docx", NodeTypeConstants.NT_FILE);
+    // The listing and the MCP tools display exo:title, not the node name: the title
+    // must carry the same "counter before the extension" form (round 3 of #2081).
+    verify(currentNode).setProperty(NodeTypeConstants.EXO_TITLE, "report (1).docx");
+  }
+
+  @Test
+  public void duplicateFolderKeepsTheCounterTrailing() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl currentNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    NodeIterator emptyChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(currentNode);
+    // The naming helpers must be real here, or this test cannot fail.
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    // A dotted folder name: only reachable via WebDAV (MKCOL bypasses cleanName's
+    // dot-stripping for nt:folder), but a real state duplicateItem must handle
+    // (round 6 of #2081).
+    when(currentNode.getName()).thenReturn("2026.Q1 reports");
+    when(currentNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(currentNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("2026.Q1 reports");
+    when(currentNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(currentNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(currentNode.getParent()).thenReturn(parentNode);
+    when(currentNode.getIdentifier()).thenReturn("1");
+    when(parentNode.getIdentifier()).thenReturn("1");
+    when(currentNode.getPath()).thenReturn("/Documents/Private");
+    when(parentNode.getPath()).thenReturn("/Documents/Private/user/2026.Q1 reports");
+    when(parentNode.hasNode("2026.Q1 reports")).thenReturn(true);
+    when(parentNode.hasNode("2026.Q1 reports (1)")).thenReturn(false);
+    when(parentNode.addNode(anyString(), anyString())).thenReturn(currentNode);
+    // A folder recurses into its children; this one has none.
+    when(currentNode.getNodes()).thenReturn(emptyChildren);
+
+    jcrDocumentFileStorage.duplicateDocument(1L, "1", "", userID);
+
+    // isFolder(oldNode) must keep the counter trailing for a folder even though its
+    // name contains a dot: without that guard this would be "2026 (1).Q1 reports".
+    verify(parentNode).addNode("2026.q1 reports (1)", NodeTypeConstants.NT_FOLDER);
+    verify(currentNode).setProperty(NodeTypeConstants.EXO_TITLE, "2026.Q1 reports (1)");
+  }
+
   @Test
   public void copyDocument() throws Exception {
     Session systemSession = mock(Session.class);
