@@ -26,7 +26,9 @@
       dense
       link
       class="ps-3"
-      @click.stop.prevent="handleClick">
+      :href="href"
+      :target="href && target"
+      @click.stop="handleClick">
       <v-list-item-icon class="me-2">
         <v-icon
           :class="iconExtraClass"
@@ -87,10 +89,21 @@ export default {
     isGroup: {
       type: Boolean,
       default: false
-    }
+    },
+    href: {
+      type: String,
+      default: null
+    },
+    target: {
+      type: String,
+      default: '_blank'
+    },
   },
   methods: {
-    handleClick() {
+    handleClick(event) {
+      if (!this.href) {
+        event.preventDefault();
+      }
       this.$emit('click');
       if (!this.isGroup) {
         this.$root.$emit('close-action-context-menu');
