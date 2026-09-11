@@ -73,9 +73,6 @@
                         <field name="defaultConfig">
                             <collection type="java.util.ArrayList">
                                 <value>
-                                    <string>daily</string>
-                                </value>
-                                <value>
                                     <string>Instantly</string>
                                 </value>
                             </collection>
@@ -117,9 +114,6 @@
                         </field>
                         <field name="defaultConfig">
                             <collection type="java.util.ArrayList">
-                                <value>
-                                    <string>daily</string>
-                                </value>
                                 <value>
                                     <string>Instantly</string>
                                 </value>
