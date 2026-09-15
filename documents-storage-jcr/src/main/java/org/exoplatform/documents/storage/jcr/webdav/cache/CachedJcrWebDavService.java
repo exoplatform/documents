@@ -317,14 +317,34 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * the lock</b> (<code>LockImpl</code> -> <code>lockData.getLockToken(session.getId())</code>).
    * Served from a shared row it hands one user's lock token to another, and
    * every write verb accepts a client-supplied token back.</li>
+   * <li><code>DAV:childcount</code> — <code>node.getNodes()</code>, which filters
+   * <b>per child</b> against the reading session: eagerly in
+   * <code>NodeImpl.getNodes()</code> (<code>hasPermission(child.getACL(), READ, …)</code>)
+   * and, past <code>session.getLazyReadThreshold()</code>, in
+   * <code>LazyItemsIterator.canRead</code>, which <code>getSize()</code> also
+   * applies. A manager's count of a folder is therefore larger than a member's,
+   * and serving the manager's discloses how many documents the member cannot
+   * see.</li>
    * </ul>
-   * Not on this list, having been checked: <code>DAV:childcount</code> and
-   * <code>DAV:haschildren</code> come from <code>node.getNodes()</code> /
-   * <code>node.hasNodes()</code>, and <code>SessionDataManager.getChildNodesData</code>
-   * checks <code>READ</code> on the <i>parent</i>, not per child — so every user
-   * who can see the row sees the same count (EXO-90128).
+   * Not on this list, having been checked:
+   * <ul>
+   * <li><code>DAV:haschildren</code> — <code>node.hasNodes()</code> goes to
+   * <code>SessionDataManager.getChildNodesCount</code>, which applies <b>no</b>
+   * permission filter at all. User-independent because it never filters, not
+   * because it filters on the parent.</li>
+   * <li><code>DAV:isroot</code> — reads <code>node.getSession().getUserID()</code>,
+   * so it is username-dependent by construction, but only on <code>/Users/…</code>
+   * paths (<code>PathCommandHandler.getIdentityIdFromJcrPath</code> ignores the
+   * username for <code>/Groups/spaces/…</code>). Such a drive roots at its owner's
+   * <code>Private</code> node, which no other session can read, so those rows are
+   * single-user and the value cannot be served to anyone else. Safe under that
+   * invariant, not safe in general.</li>
+   * </ul>
    */
-  private static final List<QName> USER_DEPENDENT_PROPERTIES = List.of(ACLProperties.ACL, SUPPORTEDLOCK, LOCKDISCOVERY);
+  private static final List<QName> USER_DEPENDENT_PROPERTIES = List.of(ACLProperties.ACL,
+                                                                       SUPPORTEDLOCK,
+                                                                       LOCKDISCOVERY,
+                                                                       CHILDCOUNT);
 
   /**
    * Moves the user-dependent properties out of the row's shared list, so that
@@ -377,10 +397,17 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * cache. The counterpart of {@link #extractUserDependentProperties}: what was
    * taken out of the shared list on write is put back, per user, on read.
    * <p>
-   * The row is only ever served to a user it already holds properties for —
-   * {@link #isMustRefreshItem} refreshes it otherwise — so an empty overlay
-   * means the item genuinely carries none of these properties, not that they
-   * are missing.
+   * An empty overlay means one of two things, and they are worth telling apart:
+   * either the item genuinely carries none of these properties, or the row is
+   * being served on the fallthrough in {@link #get} where a refresh was
+   * attempted and <code>super.get</code> returned null — which happens to a user
+   * the row holds nothing for, since
+   * <code>WebdavReadCommandHandler#getWebDavIdentityItem</code> returns null when
+   * <code>Session#itemExists</code> is false, and that method swallows the
+   * <code>AccessDeniedException</code> of a user who may not read the drive.
+   * That fallthrough is a pre-existing metadata disclosure tracked separately;
+   * what this method guarantees is only that no <i>caller-dependent</i> property
+   * is served from the row as stored.
    *
    * @param webDavItem item rebuilt from the row, may be null
    * @param webDavItemEntity the row it was rebuilt from

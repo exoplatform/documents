@@ -475,6 +475,19 @@ public class WebdavReadCommandHandler {
    * cache instead of recomputed here (EXO-89613). Today that is
    * <code>DAV:checked-in</code>, <code>DAV:predecessor-set</code> and
    * <code>DAV:successor-set</code>.
+   * <p>
+   * <b>The same holds for any branch whose value depends on the reading
+   * user</b> — one that calls <code>node.hasPermission(...)</code>,
+   * <code>node.canAddMixin(...)</code>, <code>node.getLock()</code>,
+   * <code>node.getNodes()</code> or <code>node.getSession()</code>. A cache row
+   * is shared by every user who has read the path, so such a value must be
+   * listed in
+   * {@link org.exoplatform.documents.storage.jcr.webdav.cache.CachedJcrWebDavService}
+   * <code>#USER_DEPENDENT_PROPERTIES</code>, which holds it per user instead of
+   * in the row's shared property list. Today that is <code>DAV:acl</code>,
+   * <code>DAV:supportedlock</code>, <code>DAV:lockdiscovery</code> and
+   * <code>DAV:childcount</code> (EXO-90128); that constant's javadoc also records
+   * the branches that were checked and found user-independent, and why.
    *
    * @param node the JCR node
    * @param nodeIdentifier the node's absolute WebDAV URI

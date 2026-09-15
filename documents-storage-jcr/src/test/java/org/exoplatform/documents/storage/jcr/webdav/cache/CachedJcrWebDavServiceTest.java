@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr.webdav.cache;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHECKEDIN;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.GETLASTMODIFIED;
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.CHILDCOUNT;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.HREF;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.LOCKDISCOVERY;
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.SUPPORTEDLOCK;
@@ -52,6 +53,8 @@ import javax.jcr.Session;
 import javax.jcr.Workspace;
 import javax.jcr.observation.ObservationManager;
 import javax.xml.namespace.QName;
+
+import org.apache.commons.collections4.CollectionUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -374,10 +377,11 @@ public class CachedJcrWebDavServiceTest {
   private static final String       OTHER_USERNAME  = "other";
 
   /**
-   * EXO-90128 — a cache row is keyed by the WebDAV path alone and shared by
-   * every user who has read it, but DAV:acl is computed from the reading user's
-   * own JCR session. Served from the row as stored, the last reader's
-   * permissions were handed to everyone else on it.
+   * Pins the read half of the per-user contract: each user is overlaid their own
+   * entry, and only theirs. It does not by itself reproduce the EXO-90128 leak —
+   * the row here is already in the post-fix shape, and only
+   * {@link #testRefreshByOneUserMustNotLeakTheirLockTokenToAnother} reproduces
+   * the defect end to end.
    */
   @Test
   @SneakyThrows
@@ -392,17 +396,21 @@ public class CachedJcrWebDavServiceTest {
     WebDavItem asUser = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
     WebDavItem asOther = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, OTHER_USERNAME);
 
-    assertEquals("read-only", asUser.getProperty(ACLProperties.ACL).getValue());
-    assertEquals("manager", asOther.getProperty(ACLProperties.ACL).getValue());
+    assertEquals("read-only", value(asUser, ACLProperties.ACL));
+    assertEquals("manager", value(asOther, ACLProperties.ACL));
+    // exactly one: a write half that left the property in the shared list too
+    // would shadow-duplicate it, and getProperty returns only the first match
+    assertEquals(1, count(asUser, ACLProperties.ACL));
     // both answers came from the one cached row, not from a JCR read
     verify(readCommandHandler, never()).get(any(), any(), any(), anyBoolean(), anyInt(), any(), any());
   }
 
   /**
-   * DAV:lockdiscovery carries Lock#getLockToken(), which JCR returns only to the
-   * session holding the lock — so a row that stored it served one user's lock
-   * token to another, and every write verb accepts a client-supplied token back.
-   * A user who holds no lock must see no token.
+   * Same contract for DAV:lockdiscovery, the property with teeth: JCR returns a
+   * lock token only to the session holding the lock, and every write verb
+   * accepts a client-supplied token back. A user who holds no lock must be
+   * overlaid no token. The end-to-end reproduction is
+   * {@link #testRefreshByOneUserMustNotLeakTheirLockTokenToAnother}.
    */
   @Test
   @SneakyThrows
@@ -417,7 +425,7 @@ public class CachedJcrWebDavServiceTest {
     WebDavItem asHolder = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
     WebDavItem asOther = service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, OTHER_USERNAME);
 
-    assertEquals("opaquelocktoken:abc", asHolder.getProperty(LOCKDISCOVERY).getValue());
+    assertEquals("opaquelocktoken:abc", value(asHolder, LOCKDISCOVERY));
     assertNull(asOther.getProperty(LOCKDISCOVERY));
   }
 
@@ -435,7 +443,10 @@ public class CachedJcrWebDavServiceTest {
     computed.setProperties(List.of(new WebDavItemProperty(GETLASTMODIFIED, "Thu, 01 Jan 2026 00:00:00 GMT"),
                                    new WebDavItemProperty(ACLProperties.ACL, "read-only"),
                                    new WebDavItemProperty(SUPPORTEDLOCK, "write"),
-                                   new WebDavItemProperty(LOCKDISCOVERY, "opaquelocktoken:abc")));
+                                   new WebDavItemProperty(LOCKDISCOVERY, "opaquelocktoken:abc"),
+                                   // node.getNodes() filters per child against the
+                                   // reading session, so the count is the reader's
+                                   new WebDavItemProperty(CHILDCOUNT, "10")));
     when(readCommandHandler.get(any(), any(), any(), anyBoolean(), anyInt(), any(), any())).thenReturn(computed);
 
     service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
@@ -445,7 +456,7 @@ public class CachedJcrWebDavServiceTest {
     WebDavItemEntity saved = captor.getValue();
     assertEquals(List.of(qname(GETLASTMODIFIED)), saved.getProperties().stream().map(WebDavItemPropertyEntity::getName).toList());
     assertEquals(Set.of(USERNAME), saved.getUsernames());
-    assertEquals(List.of(qname(ACLProperties.ACL), qname(SUPPORTEDLOCK), qname(LOCKDISCOVERY)),
+    assertEquals(List.of(qname(ACLProperties.ACL), qname(SUPPORTEDLOCK), qname(LOCKDISCOVERY), qname(CHILDCOUNT)),
                  saved.getUserProperties(USERNAME).stream().map(WebDavItemPropertyEntity::getName).toList());
   }
 
@@ -496,6 +507,18 @@ public class CachedJcrWebDavServiceTest {
     });
     when(webDavItemRepository.findById(anyString())).thenAnswer(invocation -> Optional.ofNullable(store.get(invocation.getArgument(0,
                                                                                                                                   String.class))));
+  }
+
+  private String value(WebDavItem webDavItem, javax.xml.namespace.QName name) {
+    WebDavItemProperty property = webDavItem.getProperty(name);
+    return property == null ? null : property.getValue();
+  }
+
+  private long count(WebDavItem webDavItem, javax.xml.namespace.QName name) {
+    return CollectionUtils.emptyIfNull(webDavItem.getProperties(false))
+                          .stream()
+                          .filter(p -> name.equals(p.getName()))
+                          .count();
   }
 
   private WebDavItemPropertyEntity property(javax.xml.namespace.QName name, String value) {
