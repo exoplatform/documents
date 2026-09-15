@@ -332,6 +332,15 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * <code>SessionDataManager.getChildNodesCount</code>, which applies <b>no</b>
    * permission filter at all. User-independent because it never filters, not
    * because it filters on the parent.</li>
+   * <li><code>DAV:getcontentlength</code> and <code>DAV:getcontenttype</code> —
+   * they reach a <i>second</i> node through the session
+   * (<code>node.getNode(JCR_CONTENT)</code>), which is the shape that made
+   * <code>DAV:childcount</code> user-dependent. Safe here because this addon
+   * never gives <code>jcr:content</code> an ACL of its own —
+   * <code>ExtendedNode#setPermissions</code> is called on the file node and on
+   * link nodes only (<code>JCRDocumentFileStorage</code>) — so a reader who can
+   * read the file can read its content node, and both values are the same for
+   * everyone.</li>
    * <li><code>DAV:isroot</code> — reads <code>node.getSession().getUserID()</code>,
    * so it is username-dependent by construction, but only on <code>/Users/…</code>
    * paths (<code>PathCommandHandler.getIdentityIdFromJcrPath</code> ignores the
