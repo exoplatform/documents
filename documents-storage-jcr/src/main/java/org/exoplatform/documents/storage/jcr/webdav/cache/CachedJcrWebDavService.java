@@ -35,10 +35,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.utils.Tools;
+import org.exoplatform.documents.storage.jcr.util.ACLProperties;
 import org.exoplatform.documents.storage.jcr.webdav.JcrWebDavService;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.dao.WebDavItemDao;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemEntity;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemPropertyEntity;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemUserPropertiesEntity;
 import org.exoplatform.documents.storage.jcr.webdav.cache.listener.WebDavCacheUpdaterAction;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
@@ -147,7 +149,9 @@ public class CachedJcrWebDavService extends JcrWebDavService {
       if (webDavItemEntity == null) {
         return null;
       } else {
-        WebDavItem webDavItem = resolveIdentifier(webDavItemEntity.toWebDavItem(), baseUri);
+        WebDavItem webDavItem = resolveUserProperties(resolveIdentifier(webDavItemEntity.toWebDavItem(), baseUri),
+                                                      webDavItemEntity,
+                                                      username);
         if (depth > 0) {
           addChildren(webDavItem, depth, baseUri, username);
         }
@@ -215,7 +219,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
               if (!c.isModified()
                   && CollectionUtils.emptyIfNull(c.getUsernames()).contains(username)
                   && (c.isDeep() || childrenDepth == 0)) {
-                childWebDavItem = resolveIdentifier(c.toWebDavItem(), baseUri);
+                childWebDavItem = resolveUserProperties(resolveIdentifier(c.toWebDavItem(), baseUri), c, username);
               } else {
                 try {
                   childWebDavItem = get(c.getWebDavPath(),
@@ -251,19 +255,15 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     LOG.debug("Save WebDav Item with path '{}' in ES Cache", webDavItem.getWebDavPath());
     WebDavItemEntity webDavItemEntity = new WebDavItemEntity(webDavItem);
     webDavItemEntity.setDeep(depth > 0);
-    if (forceRefreshUsers) {
-      webDavItemEntity.setUsernames(Collections.singleton(username));
-    } else {
-      WebDavItemEntity existingWebDavItemEntity = webDavItemDao.findById(webDavItemEntity.getWebDavPath()).orElse(null);
-      if (existingWebDavItemEntity == null) {
-        webDavItemEntity.setUsernames(Collections.singleton(username));
-      } else {
-        Set<String> usernames = new HashSet<>(CollectionUtils.emptyIfNull(existingWebDavItemEntity.getUsernames()));
-        usernames.add(username);
-        webDavItemEntity.setUsernames(usernames);
-        webDavItemEntity.setDeep(existingWebDavItemEntity.isDeep() || depth > 0);
-      }
+    // the properties just computed from this user's own JCR session leave the
+    // row's shared list and are held under their username instead
+    List<WebDavItemPropertyEntity> ownProperties = extractUserDependentProperties(webDavItemEntity);
+    WebDavItemEntity existingWebDavItemEntity = forceRefreshUsers ? null :
+                                              webDavItemDao.findById(webDavItemEntity.getWebDavPath()).orElse(null);
+    if (existingWebDavItemEntity != null) {
+      webDavItemEntity.setDeep(existingWebDavItemEntity.isDeep() || depth > 0);
     }
+    webDavItemEntity.setUserProperties(mergeUserProperties(existingWebDavItemEntity, username, ownProperties));
     webDavItemEntity = webDavItemDao.save(webDavItemEntity);
     if (CollectionUtils.isNotEmpty(webDavItem.getChildren())) {
       int childrenDepth = depth - 1;
@@ -300,6 +300,108 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * from the item URI, is not a silent regression.
    */
   private static final List<QName> IDENTIFIER_DERIVED_PROPERTIES = List.of(CHECKEDIN, PREDECESSORSET, SUCCESSORSET);
+
+  /**
+   * Properties whose value is computed from the <b>reading user's</b> JCR
+   * session, and which therefore must never be served from a cache row as
+   * stored. Kept in step with the session-dependent branches of
+   * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler}
+   * <code>#getWebDavProperty</code>, which carries the reciprocal comment.
+   * <ul>
+   * <li><code>DAV:acl</code> — four <code>node.hasPermission(...)</code> calls
+   * (<code>ACLProperties.computeAceProperty</code>);</li>
+   * <li><code>DAV:supportedlock</code> — <code>node.canAddMixin(MIX_LOCKABLE)</code>,
+   * which is refused to a session without write permission;</li>
+   * <li><code>DAV:lockdiscovery</code> — carries <code>Lock#getLockToken()</code>,
+   * and the JCR implementation returns the token <b>only to the session holding
+   * the lock</b> (<code>LockImpl</code> -> <code>lockData.getLockToken(session.getId())</code>).
+   * Served from a shared row it hands one user's lock token to another, and
+   * every write verb accepts a client-supplied token back.</li>
+   * </ul>
+   * Not on this list, having been checked: <code>DAV:childcount</code> and
+   * <code>DAV:haschildren</code> come from <code>node.getNodes()</code> /
+   * <code>node.hasNodes()</code>, and <code>SessionDataManager.getChildNodesData</code>
+   * checks <code>READ</code> on the <i>parent</i>, not per child — so every user
+   * who can see the row sees the same count (EXO-90128).
+   */
+  private static final List<QName> USER_DEPENDENT_PROPERTIES = List.of(ACLProperties.ACL, SUPPORTEDLOCK, LOCKDISCOVERY);
+
+  /**
+   * Moves the user-dependent properties out of the row's shared list, so that
+   * what stays in {@code properties} is only what every reader of this item
+   * sees identically.
+   *
+   * @param webDavItemEntity row being written, its properties freshly computed
+   *          from one user's session
+   * @return those of its properties that belong to that user alone, removed
+   *         from the entity's shared list
+   */
+  private List<WebDavItemPropertyEntity> extractUserDependentProperties(WebDavItemEntity webDavItemEntity) {
+    List<WebDavItemPropertyEntity> properties = new ArrayList<>(CollectionUtils.emptyIfNull(webDavItemEntity.getProperties()));
+    List<String> userDependentNames = USER_DEPENDENT_PROPERTIES.stream()
+                                                               .map(name -> String.format("%s:%s",
+                                                                                          name.getNamespaceURI(),
+                                                                                          name.getLocalPart()))
+                                                               .toList();
+    Map<Boolean, List<WebDavItemPropertyEntity>> split =
+                                                       properties.stream()
+                                                                 .collect(Collectors.partitioningBy(p -> userDependentNames.contains(p.getName())));
+    webDavItemEntity.setProperties(split.get(false));
+    return split.get(true);
+  }
+
+  /**
+   * @param existingWebDavItemEntity the row as already stored, null when it is
+   *          being created or when every other user's entry is being dropped
+   * @param username the user whose properties were just computed
+   * @param ownProperties that user's properties
+   * @return the per-user entries to store: every other user's kept as they
+   *         were, this user's replaced
+   */
+  private List<WebDavItemUserPropertiesEntity> mergeUserProperties(WebDavItemEntity existingWebDavItemEntity,
+                                                                   String username,
+                                                                   List<WebDavItemPropertyEntity> ownProperties) {
+    List<WebDavItemUserPropertiesEntity> userProperties = new ArrayList<>();
+    if (existingWebDavItemEntity != null) {
+      CollectionUtils.emptyIfNull(existingWebDavItemEntity.getUserProperties())
+                     .stream()
+                     .filter(u -> !StringUtils.equals(u.getUsername(), username))
+                     .forEach(userProperties::add);
+    }
+    userProperties.add(new WebDavItemUserPropertiesEntity(username, ownProperties));
+    return userProperties;
+  }
+
+  /**
+   * Overlays the reading user's own properties onto an item served from the
+   * cache. The counterpart of {@link #extractUserDependentProperties}: what was
+   * taken out of the shared list on write is put back, per user, on read.
+   * <p>
+   * The row is only ever served to a user it already holds properties for —
+   * {@link #isMustRefreshItem} refreshes it otherwise — so an empty overlay
+   * means the item genuinely carries none of these properties, not that they
+   * are missing.
+   *
+   * @param webDavItem item rebuilt from the row, may be null
+   * @param webDavItemEntity the row it was rebuilt from
+   * @param username the reading user
+   * @return the same item, carrying that user's own view of the user-dependent
+   *         properties
+   */
+  private WebDavItem resolveUserProperties(WebDavItem webDavItem, WebDavItemEntity webDavItemEntity, String username) {
+    if (webDavItem == null || webDavItemEntity == null) {
+      return webDavItem;
+    }
+    // toWebDavItem() builds the shared list with Stream#toList, which is
+    // immutable — the overlay replaces it rather than appending to it
+    List<WebDavItemProperty> properties = new ArrayList<>(CollectionUtils.emptyIfNull(webDavItem.getProperties()));
+    webDavItemEntity.getUserProperties(username)
+                    .stream()
+                    .map(WebDavItemPropertyEntity::toWebDavItemProperty)
+                    .forEach(properties::add);
+    webDavItem.setProperties(properties);
+    return webDavItem;
+  }
 
   /**
    * Resolves everything a cached item derives from the base URI of the request,
