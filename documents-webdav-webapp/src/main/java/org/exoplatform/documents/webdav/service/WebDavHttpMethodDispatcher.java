@@ -27,6 +27,12 @@ import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import javax.jcr.AccessDeniedException;
+import javax.jcr.ItemExistsException;
+import javax.jcr.ItemNotFoundException;
+import javax.jcr.PathNotFoundException;
+import javax.jcr.lock.LockException;
+
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.documents.webdav.plugin.impl.WebDavErrorHandler;
@@ -101,12 +107,58 @@ public class WebDavHttpMethodDispatcher {
     httpResponse.sendError(e.getHttpError(), e.getMessage());
   }
 
-  private WebDavException getWebDavException(Throwable e) {
-    if (e.getCause() == null) {
-      return null;
+  /**
+   * Finds the HTTP status a failure should carry, by walking the cause chain for
+   * a {@link WebDavException} and, failing that, for one of the repository's own
+   * exceptions.
+   * <p>
+   * The repository refuses an operation the user has no right to with a JCR
+   * {@link AccessDeniedException}, which carries no
+   * <code>WebDavException</code> anywhere in its chain — so before this mapping
+   * existed it fell through to the generic handler and the user renaming a file
+   * they may not write got a <b>500 plus a WARN</b> rather than a 403. That is
+   * the wrong answer twice over: it tells the client the server broke rather
+   * than that the request was refused, and it files a normal, expected refusal
+   * as an incident in the log (<code>backend-spring.md</code> §5: existence
+   * -&gt; 404, ACL -&gt; 403, validation -&gt; 400, and do not log an expected
+   * exception as an error).
+   * <p>
+   * Mapping here rather than in each verb handler covers every verb at once —
+   * the same refusal reaches this point from MOVE, PUT, DELETE, MKCOL and COPY.
+   *
+   * @param throwable the failure a handler raised
+   * @return the exception to answer with, or null to fall back to a 500
+   */
+  private WebDavException getWebDavException(Throwable throwable) {
+    for (Throwable e = throwable.getCause(); e != null; e = e.getCause()) {
+      if (e instanceof WebDavException webDavException) {
+        return webDavException;
+      }
+      Integer httpStatus = getJcrHttpStatus(e);
+      if (httpStatus != null) {
+        return new WebDavException(httpStatus, e.getMessage());
+      }
+    }
+    return getJcrHttpStatus(throwable) == null ? null :
+                                               new WebDavException(getJcrHttpStatus(throwable), throwable.getMessage());
+  }
+
+  /**
+   * @param e a failure from the repository
+   * @return the HTTP status it means, or null when it is not one the contract
+   *         covers — in which case it really is a 500
+   */
+  private Integer getJcrHttpStatus(Throwable e) {
+    if (e instanceof AccessDeniedException) {
+      return HttpStatus.SC_FORBIDDEN;
+    } else if (e instanceof PathNotFoundException || e instanceof ItemNotFoundException) {
+      return HttpStatus.SC_NOT_FOUND;
+    } else if (e instanceof LockException) {
+      return HttpStatus.SC_LOCKED;
+    } else if (e instanceof ItemExistsException) {
+      return HttpStatus.SC_CONFLICT;
     } else {
-      return e.getCause() instanceof WebDavException webDavException ? webDavException :
-                                                                     getWebDavException(e.getCause());
+      return null;
     }
   }
 
