@@ -86,14 +86,16 @@
               class="disable-pointer-event" />
           </v-col>
           <v-col cols="11" v-else>
-            <v-progress-linear
+            <div
               v-if="status!=='cannot_unzip_file'"
-              v-model="progress"
-              rounded
-              height="20"
-              class="disable-pointer-event">
-              <strong v-if="status!=='cannot_unzip_file'">{{ Math.ceil(progress) }}%</strong>
-            </v-progress-linear>
+              class="d-flex align-center">
+              <v-progress-linear
+                v-model="progress"
+                rounded
+                height="20"
+                class="disable-pointer-event flex-grow-1" />
+              <strong class="ms-3 text-color text-no-wrap flex-shrink-0">{{ Math.ceil(progress) }}%</strong>
+            </div>
           </v-col>
           <v-col cols="11" v-if="status==='creating_documents'">
             {{ importData.importedFilesCount }}/{{ totalNumber }}: {{ importData.documentInProgress }}
