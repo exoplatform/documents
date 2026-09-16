@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -179,7 +180,7 @@ public class JcrWebDavServiceTest {
   @Test
   @SneakyThrows
   public void testGetLastModifiedDate() {
-    long lastModifiedDate = service.getLastModifiedDate(WEBDAV_PATH, FILE_VERSION);
+    long lastModifiedDate = service.getLastModifiedDate(WEBDAV_PATH, FILE_VERSION, USERNAME);
     assertEquals(0l, lastModifiedDate);
     verify(readCommandHandler).getLastModifiedDate(any(Session.class), eq(WEBDAV_PATH), eq(FILE_VERSION));
   }
@@ -293,10 +294,36 @@ public class JcrWebDavServiceTest {
     assertSame(ctx1, ctx2); // cached
   }
 
+  /**
+   * EXO-90128 — both of these used to open a <b>system</b> session, so they
+   * answered "does this path hold a file" and "when was it last modified" for
+   * any caller, whatever their rights. GetWebDavHandler calls checkModified
+   * before any authoritative read, so the second one confirmed a resource's
+   * existence and exact mtime to a user with no right to it. They must open the
+   * caller's own session and let JCR refuse.
+   */
+  @Test
+  @SneakyThrows
+  public void testIsFileUsesTheCallersOwnSessionNotTheSystemOne() {
+    service.isFile("/a", USERNAME);
+
+    verify(service).newSession(eq(USERNAME), any(), any());
+    verify(repository, never()).getSystemSession(anyString());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testGetLastModifiedDateUsesTheCallersOwnSessionNotTheSystemOne() {
+    service.getLastModifiedDate(WEBDAV_PATH, FILE_VERSION, USERNAME);
+
+    verify(service).newSession(eq(USERNAME), any(), any());
+    verify(repository, never()).getSystemSession(anyString());
+  }
+
   @Test
   public void testIsFileDelegatesAndClosesSession() {
     when(readCommandHandler.isFile(session, "/a")).thenReturn(true);
-    assertTrue(service.isFile("/a"));
+    assertTrue(service.isFile("/a", USERNAME));
     verify(session).logout();
   }
 

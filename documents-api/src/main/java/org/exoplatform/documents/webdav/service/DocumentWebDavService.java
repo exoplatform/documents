@@ -51,7 +51,7 @@ public interface DocumentWebDavService {
    * @param resourcePath File or Folder Path
    * @return true if the resource designated by the path is a file, else false
    */
-  boolean isFile(String resourcePath);
+  boolean isFile(String resourcePath, String username);
 
   /**
    * Webdav GET of a given resource
@@ -346,7 +346,7 @@ public interface DocumentWebDavService {
    *           <li>- The designated resource isn't found</li>
    *           </ul>
    */
-  long getLastModifiedDate(String resourcePath, String version) throws WebDavException;
+  long getLastModifiedDate(String resourcePath, String version, String username) throws WebDavException;
 
   /**
    * Add a lock on a designated resource

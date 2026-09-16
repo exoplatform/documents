@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -197,9 +198,9 @@ public class CachedJcrWebDavServiceTest {
   @Test
   @SneakyThrows
   public void testIsFileWhenPathIsBlankShouldReturnFalse() {
-    assertFalse(service.isFile(null));
-    assertFalse(service.isFile(""));
-    assertFalse(service.isFile("/"));
+    assertFalse(service.isFile(null, USERNAME));
+    assertFalse(service.isFile("", USERNAME));
+    assertFalse(service.isFile("/", USERNAME));
   }
 
   @Test
@@ -207,9 +208,10 @@ public class CachedJcrWebDavServiceTest {
   public void testIsFileWhenEntityExistsShouldReturnEntityValue() {
     WebDavItemEntity entity = mock(WebDavItemEntity.class);
     when(entity.isFile()).thenReturn(true);
+    when(entity.getUsernames()).thenReturn(Set.of(USERNAME));
     when(webDavItemRepository.findById(FILE_PATH)).thenReturn(Optional.of(entity));
 
-    boolean result = service.isFile(FILE_PATH);
+    boolean result = service.isFile(FILE_PATH, USERNAME);
 
     assertTrue(result);
     verify(webDavItemRepository).findById(FILE_PATH);
@@ -224,18 +226,70 @@ public class CachedJcrWebDavServiceTest {
 
     WebDavItemEntity entity = new WebDavItemEntity();
     entity.setProperties(Collections.singletonList(property));
+    entity.setUserProperties(List.of(new WebDavItemUserPropertiesEntity(USERNAME, List.of())));
 
     when(webDavItemRepository.findById(FILE_PATH)).thenReturn(Optional.of(entity));
 
-    long result = service.getLastModifiedDate(FILE_PATH, "1");
+    long result = service.getLastModifiedDate(FILE_PATH, null, USERNAME);
 
     assertTrue(result > 0);
+  }
+
+  /**
+   * EXO-90128 — neither isFile nor getLastModifiedDate took a username, so a row
+   * one member had populated answered for anybody. getLastModifiedDate is the
+   * sharper of the two: GetWebDavHandler calls checkModified before any
+   * authoritative read, so a 304 confirmed both the resource's existence and its
+   * exact mtime to a user with no right to it.
+   */
+  @Test
+  @SneakyThrows
+  public void testIsFileMustNotAnswerFromARowTheCallerIsAbsentFrom() {
+    WebDavItemEntity entity = mock(WebDavItemEntity.class);
+    when(entity.getUsernames()).thenReturn(Set.of(USERNAME));
+    when(webDavItemRepository.findById(FILE_PATH)).thenReturn(Optional.of(entity));
+    assertFalse(service.isFile(FILE_PATH, OTHER_USERNAME));
+    // answered from the repository under the caller's own session, not the row
+    verify(entity, never()).isFile();
+    verify(readCommandHandler).isFile(any(), eq(FILE_PATH));
+  }
+
+  @Test
+  @SneakyThrows
+  public void testGetLastModifiedDateMustNotAnswerFromARowTheCallerIsAbsentFrom() {
+    WebDavItemPropertyEntity property = new WebDavItemPropertyEntity();
+    property.setName(GETLASTMODIFIED.getNamespaceURI() + ":" + GETLASTMODIFIED.getLocalPart());
+    property.setValue("Thu, 01 Jan 2025 00:00:00 GMT");
+    WebDavItemEntity entity = new WebDavItemEntity();
+    entity.setProperties(Collections.singletonList(property));
+    entity.setUserProperties(List.of(new WebDavItemUserPropertiesEntity(USERNAME, List.of())));
+    when(webDavItemRepository.findById(FILE_PATH)).thenReturn(Optional.of(entity));
+    assertEquals(0l, service.getLastModifiedDate(FILE_PATH, null, OTHER_USERNAME));
+    verify(readCommandHandler).getLastModifiedDate(any(), eq(FILE_PATH), isNull());
+  }
+
+  /**
+   * The row carries the head's date only, so a versioned request is never
+   * answered from it.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetLastModifiedDateOfAVersionBypassesTheCache() {
+    WebDavItemPropertyEntity property = new WebDavItemPropertyEntity();
+    property.setName(GETLASTMODIFIED.getNamespaceURI() + ":" + GETLASTMODIFIED.getLocalPart());
+    property.setValue("Thu, 01 Jan 2025 00:00:00 GMT");
+    WebDavItemEntity entity = new WebDavItemEntity();
+    entity.setProperties(Collections.singletonList(property));
+    entity.setUserProperties(List.of(new WebDavItemUserPropertiesEntity(USERNAME, List.of())));
+    when(webDavItemRepository.findById(FILE_PATH)).thenReturn(Optional.of(entity));
+    assertEquals(0l, service.getLastModifiedDate(FILE_PATH, "1", USERNAME));
+    verify(readCommandHandler).getLastModifiedDate(any(), eq(FILE_PATH), eq("1"));
   }
 
   @Test
   @SneakyThrows
   public void testGetLastModifiedDateWhenPathIsRootShouldReturnZero() {
-    long result = service.getLastModifiedDate("/", "1");
+    long result = service.getLastModifiedDate("/", "1", USERNAME);
     assertEquals(0L, result);
   }
 

@@ -80,14 +80,14 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   }
 
   @Override
-  public boolean isFile(String webDavPath) {
+  public boolean isFile(String webDavPath, String username) {
     if (StringUtils.isBlank(webDavPath)
         || StringUtils.equals(webDavPath, "/")) {
       return false;
     } else {
       WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
-      if (webDavItemEntity == null) {
-        return super.isFile(webDavPath);
+      if (webDavItemEntity == null || !CollectionUtils.emptyIfNull(webDavItemEntity.getUsernames()).contains(username)) {
+        return super.isFile(webDavPath, username);
       } else {
         return webDavItemEntity.isFile();
       }
@@ -95,13 +95,16 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   }
 
   @Override
-  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
+  public long getLastModifiedDate(String webDavPath, String version, String username) throws WebDavException {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return 0l;
     } else {
       WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
-      if (webDavItemEntity == null) {
-        return super.getLastModifiedDate(webDavPath, version);
+      // a row answers only for a caller it holds properties for, and only for
+      // the head: it carries no per-version date (EXO-90128)
+      if (webDavItemEntity == null || version != null
+          || !CollectionUtils.emptyIfNull(webDavItemEntity.getUsernames()).contains(username)) {
+        return super.getLastModifiedDate(webDavPath, version, username);
       } else {
         return webDavItemEntity.getProperties() == null ? 0l :
                                                         webDavItemEntity.getProperties()

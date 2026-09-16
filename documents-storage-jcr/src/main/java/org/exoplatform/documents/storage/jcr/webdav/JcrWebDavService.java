@@ -104,8 +104,11 @@ public class JcrWebDavService implements DocumentWebDavService {
 
   @Override
   @SneakyThrows
-  public boolean isFile(String webDavPath) {
-    Session session = getSystemSession();
+  public boolean isFile(String webDavPath, String username) {
+    // the caller's own session, never the system one: this answers "does this
+    // path hold a file", which is information about a resource the caller may
+    // have no right to see (EXO-90128)
+    Session session = getSession(username);
     try {
       return readCommandHandler.isFile(session, webDavPath);
     } finally {
@@ -127,8 +130,8 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
-    Session session = getSystemSession();
+  public long getLastModifiedDate(String webDavPath, String version, String username) throws WebDavException {
+    Session session = getSession(username);
     try {
       return readCommandHandler.getLastModifiedDate(session,
                                                     webDavPath,
