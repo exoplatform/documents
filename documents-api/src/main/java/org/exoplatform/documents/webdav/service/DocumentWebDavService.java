@@ -64,10 +64,12 @@ public interface DocumentWebDavService {
    * @param username the user asking, whose own rights decide the answer: this
    *          reports on a resource they may have no right to see, so it is
    *          resolved against their session and not a system one
-   * @return true if the resource designated by the path is a file, else false
-   * @throws org.exoplatform.documents.webdav.model.WebDavException on a path
-   *           this user cannot resolve — raised, despite the boolean return,
-   *           from the path resolution the authoritative lookup goes through
+   * @return true if the resource designated by the path is a file, else false.
+   *         Note that on a path this user cannot resolve the implementation
+   *         raises a {@link WebDavException} rather than returning false — it
+   *         comes from the path resolution the authoritative lookup goes
+   *         through, and escapes this signature because the implementation
+   *         sneaky-throws it.
    */
   boolean isFile(String resourcePath, String username);
 
