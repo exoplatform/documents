@@ -302,14 +302,6 @@ public class JcrWebDavServiceTest {
   }
 
   /**
-   * EXO-90128 — both of these used to open a <b>system</b> session, so they
-   * answered "does this path hold a file" and "when was it last modified" for
-   * any caller, whatever their rights. GetWebDavHandler calls checkModified
-   * before any authoritative read, so the second one confirmed a resource's
-   * existence and exact mtime to a user with no right to it. They must open the
-   * caller's own session and let JCR refuse.
-   */
-  /**
    * EXO-90128 — the repository's own failures mean HTTP statuses, and the
    * translation lives here rather than in the WebDAV transport, which knows
    * nothing of JCR. A refusal used to reach the client as 500 plus a WARN.
@@ -336,6 +328,18 @@ public class JcrWebDavServiceTest {
   }
 
   /**
+   * The engine's message names the internal JCR path and the userId, so it must
+   * not travel out on a status a client hits routinely.
+   */
+  @Test
+  public void testToWebDavExceptionDoesNotLeakTheEngineMessage() {
+    WebDavException webDavException =
+                                    service.toWebDavException(new AccessDeniedException("access denied for /Groups/spaces/secret/Documents by joumena"));
+
+    assertEquals("Access denied", webDavException.getMessage());
+  }
+
+  /**
    * @return the status the translation yields, or null when it yields nothing —
    *         so a mutant fails on the value rather than on a dereference
    */
@@ -344,6 +348,14 @@ public class JcrWebDavServiceTest {
     return webDavException == null ? null : webDavException.getHttpError();
   }
 
+  /**
+   * EXO-90128 — both of these used to open a <b>system</b> session, so they
+   * answered "does this path hold a file" and "when was it last modified" for
+   * any caller, whatever their rights. GetWebDavHandler calls checkModified
+   * before any authoritative read, so the second one confirmed a resource's
+   * existence and exact mtime to a user with no right to it. They must open the
+   * caller's own session and let JCR refuse.
+   */
   @Test
   @SneakyThrows
   public void testIsFileUsesTheCallersOwnSessionNotTheSystemOne() {

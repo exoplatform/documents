@@ -26,7 +26,6 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.util.List;
 
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -79,15 +78,6 @@ public class WebDavHttpMethodDispatcherTest {
     lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/d/space%20%2825%29/sample.docx");
   }
 
-
-
-
-
-
-  /**
-   * A failure the contract does not cover really is a 500 — the mapping must not
-   * swallow genuine faults into a tidy status.
-   */
   /**
    * With no WebDavException in the chain, the storage implementation is asked
    * what its own failure means — this layer knows nothing of JCR.
@@ -118,6 +108,10 @@ public class WebDavHttpMethodDispatcherTest {
     verify(documentWebDavService, never()).toWebDavException(any());
   }
 
+  /**
+   * A failure the contract does not cover really is a 500 — the translation must
+   * not swallow genuine faults into a tidy status.
+   */
   @Test
   public void testUnmappedFailureStillAnswersServerError() throws Exception {
     whenHandlerThrows(new IllegalStateException("boom"));
@@ -141,8 +135,6 @@ public class WebDavHttpMethodDispatcherTest {
 
     verify(response).sendError(404, "gone");
   }
-
-
 
   @Test
   public void testWebDavExceptionKeepsItsOwnStatus() throws Exception {

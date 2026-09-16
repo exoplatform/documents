@@ -125,10 +125,26 @@ public class JcrWebDavService implements DocumentWebDavService {
     for (Throwable e = throwable; e != null; e = e.getCause()) {
       Integer httpStatus = getHttpStatus(e);
       if (httpStatus != null) {
-        return new WebDavException(httpStatus, e.getMessage());
+        // the engine's own message names the internal JCR path and the userId
+        // (SessionImpl raises AccessDeniedException over an AccessControlException
+        // carrying both), which would now travel out on a routine status a client
+        // hits often. The client gets the status and a fixed phrase; the detail
+        // goes to the log.
+        LOG.debug("WebDav operation refused by the repository, answering {}", httpStatus, e);
+        return new WebDavException(httpStatus, getHttpReason(httpStatus));
       }
     }
     return null;
+  }
+
+  private String getHttpReason(int httpStatus) {
+    return switch (httpStatus) {
+    case HttpStatus.SC_FORBIDDEN -> "Access denied";
+    case HttpStatus.SC_NOT_FOUND -> "Resource not found";
+    case HttpStatus.SC_LOCKED -> "Resource is locked";
+    case HttpStatus.SC_CONFLICT -> "Resource already exists";
+    default -> "Request refused";
+    };
   }
 
   private Integer getHttpStatus(Throwable e) {

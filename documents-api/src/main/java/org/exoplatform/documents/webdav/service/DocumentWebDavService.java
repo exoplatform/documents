@@ -48,10 +48,6 @@ public interface DocumentWebDavService {
   String getDaslValue();
 
   /**
-   * @param resourcePath File or Folder Path
-   * @return true if the resource designated by the path is a file, else false
-   */
-  /**
    * Translates a failure raised by the storage implementation into the HTTP
    * status it means, so that the transport layer does not have to know the
    * storage's exception types. A repository that refuses an operation the user
@@ -63,6 +59,16 @@ public interface DocumentWebDavService {
    */
   WebDavException toWebDavException(Throwable throwable);
 
+  /**
+   * @param resourcePath File or Folder Path
+   * @param username the user asking, whose own rights decide the answer: this
+   *          reports on a resource they may have no right to see, so it is
+   *          resolved against their session and not a system one
+   * @return true if the resource designated by the path is a file, else false
+   * @throws org.exoplatform.documents.webdav.model.WebDavException on a path
+   *           this user cannot resolve — raised, despite the boolean return,
+   *           from the path resolution the authoritative lookup goes through
+   */
   boolean isFile(String resourcePath, String username);
 
   /**
