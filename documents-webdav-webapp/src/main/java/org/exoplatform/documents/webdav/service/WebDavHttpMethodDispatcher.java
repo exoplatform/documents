@@ -30,7 +30,6 @@ import org.springframework.stereotype.Component;
 import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.plugin.WebDavHttpMethodPlugin;
 import org.exoplatform.documents.webdav.plugin.impl.WebDavErrorHandler;
-import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 

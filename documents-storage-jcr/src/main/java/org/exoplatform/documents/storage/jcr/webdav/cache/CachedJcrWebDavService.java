@@ -32,6 +32,7 @@ import javax.xml.namespace.QName;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.utils.Tools;
@@ -106,8 +107,9 @@ public class CachedJcrWebDavService extends JcrWebDavService {
       return 0l;
     }
     WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
-    return webDavItemEntity == null || version != null ? super.getLastModifiedDate(webDavPath, version) :
-                                                       getLastModifiedDateFromProperties(webDavItemEntity);
+    return webDavItemEntity == null || version != null || webDavItemEntity.isModified() ?
+                                                                                       super.getLastModifiedDate(webDavPath, version) :
+                                                                                       getLastModifiedDateFromProperties(webDavItemEntity);
   }
 
   @Override
@@ -133,7 +135,9 @@ public class CachedJcrWebDavService extends JcrWebDavService {
       WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
       // a row answers only for a caller it holds properties for, and only for
       // the head: it carries no per-version date (EXO-90128)
-      if (webDavItemEntity == null || version != null
+      // a row marked modified by the JCR listener carries a stale date; serving
+      // it would let checkModified answer 304 for a file that has changed
+      if (webDavItemEntity == null || version != null || webDavItemEntity.isModified()
           || !CollectionUtils.emptyIfNull(webDavItemEntity.getUsernames()).contains(username)) {
         return super.getLastModifiedDate(webDavPath, version, username);
       } else {
@@ -190,19 +194,20 @@ public class CachedJcrWebDavService extends JcrWebDavService {
         } else if (webDavItemEntity != null && !webDavItemEntity.getUsernames().contains(username)) {
           // The authoritative read produced nothing for this user and the row
           // holds nothing computed against their session: it was populated by
-          // somebody else, and must not answer in their place. That is not a
-          // hypothetical — WebdavReadCommandHandler#getWebDavIdentityItem
-          // returns null when Session#itemExists is false, and itemExists
-          // swallows the AccessDeniedException of a user who may not read the
-          // drive, so without this a non-member received a member's cached
-          // metadata as a 207 where the uncached path answers 404 (EXO-90128).
+          // somebody else, and must not answer in their place. Without this a
+          // non-member received a member's cached metadata as a 207
+          // (EXO-90128). The refusal is an explicit 404 rather than a null: no
+          // verb handler tolerates a null item, and the uncached read now
+          // answers the same 404 for the same user, so cached and uncached
+          // agree.
           //
           // Deliberately narrow: when the row *does* hold an entry for this
           // user, a null from the authoritative read is the pre-existing
           // deleted-node or transient-failure case, which still serves the row.
-          // A user evicted by MAX_CACHED_USERS_PER_ITEM takes this arm instead,
-          // which is the safe direction — they are refreshed, not served.
-          return null;
+          // A user evicted by MAX_CACHED_USERS_PER_ITEM whose re-read produces
+          // nothing takes this arm too — refused, never served another user's
+          // row; when the re-read succeeds they are simply refreshed.
+          throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't find resource for path %s", webDavPath));
         }
       }
       if (webDavItemEntity == null) {

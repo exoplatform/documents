@@ -27,6 +27,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -75,6 +76,7 @@ import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.W
 import org.exoplatform.documents.storage.jcr.webdav.cache.listener.WebDavCacheUpdaterAction;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
+import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.portal.config.UserACL;
@@ -558,8 +560,30 @@ public class CachedJcrWebDavServiceTest {
 
     assertNotNull(service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME));
 
-    assertNull("a row populated by another user must not be served to one it holds nothing for",
-               service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, OTHER_USERNAME));
+    WebDavException refused = assertThrows("a row populated by another user must not be served to one it holds nothing for",
+                                           WebDavException.class,
+                                           () -> service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, OTHER_USERNAME));
+    assertEquals(404, refused.getHttpError());
+  }
+
+  /**
+   * A row the JCR listener has marked modified carries a stale date. Serving it
+   * would let checkModified answer 304 for a file that has changed.
+   */
+  @Test
+  @SneakyThrows
+  public void testGetLastModifiedDateOfAModifiedRowBypassesTheCache() {
+    WebDavItemPropertyEntity property = new WebDavItemPropertyEntity();
+    property.setName(GETLASTMODIFIED.getNamespaceURI() + ":" + GETLASTMODIFIED.getLocalPart());
+    property.setValue("Thu, 01 Jan 2025 00:00:00 GMT");
+    WebDavItemEntity entity = new WebDavItemEntity();
+    entity.setProperties(Collections.singletonList(property));
+    entity.setUserProperties(List.of(new WebDavItemUserPropertiesEntity(USERNAME, List.of())));
+    entity.setModified(true);
+    when(webDavItemRepository.findById(FILE_PATH)).thenReturn(Optional.of(entity));
+
+    assertEquals(0l, service.getLastModifiedDate(FILE_PATH, null, USERNAME));
+    verify(readCommandHandler).getLastModifiedDate(any(), eq(FILE_PATH), isNull());
   }
 
   /**

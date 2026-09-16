@@ -176,13 +176,23 @@ public class WebdavReadCommandHandler {
       if (identity == null) {
         throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't find an identity Id from path %s", webDavPath));
       } else {
-        return getWebDavIdentityItem(session,
-                                     identity.getIdentityId(),
-                                     identity.getProfile().getFullName(),
-                                     requestedPropertyNames,
-                                     requestPropertyNamesOnly,
-                                     depth,
-                                     baseUri);
+        WebDavItem identityItem = getWebDavIdentityItem(session,
+                                                        identity.getIdentityId(),
+                                                        identity.getProfile().getFullName(),
+                                                        requestedPropertyNames,
+                                                        requestPropertyNamesOnly,
+                                                        depth,
+                                                        baseUri);
+        if (identityItem == null) {
+          // Session#itemExists swallows the AccessDeniedException of a user who
+          // may not read the drive, so a null here is a refusal as often as an
+          // absence. Returned as-is it reached the verb handlers, which do not
+          // expect it: HEAD dereferenced it into a 500, PROPFIND had already
+          // set 207 and truncated its multistatus. A 404 is the answer both
+          // cases deserve, and keeps "denied" indistinguishable from "absent".
+          throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't find drive root for path %s", webDavPath));
+        }
+        return identityItem;
       }
     } else {
       Identity identity = getIdentityFromWebDavPath(webDavPath);
