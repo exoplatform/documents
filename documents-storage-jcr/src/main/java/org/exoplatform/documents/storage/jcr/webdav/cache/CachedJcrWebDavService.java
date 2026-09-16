@@ -258,7 +258,12 @@ public class CachedJcrWebDavService extends JcrWebDavService {
               }
               // get() returns null — without throwing — for a child whose row
               // holds nothing for this user, and the null is filtered below;
-              // recursing on it would NPE on the first dereference instead
+              // recursing on it would NPE on the first dereference instead.
+              // Unreachable today and so deliberately untested: a real child
+              // path throws 404 rather than returning null, a blocked name
+              // never gets a cache row, and an identity-root row has a null
+              // parentWebDavPath so it never comes back as a child. A guard,
+              // not dead code.
               if (childWebDavItem != null && childrenDepth > 0) {
                 addChildren(childWebDavItem, childrenDepth, baseUri, username);
               }
