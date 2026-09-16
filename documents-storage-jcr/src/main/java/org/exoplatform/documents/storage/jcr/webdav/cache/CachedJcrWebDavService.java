@@ -256,7 +256,10 @@ public class CachedJcrWebDavService extends JcrWebDavService {
                   return null;
                 }
               }
-              if (childrenDepth > 0) {
+              // get() returns null — without throwing — for a child whose row
+              // holds nothing for this user, and the null is filtered below;
+              // recursing on it would NPE on the first dereference instead
+              if (childWebDavItem != null && childrenDepth > 0) {
                 addChildren(childWebDavItem, childrenDepth, baseUri, username);
               }
               return childWebDavItem;
