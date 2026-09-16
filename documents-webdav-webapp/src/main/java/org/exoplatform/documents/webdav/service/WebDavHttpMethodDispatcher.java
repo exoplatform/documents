@@ -102,6 +102,13 @@ public class WebDavHttpMethodDispatcher {
                httpRequest.getMethod(),
                httpRequest.getRequestURI(),
                e);
+    } else if (LOG.isDebugEnabled()) {
+      // not an incident, but a refused request now leaves no other trace
+      LOG.debug("WebDav method '{}' on URI '{}' refused with status {}",
+                httpRequest.getMethod(),
+                httpRequest.getRequestURI(),
+                e.getHttpError(),
+                e);
     }
     httpResponse.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
     httpResponse.sendError(e.getHttpError(), e.getMessage());
@@ -130,17 +137,22 @@ public class WebDavHttpMethodDispatcher {
    * @return the exception to answer with, or null to fall back to a 500
    */
   private WebDavException getWebDavException(Throwable throwable) {
-    for (Throwable e = throwable.getCause(); e != null; e = e.getCause()) {
+    // Two passes, not one interleaved walk: a WebDavException anywhere in the
+    // chain is a status the code chose deliberately and outranks one inferred
+    // from a repository failure wrapping it, however far down it sits. Testing
+    // both at each level would let the outermost match win and mask it.
+    for (Throwable e = throwable; e != null; e = e.getCause()) {
       if (e instanceof WebDavException webDavException) {
         return webDavException;
       }
+    }
+    for (Throwable e = throwable; e != null; e = e.getCause()) {
       Integer httpStatus = getJcrHttpStatus(e);
       if (httpStatus != null) {
         return new WebDavException(httpStatus, e.getMessage());
       }
     }
-    return getJcrHttpStatus(throwable) == null ? null :
-                                               new WebDavException(getJcrHttpStatus(throwable), throwable.getMessage());
+    return null;
   }
 
   /**

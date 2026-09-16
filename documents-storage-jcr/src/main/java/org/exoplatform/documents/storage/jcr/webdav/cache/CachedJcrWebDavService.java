@@ -160,6 +160,8 @@ public class CachedJcrWebDavService extends JcrWebDavService {
           // Deliberately narrow: when the row *does* hold an entry for this
           // user, a null from the authoritative read is the pre-existing
           // deleted-node or transient-failure case, which still serves the row.
+          // A user evicted by MAX_CACHED_USERS_PER_ITEM takes this arm instead,
+          // which is the safe direction — they are refreshed, not served.
           return null;
         }
       }
@@ -325,6 +327,13 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * from the item URI, is not a silent regression.
    */
   private static final List<QName> IDENTIFIER_DERIVED_PROPERTIES = List.of(CHECKEDIN, PREDECESSORSET, SUCCESSORSET);
+
+  /*
+   * IDENTIFIER_DERIVED_PROPERTIES and USER_DEPENDENT_PROPERTIES must stay
+   * disjoint. A property in both would be re-based by resolveIdentifier and then
+   * overlaid again by resolveUserProperties, which runs second, so the re-basing
+   * would be silently discarded. Nothing enforces it; they are disjoint today.
+   */
 
   /**
    * How many users' properties one row keeps. Each entry costs of the order of

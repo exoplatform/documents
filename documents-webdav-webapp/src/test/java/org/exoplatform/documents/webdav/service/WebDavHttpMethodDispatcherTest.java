@@ -25,6 +25,7 @@ import java.util.List;
 
 import javax.jcr.AccessDeniedException;
 import javax.jcr.ItemExistsException;
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.lock.LockException;
 
@@ -136,6 +137,49 @@ public class WebDavHttpMethodDispatcherTest {
     dispatcher.handle(request, response);
 
     verify(response).sendError(500, "boom");
+  }
+
+  /**
+   * A WebDavException that arrives <b>wrapped</b> is the only way the chain walk's
+   * WebDavException arm is ever reached: one thrown bare is caught a frame above,
+   * by the dispatcher's own catch clause. Without this the arm was dead in the
+   * suite while a pin appeared to cover it.
+   */
+  @Test
+  public void testWrappedWebDavExceptionKeepsItsOwnStatus() throws Exception {
+    whenHandlerThrows(new RuntimeException("wrapped", new WebDavException(404, "gone")));
+
+    dispatcher.handle(request, response);
+
+    verify(response).sendError(404, "gone");
+  }
+
+  /**
+   * And it outranks a repository failure wrapping it, however far down it sits:
+   * a status the code chose deliberately is not overridden by one inferred from
+   * the exception that carries it.
+   */
+  @Test
+  public void testWebDavExceptionOutranksAJcrExceptionAboveIt() throws Exception {
+    whenHandlerThrows(new RuntimeException("outer",
+                                           new AccessDeniedException("denied", new WebDavException(404, "gone"))));
+
+    dispatcher.handle(request, response);
+
+    verify(response).sendError(404, "gone");
+  }
+
+  /**
+   * ItemNotFoundException is thrown message-less on the PROPPATCH path
+   * (WebdavWriteCommandHandler), so the status travels without one.
+   */
+  @Test
+  public void testMessagelessItemNotFoundAnswersNotFound() throws Exception {
+    whenHandlerThrows(new ItemNotFoundException());
+
+    dispatcher.handle(request, response);
+
+    verify(response).sendError(404, null);
   }
 
   @Test
