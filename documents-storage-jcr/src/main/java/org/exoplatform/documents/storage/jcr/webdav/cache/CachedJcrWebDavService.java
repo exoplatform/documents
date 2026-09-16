@@ -144,6 +144,20 @@ public class CachedJcrWebDavService extends JcrWebDavService {
                                             username,
                                             isMustReloadUsers(webDavItemEntity),
                                             depth);
+        } else if (webDavItemEntity != null && !webDavItemEntity.getUsernames().contains(username)) {
+          // The authoritative read produced nothing for this user and the row
+          // holds nothing computed against their session: it was populated by
+          // somebody else, and must not answer in their place. That is not a
+          // hypothetical — WebdavReadCommandHandler#getWebDavIdentityItem
+          // returns null when Session#itemExists is false, and itemExists
+          // swallows the AccessDeniedException of a user who may not read the
+          // drive, so without this a non-member received a member's cached
+          // metadata as a 207 where the uncached path answers 404 (EXO-90128).
+          //
+          // Deliberately narrow: when the row *does* hold an entry for this
+          // user, a null from the authoritative read is the pre-existing
+          // deleted-node or transient-failure case, which still serves the row.
+          return null;
         }
       }
       if (webDavItemEntity == null) {
@@ -406,17 +420,11 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * cache. The counterpart of {@link #extractUserDependentProperties}: what was
    * taken out of the shared list on write is put back, per user, on read.
    * <p>
-   * An empty overlay means one of two things, and they are worth telling apart:
-   * either the item genuinely carries none of these properties, or the row is
-   * being served on the fallthrough in {@link #get} where a refresh was
-   * attempted and <code>super.get</code> returned null — which happens to a user
-   * the row holds nothing for, since
-   * <code>WebdavReadCommandHandler#getWebDavIdentityItem</code> returns null when
-   * <code>Session#itemExists</code> is false, and that method swallows the
-   * <code>AccessDeniedException</code> of a user who may not read the drive.
-   * That fallthrough is a pre-existing metadata disclosure tracked separately;
-   * what this method guarantees is only that no <i>caller-dependent</i> property
-   * is served from the row as stored.
+   * The row is only ever served to a user it already holds properties for:
+   * {@link #isMustRefreshItem} refreshes it otherwise, and {@link #get} returns
+   * null rather than serve a row whose refresh produced nothing for this user.
+   * So an empty overlay means the item genuinely carries none of these
+   * properties, not that they are missing.
    *
    * @param webDavItem item rebuilt from the row, may be null
    * @param webDavItemEntity the row it was rebuilt from

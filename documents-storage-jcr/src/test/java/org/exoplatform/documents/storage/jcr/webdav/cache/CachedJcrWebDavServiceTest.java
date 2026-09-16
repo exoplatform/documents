@@ -486,6 +486,51 @@ public class CachedJcrWebDavServiceTest {
     assertNotNull("the item is still served from cache", asOther.getProperty(GETLASTMODIFIED));
   }
 
+  /**
+   * A row populated by one user must not answer for a user it holds nothing for.
+   * WebdavReadCommandHandler#getWebDavIdentityItem returns null when
+   * Session#itemExists is false, and itemExists swallows the
+   * AccessDeniedException of a user who may not read the drive — so without the
+   * guard in get(), a non-member of a space received a member's cached metadata
+   * as a 207 where the uncached path answers 404.
+   */
+  @Test
+  @SneakyThrows
+  public void testStaleRowMustNotAnswerForAUserItHoldsNothingFor() {
+    useInMemoryCache();
+    when(readCommandHandler.get(any(), any(), any(), anyBoolean(), anyInt(), any(), eq(USERNAME)))
+                                                                                                 .thenAnswer(invocation -> computedItem(null));
+    when(readCommandHandler.get(any(), any(), any(), anyBoolean(), anyInt(), any(), eq(OTHER_USERNAME))).thenReturn(null);
+
+    assertNotNull(service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME));
+
+    assertNull("a row populated by another user must not be served to one it holds nothing for",
+               service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, OTHER_USERNAME));
+  }
+
+  /**
+   * The other half of that guard, which must stay narrow: when the row *does*
+   * hold an entry for this user, a null from the authoritative read is the
+   * pre-existing deleted-node or transient-failure case and the row still
+   * answers. Returning null here too would be a behaviour change visible to
+   * every WebDAV client on a mount path.
+   */
+  @Test
+  @SneakyThrows
+  public void testStaleRowStillAnswersForAUserItHoldsPropertiesFor() {
+    Map<String, WebDavItemEntity> store = useInMemoryCache();
+    when(readCommandHandler.get(any(), any(), any(), anyBoolean(), anyInt(), any(), eq(USERNAME)))
+                                                                                                 .thenAnswer(invocation -> computedItem(null));
+    service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME);
+
+    // a JCR change marks the row modified, and the re-read yields nothing
+    store.get(DRIVE_PATH).setModified(true);
+    when(readCommandHandler.get(any(), any(), any(), anyBoolean(), anyInt(), any(), eq(USERNAME))).thenReturn(null);
+
+    assertNotNull("the row holds this user's own properties, so it still answers",
+                  service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME));
+  }
+
   private WebDavItem computedItem(String lockToken) {
     WebDavItem item = new WebDavItem();
     item.setWebDavPath(DRIVE_PATH);
@@ -498,7 +543,7 @@ public class CachedJcrWebDavServiceTest {
     return item;
   }
 
-  private void useInMemoryCache() {
+  private Map<String, WebDavItemEntity> useInMemoryCache() {
     Map<String, WebDavItemEntity> store = new HashMap<>();
     when(webDavItemRepository.save(any())).thenAnswer(invocation -> {
       WebDavItemEntity entity = invocation.getArgument(0, WebDavItemEntity.class);
@@ -507,6 +552,7 @@ public class CachedJcrWebDavServiceTest {
     });
     when(webDavItemRepository.findById(anyString())).thenAnswer(invocation -> Optional.ofNullable(store.get(invocation.getArgument(0,
                                                                                                                                   String.class))));
+    return store;
   }
 
   private String value(WebDavItem webDavItem, javax.xml.namespace.QName name) {
