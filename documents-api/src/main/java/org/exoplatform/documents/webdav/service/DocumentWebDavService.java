@@ -72,6 +72,19 @@ public interface DocumentWebDavService {
   boolean isFile(String resourcePath, String username);
 
   /**
+   * @param resourcePath File or Folder Path
+   * @return true if the resource designated by the path is a file, else false
+   * @deprecated kept for binary compatibility only. It resolves the path with a
+   *             <b>system session</b>, so it answers for any caller whatever
+   *             their rights, and must not be used where the answer concerns a
+   *             resource the caller may not be allowed to see. Use
+   *             {@link #isFile(String, String)}, which resolves against the
+   *             caller's own session. Since 7.3.x; not scheduled for removal.
+   */
+  @Deprecated(since = "7.3.x")
+  boolean isFile(String resourcePath);
+
+  /**
    * Webdav GET of a given resource
    * 
    * @param resourcePath File or Folder Path
@@ -365,6 +378,22 @@ public interface DocumentWebDavService {
    *           </ul>
    */
   long getLastModifiedDate(String resourcePath, String version, String username) throws WebDavException;
+
+  /**
+   * @param resourcePath File or Folder Path
+   * @param version version name, null for the head
+   * @return the last modification date in milliseconds, 0 when there is none
+   * @throws WebDavException when the resource cannot be resolved
+   * @deprecated kept for binary compatibility only. It resolves the path with a
+   *             <b>system session</b>, so it answers for any caller whatever
+   *             their rights — a conditional request answered from it discloses
+   *             a resource's existence and its exact modification date. Use
+   *             {@link #getLastModifiedDate(String, String, String)}, which
+   *             resolves against the caller's own session. Since 7.3.x; not
+   *             scheduled for removal.
+   */
+  @Deprecated(since = "7.3.x")
+  long getLastModifiedDate(String resourcePath, String version) throws WebDavException;
 
   /**
    * Add a lock on a designated resource

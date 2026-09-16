@@ -79,6 +79,37 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     addCacheEventListener();
   }
 
+  /**
+   * @deprecated the pre-EXO-90128 behaviour, kept for callers still on the
+   *             usernameless contract: a row answers whoever asks. See
+   *             {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#isFile(String)}.
+   */
+  @Override
+  @Deprecated(since = "7.3.x")
+  public boolean isFile(String webDavPath) {
+    if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
+      return false;
+    }
+    WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
+    return webDavItemEntity == null ? super.isFile(webDavPath) : webDavItemEntity.isFile();
+  }
+
+  /**
+   * @deprecated the pre-EXO-90128 behaviour, kept for callers still on the
+   *             usernameless contract: a row answers whoever asks. See
+   *             {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#getLastModifiedDate(String, String)}.
+   */
+  @Override
+  @Deprecated(since = "7.3.x")
+  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
+    if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
+      return 0l;
+    }
+    WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
+    return webDavItemEntity == null || version != null ? super.getLastModifiedDate(webDavPath, version) :
+                                                       getLastModifiedDateFromProperties(webDavItemEntity);
+  }
+
   @Override
   public boolean isFile(String webDavPath, String username) {
     if (StringUtils.isBlank(webDavPath)
@@ -106,17 +137,26 @@ public class CachedJcrWebDavService extends JcrWebDavService {
           || !CollectionUtils.emptyIfNull(webDavItemEntity.getUsernames()).contains(username)) {
         return super.getLastModifiedDate(webDavPath, version, username);
       } else {
-        return webDavItemEntity.getProperties() == null ? 0l :
-                                                        webDavItemEntity.getProperties()
-                                                                        .stream()
-                                                                        .filter(p -> GETLASTMODIFIED.equals(WebDavItemProperty.toQname(p.getName())))
-                                                                        .map(WebDavItemPropertyEntity::getValue)
-                                                                        .filter(StringUtils::isNotBlank)
-                                                                        .map(this::getModifiedDateMillis)
-                                                                        .findFirst()
-                                                                        .orElse(0l);
+        return getLastModifiedDateFromProperties(webDavItemEntity);
       }
     }
+  }
+
+  /**
+   * @param webDavItemEntity a cache row
+   * @return the last modification date its stored properties carry, 0 when they
+   *         carry none
+   */
+  private long getLastModifiedDateFromProperties(WebDavItemEntity webDavItemEntity) {
+    return webDavItemEntity.getProperties() == null ? 0l :
+                                                    webDavItemEntity.getProperties()
+                                                                    .stream()
+                                                                    .filter(p -> GETLASTMODIFIED.equals(WebDavItemProperty.toQname(p.getName())))
+                                                                    .map(WebDavItemPropertyEntity::getValue)
+                                                                    .filter(StringUtils::isNotBlank)
+                                                                    .map(this::getModifiedDateMillis)
+                                                                    .findFirst()
+                                                                    .orElse(0l);
   }
 
   @Override

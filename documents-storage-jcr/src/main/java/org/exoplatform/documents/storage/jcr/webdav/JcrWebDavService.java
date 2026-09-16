@@ -161,6 +161,38 @@ public class JcrWebDavService implements DocumentWebDavService {
     }
   }
 
+  /**
+   * @deprecated resolves with a system session and so answers for any caller —
+   *             see {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#isFile(String)}.
+   */
+  @Override
+  @Deprecated(since = "7.3.x")
+  @SneakyThrows
+  public boolean isFile(String webDavPath) {
+    Session session = getSystemSession();
+    try {
+      return readCommandHandler.isFile(session, webDavPath);
+    } finally {
+      session.logout();
+    }
+  }
+
+  /**
+   * @deprecated resolves with a system session and so answers for any caller —
+   *             see
+   *             {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#getLastModifiedDate(String, String)}.
+   */
+  @Override
+  @Deprecated(since = "7.3.x")
+  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
+    Session session = getSystemSession();
+    try {
+      return readCommandHandler.getLastModifiedDate(session, webDavPath, version);
+    } finally {
+      session.logout();
+    }
+  }
+
   @Override
   @SneakyThrows
   public boolean isFile(String webDavPath, String username) {
