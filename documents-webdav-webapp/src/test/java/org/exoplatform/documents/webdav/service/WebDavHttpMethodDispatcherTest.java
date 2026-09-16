@@ -16,18 +16,16 @@
  */
 package org.exoplatform.documents.webdav.service;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.util.List;
 
-import javax.jcr.AccessDeniedException;
-import javax.jcr.ItemExistsException;
-import javax.jcr.ItemNotFoundException;
-import javax.jcr.PathNotFoundException;
-import javax.jcr.lock.LockException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +56,9 @@ public class WebDavHttpMethodDispatcherTest {
   private WebDavErrorHandler          errorHandler;
 
   @Mock
+  private DocumentWebDavService       documentWebDavService;
+
+  @Mock
   private HttpServletRequest          request;
 
   @Mock
@@ -71,65 +72,52 @@ public class WebDavHttpMethodDispatcherTest {
     dispatcher = new WebDavHttpMethodDispatcher();
     setField("handlers", List.of(moveHandler));
     setField("errorHandler", errorHandler);
+    setField("documentWebDavService", documentWebDavService);
     lenient().when(moveHandler.getMethod()).thenReturn("MOVE");
     dispatcher.init();
     lenient().when(request.getMethod()).thenReturn("MOVE");
     lenient().when(request.getRequestURI()).thenReturn("/webdav/drives/d/space%20%2825%29/sample.docx");
   }
 
-  @Test
-  public void testAccessDeniedAnswersForbidden() throws Exception {
-    whenHandlerThrows(new AccessDeniedException("access denied"));
 
-    dispatcher.handle(request, response);
 
-    verify(response).sendError(403, "access denied");
-  }
 
-  /**
-   * The refusal reaches the dispatcher wrapped as often as bare, so the chain is
-   * walked rather than only its head inspected.
-   */
-  @Test
-  public void testWrappedAccessDeniedAnswersForbidden() throws Exception {
-    whenHandlerThrows(new RuntimeException("wrapped", new AccessDeniedException("access denied")));
 
-    dispatcher.handle(request, response);
-
-    verify(response).sendError(403, "access denied");
-  }
-
-  @Test
-  public void testPathNotFoundAnswersNotFound() throws Exception {
-    whenHandlerThrows(new PathNotFoundException("no such node"));
-
-    dispatcher.handle(request, response);
-
-    verify(response).sendError(404, "no such node");
-  }
-
-  @Test
-  public void testLockExceptionAnswersLocked() throws Exception {
-    whenHandlerThrows(new LockException("locked by someone else"));
-
-    dispatcher.handle(request, response);
-
-    verify(response).sendError(423, "locked by someone else");
-  }
-
-  @Test
-  public void testItemExistsAnswersConflict() throws Exception {
-    whenHandlerThrows(new ItemExistsException("already there"));
-
-    dispatcher.handle(request, response);
-
-    verify(response).sendError(409, "already there");
-  }
 
   /**
    * A failure the contract does not cover really is a 500 — the mapping must not
    * swallow genuine faults into a tidy status.
    */
+  /**
+   * With no WebDavException in the chain, the storage implementation is asked
+   * what its own failure means — this layer knows nothing of JCR.
+   */
+  @Test
+  public void testStorageTranslationIsUsedWhenThereIsNoWebDavException() throws Exception {
+    IllegalStateException failure = new IllegalStateException("denied");
+    when(documentWebDavService.toWebDavException(failure)).thenReturn(new WebDavException(403, "denied"));
+    whenHandlerThrows(failure);
+
+    dispatcher.handle(request, response);
+
+    verify(response).sendError(403, "denied");
+  }
+
+  /**
+   * A status the code chose deliberately outranks whatever the storage would
+   * infer from the failure carrying it, however far down it sits.
+   */
+  @Test
+  public void testWebDavExceptionOutranksTheStorageTranslation() throws Exception {
+    whenHandlerThrows(new RuntimeException("outer", new IllegalStateException("carrier", new WebDavException(404, "gone"))));
+    lenient().when(documentWebDavService.toWebDavException(any())).thenReturn(new WebDavException(403, "denied"));
+
+    dispatcher.handle(request, response);
+
+    verify(response).sendError(404, "gone");
+    verify(documentWebDavService, never()).toWebDavException(any());
+  }
+
   @Test
   public void testUnmappedFailureStillAnswersServerError() throws Exception {
     whenHandlerThrows(new IllegalStateException("boom"));
@@ -154,33 +142,7 @@ public class WebDavHttpMethodDispatcherTest {
     verify(response).sendError(404, "gone");
   }
 
-  /**
-   * And it outranks a repository failure wrapping it, however far down it sits:
-   * a status the code chose deliberately is not overridden by one inferred from
-   * the exception that carries it.
-   */
-  @Test
-  public void testWebDavExceptionOutranksAJcrExceptionAboveIt() throws Exception {
-    whenHandlerThrows(new RuntimeException("outer",
-                                           new AccessDeniedException("denied", new WebDavException(404, "gone"))));
 
-    dispatcher.handle(request, response);
-
-    verify(response).sendError(404, "gone");
-  }
-
-  /**
-   * ItemNotFoundException is thrown message-less on the PROPPATCH path
-   * (WebdavWriteCommandHandler), so the status travels without one.
-   */
-  @Test
-  public void testMessagelessItemNotFoundAnswersNotFound() throws Exception {
-    whenHandlerThrows(new ItemNotFoundException());
-
-    dispatcher.handle(request, response);
-
-    verify(response).sendError(404, null);
-  }
 
   @Test
   public void testWebDavExceptionKeepsItsOwnStatus() throws Exception {

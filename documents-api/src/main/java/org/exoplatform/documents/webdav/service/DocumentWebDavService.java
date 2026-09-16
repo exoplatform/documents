@@ -51,6 +51,18 @@ public interface DocumentWebDavService {
    * @param resourcePath File or Folder Path
    * @return true if the resource designated by the path is a file, else false
    */
+  /**
+   * Translates a failure raised by the storage implementation into the HTTP
+   * status it means, so that the transport layer does not have to know the
+   * storage's exception types. A repository that refuses an operation the user
+   * has no right to, for instance, means 403 and not 500.
+   *
+   * @param throwable the failure a WebDAV operation raised
+   * @return the exception to answer with, or null when the failure is not one
+   *         the contract covers — which really is a 500
+   */
+  WebDavException toWebDavException(Throwable throwable);
+
   boolean isFile(String resourcePath, String username);
 
   /**

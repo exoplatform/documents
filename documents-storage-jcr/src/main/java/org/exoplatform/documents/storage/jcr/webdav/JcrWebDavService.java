@@ -23,11 +23,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.jcr.AccessDeniedException;
 import javax.jcr.Item;
+import javax.jcr.ItemExistsException;
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.NamespaceRegistry;
 import javax.jcr.Node;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.lock.LockException;
 import javax.jcr.lock.Lock;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
@@ -100,6 +105,44 @@ public class JcrWebDavService implements DocumentWebDavService {
   @Override
   public String getDaslValue() {
     return DAS_VALUE;
+  }
+
+  /**
+   * The repository's own failures, in the storage module that owns them: the
+   * WebDAV transport asks for this translation rather than importing JCR types
+   * itself.
+   * <p>
+   * A refusal arrives as a bare {@link AccessDeniedException} with a message and
+   * no cause (<code>SessionImpl#move</code> raises it that way), so the head of
+   * the chain is inspected as well as its causes.
+   *
+   * @param throwable the failure a WebDAV operation raised
+   * @return the exception to answer with, or null when it is not one the
+   *         contract covers — in which case it really is a 500
+   */
+  @Override
+  public WebDavException toWebDavException(Throwable throwable) {
+    for (Throwable e = throwable; e != null; e = e.getCause()) {
+      Integer httpStatus = getHttpStatus(e);
+      if (httpStatus != null) {
+        return new WebDavException(httpStatus, e.getMessage());
+      }
+    }
+    return null;
+  }
+
+  private Integer getHttpStatus(Throwable e) {
+    if (e instanceof AccessDeniedException) {
+      return HttpStatus.SC_FORBIDDEN;
+    } else if (e instanceof PathNotFoundException || e instanceof ItemNotFoundException) {
+      return HttpStatus.SC_NOT_FOUND;
+    } else if (e instanceof LockException) {
+      return HttpStatus.SC_LOCKED;
+    } else if (e instanceof ItemExistsException) {
+      return HttpStatus.SC_CONFLICT;
+    } else {
+      return null;
+    }
   }
 
   @Override

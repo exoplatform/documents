@@ -29,12 +29,6 @@
       <artifactId>documents-api</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <!-- used directly by WebDavHttpMethodDispatcher's exception mapping -->
-      <groupId>javax.jcr</groupId>
-      <artifactId>jcr</artifactId>
-      <scope>provided</scope>
-    </dependency>
   </dependencies>
   <build>
     <finalName>webdav</finalName>

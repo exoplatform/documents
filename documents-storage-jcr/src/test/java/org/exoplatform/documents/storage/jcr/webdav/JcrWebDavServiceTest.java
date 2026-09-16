@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr.webdav;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -45,6 +46,11 @@ import java.util.Set;
 
 import javax.jcr.NamespaceRegistry;
 import javax.jcr.Node;
+import javax.jcr.AccessDeniedException;
+import javax.jcr.ItemExistsException;
+import javax.jcr.ItemNotFoundException;
+import javax.jcr.PathNotFoundException;
+import javax.jcr.lock.LockException;
 import javax.jcr.Session;
 import javax.jcr.Workspace;
 import javax.jcr.lock.Lock;
@@ -62,6 +68,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.exoplatform.documents.storage.jcr.webdav.model.JcrNamespaceContext;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
+import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
@@ -302,6 +309,41 @@ public class JcrWebDavServiceTest {
    * existence and exact mtime to a user with no right to it. They must open the
    * caller's own session and let JCR refuse.
    */
+  /**
+   * EXO-90128 — the repository's own failures mean HTTP statuses, and the
+   * translation lives here rather than in the WebDAV transport, which knows
+   * nothing of JCR. A refusal used to reach the client as 500 plus a WARN.
+   */
+  @Test
+  public void testToWebDavExceptionMapsRepositoryFailures() {
+    assertEquals(Integer.valueOf(403), status(new AccessDeniedException("denied")));
+    assertEquals(Integer.valueOf(404), status(new PathNotFoundException("gone")));
+    assertEquals(Integer.valueOf(423), status(new LockException("held")));
+    assertEquals(Integer.valueOf(409), status(new ItemExistsException("taken")));
+    // thrown message-less on the PROPPATCH path, so the status travels without one
+    assertEquals(Integer.valueOf(404), status(new ItemNotFoundException()));
+    assertNull("a failure the contract does not cover really is a 500", status(new IllegalStateException("boom")));
+  }
+
+  /**
+   * SessionImpl#move raises AccessDeniedException bare, with a message and no
+   * cause, so the head of the chain is inspected as well as its causes.
+   */
+  @Test
+  public void testToWebDavExceptionWalksTheChainAndTheHead() {
+    assertEquals(Integer.valueOf(403), status(new AccessDeniedException("denied")));
+    assertEquals(Integer.valueOf(403), status(new RuntimeException("wrapped", new AccessDeniedException("denied"))));
+  }
+
+  /**
+   * @return the status the translation yields, or null when it yields nothing —
+   *         so a mutant fails on the value rather than on a dereference
+   */
+  private Integer status(Throwable throwable) {
+    WebDavException webDavException = service.toWebDavException(throwable);
+    return webDavException == null ? null : webDavException.getHttpError();
+  }
+
   @Test
   @SneakyThrows
   public void testIsFileUsesTheCallersOwnSessionNotTheSystemOne() {
