@@ -324,16 +324,45 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   private static final List<QName> IDENTIFIER_DERIVED_PROPERTIES = List.of(CHECKEDIN, PREDECESSORSET, SUCCESSORSET);
 
   /**
+   * How many users' properties one row keeps. Each entry costs of the order of
+   * 900 bytes of <code>_source</code> (measured: <code>DAV:acl</code> 466,
+   * <code>DAV:supportedlock</code> 330, <code>DAV:childcount</code> 69,
+   * <code>DAV:lockdiscovery</code> 680 when locked), against the ~10 bytes the
+   * username alone used to cost — and the whole row is fetched on every
+   * PROPFIND, with {@link #addChildren} fetching every child row of a folder at
+   * once. Unbounded, a much-read folder in a large space would return tens of
+   * megabytes to serve one depth-1 PROPFIND.
+   * <p>
+   * Eviction is fail-safe and cheap: the evicted user's next read finds no entry
+   * of theirs, {@link #isMustRefreshItem} returns true, and the row is recomputed
+   * for them. Entries are dropped oldest-first, and a user's own refresh moves
+   * them to the end, so what is evicted is the least recently refreshed.
+   */
+  private static final int        MAX_CACHED_USERS_PER_ITEM     = 50;
+
+  /**
    * Properties whose value is computed from the <b>reading user's</b> JCR
    * session, and which therefore must never be served from a cache row as
-   * stored. Kept in step with the session-dependent branches of
+   * stored.
+   * <p>
+   * The grain of the store is the <b>username</b>, while two of these vary with
+   * the <i>session</i> (<code>checkLocking</code> and
+   * <code>LockData#getLockToken</code> both key on the session id). Two concurrent
+   * sessions of one user — a mounted drive and a browser — can therefore be
+   * served each other's answer. Accepted: it is the same principal, and the lock
+   * token is that user's own. Kept in step with the session-dependent branches of
    * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler}
    * <code>#getWebDavProperty</code>, which carries the reciprocal comment.
    * <ul>
    * <li><code>DAV:acl</code> — four <code>node.hasPermission(...)</code> calls
    * (<code>ACLProperties.computeAceProperty</code>);</li>
-   * <li><code>DAV:supportedlock</code> — <code>node.canAddMixin(MIX_LOCKABLE)</code>,
-   * which is refused to a session without write permission;</li>
+   * <li><code>DAV:supportedlock</code> — <code>node.canAddMixin(MIX_LOCKABLE)</code>.
+   * It performs <b>no</b> permission check (the method is
+   * <code>isProtected</code> / <code>checkedOut()</code> / <code>checkLocking()</code>
+   * and nothing else); it is session-dependent through <code>checkLocking()</code>
+   * alone, which is true only when no ancestor is locked <i>by another
+   * session</i>. So the value differs between a lock holder and everyone
+   * else;</li>
    * <li><code>DAV:lockdiscovery</code> — carries <code>Lock#getLockToken()</code>,
    * and the JCR implementation returns the token <b>only to the session holding
    * the lock</b> (<code>LockImpl</code> -> <code>lockData.getLockToken(session.getId())</code>).
@@ -359,10 +388,13 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * (<code>node.getNode(JCR_CONTENT)</code>), which is the shape that made
    * <code>DAV:childcount</code> user-dependent. Safe here because this addon
    * never gives <code>jcr:content</code> an ACL of its own —
-   * <code>ExtendedNode#setPermissions</code> is called on the file node and on
-   * link nodes only (<code>JCRDocumentFileStorage</code>) — so a reader who can
-   * read the file can read its content node, and both values are the same for
-   * everyone.</li>
+   * <code>DocumentUtils.shouldRewriteSpacePermissions</code> returns false for a
+   * node that is not <code>exo:privilegeable</code>, and an <code>nt:resource</code>
+   * content node never is. That guard, not the set of call sites, is what holds:
+   * <code>DocumentFileServiceImpl.synchronizeChildrenPermissions</code> does walk
+   * <code>getNodes()</code> recursively, which reaches <code>jcr:content</code>.
+   * So a reader who can read the file can read its content node, and both values
+   * are the same for everyone.</li>
    * <li><code>DAV:isroot</code> — reads <code>node.getSession().getUserID()</code>,
    * so it is username-dependent by construction, but only on <code>/Users/…</code>
    * paths (<code>PathCommandHandler.getIdentityIdFromJcrPath</code> ignores the
@@ -420,7 +452,9 @@ public class CachedJcrWebDavService extends JcrWebDavService {
                      .forEach(userProperties::add);
     }
     userProperties.add(new WebDavItemUserPropertiesEntity(username, ownProperties));
-    return userProperties;
+    return userProperties.size() <= MAX_CACHED_USERS_PER_ITEM ? userProperties :
+                                  new ArrayList<>(userProperties.subList(userProperties.size() - MAX_CACHED_USERS_PER_ITEM,
+                                                                          userProperties.size()));
   }
 
   /**

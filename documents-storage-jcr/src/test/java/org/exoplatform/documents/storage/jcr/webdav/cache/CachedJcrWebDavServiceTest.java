@@ -531,6 +531,36 @@ public class CachedJcrWebDavServiceTest {
                   service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, USERNAME));
   }
 
+  /**
+   * The per-user entries are bounded: each costs of the order of 900 bytes of
+   * _source and the whole row is fetched on every PROPFIND. Eviction is
+   * fail-safe — the evicted user simply refreshes on their next read — so the
+   * cap is a size decision, not a correctness one. Oldest goes first, and the
+   * user who just refreshed must survive.
+   */
+  @Test
+  @SneakyThrows
+  public void testUserPropertiesAreBoundedAndEvictTheLeastRecentlyRefreshed() {
+    List<WebDavItemUserPropertiesEntity> existing = new ArrayList<>();
+    for (int i = 0; i < 50; i++) {
+      existing.add(new WebDavItemUserPropertiesEntity("user" + i, List.of()));
+    }
+    WebDavItemEntity entity = cachedDriveEntry();
+    entity.setUserProperties(existing);
+    when(webDavItemRepository.findById(DRIVE_PATH)).thenReturn(Optional.of(entity));
+    when(readCommandHandler.get(any(), any(), any(), anyBoolean(), anyInt(), any(), eq(OTHER_USERNAME)))
+                                                                                                       .thenAnswer(invocation -> computedItem(null));
+
+    service.get(DRIVE_PATH, "allprop", null, false, 0, DRIVE_BASE_URI, OTHER_USERNAME);
+
+    ArgumentCaptor<WebDavItemEntity> captor = ArgumentCaptor.forClass(WebDavItemEntity.class);
+    verify(webDavItemRepository).save(captor.capture());
+    Set<String> kept = captor.getValue().getUsernames();
+    assertEquals(50, kept.size());
+    assertTrue("the user who just refreshed must survive", kept.contains(OTHER_USERNAME));
+    assertFalse("the oldest entry is the one evicted", kept.contains("user0"));
+  }
+
   private WebDavItem computedItem(String lockToken) {
     WebDavItem item = new WebDavItem();
     item.setWebDavPath(DRIVE_PATH);
