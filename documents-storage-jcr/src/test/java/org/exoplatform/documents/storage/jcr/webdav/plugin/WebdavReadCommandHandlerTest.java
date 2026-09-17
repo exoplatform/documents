@@ -17,6 +17,7 @@
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
 import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.DISPLAYNAME;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -43,6 +44,7 @@ import javax.jcr.version.VersionHistory;
 import javax.jcr.version.VersionIterator;
 import javax.xml.namespace.QName;
 
+import org.apache.http.HttpStatus;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -52,6 +54,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.webdav.model.WebDavFileDownload;
+import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItem;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
@@ -279,6 +282,25 @@ public class WebdavReadCommandHandlerTest {
     // '/' and '%' sanitised to '_'; ! ~ ' ( ) escaped, '*' left bare, '+' as %2B
     assertEquals(BASE_URI + "/Zoe%20O%27Brien%21%7E*%2B%20%28A_B%29%2050_%20%281%29",
                  userItem.getIdentifier().toString());
+  }
+
+  /**
+   * EXO-90128 — Session#itemExists swallows the AccessDeniedException of a user
+   * who may not read the drive, so the identity-root read used to return null
+   * for them. No verb handler tolerates that null: HEAD turned it into a 500,
+   * PROPFIND into a truncated 207. It is a 404 now, the same answer the cache
+   * gives, and it keeps "denied" indistinguishable from "absent".
+   */
+  @Test
+  @SneakyThrows
+  public void testGetDriveRootTheUserCannotReadAnswersNotFound() {
+    when(pathCommandHandler.isIdentityRootWebDavPath(WEBDAV_PATH)).thenReturn(true);
+    when(session.itemExists(IDENTITY_PATH)).thenReturn(false);
+
+    WebDavException refused = assertThrows(WebDavException.class,
+                                           () -> handler.get(session, WEBDAV_PATH, REQUESTED_PROPERTY_NAMES, false, 0, BASE_URI, USERNAME));
+
+    assertEquals(HttpStatus.SC_NOT_FOUND, refused.getHttpError());
   }
 
   @Test

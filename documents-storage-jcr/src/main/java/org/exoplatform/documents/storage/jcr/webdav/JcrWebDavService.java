@@ -23,11 +23,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.jcr.AccessDeniedException;
 import javax.jcr.Item;
+import javax.jcr.ItemExistsException;
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.NamespaceRegistry;
 import javax.jcr.Node;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.lock.LockException;
 import javax.jcr.lock.Lock;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
@@ -102,10 +107,99 @@ public class JcrWebDavService implements DocumentWebDavService {
     return DAS_VALUE;
   }
 
+  /**
+   * The repository's own failures, in the storage module that owns them: the
+   * WebDAV transport asks for this translation rather than importing JCR types
+   * itself.
+   * <p>
+   * A refusal arrives as a bare {@link AccessDeniedException} with a message and
+   * no cause (<code>SessionImpl#move</code> raises it that way), so the head of
+   * the chain is inspected as well as its causes.
+   *
+   * @param throwable the failure a WebDAV operation raised
+   * @return the exception to answer with, or null when it is not one the
+   *         contract covers — in which case it really is a 500
+   */
   @Override
+  public WebDavException toWebDavException(Throwable throwable) {
+    for (Throwable e = throwable; e != null; e = e.getCause()) {
+      Integer httpStatus = getHttpStatus(e);
+      if (httpStatus != null) {
+        // the engine's own message names the internal JCR path and the userId
+        // (SessionImpl raises AccessDeniedException over an AccessControlException
+        // carrying both), which would now travel out on a routine status a client
+        // hits often. The client gets the status and a fixed phrase; the detail
+        // goes to the log.
+        LOG.debug("WebDav operation refused by the repository, answering {}", httpStatus, e);
+        return new WebDavException(httpStatus, getHttpReason(httpStatus));
+      }
+    }
+    return null;
+  }
+
+  private String getHttpReason(int httpStatus) {
+    return switch (httpStatus) {
+    case HttpStatus.SC_FORBIDDEN -> "Access denied";
+    case HttpStatus.SC_NOT_FOUND -> "Resource not found";
+    case HttpStatus.SC_LOCKED -> "Resource is locked";
+    case HttpStatus.SC_CONFLICT -> "Resource already exists";
+    default -> "Request refused";
+    };
+  }
+
+  private Integer getHttpStatus(Throwable e) {
+    if (e instanceof AccessDeniedException) {
+      return HttpStatus.SC_FORBIDDEN;
+    } else if (e instanceof PathNotFoundException || e instanceof ItemNotFoundException) {
+      return HttpStatus.SC_NOT_FOUND;
+    } else if (e instanceof LockException) {
+      return HttpStatus.SC_LOCKED;
+    } else if (e instanceof ItemExistsException) {
+      return HttpStatus.SC_CONFLICT;
+    } else {
+      return null;
+    }
+  }
+
+  /**
+   * @deprecated resolves with a system session and so answers for any caller —
+   *             see {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#isFile(String)}.
+   */
+  @Override
+  @Deprecated(since = "7.3.x")
   @SneakyThrows
   public boolean isFile(String webDavPath) {
     Session session = getSystemSession();
+    try {
+      return readCommandHandler.isFile(session, webDavPath);
+    } finally {
+      session.logout();
+    }
+  }
+
+  /**
+   * @deprecated resolves with a system session and so answers for any caller —
+   *             see
+   *             {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#getLastModifiedDate(String, String)}.
+   */
+  @Override
+  @Deprecated(since = "7.3.x")
+  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
+    Session session = getSystemSession();
+    try {
+      return readCommandHandler.getLastModifiedDate(session, webDavPath, version);
+    } finally {
+      session.logout();
+    }
+  }
+
+  @Override
+  @SneakyThrows
+  public boolean isFile(String webDavPath, String username) {
+    // the caller's own session, never the system one: this answers "does this
+    // path hold a file", which is information about a resource the caller may
+    // have no right to see (EXO-90128)
+    Session session = getSession(username);
     try {
       return readCommandHandler.isFile(session, webDavPath);
     } finally {
@@ -127,8 +221,8 @@ public class JcrWebDavService implements DocumentWebDavService {
   }
 
   @Override
-  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
-    Session session = getSystemSession();
+  public long getLastModifiedDate(String webDavPath, String version, String username) throws WebDavException {
+    Session session = getSession(username);
     try {
       return readCommandHandler.getLastModifiedDate(session,
                                                     webDavPath,

@@ -49,6 +49,9 @@ public class WebDavHttpMethodDispatcher {
   @Autowired
   private WebDavErrorHandler                  errorHandler;
 
+  @Autowired
+  private DocumentWebDavService               documentWebDavService;
+
   private Map<String, WebDavHttpMethodPlugin> handlersByMethod;
 
   @PostConstruct
@@ -96,18 +99,42 @@ public class WebDavHttpMethodDispatcher {
                httpRequest.getMethod(),
                httpRequest.getRequestURI(),
                e);
+    } else if (LOG.isDebugEnabled()) {
+      // not an incident, but a refused request now leaves no other trace
+      LOG.debug("WebDav method '{}' on URI '{}' refused with status {}",
+                httpRequest.getMethod(),
+                httpRequest.getRequestURI(),
+                e.getHttpError(),
+                e);
     }
     httpResponse.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache");
     httpResponse.sendError(e.getHttpError(), e.getMessage());
   }
 
-  private WebDavException getWebDavException(Throwable e) {
-    if (e.getCause() == null) {
-      return null;
-    } else {
-      return e.getCause() instanceof WebDavException webDavException ? webDavException :
-                                                                     getWebDavException(e.getCause());
+  /**
+   * Finds the HTTP status a failure should carry: a {@link WebDavException}
+   * anywhere in the cause chain is a status the code chose deliberately and
+   * wins, and otherwise the storage implementation is asked to translate its own
+   * failure ({@link DocumentWebDavService#toWebDavException}).
+   * <p>
+   * Before that translation existed, a repository refusing an operation the user
+   * has no right to fell through to the generic handler, and renaming a file one
+   * may not write answered <b>500 plus a WARN</b> rather than 403 — telling the
+   * client the server broke, and filing a normal refusal as an incident
+   * (<code>backend-spring.md</code> §5). The translation itself lives in the
+   * storage module, so this layer, which is transport, keeps no knowledge of the
+   * storage's exception types.
+   *
+   * @param throwable the failure a handler raised
+   * @return the exception to answer with, or null to fall back to a 500
+   */
+  private WebDavException getWebDavException(Throwable throwable) {
+    for (Throwable e = throwable; e != null; e = e.getCause()) {
+      if (e instanceof WebDavException webDavException) {
+        return webDavException;
+      }
     }
+    return documentWebDavService.toWebDavException(throwable);
   }
 
 }

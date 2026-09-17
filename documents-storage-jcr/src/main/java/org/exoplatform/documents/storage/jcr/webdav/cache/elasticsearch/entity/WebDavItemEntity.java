@@ -17,7 +17,9 @@
 package org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
@@ -51,7 +53,15 @@ public class WebDavItemEntity {
   @Field(type = FieldType.Keyword)
   private String                         parentWebDavPath;
 
-  private Set<String>                    usernames;
+  /**
+   * The per-user half of this row's properties — see
+   * {@link WebDavItemUserPropertiesEntity}. Its usernames are also the row's
+   * "who has already read this item" set, exposed as {@link #getUsernames()}.
+   */
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  @Field(type = FieldType.Object)
+  private List<WebDavItemUserPropertiesEntity> userProperties;
 
   private boolean                        file;
 
@@ -87,6 +97,33 @@ public class WebDavItemEntity {
     if (properties != null) {
       this.properties = properties.stream().map(WebDavItemPropertyEntity::new).toList();
     }
+  }
+
+  /**
+   * @return the users for whom this row already holds computed properties. A
+   *         user absent from it has never had this item computed against their
+   *         own JCR session, so the row must be refreshed before it is served
+   *         to them ({@code CachedJcrWebDavService#isMustRefreshItem}).
+   */
+  public Set<String> getUsernames() {
+    return userProperties == null ? Set.of()
+                                  : userProperties.stream()
+                                                  .map(WebDavItemUserPropertiesEntity::getUsername)
+                                                  .collect(Collectors.toSet());
+  }
+
+  /**
+   * @param username the reading user
+   * @return that user's own properties for this item, empty when the row does
+   *         not hold them yet
+   */
+  public List<WebDavItemPropertyEntity> getUserProperties(String username) {
+    return userProperties == null ? List.of()
+                                  : userProperties.stream()
+                                                  .filter(u -> Objects.equals(u.getUsername(), username))
+                                                  .findFirst()
+                                                  .map(WebDavItemUserPropertiesEntity::getProperties)
+                                                  .orElseGet(List::of);
   }
 
   /**
