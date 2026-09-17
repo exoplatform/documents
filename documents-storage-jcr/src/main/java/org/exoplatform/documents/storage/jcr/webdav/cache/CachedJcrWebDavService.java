@@ -32,13 +32,16 @@ import javax.xml.namespace.QName;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.utils.Tools;
+import org.exoplatform.documents.storage.jcr.util.ACLProperties;
 import org.exoplatform.documents.storage.jcr.webdav.JcrWebDavService;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.dao.WebDavItemDao;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemEntity;
 import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemPropertyEntity;
+import org.exoplatform.documents.storage.jcr.webdav.cache.elasticsearch.entity.WebDavItemUserPropertiesEntity;
 import org.exoplatform.documents.storage.jcr.webdav.cache.listener.WebDavCacheUpdaterAction;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler;
 import org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavWriteCommandHandler;
@@ -77,15 +80,47 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     addCacheEventListener();
   }
 
+  /**
+   * @deprecated the pre-EXO-90128 behaviour, kept for callers still on the
+   *             usernameless contract: a row answers whoever asks. See
+   *             {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#isFile(String)}.
+   */
   @Override
+  @Deprecated(since = "7.3.x")
   public boolean isFile(String webDavPath) {
+    if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
+      return false;
+    }
+    WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
+    return webDavItemEntity == null ? super.isFile(webDavPath) : webDavItemEntity.isFile();
+  }
+
+  /**
+   * @deprecated the pre-EXO-90128 behaviour, kept for callers still on the
+   *             usernameless contract: a row answers whoever asks. See
+   *             {@link org.exoplatform.documents.webdav.service.DocumentWebDavService#getLastModifiedDate(String, String)}.
+   */
+  @Override
+  @Deprecated(since = "7.3.x")
+  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
+    if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
+      return 0l;
+    }
+    WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
+    return webDavItemEntity == null || version != null || webDavItemEntity.isModified() ?
+                                                                                       super.getLastModifiedDate(webDavPath, version) :
+                                                                                       getLastModifiedDateFromProperties(webDavItemEntity);
+  }
+
+  @Override
+  public boolean isFile(String webDavPath, String username) {
     if (StringUtils.isBlank(webDavPath)
         || StringUtils.equals(webDavPath, "/")) {
       return false;
     } else {
       WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
-      if (webDavItemEntity == null) {
-        return super.isFile(webDavPath);
+      if (webDavItemEntity == null || !CollectionUtils.emptyIfNull(webDavItemEntity.getUsernames()).contains(username)) {
+        return super.isFile(webDavPath, username);
       } else {
         return webDavItemEntity.isFile();
       }
@@ -93,25 +128,39 @@ public class CachedJcrWebDavService extends JcrWebDavService {
   }
 
   @Override
-  public long getLastModifiedDate(String webDavPath, String version) throws WebDavException {
+  public long getLastModifiedDate(String webDavPath, String version, String username) throws WebDavException {
     if (StringUtils.isBlank(webDavPath) || StringUtils.equals(webDavPath, "/")) {
       return 0l;
     } else {
       WebDavItemEntity webDavItemEntity = findCacheEntry(webDavPath);
-      if (webDavItemEntity == null) {
-        return super.getLastModifiedDate(webDavPath, version);
+      // a row answers only for a caller it holds properties for, and only for
+      // the head: it carries no per-version date (EXO-90128)
+      // a row marked modified by the JCR listener carries a stale date; serving
+      // it would let checkModified answer 304 for a file that has changed
+      if (webDavItemEntity == null || version != null || webDavItemEntity.isModified()
+          || !CollectionUtils.emptyIfNull(webDavItemEntity.getUsernames()).contains(username)) {
+        return super.getLastModifiedDate(webDavPath, version, username);
       } else {
-        return webDavItemEntity.getProperties() == null ? 0l :
-                                                        webDavItemEntity.getProperties()
-                                                                        .stream()
-                                                                        .filter(p -> GETLASTMODIFIED.equals(WebDavItemProperty.toQname(p.getName())))
-                                                                        .map(WebDavItemPropertyEntity::getValue)
-                                                                        .filter(StringUtils::isNotBlank)
-                                                                        .map(this::getModifiedDateMillis)
-                                                                        .findFirst()
-                                                                        .orElse(0l);
+        return getLastModifiedDateFromProperties(webDavItemEntity);
       }
     }
+  }
+
+  /**
+   * @param webDavItemEntity a cache row
+   * @return the last modification date its stored properties carry, 0 when they
+   *         carry none
+   */
+  private long getLastModifiedDateFromProperties(WebDavItemEntity webDavItemEntity) {
+    return webDavItemEntity.getProperties() == null ? 0l :
+                                                    webDavItemEntity.getProperties()
+                                                                    .stream()
+                                                                    .filter(p -> GETLASTMODIFIED.equals(WebDavItemProperty.toQname(p.getName())))
+                                                                    .map(WebDavItemPropertyEntity::getValue)
+                                                                    .filter(StringUtils::isNotBlank)
+                                                                    .map(this::getModifiedDateMillis)
+                                                                    .findFirst()
+                                                                    .orElse(0l);
   }
 
   @Override
@@ -142,12 +191,31 @@ public class CachedJcrWebDavService extends JcrWebDavService {
                                             username,
                                             isMustReloadUsers(webDavItemEntity),
                                             depth);
+        } else if (webDavItemEntity != null && !webDavItemEntity.getUsernames().contains(username)) {
+          // The authoritative read produced nothing for this user and the row
+          // holds nothing computed against their session: it was populated by
+          // somebody else, and must not answer in their place. Without this a
+          // non-member received a member's cached metadata as a 207
+          // (EXO-90128). The refusal is an explicit 404 rather than a null: no
+          // verb handler tolerates a null item, and the uncached read now
+          // answers the same 404 for the same user, so cached and uncached
+          // agree.
+          //
+          // Deliberately narrow: when the row *does* hold an entry for this
+          // user, a null from the authoritative read is the pre-existing
+          // deleted-node or transient-failure case, which still serves the row.
+          // A user evicted by MAX_CACHED_USERS_PER_ITEM whose re-read produces
+          // nothing takes this arm too — refused, never served another user's
+          // row; when the re-read succeeds they are simply refreshed.
+          throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't find resource for path %s", webDavPath));
         }
       }
       if (webDavItemEntity == null) {
         return null;
       } else {
-        WebDavItem webDavItem = resolveIdentifier(webDavItemEntity.toWebDavItem(), baseUri);
+        WebDavItem webDavItem = resolveUserProperties(resolveIdentifier(webDavItemEntity.toWebDavItem(), baseUri),
+                                                      webDavItemEntity,
+                                                      username);
         if (depth > 0) {
           addChildren(webDavItem, depth, baseUri, username);
         }
@@ -215,7 +283,7 @@ public class CachedJcrWebDavService extends JcrWebDavService {
               if (!c.isModified()
                   && CollectionUtils.emptyIfNull(c.getUsernames()).contains(username)
                   && (c.isDeep() || childrenDepth == 0)) {
-                childWebDavItem = resolveIdentifier(c.toWebDavItem(), baseUri);
+                childWebDavItem = resolveUserProperties(resolveIdentifier(c.toWebDavItem(), baseUri), c, username);
               } else {
                 try {
                   childWebDavItem = get(c.getWebDavPath(),
@@ -238,7 +306,15 @@ public class CachedJcrWebDavService extends JcrWebDavService {
                   return null;
                 }
               }
-              if (childrenDepth > 0) {
+              // get() returns null — without throwing — for a child whose row
+              // holds nothing for this user, and the null is filtered below;
+              // recursing on it would NPE on the first dereference instead.
+              // Unreachable today and so deliberately untested: a real child
+              // path throws 404 rather than returning null, a blocked name
+              // never gets a cache row, and an identity-root row has a null
+              // parentWebDavPath so it never comes back as a child. A guard,
+              // not dead code.
+              if (childWebDavItem != null && childrenDepth > 0) {
                 addChildren(childWebDavItem, childrenDepth, baseUri, username);
               }
               return childWebDavItem;
@@ -251,19 +327,15 @@ public class CachedJcrWebDavService extends JcrWebDavService {
     LOG.debug("Save WebDav Item with path '{}' in ES Cache", webDavItem.getWebDavPath());
     WebDavItemEntity webDavItemEntity = new WebDavItemEntity(webDavItem);
     webDavItemEntity.setDeep(depth > 0);
-    if (forceRefreshUsers) {
-      webDavItemEntity.setUsernames(Collections.singleton(username));
-    } else {
-      WebDavItemEntity existingWebDavItemEntity = webDavItemDao.findById(webDavItemEntity.getWebDavPath()).orElse(null);
-      if (existingWebDavItemEntity == null) {
-        webDavItemEntity.setUsernames(Collections.singleton(username));
-      } else {
-        Set<String> usernames = new HashSet<>(CollectionUtils.emptyIfNull(existingWebDavItemEntity.getUsernames()));
-        usernames.add(username);
-        webDavItemEntity.setUsernames(usernames);
-        webDavItemEntity.setDeep(existingWebDavItemEntity.isDeep() || depth > 0);
-      }
+    // the properties just computed from this user's own JCR session leave the
+    // row's shared list and are held under their username instead
+    List<WebDavItemPropertyEntity> ownProperties = extractUserDependentProperties(webDavItemEntity);
+    WebDavItemEntity existingWebDavItemEntity = forceRefreshUsers ? null :
+                                              webDavItemDao.findById(webDavItemEntity.getWebDavPath()).orElse(null);
+    if (existingWebDavItemEntity != null) {
+      webDavItemEntity.setDeep(existingWebDavItemEntity.isDeep() || depth > 0);
     }
+    webDavItemEntity.setUserProperties(mergeUserProperties(existingWebDavItemEntity, username, ownProperties));
     webDavItemEntity = webDavItemDao.save(webDavItemEntity);
     if (CollectionUtils.isNotEmpty(webDavItem.getChildren())) {
       int childrenDepth = depth - 1;
@@ -300,6 +372,179 @@ public class CachedJcrWebDavService extends JcrWebDavService {
    * from the item URI, is not a silent regression.
    */
   private static final List<QName> IDENTIFIER_DERIVED_PROPERTIES = List.of(CHECKEDIN, PREDECESSORSET, SUCCESSORSET);
+
+  /*
+   * IDENTIFIER_DERIVED_PROPERTIES and USER_DEPENDENT_PROPERTIES must stay
+   * disjoint. A property in both would be re-based by resolveIdentifier and then
+   * overlaid again by resolveUserProperties, which runs second, so the re-basing
+   * would be silently discarded. Nothing enforces it; they are disjoint today.
+   */
+
+  /**
+   * How many users' properties one row keeps. Each entry costs of the order of
+   * 900 bytes of <code>_source</code> (measured: <code>DAV:acl</code> 466,
+   * <code>DAV:supportedlock</code> 330, <code>DAV:childcount</code> 69,
+   * <code>DAV:lockdiscovery</code> 680 when locked), against the ~10 bytes the
+   * username alone used to cost — and the whole row is fetched on every
+   * PROPFIND, with {@link #addChildren} fetching every child row of a folder at
+   * once. Unbounded, a much-read folder in a large space would return tens of
+   * megabytes to serve one depth-1 PROPFIND.
+   * <p>
+   * Eviction is fail-safe and cheap: the evicted user's next read finds no entry
+   * of theirs, {@link #isMustRefreshItem} returns true, and the row is recomputed
+   * for them. Entries are dropped oldest-first, and a user's own refresh moves
+   * them to the end, so what is evicted is the least recently refreshed.
+   */
+  private static final int        MAX_CACHED_USERS_PER_ITEM     = 50;
+
+  /**
+   * Properties whose value is computed from the <b>reading user's</b> JCR
+   * session, and which therefore must never be served from a cache row as
+   * stored.
+   * <p>
+   * The grain of the store is the <b>username</b>, while two of these vary with
+   * the <i>session</i> (<code>checkLocking</code> and
+   * <code>LockData#getLockToken</code> both key on the session id). Two concurrent
+   * sessions of one user — a mounted drive and a browser — can therefore be
+   * served each other's answer. Accepted: it is the same principal, and the lock
+   * token is that user's own. Kept in step with the session-dependent branches of
+   * {@link org.exoplatform.documents.storage.jcr.webdav.plugin.WebdavReadCommandHandler}
+   * <code>#getWebDavProperty</code>, which carries the reciprocal comment.
+   * <ul>
+   * <li><code>DAV:acl</code> — four <code>node.hasPermission(...)</code> calls
+   * (<code>ACLProperties.computeAceProperty</code>);</li>
+   * <li><code>DAV:supportedlock</code> — <code>node.canAddMixin(MIX_LOCKABLE)</code>.
+   * It performs <b>no</b> permission check (the method is
+   * <code>isProtected</code> / <code>checkedOut()</code> / <code>checkLocking()</code>
+   * and nothing else); it is session-dependent through <code>checkLocking()</code>
+   * alone, which is true only when no ancestor is locked <i>by another
+   * session</i>. So the value differs between a lock holder and everyone
+   * else;</li>
+   * <li><code>DAV:lockdiscovery</code> — carries <code>Lock#getLockToken()</code>,
+   * and the JCR implementation returns the token <b>only to the session holding
+   * the lock</b> (<code>LockImpl</code> -> <code>lockData.getLockToken(session.getId())</code>).
+   * Served from a shared row it hands one user's lock token to another, and
+   * every write verb accepts a client-supplied token back.</li>
+   * <li><code>DAV:childcount</code> — <code>node.getNodes()</code>, which filters
+   * <b>per child</b> against the reading session: eagerly in
+   * <code>NodeImpl.getNodes()</code> (<code>hasPermission(child.getACL(), READ, …)</code>)
+   * and, past <code>session.getLazyReadThreshold()</code>, in
+   * <code>LazyItemsIterator.canRead</code>, which <code>getSize()</code> also
+   * applies. A manager's count of a folder is therefore larger than a member's,
+   * and serving the manager's discloses how many documents the member cannot
+   * see.</li>
+   * </ul>
+   * Not on this list, having been checked:
+   * <ul>
+   * <li><code>DAV:haschildren</code> — <code>node.hasNodes()</code> goes to
+   * <code>SessionDataManager.getChildNodesCount</code>, which applies <b>no</b>
+   * permission filter at all. User-independent because it never filters, not
+   * because it filters on the parent.</li>
+   * <li><code>DAV:getcontentlength</code> and <code>DAV:getcontenttype</code> —
+   * they reach a <i>second</i> node through the session
+   * (<code>node.getNode(JCR_CONTENT)</code>), which is the shape that made
+   * <code>DAV:childcount</code> user-dependent. Safe here because this addon
+   * never gives <code>jcr:content</code> an ACL of its own —
+   * <code>DocumentUtils.shouldRewriteSpacePermissions</code> returns false for a
+   * node that is not <code>exo:privilegeable</code>, and an <code>nt:resource</code>
+   * content node never is. That guard, not the set of call sites, is what holds:
+   * <code>DocumentFileServiceImpl.synchronizeChildrenPermissions</code> does walk
+   * <code>getNodes()</code> recursively, which reaches <code>jcr:content</code>.
+   * So a reader who can read the file can read its content node, and both values
+   * are the same for everyone.</li>
+   * <li><code>DAV:isroot</code> — reads <code>node.getSession().getUserID()</code>,
+   * so it is username-dependent by construction, but only on <code>/Users/…</code>
+   * paths (<code>PathCommandHandler.getIdentityIdFromJcrPath</code> ignores the
+   * username for <code>/Groups/spaces/…</code>). Such a drive roots at its owner's
+   * <code>Private</code> node, which no other session can read, so those rows are
+   * single-user and the value cannot be served to anyone else. Safe under that
+   * invariant, not safe in general.</li>
+   * </ul>
+   */
+  private static final List<QName> USER_DEPENDENT_PROPERTIES = List.of(ACLProperties.ACL,
+                                                                       SUPPORTEDLOCK,
+                                                                       LOCKDISCOVERY,
+                                                                       CHILDCOUNT);
+
+  /**
+   * Moves the user-dependent properties out of the row's shared list, so that
+   * what stays in {@code properties} is only what every reader of this item
+   * sees identically.
+   *
+   * @param webDavItemEntity row being written, its properties freshly computed
+   *          from one user's session
+   * @return those of its properties that belong to that user alone, removed
+   *         from the entity's shared list
+   */
+  private List<WebDavItemPropertyEntity> extractUserDependentProperties(WebDavItemEntity webDavItemEntity) {
+    List<WebDavItemPropertyEntity> properties = new ArrayList<>(CollectionUtils.emptyIfNull(webDavItemEntity.getProperties()));
+    List<String> userDependentNames = USER_DEPENDENT_PROPERTIES.stream()
+                                                               .map(name -> String.format("%s:%s",
+                                                                                          name.getNamespaceURI(),
+                                                                                          name.getLocalPart()))
+                                                               .toList();
+    Map<Boolean, List<WebDavItemPropertyEntity>> split =
+                                                       properties.stream()
+                                                                 .collect(Collectors.partitioningBy(p -> userDependentNames.contains(p.getName())));
+    webDavItemEntity.setProperties(split.get(false));
+    return split.get(true);
+  }
+
+  /**
+   * @param existingWebDavItemEntity the row as already stored, null when it is
+   *          being created or when every other user's entry is being dropped
+   * @param username the user whose properties were just computed
+   * @param ownProperties that user's properties
+   * @return the per-user entries to store: every other user's kept as they
+   *         were, this user's replaced
+   */
+  private List<WebDavItemUserPropertiesEntity> mergeUserProperties(WebDavItemEntity existingWebDavItemEntity,
+                                                                   String username,
+                                                                   List<WebDavItemPropertyEntity> ownProperties) {
+    List<WebDavItemUserPropertiesEntity> userProperties = new ArrayList<>();
+    if (existingWebDavItemEntity != null) {
+      CollectionUtils.emptyIfNull(existingWebDavItemEntity.getUserProperties())
+                     .stream()
+                     .filter(u -> !StringUtils.equals(u.getUsername(), username))
+                     .forEach(userProperties::add);
+    }
+    userProperties.add(new WebDavItemUserPropertiesEntity(username, ownProperties));
+    return userProperties.size() <= MAX_CACHED_USERS_PER_ITEM ? userProperties :
+                                  new ArrayList<>(userProperties.subList(userProperties.size() - MAX_CACHED_USERS_PER_ITEM,
+                                                                          userProperties.size()));
+  }
+
+  /**
+   * Overlays the reading user's own properties onto an item served from the
+   * cache. The counterpart of {@link #extractUserDependentProperties}: what was
+   * taken out of the shared list on write is put back, per user, on read.
+   * <p>
+   * The row is only ever served to a user it already holds properties for:
+   * {@link #isMustRefreshItem} refreshes it otherwise, and {@link #get} returns
+   * null rather than serve a row whose refresh produced nothing for this user.
+   * So an empty overlay means the item genuinely carries none of these
+   * properties, not that they are missing.
+   *
+   * @param webDavItem item rebuilt from the row, may be null
+   * @param webDavItemEntity the row it was rebuilt from
+   * @param username the reading user
+   * @return the same item, carrying that user's own view of the user-dependent
+   *         properties
+   */
+  private WebDavItem resolveUserProperties(WebDavItem webDavItem, WebDavItemEntity webDavItemEntity, String username) {
+    if (webDavItem == null || webDavItemEntity == null) {
+      return webDavItem;
+    }
+    // toWebDavItem() builds the shared list with Stream#toList, which is
+    // immutable — the overlay replaces it rather than appending to it
+    List<WebDavItemProperty> properties = new ArrayList<>(CollectionUtils.emptyIfNull(webDavItem.getProperties()));
+    webDavItemEntity.getUserProperties(username)
+                    .stream()
+                    .map(WebDavItemPropertyEntity::toWebDavItemProperty)
+                    .forEach(properties::add);
+    webDavItem.setProperties(properties);
+    return webDavItem;
+  }
 
   /**
    * Resolves everything a cached item derives from the base URI of the request,

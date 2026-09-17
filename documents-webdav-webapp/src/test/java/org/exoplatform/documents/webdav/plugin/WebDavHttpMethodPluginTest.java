@@ -17,12 +17,19 @@
 package org.exoplatform.documents.webdav.plugin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -106,6 +113,28 @@ public class WebDavHttpMethodPluginTest {
     assertEquals("/c++ team (12)", plugin.resourcePath(request));
   }
 
+  /**
+   * EXO-90128 — the usernameless DocumentWebDavService#getLastModifiedDate is
+   * retained for binary compatibility and resolves with a <b>system session</b>,
+   * so it answers for any caller. checkModified runs before any authoritative
+   * read on a GET, so calling it here would hand a conditional request a 304
+   * that confirms a resource's existence and exact mtime to a user with no right
+   * to it. This pin is what stops the WebDAV path drifting back onto the
+   * deprecated overload.
+   */
+  @Test
+  public void testCheckModifiedAsksForTheCallersOwnDate() throws Exception {
+    DocumentWebDavService documentWebDavService = mock(DocumentWebDavService.class);
+    plugin.documentWebDavService = documentWebDavService;
+    when(request.getRemoteUser()).thenReturn("joumena");
+    when(request.getHeader(anyString())).thenReturn(null);
+
+    plugin.modified(request, "/space%20%2825%29/sample.docx", null);
+
+    verify(documentWebDavService).getLastModifiedDate("/space%20%2825%29/sample.docx", null, "joumena");
+    verify(documentWebDavService, never()).getLastModifiedDate(anyString(), any());
+  }
+
   private static class TestPlugin extends WebDavHttpMethodPlugin {
 
     public TestPlugin() {
@@ -119,6 +148,10 @@ public class WebDavHttpMethodPluginTest {
 
     public String resourcePath(HttpServletRequest httpRequest) {
       return getResourcePath(httpRequest);
+    }
+
+    public boolean modified(HttpServletRequest httpRequest, String resourcePath, String version) {
+      return checkModified(httpRequest, resourcePath, version);
     }
 
   }
