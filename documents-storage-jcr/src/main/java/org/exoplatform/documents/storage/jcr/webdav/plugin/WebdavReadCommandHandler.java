@@ -176,13 +176,23 @@ public class WebdavReadCommandHandler {
       if (identity == null) {
         throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't find an identity Id from path %s", webDavPath));
       } else {
-        return getWebDavIdentityItem(session,
-                                     identity.getIdentityId(),
-                                     identity.getProfile().getFullName(),
-                                     requestedPropertyNames,
-                                     requestPropertyNamesOnly,
-                                     depth,
-                                     baseUri);
+        WebDavItem identityItem = getWebDavIdentityItem(session,
+                                                        identity.getIdentityId(),
+                                                        identity.getProfile().getFullName(),
+                                                        requestedPropertyNames,
+                                                        requestPropertyNamesOnly,
+                                                        depth,
+                                                        baseUri);
+        if (identityItem == null) {
+          // Session#itemExists swallows the AccessDeniedException of a user who
+          // may not read the drive, so a null here is a refusal as often as an
+          // absence. Returned as-is it reached the verb handlers, which do not
+          // expect it: HEAD dereferenced it into a 500, PROPFIND had already
+          // set 207 and truncated its multistatus. A 404 is the answer both
+          // cases deserve, and keeps "denied" indistinguishable from "absent".
+          throw new WebDavException(HttpStatus.SC_NOT_FOUND, String.format("Can't find drive root for path %s", webDavPath));
+        }
+        return identityItem;
       }
     } else {
       Identity identity = getIdentityFromWebDavPath(webDavPath);
@@ -475,6 +485,19 @@ public class WebdavReadCommandHandler {
    * cache instead of recomputed here (EXO-89613). Today that is
    * <code>DAV:checked-in</code>, <code>DAV:predecessor-set</code> and
    * <code>DAV:successor-set</code>.
+   * <p>
+   * <b>The same holds for any branch whose value depends on the reading
+   * user</b> — one that calls <code>node.hasPermission(...)</code>,
+   * <code>node.canAddMixin(...)</code>, <code>node.getLock()</code>,
+   * <code>node.getNodes()</code> or <code>node.getSession()</code>. A cache row
+   * is shared by every user who has read the path, so such a value must be
+   * listed in
+   * {@link org.exoplatform.documents.storage.jcr.webdav.cache.CachedJcrWebDavService}
+   * <code>#USER_DEPENDENT_PROPERTIES</code>, which holds it per user instead of
+   * in the row's shared property list. Today that is <code>DAV:acl</code>,
+   * <code>DAV:supportedlock</code>, <code>DAV:lockdiscovery</code> and
+   * <code>DAV:childcount</code> (EXO-90128); that constant's javadoc also records
+   * the branches that were checked and found user-independent, and why.
    *
    * @param node the JCR node
    * @param nodeIdentifier the node's absolute WebDAV URI
