@@ -234,7 +234,7 @@ public abstract class WebDavHttpMethodPlugin {
   protected boolean checkModified(HttpServletRequest httpRequest,
                                   String resourcePath,
                                   String version) {
-    long lastModifiedDate = documentWebDavService.getLastModifiedDate(resourcePath, version);
+    long lastModifiedDate = documentWebDavService.getLastModifiedDate(resourcePath, version, httpRequest.getRemoteUser());
     String ifNoneMatch = httpRequest.getHeader(ExtHttpHeaders.IF_NONE_MATCH); // NOSONAR
     if (ifNoneMatch != null) {
       if ("*".equals(ifNoneMatch)) {

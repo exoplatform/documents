@@ -105,7 +105,7 @@ public class GetWebDavHandler extends WebDavHttpMethodPlugin implements ServletC
       httpResponse.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
       return;
     }
-    if (documentWebDavService.isFile(resourcePath)) {
+    if (documentWebDavService.isFile(resourcePath, httpRequest.getRemoteUser())) {
       WebDavFileDownload fileDownload = documentWebDavService.download(resourcePath,
                                                                        version,
                                                                        getBaseUrl(httpRequest),

@@ -48,9 +48,42 @@ public interface DocumentWebDavService {
   String getDaslValue();
 
   /**
+   * Translates a failure raised by the storage implementation into the HTTP
+   * status it means, so that the transport layer does not have to know the
+   * storage's exception types. A repository that refuses an operation the user
+   * has no right to, for instance, means 403 and not 500.
+   *
+   * @param throwable the failure a WebDAV operation raised
+   * @return the exception to answer with, or null when the failure is not one
+   *         the contract covers — which really is a 500
+   */
+  WebDavException toWebDavException(Throwable throwable);
+
+  /**
+   * @param resourcePath File or Folder Path
+   * @param username the user asking, whose own rights decide the answer: this
+   *          reports on a resource they may have no right to see, so it is
+   *          resolved against their session and not a system one
+   * @return true if the resource designated by the path is a file, else false.
+   *         Note that on a path this user cannot resolve the implementation
+   *         raises a {@link WebDavException} rather than returning false — it
+   *         comes from the path resolution the authoritative lookup goes
+   *         through, and escapes this signature because the implementation
+   *         sneaky-throws it.
+   */
+  boolean isFile(String resourcePath, String username);
+
+  /**
    * @param resourcePath File or Folder Path
    * @return true if the resource designated by the path is a file, else false
+   * @deprecated kept for binary compatibility only. It resolves the path with a
+   *             <b>system session</b>, so it answers for any caller whatever
+   *             their rights, and must not be used where the answer concerns a
+   *             resource the caller may not be allowed to see. Use
+   *             {@link #isFile(String, String)}, which resolves against the
+   *             caller's own session. Since 7.3.x; not scheduled for removal.
    */
+  @Deprecated(since = "7.3.x")
   boolean isFile(String resourcePath);
 
   /**
@@ -346,6 +379,22 @@ public interface DocumentWebDavService {
    *           <li>- The designated resource isn't found</li>
    *           </ul>
    */
+  long getLastModifiedDate(String resourcePath, String version, String username) throws WebDavException;
+
+  /**
+   * @param resourcePath File or Folder Path
+   * @param version version name, null for the head
+   * @return the last modification date in milliseconds, 0 when there is none
+   * @throws WebDavException when the resource cannot be resolved
+   * @deprecated kept for binary compatibility only. It resolves the path with a
+   *             <b>system session</b>, so it answers for any caller whatever
+   *             their rights — a conditional request answered from it discloses
+   *             a resource's existence and its exact modification date. Use
+   *             {@link #getLastModifiedDate(String, String, String)}, which
+   *             resolves against the caller's own session. Since 7.3.x; not
+   *             scheduled for removal.
+   */
+  @Deprecated(since = "7.3.x")
   long getLastModifiedDate(String resourcePath, String version) throws WebDavException;
 
   /**
