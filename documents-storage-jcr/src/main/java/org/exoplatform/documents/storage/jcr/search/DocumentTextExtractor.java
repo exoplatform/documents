@@ -61,8 +61,8 @@ import org.exoplatform.services.log.Log;
  * {@link DocumentReaderService}, the Tika-backed extractor the JCR full-text
  * indexing already relies on, rather than Tika directly.
  * <p>
- * Bounded on every side, since it runs on a user's request: files larger than
- * {@code maxFileSizeBytes} are not read (the same 10 MB as the search index's own
+ * Bounded on every side, since it runs on a user's request: files of
+ * {@code maxFileSizeBytes} or larger are not read (the same 10 MB as the search index's own
  * content extraction), only the file types the search index extracts the text of
  * are read, the text is cut at {@code maxChars}, the caller stops waiting after
  * {@code timeoutMillis}, and at most {@link #MAX_CONCURRENT_EXTRACTIONS} run at a
@@ -123,7 +123,7 @@ public class DocumentTextExtractor {
    *
    * @param repositoryService the JCR repository holding the files
    * @param documentReaderService the platform's text extractor
-   * @param maxFileSizeBytes files larger than this are not read
+   * @param maxFileSizeBytes files of this size or larger are not read
    * @param maxChars the extracted text is cut at this length
    * @param timeoutMillis an extraction taking longer is abandoned
    */

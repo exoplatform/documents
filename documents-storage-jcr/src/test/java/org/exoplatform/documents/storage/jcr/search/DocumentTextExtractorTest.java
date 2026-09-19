@@ -246,9 +246,11 @@ class DocumentTextExtractorTest {
     extractor.shutdown();
     extractor = newExtractor(200);
     CountDownLatch release = new CountDownLatch(1);
+    CountDownLatch slotsHeld = new CountDownLatch(DocumentTextExtractor.MAX_CONCURRENT_EXTRACTIONS);
     AtomicInteger readersAsked = new AtomicInteger();
     AdvancedDocumentReader slowReader = mock(AdvancedDocumentReader.class);
     when(slowReader.getContentAsReader(any())).thenAnswer(invocation -> {
+      slotsHeld.countDown();
       // not interruptible, like the PDF and office readers
       long deadline = System.currentTimeMillis() + 5000;
       while (release.getCount() > 0 && System.currentTimeMillis() < deadline) {
@@ -269,7 +271,8 @@ class DocumentTextExtractorTest {
       for (int i = 0; i < DocumentTextExtractor.MAX_CONCURRENT_EXTRACTIONS; i++) {
         callers.submit(() -> extractor.extract(DOCUMENT_ID));
       }
-      Thread.sleep(100);
+      // both slots are held before the third extraction is asked for
+      assertTrue(slotsHeld.await(5, TimeUnit.SECONDS));
 
       DocumentTextContent queued = extractor.extract(DOCUMENT_ID);
 
