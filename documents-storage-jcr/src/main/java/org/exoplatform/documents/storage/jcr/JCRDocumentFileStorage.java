@@ -40,6 +40,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
@@ -165,14 +166,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public static final String                        TEXT_EXTRACTION_TIMEOUT_SECONDS_PROPERTY =
                                                                                          "exo.documents.textExtraction.timeoutSeconds";
 
-  // the same default as the search index's own content extraction (documents.content.max.size.mb)
+  // the same as the search index's own content extraction: FileindexingConnector's
+  // documents.content.max.size.mb, not set by the platform configuration, so 10 MB
   private static final long                         DEFAULT_TEXT_EXTRACTION_MAX_SIZE_MB      = 10;
 
   private static final long                         DEFAULT_TEXT_EXTRACTION_MAX_CHARS        = 1_000_000;
 
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
 
-  private DocumentTextExtractor                     textExtractor;
+  private volatile DocumentTextExtractor            textExtractor;
 
   private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
 
@@ -2985,17 +2987,25 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @return the text extractor
    */
   DocumentTextExtractor getTextExtractor() {
-    if (textExtractor == null) {
-      textExtractor = new DocumentTextExtractor(repositoryService,
+    DocumentTextExtractor extractor = textExtractor;
+    if (extractor == null) {
+      synchronized (this) {
+        extractor = textExtractor;
+        if (extractor == null) {
+          extractor = new DocumentTextExtractor(repositoryService,
                                                 CommonsUtils.getService(DocumentReaderService.class),
                                                 getLongProperty(TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY,
                                                                 DEFAULT_TEXT_EXTRACTION_MAX_SIZE_MB) * 1024 * 1024,
-                                                (int) getLongProperty(TEXT_EXTRACTION_MAX_CHARS_PROPERTY,
-                                                                      DEFAULT_TEXT_EXTRACTION_MAX_CHARS),
+                                                (int) Math.min(Integer.MAX_VALUE,
+                                                               getLongProperty(TEXT_EXTRACTION_MAX_CHARS_PROPERTY,
+                                                                               DEFAULT_TEXT_EXTRACTION_MAX_CHARS)),
                                                 getLongProperty(TEXT_EXTRACTION_TIMEOUT_SECONDS_PROPERTY,
                                                                 DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS) * 1000);
+          textExtractor = extractor;
+        }
+      }
     }
-    return textExtractor;
+    return extractor;
   }
 
   /**
@@ -3014,12 +3024,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @param defaultValue the value when the property is absent or invalid
    * @return the property value
    */
-  private static long getLongProperty(String name, long defaultValue) {
-    String value = PropertyManager.getProperty(name);
-    if (StringUtils.isNumeric(value) && Long.parseLong(value) > 0) {
-      return Long.parseLong(value);
-    }
-    return defaultValue;
+  static long getLongProperty(String name, long defaultValue) {
+    long value = NumberUtils.toLong(StringUtils.trim(PropertyManager.getProperty(name)), defaultValue);
+    // zero, negative, or so large it would overflow once converted: invalid, like a non-number
+    return value > 0 && value < Integer.MAX_VALUE ? value : defaultValue;
   }
 
   @Override

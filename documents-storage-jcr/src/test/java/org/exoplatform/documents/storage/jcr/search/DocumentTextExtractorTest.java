@@ -17,6 +17,7 @@
 package org.exoplatform.documents.storage.jcr.search;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,7 +29,10 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayInputStream;
 import java.io.Reader;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import javax.jcr.Node;
@@ -44,6 +48,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import org.exoplatform.container.configuration.ConfigurationManager;
+import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentTextContent.Status;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -51,7 +57,7 @@ import org.exoplatform.services.document.AdvancedDocumentReader;
 import org.exoplatform.services.document.DocumentReadException;
 import org.exoplatform.services.document.DocumentReader;
 import org.exoplatform.services.document.DocumentReaderService;
-import org.exoplatform.services.document.HandlerNotFoundException;
+import org.exoplatform.services.document.impl.tika.TikaDocumentReaderServiceImpl;
 import org.exoplatform.services.jcr.core.ExtendedSession;
 
 /**
@@ -96,14 +102,14 @@ class DocumentTextExtractorTest {
   void setUp() throws Exception {
     extractor = newExtractor(500);
     when(session.getNodeByIdentifier(DOCUMENT_ID)).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(node.getName()).thenReturn("report.docx");
     when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
     when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(content);
     when(content.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
     when(content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
     when(content.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(data);
-    Property mimeType = mock(Property.class);
-    when(mimeType.getString()).thenReturn(MIME_TYPE);
-    when(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeType);
+    storedMimeType(MIME_TYPE);
     when(data.getLength()).thenReturn(100L);
     when(data.getStream()).thenReturn(new ByteArrayInputStream(new byte[100]));
   }
@@ -156,10 +162,100 @@ class DocumentTextExtractorTest {
   }
 
   @Test
-  void reportsAFormatNoExtractorHandles() throws Exception {
-    when(documentReaderService.getDocumentReader(MIME_TYPE)).thenThrow(new HandlerNotFoundException("no reader"));
+  void reportsAFormatTheSearchIndexDoesNotExtractEither() throws Exception {
+    storedMimeType("image/png");
 
     assertEquals(Status.UNSUPPORTED_FORMAT, extractor.extract(DOCUMENT_ID).status());
+    verify(documentReaderService, never()).getDocumentReader(any());
+  }
+
+  @Test
+  void resolvesTheTypeOfAFileStoredAsGenericBinaryFromItsName() throws Exception {
+    storedMimeType("application/octet-stream");
+    when(node.getName()).thenReturn("contract.pdf");
+    readerReturning("application/pdf", "Signed");
+
+    DocumentTextContent text = extractor.extract(DOCUMENT_ID);
+
+    assertEquals(Status.EXTRACTED, text.status());
+    verify(documentReaderService).getDocumentReader("application/pdf");
+  }
+
+  @Test
+  void reportsAGenericBinaryFileWhoseNameSaysNothingAsUnsupported() throws Exception {
+    storedMimeType("application/octet-stream");
+    when(node.getName()).thenReturn("blob");
+
+    assertEquals(Status.UNSUPPORTED_FORMAT, extractor.extract(DOCUMENT_ID).status());
+  }
+
+  @Test
+  void supportsTheTypesTheSearchIndexExtractsTheTextOf() {
+    assertTrue(extractor.isSupported("text/plain"));
+    assertTrue(extractor.isSupported("application/pdf"));
+    assertTrue(extractor.isSupported(MIME_TYPE));
+    assertTrue(extractor.isSupported("application/msword"));
+    assertTrue(extractor.isSupported("text/html; charset=UTF-8"));
+    assertTrue(extractor.isSupported("application/pdf; name=contract.pdf"));
+    assertTrue(extractor.isSupported("Application/PDF"));
+    assertFalse(extractor.isSupported("application/zip"));
+    assertFalse(extractor.isSupported("image/png"));
+    assertFalse(extractor.isSupported("application/octet-stream"));
+    assertFalse(extractor.isSupported(""));
+  }
+
+  @Test
+  void extractsWithThePlatformReaderServiceItself() throws Exception {
+    extractor.shutdown();
+    TikaDocumentReaderServiceImpl platformReaderService = new TikaDocumentReaderServiceImpl(mock(ConfigurationManager.class),
+                                                                                            new InitParams());
+    extractor = new DocumentTextExtractor(null, platformReaderService, MAX_SIZE, 1000, 5000) {
+      @Override
+      protected Session openSystemSession() {
+        return session;
+      }
+    };
+    storedMimeType("application/octet-stream");
+    when(node.getName()).thenReturn("notes.txt");
+    when(data.getStream()).thenReturn(new ByteArrayInputStream("Minutes of the board".getBytes(StandardCharsets.UTF_8)));
+
+    DocumentTextContent text = extractor.extract(DOCUMENT_ID);
+
+    assertEquals(Status.EXTRACTED, text.status());
+    assertEquals("Minutes of the board", text.text().trim());
+  }
+
+  @Test
+  void reportsADocumentThatIsNotAFileNode() throws Exception {
+    when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(false);
+
+    assertEquals(Status.NOT_A_FILE, extractor.extract(DOCUMENT_ID).status());
+  }
+
+  @Test
+  void refusesAtOnceWhenTooManyExtractionsAreInProgress() throws Exception {
+    extractor.shutdown();
+    extractor = newExtractor(3000);
+    CountDownLatch release = new CountDownLatch(1);
+    AdvancedDocumentReader reader = mock(AdvancedDocumentReader.class);
+    when(reader.getContentAsReader(any())).thenAnswer(invocation -> {
+      release.await(5, TimeUnit.SECONDS);
+      return new StringReader("done");
+    });
+    when(documentReaderService.getDocumentReader(MIME_TYPE)).thenReturn(reader);
+    int inFlight = DocumentTextExtractor.MAX_CONCURRENT_EXTRACTIONS + DocumentTextExtractor.MAX_QUEUED_EXTRACTIONS;
+    ExecutorService callers = Executors.newFixedThreadPool(inFlight);
+    try {
+      for (int i = 0; i < inFlight; i++) {
+        callers.submit(() -> extractor.extract(DOCUMENT_ID));
+      }
+      Thread.sleep(300);
+
+      assertEquals(Status.BUSY, extractor.extract(DOCUMENT_ID).status());
+    } finally {
+      release.countDown();
+      callers.shutdownNow();
+    }
   }
 
   @Test
@@ -212,8 +308,20 @@ class DocumentTextExtractorTest {
     DocumentTextContent text = extractor.extract(DOCUMENT_ID);
     long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
 
-    assertEquals(Status.UNREADABLE, text.status());
+    assertEquals(Status.TIMED_OUT, text.status());
     assertTrue(elapsedMillis < 5000, "the extraction should be abandoned at the timeout, took " + elapsedMillis + " ms");
+  }
+
+  /**
+   * Sets the type the file is stored with.
+   *
+   * @param mimeType the stored type
+   * @throws Exception never, the mocks do not throw
+   */
+  private void storedMimeType(String mimeType) throws Exception {
+    Property mimeTypeProperty = mock(Property.class);
+    when(mimeTypeProperty.getString()).thenReturn(mimeType);
+    when(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
   }
 
   /**
@@ -223,10 +331,21 @@ class DocumentTextExtractorTest {
    * @throws Exception never, the mocks do not throw
    */
   private void readerReturning(String text) throws Exception {
+    readerReturning(MIME_TYPE, text);
+  }
+
+  /**
+   * Makes a format handled by a streaming reader returning that text.
+   *
+   * @param mimeType the format
+   * @param text the text of the file
+   * @throws Exception never, the mocks do not throw
+   */
+  private void readerReturning(String mimeType, String text) throws Exception {
     AdvancedDocumentReader reader = mock(AdvancedDocumentReader.class);
     Reader textReader = new StringReader(text);
     when(reader.getContentAsReader(any())).thenReturn(textReader);
-    when(documentReaderService.getDocumentReader(MIME_TYPE)).thenReturn(reader);
+    when(documentReaderService.getDocumentReader(mimeType)).thenReturn(reader);
   }
 
   /**

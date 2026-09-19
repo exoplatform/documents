@@ -19,6 +19,8 @@ package org.exoplatform.documents.storage.jcr.search;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -36,6 +38,8 @@ import javax.jcr.Session;
 
 import org.apache.commons.lang3.StringUtils;
 
+import org.exoplatform.commons.utils.MimeTypeResolver;
+import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentTextContent.Status;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
@@ -57,11 +61,17 @@ import org.exoplatform.services.log.Log;
  * indexing already relies on, rather than Tika directly.
  * <p>
  * Bounded on every side, since it runs on a user's request: files larger than
- * {@code maxFileSizeBytes} are not read (the same 10 MB default as the search
- * index's own content extraction), the text is cut at {@code maxChars}, an
- * extraction taking longer than {@code timeoutMillis} is abandoned, and at most
- * {@link #MAX_CONCURRENT_EXTRACTIONS} run at a time with a short queue, anything
- * beyond being refused at once rather than piling up.
+ * {@code maxFileSizeBytes} are not read (the same 10 MB as the search index's own
+ * content extraction), only the file types the search index extracts the text of
+ * are read, the text is cut at {@code maxChars}, the caller stops waiting after
+ * {@code timeoutMillis}, and at most {@link #MAX_CONCURRENT_EXTRACTIONS} run at a
+ * time with a short queue, anything beyond being refused at once rather than
+ * piling up.
+ * <p>
+ * What bounds memory is the file size times {@link #MAX_CONCURRENT_EXTRACTIONS}:
+ * the readers configured for PDF and office files are not streaming ones and
+ * build the whole text before it is cut, and they cannot be interrupted, so an
+ * extraction the caller stopped waiting for keeps its slot until it ends.
  * <p>
  * The file is read with a system session: the caller checks the user can access
  * the document before asking for its text.
@@ -78,6 +88,21 @@ public class DocumentTextExtractor {
 
   private static final String COLLABORATION              = "collaboration";
 
+  /** The property listing, as regular expressions, the file types whose text the search index extracts. */
+  public static final String  SUPPORTED_MIME_TYPES_PROPERTY = "exo.unified-search.indexing.supportedMimeTypes";
+
+  /** The search index's own default for {@link #SUPPORTED_MIME_TYPES_PROPERTY}, ecms core-search-configuration.xml. */
+  public static final String  DEFAULT_SUPPORTED_MIME_TYPES  =
+                                                           "text/.*, application/ms.* , application/vnd.* , application/xml , "
+                                                               + "application/excel , application/powerpoint , application/xls, "
+                                                               + "application/ppt , application/pdf , application/xhtml+xml , "
+                                                               + "application/javascript , application/x-javascript , "
+                                                               + "application/x-jaxrs+groovy , script/groovy";
+
+  private static final String GENERIC_MIME_TYPE          = "application/octet-stream";
+
+  private static final MimeTypeResolver MIME_TYPE_RESOLVER = new MimeTypeResolver();
+
   private final RepositoryService     repositoryService;
 
   private final DocumentReaderService documentReaderService;
@@ -89,6 +114,8 @@ public class DocumentTextExtractor {
   private final long                  timeoutMillis;
 
   private final ExecutorService       executor;
+
+  private final List<String>          supportedMimeTypes;
 
   /**
    * Creates an extractor with its own bounded pool of extraction threads.
@@ -109,6 +136,12 @@ public class DocumentTextExtractor {
     this.maxFileSizeBytes = maxFileSizeBytes;
     this.maxChars = maxChars;
     this.timeoutMillis = timeoutMillis;
+    this.supportedMimeTypes = Arrays.stream(StringUtils.split(StringUtils.defaultIfBlank(PropertyManager.getProperty(SUPPORTED_MIME_TYPES_PROPERTY),
+                                                                                         DEFAULT_SUPPORTED_MIME_TYPES),
+                                                               ','))
+                                    .map(String::trim)
+                                    .filter(StringUtils::isNotBlank)
+                                    .toList();
     AtomicInteger threadIndex = new AtomicInteger();
     this.executor = new ThreadPoolExecutor(MAX_CONCURRENT_EXTRACTIONS,
                                            MAX_CONCURRENT_EXTRACTIONS,
@@ -137,14 +170,14 @@ public class DocumentTextExtractor {
       extraction = executor.submit(() -> readText(documentId));
     } catch (RejectedExecutionException e) {
       LOG.warn("Too many text extractions in progress, the text of document {} is not extracted", documentId);
-      return DocumentTextContent.none(Status.UNREADABLE);
+      return DocumentTextContent.none(Status.BUSY);
     }
     try {
       return extraction.get(timeoutMillis, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
       extraction.cancel(true);
       LOG.warn("Extracting the text of document {} took more than {} ms, abandoned", documentId, timeoutMillis);
-      return DocumentTextContent.none(Status.UNREADABLE);
+      return DocumentTextContent.none(Status.TIMED_OUT);
     } catch (InterruptedException e) {
       extraction.cancel(true);
       Thread.currentThread().interrupt();
@@ -167,20 +200,24 @@ public class DocumentTextExtractor {
     Session session = openSystemSession();
     try {
       Node node = JCRDocumentsUtil.getNodeByIdentifier(session, documentId);
-      if (node == null || !node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      if (node == null || !node.isNodeType(NodeTypeConstants.NT_FILE) || !node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         return DocumentTextContent.none(Status.NOT_A_FILE);
       }
       Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
-      if (!content.hasProperty(NodeTypeConstants.JCR_DATA) || !content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)) {
+      if (!content.hasProperty(NodeTypeConstants.JCR_DATA)) {
         return DocumentTextContent.none(Status.NOT_A_FILE);
       }
       Property data = content.getProperty(NodeTypeConstants.JCR_DATA);
       if (data.getLength() > maxFileSizeBytes) {
         return DocumentTextContent.none(Status.TOO_LARGE);
       }
+      String mimeType = resolveMimeType(node, content);
+      if (!isSupported(mimeType)) {
+        return DocumentTextContent.none(Status.UNSUPPORTED_FORMAT);
+      }
       DocumentReader reader;
       try {
-        reader = documentReaderService.getDocumentReader(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString());
+        reader = documentReaderService.getDocumentReader(mimeType);
       } catch (HandlerNotFoundException e) {
         return DocumentTextContent.none(Status.UNSUPPORTED_FORMAT);
       }
@@ -196,6 +233,45 @@ public class DocumentTextExtractor {
   }
 
   /**
+   * The type of a file: the stored one, unless it says nothing (absent, or the
+   * generic binary type a mail part is often declared with), in which case it is
+   * resolved from the file name the way the platform does for an upload.
+   *
+   * @param node the file node
+   * @param content its content node
+   * @return the type to extract the text with
+   * @throws RepositoryException when the node cannot be read
+   */
+  private String resolveMimeType(Node node, Node content) throws RepositoryException {
+    String mimeType = content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)
+        ? content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString()
+        : null;
+    if (StringUtils.isBlank(mimeType) || GENERIC_MIME_TYPE.equalsIgnoreCase(mimeType.trim())) {
+      mimeType = MIME_TYPE_RESOLVER.getMimeType(node.getName());
+    }
+    return StringUtils.trimToEmpty(mimeType);
+  }
+
+  /**
+   * Whether text is extracted from files of this type: the very list the search
+   * index extracts the content of (its {@code documents.content.indexing.mimetypes}
+   * parameter, read from the same property with the same default, matched the
+   * same way: the type against each expression as it is). The platform's
+   * reader service cannot answer that itself: it hands back a reader for any type,
+   * one that simply finds no text in a type no parser handles.
+   *
+   * @param mimeType the file type
+   * @return true when its text is extracted
+   */
+  boolean isSupported(String mimeType) {
+    if (StringUtils.isBlank(mimeType) || GENERIC_MIME_TYPE.equalsIgnoreCase(mimeType)) {
+      return false;
+    }
+    String type = StringUtils.substringBefore(mimeType, ";").trim().toLowerCase();
+    return supportedMimeTypes.stream().anyMatch(type::matches);
+  }
+
+  /**
    * Opens a system session on the workspace holding the documents.
    *
    * @return a new session, logged out by the caller
@@ -207,8 +283,7 @@ public class DocumentTextExtractor {
 
   /**
    * Reads at most {@code maxChars} characters of text: streamed when the reader
-   * can stream, so a file full of text never sits whole in memory, else cut
-   * after the fact.
+   * can stream, else cut once the reader has built the whole text.
    *
    * @param reader the extractor for the file's format
    * @param stream the file's binary

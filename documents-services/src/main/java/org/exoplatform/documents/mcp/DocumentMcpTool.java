@@ -282,7 +282,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * <p>
    * The reason never claims the file is still being indexed: the search index
    * service exposes no way to know whether an indexing operation is pending for
-   * a file, and the file itself was just read without success.
+   * a file, and the file itself was just read without success. Only a busy
+   * extractor, a fact known for certain, is worded as worth another attempt.
    *
    * @param documentId the document identifier
    * @return the text of the document
@@ -315,6 +316,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     case TOO_LARGE -> prefix + "the file is too large for its text to be read.";
     case NO_TEXT -> prefix + "no text was found in the file (a scanned document or an image, for instance).";
     case NOT_A_FILE -> "The document with id %s is not a file with a content, so it has no text.".formatted(documentId);
+    case BUSY -> prefix + "too many documents are being read at the moment; asking again in a little while may succeed.";
+    case TIMED_OUT -> prefix + "reading the file took too long.";
     default -> prefix + "the file could not be read.";
     };
   }
