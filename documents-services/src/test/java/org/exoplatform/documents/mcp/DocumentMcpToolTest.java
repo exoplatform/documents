@@ -249,6 +249,8 @@ public class DocumentMcpToolTest {
     assertNoTextMessage(DocumentTextContent.Status.NO_TEXT, "no text was found in the file");
     assertNoTextMessage(DocumentTextContent.Status.UNREADABLE, "the file could not be read.");
     assertNoTextMessage(DocumentTextContent.Status.NOT_A_FILE, "is not a file with a content, so it has no text.");
+    assertNoTextMessage(DocumentTextContent.Status.BUSY, "too many documents are being read at the moment");
+    assertNoTextMessage(DocumentTextContent.Status.TIMED_OUT, "reading the file took too long.");
   }
 
   @Test

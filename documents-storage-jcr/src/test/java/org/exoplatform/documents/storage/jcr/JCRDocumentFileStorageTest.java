@@ -31,6 +31,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
@@ -200,6 +201,29 @@ public class JCRDocumentFileStorageTest {
 
     assertNull(jcrDocumentFileStorage.getFileContentAsText("doc"));
     assertEquals(DocumentTextContent.Status.UNSUPPORTED_FORMAT, jcrDocumentFileStorage.getFileTextContent("doc").status());
+  }
+
+  @Test
+  public void getLongPropertyFallsBackToTheDefaultOnAnInvalidValue() {
+    assertEquals(5, JCRDocumentFileStorage.getLongProperty(property("5"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("abc"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("0"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("-3"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("99999999999999999999"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("3000000000"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty("exo.documents.test.limit.absent", 10));
+  }
+
+  /**
+   * Sets a platform property of its own name, the platform caching read values.
+   *
+   * @param value the property value
+   * @return the property name
+   */
+  private static String property(String value) {
+    String name = "exo.documents.test.limit." + UUID.randomUUID();
+    PropertyManager.setProperty(name, value);
+    return name;
   }
 
   @Test

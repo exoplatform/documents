@@ -42,7 +42,11 @@ public record DocumentTextContent(String text, Status status) {
     NO_TEXT,
     /** The document is not a file with a content, a folder for instance. */
     NOT_A_FILE,
-    /** The file could not be read: an error, a timeout or a busy extractor. */
+    /** Too many extractions were in progress to take this one: a later attempt may succeed. */
+    BUSY,
+    /** The extraction took longer than allowed and was abandoned. */
+    TIMED_OUT,
+    /** The file could not be read or parsed. */
     UNREADABLE,
   }
 
