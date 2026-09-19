@@ -154,7 +154,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final DocumentService                     documentService;
 
-  /** Files larger than this many MB are not read to extract their text on the fly. */
+  /** Files of this many MB or larger are not read to extract their text on the fly. */
   public static final String                        TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY     =
                                                                                          "exo.documents.textExtraction.maxFileSizeMb";
 

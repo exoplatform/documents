@@ -36,7 +36,7 @@ public record DocumentTextContent(String text, Status status) {
     EXTRACTED,
     /** No text extractor handles the file's format. */
     UNSUPPORTED_FORMAT,
-    /** The file is larger than what is extracted on the fly. */
+    /** The file is at least as large as the limit of what is extracted on the fly. */
     TOO_LARGE,
     /** The file was read but holds no text, a scanned document for instance. */
     NO_TEXT,
