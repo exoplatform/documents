@@ -34,6 +34,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.jcr.Node;
 import javax.jcr.Property;
@@ -150,6 +151,14 @@ class DocumentTextExtractorTest {
   }
 
   @Test
+  void doesNotReadAFileOfExactlyTheLimitEither() throws Exception {
+    when(data.getLength()).thenReturn(MAX_SIZE);
+
+    assertEquals(Status.TOO_LARGE, extractor.extract(DOCUMENT_ID).status());
+    verify(data, never()).getStream();
+  }
+
+  @Test
   void doesNotReadAFileLargerThanTheLimit() throws Exception {
     when(data.getLength()).thenReturn(MAX_SIZE + 1);
 
@@ -230,6 +239,49 @@ class DocumentTextExtractorTest {
     when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(false);
 
     assertEquals(Status.NOT_A_FILE, extractor.extract(DOCUMENT_ID).status());
+  }
+
+  @Test
+  void reportsBusyWhenTheWaitEndsBeforeAnyFreeSlotAndNeverRunsTheQueuedExtraction() throws Exception {
+    extractor.shutdown();
+    extractor = newExtractor(200);
+    CountDownLatch release = new CountDownLatch(1);
+    AtomicInteger readersAsked = new AtomicInteger();
+    AdvancedDocumentReader slowReader = mock(AdvancedDocumentReader.class);
+    when(slowReader.getContentAsReader(any())).thenAnswer(invocation -> {
+      // not interruptible, like the PDF and office readers
+      long deadline = System.currentTimeMillis() + 5000;
+      while (release.getCount() > 0 && System.currentTimeMillis() < deadline) {
+        try {
+          release.await(50, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+          // ignored on purpose: this reader cannot be interrupted
+        }
+      }
+      return new StringReader("done");
+    });
+    when(documentReaderService.getDocumentReader(MIME_TYPE)).thenAnswer(invocation -> {
+      readersAsked.incrementAndGet();
+      return slowReader;
+    });
+    ExecutorService callers = Executors.newFixedThreadPool(DocumentTextExtractor.MAX_CONCURRENT_EXTRACTIONS);
+    try {
+      for (int i = 0; i < DocumentTextExtractor.MAX_CONCURRENT_EXTRACTIONS; i++) {
+        callers.submit(() -> extractor.extract(DOCUMENT_ID));
+      }
+      Thread.sleep(100);
+
+      DocumentTextContent queued = extractor.extract(DOCUMENT_ID);
+
+      assertEquals(Status.BUSY, queued.status());
+      release.countDown();
+      Thread.sleep(300);
+      // only the two extractions holding the slots ever ran, the queued one was cancelled
+      assertEquals(DocumentTextExtractor.MAX_CONCURRENT_EXTRACTIONS, readersAsked.get());
+    } finally {
+      release.countDown();
+      callers.shutdownNow();
+    }
   }
 
   @Test

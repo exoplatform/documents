@@ -29,6 +29,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.jcr.Node;
@@ -165,9 +166,13 @@ public class DocumentTextExtractor {
    * @return the extracted text, or why there is none
    */
   public DocumentTextContent extract(String documentId) {
+    AtomicBoolean started = new AtomicBoolean();
     Future<DocumentTextContent> extraction;
     try {
-      extraction = executor.submit(() -> readText(documentId));
+      extraction = executor.submit(() -> {
+        started.set(true);
+        return readText(documentId);
+      });
     } catch (RejectedExecutionException e) {
       LOG.warn("Too many text extractions in progress, the text of document {} is not extracted", documentId);
       return DocumentTextContent.none(Status.BUSY);
@@ -175,7 +180,14 @@ public class DocumentTextExtractor {
     try {
       return extraction.get(timeoutMillis, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
+      // cancelled either way: a queued extraction must not run once nobody waits for it
       extraction.cancel(true);
+      if (!started.get()) {
+        // still queued behind extractions holding every slot: the extractor was
+        // busy, this file was never even opened
+        LOG.warn("No free slot to extract the text of document {} within {} ms", documentId, timeoutMillis);
+        return DocumentTextContent.none(Status.BUSY);
+      }
       LOG.warn("Extracting the text of document {} took more than {} ms, abandoned", documentId, timeoutMillis);
       return DocumentTextContent.none(Status.TIMED_OUT);
     } catch (InterruptedException e) {
@@ -208,7 +220,8 @@ public class DocumentTextExtractor {
         return DocumentTextContent.none(Status.NOT_A_FILE);
       }
       Property data = content.getProperty(NodeTypeConstants.JCR_DATA);
-      if (data.getLength() > maxFileSizeBytes) {
+      // the search index extracts a file's content only when it is smaller than its limit
+      if (data.getLength() >= maxFileSizeBytes) {
         return DocumentTextContent.none(Status.TOO_LARGE);
       }
       String mimeType = resolveMimeType(node, content);
@@ -255,8 +268,13 @@ public class DocumentTextExtractor {
   /**
    * Whether text is extracted from files of this type: the very list the search
    * index extracts the content of (its {@code documents.content.indexing.mimetypes}
-   * parameter, read from the same property with the same default, matched the
-   * same way: the type against each expression as it is). The platform's
+   * parameter, read from the same property with the same default), each entry a
+   * regular expression the type must match. Two differences with the index, both
+   * more permissive: the type is normalised first (parameters such as
+   * {@code ;charset=} dropped, lower-cased) where the index matches the stored
+   * type as it is, and a file stored as {@code application/octet-stream} gets its
+   * type from its name (see resolveMimeType) where the index keeps the generic
+   * type and so extracts nothing. The platform's
    * reader service cannot answer that itself: it hands back a reader for any type,
    * one that simply finds no text in a type no parser handles.
    *
