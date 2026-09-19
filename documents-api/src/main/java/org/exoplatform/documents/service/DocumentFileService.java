@@ -690,6 +690,19 @@ public interface DocumentFileService {
   }
 
   /**
+   * Returns the text of a document file, from the search index when it already
+   * holds it, else extracted from the file itself, and when there is none, why.
+   * No permission is checked here: the caller checks the user can access the
+   * document first.
+   *
+   * @param documentId Document identifier
+   * @return the text of the file and where it came from, or why there is none
+   */
+  default DocumentTextContent getFileTextContent(String documentId) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Returns a document file content as Stream
    *
    * @param documentId Document identifier
