@@ -167,6 +167,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getFileContentAsText(docId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentTextContent getFileTextContent(String documentId) {
+    return documentFileStorage.getFileTextContent(documentId);
+  }
+
   @Override
   @SneakyThrows
   public InputStream getFileContentAsStream(String docId, long userIdentityId) {

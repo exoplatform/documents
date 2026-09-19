@@ -31,10 +31,12 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
+import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
@@ -143,6 +145,85 @@ public class JCRDocumentFileStorageTest {
                                                              activityManager,
                                                              bulkStorageActionService,
                                                              documentService);
+  }
+
+  @Test
+  public void getFileTextContentReadsTheSearchIndexFirst() {
+    DocumentTextExtractor textExtractor = mock(DocumentTextExtractor.class);
+    jcrDocumentFileStorage.setTextExtractor(textExtractor);
+    when(documentSearchServiceConnector.getFileContentAsText("doc")).thenReturn("indexed text");
+
+    DocumentTextContent content = jcrDocumentFileStorage.getFileTextContent("doc");
+
+    assertEquals("indexed text", content.text());
+    assertEquals(DocumentTextContent.Status.INDEXED, content.status());
+    assertEquals("indexed text", jcrDocumentFileStorage.getFileContentAsText("doc"));
+    verify(textExtractor, never()).extract(anyString());
+  }
+
+  @Test
+  public void getFileTextContentExtractsTheTextFromTheFileWhenTheIndexHasNone() {
+    DocumentTextExtractor textExtractor = mock(DocumentTextExtractor.class);
+    jcrDocumentFileStorage.setTextExtractor(textExtractor);
+    when(documentSearchServiceConnector.getFileContentAsText("doc")).thenReturn(null);
+    when(textExtractor.extract("doc")).thenReturn(DocumentTextContent.of("extracted", DocumentTextContent.Status.EXTRACTED));
+
+    assertEquals(DocumentTextContent.Status.EXTRACTED, jcrDocumentFileStorage.getFileTextContent("doc").status());
+    assertEquals("extracted", jcrDocumentFileStorage.getFileContentAsText("doc"));
+  }
+
+  @Test
+  public void getFileTextContentExtractsTheTextFromTheFileWhenTheIndexedTextIsBlank() {
+    DocumentTextExtractor textExtractor = mock(DocumentTextExtractor.class);
+    jcrDocumentFileStorage.setTextExtractor(textExtractor);
+    when(documentSearchServiceConnector.getFileContentAsText("doc")).thenReturn("  ");
+    when(textExtractor.extract("doc")).thenReturn(DocumentTextContent.of("extracted", DocumentTextContent.Status.EXTRACTED));
+
+    assertEquals("extracted", jcrDocumentFileStorage.getFileTextContent("doc").text());
+  }
+
+  @Test
+  public void getFileTextContentExtractsTheTextFromTheFileWhenTheIndexFails() {
+    DocumentTextExtractor textExtractor = mock(DocumentTextExtractor.class);
+    jcrDocumentFileStorage.setTextExtractor(textExtractor);
+    when(documentSearchServiceConnector.getFileContentAsText("doc")).thenThrow(new IllegalStateException("ES down"));
+    when(textExtractor.extract("doc")).thenReturn(DocumentTextContent.of("extracted", DocumentTextContent.Status.EXTRACTED));
+
+    assertEquals("extracted", jcrDocumentFileStorage.getFileTextContent("doc").text());
+  }
+
+  @Test
+  public void getFileContentAsTextIsNullWhenNeitherTheIndexNorTheFileGiveText() {
+    DocumentTextExtractor textExtractor = mock(DocumentTextExtractor.class);
+    jcrDocumentFileStorage.setTextExtractor(textExtractor);
+    when(documentSearchServiceConnector.getFileContentAsText("doc")).thenReturn(null);
+    when(textExtractor.extract("doc")).thenReturn(DocumentTextContent.none(DocumentTextContent.Status.UNSUPPORTED_FORMAT));
+
+    assertNull(jcrDocumentFileStorage.getFileContentAsText("doc"));
+    assertEquals(DocumentTextContent.Status.UNSUPPORTED_FORMAT, jcrDocumentFileStorage.getFileTextContent("doc").status());
+  }
+
+  @Test
+  public void getLongPropertyFallsBackToTheDefaultOnAnInvalidValue() {
+    assertEquals(5, JCRDocumentFileStorage.getLongProperty(property("5"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("abc"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("0"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("-3"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("99999999999999999999"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty(property("3000000000"), 10));
+    assertEquals(10, JCRDocumentFileStorage.getLongProperty("exo.documents.test.limit.absent", 10));
+  }
+
+  /**
+   * Sets a platform property of its own name, the platform caching read values.
+   *
+   * @param value the property value
+   * @return the property name
+   */
+  private static String property(String value) {
+    String name = "exo.documents.test.limit." + UUID.randomUUID();
+    PropertyManager.setProperty(name, value);
+    return name;
   }
 
   @Test
