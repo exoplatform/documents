@@ -53,6 +53,7 @@ import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
@@ -273,9 +274,52 @@ public class DocumentMcpTool implements McpToolPlugin {
     return toDocumentModel(document);
   }
 
+  /**
+   * Returns the text of a document the current user can access: from the search
+   * index when it holds it, else extracted from the file itself. When neither
+   * gives any text, the actual reason is raised rather than an empty answer, so
+   * the agent can tell the user why instead of guessing from the file name.
+   * <p>
+   * The reason never claims the file is still being indexed: the search index
+   * service exposes no way to know whether an indexing operation is pending for
+   * a file, and the file itself was just read without success. Only a busy
+   * extractor, a fact known for certain, is worded as worth another attempt.
+   *
+   * @param documentId the document identifier
+   * @return the text of the document
+   * @throws IllegalAccessException when the user cannot access the document
+   * @throws ObjectNotFoundException when the document does not exist
+   * @throws IllegalStateException when the document has no readable text, with the reason
+   */
   public String getDocumentContentById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkCanAccessDocument(documentId);
-    return documentFileService.getFileContentAsText(documentId);
+    DocumentTextContent content = documentFileService.getFileTextContent(documentId);
+    if (content != null && content.hasText()) {
+      return content.text();
+    }
+    throw new IllegalStateException(getNoTextMessage(documentId,
+                                                     content == null ? DocumentTextContent.Status.UNREADABLE
+                                                                     : content.status()));
+  }
+
+  /**
+   * Why a document has no text, worded for the agent to relay to the user.
+   *
+   * @param documentId the document identifier
+   * @param status why no text could be obtained
+   * @return the message of the exception raised to the agent
+   */
+  static String getNoTextMessage(String documentId, DocumentTextContent.Status status) {
+    String prefix = "The text of the document with id %s could not be extracted: ".formatted(documentId);
+    return switch (status) {
+    case UNSUPPORTED_FORMAT -> prefix + "its format is not supported for text extraction.";
+    case TOO_LARGE -> prefix + "the file is too large for its text to be read.";
+    case NO_TEXT -> prefix + "no text was found in the file (a scanned document or an image, for instance).";
+    case NOT_A_FILE -> "The document with id %s is not a file with a content, so it has no text.".formatted(documentId);
+    case BUSY -> prefix + "too many documents are being read at the moment; asking again in a little while may succeed.";
+    case TIMED_OUT -> prefix + "reading the file took too long.";
+    default -> prefix + "the file could not be read.";
+    };
   }
 
   public String getDocumentTranscriptionById(String documentId) throws IllegalAccessException, ObjectNotFoundException {

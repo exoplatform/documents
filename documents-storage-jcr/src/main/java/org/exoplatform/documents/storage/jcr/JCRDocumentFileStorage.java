@@ -40,20 +40,24 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.commons.utils.IOUtil;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
+import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
+import org.exoplatform.services.document.DocumentReaderService;
 import org.exoplatform.services.cms.documents.DocumentService;
 import org.exoplatform.services.cms.documents.NewDocumentTemplate;
 import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
@@ -149,6 +153,28 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private final BulkStorageActionService            bulkStorageActionService;
 
   private final DocumentService                     documentService;
+
+  /** Files of this many MB or larger are not read to extract their text on the fly. */
+  public static final String                        TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY     =
+                                                                                         "exo.documents.textExtraction.maxFileSizeMb";
+
+  /** The text extracted on the fly is cut at this many characters. */
+  public static final String                        TEXT_EXTRACTION_MAX_CHARS_PROPERTY       =
+                                                                                         "exo.documents.textExtraction.maxChars";
+
+  /** An on-the-fly text extraction taking longer than this many seconds is abandoned. */
+  public static final String                        TEXT_EXTRACTION_TIMEOUT_SECONDS_PROPERTY =
+                                                                                         "exo.documents.textExtraction.timeoutSeconds";
+
+  // the same as the search index's own content extraction: FileindexingConnector's
+  // documents.content.max.size.mb, not set by the platform configuration, so 10 MB
+  private static final long                         DEFAULT_TEXT_EXTRACTION_MAX_SIZE_MB      = 10;
+
+  private static final long                         DEFAULT_TEXT_EXTRACTION_MAX_CHARS        = 1_000_000;
+
+  private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
+
+  private volatile DocumentTextExtractor            textExtractor;
 
   private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
 
@@ -2923,9 +2949,85 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return null;
   }
 
+  /**
+   * {@inheritDoc} From the search index when it already holds it, else extracted
+   * from the file itself; null when neither gives any text, see
+   * {@link #getFileTextContent(String)} for why.
+   */
   @Override
   public String getFileContentAsText(String documentId) {
-    return documentSearchServiceConnector.getFileContentAsText(documentId);
+    return getFileTextContent(documentId).text();
+  }
+
+  /**
+   * {@inheritDoc} The search index is asked first, being the cheapest; a file
+   * saved a few seconds ago, or never indexed, is not there yet, so its text is
+   * then extracted from the file itself.
+   */
+  @Override
+  public DocumentTextContent getFileTextContent(String documentId) {
+    String indexedText;
+    try {
+      indexedText = documentSearchServiceConnector.getFileContentAsText(documentId);
+    } catch (RuntimeException e) {
+      // the index being unavailable is no reason not to read the file itself
+      LOG.debug("Could not read the indexed text of document {}, extracting it from the file", documentId, e);
+      indexedText = null;
+    }
+    if (StringUtils.isNotBlank(indexedText)) {
+      return DocumentTextContent.of(indexedText, DocumentTextContent.Status.INDEXED);
+    }
+    return getTextExtractor().extract(documentId);
+  }
+
+  /**
+   * The extractor reading a file's text when the search index does not hold it,
+   * created on first use with its limits read from the platform properties.
+   *
+   * @return the text extractor
+   */
+  DocumentTextExtractor getTextExtractor() {
+    DocumentTextExtractor extractor = textExtractor;
+    if (extractor == null) {
+      synchronized (this) {
+        extractor = textExtractor;
+        if (extractor == null) {
+          extractor = new DocumentTextExtractor(repositoryService,
+                                                CommonsUtils.getService(DocumentReaderService.class),
+                                                getLongProperty(TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY,
+                                                                DEFAULT_TEXT_EXTRACTION_MAX_SIZE_MB) * 1024 * 1024,
+                                                (int) Math.min(Integer.MAX_VALUE,
+                                                               getLongProperty(TEXT_EXTRACTION_MAX_CHARS_PROPERTY,
+                                                                               DEFAULT_TEXT_EXTRACTION_MAX_CHARS)),
+                                                getLongProperty(TEXT_EXTRACTION_TIMEOUT_SECONDS_PROPERTY,
+                                                                DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS) * 1000);
+          textExtractor = extractor;
+        }
+      }
+    }
+    return extractor;
+  }
+
+  /**
+   * Replaces the text extractor, for tests.
+   *
+   * @param textExtractor the extractor to use
+   */
+  void setTextExtractor(DocumentTextExtractor textExtractor) {
+    this.textExtractor = textExtractor;
+  }
+
+  /**
+   * Reads a positive whole-number platform property.
+   *
+   * @param name the property name
+   * @param defaultValue the value when the property is absent or invalid
+   * @return the property value
+   */
+  static long getLongProperty(String name, long defaultValue) {
+    long value = NumberUtils.toLong(StringUtils.trim(PropertyManager.getProperty(name)), defaultValue);
+    // zero, negative, or so large it would overflow once converted: invalid, like a non-number
+    return value > 0 && value < Integer.MAX_VALUE ? value : defaultValue;
   }
 
   @Override

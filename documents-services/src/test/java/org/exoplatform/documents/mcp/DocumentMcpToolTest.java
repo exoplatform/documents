@@ -56,6 +56,7 @@ import org.exoplatform.documents.mcp.model.DocumentVersionModel;
 import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.BreadCrumbItem;
+import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FileVersion;
@@ -217,9 +218,80 @@ public class DocumentMcpToolTest {
   @Test
   public void getDocumentContentById() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
-    when(documentFileService.getFileContentAsText(DOCUMENT_ID)).thenReturn("Hello world");
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.of("Hello world",
+                                                                                              DocumentTextContent.Status.INDEXED));
 
     assertEquals("Hello world", documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+  }
+
+  @Test
+  public void getDocumentContentByIdReturnsTheTextExtractedFromTheFile() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.of("Freshly saved",
+                                                                                              DocumentTextContent.Status.EXTRACTED));
+
+    assertEquals("Freshly saved", documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+  }
+
+  @Test
+  public void getDocumentContentByIdChecksAccessBeforeReadingAnyText() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenThrow(new IllegalAccessException("denied"));
+
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+    verify(documentFileService, never()).getFileTextContent(anyString());
+  }
+
+  @Test
+  public void getDocumentContentByIdStatesWhyThereIsNoText() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    assertNoTextMessage(DocumentTextContent.Status.UNSUPPORTED_FORMAT, "its format is not supported for text extraction.");
+    assertNoTextMessage(DocumentTextContent.Status.TOO_LARGE, "the file is too large for its text to be read.");
+    assertNoTextMessage(DocumentTextContent.Status.NO_TEXT, "no text was found in the file");
+    assertNoTextMessage(DocumentTextContent.Status.UNREADABLE, "the file could not be read.");
+    assertNoTextMessage(DocumentTextContent.Status.NOT_A_FILE, "is not a file with a content, so it has no text.");
+    assertNoTextMessage(DocumentTextContent.Status.BUSY, "too many documents are being read at the moment");
+    assertNoTextMessage(DocumentTextContent.Status.TIMED_OUT, "reading the file took too long.");
+  }
+
+  @Test
+  public void getDocumentContentByIdNeverClaimsTheFileIsBeingIndexed() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    for (DocumentTextContent.Status status : DocumentTextContent.Status.values()) {
+      if (status == DocumentTextContent.Status.INDEXED || status == DocumentTextContent.Status.EXTRACTED) {
+        continue;
+      }
+      when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.none(status));
+      IllegalStateException e = assertThrows(IllegalStateException.class,
+                                             () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+      assertFalse(e.getMessage().toLowerCase().contains("index"));
+      assertFalse(e.getMessage().toLowerCase().contains("try again"));
+    }
+  }
+
+  @Test
+  public void getDocumentContentByIdWithBlankTextRaisesRatherThanReturningNothing() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(null);
+
+    IllegalStateException e = assertThrows(IllegalStateException.class,
+                                           () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+    assertTrue(e.getMessage().endsWith("the file could not be read."));
+  }
+
+  /**
+   * Asserts the tool raises, for a document without text for the given reason,
+   * an exception whose message names that reason.
+   *
+   * @param status why the document has no text
+   * @param expected the part of the message stating that reason
+   * @throws Exception when the call fails otherwise
+   */
+  private void assertNoTextMessage(DocumentTextContent.Status status, String expected) throws Exception {
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.none(status));
+    IllegalStateException e = assertThrows(IllegalStateException.class,
+                                           () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+    assertTrue("'" + e.getMessage() + "' should state: " + expected, e.getMessage().contains(expected));
+    assertTrue(e.getMessage().contains(DOCUMENT_ID));
   }
 
   @Test
