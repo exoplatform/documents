@@ -330,12 +330,10 @@ export default {
       return new Date(this.file.date).toLocaleString(lang, options).split('/').join('-');
     },
     openInEditMode(file) {
-      const fileId = file.sourceID? file.sourceID: file.id;
-      this.$documentsUtils.openLink(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&backTo=${window.location.pathname}`, '_blank');
+      this.$documentsUtils.openLink(this.$documentsUtils.getEditorUrl(file, ''), '_blank');
     },
     openInReadOnlyMode(file) {
-      const fileId = file.sourceID? file.sourceID: file.id;
-      this.$documentsUtils.openLink(`${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/oeditor?docId=${fileId}&mode=view&backTo=${window.location.pathname}`, '_blank');
+      this.$documentsUtils.openLink(this.$documentsUtils.getEditorUrl(file, 'view'), '_blank');
     },
     openPreview() {
       this.loading = true;
