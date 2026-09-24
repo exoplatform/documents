@@ -84,11 +84,23 @@ export function getParentFolderUrl(file) {
       const parentIndex = pathParts.indexOf('Private');
       if (parentIndex !== -1) {
         folderPath = pathParts.slice(parentIndex, pathParts.length - 1).join('/');
-        folderPath = `${eXo.env.portal.defaultPath}/dashboard/drive/${folderPath}`;
+        folderPath = folderPath === 'Private' ? getPersonalDriveUrl() : `${getPersonalDriveUrl()}/${folderPath}`;
       }
     }
     return folderPath;
   }
+}
+
+export function getPersonalDriveUrl() {
+  const pathname = window.location.pathname;
+  const privateIndex = pathname.indexOf('/Private');
+  if (privateIndex !== -1) {
+    return pathname.substring(0, privateIndex);
+  }
+  if (!eXo.env.portal.spaceName && document.querySelector('.documents-application')) {
+    return pathname;
+  }
+  return `${eXo.env.portal.context}/${eXo.env.portal.metaPortalName}/documents`;
 }
 
 export function getEditorUrl(file, mode) {
