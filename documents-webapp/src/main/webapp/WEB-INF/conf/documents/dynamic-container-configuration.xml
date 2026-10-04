@@ -120,7 +120,7 @@
       <init-params>
         <value-param>
           <name>priority</name>
-          <value>0</value>
+          <value>1</value>
         </value-param>
         <value-param>
           <name>containerName</name>
