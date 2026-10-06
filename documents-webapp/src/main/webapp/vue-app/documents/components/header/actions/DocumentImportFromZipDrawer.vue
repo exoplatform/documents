@@ -112,12 +112,10 @@
                       @click="showCreatedFiles=!showCreatedFiles">
                       <v-icon
                         v-if="showCreatedFiles"
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-up chevron-icon" />
                       <v-icon
                         v-else
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-down chevron-icon" />
                     </v-btn>
@@ -150,12 +148,10 @@
                       @click="showIgnoredFiles=!showIgnoredFiles">
                       <v-icon
                         v-if="showIgnoredFiles"
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-up chevron-icon" />
                       <v-icon
                         v-else
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-down chevron-icon" />
                     </v-btn>
@@ -188,12 +184,10 @@
                       @click="showDuplicatedFiles=!showDuplicatedFiles">
                       <v-icon
                         v-if="showDuplicatedFiles"
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-up chevron-icon" />
                       <v-icon
                         v-else
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-down chevron-icon" />
                     </v-btn>
@@ -226,12 +220,10 @@
                       @click="showFailedFiles=!showFailedFiles">
                       <v-icon
                         v-if="showFailedFiles"
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-up chevron-icon" />
                       <v-icon
                         v-else
-                        color="grey"
                         size="16"
                         class="fas fa-chevron-down chevron-icon" />
                     </v-btn>
