@@ -48,13 +48,11 @@
       class="ma-auto d-flex pe-2">
       <v-icon
         v-if="userVisibility && userVisibility === 'edit' || user.permission === 'edit'"
-        color="grey lighten-1"
         :size="16">
         fas fa-edit
       </v-icon>
       <v-icon
         v-else
-        color="grey lighten-1"
         :size="16">
         fas fa-eye
       </v-icon>
@@ -65,7 +63,6 @@
       <v-icon
         :title="$t('documents.label.visibility.remove')"
         :size="16"
-        color="grey lighten-1"
         class="pe-5 iconStyle"
         @click="$emit('remove-user', user)">
         fas fa-trash

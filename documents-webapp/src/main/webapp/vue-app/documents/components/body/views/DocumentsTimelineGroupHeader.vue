@@ -6,7 +6,7 @@
       class="transparent no-border no-box-shadow ps-3"
       text
       @click="toggleFunction">
-      <v-icon class="text-light-color">{{ icon }}</v-icon>
+      <v-icon>{{ icon }}</v-icon>
       <v-divider vertical class="mx-2" />
       {{ label }}
     </v-btn>
