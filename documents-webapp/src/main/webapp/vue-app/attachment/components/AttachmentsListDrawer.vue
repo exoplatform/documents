@@ -8,7 +8,6 @@
         <div class="drawerTitle">
           <v-btn
             icon
-            color="grey"
             @click="closeAttachmentsListDrawer()">
             <v-icon>mdi-keyboard-backspace</v-icon>
           </v-btn>

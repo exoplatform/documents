@@ -12,7 +12,7 @@
           <v-icon
             v-bind="attrs"
             v-on="on"
-            class="text-sub-title d-none mx-0 px-0"
+            class="d-none mx-0 px-0"
             size="16"
             @click="displayDetails">
             fa-info-circle

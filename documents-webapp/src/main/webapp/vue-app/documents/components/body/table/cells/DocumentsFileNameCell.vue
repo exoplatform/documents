@@ -118,7 +118,7 @@
             <v-icon
               v-show="isMobile || menuDisplayed"
               :size="isMobile ? 14 : 18"
-              class="clickable text-sub-title"
+              class="clickable"
               :class="editNameMode ? '' : 'button-document-action'"
               @click="displayActionMenu($event)">
               mdi-dots-vertical
