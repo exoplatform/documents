@@ -33,12 +33,9 @@
         :title="$t('documents.tooltip.close.tree')"
         :aria-label="$t('documents.tooltip.close.tree')"
         @click.stop.prevent="$root.$emit('tree-view-expend', false)">
-        <img
-          alt=""
-          src="/social/images/sidebar.svg"
-          class="icon-default-color mb-1"
-          height="20px"
-          width="20px">
+        <i
+          class="icon-sidebar icon-default-color mb-1"
+          aria-hidden="true"></i>
       </v-btn>
     </v-card-title>
     <v-card-text class="px-0">
