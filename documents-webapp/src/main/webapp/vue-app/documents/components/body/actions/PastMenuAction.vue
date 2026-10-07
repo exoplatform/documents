@@ -26,7 +26,7 @@
         v-on="on"
         @click="past()">
         <v-icon
-          :class="!showPast?'text-disabled-color':''"
+          :class="!showPast?'icon-disabled-color':''"
           size="16"
           class="pe-1">
           fas fa-paste
