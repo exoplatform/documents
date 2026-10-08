@@ -8,7 +8,6 @@
           icon
           @click="changeVisibility">
           <v-icon
-            dark
             v-bind="attrs"
             v-on="on"
             size="13"
