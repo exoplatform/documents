@@ -426,6 +426,15 @@ export default {
       }
     },
     openFile() {
+      // The app the files belong to is asked first: it may open the file its own way,
+      // in which case it cancels the event and nothing more is done here.
+      const open = new CustomEvent('attachment-open', {
+        cancelable: true,
+        detail: {attachment: this.attachment, attachments: this.attachments},
+      });
+      if (!document.dispatchEvent(open)) {
+        return;
+      }
       if (this.openInEditor && this.isFileFillable && this.attachment.acl?.canEdit) {
         this.openFileInEditor('fillform');
       } else if (this.openInEditor && this.isFileEditable && this.attachment.acl?.canEdit) {
