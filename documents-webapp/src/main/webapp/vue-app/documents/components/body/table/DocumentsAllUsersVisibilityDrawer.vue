@@ -24,7 +24,6 @@
       <div class="d-flex">
         <v-icon
           size="16"
-          color="grey lighten-1"
           class="clickable"
           @click="close()">
           fas fa-arrow-left

@@ -11,12 +11,9 @@
         :title="$t('documents.tooltip.open.tree')"
         :aria-label="$t('documents.tooltip.open.tree')"
         @click.stop.prevent="openTreeView()">
-        <img
-          alt=""
-          src="/social/images/sidebar.svg"
-          class="icon-default-color pb-1"
-          height="20px"
-          width="20px">
+        <i
+          class="icon-sidebar icon-default-color pb-1"
+          aria-hidden="true"></i>
       </v-btn>
       <div
         v-if="!isMobile"

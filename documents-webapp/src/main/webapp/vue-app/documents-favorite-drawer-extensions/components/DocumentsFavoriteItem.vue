@@ -69,7 +69,7 @@
         small
         @keydown.enter.stop
         @click.stop.prevent="openInfoDrawer">
-        <v-icon size="16" class="text-sub-title">fa-info-circle</v-icon>
+        <v-icon size="16">fa-info-circle</v-icon>
       </v-btn>
       <documents-favorite-button
         :id="id"
