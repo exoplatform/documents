@@ -302,8 +302,7 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      },
-      "space_scope": { "object_arg": "folder_id", "resolver": "document", "id_format": "hex32" }
+      }
     },
     {
       "name": "get_folder_tree",
