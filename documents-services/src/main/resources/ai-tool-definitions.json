@@ -21,7 +21,8 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "space_arg": "space_id", "when_absent": "use_scope" }
     },
     {
       "name": "get_documents_by_folder_id",
