@@ -2047,6 +2047,106 @@ public class JCRDocumentFileStorageTest {
     verify(sessionProvider, times(1)).close();
   }
 
+  /**
+   * The group id comes from the path of a node of a space's {@code Documents}
+   * drive, the drive root included, and from nothing else: a personal drive,
+   * another folder of the space, a name that only starts like the drive, a
+   * same-name-sibling index, a nested space path and a null path give none.
+   * Mutants: the {@code Documents} segment dropped from the pattern; the
+   * pattern unanchored (a path that merely contains a drive).
+   */
+  @Test
+  public void spaceGroupIdOfDrivePathAcceptsTheDriveOfASpaceOnly() {
+    assertEquals("/spaces/team", JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents"));
+    assertEquals("/spaces/team", JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents/a/b.txt"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Pages/x"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documentsx"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents[2]/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team[2]/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/platform/administrators/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Users/j___/jo___/john/Private/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Trash/a/Groups/spaces/team/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces//Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath(null));
+  }
+
+  /**
+   * A node of a space's drive tells its space, as the system. Mutant: the
+   * path read from another node.
+   */
+  @Test
+  public void documentSpaceGroupIdOfANodeOfASpaceDrive() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node node = mock(Node.class);
+    when(node.getPath()).thenReturn("/Groups/spaces/team/Documents/reports/q3.txt");
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "abc")).thenReturn(node);
+
+    assertEquals("/spaces/team", jcrDocumentFileStorage.getDocumentSpaceGroupId("abc"));
+  }
+
+  /**
+   * A shortcut or a share link inside a space's drive belongs to no space: it
+   * stands for a node that may lie anywhere. Mutants: the {@code exo:symlink}
+   * check removed; the {@code exo:taxonomyLink} check removed.
+   */
+  @Test
+  public void documentSpaceGroupIdOfAShortcutIsNone() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node shortcut = mock(Node.class);
+    Node taxonomyLink = mock(Node.class);
+    when(shortcut.getPath()).thenReturn("/Groups/spaces/team/Documents/Shared/q3.txt");
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(taxonomyLink.getPath()).thenReturn("/Groups/spaces/team/Documents/links/q3.txt");
+    when(taxonomyLink.isNodeType(NodeTypeConstants.TAXONOMY_LINK)).thenReturn(true);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "shortcut")).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "taxonomy")).thenReturn(taxonomyLink);
+
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("shortcut"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("taxonomy"));
+  }
+
+  /**
+   * A node of a personal drive, of the trash, outside any drive, a missing
+   * node and a repository that fails give no space, and the session is closed
+   * each time.
+   */
+  @Test
+  public void documentSpaceGroupIdOfAnythingElseIsNone() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node personal = mock(Node.class);
+    Node trashed = mock(Node.class);
+    Node failing = mock(Node.class);
+    when(personal.getPath()).thenReturn("/Users/j___/jo___/john/Private/Documents/a");
+    when(trashed.getPath()).thenReturn("/Trash/a");
+    when(failing.getPath()).thenThrow(new RepositoryException("down"));
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "personal")).thenReturn(personal);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "trashed")).thenReturn(trashed);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "failing")).thenReturn(failing);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "missing")).thenReturn(null);
+
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("personal"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("trashed"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("failing"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("missing"));
+    verify(sessionProviderOfSpaceGroupId, times(4)).close();
+  }
+
+  private SessionProvider sessionProviderOfSpaceGroupId;
+
+  /**
+   * @return the system session the space group id is read with
+   */
+  private Session systemSessionForSpaceGroupId() throws Exception {
+    Session session = mock(Session.class);
+    sessionProviderOfSpaceGroupId = mock(SessionProvider.class);
+    ManageableRepository repository = mock(ManageableRepository.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProviderOfSpaceGroupId);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(sessionProviderOfSpaceGroupId.getSession("collaboration", repository)).thenReturn(session);
+    return session;
+  }
+
   private Value categoryValue(String value) throws Exception {
     Value jcrValue = mock(Value.class);
     when(jcrValue.getString()).thenReturn(value);

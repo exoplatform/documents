@@ -28,6 +28,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.jcr.*;
@@ -186,6 +188,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final String                              SPACE_PATH_PREFIX           = "/Groups/spaces/";
 
+
   private final SimpleDateFormat                    formatter                   = new SimpleDateFormat(DATE_FORMAT);
 
   private static final String                       GROUP_ADMINISTRATORS        = "*:/platform/administrators";
@@ -221,6 +224,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final Log                          LOG                         =
                                                         ExoLogger.getLogger(JCRDocumentFileStorage.class);
+
+  /** A node path in the {@code Documents} drive of a space, the space's group name captured. */
+  private static final Pattern                      SPACE_DRIVE_PATH            = Pattern.compile("/Groups/spaces/([^/\\[\\]]+)/Documents(?:/.*)?");
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -2565,6 +2571,39 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDocumentSpaceGroupId(String documentId) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null || node.isNodeType(NodeTypeConstants.EXO_SYMLINK) || node.isNodeType(NodeTypeConstants.TAXONOMY_LINK)) {
+        return null;
+      }
+      return spaceGroupIdOfDrivePath(node.getPath());
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.debug("The space of document '{}' couldn't be read", documentId, e);
+      return null;
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * @param path a node path
+   * @return the group id ({@code /spaces/<name>}) of the space whose
+   *         {@code Documents} drive the path is, or lies in, null for any
+   *         other path
+   */
+  static String spaceGroupIdOfDrivePath(String path) {
+    Matcher matcher = path == null ? null : SPACE_DRIVE_PATH.matcher(path);
+    return matcher != null && matcher.matches() ? "/spaces/" + matcher.group(1) : null;
   }
 
   @Override

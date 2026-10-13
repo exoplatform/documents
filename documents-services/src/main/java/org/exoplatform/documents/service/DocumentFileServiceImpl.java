@@ -827,6 +827,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getDocumentById(documentId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDocumentSpaceGroupId(String documentId) {
+    return documentFileStorage.getDocumentSpaceGroupId(documentId);
+  }
+
   @Override
   public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId) throws Exception {
     documentFileStorage.setDocumentVisibility(ownerId, documentID, hidden, getAclUserIdentity(authenticatedUserId));
