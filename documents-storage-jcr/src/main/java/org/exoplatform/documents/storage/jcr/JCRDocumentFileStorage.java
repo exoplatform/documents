@@ -188,7 +188,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final String                              SPACE_PATH_PREFIX           = "/Groups/spaces/";
 
-
   private final SimpleDateFormat                    formatter                   = new SimpleDateFormat(DATE_FORMAT);
 
   private static final String                       GROUP_ADMINISTRATORS        = "*:/platform/administrators";
