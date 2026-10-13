@@ -80,8 +80,7 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                                 "list_document_versions", List.of("document_id"),
                                                                 "get_documents_by_folder_id",
                                                                 List.of("folder_id", "files_only", "folders_only", "offset", "limit"),
-                                                                "list_folder_children", List.of("folder_id", "offset", "limit"),
-                                                                "get_folder_breadcrumb", List.of("folder_id"));
+                                                                "list_folder_children", List.of("folder_id", "offset", "limit"));
 
   /**
    * Writes by node id, whose whole effect stays in the space of that node.
@@ -101,6 +100,9 @@ public class DocumentToolDefinitionSpaceScopeTest {
    * <li>they search, size or list across spaces and the user's own drive:
    * {@code get_root_folder_for_user}, {@code search_documents},
    * {@code get_documents_size};</li>
+   * <li>{@code get_folder_breadcrumb} replaces an ancestor by a node taken
+   * from a navigation history that clients feed with any symlink id under any
+   * owner id, so it may name the folders of another space;</li>
    * <li>{@code get_folder_tree} walks the folders a shortcut stands for, down
    * to their children, with its default {@code with_children};</li>
    * <li>they name two nodes or a node and something else, or leave the node's
@@ -119,6 +121,7 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                     "attach_document_to_content",
                                                     "search_documents",
                                                     "get_folder_tree",
+                                                    "get_folder_breadcrumb",
                                                     "get_documents_size",
                                                     "upload_document",
                                                     "move_document",
