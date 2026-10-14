@@ -21,6 +21,7 @@
     <v-menu
       v-model="selectionsMenu"
       class="add-menu-btn width-full"
+      content-class="layout-drawer"
       close-on-click
       offset-y>
       <template #activator="{ on, attrs }">
