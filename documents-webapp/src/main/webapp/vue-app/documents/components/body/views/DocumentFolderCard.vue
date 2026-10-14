@@ -72,6 +72,7 @@
           </v-btn>  
           <v-menu
             v-model="menuDisplayed"
+            content-class="layout-drawer"
             bottom>
             <template #activator="{ on, attrs }">
               <v-btn
