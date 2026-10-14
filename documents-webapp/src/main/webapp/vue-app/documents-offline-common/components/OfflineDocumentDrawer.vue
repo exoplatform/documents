@@ -29,7 +29,7 @@
     <template #title>{{ $t('OfflineApp.pwa.documents.drawer.title') }}</template>
     <template v-if="drawer" #content>
       <v-card
-        :color="expanded ? 'light-grey-background-color' : 'transparent'"
+        :color="expanded ? 'page-background' : 'transparent'"
         min-height="calc(var(--100vh, 100vh) - 61px)"
         class="d-flex"
         flat>
