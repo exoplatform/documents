@@ -6,7 +6,7 @@
       {{ $t('documents.drawer.actions.menu.mobile.title') }}
     </template>
     <template slot="content">
-      <v-list dense>
+      <v-list dense class="transparent">
         <v-list-item
           v-for="(extension, i) in menuExtensions"
           :key="i"
