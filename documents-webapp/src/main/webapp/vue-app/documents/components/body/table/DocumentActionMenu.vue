@@ -1,6 +1,6 @@
 <template>
   <v-list 
-    class="py-0"
+    class="py-0 transparent"
     dense>
     <v-list-item
       v-for="(extension, i) in menuExtensions"
