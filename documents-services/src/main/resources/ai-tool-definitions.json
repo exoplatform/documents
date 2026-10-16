@@ -527,7 +527,7 @@
     {
       "name": "rename_document",
       "title": "Rename a DMS file or folder",
-      "description": "Renames a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "description": "Renames a file or folder. In a call limited to a space, a node the platform created for the space (creator __system) can't be renamed. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -557,7 +557,7 @@
     {
       "name": "move_document",
       "title": "Move a DMS file or folder",
-      "description": "Moves a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "description": "Moves a file or folder into a destination folder. In a call limited to a space, the destination folder must be in that space, and a node the platform created for the space (creator __system) can't be moved. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -586,12 +586,13 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"] },
       "require_approval": true
     },
     {
       "name": "copy_document",
       "title": "Copy a DMS file or folder",
-      "description": "Copies a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "description": "Copies a file or folder into a destination folder. In a call limited to a space, the destination folder must be in that space, and a node the platform created for the space (creator __system) can't be copied. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -615,12 +616,13 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"] },
       "require_approval": true
     },
     {
       "name": "duplicate_document",
       "title": "Duplicate a DMS file or folder",
-      "description": "Creates a copy of a file or folder in the same parent folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "description": "Creates a copy of a file or folder in the same parent folder. In a call limited to a space, a node the platform created for the space (creator __system) can't be duplicated. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -755,7 +757,7 @@
     {
       "name": "set_document_visibility",
       "title": "Set DMS document visibility",
-      "description": "Hides or shows a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "description": "Hides or shows a file or folder; hiding a folder may also hide some of its direct children. In a call limited to a space, only a folder, and not one the platform created for the space (creator __system). Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -779,6 +781,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["hidden"] },
       "require_approval": true
     },
     {
@@ -827,6 +830,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["content", "base64", "version_summary"] },
       "require_approval": true
     },
     {
@@ -864,7 +868,7 @@
     {
       "name": "create_document_shortcut",
       "title": "Create a shortcut to a DMS file or folder",
-      "description": "Creates a shortcut (symlink) to a document inside another folder, so the same file appears in a second location without being copied. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "description": "Creates a shortcut (symlink) to a document inside another folder, so the same file appears in a second location without being copied. In a call limited to a space, the destination folder must be in that space, and a node the platform created for the space (creator __system) can't be linked. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -893,6 +897,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id", "conflict_action"] },
       "require_approval": true
     },
     {
