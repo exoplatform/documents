@@ -57,8 +57,12 @@ import tools.jackson.databind.json.JsonMapper;
  * and none for a shortcut, a share link or a node outside a space's drive.
  * A read listing a folder shows its shortcut entries without following them;
  * opening what a shortcut stands for goes through the same resolver, which
- * refuses it. A write is declared only when its whole effect stays in the
- * space of the node it names and it takes a single node id.
+ * refuses it. A write is declared when its whole effect stays in the space
+ * of the node it names and it takes a single node id, and also a move, a
+ * copy or a shortcut, whose destination folder {@code DocumentMcpTool}
+ * checks is in the same space, a new version from inline content only, and
+ * the node's visibility (which may also mark some of a folder's direct
+ * children, all in the same space).
  */
 public class DocumentToolDefinitionSpaceScopeTest {
 
@@ -95,6 +99,39 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                                  "duplicate_document", List.of("document_id", "prefix"));
 
   /**
+   * Writes by node id that take a second node or content: the destination
+   * folder of a move, a copy
+   * or a shortcut, which {@code DocumentMcpTool} checks is in the call's
+   * space, a move always keeping both nodes on a name clash (its
+   * {@code createNewVersion} conflict action removes the moved node outright,
+   * past the trash and its shortcuts elsewhere); a new version from inline
+   * content or bytes, never a url or a chat attachment; and the node's
+   * visibility, which marks the node and, for a folder, possibly some of its
+   * direct children, all in the node's space.
+   * The id's argument first, then the accepted ones.
+   */
+  private static final Map<String, List<String>> SECOND_NODE_WRITES =
+                                                                     Map.of("move_document",
+                                                                            List.of("document_id", "destination_folder_id"),
+                                                                            "copy_document", List.of("document_id", "destination_folder_id"),
+                                                                            "create_document_shortcut",
+                                                                            List.of("document_id", "destination_folder_id", "conflict_action"),
+                                                                            "set_document_visibility", List.of("document_id", "hidden"),
+                                                                            "add_document_version",
+                                                                            List.of("document_id", "content", "base64", "version_summary"));
+
+  /**
+   * The schema arguments of {@link #SECOND_NODE_WRITES} the declarations
+   * refuse: a move's conflict action, and a new version's url and chat
+   * attachment.
+   */
+  private static final Map<String, List<String>> REFUSED_ARGUMENTS =
+                                                                    Map.of("move_document",
+                                                                           List.of("conflict_action"),
+                                                                           "add_document_version",
+                                                                           List.of("url", "attachment_object_type", "attachment_object_id"));
+
+  /**
    * Tools that must stay refused under a space scope, and why:
    * <ul>
    * <li>they search, size or list across spaces and the user's own drive:
@@ -105,13 +142,11 @@ public class DocumentToolDefinitionSpaceScopeTest {
    * owner id, so it may name the folders of another space;</li>
    * <li>{@code get_folder_tree} walks the folders a shortcut stands for, down
    * to their children, with its default {@code with_children};</li>
-   * <li>they name two nodes or a node and something else, or leave the node's
-   * space: {@code move_document}, {@code copy_document},
-   * {@code create_document_shortcut}, {@code share_document},
-   * {@code create_public_link}, {@code attach_document_to_content},
-   * {@code update_version_summary} and {@code restore_document_version} (a
-   * version id of any node), {@code add_version}, {@code upload_document}
-   * (a url or a chat attachment), {@code set_document_visibility};</li>
+   * <li>they name a node and something else, or leave the node's space:
+   * {@code share_document}, {@code create_public_link},
+   * {@code attach_document_to_content}, {@code update_version_summary} and
+   * {@code restore_document_version} (a version id of any node),
+   * {@code upload_document} (a url or a chat attachment);</li>
    * <li>{@code delete_document} trashes the node and removes the shortcuts
    * and shares of it that lie in other places, {@code undo_delete_document}
    * names a node of the trash, and the favorites belong to the user.</li>
@@ -124,16 +159,11 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                     "get_folder_breadcrumb",
                                                     "get_documents_size",
                                                     "upload_document",
-                                                    "move_document",
-                                                    "copy_document",
                                                     "delete_document",
                                                     "undo_delete_document",
                                                     "restore_document_version",
                                                     "update_version_summary",
-                                                    "set_document_visibility",
-                                                    "add_document_version",
                                                     "create_public_link",
-                                                    "create_document_shortcut",
                                                     "share_document",
                                                     "favorite_document",
                                                     "unfavorite_document");
@@ -153,6 +183,7 @@ public class DocumentToolDefinitionSpaceScopeTest {
                               .collect(Collectors.toSet());
     Set<String> expected = new HashSet<>(READS.keySet());
     expected.addAll(WRITES.keySet());
+    expected.addAll(SECOND_NODE_WRITES.keySet());
     expected.add(ROOT_BY_SPACE);
     assertEquals(expected, declared);
     Set<String> others = all.keySet().stream().filter(name -> !declared.contains(name)).collect(Collectors.toSet());
@@ -169,6 +200,62 @@ public class DocumentToolDefinitionSpaceScopeTest {
 
     READS.forEach((name, args) -> assertObjectDeclaration(all.get(name), name, args, false));
     WRITES.forEach((name, args) -> assertObjectDeclaration(all.get(name), name, args, true));
+    SECOND_NODE_WRITES.forEach((name, args) -> {
+      SimpleToolDefinition tool = all.get(name);
+      SpaceScopeDeclaration scope = tool.getSpaceScope();
+      assertTrue(name, tool.isRequireApproval());
+      assertFalse(name, McpToolSpaceScopeService.isReadTool(tool));
+      assertTrue(name, scope.isWellFormedFor(true));
+      assertTrue(name, scope.isObjectKind());
+      assertEquals(name, "hex32", scope.getIdFormat());
+      assertEquals(name, DocumentSpaceScopeResolver.NAME, scope.getResolver());
+      assertEquals(name, args.get(0), scope.getObjectArg());
+      assertEquals(name, args.subList(1, args.size()), scope.getAllowedArgs());
+      REFUSED_ARGUMENTS.getOrDefault(name, List.of())
+                       .forEach(argument -> assertFalse(name + " " + argument, scope.getAllowedArgs().contains(argument)));
+    });
+  }
+
+  /**
+   * Through the real space scope service, a move, a copy, a shortcut, a
+   * visibility change and a new version of a node of the call's space run as
+   * an approved proposal with the arguments they accept, and are refused for
+   * a node of another space, outside a proposal, and with an argument the
+   * declaration refuses: a username for each, a move's conflict action, and
+   * a url or a chat attachment for a new version. The destination folder is not the space
+   * scope's to check: {@code DocumentMcpTool} checks it.
+   * Mutants: a declaration dropped, its object argument changed, or an
+   * argument added to the accepted ones (the url above all).
+   */
+  @Test
+  public void secondNodeWritesReachTheNodesOfTheSpaceOnly() {
+    Map<String, SimpleToolDefinition> all = shippedTools();
+    McpToolSpaceScopeService service = new McpToolSpaceScopeService(providerOf(resolver()));
+    ActingIdentity reader = ActingIdentity.agent("agent-docs", "DOCS", Origin.MENTION, SPACE_ID);
+    ActingIdentity proposal = ActingIdentity.agent("agent-docs", "DOCS", Origin.PROPOSAL, SPACE_ID);
+    Map<String, String> values = Map.of("destination_folder_id", "\"" + OTHER_NODE_ID + "\"",
+                                        "conflict_action", "\"keepBoth\"",
+                                        "hidden", "true",
+                                        "content", "\"v2\"",
+                                        "base64", "\"AAAA\"",
+                                        "version_summary", "\"Second draft\"");
+
+    SECOND_NODE_WRITES.forEach((name, args) -> {
+      SimpleToolDefinition tool = all.get(name);
+      StringBuilder rest = new StringBuilder();
+      args.subList(1, args.size()).forEach(arg -> rest.append(",\"").append(arg).append("\":").append(values.get(arg)));
+      String inSpace = "{\"document_id\":\"%s\"%s}".formatted(NODE_ID, rest);
+      assertEquals(name, inSpace, service.enforce(name, tool, inSpace, proposal));
+      assertThrows(name, SpaceScopeRefusedException.class, () -> service.enforce(name, tool, inSpace, reader));
+      String otherSpace = "{\"document_id\":\"%s\"%s}".formatted(OTHER_NODE_ID, rest);
+      assertThrows(name, SpaceScopeRefusedException.class, () -> service.enforce(name, tool, otherSpace, proposal));
+      String withUser = "{\"document_id\":\"%s\"%s,\"username\":\"mary\"}".formatted(NODE_ID, rest);
+      assertThrows(name, SpaceScopeRefusedException.class, () -> service.enforce(name, tool, withUser, proposal));
+      REFUSED_ARGUMENTS.getOrDefault(name, List.of()).forEach(argument -> {
+        String refused = "{\"document_id\":\"%s\",\"%s\":\"x\"}".formatted(NODE_ID, argument);
+        assertThrows(name + " " + argument, SpaceScopeRefusedException.class, () -> service.enforce(name, tool, refused, proposal));
+      });
+    });
   }
 
   /**
