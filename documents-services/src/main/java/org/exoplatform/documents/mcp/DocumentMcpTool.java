@@ -158,17 +158,25 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      PARENT_FOLDER_NOT_FOUND_MESSAGE =
                                                                    "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_for_user, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
 
+  /** The refusal of an unknown space id, saying how to find the space. */
   private static final String      MSG_SPACE_NOT_FOUND    =
                                                           "Space with id %s doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.";
 
+  /** The refusal of a space given both by id and by name. */
   private static final String      MSG_SPACE_ID_OR_NAME   = "Pass either space_id or space_name, not both.";
 
+  /** The refusal of a call that gives no space where one is required. */
   private static final String      MSG_SPACE_REQUIRED     =
                                                           "Pass the space: its space_name (the space's name) or its space_id; get_my_spaces lists your spaces.";
 
+  /**
+   * The refusal of a space name naming another space than the one the call is
+   * limited to, worded as the space scope refuses another space's id.
+   */
   private static final String      MSG_NAME_OUTSIDE_SCOPE =
                                                           "Not executed: while this run is limited to the space with id %s, '%s' can only reach that space, and the space_name '%s' names another one. Call it again without space_name, or answer from what you already have.";
 
+  /** The refusal of a space name when the call's space can't be read. */
   private static final String      MSG_NAME_SCOPE_UNREADABLE =
                                                              "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
 
@@ -1258,7 +1266,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    *
    * @param documentId the id of the file to share (get it from the read tools)
    * @param username the username to share the document with (mutually exclusive
-   *          with space_id)
+   *          with spaceId and spaceName)
    * @param spaceId the id of the space to share the document with (mutually
    *          exclusive with username and spaceName)
    * @param spaceName the name of the space to share the document with, one of
