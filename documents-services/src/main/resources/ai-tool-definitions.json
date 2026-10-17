@@ -3,18 +3,19 @@
     {
       "name": "get_root_folder_by_space",
       "title": "Get DMS root folder of a given space",
-      "description": "Retrieves the root folder associated with a specific space.",
+      "description": "Retrieves the root folder of a space's documents. Give the space either by its space_name (its name, as the user says it) or by its space_id, not both. A space_name is looked up among the spaces you're a member of; when it matches none or several, the error lists the candidates with their space_id. Never guess a space_id: pass the space_name, or find the id with get_my_spaces.",
       "input_schema": {
         "type": "object",
         "properties": {
           "space_id": {
             "type": "integer",
-            "description": "space id for which the root folder is requested."
+            "description": "The id of the space whose root folder is requested. Leave it out when you pass space_name."
+          },
+          "space_name": {
+            "type": "string",
+            "description": "The name of the space whose root folder is requested, e.g. 'Legal'. Case and surrounding spaces don't matter. Leave it out when you pass space_id."
           }
-        },
-        "required": [
-          "space_id"
-        ]
+        }
       },
       "annotations": {
         "readOnlyHint": true,
@@ -219,7 +220,11 @@
           },
           "space_id": {
             "type": "integer",
-            "description": "Optional space identifier to restrict search scope."
+            "description": "Optional id of the space to search in. Leave it out when you pass space_name."
+          },
+          "space_name": {
+            "type": "string",
+            "description": "Optional name of the space to search in, e.g. 'Legal', looked up among the spaces you're a member of. Leave it out when you pass space_id."
           },
           "parent_folder_id": {
             "type": "string",
@@ -903,7 +908,7 @@
     {
       "name": "share_document",
       "title": "Share a DMS file with a user or space",
-      "description": "Shares a document with another user or with a space: the recipient is granted read access and gets the file in their 'Shared' folder. Provide exactly one recipient: either username or space_id. Requires edit permission on the document. Call get_document_by_id first to get the document_id, search_users for a username, or get_my_spaces for a space_id.",
+      "description": "Shares a document with another user or with a space: the recipient is granted read access and gets the file in their 'Shared' folder. Provide exactly one recipient: username, space_id or space_name. Requires edit permission on the document. Call get_document_by_id first to get the document_id, search_users for a username; a space can be given by its space_name, looked up among the spaces you're a member of, or by its space_id from get_my_spaces.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -913,11 +918,15 @@
           },
           "username": {
             "type": "string",
-            "description": "The username to share the document with (mutually exclusive with space_id)."
+            "description": "The username to share the document with (mutually exclusive with space_id and space_name)."
           },
           "space_id": {
             "type": "integer",
-            "description": "The id of the space to share the document with (mutually exclusive with username)."
+            "description": "The id of the space to share the document with (mutually exclusive with username and space_name)."
+          },
+          "space_name": {
+            "type": "string",
+            "description": "The name of the space to share the document with, e.g. 'Legal', one of the spaces you're a member of (mutually exclusive with username and space_id)."
           },
           "notify": {
             "type": "boolean",
