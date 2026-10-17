@@ -288,6 +288,55 @@ public class DocumentToolDefinitionSpaceScopeTest {
   }
 
   /**
+   * Through the real space scope service, a call limited to a space can't
+   * name a space by its name: {@code space_name} isn't an argument the root
+   * folder's declaration accepts, so the server refuses it before the tool
+   * runs, whichever space the name designates, alone or beside the scope's
+   * own {@code space_id}; the scope's space is reached by leaving the space
+   * out. A name can't stand in for an out-of-scope id.
+   * Mutants: {@code space_name} added to the accepted arguments.
+   */
+  @Test
+  public void aCallLimitedToASpaceCannotNameASpace() {
+    Map<String, SimpleToolDefinition> all = shippedTools();
+    SimpleToolDefinition root = all.get(ROOT_BY_SPACE);
+    McpToolSpaceScopeService service = new McpToolSpaceScopeService(providerOf(resolver()));
+    ActingIdentity reader = ActingIdentity.agent("agent-docs", "DOCS", Origin.MENTION, SPACE_ID);
+
+    for (String input : List.of("{\"space_name\":\"Marketing\"}",
+                                "{\"space_name\":\"Legal\"}",
+                                "{\"space_id\":12,\"space_name\":\"Marketing\"}",
+                                "{\"space_id\":13}")) {
+      SpaceScopeRefusedException e = assertThrows(input,
+                                                   SpaceScopeRefusedException.class,
+                                                   () -> service.enforce(ROOT_BY_SPACE, root, input, reader));
+      assertTrue(e.getMessage(), e.getMessage().contains("limited to the space with id 12"));
+    }
+    assertEquals("{\"space_id\":12}", service.enforce(ROOT_BY_SPACE, root, "{}", reader));
+  }
+
+  /**
+   * The tools taking a space accept it by its id or by its name, both
+   * optional in the schema, and say not to guess an id; the root folder of a
+   * space requires neither, so the scope fills its space in.
+   * Mutants: a {@code space_name} property dropped, or {@code space_id}
+   * required again.
+   */
+  @Test
+  public void theSpaceToolsTakeASpaceByIdOrByName() {
+    Map<String, SimpleToolDefinition> all = shippedTools();
+    for (String name : List.of(ROOT_BY_SPACE, "search_documents", "share_document")) {
+      JsonNode schema = JsonMapper.builder().build().readTree(all.get(name).getInputSchema());
+      assertEquals(name, "integer", schema.path("properties").path("space_id").path("type").asString());
+      assertEquals(name, "string", schema.path("properties").path("space_name").path("type").asString());
+      Set<String> required = new HashSet<>();
+      schema.path("required").forEach(node -> required.add(node.asString()));
+      assertFalse(name, required.contains("space_id") || required.contains("space_name"));
+    }
+    assertTrue(all.get(ROOT_BY_SPACE).getDescription().contains("Never guess a space_id"));
+  }
+
+  /**
    * Checks one declared tool against the real service.
    *
    * @param service the real space scope service
