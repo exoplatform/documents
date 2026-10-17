@@ -162,6 +162,20 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private static final java.util.regex.Pattern INVALID_TITLE_CHARACTERS = java.util.regex.Pattern.compile("[<\\\\>:\"/|?*]");
 
+  private static final String      MSG_SPACE_NOT_FOUND    =
+                                                          "Space with id %s doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.";
+
+  private static final String      MSG_SPACE_ID_OR_NAME   = "Pass either space_id or space_name, not both.";
+
+  private static final String      MSG_SPACE_REQUIRED     =
+                                                          "Pass the space: its space_name (the space's name) or its space_id; get_my_spaces lists your spaces.";
+
+  private static final String      MSG_NAME_OUTSIDE_SCOPE =
+                                                          "Not executed: while this run is limited to the space with id %s, '%s' can only reach that space, and the space_name '%s' names another one. Call it again without space_name, or answer from what you already have.";
+
+  private static final String      MSG_NAME_SCOPE_UNREADABLE =
+                                                             "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
+
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
 
@@ -217,6 +231,9 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private final FavoriteService     favoriteService;
 
+  /** Finds a space by its name among the calling user's spaces. */
+  private final SpaceNameResolver   spaceNameResolver;
+
   public DocumentMcpTool(DocumentFileService documentFileService,
                          AttachmentService attachmentService,
                          org.exoplatform.social.attachment.AttachmentService socialAttachmentService,
@@ -243,6 +260,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     this.uploadService = uploadService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.favoriteService = favoriteService;
+    this.spaceNameResolver = new SpaceNameResolver(spaceService);
   }
 
   /**
@@ -316,9 +334,77 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
-  public DocumentFolderModel getRootFolderBySpace(long spaceId) throws ObjectNotFoundException, IllegalAccessException {
-    FolderNode spaceRootFolder = documentFileService.getSpaceRootFolder(spaceId, getCurrentUserAclIdentity());
+  /**
+   * Reads the root folder of a space's documents, the space given by its id
+   * or by its name, exactly one of them. A name is looked up among the spaces
+   * the user is a member of, and nothing is guessed.
+   *
+   * @param spaceId the space's id, null when the space is given by its name
+   * @param spaceName the space's name, blank when the space is given by its
+   *          id
+   * @return the space's root folder
+   * @throws ObjectNotFoundException when the space doesn't exist, or no space
+   *           of the user carries the name: the message says how to find it
+   * @throws IllegalAccessException when the user can't view the space, or a
+   *           call limited to a space names another one
+   * @throws IllegalArgumentException when both or neither are given, or
+   *           several of the user's spaces carry the name
+   */
+  public DocumentFolderModel getRootFolderBySpace(Long spaceId, String spaceName) throws ObjectNotFoundException,
+                                                                                  IllegalAccessException {
+    Long resolvedSpaceId = resolveSpaceId(spaceId, spaceName, "get_root_folder_by_space");
+    if (resolvedSpaceId == null) {
+      throw new IllegalArgumentException(MSG_SPACE_REQUIRED);
+    }
+    FolderNode spaceRootFolder;
+    try {
+      spaceRootFolder = documentFileService.getSpaceRootFolder(resolvedSpaceId, getCurrentUserAclIdentity());
+    } catch (ObjectNotFoundException e) {
+      throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(resolvedSpaceId));
+    }
     return toDocumentFolderModel(spaceRootFolder);
+  }
+
+  /**
+   * Tells which space a call names, by its id or by its name, at most one of
+   * them. A name is looked up among the spaces the user is a member of; in a
+   * call limited to a space, a name of another space is refused as the space
+   * scope refuses another space's id, and one whose space can't be read is
+   * refused too.
+   *
+   * @param spaceId the space's id, null or not positive when not given
+   * @param spaceName the space's name, blank when not given
+   * @param toolName the tool the call runs, named in a refusal
+   * @return the space's id, null when neither is given
+   * @throws ObjectNotFoundException when no space of the user carries the name
+   * @throws IllegalAccessException when a call limited to a space names
+   *           another one, or its space can't be read
+   * @throws IllegalArgumentException when both are given, or several of the
+   *           user's spaces carry the name
+   */
+  private Long resolveSpaceId(Long spaceId, String spaceName, String toolName) throws ObjectNotFoundException,
+                                                                               IllegalAccessException {
+    boolean hasId = spaceId != null && spaceId > 0;
+    boolean hasName = StringUtils.isNotBlank(spaceName);
+    if (hasId && hasName) {
+      throw new IllegalArgumentException(MSG_SPACE_ID_OR_NAME);
+    } else if (hasId) {
+      return spaceId;
+    } else if (!hasName) {
+      return null;
+    }
+    Long scopeSpaceId;
+    try {
+      scopeSpaceId = getScopeSpaceId();
+    } catch (IllegalStateException e) {
+      throw new IllegalAccessException(MSG_NAME_SCOPE_UNREADABLE);
+    }
+    Space space = spaceNameResolver.resolve(spaceName, getCurrentUserName());
+    Long resolvedSpaceId = Long.valueOf(space.getId());
+    if (scopeSpaceId != null && !scopeSpaceId.equals(resolvedSpaceId)) {
+      throw new IllegalAccessException(MSG_NAME_OUTSIDE_SCOPE.formatted(scopeSpaceId, toolName, spaceName.trim()));
+    }
+    return resolvedSpaceId;
   }
 
   /**
@@ -444,8 +530,28 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Searches the documents the user can read, optionally in one space, given
+   * by its id or by its name (at most one of them), or under one folder.
+   *
+   * @param query the full-text query
+   * @param spaceId the space to search in, null for none
+   * @param spaceName the name of the space to search in, blank for none
+   * @param parentFolderId the folder to search under, which wins over the
+   *          space
+   * @param offset the first result
+   * @param limit the most results
+   * @param isFavorites true to search the user's favorites only
+   * @return the matching documents
+   * @throws ObjectNotFoundException when the space doesn't exist, or no space
+   *           of the user carries the name
+   * @throws IllegalAccessException when the user can't view the space
+   * @throws IllegalArgumentException when both a space id and a name are
+   *           given, or several of the user's spaces carry the name
+   */
   public List<DocumentFileModel> searchDocuments(String query,
                                                  Long spaceId,
+                                                 String spaceName,
                                                  String parentFolderId,
                                                  Integer offset,
                                                  Integer limit,
@@ -455,14 +561,15 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (isFavorites != null && isFavorites.booleanValue()) {
       filter.setFavorites(true);
     }
+    Long searchedSpaceId = resolveSpaceId(spaceId, spaceName, "search_documents");
     if (StringUtils.isNotBlank(parentFolderId)) {
       filter.setParentFolderId(parentFolderId);
-    } else if (spaceId != null && spaceId > 0) {
-      Space space = spaceService.getSpaceById(String.valueOf(spaceId));
+    } else if (searchedSpaceId != null) {
+      Space space = spaceService.getSpaceById(String.valueOf(searchedSpaceId));
       if (space == null) {
-        throw new ObjectNotFoundException("Space with id %s not found. Use 'search_my_spaces' tool to check accessible spaces");
+        throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(searchedSpaceId));
       } else if (!spaceService.canViewSpace(space, getCurrentUserName())) {
-        throw new IllegalAccessException("Space with id %s not accessbile for current user. Use 'search_my_spaces' tool to check accessible spaces");
+        throw new IllegalAccessException("Space with id %s isn't accessible to you. Use get_my_spaces to find your spaces.".formatted(searchedSpaceId));
       }
       Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
       filter.setOwnerId(spaceIdentity.getIdentityId());
@@ -1154,25 +1261,34 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * Shares a document with another user or with a space: the recipient is GRANTED
    * read access to the file and gets it in their "Shared" folder. Provide exactly
-   * one of <code>username</code> or <code>spaceId</code>. Requires edit permission
-   * on the document.
+   * one of <code>username</code>, <code>spaceId</code> or <code>spaceName</code>.
+   * Requires edit permission on the document.
    *
    * @param documentId the id of the file to share (get it from the read tools)
    * @param username the username to share the document with (mutually exclusive
    *          with space_id)
    * @param spaceId the id of the space to share the document with (mutually
-   *          exclusive with username)
+   *          exclusive with username and spaceName)
+   * @param spaceName the name of the space to share the document with, one of
+   *          the spaces the user is a member of (mutually exclusive with
+   *          username and spaceId)
    * @param notify whether to notify the recipient; defaults to true
+   * @throws IllegalAccessException when the user can't edit the document
+   * @throws ObjectNotFoundException when the document, the user or the space
+   *           doesn't exist, or no space of the user carries the name
+   * @throws IllegalArgumentException when not exactly one recipient is given,
+   *           or several of the user's spaces carry the name
    */
   public void shareDocument(String documentId,
                             String username,
                             Long spaceId,
+                            String spaceName,
                             Boolean notify) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode node = checkCanAccessDocument(documentId);
     boolean hasUser = StringUtils.isNotBlank(username);
-    boolean hasSpace = spaceId != null && spaceId > 0;
+    boolean hasSpace = spaceId != null && spaceId > 0 || StringUtils.isNotBlank(spaceName);
     if (hasUser == hasSpace) {
-      throw new IllegalArgumentException("Provide exactly one recipient: either 'username' or 'space_id', not both and not none.");
+      throw new IllegalArgumentException("Provide exactly one recipient: either 'username', 'space_id' or 'space_name', not several and not none.");
     }
     if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot share it.".formatted(documentId));
@@ -1185,10 +1301,10 @@ public class DocumentMcpTool implements McpToolPlugin {
             .formatted(username));
       }
     } else {
-      Space space = spaceService.getSpaceById(String.valueOf(spaceId));
+      Long recipientSpaceId = resolveSpaceId(spaceId, spaceName, "share_document");
+      Space space = spaceService.getSpaceById(String.valueOf(recipientSpaceId));
       if (space == null) {
-        throw new ObjectNotFoundException("Space with id %s not found. Use get_my_spaces to check accessible spaces."
-            .formatted(spaceId));
+        throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(recipientSpaceId));
       }
       destIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
     }

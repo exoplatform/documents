@@ -431,7 +431,7 @@ public class DocumentMcpToolTest {
   public void getRootFolderBySpace() throws Exception {
     when(documentFileService.getSpaceRootFolder(eq(SPACE_ID), eq(currentIdentity))).thenReturn(folderNode(FOLDER_ID));
 
-    DocumentFolderModel model = documentMcpTool.getRootFolderBySpace(SPACE_ID);
+    DocumentFolderModel model = documentMcpTool.getRootFolderBySpace(SPACE_ID, null);
 
     assertNotNull(model);
     assertEquals(FOLDER_ID, model.getId());
@@ -604,7 +604,7 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null);
+    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null);
 
     assertNotNull(models);
     assertEquals(1, models.size());
@@ -616,7 +616,7 @@ public class DocumentMcpToolTest {
     when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(null);
 
     assertThrows(ObjectNotFoundException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null));
   }
 
   @Test
@@ -628,7 +628,7 @@ public class DocumentMcpToolTest {
     when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
 
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null));
   }
 
   @Test
@@ -1717,7 +1717,7 @@ public class DocumentMcpToolTest {
                                                              new org.exoplatform.social.core.identity.model.Identity("200");
     when(identityManager.getOrCreateUserIdentity("bob")).thenReturn(bob);
 
-    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null);
+    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null, null);
 
     // Must route through updatePermissions (grant + share), not the bare shareDocument
     // that only copies the recipient's pre-existing permissions onto the symlink.
@@ -1745,7 +1745,7 @@ public class DocumentMcpToolTest {
                                                                        new org.exoplatform.social.core.identity.model.Identity("300");
     when(identityManager.getOrCreateSpaceIdentity("engineering")).thenReturn(spaceIdentity);
 
-    documentMcpTool.shareDocument(DOCUMENT_ID, null, SPACE_ID, false);
+    documentMcpTool.shareDocument(DOCUMENT_ID, null, SPACE_ID, null, false);
 
     // notify=false -> the recipient is in toShare (granted access) but not in toNotify.
     verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
@@ -1759,9 +1759,9 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
 
     // neither recipient
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, null, null, null));
     // both recipients
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", SPACE_ID, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", SPACE_ID, null, null));
   }
 
   @Test
@@ -1769,7 +1769,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
 
-    assertThrows(IllegalAccessException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null, null));
   }
 
   @Test
@@ -1800,7 +1800,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(node);
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
 
-    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null);
+    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null, null);
 
     verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
                                                   argThat((NodePermission np) -> np.getPermissions()
@@ -1870,6 +1870,171 @@ public class DocumentMcpToolTest {
     doThrow(new ObjectNotFoundException("not a favorite")).when(favoriteService).deleteFavorite(any());
 
     assertThrows(IllegalStateException.class, () -> documentMcpTool.unfavoriteDocument(DOCUMENT_ID));
+  }
+
+  /**
+   * The root folder of a space is found by the space's name, whatever its
+   * case and surrounding whitespace, among the user's spaces, and read by the
+   * id the name resolves to.
+   * Mutants: the name ignored, or resolved to another space.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getRootFolderBySpaceName() throws Exception {
+    memberOfLegalAndMarketing();
+    when(documentFileService.getSpaceRootFolder(eq(6L), eq(currentIdentity))).thenReturn(folderNode(FOLDER_ID));
+
+    assertEquals(FOLDER_ID, documentMcpTool.getRootFolderBySpace(null, "  legal ").getId());
+    assertEquals(FOLDER_ID, documentMcpTool.getRootFolderBySpace(0L, "LEGAL").getId());
+  }
+
+  /**
+   * A space given both by id and by name, or by neither, is refused before
+   * any space is read.
+   * Mutants: one of the two taken silently, or a missing space read as 0.
+   */
+  @Test
+  public void getRootFolderBySpaceTakesExactlyOneOfIdAndName() throws Exception {
+    memberOfLegalAndMarketing();
+
+    IllegalArgumentException both = assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.getRootFolderBySpace(6L, "Legal"));
+    assertTrue(both.getMessage(), both.getMessage().contains("not both"));
+    IllegalArgumentException neither = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.getRootFolderBySpace(null, " "));
+    assertTrue(neither.getMessage(), neither.getMessage().contains("space_name"));
+    verify(documentFileService, never()).getSpaceRootFolder(anyLong(), any());
+  }
+
+  /**
+   * An unknown space id is answered with how to find the space: by its name,
+   * or with get_my_spaces.
+   * Mutants: the storage's bare message passed through.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getRootFolderBySpaceWithUnknownIdSaysHowToFindTheSpace() throws Exception {
+    when(documentFileService.getSpaceRootFolder(eq(7L), eq(currentIdentity))).thenThrow(new ObjectNotFoundException("Space with id 7 doesn't exist"));
+
+    ObjectNotFoundException e = assertThrows(ObjectNotFoundException.class, () -> documentMcpTool.getRootFolderBySpace(7L, null));
+
+    assertEquals("Space with id 7 doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.", e.getMessage());
+  }
+
+  /**
+   * A name of a space the user isn't a member of, or of no space, is refused
+   * with the user's closest spaces, and no root folder is read.
+   * Mutants: a space searched outside the user's spaces.
+   */
+  @Test
+  public void getRootFolderBySpaceNameOutsideTheUsersSpacesIsRefused() throws Exception {
+    memberOfLegalAndMarketing();
+
+    ObjectNotFoundException e = assertThrows(ObjectNotFoundException.class,
+                                             () -> documentMcpTool.getRootFolderBySpace(null, "Finance"));
+
+    assertTrue(e.getMessage(), e.getMessage().contains("'Legal' (space_id 6)"));
+    verify(documentFileService, never()).getSpaceRootFolder(anyLong(), any());
+  }
+
+  /**
+   * In a call limited to a space, a name of that space is read, a name of
+   * another space of the user is refused as the space scope refuses another
+   * space's id, before any root folder is read, and a name is refused when
+   * the call's space can't be read.
+   * Mutants: the scope not compared, the comparison inverted, or an
+   * unreadable scope taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceNamesThatSpaceOnly() throws Exception {
+    memberOfLegalAndMarketing();
+    when(documentFileService.getSpaceRootFolder(eq(6L), eq(currentIdentity))).thenReturn(folderNode(FOLDER_ID));
+    scopeSpaceId = 6L;
+
+    assertEquals(FOLDER_ID, documentMcpTool.getRootFolderBySpace(null, "Legal").getId());
+    IllegalAccessException e = assertThrows(IllegalAccessException.class,
+                                            () -> documentMcpTool.getRootFolderBySpace(null, "Marketing"));
+    assertTrue(e.getMessage(), e.getMessage().contains("limited to the space with id 6"));
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.searchDocuments("report", null, "Marketing", null, null, null, null));
+    verify(documentFileService, never()).getSpaceRootFolder(eq(5L), any());
+
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.getRootFolderBySpace(null, "Legal"));
+  }
+
+  /**
+   * A search in a space given by its name searches that space's documents.
+   * Mutants: the name ignored.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsBySpaceName() throws Exception {
+    Space legal = memberOfLegalAndMarketing();
+    when(spaceService.getSpaceById("6")).thenReturn(legal);
+    when(spaceService.canViewSpace(eq(legal), eq(USERNAME))).thenReturn(true);
+    when(identityManager.getOrCreateSpaceIdentity("legal")).thenReturn(new org.exoplatform.social.core.identity.model.Identity("306"));
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                    eq(currentIdentity),
+                                    anyInt(),
+                                    anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
+
+    assertEquals(1, documentMcpTool.searchDocuments("report", null, "legal", null, null, null, null).size());
+
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(306L).equals(filter.getOwnerId())),
+                                       eq(currentIdentity),
+                                       anyInt(),
+                                       anyInt());
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments("report", 6L, "legal", null, null, null, null));
+  }
+
+  /**
+   * A document is shared with a space given by its name, and a name is one
+   * more recipient: with a username or a space id, it is refused.
+   * Mutants: the name ignored, or counted apart from the other recipients.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void shareDocumentWithSpaceByName() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    Space legal = memberOfLegalAndMarketing();
+    when(spaceService.getSpaceById("6")).thenReturn(legal);
+    when(identityManager.getOrCreateSpaceIdentity("legal")).thenReturn(new org.exoplatform.social.core.identity.model.Identity("306"));
+
+    documentMcpTool.shareDocument(DOCUMENT_ID, null, null, "Legal", false);
+
+    verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
+                                                  argThat((NodePermission np) -> np.getToShare().containsKey(306L)),
+                                                  eq(USER_IDENTITY_ID));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, "Legal", null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, 6L, "Legal", null));
+  }
+
+  /**
+   * Makes the user a member of the spaces Legal (id 6) and Marketing (id 5).
+   *
+   * @return the Legal space
+   */
+  private Space memberOfLegalAndMarketing() {
+    Space legal = new Space();
+    legal.setId("6");
+    legal.setDisplayName("Legal");
+    legal.setPrettyName("legal");
+    Space marketing = new Space();
+    marketing.setId("5");
+    marketing.setDisplayName("Marketing");
+    marketing.setPrettyName("marketing");
+    when(spaceService.getMemberSpaces(USERNAME)).thenReturn(SpaceNameResolverTest.listAccessOf(marketing, legal));
+    return legal;
   }
 
 }
