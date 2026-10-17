@@ -146,6 +146,14 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_CONTENT_TOO_LARGE  =
                                                           "The new version content is %d bytes, over the %d bytes limit.";
 
+  /**
+   * The error the model reads when {@code create_folder} names a parent folder
+   * id no folder has, typically one it composed for a folder it creates in the
+   * same round.
+   */
+  private static final String      PARENT_FOLDER_NOT_FOUND_MESSAGE =
+                                                                   "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
+
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
 
@@ -532,31 +540,47 @@ public class DocumentMcpTool implements McpToolPlugin {
   // Content management (writes, require approval)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Creates a folder under a parent folder, or a chain of nested folders when
+   * the name is a path: each segment of {@code Finances/Factures/Entrantes}
+   * but the last reuses the child folder of that name when there is one and
+   * is created otherwise, and the last one is created. A whole tree then takes
+   * one call per leaf, every call naming the same parent: none of them needs
+   * the id of a folder created by another call of the same round, an id a
+   * model calling them together does not have yet and makes up instead.
+   *
+   * @param parentFolderId the folder the name, or the path's first segment,
+   *          is created under
+   * @param name the folder name, or a path of folder names separated by
+   *          {@code /}
+   * @return the last folder of the path, the one created
+   * @throws IllegalAccessException when the user cannot read the parent folder
+   *           or add a folder to it
+   * @throws ObjectNotFoundException when no folder has the parent folder id
+   */
   public DocumentModel createFolder(String parentFolderId,
                                     String name) throws IllegalAccessException, ObjectNotFoundException {
     checkFolderIdParameter(parentFolderId);
-    if (StringUtils.isBlank(name)) {
-      throw new IllegalArgumentException("The 'name' parameter is mandatory to create a folder. Ask the user for a folder name.");
-    }
+    List<String> segments = toFolderPathSegments(name);
     // Validate the parent folder exists and is readable by the user, so a bad id
     // fails with a clean ObjectNotFoundException / IllegalAccessException before
     // reaching the JCR storage.
-    getNode(parentFolderId);
     try {
-      // parentFolderId already identifies the parent JCR node uniquely; the
-      // storage 'folderPath' argument is a RELATIVE sub-path resolved *from* that
-      // node (node.getNode(folderPath)), so it must stay empty. Passing the
-      // absolute node path made root-folder creation fail with
-      // "Folder with path : /Users/.../Private isn't found".
-      AbstractNode folder = documentFileService.createFolder(getOwnerId(parentFolderId),
-                                                             parentFolderId,
-                                                             null,
-                                                             name,
-                                                             getCurrentUserIdentityId());
-      return toDocumentModel(folder);
+      getNode(parentFolderId);
+    } catch (ObjectNotFoundException e) {
+      throw new ObjectNotFoundException(PARENT_FOLDER_NOT_FOUND_MESSAGE.formatted(parentFolderId));
+    }
+    long ownerId = getOwnerId(parentFolderId);
+    String folderId = parentFolderId;
+    for (String segment : segments.subList(0, segments.size() - 1)) {
+      folderId = getOrCreateChildFolder(ownerId, folderId, segment);
+    }
+    String folderName = segments.get(segments.size() - 1);
+    try {
+      return toDocumentModel(createChildFolder(ownerId, folderId, folderName));
     } catch (ObjectAlreadyExistsException e) {
       throw new IllegalStateException("A folder named '%s' already exists under this parent folder. Tell the user to pick a different name."
-          .formatted(name));
+          .formatted(folderName));
     }
   }
 
@@ -1436,6 +1460,112 @@ public class DocumentMcpTool implements McpToolPlugin {
                                     formatDate(version.getCreatedDate()),
                                     version.isCurrent(),
                                     version.getSize());
+  }
+
+  /**
+   * Splits the name {@code create_folder} receives into the folder names it
+   * creates, one per {@code /}-separated segment, each trimmed, empty ones
+   * dropped.
+   *
+   * @param name a folder name, or a path of folder names
+   * @return the folder names, in path order, at least one
+   * @throws IllegalArgumentException when the name holds no folder name, or a
+   *           segment that names the folder itself or its parent
+   */
+  private static List<String> toFolderPathSegments(String name) {
+    List<String> segments = name == null ? List.of()
+                                          : java.util.Arrays.stream(name.split("/"))
+                                                            .map(String::trim)
+                                                            .filter(StringUtils::isNotEmpty)
+                                                            .toList();
+    if (segments.isEmpty()) {
+      throw new IllegalArgumentException("The 'name' parameter is mandatory to create a folder. Ask the user for a folder name.");
+    }
+    if (segments.stream().anyMatch(segment -> ".".equals(segment) || "..".equals(segment))) {
+      throw new IllegalArgumentException("The folder name '%s' holds a '.' or '..' segment: give folder names only, separated by '/'."
+          .formatted(name));
+    }
+    return segments;
+  }
+
+  /**
+   * Gives the id of the child folder of a folder named as one segment of a
+   * {@code create_folder} path, creating it when the folder has none. A
+   * folder created by a concurrent call between the lookup and the creation
+   * is looked up again.
+   *
+   * @param ownerId the owner of the folders' root
+   * @param folderId the folder holding the child
+   * @param folderName the child folder's name
+   * @return the id of the child folder
+   * @throws IllegalAccessException when the user cannot add a folder there
+   * @throws ObjectNotFoundException when the folder cannot be read
+   */
+  private String getOrCreateChildFolder(long ownerId,
+                                        String folderId,
+                                        String folderName) throws IllegalAccessException, ObjectNotFoundException {
+    String childFolderId = findChildFolderId(folderId, folderName);
+    if (childFolderId != null) {
+      return childFolderId;
+    }
+    try {
+      return createChildFolder(ownerId, folderId, folderName).getId();
+    } catch (ObjectAlreadyExistsException e) {
+      childFolderId = findChildFolderId(folderId, folderName);
+      if (childFolderId == null) {
+        throw new IllegalStateException("An item named '%s' already exists in the folder %s and is not a folder: pick another folder name."
+            .formatted(folderName, folderId));
+      }
+      return childFolderId;
+    }
+  }
+
+  /**
+   * Looks for the child folder of a folder whose displayed name is the given
+   * one, ignoring case, as the storage names a folder's node after its
+   * lower-cased title.
+   *
+   * @param folderId the folder holding the child
+   * @param folderName the child folder's name
+   * @return the child folder's id, null when the folder has none of that name
+   * @throws IllegalAccessException when the user cannot read the folder
+   * @throws ObjectNotFoundException when the folder cannot be read
+   */
+  private String findChildFolderId(String folderId, String folderName) throws IllegalAccessException,
+                                                                       ObjectNotFoundException {
+    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
+    return documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, getCurrentUserIdentityId())
+                              .stream()
+                              .filter(FolderNode.class::isInstance)
+                              .filter(child -> folderName.equalsIgnoreCase(StringUtils.trim(child.getName())))
+                              .map(AbstractNode::getId)
+                              .findFirst()
+                              .orElse(null);
+  }
+
+  /**
+   * Creates one folder under a folder identified by its id.
+   *
+   * @param ownerId the owner of the folders' root
+   * @param folderId the folder the new one is created under
+   * @param folderName the new folder's name
+   * @return the created folder
+   * @throws IllegalAccessException when the user cannot add a folder there
+   * @throws ObjectNotFoundException when the folder cannot be read
+   * @throws ObjectAlreadyExistsException when the folder already holds an item
+   *           of that name
+   */
+  private AbstractNode createChildFolder(long ownerId,
+                                         String folderId,
+                                         String folderName) throws IllegalAccessException,
+                                                            ObjectNotFoundException,
+                                                            ObjectAlreadyExistsException {
+    // folderId already identifies the parent JCR node uniquely; the storage
+    // 'folderPath' argument is a RELATIVE sub-path resolved *from* that node
+    // (node.getNode(folderPath)), so it must stay empty. Passing the absolute
+    // node path made root-folder creation fail with
+    // "Folder with path : /Users/.../Private isn't found".
+    return documentFileService.createFolder(ownerId, folderId, null, folderName, getCurrentUserIdentityId());
   }
 
   private void checkFolderIdParameter(String folderId) {
