@@ -33,6 +33,7 @@ import java.util.zip.ZipOutputStream;
 
 import javax.jcr.RepositoryException;
 
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -152,7 +153,14 @@ public class DocumentMcpTool implements McpToolPlugin {
    * same round.
    */
   private static final String      PARENT_FOLDER_NOT_FOUND_MESSAGE =
-                                                                   "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
+                                                                   "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_for_user, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
+
+  /**
+   * The characters the storage refuses in a document title, as
+   * {@code JCRDocumentsUtil#isValidDocumentTitle} of
+   * {@code documents-storage-jcr} checks them.
+   */
+  private static final java.util.regex.Pattern INVALID_TITLE_CHARACTERS = java.util.regex.Pattern.compile("[<\\\\>:\"/|?*]");
 
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
@@ -1465,12 +1473,14 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * Splits the name {@code create_folder} receives into the folder names it
    * creates, one per {@code /}-separated segment, each trimmed, empty ones
-   * dropped.
+   * dropped, and checks every one of them before any folder is created, so an
+   * invalid segment never leaves the path half created.
    *
    * @param name a folder name, or a path of folder names
    * @return the folder names, in path order, at least one
-   * @throws IllegalArgumentException when the name holds no folder name, or a
-   *           segment that names the folder itself or its parent
+   * @throws IllegalArgumentException when the name holds no folder name, a
+   *           segment that names the folder itself or its parent, or a segment
+   *           the storage refuses as a title
    */
   private static List<String> toFolderPathSegments(String name) {
     List<String> segments = name == null ? List.of()
@@ -1485,14 +1495,37 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalArgumentException("The folder name '%s' holds a '.' or '..' segment: give folder names only, separated by '/'."
           .formatted(name));
     }
+    segments.stream().filter(segment -> !isValidFolderTitle(segment)).findFirst().ifPresent(segment -> {
+      throw new IllegalArgumentException("The folder name '%s' is not valid: a folder name can't hold any of < \\ > : \" / | ? * and can't be only an extension. Ask the user for another name."
+          .formatted(segment));
+    });
     return segments;
   }
 
   /**
+   * Tells whether the storage accepts a title for a folder it creates. It
+   * mirrors {@code JCRDocumentsUtil#isValidDocumentTitle} of
+   * {@code documents-storage-jcr}, which {@code JCRDocumentFileStorage#createFolder}
+   * applies and which this module cannot call: a title holding none of
+   * {@code < \ > : " / | ? *}, whose base name (the part before the last dot)
+   * is not blank.
+   *
+   * @param title the folder title
+   * @return true when the storage accepts it
+   */
+  private static boolean isValidFolderTitle(String title) {
+    return StringUtils.isNotBlank(FilenameUtils.getBaseName(title)) && !INVALID_TITLE_CHARACTERS.matcher(title).find();
+  }
+
+  /**
    * Gives the id of the child folder of a folder named as one segment of a
-   * {@code create_folder} path, creating it when the folder has none. A
-   * folder created by a concurrent call between the lookup and the creation
-   * is looked up again.
+   * {@code create_folder} path, creating it when the folder has none. When the
+   * creation is refused because the node name is taken, the folder is looked
+   * up again, which finds one created by a concurrent call meanwhile; when it
+   * still finds none, the taken name belongs to an item that can't be reused:
+   * a file, a hidden or shortcut folder, one past the first page of children,
+   * or one whose title differs only by what {@code JCRDocumentsUtil#cleanName}
+   * replaces in a node name.
    *
    * @param ownerId the owner of the folders' root
    * @param folderId the folder holding the child
@@ -1513,8 +1546,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     } catch (ObjectAlreadyExistsException e) {
       childFolderId = findChildFolderId(folderId, folderName);
       if (childFolderId == null) {
-        throw new IllegalStateException("An item named '%s' already exists in the folder %s and is not a folder: pick another folder name."
-            .formatted(folderName, folderId));
+        throw new IllegalStateException("An item named '%s' already exists in this folder but can't be reused as a folder (a file, a hidden or shortcut folder, or a name differing only by punctuation): pick another folder name."
+            .formatted(folderName));
       }
       return childFolderId;
     }
@@ -1523,7 +1556,10 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * Looks for the child folder of a folder whose displayed name is the given
    * one, ignoring case, as the storage names a folder's node after its
-   * lower-cased title.
+   * lower-cased title passed through {@code JCRDocumentsUtil#cleanName}. A
+   * shortcut to a folder is listed as a {@link FolderNode} carrying its
+   * target's id as source id; it is never reused, since a folder can't be
+   * created under a shortcut node.
    *
    * @param folderId the folder holding the child
    * @param folderName the child folder's name
@@ -1537,6 +1573,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     return documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, getCurrentUserIdentityId())
                               .stream()
                               .filter(FolderNode.class::isInstance)
+                              .filter(child -> StringUtils.isBlank(child.getSourceID()))
                               .filter(child -> folderName.equalsIgnoreCase(StringUtils.trim(child.getName())))
                               .map(AbstractNode::getId)
                               .findFirst()
