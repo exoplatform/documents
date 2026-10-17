@@ -378,7 +378,7 @@
     {
       "name": "create_folder",
       "title": "Create a DMS folder",
-      "description": "Creates a new folder under a parent folder. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id.",
+      "description": "Creates a new folder under a parent folder, or a chain of nested folders when name is a path such as 'Finances/Factures/Entrantes': the folders of the path that already exist are reused, the others are created. Returns the last folder of the path, whose document_id is the id to create into it. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. To create a folder tree, call it once per leaf folder with its path from the same existing parent_folder_id, never with the id of a folder you have not received from a tool.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -388,7 +388,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Name of the folder to create."
+            "description": "Name of the folder to create, or the path of nested folders to create, separated by '/', such as 'Contrats/Signés'."
           }
         },
         "required": [
