@@ -486,10 +486,7 @@ public class DocumentPagedTextExtractor {
    */
   private void remember(String key, Extraction extraction) {
     synchronized (cache) {
-      Extraction replaced = cache.put(key, extraction);
-      if (replaced != null) {
-        cacheBytes -= replaced.totalChars() * 2;
-      }
+      cache.put(key, extraction);
       cacheBytes += extraction.totalChars() * 2;
       Iterator<Map.Entry<String, Extraction>> eldest = cache.entrySet().iterator();
       while (cacheBytes > maxCacheBytes && eldest.hasNext()) {
@@ -511,12 +508,13 @@ public class DocumentPagedTextExtractor {
    * @param extraction the extraction
    */
   private void forget(Extraction extraction) {
+    // under the lock an extraction starts under: no new extraction of the version writes the file meanwhile
     synchronized (cache) {
       if (cache.values().removeIf(cached -> cached == extraction)) {
         cacheBytes -= extraction.totalChars() * 2;
+        deleteQuietly(extraction);
       }
     }
-    deleteQuietly(extraction);
   }
 
   /**
