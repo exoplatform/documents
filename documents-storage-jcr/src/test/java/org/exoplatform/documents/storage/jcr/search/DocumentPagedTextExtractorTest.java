@@ -370,6 +370,27 @@ class DocumentPagedTextExtractorTest {
   }
 
   /**
+   * A cached text whose file is gone is forgotten and extracted again on the
+   * next read, which gets the text and a file the cache keeps.
+   * Mutants: the retry dropped, the forgotten text kept in the cache.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void extractsAgainATextWhoseCacheFileIsGone() throws Exception {
+    storeText(DOCUMENT_ID, "0123456789", 1L);
+    extractor.getPage(DOCUMENT_ID, 0, 2);
+    try (var files = Files.list(directory.resolve("cache"))) {
+      files.forEach(file -> file.toFile().delete());
+    }
+
+    assertEquals("345", extractor.getPage(DOCUMENT_ID, 3, 3).text());
+    assertEquals(2, extractions.get());
+    assertEquals("67", extractor.getPage(DOCUMENT_ID, 6, 2).text());
+    assertEquals(2, extractions.get());
+  }
+
+  /**
    * A text larger than the whole cache is kept for the call waiting for it,
    * read from one extraction.
    * Mutants: the text just extracted evicted at once.
