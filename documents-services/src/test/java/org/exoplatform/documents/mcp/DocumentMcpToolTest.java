@@ -2236,7 +2236,8 @@ public class DocumentMcpToolTest {
    * in that part comes whole, a cut one says so; a file too large even part
    * by part, or one still being read, says it.
    * Mutants: the refusal kept, the note dropped or with the wrong offset, a
-   * part smaller than the largest, the cut not told.
+   * part smaller than the largest, the cut not told, whether the whole text
+   * fits in the part or not.
    *
    * @throws Exception never
    */
@@ -2248,6 +2249,7 @@ public class DocumentMcpToolTest {
         .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("0123456789", 0, 500_000, false, List.of(), DocumentTextContent.Status.EXTRACTED))
         .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("whole", 0, 5, false, List.of(), DocumentTextContent.Status.EXTRACTED))
         .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("cut", 0, 3, true, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("start", 0, 900, true, List.of(), DocumentTextContent.Status.EXTRACTED))
         .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.TOO_LARGE))
         .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.BUSY));
 
@@ -2257,6 +2259,10 @@ public class DocumentMcpToolTest {
     assertTrue(first.contains("read_document_text with offset=10"));
     assertEquals("whole", documentMcpTool.getDocumentContentById(DOCUMENT_ID));
     assertTrue(documentMcpTool.getDocumentContentById(DOCUMENT_ID).contains("it was cut at the most characters read"));
+    String cutFirst = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+    assertTrue(cutFirst.contains("900 characters long once cut at the most characters read"));
+    assertTrue(cutFirst.contains("offset=5"));
+    assertFalse(first.contains("once cut"));
     assertTrue(assertThrows(IllegalStateException.class,
                             () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID)).getMessage().contains("even part by part"));
     assertTrue(assertThrows(IllegalStateException.class,
@@ -2264,8 +2270,7 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * The one-shot read says when its text was cut and where to read on, and a
-   * file too large for it points to the part-by-part tools.
+   * The one-shot read says when its text was cut and where to read on.
    * Mutants: the cut not told, an offset given, the pointer dropped.
    *
    * @throws Exception never
@@ -2281,7 +2286,6 @@ public class DocumentMcpToolTest {
     assertTrue(text.contains("get_document_outline and read_document_text"));
     // this text's length is no position in the text read part by part, so none is given
     assertFalse(text.contains("offset 10"));
-    assertTrue(DocumentMcpTool.getNoTextMessage(DOCUMENT_ID, DocumentTextContent.Status.TOO_LARGE).contains("get_document_outline"));
   }
 
   // ---------------------------------------------------------------------------

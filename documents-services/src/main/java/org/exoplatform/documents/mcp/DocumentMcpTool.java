@@ -187,7 +187,10 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /** The note ending the first part of a document too large to be read in one go: its length, where to read on. */
   private static final String      MSG_FIRST_PART_CONTINUES =
-                                                            "\n\n[This is the first part of a large document, whose text is %d characters long. To read the rest, call read_document_text with offset=%d, or get_document_outline to find a chapter.]";
+                                                            "\n\n[This is the first part of a large document, whose text is %d characters long%s. To read the rest, call read_document_text with offset=%d, or get_document_outline to find a chapter.]";
+
+  /** Said of a text read part by part that was cut at the most characters read from one document. */
+  private static final String      MSG_TEXT_CUT_AT_MOST     = " once cut at the most characters read from one document, so its end is missing";
 
   /** The note ending a text read part by part that was cut at the most characters read from one document. */
   private static final String      MSG_PAGED_TEXT_CUT       =
@@ -608,7 +611,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     DocumentTextPage page = getTextPage(documentId, 0, MAX_TEXT_PART_CHARS);
     long partEnd = page.offset() + page.text().length();
     if (partEnd < page.totalChars()) {
-      return page.text() + MSG_FIRST_PART_CONTINUES.formatted(page.totalChars(), partEnd);
+      return page.text() + MSG_FIRST_PART_CONTINUES.formatted(page.totalChars(), page.truncated() ? MSG_TEXT_CUT_AT_MOST : "", partEnd);
     }
     return page.truncated() ? page.text() + MSG_PAGED_TEXT_CUT : page.text();
   }
@@ -624,8 +627,6 @@ public class DocumentMcpTool implements McpToolPlugin {
     String prefix = "The text of the document with id %s could not be extracted: ".formatted(documentId);
     return switch (status) {
     case UNSUPPORTED_FORMAT -> prefix + "its format is not supported for text extraction.";
-    case TOO_LARGE -> prefix + "the file is too large for its text to be read in one go. Read it part by part with "
-        + "read_document_text, and find its chapters with get_document_outline.";
     case NO_TEXT -> prefix + "no text was found in the file (a scanned document or an image, for instance).";
     case NOT_A_FILE -> "The document with id %s is not a file with a content, so it has no text.".formatted(documentId);
     case BUSY -> prefix + "too many documents are being read at the moment; asking again in a little while may succeed.";
