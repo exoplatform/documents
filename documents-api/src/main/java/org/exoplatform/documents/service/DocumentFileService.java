@@ -26,6 +26,7 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -369,6 +370,72 @@ public interface DocumentFileService {
    * @return the created {@link AbstractNode}
    */
   AbstractNode createDocumentFromTemplate(long ownerId, String folderId, String folderPath, String title, String documentType, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException;
+
+  /**
+   * Checks a file's content with the platform's upload validators, as a new
+   * file uploaded from a browser is checked.
+   *
+   * @param fileName the file name
+   * @param mimeType the file's type
+   * @param content the file's content
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   */
+  default void validateUploadedContent(String fileName, String mimeType, byte[] content) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Checks an upload can be filed under a name in a folder with a conflict
+   * action, before its file is sent, as {@link #saveUploadedDocument} checks it
+   * when it files it.
+   *
+   * @param folderId the folder
+   * @param name the file name, with its extension
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @param authenticatedUserId the identity id of the user
+   * @throws IllegalArgumentException when the folder is not a folder, or a
+   *           new version is asked of a document of that name that is not a
+   *           file (a folder or a shortcut), or keeps no versions
+   * @throws IllegalStateException when the folder can't be read
+   * @throws IllegalAccessException when the user's identity can't be read
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   */
+  default void checkUploadConflict(String folderId,
+                                   String name,
+                                   UploadConflictAction conflictAction,
+                                   long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Files an uploaded file into a folder the way the Documents app files an
+   * upload, as the user: the same activity, events, hidden state and name
+   * handling.
+   *
+   * @param folderId the folder the file is filed into
+   * @param uploadId the upload, registered in the platform's upload service;
+   *          it is consumed once the file is filed
+   * @param name the file name, with its extension
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @param authenticatedUserId the identity id of the user filing it
+   * @return the filed document
+   * @throws IllegalArgumentException when the name is blank, the folder is
+   *           not a folder, or a new version is asked of a document of that
+   *           name that is not a file (a folder or a shortcut), or keeps no versions
+   * @throws IllegalStateException when the file couldn't be filed, or read
+   *           back once filed
+   * @throws IllegalAccessException when the user can't add documents to the
+   *           folder
+   * @throws ObjectNotFoundException when the folder or the upload doesn't exist
+   */
+  default AbstractNode saveUploadedDocument(String folderId,
+                                            String uploadId,
+                                            String name,
+                                            UploadConflictAction conflictAction,
+                                            long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
 
   String getNewName(long ownerId, String folderId, String folderPath, String name) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 

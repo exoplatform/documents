@@ -38,8 +38,11 @@ import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
+import javax.ws.rs.core.Response;
+import javax.xml.transform.dom.DOMSource;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.fileupload2.core.FileUploadException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -50,7 +53,9 @@ import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.PropertyManager;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.commons.utils.IOUtil;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
@@ -58,11 +63,13 @@ import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.documents.storage.jcr.search.DocumentPagedTextExtractor;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
+import org.exoplatform.documents.storage.jcr.util.ContentSource;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
 import org.exoplatform.services.document.DocumentReaderService;
 import org.exoplatform.services.cms.documents.DocumentService;
+import org.exoplatform.services.context.DocumentContext;
 import org.exoplatform.services.cms.documents.NewDocumentTemplate;
 import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -95,7 +102,9 @@ import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
 import org.exoplatform.upload.UploadResource;
+import org.exoplatform.upload.UploadFileValidator;
 import org.exoplatform.upload.UploadService;
+import org.exoplatform.wcm.connector.FileUploadHandler;
 
 import io.meeds.portal.thumbnail.model.FileContent;
 import lombok.SneakyThrows;
@@ -203,6 +212,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final DocumentService                     documentService;
 
+  private FileUploadHandler                         fileUploadHandler;
+
   /** Files of this many MB or larger are not read to extract their text on the fly. */
   public static final String                        TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY     =
                                                                                          "exo.documents.textExtraction.maxFileSizeMb";
@@ -254,6 +265,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final String                       KEEP_BOTH                   = "keepBoth";
 
   private static final String                       CREATE_NEW_VERSION          = "createNewVersion";
+
+  /** The source the Documents app names when it files an upload. */
+  private static final String                       UPLOAD_SOURCE_NEW_APP       = "newApp";
 
   private static final String                       ZIP_PREFIX                  = "downloadzip";
 
@@ -1272,6 +1286,277 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  @Override
+  public void checkUploadConflict(String folderId,
+                                  String name,
+                                  UploadConflictAction conflictAction,
+                                  Identity aclIdentity) throws ObjectNotFoundException {
+    if (conflictAction == null || conflictAction == UploadConflictAction.KEEP_BOTH) {
+      return;
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node folder = getUploadFolder(session, folderId);
+      toExistenceAction(folder, name, conflictAction);
+    } catch (RepositoryException e) {
+      LOG.debug("Error reading the folder {}", folderId, e);
+      throw new IllegalStateException("The folder " + folderId + " can't be read");
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public FileNode saveUploadedDocument(String folderId,
+                                       String uploadId,
+                                       String name,
+                                       UploadConflictAction conflictAction,
+                                       Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("The file name is mandatory");
+    }
+    UploadResource upload = uploadService.getUploadResource(uploadId);
+    if (upload == null) {
+      throw new ObjectNotFoundException("The upload " + uploadId + " doesn't exist");
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node folder = getUploadFolder(session, folderId);
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(folder, aclIdentity);
+      if (nodeAccessList.containsKey("canEdit") && !nodeAccessList.get("canEdit").booleanValue()) {
+        throw new IllegalAccessException("Permission to add a document to the folder is missing");
+      }
+      String existenceAction = toExistenceAction(folder, name, conflictAction);
+      validateUploadedFile(upload, name);
+      Response response = saveAsNTFile(folder, uploadId, name, aclIdentity.getUserId(), existenceAction);
+      Node file = getNodeByIdentifier(session, getSavedFileId(response, name));
+      if (file == null) {
+        throw new IllegalStateException("The file '" + name + "' was filed but can't be read back");
+      }
+      return toFileNode(identityManager, aclIdentity, file, "", spaceService);
+    } catch (IllegalAccessException | ObjectNotFoundException | IllegalArgumentException | IllegalStateException e) {
+      throw e;
+    } catch (Exception e) {
+      LOG.debug("Error filing the upload {} into the folder {}", uploadId, folderId, e);
+      throw new IllegalStateException("The file '" + name + "' couldn't be filed");
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Runs the platform's upload validators on an upload, as the platform runs
+   * them on a file uploaded from a browser: each validator that supports the
+   * file reads it from a fresh stream.
+   *
+   * @param upload the upload, its file on disk
+   * @param name the name it is filed under
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   * @throws IOException when the file can't be read
+   */
+  void validateUploadedFile(UploadResource upload, String name) throws IOException {
+    validateFile(name, upload.getMimeType(), () -> Files.newInputStream(Path.of(upload.getStoreLocation())));
+  }
+
+  @Override
+  public void validateUploadedContent(String fileName, String mimeType, byte[] content) {
+    try {
+      validateFile(fileName, mimeType, () -> new ByteArrayInputStream(content));
+    } catch (IOException e) {
+      throw new IllegalStateException("The file '" + fileName + "' couldn't be checked", e);
+    }
+  }
+
+  /**
+   * Runs every upload validator that supports a file on its content, each
+   * from a fresh stream.
+   *
+   * @param name the file name
+   * @param mimeType the file's type
+   * @param content opens a stream at the start of the file's content
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   * @throws IOException when the content can't be read
+   */
+  private void validateFile(String name, String mimeType, ContentSource content) throws IOException {
+    for (UploadFileValidator validator : getUploadFileValidators()) {
+      if (validator.supports(name, mimeType)) {
+        try (InputStream inputStream = content.open()) {
+          validator.validate(name, mimeType, inputStream);
+        } catch (FileUploadException e) {
+          throw new IllegalArgumentException("The file '" + name + "' is refused: " + e.getMessage());
+        }
+      }
+    }
+  }
+
+  /**
+   * The platform's upload validators, the container's components of that
+   * type.
+   *
+   * @return the validators
+   */
+  List<UploadFileValidator> getUploadFileValidators() {
+    return ExoContainerContext.getCurrentContainer().getComponentInstancesOfType(UploadFileValidator.class);
+  }
+
+  /**
+   * Reads the folder an upload is filed into, in the user's session: a
+   * shortcut to a folder is the folder it targets, as the Documents app shows
+   * it.
+   *
+   * @param session the user's session
+   * @param folderId the folder's id, or a shortcut's
+   * @return the folder
+   * @throws ObjectNotFoundException when no node has that id, or a shortcut's
+   *           target is gone
+   * @throws IllegalArgumentException when the node is not a folder
+   * @throws RepositoryException when the node can't be read
+   */
+  private Node getUploadFolder(Session session, String folderId) throws ObjectNotFoundException, RepositoryException {
+    Node folder = getNodeByIdentifier(session, folderId);
+    if (folder != null && folder.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      folder = getNodeByIdentifier(session, folder.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+    }
+    if (folder == null) {
+      throw new ObjectNotFoundException("The folder " + folderId + " doesn't exist");
+    }
+    if (!JCRDocumentsUtil.isFolder(folder)) {
+      throw new IllegalArgumentException("The document " + folderId + " is not a folder: a file is filed into a folder");
+    }
+    return folder;
+  }
+
+  /**
+   * Files an upload through the handler as the Documents app does: no file
+   * activity is posted in the stream, which the app asks of the handler
+   * through the thread's document context. The context outlives the request
+   * on its thread, so its previous state is restored once the file is filed.
+   *
+   * @param folder the folder, read in the user's session
+   * @param uploadId the upload
+   * @param name the file name
+   * @param userId the user filing it
+   * @param existenceAction the handler's conflict action
+   * @return the handler's answer
+   * @throws Exception when the handler fails outside its own answer
+   */
+  private Response saveAsNTFile(Node folder, String uploadId, String name, String userId, String existenceAction) throws Exception {
+    Map<String, Object> documentAttributes = DocumentContext.getCurrent().getAttributes();
+    boolean hadSkip = documentAttributes.containsKey(DocumentContext.IS_SKIP_RAISE_ACT);
+    Object previousSkip = documentAttributes.get(DocumentContext.IS_SKIP_RAISE_ACT);
+    documentAttributes.put(DocumentContext.IS_SKIP_RAISE_ACT, true);
+    try {
+      return getFileUploadHandler().saveAsNTFile(COLLABORATION,
+                                                 folder,
+                                                 uploadId,
+                                                 name,
+                                                 Locale.ENGLISH.getLanguage(),
+                                                 UPLOAD_SOURCE_NEW_APP,
+                                                 null,
+                                                 userId,
+                                                 existenceAction);
+    } finally {
+      if (hadSkip) {
+        documentAttributes.put(DocumentContext.IS_SKIP_RAISE_ACT, previousSkip);
+      } else {
+        documentAttributes.remove(DocumentContext.IS_SKIP_RAISE_ACT);
+      }
+    }
+  }
+
+  /**
+   * The handler the Documents app files an upload through, built at first use:
+   * it reads its services from the container when it is built. One handler
+   * files every upload of this storage, since it files one at a time.
+   *
+   * @return the handler
+   */
+  synchronized FileUploadHandler getFileUploadHandler() {
+    if (fileUploadHandler == null) {
+      fileUploadHandler = new FileUploadHandler();
+    }
+    return fileUploadHandler;
+  }
+
+  /**
+   * Maps a conflict action to the one the upload handler takes. A new version
+   * needs a versioned file of that name, as the Documents app offers it only
+   * then: the handler writes the upload over whatever node bears the name and
+   * keeps a version only of a versioned file, so a folder, a shortcut or a
+   * file that keeps no versions is refused rather than overwritten, and a new version
+   * of a file that doesn't exist files the upload as a new one. The handler's
+   * replacement, which deletes the existing node before filing, is never
+   * asked for.
+   *
+   * @param folder the folder the upload is filed into
+   * @param name the file name it is filed under
+   * @param conflictAction the action asked, {@link UploadConflictAction#KEEP_BOTH}
+   *          when null
+   * @return {@link FileUploadHandler#KEEP_BOTH} or
+   *         {@link FileUploadHandler#CREATE_VERSION}
+   * @throws RepositoryException when the folder can't be read
+   * @throws IllegalArgumentException when the action is a new version and the
+   *           document of that name is not a file (a folder or a shortcut), or
+   *           keeps no versions
+   */
+  static String toExistenceAction(Node folder, String name, UploadConflictAction conflictAction) throws RepositoryException {
+    if (conflictAction == null || conflictAction == UploadConflictAction.KEEP_BOTH) {
+      return FileUploadHandler.KEEP_BOTH;
+    }
+    // the node name the handler computes from the file name, to find the node it acts on
+    String cleanedName = org.exoplatform.services.cms.impl.Utils.cleanNameWithAccents(name);
+    cleanedName = org.exoplatform.services.cms.impl.Utils.cleanName(cleanedName.toLowerCase());
+    String nodeName = org.exoplatform.ecm.utils.text.Text.escapeIllegalJcrChars(cleanedName);
+    if (!folder.hasNode(nodeName)) {
+      return FileUploadHandler.KEEP_BOTH;
+    }
+    Node existing = folder.getNode(nodeName);
+    if (!existing.isNodeType(NodeTypeConstants.NT_FILE)) {
+      throw new IllegalArgumentException("A document named '" + name + "' in this folder is not a file (a folder or a shortcut): "
+          + "it can't get a version. Keep both files instead.");
+    }
+    if (!existing.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+      throw new IllegalArgumentException("The file '" + name + "' in this folder keeps no versions: a new version would overwrite "
+          + "its content. Keep both files instead.");
+    }
+    return FileUploadHandler.CREATE_VERSION;
+  }
+
+  /**
+   * Reads the id of the file the upload handler filed from its answer. The
+   * handler answers every failure as a server error carrying the engine's
+   * message, and a refusal as a message document: neither is shown as is.
+   *
+   * @param response the handler's answer
+   * @param name the file name, for the messages
+   * @return the filed file's id
+   * @throws IllegalAccessException when the handler refused the upload
+   */
+  static String getSavedFileId(Response response, String name) throws IllegalAccessException {
+    Object entity = response.getEntity();
+    if (response.getStatus() == Response.Status.OK.getStatusCode() && entity instanceof DOMSource source
+        && source.getNode() instanceof org.w3c.dom.Document document) {
+      org.w3c.dom.Element root = document.getDocumentElement();
+      if (root != null && "file".equals(root.getTagName()) && StringUtils.isNotBlank(root.getAttribute("UUID"))) {
+        return root.getAttribute("UUID");
+      }
+      LOG.debug("The upload handler refused the file '{}': {}", name, root == null ? null : root.getTextContent());
+      throw new IllegalAccessException("The file '" + name + "' can't be added to this folder");
+    }
+    LOG.debug("The upload handler failed to file '{}' with the status {}: {}", name, response.getStatus(), entity);
+    throw new IllegalStateException("The file '" + name + "' couldn't be filed");
   }
 
   @Override
