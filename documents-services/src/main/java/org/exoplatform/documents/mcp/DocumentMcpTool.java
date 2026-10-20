@@ -654,15 +654,14 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Lists the direct children of a folder, folders first, or with a date only
    * the children changed since then, the most recent first.
    * <p>
-   * The storage pages its folders by the offset but always reads its files
-   * from the first one, so a page past the first would repeat files: the
-   * children are read from the first one up to the end of the page, and the
-   * page is cut here. A date is checked against the same last-change date the
-   * listing shows, over the folder's children read in one go, up to
-   * {@link #MAX_SCANNED_CHILDREN}; a folder whose listing returns more is
-   * refused rather than answered with part of its changes. The listing leaves
-   * out what it can't read (a shortcut whose target is gone), so it is what
-   * it returns that is counted.
+   * Without a date, the storage pages over the listing itself. A date is
+   * checked against the same last-change date the listing shows, over the
+   * folder's children read in one go, up to {@link #MAX_SCANNED_CHILDREN}: the
+   * storage fills a page up to its limit whenever the folder holds more
+   * children, however many rows it leaves out (a shortcut whose target is
+   * gone), so a listing asked for one child more than the bound returns it
+   * exactly when the folder holds more, and such a folder is refused rather
+   * than answered with part of its changes.
    *
    * @param folderId the folder id
    * @param offset the first child
@@ -683,21 +682,29 @@ public class DocumentMcpTool implements McpToolPlugin {
     int first = Math.max(getInteger(offset, DEFAULT_OFFSET), 0);
     int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    List<AbstractNode> children;
-    if (updatedSinceTime == null) {
-      int end = (int) Math.min((long) first + size, Integer.MAX_VALUE);
-      children = documentFileService.getFolderChildNodes(filter, 0, end, getCurrentUserIdentityId());
-    } else {
-      children = documentFileService.getFolderChildNodes(filter, 0, MAX_SCANNED_CHILDREN + 1, getCurrentUserIdentityId());
-      if (children.size() > MAX_SCANNED_CHILDREN) {
-        throw new IllegalArgumentException(MSG_TOO_MANY_CHILDREN.formatted(MAX_SCANNED_CHILDREN));
-      }
-      children = children.stream()
-                         .filter(child -> child.getModifiedDate() >= updatedSinceTime)
-                         .sorted(Comparator.comparingLong(AbstractNode::getModifiedDate).reversed())
-                         .toList();
+    if (size == 0) {
+      // a negative limit; the storage reads every child when given none
+      return List.of();
+    } else if (updatedSinceTime == null) {
+      return documentFileService.getFolderChildNodes(filter, first, size, getCurrentUserIdentityId())
+                                .stream()
+                                .map(this::toDocumentModel)
+                                .toList();
     }
-    return children.stream().skip(first).limit(size).map(this::toDocumentModel).toList();
+    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter,
+                                                                          0,
+                                                                          MAX_SCANNED_CHILDREN + 1,
+                                                                          getCurrentUserIdentityId());
+    if (children.size() > MAX_SCANNED_CHILDREN) {
+      throw new IllegalArgumentException(MSG_TOO_MANY_CHILDREN.formatted(MAX_SCANNED_CHILDREN));
+    }
+    return children.stream()
+                   .filter(child -> child.getModifiedDate() >= updatedSinceTime)
+                   .sorted(Comparator.comparingLong(AbstractNode::getModifiedDate).reversed())
+                   .skip(first)
+                   .limit(size)
+                   .map(this::toDocumentModel)
+                   .toList();
   }
 
   /**
