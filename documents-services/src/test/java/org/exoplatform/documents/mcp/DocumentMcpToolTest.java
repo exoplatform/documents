@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -2058,26 +2059,24 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A page past the first is read from the first child up to the page's end
-   * and cut here, because the storage restarts its files at the first one
-   * whatever the offset: asking the storage for the offset would repeat files.
-   * Mutants: the offset passed to the storage, the page not cut.
+   * Without a date, the page is the storage's, which pages over the listing
+   * itself: the offset and the limit are passed through. A negative limit
+   * asks nothing, the storage reading every child when given none.
+   * Mutants: the offset or the limit not passed, the page cut again here, a
+   * negative limit passed to the storage.
    *
    * @throws Exception never
    */
   @Test
-  public void listFolderChildrenReadsFromTheFirstChildAndCutsThePage() throws Exception {
-    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(4), anyLong())).thenReturn(List.of(childChangedAt("a", true, 1L),
-                                                                                                    childChangedAt("b", false, 1L),
-                                                                                                    childChangedAt("c", false, 1L),
+  public void listFolderChildrenPassesThePageToTheStorage() throws Exception {
+    when(documentFileService.getFolderChildNodes(any(), eq(2), eq(2), anyLong())).thenReturn(List.of(childChangedAt("c", false, 1L),
                                                                                                     childChangedAt("d", false, 1L)));
 
     List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, 2, 2, null);
 
     assertEquals(List.of("c", "d"), models.stream().map(DocumentModel::getId).toList());
-    // an offset near the largest int never overflows the storage's limit into a negative one
-    documentMcpTool.listFolderChildren(FOLDER_ID, Integer.MAX_VALUE - 1, 10, null);
-    verify(documentFileService).getFolderChildNodes(any(), eq(0), eq(Integer.MAX_VALUE), anyLong());
+    assertEquals(0, documentMcpTool.listFolderChildren(FOLDER_ID, 0, -1, null).size());
+    verify(documentFileService, times(1)).getFolderChildNodes(any(), anyInt(), anyInt(), anyLong());
   }
 
   /**
