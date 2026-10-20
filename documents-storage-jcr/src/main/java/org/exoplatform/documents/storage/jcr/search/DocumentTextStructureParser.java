@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -50,7 +51,9 @@ import org.apache.poi.xslf.usermodel.XSLFTableRow;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.ICell;
+import org.apache.poi.xwpf.usermodel.XWPFComment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFHeaderFooter;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFSDT;
 import org.apache.poi.xwpf.usermodel.XWPFSDTCell;
@@ -127,7 +130,8 @@ final class DocumentTextStructureParser {
 
   /**
    * Writes a Word document's paragraphs, tables and block content controls in
-   * their order, each heading paragraph becoming an outline entry.
+   * their order, each heading paragraph becoming an outline entry, then its
+   * headers, footers and comments.
    *
    * @param file the docx file
    * @param out where the text is written
@@ -168,8 +172,54 @@ final class DocumentTextStructureParser {
           }
         }
       }
+      writeWordMargins(document, out);
     } catch (org.apache.poi.openxml4j.exceptions.InvalidFormatException e) {
       throw new IOException("Not a Word document", e);
+    }
+  }
+
+  /**
+   * Writes the text of a Word document's headers, footers and comments after
+   * its body, as the one-shot read gives them, so the headings of the body
+   * keep their offsets. A header or footer repeated by several sections is
+   * written once.
+   *
+   * @param document the document
+   * @param out where the text is written
+   * @throws IOException when the writer refuses more text
+   */
+  private static void writeWordMargins(XWPFDocument document, CountingWriter out) throws IOException {
+    Set<String> written = new HashSet<>();
+    for (XWPFHeaderFooter part : document.getHeaderList()) {
+      writeLabelled("Header: ", part.getText(), written, out);
+    }
+    for (XWPFHeaderFooter part : document.getFooterList()) {
+      writeLabelled("Footer: ", part.getText(), written, out);
+    }
+    // null for a document without comments
+    XWPFComment[] comments = document.getComments();
+    for (XWPFComment comment : comments == null ? new XWPFComment[0] : comments) {
+      String author = StringUtils.trimToNull(comment.getAuthor());
+      writeLabelled(author == null ? "Comment: " : "Comment by %s: ".formatted(author), comment.getText(), null, out);
+    }
+  }
+
+  /**
+   * Writes a text on its own line after a label, nothing when it is blank or
+   * already written.
+   *
+   * @param label the label
+   * @param text the text
+   * @param written the texts already written, null to write every one
+   * @param out where the text is written
+   * @throws IOException when the writer refuses more text
+   */
+  private static void writeLabelled(String label, String text, Set<String> written, CountingWriter out) throws IOException {
+    String line = StringUtils.trimToNull(StringUtils.normalizeSpace(text));
+    if (line != null && (written == null || written.add(label + line))) {
+      out.write(label);
+      out.write(line);
+      out.write('\n');
     }
   }
 

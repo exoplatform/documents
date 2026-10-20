@@ -334,6 +334,39 @@ class DocumentTextStructureParserTest {
   }
 
   /**
+   * A Word document's header, footer and comments are written after its
+   * body, a header repeated once, so the body's headings keep their offsets.
+   * Mutants: the header, the footer or the comments left out, a repeated
+   * header written twice, the margins written before the body.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aWordDocumentsHeadersFootersAndCommentsFollowItsBody() throws IOException {
+    File file = directory.resolve("reviewed.docx").toFile();
+    try (XWPFDocument document = new XWPFDocument(); FileOutputStream out = new FileOutputStream(file)) {
+      var heading = document.createParagraph();
+      heading.createRun().setText("Chapter");
+      heading.getCTP().addNewPPr().addNewOutlineLvl().setVal(BigInteger.ZERO);
+      document.createParagraph().createRun().setText("Body text");
+      document.createHeader(org.apache.poi.wp.usermodel.HeaderFooterType.DEFAULT).createParagraph().createRun().setText("Confidential");
+      document.createHeader(org.apache.poi.wp.usermodel.HeaderFooterType.FIRST).createParagraph().createRun().setText("Confidential");
+      document.createFooter(org.apache.poi.wp.usermodel.HeaderFooterType.DEFAULT).createParagraph().createRun().setText("Page footer");
+      var comment = document.createComments().createComment(BigInteger.ONE);
+      comment.setAuthor("Reviewer");
+      comment.createParagraph().createRun().setText("Check this figure");
+      document.write(out);
+    }
+    StringWriter text = new StringWriter();
+
+    List<DocumentOutlineEntry> outline = parse(file, DocumentTextStructureParser.DOCX_MIME_TYPE, text, Long.MAX_VALUE);
+
+    assertEquals("Chapter\nBody text\nHeader: Confidential\nFooter: Page footer\nComment by Reviewer: Check this figure\n",
+                 text.toString());
+    assertEquals(0, outline.get(0).offset());
+  }
+
+  /**
    * A PDF's bookmarks, nested ones included, are outline entries at the start
    * of the page each points to, with the page's number and the depth of the
    * bookmark.
