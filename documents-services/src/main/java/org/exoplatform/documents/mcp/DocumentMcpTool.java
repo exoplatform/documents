@@ -689,10 +689,9 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Lists a document's headings: a Word document's headings, a PDF's
-   * bookmarks, a presentation's slide titles, a spreadsheet's sheets, each
-   * with where its section
-   * starts and ends in the text {@code read_document_text} reads.
+   * Lists a document's headings: a Word document's headings, a PDF's bookmarks,
+   * a presentation's slide titles, a spreadsheet's sheets, each with where its
+   * section starts and ends in the text {@code read_document_text} reads.
    *
    * @param documentId the document id
    * @return the outline, empty when the document has no heading

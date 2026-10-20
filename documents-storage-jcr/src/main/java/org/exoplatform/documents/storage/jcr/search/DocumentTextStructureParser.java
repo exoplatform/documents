@@ -86,10 +86,10 @@ import org.exoplatform.services.log.Log;
 /**
  * Writes the text of a Word document, a presentation, a PDF or a spreadsheet
  * together with its outline: the Word headings, the slide titles, the PDF
- * bookmarks, the sheet names, each
- * at the character its section starts in the text written. The text and the
- * outline come from one walk of the file, so the positions match the text.
- * Pictures are never decoded: only the text of the file is read.
+ * bookmarks, the sheet names, each at the character its section starts in the
+ * text written. The text and the outline come from one walk of the file, so the
+ * positions match the text. Pictures are never decoded: only the text of the
+ * file is read.
  */
 final class DocumentTextStructureParser {
 

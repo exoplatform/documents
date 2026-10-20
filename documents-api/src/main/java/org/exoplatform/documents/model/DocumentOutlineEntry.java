@@ -17,8 +17,9 @@
 package org.exoplatform.documents.model;
 
 /**
- * One heading of a document's outline: a Word heading, a PDF bookmark or a
- * slide title, and where its section starts in the document's text.
+ * One heading of a document's outline: a Word heading, a PDF bookmark, a
+ * slide title or a spreadsheet's sheet, and where its section starts in the
+ * document's text.
  *
  * @param index the heading's position in the outline, from 0
  * @param level its depth, 1 for a top-level heading

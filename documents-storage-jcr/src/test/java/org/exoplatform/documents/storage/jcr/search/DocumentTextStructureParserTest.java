@@ -57,9 +57,9 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType;
 import org.exoplatform.documents.model.DocumentOutlineEntry;
 
 /**
- * Parses Word documents, presentations and PDFs built with POI and PDFBox, and
- * checks every heading's offset against the text written, which is what a
- * section read relies on.
+ * Parses Word documents, presentations, PDFs and spreadsheets built with POI
+ * and PDFBox, and checks every heading's offset against the text written, which
+ * is what a section read relies on.
  */
 class DocumentTextStructureParserTest {
 
@@ -687,13 +687,13 @@ class DocumentTextStructureParserTest {
   }
 
   /**
-   * The structured types are the Word document, the presentation and the
-   * PDF, whatever their parameters; any other type is read by the platform's
-   * readers.
+   * The structured types are the Word document, the presentation, the PDF
+   * and the xlsx spreadsheet, whatever their parameters; any other type, an
+   * OpenDocument spreadsheet for instance, is read by the platform's readers.
    * Mutants: a parameter making a type unknown, another type taken.
    */
   @Test
-  void onlyWordPresentationAndPdfAreStructured() {
+  void onlyWordPresentationPdfAndXlsxAreStructured() {
     assertTrue(DocumentTextStructureParser.isStructured("application/pdf; charset=binary"));
     assertTrue(DocumentTextStructureParser.isStructured(DocumentTextStructureParser.DOCX_MIME_TYPE.toUpperCase()));
     assertTrue(DocumentTextStructureParser.isStructured(DocumentTextStructureParser.PPTX_MIME_TYPE));
