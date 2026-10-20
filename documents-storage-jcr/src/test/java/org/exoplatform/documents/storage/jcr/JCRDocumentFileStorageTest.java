@@ -2572,6 +2572,11 @@ public class JCRDocumentFileStorageTest {
     latestFirst.setSortField(org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE);
     latestFirst.setAscending(false);
     jcrDocumentFileStorage.search(latestFirst, aclIdentity, 0, 10);
+    DocumentTimelineFilter oldestFirst = new DocumentTimelineFilter();
+    oldestFirst.setParentFolderId("folder");
+    oldestFirst.setSortField(org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE);
+    oldestFirst.setAscending(true);
+    jcrDocumentFileStorage.search(oldestFirst, aclIdentity, 0, 10);
     DocumentTimelineFilter relevance = new DocumentTimelineFilter();
     relevance.setParentFolderId("folder");
     relevance.setQuery("contract");
@@ -2579,6 +2584,8 @@ public class JCRDocumentFileStorageTest {
 
     verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(latestFirst), eq(0), eq(10),
                                                   eq("lastUpdatedDate"), eq("DESC"));
+    verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(oldestFirst), eq(0), eq(10),
+                                                  eq("lastUpdatedDate"), eq("ASC"));
     verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(relevance), eq(0), eq(10),
                                                   eq("_score"), eq("DESC"));
   }
