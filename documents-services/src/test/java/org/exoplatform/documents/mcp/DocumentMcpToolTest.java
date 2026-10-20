@@ -575,6 +575,20 @@ public class DocumentMcpToolTest {
     assertEquals(2, models.size());
   }
 
+  /**
+   * A negative limit lists nothing and reads nothing, as list_folder_children
+   * does: given to the storage, it would read every child of the folder.
+   * Mutant: the clamp dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentsByFolderIdWithANegativeLimitListsNothing() throws Exception {
+    assertEquals(List.of(), documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, null, -1));
+
+    verify(documentFileService, never()).getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean());
+  }
+
   @Test
   public void getDocumentsByFolderIdFilesOnlyExcludesFolders() throws Exception {
     List<AbstractNode> items = List.of(fileNode(DOCUMENT_ID, "application/pdf"), folderNode(FOLDER_ID));
