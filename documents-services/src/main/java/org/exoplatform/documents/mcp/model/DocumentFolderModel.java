@@ -18,6 +18,7 @@ package org.exoplatform.documents.mcp.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.meeds.mcp.server.tool.model.UserModel;
 
@@ -31,6 +32,21 @@ import lombok.NoArgsConstructor;
 @JsonInclude(Include.NON_EMPTY)
 public class DocumentFolderModel extends DocumentModel {
 
+  /** The date the folder was last changed, formatted. */
+  @JsonProperty("updated_date")
+  private String updatedDate;
+
+  /**
+   * Builds a folder, its rights and its last change left unknown.
+   *
+   * @param id the folder id
+   * @param name the folder title
+   * @param path the folder path
+   * @param url the folder URL in the Documents app
+   * @param parentFolderId the id of the folder holding it
+   * @param createdDate the creation date, formatted
+   * @param creatorUser the creator
+   */
   public DocumentFolderModel(String id,
                              String name,
                              String path,
