@@ -181,9 +181,9 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_TEXT_CONTINUES      =
                                                            "\n\n[The text continues past this point. To read the rest, call get_document_outline and read_document_text with the sections that follow, or read_document_text by offset from the start: its text is laid out its own way, so this text's length is not an offset in it.]";
 
-  /** The answer while a large document's text is being extracted. */
+  /** The answer while a large document's text is being extracted, or others' fill the queue. */
   private static final String      MSG_TEXT_BEING_READ     =
-                                                           "The document with id %s is being read, which takes a while for a large file. Call the same tool again in a minute.";
+                                                           "The document with id %s is being read, or other large documents are, which takes a while. Call the same tool again in a minute.";
 
   /** The refusal of a document too large even to be read part by part. */
   private static final String      MSG_TOO_LARGE_FOR_PARTS =

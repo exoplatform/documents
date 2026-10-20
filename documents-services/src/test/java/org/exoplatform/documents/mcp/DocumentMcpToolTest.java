@@ -2163,9 +2163,11 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A large document still being read says to call again, one too large even
-   * for parts says so, and any other reason is the one-shot tool's.
-   * Mutants: the being-read answer worded as a failure, the reasons swapped.
+   * A large document still being read, or waiting behind other large ones,
+   * says to call again, one too large even for parts says so, and any other
+   * reason is the one-shot tool's.
+   * Mutants: the being-read answer worded as a failure or naming only this
+   * document's reading, the reasons swapped.
    *
    * @throws Exception never
    */
@@ -2177,9 +2179,10 @@ public class DocumentMcpToolTest {
         .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.TOO_LARGE))
         .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.NO_TEXT));
 
-    assertTrue(assertThrows(IllegalStateException.class,
-                            () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null)).getMessage()
-                                                                                                    .contains("Call the same tool again"));
+    String busy = assertThrows(IllegalStateException.class,
+                               () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null)).getMessage();
+    assertTrue(busy.contains("Call the same tool again"));
+    assertTrue(busy.contains("or other large documents are"));
     assertTrue(assertThrows(IllegalStateException.class,
                             () -> documentMcpTool.getDocumentOutline(DOCUMENT_ID)).getMessage().contains("even part by part"));
     assertTrue(assertThrows(IllegalStateException.class,
