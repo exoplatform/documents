@@ -449,6 +449,51 @@ class DocumentTextStructureParserTest {
   }
 
   /**
+   * A PDF bookmark whose destination PDFBox can't read, a bare number or a
+   * page past the last one, is left out: the text and the other bookmarks
+   * are kept.
+   * Mutants: a bookmark's failure ending the whole reading.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aPdfsBrokenBookmarksAreLeftOut() throws IOException {
+    File file = directory.resolve("broken-bookmarks.pdf").toFile();
+    try (PDDocument document = new PDDocument()) {
+      PDPage page = new PDPage();
+      document.addPage(page);
+      try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+        stream.beginText();
+        stream.setFont(PDType1Font.HELVETICA, 12);
+        stream.newLineAtOffset(72, 700);
+        stream.showText("Hello body text");
+        stream.endText();
+      }
+      PDDocumentOutline bookmarks = new PDDocumentOutline();
+      document.getDocumentCatalog().setDocumentOutline(bookmarks);
+      bookmarks.addLast(bookmark("Good", page));
+      PDOutlineItem number = new PDOutlineItem();
+      number.setTitle("Bare number");
+      number.getCOSObject().setInt(COSName.DEST, 7);
+      bookmarks.addLast(number);
+      PDOutlineItem pastTheEnd = new PDOutlineItem();
+      pastTheEnd.setTitle("Past the end");
+      org.apache.pdfbox.cos.COSArray destination = new org.apache.pdfbox.cos.COSArray();
+      destination.add(org.apache.pdfbox.cos.COSInteger.get(5));
+      destination.add(COSName.getPDFName("Fit"));
+      pastTheEnd.getCOSObject().setItem(COSName.DEST, destination);
+      bookmarks.addLast(pastTheEnd);
+      document.save(file);
+    }
+    StringWriter text = new StringWriter();
+
+    List<DocumentOutlineEntry> outline = parse(file, DocumentTextStructureParser.PDF_MIME_TYPE, text, Long.MAX_VALUE);
+
+    assertTrue(text.toString().contains("Hello body text"));
+    assertEquals(List.of("Good"), outline.stream().map(DocumentOutlineEntry::title).toList());
+  }
+
+  /**
    * A PDF's outline is cut at the most bookmarks read from one file.
    * Mutants: the cap removed, off by one.
    *

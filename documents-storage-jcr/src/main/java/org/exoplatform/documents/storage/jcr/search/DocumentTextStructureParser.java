@@ -67,6 +67,8 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPrGeneral;
 
 import org.exoplatform.documents.model.DocumentOutlineEntry;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
 /**
  * Writes the text of a Word document, a presentation or a PDF together with
@@ -85,6 +87,8 @@ final class DocumentTextStructureParser {
 
   /** The most bookmarks read from one PDF, its outline being cut there. */
   static final int              MAX_BOOKMARKS     = 10_000;
+
+  private static final Log      LOG               = ExoLogger.getLogger(DocumentTextStructureParser.class);
 
   /** The deepest Word heading kept in the outline. */
   private static final int      MAX_HEADING_LEVEL = 9;
@@ -360,7 +364,8 @@ final class DocumentTextStructureParser {
   /**
    * Writes a PDF page by page, and turns its bookmarks into outline entries
    * at the start of the page each one points to. Bookmarks pointing to no
-   * page, or past the text written, are left out.
+   * page, to a page that isn't there or past the text written, or whose
+   * destination can't be read, are left out.
    *
    * @param file the PDF file
    * @param out where the text is written
@@ -445,9 +450,16 @@ final class DocumentTextStructureParser {
         return;
       }
       out.checkDeadline();
-      PDPage page = item.findDestinationPage(document);
-      Integer pageIndex = page == null ? null : pageIndexes.get(page.getCOSObject());
-      String title = StringUtils.trimToNull(StringUtils.normalizeSpace(item.getTitle()));
+      Integer pageIndex = null;
+      String title = null;
+      try {
+        PDPage page = item.findDestinationPage(document);
+        pageIndex = page == null ? null : pageIndexes.get(page.getCOSObject());
+        title = StringUtils.trimToNull(StringUtils.normalizeSpace(item.getTitle()));
+      } catch (IOException | RuntimeException e) {
+        // a destination PDFBox can't resolve, a page number past the last page for instance: left out
+        LOG.debug("A PDF bookmark whose destination can't be read is left out", e);
+      }
       if (title != null && pageIndex != null && pageIndex < pageStarts.size()) {
         outline.add(new DocumentOutlineEntry(outline.size(), level, title, pageStarts.get(pageIndex), pageIndex + 1));
       }
