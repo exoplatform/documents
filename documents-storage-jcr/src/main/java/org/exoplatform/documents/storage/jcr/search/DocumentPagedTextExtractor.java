@@ -80,7 +80,8 @@ import org.exoplatform.services.log.Log;
  * The file is copied to a temporary file and parsed from it. A Word document,
  * a presentation, a PDF and a spreadsheet get their outline from the same walk
  * that writes their text, the PDF being parsed with its buffers in temporary
- * files and the spreadsheet streamed a row at a time. Any other supported
+ * files and the spreadsheet streamed a row at a time, its shared strings
+ * held in memory. Any other supported
  * type, an older Office or an OpenDocument file for instance, is read by the
  * platform's document readers, without an outline; most of them load the
  * whole file, so reading one takes a heap of at least the file's size, up to

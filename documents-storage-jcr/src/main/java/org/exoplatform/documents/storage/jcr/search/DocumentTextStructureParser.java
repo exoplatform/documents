@@ -349,8 +349,9 @@ final class DocumentTextStructureParser {
 
   /**
    * Writes a spreadsheet sheet by sheet, each sheet's name becoming an
-   * outline entry, its rows streamed one at a time, so a large workbook is
-   * never held in memory, as the platform's own spreadsheet reader does.
+   * outline entry, its rows streamed one at a time, as the platform's own
+   * spreadsheet reader does: the workbook's shared strings, most of a
+   * text-heavy workbook's text, are held in memory, its rows are not.
    *
    * @param file the xlsx file
    * @param out where the text is written
@@ -363,6 +364,7 @@ final class DocumentTextStructureParser {
       XSSFReader reader = new XSSFReader(pkg);
       ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg, false);
       StylesTable styles = reader.getStylesTable();
+      out.checkDeadline();
       XSSFReader.SheetIterator sheets = (XSSFReader.SheetIterator) reader.getSheetsData();
       int number = 0;
       while (sheets.hasNext()) {

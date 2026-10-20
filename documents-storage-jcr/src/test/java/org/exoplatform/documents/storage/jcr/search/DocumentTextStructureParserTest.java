@@ -402,6 +402,22 @@ class DocumentTextStructureParserTest {
   }
 
   /**
+   * A spreadsheet's row without values, which writes nothing, still stops
+   * the reading once the deadline is passed, the writer's refusal carried as
+   * itself.
+   * Mutants: the deadline checked only when a row is written.
+   */
+  @Test
+  void aSpreadsheetsBlankRowsStopAtTheDeadline() {
+    CountingWriter late = new CountingWriter(new StringWriter(), Long.MAX_VALUE, System.nanoTime() - 1);
+    SpreadsheetRowWriter rows = new SpreadsheetRowWriter(late);
+    rows.startRow(0);
+
+    java.io.UncheckedIOException e = assertThrows(java.io.UncheckedIOException.class, () -> rows.endRow(0));
+    assertTrue(e.getCause() instanceof java.io.InterruptedIOException);
+  }
+
+  /**
    * A spreadsheet's text cut at the most characters read stops as a cut, the
    * outline holding the sheets written: the writer's refusal reaches the
    * caller as itself through the streaming handler.

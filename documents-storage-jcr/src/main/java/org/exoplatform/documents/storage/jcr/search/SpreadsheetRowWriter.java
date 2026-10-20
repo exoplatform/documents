@@ -57,16 +57,19 @@ class SpreadsheetRowWriter implements SheetContentsHandler {
   }
 
   /**
-   * Writes the row's cells on one line, nothing for a row without values.
+   * Writes the row's cells on one line, nothing for a row without values,
+   * failing once the deadline is passed either way.
    *
    * @param rowNumber the row's number, from 0
    */
   @Override
   public void endRow(int rowNumber) {
-    if (cells.isEmpty()) {
-      return;
-    }
     try {
+      // checked on every row, a sheet of rows without values writing nothing that would check it
+      out.checkDeadline();
+      if (cells.isEmpty()) {
+        return;
+      }
       out.write(String.join(" | ", cells));
       out.write('\n');
     } catch (IOException e) {
