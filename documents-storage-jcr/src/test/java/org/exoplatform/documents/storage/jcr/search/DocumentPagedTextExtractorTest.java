@@ -285,13 +285,13 @@ class DocumentPagedTextExtractorTest {
 
   /**
    * A file that failed to be read is read again on the next call, while a
-   * refusal that holds for the file's version is remembered with it.
-   * Mutants: every outcome remembered, no refusal remembered.
+   * file found to have no text is remembered as such for its version.
+   * Mutants: every outcome remembered, a file without text not remembered.
    *
    * @throws Exception never
    */
   @Test
-  void readsAgainAFileThatFailedButRemembersARefusal() throws Exception {
+  void readsAgainAFileThatFailedButRemembersOneWithoutText() throws Exception {
     AdvancedDocumentReader flaky = mock(AdvancedDocumentReader.class);
     when(flaky.getContentAsReader(any())).thenThrow(new IOException("broken"))
                                          .thenAnswer(invocation -> new StringReader("read at last"));

@@ -95,19 +95,18 @@ public class DocumentPagedTextExtractor {
   /** How many extractions may wait for the one running. */
   static final int                   MAX_QUEUED_EXTRACTIONS = 4;
 
-  /** The most file versions the cache remembers, a refusal taking no room on disk. */
+  /** The most file versions the cache remembers, a version without text taking no room on disk. */
   static final int                   MAX_CACHED_VERSIONS    = 10_000;
 
   /**
-   * The outcomes that hold for as long as the version of the file does, and
-   * are remembered with it; any other, a timeout or a failure to read, is
-   * tried again on the next call.
+   * The outcomes of an extraction that hold for as long as the version of the
+   * file does, and are remembered with it; a timeout or a failure to read is
+   * tried again on the next call. A file that is not one, too large or of a
+   * format never read is refused before any extraction; an extraction that
+   * finds it so has met a file changed since its version was read, so its
+   * outcome is not kept under that version.
    */
-  static final Set<Status>           REMEMBERED_STATUSES    = EnumSet.of(Status.EXTRACTED,
-                                                                         Status.NO_TEXT,
-                                                                         Status.NOT_A_FILE,
-                                                                         Status.TOO_LARGE,
-                                                                         Status.UNSUPPORTED_FORMAT);
+  static final Set<Status>           REMEMBERED_STATUSES    = EnumSet.of(Status.EXTRACTED, Status.NO_TEXT);
 
   private static final Log           LOG                    = ExoLogger.getLogger(DocumentPagedTextExtractor.class);
 
