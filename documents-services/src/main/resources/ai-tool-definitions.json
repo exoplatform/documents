@@ -170,7 +170,7 @@
           },
           "section": {
             "type": "integer",
-            "description": "Optional index of a heading of get_document_outline: reads that heading's section only, up to the next heading of the same or a higher level."
+            "description": "Optional index of a heading of get_document_outline: reads that heading's section only, up to the next heading of the same or a higher level that starts after it."
           }
         },
         "required": [
